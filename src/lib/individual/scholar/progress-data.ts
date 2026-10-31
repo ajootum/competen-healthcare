@@ -6,7 +6,7 @@
 // competency links). Then: the current picture (Stage 7's evaluation of all the evidence), engagement, the history
 // over periods (progress-history.ts) and the next steps (progress-next.ts). No AI, no new store, no new engine.
 
-import { evaluationEvidence, libraryTopics, listEvaluations, listMaterials, sectionLinks, sectionsOf } from "./store";
+import { evaluationEvidence, learningEventTimes, libraryTopics, listEvaluations, listMaterials, sectionLinks, sectionsOf } from "./store";
 import { contextHistory } from "./context";
 import { evaluateScope } from "./evaluation-data";
 import { learningHistory, type History, type PeriodKind } from "./progress-history";
@@ -26,26 +26,35 @@ export type ProgressView = {
 
 const DAY = 86_400_000;
 
+/**
+ * Pure: engagement is activity, never understanding. Study days and "last studied" count every kind of study
+ * activity, Learn sessions included (`learn`: the timestamps of the learner's own learning events); the
+ * answer, review, decision and check counts stay what they were. Learn never feeds an evaluation figure.
+ */
+export function engagementFrom(d: { attempts: { answeredAt: string }[]; reviews: { reviewedAt: string }[]; decisions: { createdAt: string }[]; checks: { createdAt: string }[] }, learn: readonly string[], windowDays: number, now: string): Engagement {
+  const since = Date.parse(now) - windowDays * DAY;
+  const times = [...d.attempts.map(a => a.answeredAt), ...d.reviews.map(v => v.reviewedAt), ...d.decisions.map(x => x.createdAt), ...d.checks.map(c => c.createdAt), ...learn];
+  const recent = times.filter(t => Date.parse(t) >= since);
+  return {
+    windowDays, studyDays: new Set(recent.map(t => t.slice(0, 10))).size,
+    answers: d.attempts.filter(a => Date.parse(a.answeredAt) >= since).length, reviews: d.reviews.filter(v => Date.parse(v.reviewedAt) >= since).length,
+    decisions: d.decisions.filter(x => Date.parse(x.createdAt) >= since).length, checks: d.checks.filter(c => Date.parse(c.createdAt) >= since).length,
+    lastStudied: times.length ? times.reduce((a, b) => (a > b ? a : b)) : null,
+  };
+}
+
 /** Everything the Progress workspace shows, from records that already exist. */
 export async function loadProgress(admin: any, userId: string, policy: IndividualPolicy, now: string, opts: { period?: PeriodKind } = {}): Promise<ProgressView> {
-  const [live, ev, kept, ctx, mats, topics] = await Promise.all([
+  const [live, ev, kept, ctx, mats, topics, learn] = await Promise.all([
     evaluateScope(admin, userId, policy, { kind: "all" }, { method: "existing", now }),
-    evaluationEvidence(admin, userId), listEvaluations(admin, userId, 200), contextHistory(admin, userId), listMaterials(admin, userId), libraryTopics(admin, userId),
+    evaluationEvidence(admin, userId), listEvaluations(admin, userId, 200), contextHistory(admin, userId), listMaterials(admin, userId), libraryTopics(admin, userId), learningEventTimes(admin, userId),
   ]);
   if (!live.ok) return { ok: false, error: live.error };
   if (!ev.ok || !mats.ok) return { ok: false, error: "Your learning could not be read just now." };
   const e = live.evaluation, d = ev.data;
 
-  // Engagement: activity, never understanding.
-  const since = Date.parse(now) - policy.scholarInsightWindowDays * DAY;
-  const times = [...d.attempts.map(a => a.answeredAt), ...d.reviews.map(v => v.reviewedAt), ...d.decisions.map(x => x.createdAt), ...d.checks.map(c => c.createdAt)];
-  const recent = times.filter(t => Date.parse(t) >= since);
-  const engagement: Engagement = {
-    windowDays: policy.scholarInsightWindowDays, studyDays: new Set(recent.map(t => t.slice(0, 10))).size,
-    answers: d.attempts.filter(a => Date.parse(a.answeredAt) >= since).length, reviews: d.reviews.filter(v => Date.parse(v.reviewedAt) >= since).length,
-    decisions: d.decisions.filter(x => Date.parse(x.createdAt) >= since).length, checks: d.checks.filter(c => Date.parse(c.createdAt) >= since).length,
-    lastStudied: times.length ? times.reduce((a, b) => (a > b ? a : b)) : null,
-  };
+  // Engagement: activity, never understanding. Learn sessions count here (study days, last studied) and nowhere else.
+  const engagement = engagementFrom(d, learn.ok ? learn.data : [], policy.scholarInsightWindowDays, now);
 
   // Classification: a material with neither topics nor competency links has not been classified yet.
   const withChunks = mats.data.filter(m => m.chunkCount > 0);

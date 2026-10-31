@@ -13,7 +13,7 @@ import { isLayer, type Layer, type ProgrammeConfig } from "./catalogue";
 import { mappingStates, type LiveMapping, type MappingDecision, type MappingState, type MappingSubject, type SubjectAnalysis } from "@/lib/competency/mapping";
 
 export type MapSource = "ai" | "student" | "reviewer";
-import { STUDY_ACHIEVEMENT, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
+import { STUDY_ACHIEVEMENT, countsForAchievement, isStudyAchievementKind, studyAchievementsFrom, type ChoiceRow, type StudyAchievement, type StudyAchievementKind } from "./passport-items";
 import { passportEvaluationOf, type PassportEvaluation } from "./passport-evaluations";
 import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam-paper";
 import { stemKey } from "./question-intel";
@@ -1354,7 +1354,7 @@ export async function progressRows(admin: Admin, userId: string): Promise<Read<{
   const [m, q, a, c] = await Promise.all([
     admin.from("individual_scholar_material").select("id, title, created_at").eq("user_id", userId).order("created_at", { ascending: false }),
     admin.from("individual_scholar_question").select("id, material_id, kind").eq("user_id", userId).limit(5000),
-    admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(10000),
+    admin.from("individual_scholar_attempt").select("question_id, correct, answered_at, marking").eq("user_id", userId).order("answered_at", { ascending: false }).limit(10000),
     admin.from("individual_scholar_card").select("material_id, status, next_review_at").eq("user_id", userId).limit(5000),
   ]);
   const err = m.error ?? q.error ?? a.error ?? c.error;
@@ -1364,7 +1364,7 @@ export async function progressRows(admin: Admin, userId: string): Promise<Read<{
     data: {
       materials: (m.data ?? []).map((r: any) => ({ id: r.id, title: r.title, createdAt: r.created_at })),
       questions: (q.data ?? []).map((r: any) => ({ id: r.id, materialId: r.material_id, kind: r.kind })),
-      attempts: (a.data ?? []).map((r: any) => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at })),
+      attempts: (a.data ?? []).map((r: any) => ({ questionId: r.question_id, correct: r.correct, answeredAt: r.answered_at, marking: r.marking ?? undefined })),
       cards: (c.data ?? []).map((r: any) => ({ materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),
     },
   };
@@ -1901,6 +1901,16 @@ export async function learningEvents(admin: Admin, userId: string, sessionId: st
   return { ok: true, data: ((data ?? []) as any[]).map(r => ({ step: r.step, action: r.action, verdict: r.verdict, createdAt: r.created_at })) };
 }
 
+/**
+ * When the caller did anything in a Learn session (any action), newest first: timestamps only, for Progress
+ * engagement (study days, last studied). Never an input to an evaluation. A store without 414 reads as none.
+ */
+export async function learningEventTimes(admin: Admin, userId: string): Promise<Read<string[]>> {
+  const { data, error } = await admin.from("individual_scholar_learning_event").select("created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5000);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => r.created_at as string) };
+}
+
 // ── SCH-LEARN-UX-01: SEARCH-FIRST LEARN ── reads only, over what Stages 2 and 3 already store ────────────────
 //
 // No AI, no index of its own: Postgres full-text search on the chunks' tsv (372), the material titles and file
@@ -2291,21 +2301,22 @@ export async function listPassportChoices(admin: Admin, userId: string): Promise
 
 /** How many distinct questions of this kind the person answered from this material of their own -- or, for revision, how many reviews they made on it. */
 async function answeredFrom(admin: Admin, userId: string, materialId: string, achievement: StudyAchievementKind): Promise<number | null> {
-  const questionKind = STUDY_ACHIEVEMENT[achievement].questionKind;
-  if (questionKind === null) {
+  const questionKinds = STUDY_ACHIEVEMENT[achievement].questionKinds;
+  if (questionKinds.length === 0) {
     const { count, error } = await admin.from("individual_scholar_review").select("id", { count: "exact" })
       .eq("user_id", userId).eq("material_id", materialId).limit(1);
     return error ? null : (count ?? 0);
   }
-  const { data: qs, error } = await admin.from("individual_scholar_question").select("id")
-    .eq("user_id", userId).eq("material_id", materialId).eq("kind", questionKind).limit(5000);
+  const { data: qs, error } = await admin.from("individual_scholar_question").select("id, kind")
+    .eq("user_id", userId).eq("material_id", materialId).in("kind", [...questionKinds]).limit(5000);
   if (error) return null;
-  const ids = ((qs ?? []) as any[]).map(q => q.id);
+  const kindOf = new Map(((qs ?? []) as any[]).map(q => [q.id as string, q.kind as string]));
+  const ids = [...kindOf.keys()];
   if (!ids.length) return 0;
-  const { data: at, error: aErr } = await admin.from("individual_scholar_attempt").select("question_id")
+  const { data: at, error: aErr } = await admin.from("individual_scholar_attempt").select("question_id, marking")
     .eq("user_id", userId).in("question_id", ids).limit(10000);
   if (aErr) return null;
-  return new Set(((at ?? []) as any[]).map(a => a.question_id)).size;
+  return new Set(((at ?? []) as any[]).filter(a => countsForAchievement(kindOf.get(a.question_id) ?? "", a.marking)).map(a => a.question_id)).size;
 }
 
 /**
@@ -2348,12 +2359,12 @@ export async function loadStudyAchievements(admin: Admin, userId: string): Promi
   if (error) return fail(error);
   const questions = ((qs ?? []) as any[]).map(q => ({ id: q.id, materialId: q.material_id, kind: q.kind }));
   const ids = questions.map(q => q.id);
-  let attempts: { questionId: string; answeredAt: string }[] = [];
+  let attempts: { questionId: string; answeredAt: string; marking?: string }[] = [];
   if (ids.length) {
-    const { data: at, error: aErr } = await admin.from("individual_scholar_attempt").select("question_id, answered_at")
+    const { data: at, error: aErr } = await admin.from("individual_scholar_attempt").select("question_id, answered_at, marking")
       .eq("user_id", userId).in("question_id", ids).limit(10000);
     if (aErr) return fail(aErr);
-    attempts = ((at ?? []) as any[]).map(a => ({ questionId: a.question_id, answeredAt: a.answered_at }));
+    attempts = ((at ?? []) as any[]).map(a => ({ questionId: a.question_id, answeredAt: a.answered_at, marking: a.marking ?? undefined }));
   }
   // Revision achievements (migration 391) read only which material was reviewed and when -- never the grade.
   // Only asked when one is chosen, so a Passport without one never depends on the review table existing.

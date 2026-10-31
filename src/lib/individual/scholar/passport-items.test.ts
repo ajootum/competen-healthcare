@@ -76,3 +76,41 @@ describe("the title", () => {
     expect(parseLabel(42)).toBeNull();
   });
 });
+
+describe("code-marked revision kinds count under practice questions (owner-delegated ruling 31 Oct)", () => {
+  const qs = [
+    { id: "r1", materialId: "m1", kind: "mrq" }, { id: "r2", materialId: "m1", kind: "match" }, { id: "r3", materialId: "m1", kind: "sequence" },
+    { id: "r4", materialId: "m1", kind: "short" }, { id: "r5", materialId: "m1", kind: "structured" }, { id: "r6", materialId: "m1", kind: "mrq" },
+  ];
+  const at = (questionId: string, marking?: string) => ({ questionId, answeredAt: "2026-10-25T10:00:00Z", marking });
+
+  it("counts mrq, match and sequence answers marked by code", () => {
+    const e = eligibleAchievements({ materials, questions: qs, attempts: [at("r1", "deterministic"), at("r2", "deterministic"), at("r3", "deterministic")], choices: [] });
+    expect(e.map(x => `${x.achievement}:${x.answered}`)).toEqual(["practice_questions:3"]);
+  });
+
+  it("never counts AI-marked or self-graded answers, nor short or structured questions", () => {
+    const e = eligibleAchievements({
+      materials, questions: qs, choices: [],
+      attempts: [at("r4", "ai_evaluation"), at("r4", "self_graded"), at("r5", "ai_evaluation"), at("r5", "deterministic"), at("r1", "self_graded"), at("r6", "ai_evaluation"), at("r2")],
+    });
+    // short/structured never count (even if somehow code-marked), and mrq/match only when explicitly deterministic.
+    expect(e.filter(x => x.achievement === "practice_questions")).toEqual([]);
+  });
+
+  it("adds to the mcq figure and to what the Passport shows, distinct questions only", () => {
+    const shown = studyAchievementsFrom({ choices: [choice({})], questions: [...questions, ...qs], attempts: [...attempts, at("r1", "deterministic"), at("r1", "deterministic"), at("r4", "ai_evaluation")] });
+    expect(shown.map(s => s.answered)).toEqual([3]);
+  });
+
+  it("a legacy mcq or case answer with no marking still counts", () => {
+    expect(eligibleAchievements({ materials, questions, attempts, choices: [] }).map(x => x.answered)).toEqual([2, 1]);
+  });
+});
+
+describe("study achievement wording is the one studyDetail() wording", () => {
+  it("revision reviews read as reviews, not answers", () => {
+    expect(studyDetail({ achievement: "revision_reviews", answered: 8 })).toBe("8 revision reviews of own notes");
+    expect(studyDetail({ achievement: "practice_questions", answered: 1 })).toBe("1 practice question answered from own notes");
+  });
+});

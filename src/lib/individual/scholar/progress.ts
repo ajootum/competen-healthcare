@@ -14,7 +14,7 @@
 
 export type ProgressMaterial = { id: string; title: string; createdAt?: string };
 export type ProgressQuestion = { id: string; materialId: string; kind: "mcq" | "case" };
-export type ProgressAttempt = { questionId: string; correct: boolean; answeredAt: string };
+export type ProgressAttempt = { questionId: string; correct: boolean; answeredAt: string; /** The attempt's own marking, read only for the Passport count (passport-items.ts). */ marking?: string };
 export type ProgressCard = { materialId: string; status: "active" | "mastered"; nextReviewAt: string };
 
 export type MaterialProgress = {

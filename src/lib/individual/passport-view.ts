@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { isNotProvisioned } from "./access";
 import { EVIDENCE_LABEL, loadIndividualPassport } from "./passport";
+import { studyDetail } from "./scholar/passport-items";
 import { loadProfessionalRecord } from "./professional/record";
 import { loadSharedProfile } from "./professional/share-profile";
 import { loadSharedLearning } from "./professional/share-learning";
@@ -176,7 +177,7 @@ export async function loadPassportSelection(admin: any, userId: string, shareTok
     if (passport && studyIds.size) {
       if (!passport.study.ok) unreadable.push("study");
       for (const s of passport.study.ok ? passport.study.data.filter(s => s.itemId && studyIds.has(s.itemId)) : []) items.push({
-        key: `study:${s.itemId}`, category: "study", sourceService: "Competen Scholar", title: s.label, description: `${s.answered} answered`,
+        key: `study:${s.itemId}`, category: "study", sourceService: "Competen Scholar", title: s.label, description: studyDetail(s),
         issuer: "Competen Scholar", date: s.lastStudied, version: null, evidenceRef: null, method: "Self-directed practice", authority: null,
         trust: "educational", validity: "not_applicable", meaning: EVIDENCE_LABEL.self_directed,
       });
