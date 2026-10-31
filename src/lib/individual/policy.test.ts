@@ -105,6 +105,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
       scholarStudySessions: false,
+      // SCHOLAR-GUIDED-LEARNING-01: no lesson is prepared ahead until HQ switches it on.
+      scholarLearnPrepareNext: false,
       scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
       scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
       scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",
@@ -187,6 +189,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);
   });
 
+it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only from a published on", () => {    const path = policyPath("scholar_learn_prepare_next");    expect(DEFAULT_POLICY.scholarLearnPrepareNext).toBe(false);    expect(resolvePolicy([{ config_path: path, published: { value: "on" } }]).scholarLearnPrepareNext).toBe(true);    expect(resolvePolicy([{ config_path: path, published: { value: true } }]).scholarLearnPrepareNext).toBe(false);    expect(validateDraft("scholar_learn_prepare_next", "on")).toMatchObject({ ok: true, settings: { value: "on" } });    expect(validateDraft("scholar_learn_prepare_next", "ahead").ok).toBe(false);  });
   it("SCHOLAR-SESSION-AI-02: study sessions default off, resolve on only from a published on, and need 740 too", () => {
     const path = policyPath("scholar_study_sessions");
     expect(DEFAULT_POLICY.scholarStudySessions).toBe(false);
