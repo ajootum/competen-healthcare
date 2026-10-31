@@ -96,3 +96,34 @@ describe("buildStudySessionContext", () => {
     expect(buildStudySessionContext({ focus: { title: "", objective: null, competencies: [] }, sources: [], missed: [], mistakes: [], unsure: [], osce: [], progress: null })).toBeNull();
   });
 });
+
+describe("buildStudySessionContext: formative feedback on written answers (SCHOLAR-WRITTEN-FEEDBACK-01)", () => {
+  const written = (): NonNullable<StudySessionContextInput["written"]> => [
+    { id: "a1", stem: "Why does oliguria matter in AKI?", topic: "Fluid balance", at: "2026-10-30T13:00:00Z", missing: ["Urine output below the threshold", "Link to staging", "Third point"], misconceptions: ["Thinking creatinine rises first"], next: "Revise the staging criteria", summary: null },
+    { id: "a2", stem: "What is stage 1 AKI?", topic: null, at: "2026-10-30T08:00:00Z", missing: [], misconceptions: [], next: null, summary: "Mostly right; add the time window." },
+  ];
+  it("adds labelled headlines to the feedback section, newest first, words only, no verdict or mark", () => {
+    const r = buildStudySessionContext({ ...base(), written: written() })!;
+    expect(r.sections).toEqual(["focus", "sources", "misconceptions", "feedback", "progress"]);
+    const at = (s: string) => r.text.indexOf(s);
+    expect(r.text).toContain('Formative AI feedback on my written answer on Fluid balance to "Why does oliguria matter in AKI?": missing Urine output below the threshold; Link to staging. mistaken idea Thinking creatinine rises first. revise next Revise the staging criteria');
+    expect(r.text).not.toContain("Third point");
+    expect(r.text).toContain('to "What is stage AKI?": Mostly right; add the time window.');
+    expect(at("OSCE practice")).toBeLessThan(at("Formative AI feedback"));
+    expect(at("oliguria matter")).toBeLessThan(at("What is stage AKI"));
+    expect(at("Formative AI feedback")).toBeLessThan(at("learning steps"));
+    expect(r.text).not.toMatch(/verified|score|correct|self-assess/i);
+  });
+  it("is deterministic whatever the read order, and leaves out an item with a patient identifier", () => {
+    const w = written();
+    expect(buildStudySessionContext({ ...base(), written: [...w].reverse() })!.text).toBe(buildStudySessionContext({ ...base(), written: w })!.text);
+    const r = buildStudySessionContext({ ...base(), written: [{ ...w[0], stem: "Mr Smith NHS number 943 476 5919: why oliguria?" }] })!;
+    expect(r.text).not.toContain("Formative AI feedback");
+  });
+  it("stays within the cap, losing written-answer feedback before anything of higher priority", () => {
+    const many = Array.from({ length: 3 }, (_, i) => ({ ...written()[0], id: `w${i}`, at: `2026-10-3${i}T00:00:00Z`, stem: `${"Long stem words ".repeat(9)}${i}?` }));
+    const r = buildStudySessionContext({ ...base(), written: many }, 900)!;
+    expect(r.text.length).toBeLessThanOrEqual(900);
+    expect(r.text).toContain("I am studying: Acute kidney injury");
+  });
+});

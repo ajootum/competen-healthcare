@@ -18,14 +18,15 @@ import { words } from "./learner-context";
 // ⚠ ONLY WHAT IS NAMED BELOW is read from the input. Nothing about who the learner is, nothing from Professional,
 //   an employer or another learner: the input type has no such field and anything extra passed in is ignored.
 // ⚠ NO PASSAGE TEXT. Sources are material titles and section topics only; the passages reach the AI on their own.
-// ⚠ NOT FORMAL EVIDENCE (D5). Practice results here are formative and say nothing about competence.
+// ⚠ NOT FORMAL EVIDENCE (D5). Practice results here are formative and say nothing about competence. Written-answer
+//   feedback (SCHOLAR-WRITTEN-FEEDBACK-01) is the AI's formative feedback, labelled so: never self-assessment, never verified.
 
 /** D4: the block is held to about this many characters (roughly 750 input tokens). */
 export const STUDY_CONTEXT_MAX_CHARS = 3000;
 
 /** Fixed limits, so the selection never depends on how much was read. */
 export const STUDY_CONTEXT_LIMITS = {
-  competencies: 5, sources: 6, topicsPerSource: 4, missed: 6, unsure: 4, mistakes: 3, osce: 3, gapsPerOsce: 5, suggestionsPerOsce: 3, stemChars: 160, itemChars: 200,
+  competencies: 5, sources: 6, topicsPerSource: 4, missed: 6, unsure: 4, mistakes: 3, osce: 3, gapsPerOsce: 5, suggestionsPerOsce: 3, written: 3, pointsPerWritten: 2, stemChars: 160, itemChars: 200,
 } as const;
 
 export type StudySessionContextInput = {
@@ -40,6 +41,12 @@ export type StudySessionContextInput = {
   unsure: readonly { topic: string; at: string }[];
   /** Formative OSCE feedback from runs linked to the session: gaps and revision suggestions. */
   osce: readonly { id: string; station: string | null; at: string; gaps: readonly { text: string; critical: boolean; mark: "partly" | "missed" }[]; suggestions: readonly string[] }[];
+  /**
+   * SCHOLAR-WRITTEN-FEEDBACK-01: formative AI feedback kept on the learner's written answers in the session's sections
+   * (written-feedback.ts): what it said was missing, any mistaken idea, what to revise next, or its summary. Headlines
+   * only: never the verdict or a mark, and never self-assessment or verification.
+   */
+  written?: readonly { id: string; stem: string; topic: string | null; at: string; missing: readonly string[]; misconceptions: readonly string[]; next: string | null; summary: string | null }[];
   progress: { stepsDone: number; stepsTotal: number; completed: boolean; stagesTouched: readonly string[] } | null;
 };
 
@@ -100,6 +107,19 @@ function sections(input: StudySessionContextInput): Section[] {
     return `OSCE practice${station ? ` on ${station}` : ""}: ${[g.length ? `gaps: ${g.join("; ")}` : "", s.length ? `suggested next: ${s.join("; ")}` : ""].filter(Boolean).join(". ")}`;
   }).filter(Boolean);
 
+  // Formative AI feedback on written answers: newest first, then by id. Headlines only, each part screened and cut.
+  const written = distinct([...(input.written ?? [])].sort((a, b) => cmp(b.at, a.at) || cmp(a.id, b.id)).map(w => {
+    const stem = clean(w.stem, L.stemChars);
+    if (!stem) return "";
+    const pick = (xs: readonly string[]) => distinct([...xs].map(x => clean(x))).slice(0, L.pointsPerWritten);
+    const missing = pick(w.missing), wrong = pick(w.misconceptions), next = clean(w.next), summary = clean(w.summary);
+    const said = [missing.length ? `missing ${missing.join("; ")}` : "", wrong.length ? `mistaken idea ${wrong.join("; ")}` : "", next ? `revise next ${next}` : ""].filter(Boolean);
+    const body = said.length ? said.join(". ") : summary;
+    if (!body) return "";
+    const t = clean(w.topic);
+    return `Formative AI feedback on my written answer${t ? ` on ${t}` : ""} to "${stem}": ${body}`;
+  })).slice(0, L.written);
+
   const p = input.progress;
   const progress = !p ? [] : distinct([
     p.completed ? "I have finished the learning steps." : p.stepsTotal > 0 ? `I have done ${spell(Math.min(p.stepsDone, p.stepsTotal))} of ${spell(p.stepsTotal)} learning steps.` : "",
@@ -110,7 +130,7 @@ function sections(input: StudySessionContextInput): Section[] {
     { name: "focus", head: "", items: focus, join: " " },
     { name: "sources", head: "Sources I am studying from: ", items: sources, join: "; " },
     { name: "misconceptions", head: "", items: [...missed, ...unsure, ...mistakes], join: "\n" },
-    { name: "feedback", head: "", items: feedback, join: "\n" },
+    { name: "feedback", head: "", items: [...feedback, ...written], join: "\n" },
     { name: "progress", head: "", items: progress, join: " " },
   ];
 }

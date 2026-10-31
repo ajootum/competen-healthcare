@@ -17,6 +17,7 @@ import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, recoveryPas
 import { rubricOf, type FeedbackParts } from "@/lib/individual/scholar/question-intel";
 import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 import { ORIGIN_LABEL, originOf, recallCardOf } from "@/lib/individual/scholar/flashcards";
+import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -168,8 +169,10 @@ export async function POST(req: Request) {
 
   // ── the record: an attempt naming its session; the card reviewed, made or reset ──
   const stored = storedResponse(r);
+  // SCHOLAR-WRITTEN-FEEDBACK-01: an AI-evaluated answer keeps the formative feedback it was shown, on its own response.
+  const formative = marking === "ai_evaluation" ? formativeFeedback([{ part: null, feedback: evaluation, parts: evaluationParts }], evaluator) : null;
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
-    chosenIndex: stored.chosenIndex, response: stored.response, correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
+    chosenIndex: stored.chosenIndex, response: withFormative(stored.response, formative), correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
     quality: r.kind === "recall" ? r.quality : null, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
@@ -254,8 +257,10 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   const m = practiceMarks(parts, final);
   const marking = final.some(x => x.by === "self") ? "self_graded" as const : evaluator ? "ai_evaluation" as const : "deterministic" as const;
   const stored = storedResponse(r);
+  // SCHOLAR-WRITTEN-FEEDBACK-01: how each part was marked, and (AI-evaluated only) the formative feedback on each AI part.
+  const formative = marking === "ai_evaluation" ? formativeFeedback(final.flatMap((x, i) => x.by === "ai" ? [{ part: i + 1, feedback: x.feedback ?? null, parts: x.parts ?? null }] : []), evaluator) : null;
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
-    chosenIndex: null, response: { ...stored.response, awarded: final.map(x => x.awarded) }, correct: m.correct, score: m.score, marking,
+    chosenIndex: null, response: withFormative({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, formative), correct: m.correct, score: m.score, marking,
     evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
   });
   if (!saved.ok) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
