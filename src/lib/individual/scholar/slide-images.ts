@@ -19,6 +19,10 @@
 export const MAX_AI_SLIDES_PER_MATERIAL = 10;
 /** Pictures per slide, and their combined size: two slides go in one call, as a PDF, well inside the provider's limit. */
 export const SLIDE_IMAGE_LIMITS = { imagesPerSlide: 6, bytesPerSlide: 8 * 1024 * 1024 } as const;
+/** The largest single picture that is converted to PNG (extract.ts reports a larger one as too large). */
+export const MAX_CONVERT_INPUT_BYTES = 15 * 1024 * 1024;
+/** Converted pictures are scaled to fit this many pixels on each side (never enlarged). */
+export const CONVERT_MAX_DIMENSION = 2000;
 
 /** Pictures that go into the PDF as they are. */
 const DIRECT = new Set(["png", "jpg", "jpeg"]);

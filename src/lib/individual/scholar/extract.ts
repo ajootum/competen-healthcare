@@ -240,8 +240,7 @@ export async function pictureSlideImages(buffer: Uint8Array, slides: readonly nu
   const z = await openOfficeZip(buffer);
   if (!z.ok) return z;
   const { zip } = z;
-  const { slidePictures, imageKind, isConvertibleKind, SLIDE_IMAGE_LIMITS } = await import("./slide-images");
-  const { MAX_CONVERT_INPUT_BYTES } = await import("./slide-convert");
+  const { slidePictures, imageKind, isConvertibleKind, SLIDE_IMAGE_LIMITS, MAX_CONVERT_INPUT_BYTES } = await import("./slide-images");
   try {
     const parts = slidePartNames(Object.keys(zip.files));
     const out: SlideImages[] = [];
