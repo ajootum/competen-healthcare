@@ -27,6 +27,7 @@ import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, STEP_MAX_SECTIONS,
   isLearnAction, type ExplanationDepth, type LearnAction,
@@ -184,6 +185,12 @@ export async function POST(req: Request) {
     return pre;
   }
   const learnerContext = await loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId));
+  // SCHOLAR-SESSION-AI-02 slice C (owner D4): an ask in the caller's OWN connected study session (policy on, 740 present)
+  // also carries the session block -- database reads only, no AI call, under the learner-context rule (emphasis, never
+  // grounding, never cited). Any other session, or the gate off: null, and the ask is exactly as before.
+  const study = action === "ask" && recorded && sessionId
+    ? await studySessionBlock(ctx.admin, ctx.userId, sessionId, { policy, competencyTitle: id => learner.competencies?.find(c => c.id === id)?.title ?? null })
+    : null;
   const history: TutorTurn[] = (Array.isArray(body?.history) ? body.history : []).slice(-policy.scholarTutorTurns).flatMap((raw: unknown) => {
     const t = raw as { speaker?: unknown; text?: unknown } | null;
     return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim() ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
@@ -231,7 +238,7 @@ export async function POST(req: Request) {
     research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery));
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
-  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence }, ai.run);
+  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null }, ai.run);
   const refusal = ai.refusal();
   if (refusal?.error === "clarify_purpose") return meteredRefusal(refusal)!;
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
@@ -254,6 +261,8 @@ export async function POST(req: Request) {
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action_id: ai.actionId, purpose: purposeFrom(body),
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
+    // SCHOLAR-SESSION-AI-02: which study-session sections reached the prompt (names only, never the text).
+    study_context: study ? study.sections : null,
     outcome: r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`,
     // SCHOLAR-AI-OPT-01: what the grounding check refused, in its own words ("the number one"), never the answer text.
     withheld_detail: r.ok && action !== "check" && !r.check.ok && r.check.violations?.length ? describeViolations(r.check.violations) : null,

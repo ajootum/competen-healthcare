@@ -533,8 +533,11 @@ const researchInstruction = (words: number) => [
   `PART TWO: a line that reads exactly ${RESEARCH_MARKER} and then, under ${words} words, what the abstracts say that helps the student understand this topic, ending EVERY sentence with the [E n] it comes from. Do not write a heading or an introduction: start with the first finding. Use only what the abstracts say: no outside facts, no figures they do not contain, no doses, drug names, regimens or advice about any patient, and never [S n] or [R n] in this part. Say plainly when the evidence is limited, early or mixed. Write PART TWO whenever any abstract is relevant to the topic, and leave it out only if none is.`,
 ].join("\n");
 
-export function learnUserPrompt(question: string, passages: Passage[], references: GovernedReference[], history: TutorTurn[], learnerContext: string | null, research: readonly ResearchEvidence[] = []): string {
-  const about = learnerContext ? `${CONTEXT_PREAMBLE}\n${learnerContext}\n\n` : "";
+export function learnUserPrompt(question: string, passages: Passage[], references: GovernedReference[], history: TutorTurn[], learnerContext: string | null, research: readonly ResearchEvidence[] = [], studyContext: string | null = null): string {
+  // SCHOLAR-SESSION-AI-02 (D4): the study-session block sits under the same preamble as the learner context -- emphasis
+  // only, never grounding (checkLearnMain is never given it), never cited or quoted.
+  const context = [learnerContext, studyContext].filter((x): x is string => !!x).join("\n\n");
+  const about = context ? `${CONTEXT_PREAMBLE}\n${context}\n\n` : "";
   const blocks = passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`);
   const refs = references.length ? `\n\nGOVERNED REFERENCES:\n${references.map((r, i) => `[R${i + 1}] ${r.code ? `${r.code} ` : ""}${r.title}${r.outcome ? ` -- outcome: ${r.outcome}` : ""} (${r.status})`).join("\n")}` : "";
   const ext = research.length ? `\n\nEXTERNAL RESEARCH (published abstracts, not my notes):\n\n${research.map((e, i) => `[E${i + 1}] ${e.title}${e.journal ? `. ${e.journal}` : ""}${e.year ? ` (${e.year})` : ""}\nAbstract: ${e.abstract}`).join("\n\n")}` : "";
@@ -635,17 +638,21 @@ export const LEARN_RESEARCH_OPERATION = "individual_scholar_learn_research";
 export async function runLearn(userId: string, args: {
   action: LearnAction | "check" | "clarify"; question: string; passages: Passage[]; references: GovernedReference[];
   depth: ExplanationDepth; background: boolean; history: TutorTurn[]; learnerContext: string | null; research?: readonly ResearchEvidence[];
+  /** SCHOLAR-SESSION-AI-02 (D4): the study-session block, for an ask in the caller's own connected session only. */
+  studyContext?: string | null;
 }, run: AiRun = direct): Promise<LearnResult> {
   const research = args.research?.length && RESEARCH_ACTIONS.includes(args.action) ? args.research : [];
+  const studyContext = args.action === "ask" ? args.studyContext ?? null : null;
   const r = await run({
     system: learnSystem(args.action, { depth: args.depth, background: args.background, references: args.references.length > 0, research: research.length > 0 }),
-    user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext, research),
+    user: learnUserPrompt(args.question, args.passages, args.references, args.history, args.learnerContext, research, studyContext),
     tier: "reasoning",
     maxTokens: args.action === "check" ? 200 : (args.depth === "detailed" ? 1100 : 800) + (research.length ? 500 : 0),
     context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_learn" },
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider, promptVersion: research.length ? learnResearchPromptVersion(args.action) : learnPromptVersion(args.action) };
+  const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider,
+    promptVersion: `${research.length ? learnResearchPromptVersion(args.action) : learnPromptVersion(args.action)}${studyContext ? `+${PROMPT_VERSIONS.studySession}` : ""}` };
   if (args.action === "check") {
     const question = checkCheckQuestion(r.text, args.passages);
     return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question, research: null };
