@@ -299,6 +299,15 @@ const STAGING_ONLY: Exclusion[] = [
       + "fixture identities, moves a run's start back to simulate time up, and keeps one browser fixture for the coordinator. "
       + "Changes no staging setting (proved in Z). Refuses any other project.",
   },
+  {
+    file: "scholar-flashcards-acceptance-harness.ts",
+    reason:
+      "SCHOLAR-FLASHCARDS-01 s14 flashcards acceptance (renal + respiratory notes). Needs a RUNNING dev server pointed at "
+      + "the staging project (BASE_URL=http://localhost:3100) with migration 730, the staging service-role key, "
+      + "STAGING_DB_URL (verification-table counts) and real AI (activity questions). It creates fixture identities, "
+      + "writes the exported PDFs to a local folder, and keeps one flashcards browser fixture for the coordinator. "
+      + "Changes no staging setting (proved in Z). Refuses any other project.",
+  },
 ];
 
 // ── Run ──────────────────────────────────────────────────────────────────────────────────────────
