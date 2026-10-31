@@ -12,8 +12,8 @@ export type AuthoringCompetency = {
   /** CFCA-STUDIO-P1 (670): its skills / assessment criteria, in order, each with its component (null = not classified). */
   criteria: AuthoringCriterion[];
 };
-/** id: the competency_skills row (FRAMEWORK-DESIGN-STUDIO-01, for reordering). */
-export type AuthoringCriterion = { id?: string; component: string | null; text: string; sourceRef: string | null };
+/** id: the competency_skills row (FRAMEWORK-DESIGN-STUDIO-01, for reordering). active false: retired (FRAMEWORK-DESIGN-STUDIO-02 S1), kept for history. */
+export type AuthoringCriterion = { id?: string; component: string | null; text: string; sourceRef: string | null; active?: boolean };
 export type AuthoringPractice = { id: string; code: string | null; name: string; cpus: { id: string; code: string | null; name: string; riskCategory: string; complexity: number }[] };
 export type AuthoringFramework = {
   id: string; code: string | null; name: string; description: string | null; layer: string | null; pubStatus: string; versionNum: number;
@@ -93,8 +93,8 @@ async function loadCriteria(admin: any, ids: string[]): Promise<Map<string, Auth
   const out = new Map<string, AuthoringCriterion[]>();
   if (!ids.length) return out;
   const read = (cols: string) => admin.from("competency_skills").select(cols).in("competency_id", ids).order("sort_order").limit(20000);
-  let r = await read("id, competency_id, name, sort_order, component_code, source_ref");
-  if (r.error) r = await read("id, competency_id, name, sort_order");
-  for (const k of ([...(r.data ?? [])] as any[]).sort(byRowOrder)) out.set(k.competency_id, [...(out.get(k.competency_id) ?? []), { id: k.id, component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null }]);
+  let r = await read("id, competency_id, name, sort_order, is_active, component_code, source_ref");
+  if (r.error) r = await read("id, competency_id, name, sort_order, is_active");
+  for (const k of ([...(r.data ?? [])] as any[]).sort(byRowOrder)) out.set(k.competency_id, [...(out.get(k.competency_id) ?? []), { id: k.id, component: k.component_code ?? null, text: k.name, sourceRef: k.source_ref ?? null, active: k.is_active !== false }]);
   return out;
 }

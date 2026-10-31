@@ -3,6 +3,8 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { createCompetency, createCpu, createDomain, createFramework, createPractice, importDraftPackage, isId, renameDomain, setFrameworkIdentity, updateCompetency, updateFramework } from "@/lib/competency/authoring";
 import { submitForReview } from "@/lib/competency/clinical-review";
+import { createCriterion, moveCriterion, restoreCriterion, retireCriterion, updateCriterion } from "@/lib/competency/criteria-authoring";
+import { loadFrameworkDiff } from "@/lib/competency/framework-diff";
 import { discardLayout, reorderLayout } from "@/lib/competency/framework-layout";
 import { loadFrameworkForReview, outcomeCounts, previewOf, runSubmission, type ReviewScope } from "@/lib/competency/review-batch";
 import { currentTraceId } from "@/lib/trace";
@@ -23,6 +25,14 @@ export const maxDuration = 60;
 // not classified), order: ids (codes for sections), every one of that parent, in the new order }. A never-published
 // draft is reordered directly; a published framework saves a layout draft, applied only by an independent publisher.
 // "outcomes" and any cross-parent move are refused (409) as clinical changes. discard_layout { frameworkId }.
+//
+// FRAMEWORK-DESIGN-STUDIO-02 S1 (draft frameworks only; anything else 409 "... go through a revision draft"):
+//   create_criterion { competencyId, component, text, sourceRef?, position? }          -> 201 { ok, id }
+//   update_criterion { criterionId, text?, sourceRef? }                                 -> { ok, unchanged }
+//   retire_criterion | restore_criterion { criterionId }                                -> { ok, unchanged }
+//   move_criterion { criterionId, component?, competencyId?, position? }                -> { ok, kind, substantive, mode? }
+//   import_draft { package, mode?: "append" }   append: new competencies into an existing DRAFT, nothing existing touched
+//   compare_published { frameworkId }           read only: the draft against its last published version (framework-diff.ts)
 //
 // ⚠ GATED BY hqApiGate(["hq.quality.competency.author"]) -- the Competency Author. It authors shared content and
 // puts it forward for clinical review. It approves nothing (395, the Clinical Content Reviewer) and publishes nothing
@@ -47,7 +57,17 @@ export async function POST(req: Request) {
     case "update_competency": { const r = await updateCompetency(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "reorder_layout": { const r = await reorderLayout(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
     case "discard_layout": { const r = await discardLayout(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
-    case "import_draft": { const r = await importDraftPackage(ctx.admin, actor, body.package); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
+    case "import_draft": { const r = await importDraftPackage(ctx.admin, actor, body.package, { mode: body.mode === "append" ? "append" : undefined }); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
+    case "create_criterion": { const r = await createCriterion(ctx.admin, actor, body); return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error); }
+    case "update_criterion": { const r = await updateCriterion(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "retire_criterion": { const r = await retireCriterion(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "restore_criterion": { const r = await restoreCriterion(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "move_criterion": { const r = await moveCriterion(ctx.admin, actor, body); return r.ok ? NextResponse.json(r) : refuse(r.status, r.error); }
+    case "compare_published": {
+      if (!isId(body.frameworkId)) return refuse(400, "Choose a framework.");
+      const r = await loadFrameworkDiff(ctx.admin, body.frameworkId);
+      return "error" in r ? refuse(r.status, r.error) : NextResponse.json(r);
+    }
     case "submit_review": {
       // Draft -> Submit for Review. The curator becomes the submitter (and is already an author), so the 395 trigger
       // refuses any decision they make on it. Shared frameworks only: 395 refuses anything else.
