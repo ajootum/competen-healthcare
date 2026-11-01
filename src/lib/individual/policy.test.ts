@@ -105,6 +105,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
       scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
+      // SCHOLAR-LEARN-STYLE-01: Guide me, Challenge me and the More menu offered (Explain is always on).
+      scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -379,4 +381,14 @@ it("SCHOLAR-INLINE-CHECKS-01: the six inline-check keys default to the lightweig
   expect(p("scholar_learn_inline_skippable", "off").scholarLearnInlineSkippable).toBe("off");
   expect(validateDraft("scholar_learn_inline_checks", "off")).toMatchObject({ ok: true });
   expect(validateDraft("scholar_learn_inline_application", "sometimes").ok).toBe(false);
+});
+
+it("SCHOLAR-LEARN-STYLE-01: the teaching-style and More-menu keys default on and clamp to their options", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({ scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on" });
+  expect(p("scholar_learn_style_guide", "off").scholarLearnStyleGuide).toBe("off");
+  expect(p("scholar_learn_style_challenge", "off").scholarLearnStyleChallenge).toBe("off");
+  expect(p("scholar_learn_more_menu", "off").scholarLearnMoreMenu).toBe("off");
+  expect(p("scholar_learn_style_guide", "maybe").scholarLearnStyleGuide).toBe("on");
+  expect(p("scholar_learn_more_menu", 3).scholarLearnMoreMenu).toBe("on");
 });

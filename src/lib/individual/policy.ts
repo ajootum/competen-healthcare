@@ -119,7 +119,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
-  | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every";
+  | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
+  | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1740,6 +1741,31 @@ export const POLICIES: readonly PolicyDef[] = [
   ...PROFESSIONAL_PLAN_POLICIES,
   ...PROFESSIONAL_COMPETENCY_POLICIES,
   ...PASSPORT_POLICIES,
+  // SCHOLAR-LEARN-STYLE-01 (owner GO, Teaching Style and Practice HFE redesign): three teaching styles, Explain always on. One contiguous block.
+  {
+    key: "scholar_learn_style_guide", kind: "choice", product: "Scholar",
+    label: "Teaching style: Guide me",
+    help: "Whether Learn offers \"Guide me\" (step-by-step learning with questions and prompts) as one of its three teaching styles. It runs the existing Guide action, with the same allowance and model checks. Explain is always offered.",
+    options: [{ value: "on", label: "Offer Guide me" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Only shown where the Guide action is also offered by the learning actions. Default: offered.",
+  },
+  {
+    key: "scholar_learn_style_challenge", kind: "choice", product: "Scholar",
+    label: "Teaching style: Challenge me",
+    help: "Whether Learn offers \"Challenge me\" (questioning, teach-back and harder reasoning) as one of its three teaching styles. \"Ask me a question\" and \"Teach it back\" are its follow-on steps. Hidden, they move to the More menu. Explain is always offered.",
+    options: [{ value: "on", label: "Offer Challenge me" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Only shown where the Challenge action is also offered by the learning actions. Default: offered.",
+  },
+  {
+    key: "scholar_learn_more_menu", kind: "choice", product: "Scholar",
+    label: "Learn: the More menu",
+    help: "Whether a lesson has a discreet \"More\" menu holding the other teaching actions (High-yield, Simplify, Summarise and the like). Explain my mistake appears on its own after a wrong check, whatever this says.",
+    options: [{ value: "on", label: "Offer the More menu" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Only actions the learning actions policy already offers appear. Default: offered.",
+  },
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -2044,6 +2070,10 @@ export type IndividualPolicy = {
   professionalCompetency: ProfessionalCompetencyPolicy;
   /** COMPETEN-PROFESSIONAL-PASSPORT-01: the lifelong Passport and its shared views, as configured. */
   professionalPassport: PassportPolicy;
+  /** SCHOLAR-LEARN-STYLE-01: the Guide me and Challenge me teaching styles and the More menu (Explain is always on). */
+  scholarLearnStyleGuide: "on" | "off";
+  scholarLearnStyleChallenge: "on" | "off";
+  scholarLearnMoreMenu: "on" | "off";
 };
 
 /** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
@@ -2201,6 +2231,9 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     professionalPlan: resolveProfessionalPlan(published),
     professionalCompetency: resolveProfessionalCompetency(published),
     professionalPassport: resolvePassport(published),
+    scholarLearnStyleGuide: clampChoice(policyDef("scholar_learn_style_guide") as ChoicePolicy, published.get(policyPath("scholar_learn_style_guide"))) as "on" | "off",
+    scholarLearnStyleChallenge: clampChoice(policyDef("scholar_learn_style_challenge") as ChoicePolicy, published.get(policyPath("scholar_learn_style_challenge"))) as "on" | "off",
+    scholarLearnMoreMenu: clampChoice(policyDef("scholar_learn_more_menu") as ChoicePolicy, published.get(policyPath("scholar_learn_more_menu"))) as "on" | "off",
   };
 }
 

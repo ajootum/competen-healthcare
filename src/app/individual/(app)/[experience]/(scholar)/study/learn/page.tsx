@@ -141,6 +141,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
           materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} objectiveText={studyOn && one(q.study) === "new" && start && start.kind !== "competency" ? cleanObjectiveText(one(q.obj)) ?? undefined : undefined} openAsk={q.panel === "ask"} prepareNext={policy.scholarLearnPrepareNext} ownCards={policy.scholarFlashcards === "on"} applyChunkIds={await applyChunkIds(ctx.admin, ctx.userId)}
           inline={{ recall: policy.scholarLearnInlineRecall, placement: policy.scholarLearnInlineRecallPlacement, minWords: policy.scholarLearnInlineRecallMinWords, checks: policy.scholarLearnInlineChecks, application: policy.scholarLearnInlineApplication, skippable: policy.scholarLearnInlineSkippable, required: policy.scholarLearnCheckRequired, every: policy.scholarLearnCheckEvery, saveMissed: policy.scholarLearnSaveMissedCards }}
+          styleOn={{ guide: policy.scholarLearnStyleGuide, challenge: policy.scholarLearnStyleChallenge, moreMenu: policy.scholarLearnMoreMenu }}
           notesOn={policy.scholarLearningLibrary === "on" && await librarySchema(ctx.admin, ctx.userId)} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}

@@ -41,7 +41,8 @@ import { LessonPractice } from "./learn-practice";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
 import { INLINE_DEFAULTS, RECALL_WAIT_REASON, applicationAfter, applyEligible, blockPending, checkBlocks, inlineCheckPlacement, lessonCanContinue, marksFromActivities, quickFromCode, recallContent, recallFromCode, wordCount, type CheckBlock, type InlinePolicy } from "@/lib/individual/scholar/learn-inline";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
-import { ApproachControl, offeredApproaches, type Approach, type ApproachResult } from "./learn-approach";
+import { ApproachControl, type ApproachMemory, type ApproachResult } from "./learn-approach";
+import { STYLE_DEFAULTS, effectiveStyle, mistakeOffer, moreItems, styleChoices, styleCode, type StylePolicy, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -217,6 +218,8 @@ export function LearnWorkspace(props: {
   inline?: InlinePolicy;
   /** SCHOLAR-INLINE-CHECKS-01: sections with an accepted competency mapping -- the clinical-relevance signal for Apply (learn-inline.ts applyEligible). */
   applyChunkIds?: string[];
+  /** SCHOLAR-LEARN-STYLE-01: scholar_learn_style_guide / _challenge / scholar_learn_more_menu (absent: all on). Explain is always on. */
+  styleOn?: StylePolicy;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<SessionView | null>(props.initial);
@@ -272,8 +275,12 @@ export function LearnWorkspace(props: {
   const [lessonNote, setLessonNote] = useState<Record<number, { message: string; settings: LessonSettings }>>({});
   /** The settings each step's lesson was last taught with (a lesson offers to teach it again with new ones). */
   const [taught, setTaught] = useState<Record<number, LessonSettings>>({});
-  /** Per lesson: the teaching approach chosen, and whether Practise is open. */
-  const [approachOf, setApproachOf] = useState<Record<number, Approach | null>>({});
+  /** SCHOLAR-LEARN-STYLE-01: the teaching style chosen for this session (kept in the 790 position, `unfinished.style`), and what each approach last showed in each lesson (switching style costs no AI call). */
+  const [styleChosen, setStyleChosen] = useState<TeachingStyle>("explain");
+  const styleRef = useRef<TeachingStyle>("explain");
+  const [styleMem, setStyleMem] = useState<Record<string, ApproachMemory>>({});
+  const remember = useCallback((k: string, m: ApproachMemory) => setStyleMem(o => ({ ...o, [k]: m })), []);
+  /** Per lesson: whether Practise is open. */
   const [practiceOpen, setPracticeOpen] = useState<Record<number, boolean>>({});
   // SCHOLAR-INLINE-CHECKS-01: the recall check is open for this lesson (its text is collapsed while the learner recalls), the missed-card saves
   // waiting for the learner to continue (the required recall block, learn-inline.ts).
@@ -319,6 +326,7 @@ export function LearnWorkspace(props: {
   const pendingPlace = useRef<{ step: number; place: Place; since: number } | null>(null);
   const sessionRef = useRef(session);
   const practiceRef = useRef(practiceOpen);
+  const chooseStyle = useCallback((st: TeachingStyle) => { styleRef.current = st; setStyleChosen(st); if (engaged.current) syncRef.current?.event("activity"); }, []);
   useEffect(() => { sessionRef.current = session; }, [session]);
   const dispatch = useCallback((e: JourneyEvent) => {
     const s = jRef.current;
@@ -688,6 +696,7 @@ export function LearnWorkspace(props: {
     });
     const j = createJourney({ count, current, revealedUpTo: merged ? merged.revealedUpTo : saved?.revealedUpTo, progress: session.steps.map(x => progress[x.step]), activities: acts, saved: savedOf });
     if (merged?.practiceOpen != null) { const p = merged.practiceOpen; setPracticeOpen(m => ({ ...m, [p]: true })); }
+    if (merged && merged.style !== "explain") { styleRef.current = merged.style; setStyleChosen(merged.style); }
     serverAt.current = serverIdx; anchor.current = current;
     // Resume: the furthest lesson taught (from the records) when the stored position is behind it -- a position pulled
     // back by an older version of this page hides nothing; choosing it is the learner's (one tap, saved: no AI).
@@ -740,7 +749,7 @@ export function LearnWorkspace(props: {
       return {
         step: at.step, furthestStep: Math.max(far.step, at.step), cardId: cardIdFor(at.step, pl.anchor ?? (practice ? "practice" : null)), sectionChunkId: at.sections[0]?.chunkId ?? null,
         offsetHint: pl.offset, lastCompletedActivity: lastDone.current?.activity ?? null, lastCompletedAt: lastDone.current?.at ?? null,
-        unfinished: practice || marks.recall || marks.quick ? { v: 1, ...(practice ? { practiceOpen: at.step } : {}), ...marks } : null,
+        unfinished: practice || marks.recall || marks.quick || styleCode(styleRef.current) ? { v: 1, ...(practice ? { practiceOpen: at.step } : {}), ...marks, ...(styleCode(styleRef.current) ? { style: styleCode(styleRef.current) } : {}) } : null,
       };
     };
     const sync = new PositionSync({ deviceId: deviceIdOf(), read, send: (p, o) => sendPosition(syncSession, p, o.keepalive) });
@@ -984,7 +993,13 @@ export function LearnWorkspace(props: {
     const first = st.sections[0];
     // Apply only where the content is clinically relevant (a competency studied, or an accepted competency mapping on a section).
     const applyHref = first && applyEligible(session.scopeKind, st.sections.map(x => x.chunkId), mappedChunks) ? `/individual/scholar/study/apply?section=${first.chunkId}&from=teach` : null;
-    const offered = offeredApproaches(props.actions, verdict, !!lastCheck[st.step]);
+    // SCHOLAR-LEARN-STYLE-01: three teaching styles (Explain, Guide me, Challenge me), the More menu, and Explain my mistake only after a wrong check.
+    const av = { actions: props.actions, consent: props.consent, reasonOf: offReason };
+    const stylePolicy = props.styleOn ?? STYLE_DEFAULTS;
+    const styleList = styleChoices(stylePolicy, av);
+    const moreList = moreItems(stylePolicy, av, more);
+    const mistake = mistakeOffer(av, verdict, !!lastCheck[st.step]);
+    const style = effectiveStyle(styleChosen, styleList);
     const parts = lastTeach ? parseTeachAnswer(lastTeach.reply.answer!) : null;
     const draft = {
       front: plain(teachQuestions[0] ? questionText(teachQuestions[0]) : `What are the key points of ${st.title || "this lesson"}?`, 300),
@@ -1076,34 +1091,18 @@ export function LearnWorkspace(props: {
             containerId={lessonDomId(st.step)} label="Your notes on this lesson" />
         )}
 
-        {/* SCHOLAR-PERSISTENT-LEARNING-01: the teaching approaches and the other ways to explain, as ONE optional, collapsed
-            "Teaching style" control. Every choice inside is the learner's click (an explicit request); Ask Scholar stays in view. */}
+        {/* SCHOLAR-LEARN-STYLE-01: ONE teaching-style choice of three (Explain, Guide me, Challenge me), a discreet More menu, and Explain my
+            mistake after a wrong check. Every choice is the learner's click and runs the same request as before; Ask Scholar stays in view. */}
         <div className="mt-3 flex flex-wrap items-start gap-2">
-          {(offered.length > 0 || more.length > 0) && (
-            <details id={lessonAnchorId(st.step, "style")} className="group min-w-0 flex-1 basis-[220px] scroll-mt-4 rounded-xl border border-gray-200">
-              <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-                <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Teaching style
-                <span className="min-w-0 truncate text-[12px] font-normal text-gray-600">· optional</span>
-              </summary>
-              <div className="border-t border-gray-200 px-3 pb-3">
-                <ApproachControl offered={offered} value={approachOf[st.step] ?? null} onChange={a => setApproachOf(m => ({ ...m, [st.step]: a }))}
-                  onTeach={() => (!hasLesson ? dispatch({ type: "requestTeach", index: i }) : props.actions.includes("explain") ? void act("explain", {}, "lesson", undefined, st.step) : scrollToLesson(st.step))}
-                  onExplain={props.actions.includes("explain") ? () => void act("explain", {}, "lesson", undefined, st.step) : undefined}
-                  verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
-                  run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent} />
-                {more.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Other ways to explain">
-                    {more.map(a => (
-                      <button key={a} type="button" disabled={busyHere || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a, {}, "lesson", undefined, st.step)}
-                        className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>
-                        {working(a) ? "Working…" : props.labels[a as LearnAction]}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </details>
-          )}
+          <div id={lessonAnchorId(st.step, "style")} className="min-w-0 flex-1 basis-[220px] scroll-mt-4">
+            <ApproachControl step={st.step} style={style} choices={styleList} more={moreList} mistake={mistake}
+              onStyle={x => { chooseStyle(x); if (x === "explain" && hasLesson) scrollToLesson(st.step); }}
+              onClassic={a => void act(a, {}, "lesson", undefined, st.step)} working={working}
+              onExplain={props.actions.includes("explain") ? () => void act("explain", {}, "lesson", undefined, st.step) : undefined}
+              verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
+              run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent}
+              memory={styleMem} remember={remember} />
+          </div>
           {group.ask && <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{props.labels.ask}</button>}
         </div>
 

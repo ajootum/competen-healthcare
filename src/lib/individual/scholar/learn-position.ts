@@ -24,6 +24,7 @@
 // recall / quick-check marks as short codes per lesson), never AI output and never notes content.
 
 import { cleanMarks, type InlineMarks } from "./learn-inline";
+import { cleanStyleCode, styleFromCode, type TeachingStyle } from "./learn-style";
 
 export const SYNC_INTERVAL_MS = 15_000;
 export const EVENT_COALESCE_MS = 300;
@@ -35,7 +36,8 @@ export type PositionDraft = {
   lastCompletedActivity: string | null; lastCompletedAt: string | null; unfinished: Unfinished | null;
 };
 /** `recall` / `quick`: SCHOLAR-INLINE-CHECKS-01, the learner's own recall rating and quick-check result per lesson step (learn-inline.ts; codes only). */
-export type Unfinished = { v: 1; practiceOpen?: number | null } & InlineMarks;
+/** `style`: SCHOLAR-LEARN-STYLE-01, the learner's chosen teaching style for this session (g Guide me, c Challenge me; Explain is the default and is not stored). */
+export type Unfinished = { v: 1; practiceOpen?: number | null; style?: "g" | "c" } & InlineMarks;
 export type PositionPut = PositionDraft & { deviceId: string; clientSeq: number; baseRevision: number | null; clientUpdatedAt: string };
 export type ServerPosition = PositionDraft & { deviceId: string; clientSeq: number; clientUpdatedAt: string; revision: number; updatedAt: string };
 export type WriteReason = "first" | "same_device" | "informed" | "progress" | "stale";
@@ -89,7 +91,9 @@ export function cleanUnfinished(v: unknown): Unfinished | null {
   const marks = cleanMarks(v);
   const out: Unfinished = { v: 1, ...marks };
   if (int(p, 0, 10000)) out.practiceOpen = p as number;
-  return out.practiceOpen !== undefined || marks.recall || marks.quick ? out : null;
+  const style = cleanStyleCode((v as Record<string, unknown>).style);
+  if (style) out.style = style;
+  return out.practiceOpen !== undefined || marks.recall || marks.quick || style ? out : null;
 }
 
 /** Pure. A PUT body as a position write, or why not. `nowMs` is the server's clock (an app clock, compared with device time only to refuse the far future). */
@@ -147,7 +151,7 @@ export function positionFromRow(r: unknown): ServerPosition | null {
 export function mergeResume(input: {
   steps: readonly number[]; fallback: number;
   local: { anchor: number; revealedUpTo: number; updatedAt: string } | null; server: ServerPosition | null;
-}): { anchor: number; revealedUpTo: number; from: "server" | "device" | "session"; practiceOpen: number | null; marks: InlineMarks } {
+}): { anchor: number; revealedUpTo: number; from: "server" | "device" | "session"; practiceOpen: number | null; marks: InlineMarks; style: TeachingStyle } {
   const last = Math.max(0, input.steps.length - 1);
   const clamp = (i: number) => Math.max(0, Math.min(last, Number.isInteger(i) ? i : 0));
   const idx = (stepNo: number) => { const i = input.steps.indexOf(stepNo); return i >= 0 ? i : -1; };
@@ -160,7 +164,9 @@ export function mergeResume(input: {
   const practiceStep = serverWins ? s?.unfinished?.practiceOpen ?? null : null;
   return { anchor, revealedUpTo, from: serverWins ? "server" : input.local ? "device" : "session", practiceOpen: practiceStep !== null && idx(practiceStep) >= 0 ? practiceStep : null,
     // The inline-check marks are the learner's own words on a lesson: read whichever copy is newer, never dropped for a position.
-    marks: cleanMarks(s?.unfinished) };
+    marks: cleanMarks(s?.unfinished),
+    // SCHOLAR-LEARN-STYLE-01: the teaching style chosen in this session, from whichever device wrote it last (Explain when none).
+    style: styleFromCode(s?.unfinished?.style) };
 }
 
 // ── WHEN THE PAGE WRITES ──
