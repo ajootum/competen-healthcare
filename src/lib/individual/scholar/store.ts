@@ -335,6 +335,20 @@ export async function materialExtras(admin: Admin, userId: string, ids: string[]
   return { qualityOn: !q.error, collectionsOn: !c.error, byId };
 }
 
+/**
+ * SCHOLAR-LEARN-GAPS-02 item 5: the extraction quality (406) of some of the caller's own materials, in ONE bounded read, keyed
+ * on the caller. Absent migration or a failed read: an empty map (nothing is then marked, never an error).
+ */
+export async function materialQualities(admin: Admin, userId: string, ids: string[]): Promise<Map<string, ExtractionQuality | null>> {
+  const out = new Map<string, ExtractionQuality | null>();
+  const keep = [...new Set(ids.filter(isUuid))].slice(0, 60);
+  if (!keep.length) return out;
+  const q = await admin.from("individual_scholar_material").select("id, extraction_quality").eq("user_id", userId).in("id", keep);
+  if (q.error) return out;
+  for (const r of (q.data ?? []) as any[]) out.set(r.id, fromQualityJson(r.extraction_quality));
+  return out;
+}
+
 /** Rename one of the person's own materials. */
 export async function renameMaterial(admin: Admin, userId: string, id: string, title: string): Promise<"ok" | "not_found" | "failed"> {
   if (!isUuid(id)) return "not_found";

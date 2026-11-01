@@ -25,6 +25,8 @@ import {
   type JourneyEffect, type JourneyEvent, type JourneyState, type LessonFacts, type LessonRecord,
 } from "@/lib/individual/scholar/learn-journey";
 import { DEVICE_KEY, PositionSync, mergeResume, newDeviceId, type PositionDraft, type PositionPut, type ServerPosition, type SyncResult } from "@/lib/individual/scholar/learn-position";
+import { PlaceScheduler, cardIdFor, choosePlace, lessonAnchorId, lessonAnchorPrefix, offsetPercent, parseCardId, parseLocalPlaces, pickAnchor, placeKey, placeScrollTop, withLocalPlace, type Place } from "@/lib/individual/scholar/learn-place";
+import { SPELLING_CHOICES, SPELLING_CHOICE_LABEL, readSpellingChoice, spellingField, writeSpellingChoice, type SpellingChoice } from "@/lib/individual/scholar/spelling-variant";
 import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 import { STUDY_EVENT, carry } from "./study-active";
@@ -33,7 +35,7 @@ import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi } from "
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
 import { usePaneGrid } from "@/components/ui/pane-grid";
-import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonHeadingId, type Activity, type LessonRow } from "./learn-lesson-card";
+import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
 import { ApproachControl, offeredApproaches, type Approach, type ApproachResult } from "./learn-approach";
@@ -70,7 +72,8 @@ export type StartScope =
   | { kind: "sources"; materialIds: string[]; chunkIds: string[]; topics: string[]; topic?: string };
 
 /** `excerpt`: the start of the section, shown only behind "View sources" (absent on some older replies). */
-type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string; excerpt?: string };
+/** `aiRead` / `aiReadNote`: the section's text was read from a slide or page picture by AI (extract.ts aiReadLabel), set by the server. */
+type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string; excerpt?: string; aiRead?: boolean; aiReadNote?: string };
 type Reference = { tag: string; title: string; code: string | null; outcome: string | null; status: string; approved?: boolean; library?: boolean };
 /** COMPETEN-RESEARCH-01: one external record, exactly as the provider returned it. Untagged = further reading only. */
 type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null };
@@ -155,14 +158,30 @@ function deviceIdOf(): string {
     const id = newDeviceId(); window.localStorage.setItem(DEVICE_KEY, id); return id;
   } catch { return newDeviceId(); }
 }
-/** 0-100: how far through the lesson the reading band (35% down the screen) is. Read only when a write is made. */
-function offsetIn(stepNo: number): number | null {
+/** The nearest scrolling ancestor of an element (the app shell may scroll rather than the window), or null for the window. */
+function scrollParent(el: HTMLElement | null): HTMLElement | null {
+  for (let p = el?.parentElement ?? null; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if ((o === "auto" || o === "scroll") && p.scrollHeight > p.clientHeight + 1) return p;
+  }
+  return null;
+}
+/**
+ * SCHOLAR-LEARN-GAPS-02 item 2: WHERE in the active lesson the reading band (35% down the screen) is: the nearest section's
+ * anchor (the fixed ids in the lesson card, learn-place.ts) and a coarse 0-100. Read only when a write is made.
+ */
+function readPlace(stepNo: number): { anchor: string | null; offset: number | null } {
   try {
-    const el = document.getElementById(lessonDomId(stepNo));
-    const r = el?.getBoundingClientRect();
-    if (!r || r.height <= 0) return null;
-    return Math.max(0, Math.min(100, Math.round(((window.innerHeight * 0.35 - r.top) / r.height) * 100)));
-  } catch { return null; }
+    const card = document.getElementById(lessonDomId(stepNo));
+    if (!card) return { anchor: null, offset: null };
+    const sc = scrollParent(card);
+    const frame = sc ? sc.getBoundingClientRect() : { top: 0, height: window.innerHeight };
+    const band = frame.top + frame.height * 0.35;
+    const prefix = lessonAnchorPrefix(stepNo);
+    const tops = [...card.querySelectorAll<HTMLElement>(`[id^="${prefix}"]`)].map(el => ({ anchor: el.id.slice(prefix.length), top: el.getBoundingClientRect().top }));
+    const r = card.getBoundingClientRect();
+    return { anchor: pickAnchor(tops, band), offset: offsetPercent({ top: r.top, height: r.height }, band) };
+  } catch { return { anchor: null, offset: null }; }
 }
 /** A flashcard's starting words from the lesson's own text: [S n] tags removed, within the card limits. The learner edits them. */
 const plain = (s: string, max: number) => s.replace(/\s*\[[SRE]\d+\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
@@ -232,6 +251,11 @@ export function LearnWorkspace(props: {
   const [chosenGuided, setChosenGuided] = useState<boolean | null>(null);
   const guided = chosenGuided ?? isGuided(rememberedG);
   const setGuided = (on: boolean) => { setChosenGuided(on); try { window.localStorage.setItem(GUIDED_KEY, guidedValue(on)); } catch { /* this visit only */ } };
+  // SCHOLAR-LEARN-GAPS-02 item 4: British, American or leave as typed, on this device (spelling-variant.ts says why not the server).
+  const rememberedSpelling = useSyncExternalStore(noSubscribe, readSpellingChoice, () => "none" as SpellingChoice);
+  const [chosenSpelling, setChosenSpelling] = useState<SpellingChoice | null>(null);
+  const spelling: SpellingChoice = chosenSpelling ?? rememberedSpelling;
+  const setSpelling = (c: SpellingChoice) => { setChosenSpelling(c); writeSpellingChoice(c); };
   const requests = useRef(new LessonRequests());
   /** Lessons being opened or written, by lesson key: the progress line shows in that lesson. */
   const [loading, setLoading] = useState<Record<string, { step: number; mode: LearnMode }>>({});
@@ -275,6 +299,10 @@ export function LearnWorkspace(props: {
   const serverPos = useRef<ServerPosition | null>(props.initialPosition ?? null);
   const lastDone = useRef<{ activity: string; at: string } | null>(null);
   const syncRef = useRef<PositionSync | null>(null);
+  // SCHOLAR-LEARN-GAPS-02 item 2: the reading place within the active lesson. `pendingPlace`: a saved place to return to once the
+  // lesson's content is on the page (until then the writer reports it, so a write never replaces it with the lesson's top).
+  const placerRef = useRef<PlaceScheduler | null>(null);
+  const pendingPlace = useRef<{ step: number; place: Place; since: number } | null>(null);
   const sessionRef = useRef(session);
   const practiceRef = useRef(practiceOpen);
   useEffect(() => { sessionRef.current = session; }, [session]);
@@ -310,9 +338,10 @@ export function LearnWorkspace(props: {
     const scopeIds = session.steps.flatMap(x => x.sections.map(y => y.chunkId));
     return {
       action, step: st.step, depth: s.depth, ...(s.mode !== "notes" && action !== "check" && action !== "clarify" ? { mode: s.mode } : {}), ...extra,
+      ...(action === "ask" ? spellingField(spelling) : {}),
       ...(session.id ? { sessionId: session.id } : { chunkIds: action === "ask" ? scopeIds : st.sections.map(x => x.chunkId) }),
     };
-  }, [session]);
+  }, [session, spelling]);
   // A reply into its own step's thread (or the Ask thread), and the step's progress. A reply that arrives after the
   // learner moved on still belongs to the step it teaches, so it shows in that lesson (no second AI call).
   const record = useCallback((stepNo: number, json: Record<string, any>, action: string, extra: Record<string, unknown> | undefined, target: "lesson" | "ask", asked?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -450,6 +479,49 @@ export function LearnWorkspace(props: {
     requestAnimationFrame(() => { if (!go()) setTimeout(go, 60); });
   }, []);
 
+  // SCHOLAR-LEARN-GAPS-02 item 2: RETURNING TO A SAVED PLACE. The place is the server's when newer than this device's copy
+  // (learn-place.ts choosePlace). It is applied once the lesson's saved teaching is on the page (the anchor exists), else after
+  // a few seconds by its coarse percentage. The learner's own wheel, touch or key press cancels it. Never moves current_step.
+  const liveRef = useRef({ cards, opening, loading, lessonNote });
+  useEffect(() => { liveRef.current = { cards, opening, loading, lessonNote }; });
+  const applyPlace = useCallback((): boolean => {
+    const pp = pendingPlace.current, s = sessionRef.current, j = jRef.current;
+    if (!pp || !s || !j) return false;
+    if (s.steps[j.current]?.step !== pp.step) { pendingPlace.current = null; return false; }
+    const card = document.getElementById(lessonDomId(pp.step));
+    if (!card) return false;
+    const live = liveRef.current;
+    const parsed = parseCardId(pp.place.cardId);
+    const anchorEl = parsed?.anchor ? document.getElementById(lessonAnchorId(pp.step, parsed.anchor)) : null;
+    const waiting = !!live.opening[pp.step] || Object.values(live.loading).some(l => l.step === pp.step);
+    const hasContent = (live.cards[pp.step]?.length ?? 0) > 0;
+    if (anchorEl) {
+      pendingPlace.current = null;
+      anchorEl.scrollIntoView({ behavior: "auto", block: "start" });
+      return true;
+    }
+    if (waiting || (!hasContent && !live.lessonNote[pp.step] && Date.now() - pp.since < 4000)) return false;
+    pendingPlace.current = null;
+    const cr = card.getBoundingClientRect(), sc = scrollParent(card);
+    if (pp.place.offset === null) { card.scrollIntoView({ behavior: "auto", block: "start" }); return true; }
+    if (sc) { const f = sc.getBoundingClientRect(); sc.scrollTop = placeScrollTop({ cardTop: cr.top - f.top, cardHeight: cr.height, offset: pp.place.offset, viewportHeight: sc.clientHeight, scrollY: sc.scrollTop }); }
+    else window.scrollTo(0, placeScrollTop({ cardTop: cr.top, cardHeight: cr.height, offset: pp.place.offset, viewportHeight: window.innerHeight, scrollY: window.scrollY }));
+    return true;
+  }, []);
+  /** A place worth returning to in this lesson (not merely its top) is now pending. */
+  const wantPlace = useCallback((stepNo: number): boolean => {
+    const sp = serverPos.current, id = sessionRef.current?.id ?? null;
+    let local: Place | null = null;
+    if (id) { try { local = parseLocalPlaces(window.localStorage.getItem(placeKey(id)))[String(stepNo)] ?? null; } catch { /* the server's copy only */ } }
+    const place = choosePlace({ step: stepNo, local, server: sp ? { step: sp.step, cardId: sp.cardId, offsetHint: sp.offsetHint, clientUpdatedAt: sp.clientUpdatedAt } : null });
+    const anchor = parseCardId(place?.cardId)?.anchor ?? null;
+    if (!place || ((!anchor || anchor === "h") && (place.offset ?? 0) < 3)) { pendingPlace.current = null; return false; }
+    pendingPlace.current = { step: stepNo, place, since: Date.now() };
+    window.setTimeout(() => { if (pendingPlace.current?.step === stepNo) applyPlace(); }, 4200);
+    return true;
+  }, [applyPlace]);
+  useEffect(() => { if (pendingPlace.current) applyPlace(); }, [cards, opening, loading, lessonNote, journey, applyPlace]);
+
   // The journey's effects, against the latest callbacks.
   useEffect(() => {
     cardsRef.current = cards;
@@ -461,7 +533,7 @@ export function LearnWorkspace(props: {
       else if (f.kind === "teach") runTeach(st.step, f.auto);
       else if (f.kind === "abort") { if (teachCtl.current?.step === st.step) teachCtl.current.ctl.abort(); }
       else if (f.kind === "prefetch") void prefetch(st.step);
-      else if (f.kind === "scrollTo") scrollToLesson(st.step);
+      else if (f.kind === "scrollTo") { if (pendingPlace.current?.step !== st.step) scrollToLesson(st.step); }
     };
   });
   // Nothing outlives the workspace: an unneeded lesson or prefetch request is cancelled on leaving.
@@ -476,7 +548,7 @@ export function LearnWorkspace(props: {
     const id = ++seq.current;
     let shown = false;
     const r = await askPersonalAi("/api/individual/scholar/learn/assistant", studyBody({
-      question, mode: "teach", step: step.step, depth: paDepth, ...(purpose ? { purpose } : {}), ...(followUp ? { followUp } : {}),
+      question, mode: "teach", step: step.step, depth: paDepth, ...(purpose ? { purpose } : {}), ...(followUp ? { followUp } : {}), ...spellingField(spelling),
       ...(session.id ? { sessionId: session.id } : { chunkIds: step.sections.map(x => x.chunkId) }),
     }), soFar => {
       if (!shown) { shown = true; setAssist(list => [{ id, asked: question, answer: soFar, streaming: true, followUp: followUp?.kind }, ...list]); }
@@ -493,7 +565,7 @@ export function LearnWorkspace(props: {
     if (prompt) { setPending({ prompt, target: "assistant", question, followUp }); return; }
     if (r.ok) setAssist(list => [{ id, asked: question, answer: String(r.json.answer ?? ""), followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources : undefined }, ...list]);
     else failed(String(r.json.error ?? "Your assistant could not answer just now."));
-  }, [session, step, studyBody, paDepth]);
+  }, [session, step, studyBody, paDepth, spelling]);
   // SCHOLAR-SQIE-02: a withheld answer offers evidence recovery beneath it, in the learner's own source mode. "Explain
   // using approved references" makes the SAME request again (same action, same question) with only the recovery's id,
   // mode and question; the server finds the evidence again and runs the same checks. Nothing the student typed is cleared.
@@ -590,18 +662,19 @@ export function LearnWorkspace(props: {
     if (resumed.current && furthest > current) setBanner(furthest);
     else if (resumed.current && current > 0) setBanner(current);
     else engaged.current = true;
+    if (resumed.current) wantPlace(session.steps[current]?.step ?? -1);
     const r = startJourney(j, !resumed.current || (chosenGuided ?? isGuided(rememberedGuided())), resumed.current);
     jRef.current = r.state; setJourney(r.state);
     for (const f of r.effects) fxRef.current(f);
-  }, [session, progress, records, chosenGuided]);
+  }, [session, progress, records, chosenGuided, wantPlace]);
 
   // SCHOLAR-PERSISTENT-LEARNING-01: no scroll observer. Scrolling never changes the active lesson, never moves the
   // position and never asks for anything; the 790 writer below only notes a scroll as an interaction (touch).
   // The learner's own input marks them as reading (a page merely loaded never moves their saved position).
   useEffect(() => {
-    const on = () => { engaged.current = true; };
-    const opts = { passive: true, once: true } as const;
-    window.addEventListener("wheel", on, opts); window.addEventListener("touchmove", on, opts); window.addEventListener("keydown", on, { once: true });
+    const on = () => { engaged.current = true; pendingPlace.current = null; };
+    const opts = { passive: true } as const;
+    window.addEventListener("wheel", on, opts); window.addEventListener("touchmove", on, opts); window.addEventListener("keydown", on);
     return () => { window.removeEventListener("wheel", on); window.removeEventListener("touchmove", on); window.removeEventListener("keydown", on); };
   }, []);
   // This device's copy (indices and marks only: nothing taught or typed is kept in the browser). The position kept is
@@ -627,18 +700,33 @@ export function LearnWorkspace(props: {
       if (!at) return null;
       const far = s.steps[Math.max(j.revealedUpTo, j.current)] ?? at;
       const practice = !!practiceRef.current[at.step];
+      // WHERE in the active lesson (a saved place still on its way back is reported as it is, never replaced by the lesson's top).
+      const pend = pendingPlace.current?.step === at.step ? pendingPlace.current.place : null;
+      const pl = pend ? { anchor: parseCardId(pend.cardId)?.anchor ?? null, offset: pend.offset } : readPlace(at.step);
       return {
-        step: at.step, furthestStep: Math.max(far.step, at.step), cardId: `lesson-${at.step}${practice ? ":practice" : ""}`, sectionChunkId: at.sections[0]?.chunkId ?? null,
-        offsetHint: offsetIn(at.step), lastCompletedActivity: lastDone.current?.activity ?? null, lastCompletedAt: lastDone.current?.at ?? null,
+        step: at.step, furthestStep: Math.max(far.step, at.step), cardId: cardIdFor(at.step, pl.anchor ?? (practice ? "practice" : null)), sectionChunkId: at.sections[0]?.chunkId ?? null,
+        offsetHint: pl.offset, lastCompletedActivity: lastDone.current?.activity ?? null, lastCompletedAt: lastDone.current?.at ?? null,
         unfinished: practice ? { v: 1, practiceOpen: at.step } : null,
       };
     };
     const sync = new PositionSync({ deviceId: deviceIdOf(), read, send: (p, o) => sendPosition(syncSession, p, o.keepalive) });
     sync.adopt(serverPos.current);
     syncRef.current = sync;
-    const onVisibility = () => { if (document.visibilityState === "hidden") sync.hide(); };
-    const onHide = () => sync.hide();
-    const onScroll = () => { if (engaged.current) sync.touch(); };
+    // Scrolling only NOTES a place; it is committed once the scrolling has stopped (2 s) and at most once per 15 s, and at once on
+    // hide / pagehide with keepalive (learn-place.ts PlaceScheduler). It never changes the active lesson or current_step.
+    const keepPlace = () => {
+      try {
+        const s = sessionRef.current, j = jRef.current, at = s && j ? s.steps[j.current] : null;
+        if (!s?.id || !at) return;
+        const pl = readPlace(at.step), key = placeKey(s.id);
+        window.localStorage.setItem(key, JSON.stringify(withLocalPlace(parseLocalPlaces(window.localStorage.getItem(key)), at.step, { cardId: cardIdFor(at.step, pl.anchor), offset: pl.offset, at: new Date().toISOString() })));
+      } catch { /* this visit only */ }
+    };
+    const placer = new PlaceScheduler({ commit: keepalive => { if (pendingPlace.current) return; keepPlace(); sync.touch(); if (keepalive) sync.hide(); } });
+    placerRef.current = placer;
+    const onVisibility = () => { if (document.visibilityState === "hidden") { placer.hide(); sync.hide(); } };
+    const onHide = () => { placer.hide(); sync.hide(); };
+    const onScroll = () => { if (engaged.current && !pendingPlace.current) placer.note(); };
     document.addEventListener("visibilitychange", onVisibility);
     window.addEventListener("pagehide", onHide);
     document.addEventListener("scroll", onScroll, { passive: true, capture: true });
@@ -646,6 +734,7 @@ export function LearnWorkspace(props: {
       document.removeEventListener("visibilitychange", onVisibility);
       window.removeEventListener("pagehide", onHide);
       document.removeEventListener("scroll", onScroll, { capture: true });
+      placer.hide(); placer.stop(); if (placerRef.current === placer) placerRef.current = null;
       sync.hide(); sync.disable();
       if (syncRef.current === sync) syncRef.current = null;
     };
@@ -663,14 +752,17 @@ export function LearnWorkspace(props: {
     const st = session.steps[i];
     if (!st) return;
     engaged.current = true; setBanner(null);
-    if (i === j.current) { scrollToLesson(st.step); return; }
+    placerRef.current?.cancel();
+    // Coming back to this lesson: its saved place (the server's if newer than this device's), else its start.
+    if (i === j.current) { if (wantPlace(st.step)) requestAnimationFrame(() => { applyPlace(); }); else scrollToLesson(st.step); return; }
+    wantPlace(st.step);
     const hadThread = (cardsRef.current[session.steps[j.current]?.step ?? -1] ?? []).length > 0;
     const move = i < j.current ? "revisit" : i > j.current + 1 || !hadThread ? "skip" : null;
     anchor.current = i; serverAt.current = i;
     dispatch(how === "next" ? { type: "next", guided } : { type: "select", index: i, guided });
     if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step, ...(move ? { move } : {}) }, "PATCH");
     syncRef.current?.event(how === "next" ? "continue" : "jump");
-  }, [session, dispatch, guided, scrollToLesson]);
+  }, [session, dispatch, guided, scrollToLesson, wantPlace, applyPlace]);
   /** Next lesson: the one after the ACTIVE lesson, opened (saved) or taught (Guided, nothing saved) in one action. */
   const next = useCallback(() => { const j = jRef.current; if (j && j.current < j.count - 1) select(j.current + 1, "next"); }, [select]);
   const previous = useCallback(() => { const j = jRef.current; if (j && j.current > 0) select(j.current - 1); }, [select]);
@@ -758,6 +850,12 @@ export function LearnWorkspace(props: {
     status: j ? lessonStatus(j, i, facts[i]) : { label: "Not started", icon: "none", current: i === curIdx },
   }));
   const read = readCount(facts);
+  // SCHOLAR-LEARN-GAPS-02 items 1 and 5: all saved lessons of a single-material session as one PDF; the AI-read mark on a source.
+  const materialIds = new Set(session.steps.flatMap(s => s.sections.map(x => x.materialId)));
+  const oneMaterial = materialIds.size === 1 ? [...materialIds][0] : null;
+  const anySaved = records.some(r => !!r.saved) || Object.values(cards).some(cs => cs.some(c => c.target !== "ask" && !!(c.reply.saved || c.reply.artefactId)));
+  const aiReadNote = new Map<string, string>();
+  for (const c of cards[at] ?? []) for (const s of c.reply.sources ?? []) if (s.aiRead && s.aiReadNote) aiReadNote.set(s.chunkId, s.aiReadNote);
   const rows: LessonRow[] = navLessons.map(l => ({ index: l.index, title: l.title, status: l.status, action: PRIMARY_LABEL[primaryAction(facts[l.index], false)] }));
   // Three columns only when the content area is wide enough (a container query, not a new viewport breakpoint): on a
   // tablet beside the app sidebar the 240px + 300px columns left the lesson too narrow and pushed Ask Scholar off-screen.
@@ -836,6 +934,8 @@ export function LearnWorkspace(props: {
       ...(applyHref ? [{ key: "apply", label: "Apply", done: !!acts.applied, onClick: () => { dispatch({ type: "activity", index: i, kind: "applied" }); router.push(carry(applyHref)); } }] : []),
       { key: "evaluate", label: "Evaluate", onClick: () => router.push(carry(evaluationHref())) },
     ];
+    // SCHOLAR-LEARN-GAPS-02 item 1: a lesson with saved teaching can be downloaded (learn/export, no AI).
+    const savedHere = !!records.find(r => r.step === st.step)?.saved || thread.some(c => c.target !== "ask" && c.reply.action === props.startAction && !!(c.reply.saved || c.reply.artefactId));
     const status = navLessons[i].status.label;
     return (
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
@@ -853,7 +953,7 @@ export function LearnWorkspace(props: {
         )}
         {pending?.target === "lesson" && (pending.step ?? at) === st.step && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}
         <div className="mt-4 space-y-4">
-          {thread.map(c => <ReplyCard key={c.id} card={c} labels={props.labels} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }, "lesson", undefined, st.step) : undefined}
+          {thread.map((c, k) => <ReplyCard key={c.id} card={c} labels={props.labels} anchorId={lessonAnchorId(st.step, `a${k}`)} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }, "lesson", undefined, st.step) : undefined}
             onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c, st)} wider={widerFor(c, st)} expansions={expansionsFor(c, st)}
             onAnswer={canCheck && c === lastTeach ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
             renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkForm(true) : null) : undefined} />)}
@@ -880,13 +980,14 @@ export function LearnWorkspace(props: {
           <button type="button" className={`${ghost} mt-3`} disabled={busyHere || !!offReason(group.primary)} onClick={() => void teachLesson(st.step, { mode, depth })}>Teach this lesson again with these settings</button>
         )}
 
-        <ActivityRow label={`Activities for lesson ${i + 1}`} items={items} />
+        <ActivityRow id={lessonAnchorId(st.step, "act")} label={`Activities for lesson ${i + 1}`} items={items} />
+        {session.id && savedHere && <p className="mt-1"><DownloadLink href={lessonExportHref(session.id, st.step)}>Download this lesson (PDF)</DownloadLink></p>}
 
         {/* SCHOLAR-PERSISTENT-LEARNING-01: the teaching approaches and the other ways to explain, as ONE optional, collapsed
             "Teaching style" control. Every choice inside is the learner's click (an explicit request); Ask Scholar stays in view. */}
         <div className="mt-3 flex flex-wrap items-start gap-2">
           {(offered.length > 0 || more.length > 0) && (
-            <details className="group min-w-0 flex-1 basis-[220px] rounded-xl border border-gray-200">
+            <details id={lessonAnchorId(st.step, "style")} className="group min-w-0 flex-1 basis-[220px] scroll-mt-4 rounded-xl border border-gray-200">
               <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
                 <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Teaching style
                 <span className="min-w-0 truncate text-[12px] font-normal text-gray-600">· optional</span>
@@ -913,11 +1014,13 @@ export function LearnWorkspace(props: {
           {group.ask && <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{props.labels.ask}</button>}
         </div>
 
+        <div id={lessonAnchorId(st.step, "practice")} className="scroll-mt-4">
         <LessonPractice open={!!practiceOpen[st.step]} onToggle={o => setPracticeOpen(m => (!!m[st.step] === o ? m : { ...m, [st.step]: o }))}
           chunkId={first?.chunkId ?? null} materialId={first?.materialId ?? null} draft={draft} ownCards={!!props.ownCards}
           aiAllowed={props.consent && !offReason("questions")} applyHref={applyHref} accent={accent}
           teachBack={props.actions.includes("teach_back" as LearnAction) ? () => setApproachOf(m => ({ ...m, [st.step]: "teach_back" })) : undefined}
           onPractised={() => dispatch({ type: "activity", index: i, kind: "practised" })} onApplied={() => dispatch({ type: "activity", index: i, kind: "applied" })} />
+        </div>
       </LessonCard>
     );
   };
@@ -954,12 +1057,16 @@ export function LearnWorkspace(props: {
         <aside aria-label="Lessons and sources" className={`${panel("sources")} rounded-2xl border border-gray-200 bg-white p-4 @min-[66rem]:sticky @min-[66rem]:top-4 @min-[66rem]:max-h-[calc(100vh-2rem)] @min-[66rem]:overflow-y-auto`}>
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Your lessons</p>
           <p className="mt-0.5 text-[12px] text-gray-600">{read} of {count} read. A learning record for you, not an assessment.</p>
+          {oneMaterial && anySaved && <p className="mt-1"><DownloadLink href={materialExportHref(oneMaterial)}>Download all saved lessons (PDF)</DownloadLink></p>}
           <div className="mt-2"><JourneyOutline lessons={navLessons} onJump={select} /></div>
           {step && (
             <>
               <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">This lesson&apos;s sources</p>
               <ul className="mt-1.5 space-y-1">
-                {step.sections.map(x => <li key={x.chunkId}><Link href={sourceHref(x.materialId, x.chunkId)} className={`text-[13px] underline underline-offset-2 ${focusRing}`}>{x.citation}</Link></li>)}
+                {step.sections.map(x => (
+                  <li key={x.chunkId}><Link href={sourceHref(x.materialId, x.chunkId)} className={`text-[13px] underline underline-offset-2 ${focusRing}`}>{x.citation}</Link>
+                    {aiReadNote.get(x.chunkId) && <span className="block text-[11.5px] leading-snug text-amber-900">{aiReadNote.get(x.chunkId)}</span>}</li>
+                ))}
               </ul>
               {/* CLINICAL-REASONING-01 CR1: from Teach Me, a case written from this step's own section. */}
               <p className="mt-3 text-[12.5px]"><Link href={`/individual/scholar/study/apply?section=${step.sections[0].chunkId}&from=teach`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Practise this in a clinical case</Link></p>
@@ -991,6 +1098,14 @@ export function LearnWorkspace(props: {
               </label>
               <div className="flex flex-wrap items-center gap-2 text-[13px] text-gray-700"><span id="learn-depth-l">Depth</span>
                 <DepthSegment value={depth} onChange={setDepth} disabled={!!busy} accent={accent} />
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-[13px] text-gray-700">
+                <label htmlFor="learn-spelling">Spelling</label>
+                <select id="learn-spelling" value={spelling} onChange={e => setSpelling(e.target.value as SpellingChoice)}
+                  className={`rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-[13px] text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+                  {SPELLING_CHOICES.map(c => <option key={c} value={c}>{SPELLING_CHOICE_LABEL[c]}</option>)}
+                </select>
+                <span className="basis-full text-[12px] text-gray-600">Used to read what you type in Ask Scholar, the assistant, Revise and Apply. Only obvious typing slips are fixed; clinical words, numbers and your notes are never changed, and your answers are marked exactly as you typed them. Saved on this device.</span>
               </div>
               {modes.length > 1 && (
                 <fieldset className="rounded-xl border border-gray-200 px-3 py-2">
@@ -1131,7 +1246,9 @@ function Withheld({ r, asked, onRephrase }: { r: Reply; asked?: string; onRephra
 }
 
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck }: {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId }: {
+  /** SCHOLAR-LEARN-GAPS-02 item 2: the fixed DOM id of this reply in its lesson (the reading place is saved against it). */
+  anchorId?: string;
   card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover;
   /** SCHOLAR-LEARN-FIX-01 L-B: the wider tier offered under a partly grounded answer; answering one of its check questions. */
   wider?: Recover; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean;
@@ -1157,7 +1274,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
   if (r.action === "check" && r.checkQuestion) return null; // shown in the check form
   const cited = new Set(r.cited ?? []);
   return (
-    <article className={`rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}>
+    <article id={anchorId} className={`${anchorId ? "scroll-mt-4 " : ""}rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}>
       {card.asked && (
         <p className="mb-1 break-words text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {r.spelling && r.spelling.original === card.asked ? r.spelling.display : card.asked}
           {/* Item 8: the reading Scholar used (spelling.ts, no AI), with what was typed kept beside it. */}
@@ -1178,7 +1295,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           )}
           <div className="mt-2"><AiBadge /></div>
           <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
-          {r.answer && <AnswerBody text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} />}
+          {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} />}
           {/* SCHOLAR-GUIDED-LEARNING-01: a salvaged lesson -- shown, and said calmly what was left out (a count, never which). */}
           {r.salvage && (
             <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
@@ -1232,8 +1349,8 @@ function CiteLink({ n, sources }: { n: number; sources: Source[] }) {
   const s = sources.find(x => x.tag === `S${n}`);
   if (!s) return <span className="font-mono text-[12.5px]">[S{n}]</span>;
   return (
-    <Link href={sourceHref(s.materialId, s.chunkId)} title={s.citation} aria-label={`Source ${s.tag}: ${s.citation}`}
-      className={`rounded font-mono text-[12.5px] font-bold underline underline-offset-2 pointer-coarse:px-1 pointer-coarse:py-1 ${focusRing}`} style={{ color: accent }}>[{s.tag}]</Link>
+    <Link href={sourceHref(s.materialId, s.chunkId)} title={s.aiRead && s.aiReadNote ? `${s.citation}. ${s.aiReadNote}` : s.citation} aria-label={`Source ${s.tag}: ${s.citation}${s.aiRead && s.aiReadNote ? `. ${s.aiReadNote}` : ""}`}
+      className={`rounded font-mono text-[12.5px] font-bold underline underline-offset-2 pointer-coarse:px-1 pointer-coarse:py-1 ${focusRing}`} style={{ color: accent }}>[{s.tag}]{s.aiRead && <sup aria-hidden="true" className="ml-px text-[9px] font-bold">AI</sup>}</Link>
   );
 }
 function Cited({ text, sources }: { text: string; sources: Source[] }) {
@@ -1246,13 +1363,13 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  * Anything else -- every other action, and a Teach Me answer saved before the structure -- is shown as written. Either
  * way each [S n] is a link to its section.
  */
-function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }: { text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
+function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
   const parts = action === "teach" ? parseTeachAnswer(text) : null;
   // SCHOLAR-PERSISTENT-LEARNING-01 item 4: PROGRESSIVE -- the start first, the rest one click away (no new AI call).
   if (!parts) {
     const { lead, more } = progressiveSplit(text);
     return (
-      <div className="mt-1 break-words text-[14.5px] leading-relaxed text-gray-800">
+      <div id={idPrefix ? `${idPrefix}-tx` : undefined} className="mt-1 break-words text-[14.5px] leading-relaxed text-gray-800">
         <div className="whitespace-pre-wrap"><Cited text={lead} sources={sources} /></div>
         {more && <ShowMore label="Show more"><div className="whitespace-pre-wrap"><Cited text={more} sources={sources} /></div></ShowMore>}
       </div>
@@ -1261,9 +1378,9 @@ function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }:
   const sub = "text-[12px] font-bold uppercase tracking-[0.1em]";
   return (
     <div className="mt-1 space-y-3 break-words text-[14.5px] leading-relaxed text-gray-800">
-      {parts.overview && <p className="text-[15px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
+      {parts.overview && <p id={idPrefix ? `${idPrefix}-ov` : undefined} className="text-[15px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
       {parts.points.length > 0 && (
-        <div>
+        <div id={idPrefix ? `${idPrefix}-kp` : undefined}>
           <h4 className={`${sub} text-gray-600`}>Key points</h4>
           <ul className="mt-1 list-disc space-y-1.5 pl-5">{parts.points.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
         </div>
@@ -1277,7 +1394,7 @@ function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }:
         </ShowMore>
       )}
       {parts.questions.length > 0 && (
-        <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
+        <div id={idPrefix ? `${idPrefix}-q` : undefined} className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
           <h4 className={`${sub} text-violet-900`}>Check your understanding</h4>
           <ul className="mt-1 space-y-2">
             {parts.questions.map((q, i) => (
@@ -1357,6 +1474,7 @@ function SourcesDisclosure({ sources }: { sources: Source[] }) {
           <li key={s.tag} className="break-words text-[12.5px] text-gray-700">
             <span className="font-mono font-bold" style={{ color: accent }}>[{s.tag}]</span>{" "}
             <Link href={sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>{s.citation}</Link>
+            {s.aiRead && s.aiReadNote && <span className="mt-0.5 block rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] text-amber-950">{s.aiReadNote}</span>}
             {s.excerpt && <p className="mt-1 whitespace-pre-wrap border-l-2 border-gray-200 pl-2 text-[12.5px] leading-relaxed text-gray-700">{s.excerpt}{s.excerpt.length >= 400 ? "…" : ""}</p>}
           </li>
         ))}

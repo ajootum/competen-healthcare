@@ -114,7 +114,7 @@ export async function scholarRisk(admin: unknown, userId: string, input: {
 /** The request id the engine reserves against: the caller's, from the client's retry key when it is well formed. */
 export const scholarRequestId = (ctx: IndividualContext, req: Request) => requestIdFor(ctx.userId, req.headers.get("x-request-id"));
 
-export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey?: string): { run: ScholarAiRun; refusal: () => MeteredRefusal | null; actionId: string; calls: () => Record<string, number> } {
+export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey?: string): { run: ScholarAiRun; refusal: () => MeteredRefusal | null; actionId: string; calls: () => Record<string, number>; risk: RiskContext } {
   // `callKey`: one student action that makes several separate generations (a revision session filling its shortfall)
   // gives each its own deterministic id, `:g1`, `:g2` ..., so each is its own idempotent reservation.
   const requestId = callKey ? `${scholarRequestId(ctx, req)}:${callKey}` : scholarRequestId(ctx, req);
@@ -131,7 +131,9 @@ export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: 
     if (isMeteredRefusal(x)) { refused = x; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
     return x;
   };
-  return { run, refusal: () => refused, actionId, calls: () => ({ ...made }) };
+  // `risk`: the SAME object each call sends, so a route can add where the request was asked (intentContext) after building the
+  // runner, as the Learn act route does with Object.assign. Read in memory by the intent layer only, never recorded.
+  return { run, refusal: () => refused, actionId, calls: () => ({ ...made }), risk };
 }
 
 /** The same request, tagged with the student action it belongs to. Nothing else about it changes. */

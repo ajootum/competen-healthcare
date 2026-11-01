@@ -180,7 +180,10 @@ describe("when the page writes (PositionSync)", () => {
   });
   it("the Learn workspace writes only through PositionSync and listens for hide, not for every scroll write", () => {
     const s = readFileSync("src/app/individual/(app)/[experience]/(scholar)/study/_components/learn-client.tsx", "utf8");
-    expect(s).toContain('const onScroll = () => { if (engaged.current) sync.touch(); };');
+    // SCHOLAR-LEARN-GAPS-02: a scroll only NOTES a place (debounced 2 s, at most one commit per 15 s: learn-place.ts); it never touches the writer itself.
+    expect(s).toContain('const onScroll = () => { if (engaged.current && !pendingPlace.current) placer.note(); };');
+    expect(s).not.toMatch(/onScroll = \(\) => \{[^}]*sync\.touch\(\)/);
+    expect(s).toContain('const placer = new PlaceScheduler({ commit: keepalive =>');
     expect(s).toContain('document.addEventListener("visibilitychange", onVisibility);');
     expect(s).toContain('window.addEventListener("pagehide", onHide);');
     expect(s.match(/method: "PUT"/g)?.length).toBe(1);

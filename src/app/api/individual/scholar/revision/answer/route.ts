@@ -23,6 +23,8 @@ import { extendedMarks, extendedSpecOf, isExtendedQuestion } from "@/lib/individ
 import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
 import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 import { aiMarkingAllowed } from "@/lib/individual/scholar/library-format";
+import { answerSpelling, vocabularyOf } from "@/lib/individual/scholar/spelling";
+import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
 
 /** SQIE-LIBRARY-EXPANSION-01: what a governed library copy whose version is not marked by AI says instead of calling it. */
 const LIBRARY_SELF_MARKED = { available: false, insufficient: false, message: "This Competen library question is marked against its key, not by AI." };
@@ -114,6 +116,9 @@ export async function POST(req: Request) {
   if (!r) return NextResponse.json({ error: "Answer the question first." }, { status: 400 });
   if (r.kind === "text" && findPatientIdentifiers(r.text).length)
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
+  // SCHOLAR-LEARN-GAPS-02 item 3: how the typed answer was read (display only, spelling.ts, no AI). The answer MARKED and STORED
+  // is `r.text` exactly as typed; the risk classification reads the typed and the corrected reading (the more cautious).
+  const understood = r.kind === "text" && !gaveUp ? answerSpelling(r.text, { variant: parseSpellingVariant(body?.spellingVariant), vocabulary: vocabularyOf([q.stem, q.sourceQuote]) }) : {};
   const policy = await loadIndividualPolicy(ctx.admin);
   const recoveryAsked = parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
   if (recoveryAsked && !recoveryAsked.ok) return NextResponse.json({ error: recoveryAsked.error }, { status: 400 });
@@ -143,12 +148,14 @@ export async function POST(req: Request) {
           // The question's own words are what recovery searches for; the browser's are not used.
           recovered = await rederiveRecovery(ctx, policy, { ...recovery, question: q.stem.slice(0, QUESTION_MAX) }, { materialId: q.materialId, sectionId: q.chunkId });
           if (!recovered.ok && recovered.reason === "unknown") return NextResponse.json({ error: "Those learning resources could not be found. Look for them again." }, { status: 400 });
-          if (!recovered.ok) return NextResponse.json({ needsSelfGrade: true, accepted, reason: RECOVERY_STILL_WITHHELD, label: MARKING_LABEL.self_graded, withheld: { reason: "no_evidence" }, questionId: q.id, attempt: r.text, recovered: recoveredReply(recovered, false) });
+          if (!recovered.ok) return NextResponse.json({ needsSelfGrade: true, accepted, reason: RECOVERY_STILL_WITHHELD, label: MARKING_LABEL.self_graded, withheld: { reason: "no_evidence" }, questionId: q.id, attempt: r.text, recovered: recoveredReply(recovered, false), ...understood });
           passage = recoveryPassage(passage, recovered.inputs);
         }
         if (!standing.available) why = `${standing.message ?? "AI evaluation is not available right now."} Compare your answer yourself.`;
         else if (passage) {
           const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\n${r.text}`, passages: [passage] }));
+          // Owner item 5: where the answer was given (the question), so a study answer is read as study; framing only, never lowers real-patient evidence.
+          Object.assign(ai.risk, { intentContext: { surface: "revise" as const, lessonTitle: q.stem.slice(0, 200), objective: null, materialTopics: ai.risk.topicTerms ?? [] } });
           // SCHOLAR-QUESTION-INTELLIGENCE-01: judged against the question's key points and misconceptions where it has them.
           const rubric = rubricOf(q.answer);
           const e = await runEvaluate(ctx.userId, { question: q.stem, accepted, answer: r.text, passage, rubric, ...(extSpec ? { numberedKeyPoints: extSpec.keyPoints } : {}) }, ai.run);
@@ -179,12 +186,12 @@ export async function POST(req: Request) {
       if (!evaluator && sessionId && feedbackMode === "end" && !finished && holding) {
         if (!(await holdRevisionAnswer(ctx.admin, ctx.userId, sessionId, q.id, r.text))) return NextResponse.json({ error: "Your answer could not be saved. Try again shortly." }, { status: 500 });
         await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
-        return NextResponse.json({ recorded: true, held: true });
+        return NextResponse.json({ recorded: true, held: true, ...understood });
       }
       // SCHOLAR-SQIE-02: after an explanation from recovered evidence that was still withheld, the withhold says so and
       // carries what remains unanswered (withheld.recovered); the student's own judgement is still what marks it.
       if (recovered && withheld) { why = RECOVERY_STILL_WITHHELD; withheld = { ...withheld, recovered: recoveredReply(recovered, false) }; }
-      if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded, ...(extSpec ? { extended: { modelAnswer: extSpec.modelAnswer, keyPoints: extSpec.keyPoints, marks: extSpec.marks } } : {}), ...(withheld ? { withheld, questionId: q.id, attempt: r.text } : {}) });
+      if (!evaluator) return NextResponse.json({ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL.self_graded, ...(extSpec ? { extended: { modelAnswer: extSpec.modelAnswer, keyPoints: extSpec.keyPoints, marks: extSpec.marks } } : {}), ...(withheld ? { withheld, questionId: q.id, attempt: r.text } : {}), ...understood });
     }
   }
   if ("needsJudgement" in mark) return NextResponse.json({ error: "This answer could not be marked." }, { status: 400 });
@@ -209,7 +216,7 @@ export async function POST(req: Request) {
 
   if (feedbackMode === "end" && !finished) return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
-    recorded: true,
+    recorded: true, ...understood,
     feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, extendedMatched, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
     ...(recovered?.ok && evaluator ? { recovered: recoveredReply(recovered, true) } : {}),
   });

@@ -22,7 +22,9 @@ import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { externalReferences, learnResearch, researchEvidence, scholarResearchOperational, type LearnResearch } from "@/lib/individual/scholar/learn-research";
 import { qualityOf } from "@/lib/individual/scholar/source-quality";
-import { findSavedLesson, topicsOfSections } from "@/lib/individual/scholar/store";
+import { findSavedLesson, materialQualities, topicsOfSections } from "@/lib/individual/scholar/store";
+import { aiReadByMaterial, aiReadMark } from "@/lib/individual/scholar/learn-ai-read";
+import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
 import { SAVED_EARLIER_LABEL } from "@/lib/individual/scholar/learn-journey";
 import { normaliseLearnerText, vocabularyOf } from "@/lib/individual/scholar/spelling";
 import type { LearnSourceMode } from "@/lib/individual/policy";
@@ -155,7 +157,9 @@ export async function POST(req: Request) {
   // deterministically (spelling.ts, no AI). The question as TYPED is what is screened, stored and shown beside the reading;
   // the search reads both, and the lesson terms and the prompt read the corrected one (re-read below against the
   // learner's own passages, whose words are never corrected). Check answers are marked as typed and never normalised.
-  let spelt = action === "ask" ? normaliseLearnerText(question) : null;
+  // SCHOLAR-LEARN-GAPS-02 item 4: the learner's British / American choice (this device's setting, sent as spellingVariant).
+  const variant = parseSpellingVariant(body?.spellingVariant);
+  let spelt = action === "ask" ? normaliseLearnerText(question, { variant }) : null;
   const searchText = spelt && spelt.display !== question ? `${question} ${spelt.display}` : question;
   if ([question, spelt?.display ?? "", answer, ...(teachingRequest ? teachingTexts(teachingRequest) : [])].some(t => t && findPatientIdentifiers(t).length))
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
@@ -199,7 +203,7 @@ export async function POST(req: Request) {
   } else passages = await ownPassages(ctx.admin, ctx.userId, stepIds);
   if (!passages?.length) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
   if (!sessionMaterials.length) sessionMaterials = [...new Set(passages.map(p => p.materialId))];
-  if (spelt) spelt = normaliseLearnerText(question, { vocabulary: vocabularyOf(passages.map(p => p.content)) });
+  if (spelt) spelt = normaliseLearnerText(question, { vocabulary: vocabularyOf(passages.map(p => p.content)), variant });
   /** What the learner meant: the corrected reading of an Ask question (the question as typed when nothing was corrected). */
   const meant = spelt?.display || question;
   const spelling = spelt && spelt.corrections.length ? { original: spelt.original, display: spelt.display, corrections: spelt.corrections.map(c => ({ from: c.from, to: c.to })) } : null;
@@ -243,6 +247,18 @@ export async function POST(req: Request) {
     : mode === "library" ? widerMode("notes_and_library", policy, await scholarResearchOperational(ctx.admin).catch(() => false)) : null;
   const lessonFields = { lesson: lesson ? { title: lesson.title, objective: lesson.objective } : null, grounding: { ...grounding, related, wider } };
   clock.mark("related");
+  // SCHOLAR-LEARN-GAPS-02 item 5 (no AI): a section whose text was read from a slide or page PICTURE by AI says so on its source
+  // (aiRead + the shared label), from the material's stored extraction quality: one bounded read of the caller's own materials.
+  const aiRead = new Map<string, Set<number>>(), aiReadSeen = new Set<string>();
+  const loadAiRead = async (ps: readonly Passage[]) => {
+    const ids = [...new Set(ps.map(p => p.materialId))].filter(id => !aiReadSeen.has(id));
+    if (!ids.length) return;
+    ids.forEach(id => aiReadSeen.add(id));
+    const q = await materialQualities(ctx.admin, ctx.userId, ids).catch(() => new Map());
+    for (const [id, s] of aiReadByMaterial(q)) aiRead.set(id, s);
+  };
+  const sourceOf = (p: Passage, i: number) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400), ...aiReadMark(aiRead.get(p.materialId), p) });
+  await loadAiRead(passages);
 
   // ── how to teach it: depth and the governed references (L5 decides each). No AI yet. ──
   const pref = await prefP;
@@ -298,7 +314,7 @@ export async function POST(req: Request) {
     const external = a.refs.filter(r => r?.kind === "external");
     return {
       action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
-      sources: src.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) })),
+      sources: src.map(sourceOf),
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
       research: external.length ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: null, references: external, ...(split.research ? { text: split.research } : {}) } : null,
@@ -337,6 +353,7 @@ export async function POST(req: Request) {
     if (earlier && extra) {
       if (prepare) return notPrepared("saved", { step });
       passages = [...passages, ...extra];
+      await loadAiRead(extra);
       const differs = earlier.promptVersion.indexOf(promptVersion) !== 0 || earlier.depth !== depth;
       await openedSaved(earlier);
       served(earlier, { fallback: true });
@@ -538,7 +555,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     ]);
   }
 
-  const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
+  const sources = passages.map(sourceOf);
   const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
     references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields, ...(spelling ? { spelling } : {}),
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),

@@ -18,6 +18,9 @@ import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
 import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
 import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
 import { carry, studyField } from "./study-active";
+import { SpellingNote } from "./spelling-note";
+import type { AnswerSpelling } from "@/lib/individual/scholar/spelling";
+import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spelling-variant";
 import { CLOZE_LABEL } from "@/lib/individual/scholar/cloze";
 import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 
@@ -348,7 +351,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   const [matches, setMatches] = useState<string[]>(item.options.map(() => ""));
   const [order, setOrder] = useState<number[]>(item.options.map((_, i) => i));
   const [back, setBack] = useState<{ back: string; source: { quote: string; citation: string; materialId: string; chunkId: string }; card?: { origin: "notes" | "library" | "learner"; originLabel: string } } | null>(null);
-  const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string; extended?: { modelAnswer: string; keyPoints: string[]; marks: number } } | null>(null);
+  const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string; extended?: { modelAnswer: string; keyPoints: string[]; marks: number }; spelling?: AnswerSpelling | null } | null>(null);
   // SCHOLAR-SQIE-CLOSE-01: a structured question's answers, one per part, and the student's own marking of each part.
   const [texts, setTexts] = useState<string[]>((item.parts ?? []).map(() => ""));
   const [partGrade, setPartGrade] = useState<{ reason: string; label: string; parts: PartToGrade[] } | null>(null);
@@ -359,7 +362,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
 
   async function send(response: unknown, extra: Record<string, unknown> = {}) {
     setBusy(true); setError("");
-    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response, ...extra });
+    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response, ...spellingField(readSpellingChoice()), ...extra });
     setBusy(false);
     if (r.json.needsSelfGrade && item.kind === "structured") {
       const parts = (r.json.parts ?? []) as PartToGrade[];
@@ -368,7 +371,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
       return;
     }
     if (r.json.needsSelfGrade) {
-      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "", extended: r.json.extended });
+      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "", extended: r.json.extended, spelling: r.json.spelling ?? null });
       if (r.json.withheld && (item.kind === "short" || item.kind === "extended")) setRecovery(x => ({ key: (x?.key ?? 0) + 1, withheldReason: r.json.withheld?.reason ?? null }));
       return;
     }
@@ -377,9 +380,9 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   }
   /** "Explain using approved references": the SAME evaluation of the same answer, with only the recovery's id, mode and question. */
   async function explainFromRecovery(rec: { id: string; mode: "notes_only" | "notes_and_library" | "notes_and_references"; question: string }): Promise<ExplainOutcome> {
-    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response: { text }, recovery: rec });
+    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response: { text }, recovery: rec, ...spellingField(readSpellingChoice()) });
     if (r.json.needsSelfGrade) {
-      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "", extended: r.json.extended });
+      setSelfGrade({ accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "", extended: r.json.extended, spelling: r.json.spelling ?? null });
       const rec = r.json.recovered ?? r.json.withheld?.recovered;
       return { shown: false, message: r.json.reason ?? null, unanswered: rec?.unanswered, reading: rec?.reading };
     }
@@ -474,6 +477,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
             </>
           )}
           <p className="mt-2 whitespace-pre-wrap text-[13px] text-gray-700">Your answer: <span className="font-semibold">{text}</span></p>
+          <SpellingNote spelling={selfGrade.spelling} />
           <p className="mt-1 text-[12px] text-gray-500">{selfGrade.label}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: true })}>{selfGrade.extended ? "It makes these points" : "It says the same"}</button>
