@@ -143,7 +143,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
         <Link key={d.key} href={withStudy(hrefOf(d.key), sid)} aria-current={d.key === deck.key ? "true" : undefined}
           className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${d.key === deck.key ? "border-[var(--cmp-role-indigo-ink)] bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>{d.title} ({d.total})</Link>
       ))}
-      <Link href={withStudy(flashcardsHref({ view: "decks" }), sid)} className={`rounded-full px-3 py-1 text-[12.5px] font-semibold underline ${focusRing}`}>All decks</Link>
+      <Link href={withStudy(flashcardsHref({ view: "decks" }), sid)} className={`inline-flex items-center rounded-full px-3 py-1 text-[12.5px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>All decks</Link>
     </div>
   );
 
@@ -294,7 +294,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
                 ))}
               </ul>
               {osceSkippedNote(gapInfo.osceSkipped) && <p role="note" className="mt-2 text-[12.5px] text-gray-600">{osceSkippedNote(gapInfo.osceSkipped)}</p>}
-              <Link href={flashcardsHref({ view: "manage", create: "gaps" })} className={`mt-3 inline-flex text-[13.5px] font-semibold underline ${focusRing}`}>Make cards for my gaps</Link>
+              <Link href={flashcardsHref({ view: "manage", create: "gaps" })} className={`mt-3 inline-flex items-center text-[13.5px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Make cards for my gaps</Link>
             </>
           )}
         </section>
