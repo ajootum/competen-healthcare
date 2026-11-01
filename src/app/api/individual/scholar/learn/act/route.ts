@@ -512,6 +512,8 @@ ${RESEARCH_MARKER}
 ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
       refs: [...references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), ...(research ? externalReferences(research) : [])], dedupeKey: key,
       model: r.model, promptVersion: salvaged ? salvagedPromptVersion(r.promptVersion, salvaged.removed) : r.promptVersion, chunkIds: passages.map(p => p.chunkId),
+      // SCHOLAR-LIBRARY-01 (820): the lesson of the caller's own recorded session it was saved for (read above by their id).
+      lesson: sessionId && sessionStep !== null ? { sessionId, step } : null,
     });
   }
   clock.mark("save");

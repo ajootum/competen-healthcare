@@ -157,6 +157,8 @@ export type ReviewState = "new" | "due" | "needs_practice" | "remembered";
 export const REVIEW_STATE_LABEL: Record<ReviewState, string> = { new: "Not studied yet", due: "Due today", needs_practice: "Needs more practice", remembered: "Remembered" };
 export type CardReview = {
   state: ReviewState; nextReviewAt: string | null; lastReviewedAt: string | null; reviews: number;
+  /** The last rating's SM-2 quality (individual_scholar_card.last_quality), or null when never rated. */
+  lastQuality: number | null;
   intervalDays: number | null; ease: number | null; status: "active" | "mastered" | null;
   /** Newest first, from the 391 review log. */
   history: { quality: number; recall: RecallChoice; at: string; intervalDays: number | null }[];
@@ -233,7 +235,7 @@ export function flashcardView(q: QuestionRow, x: CardRowExtras, today: string): 
     version: origin === "library" ? `Competen library version ${q.library!.versionNo}` : origin === "learner" ? `Your card, version ${x.contentVersion}` : q.promptVersion,
     material: { id: q.materialId, title: q.materialTitle }, chunkId: q.chunkId,
     review: {
-      state: reviewStateOf(x.card, today), nextReviewAt: x.card?.nextReviewAt ?? null, lastReviewedAt: x.card?.lastReviewedAt ?? null, reviews: x.card?.reviews ?? 0,
+      state: reviewStateOf(x.card, today), nextReviewAt: x.card?.nextReviewAt ?? null, lastReviewedAt: x.card?.lastReviewedAt ?? null, reviews: x.card?.reviews ?? 0, lastQuality: x.card?.lastQuality ?? null,
       intervalDays: x.card ? x.card.intervalDays : null, ease: x.card ? x.card.ease : null, status: x.card?.status ?? null,
       history: x.history.map(h => ({ ...h, recall: recallOf(h.quality) })),
     },
@@ -247,12 +249,16 @@ export function flashcardView(q: QuestionRow, x: CardRowExtras, today: string): 
 export type PersonalDeck = {
   id: string; title: string; organiseBy: "personal" | "module" | "topic" | "document" | "competency"; organiseRef: string | null;
   createdAt: string; updatedAt: string; lastStudiedAt: string | null; cardIds: string[];
+  /** Migration 820: when the learner archived the deck (hidden from the main list, never deleted). null: not archived, or 820 is absent. */
+  archivedAt?: string | null;
 };
 export const DECK_ORGANISE = ["personal", "module", "topic", "document", "competency"] as const;
 export type DeckKind = "all" | "personal" | "document" | "topic" | "competency" | "bookmarked";
 export type DeckSummary = {
   key: string; kind: DeckKind; id: string | null; title: string; subtitle: string | null; cardIds: string[];
   total: number; due: number; fresh: number; needsPractice: number; remembered: number; lastStudiedAt: string | null;
+  /** The learner's own decks only: how it is organised, when it last changed, and whether it is archived (820). */
+  organiseBy?: PersonalDeck["organiseBy"]; updatedAt?: string | null; archived?: boolean;
 };
 
 const latest = (xs: (string | null)[]) => xs.filter((x): x is string => !!x).sort().at(-1) ?? null;
@@ -271,12 +277,15 @@ function summarise(key: string, kind: DeckKind, id: string | null, title: string
  * cards already make by document, topic and competency, then their bookmarks. A card is in each deck it belongs to:
  * decks reference cards.
  */
-export function buildDecks(cards: readonly FlashcardView[], personal: readonly PersonalDeck[]): DeckSummary[] {
+export function buildDecks(cards: readonly FlashcardView[], personal: readonly PersonalDeck[], opts: { alwaysBookmarked?: boolean } = {}): DeckSummary[] {
   const byId = new Map(cards.map(c => [c.id, c]));
   const out: DeckSummary[] = [summarise("all", "all", null, "All cards", null, [...cards])];
-  out.push(...personal.map(d => summarise(`deck:${d.id}`, "personal", d.id, d.title,
-    d.organiseBy === "personal" ? null : `${d.organiseBy[0].toUpperCase()}${d.organiseBy.slice(1)}: ${d.organiseRef ?? ""}`,
-    d.cardIds.map(id => byId.get(id)).filter((c): c is FlashcardView => !!c), d.lastStudiedAt)));
+  out.push(...personal.map(d => ({
+    ...summarise(`deck:${d.id}`, "personal", d.id, d.title,
+      d.organiseBy === "personal" ? null : `${d.organiseBy[0].toUpperCase()}${d.organiseBy.slice(1)}: ${d.organiseRef ?? ""}`,
+      d.cardIds.map(id => byId.get(id)).filter((c): c is FlashcardView => !!c), d.lastStudiedAt),
+    organiseBy: d.organiseBy, updatedAt: d.updatedAt, archived: !!d.archivedAt,
+  })));
   const group = (keyOf: (c: FlashcardView) => string | null, titleOf: (c: FlashcardView) => string, kind: DeckKind, prefix: string, subtitle: string) => {
     const by = new Map<string, FlashcardView[]>();
     for (const c of cards) { const k = keyOf(c); if (k) by.set(k, [...(by.get(k) ?? []), c]); }
@@ -286,7 +295,8 @@ export function buildDecks(cards: readonly FlashcardView[], personal: readonly P
   out.push(...group(c => c.topic, c => c.topic!, "topic", "topic", "Topic"));
   out.push(...group(c => c.competency?.id ?? null, c => c.competency!.title, "competency", "comp", "Competency"));
   const marked = cards.filter(c => c.bookmarked);
-  if (marked.length) out.push(summarise("bookmarked", "bookmarked", null, "Bookmarked cards", null, marked));
+  // The Bookmarked entry is always offered where marks exist (opts.alwaysBookmarked), even when nothing is bookmarked yet.
+  if (marked.length || opts.alwaysBookmarked) out.push(summarise("bookmarked", "bookmarked", null, "Bookmarked cards", null, marked));
   return out;
 }
 
@@ -313,11 +323,11 @@ export function filterCards(cards: readonly FlashcardView[], decks: readonly Dec
     && (!words.length || words.every(w => flat([c.front, c.back, c.topic ?? "", c.material.title, c.note ?? "", c.competency?.title ?? ""].join(" ")).includes(w))));
 }
 
-export type CardSelection = { deckIds?: readonly string[]; cardIds?: readonly string[]; topic?: string | null; competencyId?: string | null; materialId?: string | null };
+export type CardSelection = { deckIds?: readonly string[]; cardIds?: readonly string[]; topic?: string | null; competencyId?: string | null; materialId?: string | null; bookmarked?: boolean };
 
 /**
  * Pure. The learner's own cards a selection names: the cards of the decks named, and the cards named, in that order;
- * then narrowed by topic, competency and document where given. Naming no deck and no card selects every card, narrowed
+ * then narrowed by topic, competency, document and bookmarked (the learner's own bookmarks) where given. Naming no deck and no card selects every card, narrowed
  * the same way. A card id that is not one of the learner's own is simply not there.
  */
 export function selectCards(cards: readonly FlashcardView[], decks: readonly DeckSummary[], sel: CardSelection): FlashcardView[] {
@@ -326,7 +336,8 @@ export function selectCards(cards: readonly FlashcardView[], decks: readonly Dec
   const base = named.length || (sel.deckIds?.length ?? 0) || (sel.cardIds?.length ?? 0)
     ? [...new Set(named)].map(id => byId.get(id)).filter((c): c is FlashcardView => !!c) : [...cards];
   const topic = sel.topic ? flat(sel.topic) : null;
-  return base.filter(c => (!topic || flat(c.topic ?? "") === topic) && (!sel.competencyId || c.competency?.id === sel.competencyId) && (!sel.materialId || c.material.id === sel.materialId));
+  return base.filter(c => (!topic || flat(c.topic ?? "") === topic) && (!sel.competencyId || c.competency?.id === sel.competencyId) && (!sel.materialId || c.material.id === sel.materialId)
+    && (!sel.bookmarked || c.bookmarked));
 }
 
 /** Pure. The spaced-repetition views: due today, needing practice, remembered, new, and the next review coming. */
@@ -340,7 +351,8 @@ export function spacedViews(cards: readonly FlashcardView[], today: string) {
 
 // ── LEARNING GAPS: what was missed, and what to make cards on ──
 
-export type TopicGap = { label: string; chunkIds: string[]; materialId: string; missed: number; keyPoints: string[]; misconceptions: string[] };
+/** `source`: where the gap was found. Absent or "revision": questions and cards; "osce": the learner's own OSCE practice runs. */
+export type TopicGap = { label: string; chunkIds: string[]; materialId: string; missed: number; keyPoints: string[]; misconceptions: string[]; source?: "revision" | "osce" };
 
 /**
  * Pure. Topic-level gaps from the learner's own answers and recall ratings: every question or card answered wrongly
@@ -393,4 +405,114 @@ export function parseDeckFields(raw: unknown, requireTitle: boolean):
   }
   if (findPatientIdentifiers(`${out.title ?? ""}\n${out.organiseRef ?? ""}`).length) return { ok: false, message: "That looks like it identifies a patient. Choose another name.", identifier: true };
   return out;
+}
+
+// ── CARD <-> LESSON AND STUDY-SESSION LINKS (exact only) ──
+
+export type LessonStepRef = { sessionId: string; title: string; step: number; lastActiveAt: string; chunkIds: readonly string[] };
+export type CardLinks = {
+  lesson: { sessionId: string; title: string; step: number } | null;
+  study: { sessionId: string; title: string } | null;
+};
+/**
+ * Pure. For each card, the saved lesson it comes from, and the study session its deck is linked to. A lesson is named
+ * only when the card's own section (chunk_id) is one of the sections of a step of a Learn session the learner has (the
+ * newest session wins, then the earliest step): never inferred from a topic or a title. A study session is named only when
+ * one of the card's decks is linked to it (a flashcard_deck study link, 740). Cards with neither are absent from the map.
+ */
+export function cardLinksOf(
+  cards: readonly { id: string; chunkId: string; deckIds: readonly string[] }[], lessons: readonly LessonStepRef[],
+  deckStudy: ReadonlyMap<string, { sessionId: string; title: string }>,
+): Map<string, CardLinks> {
+  const newestFirst = [...lessons].sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt) || a.step - b.step);
+  const out = new Map<string, CardLinks>();
+  for (const c of cards) {
+    const hit = newestFirst.find(l => l.chunkIds.includes(c.chunkId));
+    const study = c.deckIds.map(d => deckStudy.get(d)).find(x => !!x) ?? null;
+    if (!hit && !study) continue;
+    out.set(c.id, { lesson: hit ? { sessionId: hit.sessionId, title: hit.title, step: hit.step } : null, study });
+  }
+  return out;
+}
+
+// ── OSCE GAPS AS GAP FOCUS (the existing gap-generation path; no new generator) ──
+
+export const OSCE_GAP_RECENT = { attempts: 5, days: 90 } as const;
+export type OsceGapAttempt = {
+  id: string; finishedAt: string | null; status: string; gaps: readonly unknown[] | null; revisionSuggestions: readonly unknown[] | null;
+  /** The checklist item id -> the section that item was written from, from the run's own snapshot. */
+  itemChunks: ReadonlyMap<string, string>;
+  station: { title: string; topic: string | null; materialId: string | null; chunkId: string | null; competencyId: string | null };
+};
+
+/** Pure. The learner's finished OSCE runs of the last 90 days that recorded gaps or suggestions, newest first, at most five. */
+export function recentOsceAttempts<T extends { status: string; finishedAt: string | null; gaps: readonly unknown[] | null; revisionSuggestions: readonly unknown[] | null }>(attempts: readonly T[], nowIso: string): T[] {
+  const since = new Date(new Date(nowIso).getTime() - OSCE_GAP_RECENT.days * 86400000).toISOString();
+  return attempts.filter(a => a.status === "finished" && !!a.finishedAt && a.finishedAt >= since && (a.gaps?.length || a.revisionSuggestions?.length))
+    .sort((a, b) => b.finishedAt!.localeCompare(a.finishedAt!)).slice(0, OSCE_GAP_RECENT.attempts);
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+/**
+ * Pure. OSCE practice gaps (missed or partly done checklist items, and the "Learn: ..." revision suggestions) as topic
+ * gaps for the EXISTING gap-card path (gapFocus). Each gap is mapped to the learner's own sections, most exact first:
+ *   1. the section its checklist item was written from (the run's snapshot, or the suggestion's section link);
+ *   2. the section its station was built from;
+ *   3. the sections the station's competency is linked to (`competencySections`), those in the station's material when
+ *      it has one, at most three.
+ * A gap that maps to no section is NOT given to the generator: it is counted in `skipped` so the page can say so.
+ * Gap text that identifies a patient is dropped. The station's topic (else its title) is the gap's label.
+ */
+export function osceGapTopics(attempts: readonly OsceGapAttempt[], competencySections: ReadonlyMap<string, readonly { chunkId: string; materialId: string }[]>): { gaps: TopicGap[]; skipped: number } {
+  const by = new Map<string, TopicGap>();
+  let skipped = 0;
+  for (const a of attempts) {
+    const label = a.station.topic?.trim() || a.station.title;
+    const items = new Map<string, { text: string; chunk: string | null }>();
+    const add = (text: string, chunk: string | null) => {
+      const t = text.replace(/\s+/g, " ").trim().slice(0, 300), k = flat(t);
+      if (!t || !k || findPatientIdentifiers(t).length) return;
+      const have = items.get(k);
+      if (!have) items.set(k, { text: t, chunk }); else if (!have.chunk && chunk) have.chunk = chunk;
+    };
+    for (const raw of a.gaps ?? []) {
+      const g = raw as { itemId?: unknown; text?: unknown; mark?: unknown } | null;
+      if (g && typeof g.text === "string" && (g.mark === "missed" || g.mark === "partly")) add(g.text, typeof g.itemId === "string" ? a.itemChunks.get(g.itemId) ?? null : null);
+    }
+    for (const raw of a.revisionSuggestions ?? []) {
+      const s = raw as { label?: unknown; query?: { section?: unknown } | null } | null;
+      if (s && typeof s.label === "string" && /^Learn:\s*/.test(s.label)) add(s.label.replace(/^Learn:\s*/, ""), typeof s.query?.section === "string" && UUID.test(s.query.section) ? s.query.section : null);
+    }
+    const fallback = (): string[] => {
+      if (a.station.chunkId) return [a.station.chunkId];
+      const linked = a.station.competencyId ? competencySections.get(a.station.competencyId) ?? [] : [];
+      const inMaterial = a.station.materialId ? linked.filter(x => x.materialId === a.station.materialId) : linked;
+      return inMaterial.slice(0, 3).map(x => x.chunkId);
+    };
+    for (const it of items.values()) {
+      const chunks = it.chunk ? [it.chunk] : fallback();
+      if (!chunks.length) { skipped++; continue; }
+      const g = by.get(label) ?? { label, chunkIds: [], materialId: a.station.materialId ?? "", missed: 0, keyPoints: [], misconceptions: [], source: "osce" as const };
+      g.missed += 1;
+      for (const c of chunks) if (!g.chunkIds.includes(c)) g.chunkIds.push(c);
+      if (!g.keyPoints.includes(it.text)) g.keyPoints = [...g.keyPoints, it.text].slice(0, 6);
+      by.set(label, g);
+    }
+  }
+  return { gaps: [...by.values()].sort((x, y) => y.missed - x.missed || x.label.localeCompare(y.label)), skipped };
+}
+
+/** Pure. Gaps from questions and cards and gaps from OSCE practice as one list: one label once (counts and sections joined), most missed first. */
+export function mergeGaps(a: readonly TopicGap[], b: readonly TopicGap[], limit = 6): TopicGap[] {
+  const by = new Map<string, TopicGap>();
+  for (const g of [...a, ...b]) {
+    const k = flat(g.label), have = by.get(k);
+    if (!have) { by.set(k, { ...g, chunkIds: [...g.chunkIds], keyPoints: [...g.keyPoints], misconceptions: [...g.misconceptions] }); continue; }
+    have.missed += g.missed;
+    have.chunkIds = [...new Set([...have.chunkIds, ...g.chunkIds])];
+    have.keyPoints = [...new Set([...have.keyPoints, ...g.keyPoints])].slice(0, 6);
+    have.misconceptions = [...new Set([...have.misconceptions, ...g.misconceptions])].slice(0, 4);
+    if (have.source !== g.source) have.source = undefined;
+  }
+  return [...by.values()].sort((x, y) => y.missed - x.missed || x.label.localeCompare(y.label)).slice(0, limit);
 }

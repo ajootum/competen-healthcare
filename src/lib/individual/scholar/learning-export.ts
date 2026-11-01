@@ -17,7 +17,8 @@ import { parseTeachAnswer } from "./teach-format";
 //   AI-generated teaching         the saved teaching, private and formative, not clinically reviewed
 //   External research             metadata only (title, journal, year, authors, DOI / PMID / link) and the short excerpt
 //                                 already stored. Never full text.
-//   Your notes                    anything the learner wrote themselves (their own flashcards and card notes)
+//   Your notes                    anything the learner wrote themselves (their own flashcards and card notes, and the
+//                                 notes and highlights of the personal library, migration 820)
 // The one model is exportBlocks(): the tests read it, the renderer draws it.
 
 export const EXPORT_PROVENANCE = {
@@ -48,13 +49,13 @@ export type ExportTeaching = {
   model: string | null; promptVersion: string | null;
   citations: ExportCitation[]; governed: ExportGoverned[]; external: ExportExternal[];
 };
-export type ExportNote = { kind: "flashcard" | "note"; text: string; savedAt: string | null; detail?: string | null };
+export type ExportNote = { kind: "flashcard" | "note" | "highlight"; text: string; savedAt: string | null; detail?: string | null };
 export type ExportLesson = {
   title: string; objective: string | null; step: number | null; sessionTitle: string | null;
   material: { title: string; uploadedAt: string | null }[]; sections: string[];
   teachings: ExportTeaching[]; notes: ExportNote[];
 };
-export type ExportScope = "lesson" | "material" | "study";
+export type ExportScope = "lesson" | "material" | "study" | "selected" | "topic" | "range";
 export type LearningExportInput = {
   scope: ExportScope; title: string; learner: string | null; generatedAt: string;
   /** A connected study session's stated objective, where it has one. */
@@ -176,12 +177,17 @@ export function lessonBlocks(l: ExportLesson, n: number): Block[] {
   if (l.notes.length) {
     out.push({ t: "label", kind: "notes", text: EXPORT_PROVENANCE.notes });
     for (const nt of l.notes) {
-      out.push({ t: "bullet", text: `${nt.kind === "flashcard" ? "Flashcard you wrote: " : ""}${inline(nt.text)}` });
+      out.push({ t: "bullet", text: `${nt.kind === "flashcard" ? "Flashcard you wrote: " : nt.kind === "highlight" ? "You highlighted: " : ""}${inline(nt.text)}` });
       if (nt.detail) out.push({ t: "small", text: inline(nt.detail) });
     }
   }
   return out;
 }
+
+const SCOPE_WORDS: Record<ExportScope, string> = {
+  lesson: "one saved lesson", material: "all saved lessons for one material", study: "a connected study session",
+  selected: "saved lessons you chose", topic: "saved lessons on one topic", range: "saved lessons from a date range",
+};
 
 /** Pure. The whole document as blocks: the header (learner's own document, date, sources and versions), then each lesson. */
 export function exportBlocks(input: LearningExportInput): Block[] {
@@ -189,7 +195,7 @@ export function exportBlocks(input: LearningExportInput): Block[] {
   out.push({ t: "small", text: "Your saved learning — Competen Scholar" });
   out.push({ t: "kv", k: "Your document", v: input.learner ? `Made for ${inline(input.learner)}, for your own study` : "Made for you, for your own study" });
   out.push({ t: "kv", k: "Generated", v: exportDate(input.generatedAt) });
-  out.push({ t: "kv", k: "Contents", v: `${input.lessons.length} lesson${input.lessons.length === 1 ? "" : "s"} (${input.scope === "lesson" ? "one saved lesson" : input.scope === "material" ? "all saved lessons for one material" : "a connected study session"})` });
+  out.push({ t: "kv", k: "Contents", v: `${input.lessons.length} lesson${input.lessons.length === 1 ? "" : "s"} (${SCOPE_WORDS[input.scope]})` });
   if (input.objective) out.push({ t: "kv", k: "Study objective", v: inline(input.objective) });
   const mats = new Map<string, string | null>();
   for (const l of input.lessons) for (const m of l.material) mats.set(m.title, m.uploadedAt);

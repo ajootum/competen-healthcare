@@ -7,7 +7,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { countDue, getRevisionSession, listMaterials, readConsent } from "@/lib/individual/scholar/store";
-import { applyContentReview, loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
+import { applyContentReview, loadCardLinks, loadFlashcardGapsDetailed, loadFlashcards, osceSkippedNote } from "@/lib/individual/scholar/flashcard-service";
 import { REVIEW_STATE_LABEL, filterCards, recallOf, spacedViews, type CardOrigin, type DeckSummary, type FlashcardView, type ReviewState } from "@/lib/individual/scholar/flashcards";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
@@ -96,13 +96,16 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   if (policy.scholarFlashcards !== "on")
     return <>{top}<StatePanel title="Flashcards are not offered here"><p>Revision, your review cards and your saved sets are unaffected.</p></StatePanel></>;
 
-  const [lib, materials, learner, consent, gaps] = await Promise.all([
-    loadFlashcards(ctx), listMaterials(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId), loadFlashcardGaps(ctx),
+  const [lib, materials, learner, consent, gapInfo] = await Promise.all([
+    loadFlashcards(ctx), listMaterials(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId), loadFlashcardGapsDetailed(ctx),
   ]);
   if (!lib.ok) return <>{top}<Unreadable what="your flashcards" /></>;
-  const { cards, decks, schema730 } = lib.data;
+  const { cards, decks, schema730, archive820 } = lib.data;
+  const gaps = gapInfo.gaps;
   const exports = policy.scholarFlashcardExports as ExportFormat[];
-  const deck: DeckSummary = decks.find(d => d.key === q.deck) ?? decks.find(d => d.kind === "personal" && d.total > 0) ?? decks[0];
+  // An archived deck is out of the main list and the default choice; it is still reachable by its link and by Show archived.
+  const liveDecks = decks.filter(d => !d.archived);
+  const deck: DeckSummary = decks.find(d => d.key === q.deck) ?? liveDecks.find(d => d.kind === "personal" && d.total > 0) ?? liveDecks[0] ?? decks[0];
 
   // Where new cards can come from right now, said plainly (as Revise says it). Stored and library cards always work.
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
@@ -111,12 +114,12 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
     : status !== "on" ? `${status ? aiOffMessage(status) ?? "AI help is off." : "Your AI help setting could not be read just now."} Your saved and library cards are used.`
       : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Your saved and library cards are used.` : null;
   const mats = materials.ok ? materials.data.filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title })) : [];
-  const personal = decks.filter(d => d.kind === "personal" && d.id).map(d => ({ id: d.id!, title: d.title }));
+  const personal = decks.filter(d => d.kind === "personal" && d.id && !d.archived).map(d => ({ id: d.id!, title: d.title }));
   const side = (preset: string | null = null) => (
     <>
       <DeckOptions deck={{ key: deck.key, id: deck.id, title: deck.title, total: deck.total, due: deck.due + deck.fresh }} exports={exports} />
       <CreateMore materials={mats} competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} decks={personal}
-        sourceModes={policy.scholarFlashcardSourceModes} perGeneration={policy.scholarFlashcardsPerGeneration} aiNote={aiNote} gaps={gaps.length} marksOn={schema730}
+        sourceModes={policy.scholarFlashcardSourceModes} perGeneration={policy.scholarFlashcardsPerGeneration} aiNote={aiNote} gaps={gaps.length} gapNote={osceSkippedNote(gapInfo.osceSkipped)} marksOn={schema730}
         preset={preset === "notes" || preset === "competency" || preset === "topic" || preset === "gaps" || preset === "write" ? preset : null}
         scope={flashcardPrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
       {!schema730 && <p className="rounded-2xl border border-gray-200 bg-white p-4 text-[13px] text-gray-600">Decks of your own, cards you write yourself, bookmarks and notes are not available here yet. Flashcards from your notes and the Competen library work as usual.</p>}
@@ -133,15 +136,22 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
     const inSession = new Set(s.data.questionIds);
     const byId = new Map((await applyContentReview(ctx, cards.filter(c => inSession.has(c.id)), ukDate)).map(c => [c.id, c]));
     const rated = new Map(s.data.attempts.map(a => [a.questionId, a]));
+    const links = await loadCardLinks(ctx, [...byId.values()].map(c => ({ id: c.id, chunkId: c.chunkId, deckIds: c.deckIds })));
     const studyCards: StudyCard[] = s.data.questionIds.map(id => byId.get(id)).filter((c): c is FlashcardView => !!c).map(c => {
       const a = rated.get(c.id);
+      const l = links.get(c.id);
       return {
+        links: l ? {
+          lesson: l.lesson ? { title: l.lesson.title, href: `${studyHref("learn")}?session=${l.lesson.sessionId}#lesson-${l.lesson.step}` } : null,
+          study: l.study ? { title: l.study.title, href: `${studyHref("learn")}?study=${l.study.sessionId}` } : null,
+        } : null,
         id: c.id, front: c.front, origin: c.origin, originLabel: c.originLabel, citation: c.sources[0]?.citation ?? c.material.title,
         materialId: c.material.id, materialTitle: c.material.title, chunkId: c.chunkId, competency: c.competency?.title ?? null, topic: c.topic,
         editable: c.editable, bookmarked: c.bookmarked, note: c.note, issue: c.issue,
         // SCHOLAR-FLASHCARDS-QA-01: flagged, never rewritten (flashcard-sensitive.ts); shown with the answer.
         sensitive: c.sensitive?.marker ? { marker: c.sensitive.marker, reviewed: c.sensitive.reviewed } : null,
         answered: a ? { recall: a.correct ? "remembered" : "again", nextReviewAt: c.review.nextReviewAt } : null,
+        schedule: { lastQuality: c.review.lastQuality, nextReviewAt: c.review.nextReviewAt, status: c.review.status, reviews: c.review.reviews },
         back: a ? { text: c.back, explanation: c.explanation, quote: c.sources.find(x => x.origin === "notes")?.quote ?? null } : null,
       };
     });
@@ -152,7 +162,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
       <>
         {madeNote && <p role="status" className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-800">{madeNote}</p>}
         {studyCards.length < s.data.questionIds.length && <p className="text-[12.5px] text-gray-600">Some cards in this session are no longer stored (their material was removed, or a library card was withdrawn) and are left out.</p>}
-        <FlashcardStudy sessionId={s.data.session.id} deckTitle={studyDeck?.title ?? "Study session"} deckKey={studyDeck?.key ?? null} deckCards={studyDeck?.total ?? studyCards.length}
+        <FlashcardStudy sessionId={s.data.session.id} today={lib.data.today} deckTitle={studyDeck?.title ?? "Study session"} deckKey={studyDeck?.key ?? null} deckCards={studyDeck?.total ?? studyCards.length}
           lastRevised={studyDeck?.lastStudiedAt ?? null} cards={studyCards} marksOn={schema730} completed={s.data.session.status === "completed"} />
       </>,
       side(), false,
@@ -179,9 +189,9 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   if (q.view === "decks") {
     const rows: DeckRow[] = decks.map(d => {
       const p = lib.data.personal.find(x => x.id === d.id);
-      return { key: d.key, id: d.id, kind: d.kind, title: d.title, subtitle: d.subtitle, total: d.total, due: d.due, fresh: d.fresh, needsPractice: d.needsPractice, remembered: d.remembered, lastStudiedAt: d.lastStudiedAt, organiseBy: p?.organiseBy, organiseRef: p?.organiseRef ?? null };
+      return { key: d.key, id: d.id, kind: d.kind, title: d.title, subtitle: d.subtitle, total: d.total, due: d.due, fresh: d.fresh, needsPractice: d.needsPractice, remembered: d.remembered, lastStudiedAt: d.lastStudiedAt, organiseBy: p?.organiseBy, organiseRef: p?.organiseRef ?? null, updatedAt: d.updatedAt ?? null, archived: !!d.archived };
     });
-    return shell(<DeckList decks={rows} marksOn={schema730} exports={exports} editId={q.edit ?? null} />, side(q.create ?? null));
+    return shell(<DeckList decks={rows} marksOn={schema730} archiveOn={archive820} exports={exports} editId={q.edit ?? null} />, side(q.create ?? null));
   }
 
   // ── Revision History: the spaced repetition views, history and topic-level gaps ──
@@ -209,13 +219,14 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
               <ul className="mt-2 space-y-2">
                 {gaps.map(g => (
                   <li key={g.label} className="text-[13.5px]">
-                    <span className="font-semibold text-gray-900">{g.label}</span> <span className="text-gray-600">· missed {g.missed} time{g.missed === 1 ? "" : "s"}</span>
+                    <span className="font-semibold text-gray-900">{g.label}</span> <span className="text-gray-600">· {g.source === "osce" ? `${g.missed} gap${g.missed === 1 ? "" : "s"} in OSCE practice` : `missed ${g.missed} time${g.missed === 1 ? "" : "s"}`}</span>
                     {g.keyPoints.length > 0 && <span className="block text-[12.5px] text-gray-700">Key points: {g.keyPoints.slice(0, 3).join("; ")}</span>}
                     {g.misconceptions.length > 0 && <span className="block text-[12.5px] text-gray-700">Watch for: {g.misconceptions.slice(0, 2).join("; ")}</span>}
                     <Link href={`${studyHref("learn")}?section=${g.chunkIds[0]}`} className={`text-[12.5px] font-semibold underline ${focusRing}`}>Revise this topic in Learn</Link>
                   </li>
                 ))}
               </ul>
+              {osceSkippedNote(gapInfo.osceSkipped) && <p role="note" className="mt-2 text-[12.5px] text-gray-600">{osceSkippedNote(gapInfo.osceSkipped)}</p>}
               <Link href={flashcardsHref({ view: "history", create: "gaps" })} className={`mt-3 inline-flex text-[13.5px] font-semibold underline ${focusRing}`}>Make cards for my gaps</Link>
             </>
           )}
@@ -254,9 +265,9 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
             <p className="mt-1 text-[13.5px] text-gray-600">Make cards from your notes, a competency, a topic or your learning gaps under Create More Flashcards, or write one yourself.</p>
           </div>
         ) : <DeckStart deck={{ key: deck.key, title: deck.title, total: deck.total }} perState={{ due: deck.due, fresh: deck.fresh, needsPractice: deck.needsPractice, remembered: deck.remembered }} />}
-        {decks.length > 1 && (
+        {liveDecks.length > 1 && (
           <div className="mt-4 flex flex-wrap gap-1.5">
-            {decks.filter(d => d.kind === "all" || d.kind === "personal" || d.kind === "bookmarked").slice(0, 8).map(d => (
+            {liveDecks.filter(d => d.kind === "all" || d.kind === "personal" || (d.kind === "bookmarked" && d.total > 0)).slice(0, 8).map(d => (
               <Link key={d.key} href={flashcardsHref({ deck: d.key })} aria-current={d.key === deck.key ? "true" : undefined}
                 className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${d.key === deck.key ? "border-[var(--cmp-role-indigo-ink)] bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>{d.title} ({d.total})</Link>
             ))}

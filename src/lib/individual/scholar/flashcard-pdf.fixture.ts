@@ -22,7 +22,7 @@ const card = (over: Partial<FlashcardView> & Pick<FlashcardView, "front" | "back
         : [],
     createdAt: "2026-10-28T10:00:00Z", updatedAt: null, contentVersion: 1, version: "revision-flashcard-v3",
     material: MAT, chunkId: `chunk-${n}`,
-    review: { state: "new", nextReviewAt: null, lastReviewedAt: null, reviews: 0, intervalDays: null, ease: null, status: null, history: [] },
+    review: { state: "new", nextReviewAt: null, lastReviewedAt: null, reviews: 0, lastQuality: null, intervalDays: null, ease: null, status: null, history: [] },
     bookmarked: false, note: null, issue: null, deckIds: [], editable: origin === "learner",
     ...over,
   };
