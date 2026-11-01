@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { classifyRisk, higherRisk, intentActive, NO_INTENT, resolveRiskPolicy, riskRank, ruleMatches, ruleRefusal, type ResolvedRiskSubject, type RiskDecision, type RiskPolicy, type RiskRule, type RiskTier } from "./clinical-risk";
-import { firstKind, intentFeatures, type RefusalKind } from "./request-intent";
+import { cautiousIntentFeatures, firstKind, type RefusalKind } from "./request-intent";
+import { classificationReadings, vocabularyOf } from "../individual/scholar/spelling";
 import type { AiProduct } from "./fair-use-policy";
 
 // ── AI OPERATING MODES ── owner GO "COMPETEN AI — SUPERVISED PILOT MODE", 29 Oct 2026 ─────────────────────────────
@@ -101,8 +102,15 @@ export type Purpose = "education" | null;
  * SCHOLAR-RISK-01: where the product's risk policy turns its intent layer on (clinical-risk.ts IntentPolicy), decideIntent
  * decides first, in every mode; what it leaves undecided goes on exactly as before.
  */
-export function decideRisk(policy: RiskPolicy, subject: ResolvedRiskSubject, activityFloor: RiskTier, m: RequestMode, purpose: Purpose): GateVerdict {
+export function decideRisk(policy: RiskPolicy, subject0: ResolvedRiskSubject, activityFloor: RiskTier, m: RequestMode, purpose: Purpose): GateVerdict {
+  return withRecovery(subject0, decideRiskCore(policy, subject0, activityFloor, m, purpose));
+}
+
+function decideRiskCore(policy: RiskPolicy, subject0: ResolvedRiskSubject, activityFloor: RiskTier, m: RequestMode, purpose: Purpose): GateVerdict {
   const rules = rulesFor(policy, m);
+  // Owner item 8 (1 Nov 2026): where the intent layer is on, the rules also read the corrected readings of the learner's
+  // own words (a rule matching in ANY reading matches, so a correction can add a high-risk match, never remove one).
+  const subject = intentActive(policy.intent) ? withReadings(subject0) : subject0;
   const d = classifyRisk(rules, subject, activityFloor);
   const v = intentActive(policy.intent) ? decideIntent(rules, subject, activityFloor, d, purpose) : null;
   if (v) return withSafeguards(policy, v);
@@ -120,6 +128,32 @@ export function decideRisk(policy: RiskPolicy, subject: ResolvedRiskSubject, act
  *  compared against (scholar/http.ts withinRequestRisk). A category-4 request is high (it is never served). */
 export const servedTier = (policy: RiskPolicy, subject: ResolvedRiskSubject, floor: RiskTier): RiskTier =>
   decideRisk(policy, subject, floor, modeFor(STRICT_DOC, { userId: null, entitlementSources: [], planCodes: [] }), "education").risk.tier;
+
+/** The learner's material words, beside their request (the subject text without the request words), and the lesson's
+ *  own words: never corrected (spelling.ts vocabulary). */
+function materialVocabulary(s: ResolvedRiskSubject): string[] {
+  const req = s.requestText;
+  const material = req === undefined ? "" : s.text.startsWith(req) ? s.text.slice(req.length) : s.text.replace(req, "");
+  const c = s.intentContext;
+  return vocabularyOf([material, c?.lessonTitle, c?.objective, c?.activity, ...(c?.materialTopics ?? [])]);
+}
+type WithReadings = ResolvedRiskSubject & { readings?: string[]; vocabulary?: string[] };
+/** Pure: the subject with the request's other readings beside it (classificationReadings). Unchanged when the text was
+ *  read as typed. */
+function withReadings(s: ResolvedRiskSubject): WithReadings {
+  const req = s.requestText ?? s.text;
+  const vocabulary = materialVocabulary(s);
+  const { readings } = classificationReadings(req, { vocabulary });
+  const extra = readings.filter(r => r !== req);
+  if (!extra.length) return { ...s, readings, vocabulary };
+  const add = `\n${extra.join("\n")}`;
+  return { ...s, text: `${s.text}${add}`, requestText: `${req}${add}`, readings, vocabulary };
+}
+
+/** Owner item 5: an unrecognised request asked in Learn says what Learn can still do (the notes, research). */
+function withRecovery(s: ResolvedRiskSubject, v: GateVerdict): GateVerdict {
+  return s.intentContext?.surface === "learn" && v.risk.refusal === "unrecognised" ? { ...v, risk: { ...v.risk, recovery: "learn" } } as GateVerdict : v;
+}
 
 /** Pure: a served decision above standard carries the educational boundary where the policy asks for it. */
 function withSafeguards(policy: RiskPolicy, v: GateVerdict): GateVerdict {
@@ -151,7 +185,9 @@ const REASON: Record<RefusalKind, string> = {
  */
 export function decideIntent(rules: RiskPolicy, subject: ResolvedRiskSubject, activityFloor: RiskTier, d: RiskDecision, purpose: Purpose): GateVerdict | null {
   const intent = rules.intent ?? NO_INTENT;
-  const f = intentFeatures(subject.requestText ?? subject.text);
+  // Item 8: every reading of the request, the more cautious result. Item 5: where it was asked (subject.intentContext).
+  const w = subject as WithReadings;
+  const f = cautiousIntentFeatures(w.readings?.[0] ?? subject.requestText ?? subject.text, { context: subject.intentContext, vocabulary: w.vocabulary ?? materialVocabulary(subject) });
   const highHits = rules.rules.filter(r => r.tier === "high_risk_clinical" && ruleMatches(r, subject));
   const ambiguous = new Set(intent.ambiguousRules);
   const hard = highHits.filter(r => !ambiguous.has(r.id));
@@ -187,6 +223,8 @@ export function decideIntent(rules: RiskPolicy, subject: ResolvedRiskSubject, ac
   // Unrecognised: as the policy says.
   if (d.rule === "unknown:no_rule") {
     if (intent.unknownHandling === "educational_if_study_intent" && f.questionFraming) return educational("intent:study_framing", "Not recognised by a rule, asked as a study question.");
+    // Item 5: no study verb, but asked inside a lesson or material and about its content: study.
+    if (intent.unknownHandling === "educational_if_study_intent" && f.contextFraming) return educational("intent:lesson_context", "Not recognised by a rule, asked about the lesson or material it was asked in.");
     if (intent.unknownHandling !== "high_risk") return askOrConfirm("intent:unrecognised", "unrecognised", true);
   }
   return null;
@@ -214,11 +252,15 @@ export const REFUSAL: Record<RefusalKind, string> = {
   unrecognised: "I couldn't tell what this question is about, so I haven't answered it. If it's a study question, try asking it again with a little more detail, for example \"explain...\", \"compare...\" or \"what are the causes of...\".",
 };
 
+/** Owner item 5: the unrecognised words in Learn, where the notes and research are one step away. */
+export const REFUSAL_LEARN_UNRECOGNISED = "I couldn't tell what this question is about, so I haven't answered it. Try asking it again with a little more detail (for example \"explain...\", \"compare...\" or \"what are the causes of...\"), search your notes for the topic, or look for references on it from this lesson.";
+
 /** The general high-risk words (kept under their old name: every page that shows them keeps them as the server wrote them). */
 export const SUPPORTIVE_REFUSAL = REFUSAL.clinical_high;
 /** Pure: the words for a high-risk refusal, by its reason. */
-export const refusalFor = (risk: Pick<RiskDecision, "refusal"> | undefined): string => REFUSAL[risk?.refusal ?? "clinical_high"] ?? SUPPORTIVE_REFUSAL;
-const REFUSAL_TEXTS = new Set<string>(Object.values(REFUSAL));
+export const refusalFor = (risk: Pick<RiskDecision, "refusal" | "recovery"> | undefined): string =>
+  risk?.refusal === "unrecognised" && risk.recovery === "learn" ? REFUSAL_LEARN_UNRECOGNISED : REFUSAL[risk?.refusal ?? "clinical_high"] ?? SUPPORTIVE_REFUSAL;
+const REFUSAL_TEXTS = new Set<string>([...Object.values(REFUSAL), REFUSAL_LEARN_UNRECOGNISED]);
 /** Pure: whether a message is one of the refusal words above (a page shows it as the server wrote it). */
 export const isSupportiveRefusal = (text: unknown): boolean => typeof text === "string" && REFUSAL_TEXTS.has(text);
 

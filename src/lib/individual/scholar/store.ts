@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
 import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
-import type { Chunk, ExtractionQuality } from "./extract";
+import type { AiReading, Chunk, ExtractionQuality } from "./extract";
 import { planChunkInsertion, type NewChunk } from "./slide-images";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
@@ -26,6 +26,7 @@ import { guidanceJson, readDefinition } from "./osce";
 import type { CardRowExtras, PersonalDeck } from "./flashcards";
 import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type StudyLinkKind, type StudySpace } from "./study-session";
 import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
+import { newestSavedLesson, type LessonRecord } from "./learn-journey";
 import { correctionFromRow, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -244,13 +245,18 @@ export async function createMaterial(admin: Admin, userId: string, input: {
 const toQualityJson = (q: ExtractionQuality) => ({
   unit: q.unit, units: q.units, empty_units: q.emptyUnits, chars: q.chars, sections: q.sections,
   ...(q.aiReadUnits ? { ai_read_units: q.aiReadUnits } : {}), ...(q.aiTriedUnits ? { ai_tried_units: q.aiTriedUnits } : {}),
+  ...(q.aiProvenance?.length ? { ai_provenance: q.aiProvenance.map(r => ({ units: r.units, model: r.model, prompt_version: r.promptVersion, extracted_at: r.extractedAt })) } : {}),
 });
+const provenance = (v: unknown): AiReading[] | undefined => Array.isArray(v)
+  ? v.filter((r: any) => r && Array.isArray(r.units) && typeof r.model === "string").map((r: any) => ({ units: r.units.map(Number).filter(Number.isFinite), model: String(r.model), promptVersion: String(r.prompt_version ?? ""), extractedAt: String(r.extracted_at ?? "") }))
+  : undefined;
 const numbers = (v: unknown): number[] | undefined => Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : undefined;
 export const fromQualityJson = (j: any): ExtractionQuality | null =>
   j && typeof j === "object" && Array.isArray(j.empty_units)
     ? {
       unit: j.unit, units: Number(j.units), emptyUnits: (j.empty_units as unknown[]).map(Number), chars: Number(j.chars), sections: Number(j.sections),
       ...(numbers(j.ai_read_units) ? { aiReadUnits: numbers(j.ai_read_units) } : {}), ...(numbers(j.ai_tried_units) ? { aiTriedUnits: numbers(j.ai_tried_units) } : {}),
+      ...(provenance(j.ai_provenance) ? { aiProvenance: provenance(j.ai_provenance) } : {}),
     }
     : null;
 
@@ -2310,6 +2316,51 @@ export async function listArtefacts(admin: Admin, userId: string, opts: { materi
   return { ok: true, data: ((data ?? []) as any[]).map(r => toArtefact(r, src.get(r.id) ?? [])) };
 }
 
+// ── SCHOLAR-PERSISTENT-LEARNING-01: SAVED TEACHING AND LESSON RECORDS, WITHOUT AI (learn-journey.ts says the rules) ──
+
+/**
+ * The newest saved artefact of `action` for this lesson's own chunk set and material, whatever prompt version, depth or
+ * mode it was written under (learn-journey.ts newestSavedLesson). Learn/act's open falls back to it when the exact key
+ * finds nothing, so a lesson taught under an older prompt or other settings reopens with no AI call. Keyed on user_id.
+ */
+export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[] }): Promise<ArtefactRow | null> {
+  if (!q.chunkIds.length) return null;
+  const r = await listArtefacts(admin, userId, { chunkIds: [q.chunkIds[0]], ...(q.materialId ? { materialId: q.materialId } : {}) });
+  return r.ok ? newestSavedLesson(r.data, q) : null;
+}
+
+/**
+ * Per lesson of a session: its newest saved teaching of `action` (metadata only, never the content) and the attempts on
+ * questions from its own sections -- the server records behind the lesson states (learn-journey.ts lessonFacts). Reads
+ * only, keyed on user_id. Anything unreadable (415 / 416 absent) is simply not counted: a lesson then shows what the
+ * learning events say, never a fabricated state.
+ */
+export async function learnLessonRecords(admin: Admin, userId: string, steps: readonly LearningStep[], action: string): Promise<LessonRecord[]> {
+  const all = [...new Set(steps.flatMap(s => s.sections.map(x => x.chunkId)))].slice(0, 400);
+  const empty: LessonRecord[] = steps.map(s => ({ step: s.step, saved: null, attempts: 0 }));
+  if (!all.length) return empty;
+  const [src, qs] = await Promise.all([
+    admin.from("individual_scholar_artefact_source").select("artefact_id").eq("user_id", userId).in("chunk_id", all).limit(2000),
+    admin.from("individual_scholar_question").select("id, chunk_id").eq("user_id", userId).in("chunk_id", all).limit(2000),
+  ]);
+  const list = (r: { data?: unknown; error?: unknown } | null): any[] => (r && !r.error && Array.isArray(r.data) ? r.data : []);
+  const ids: string[] = [...new Set(list(src).map(r => String(r.artefact_id)))];
+  const [arts, sources, att] = await Promise.all([
+    ids.length ? admin.from("individual_scholar_artefact").select("id, material_id, action, depth, prompt_version, created_at").eq("user_id", userId).eq("action", action).in("id", ids).limit(500) : null,
+    artefactSources(admin, userId, ids),
+    list(qs).length ? admin.from("individual_scholar_attempt").select("question_id").eq("user_id", userId).in("question_id", list(qs).map(q => q.id)).limit(5000) : null,
+  ]);
+  const rows = list(arts).map(r => ({ id: r.id as string, materialId: r.material_id as string, action: r.action as string, depth: r.depth as string, promptVersion: r.prompt_version as string, createdAt: r.created_at as string, sources: sources.get(r.id) ?? [] }));
+  const chunkOf = new Map<string, string>(list(qs).map(q => [String(q.id), String(q.chunk_id)]));
+  const perChunk = new Map<string, number>();
+  for (const a of list(att)) { const c = chunkOf.get(a.question_id); if (c) perChunk.set(c, (perChunk.get(c) ?? 0) + 1); }
+  return steps.map(s => {
+    const chunkIds = s.sections.map(x => x.chunkId);
+    const best = newestSavedLesson(rows, { action, materialId: s.sections[0]?.materialId ?? null, chunkIds });
+    return { step: s.step, saved: best ? { at: best.createdAt, promptVersion: best.promptVersion, depth: best.depth } : null, attempts: chunkIds.reduce((n, c) => n + (perChunk.get(c) ?? 0), 0) };
+  });
+}
+
 /**
  * After a material is deleted, what it emptied goes too:
  * - a Learn session with no step left has nothing to teach (414 cascades its steps);
@@ -2990,12 +3041,14 @@ export async function materialBytes(admin: Admin, userId: string, id: string): P
  */
 export async function addPictureSlideSections(admin: Admin, userId: string, materialId: string, input: {
   additions: NewChunk[]; read: readonly number[]; tried: readonly number[]; extractorTag: string;
+  /** SCHOLAR-IMAGE-RECOVERY: the model, prompt version and time of this reading, kept on the material (ai_provenance). */
+  provenance?: { model: string; promptVersion: string; extractedAt: string } | null;
 }): Promise<{ ok: true; added: number; recorded: boolean } | { ok: false; error: string }> {
   const { data: row, error: rErr } = await admin.from("individual_scholar_material").select("extraction_quality, chunk_count, char_count, extractor")
     .eq("user_id", userId).eq("id", materialId).maybeSingle();
   if (rErr || !row) return { ok: false, error: "material" };
   const q = fromQualityJson(row.extraction_quality);
-  if (!q || q.unit !== "slide") return { ok: false, error: "quality" };
+  if (!q || (q.unit !== "slide" && q.unit !== "page")) return { ok: false, error: "quality" };
   const { data: rows, error: cErr } = await admin.from("individual_scholar_chunk").select("id, ordinal, page_from")
     .eq("user_id", userId).eq("material_id", materialId).order("ordinal").limit(2000);
   if (cErr) return { ok: false, error: "chunks" };
@@ -3022,6 +3075,7 @@ export async function addPictureSlideSections(admin: Admin, userId: string, mate
     ...q, emptyUnits: q.emptyUnits.filter(n => !read.includes(n)), chars: q.chars + chars, sections: q.sections + plan.inserts.length,
     aiReadUnits: [...new Set([...(q.aiReadUnits ?? []), ...read])].sort((a, b) => a - b),
     aiTriedUnits: [...new Set([...(q.aiTriedUnits ?? []), ...tried])].sort((a, b) => a - b),
+    ...(input.provenance && read.length ? { aiProvenance: [...(q.aiProvenance ?? []), { units: [...read], ...input.provenance }] } : {}),
   };
   const extractor = String(row.extractor ?? "").includes(input.extractorTag) ? row.extractor : `${row.extractor}+${input.extractorTag}`;
   const { error: uErr } = await admin.from("individual_scholar_material").update({

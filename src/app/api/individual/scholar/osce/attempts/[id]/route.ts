@@ -98,10 +98,11 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
     if (!standing.available) return NextResponse.json({ error: `${standing.message ?? "AI feedback is not available right now."} Mark each item yourself.`, selfMark: true }, { status: 409 });
     const pre = await aiPreflight(ctx);
     if (pre) return pre;
-    const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, {
+    // Owner item 5 (1 Nov 2026): answers inside this OSCE station (framing only; the answers are marked as typed).
+    const ai = scholarAiRunner(ctx, req, "evaluate", { ...(await scholarRisk(ctx.admin, ctx.userId, {
       text: Object.values(attempt.responses).join("\n"), passages: [{ chunkId: station.chunkId ?? station.id, content: `${station.scenario}\n${station.checklist.map(i => i.text).join("\n")}` }],
       competencyIds: station.competencyId ? [station.competencyId] : [],
-    }));
+    })), intentContext: { surface: "apply", lessonTitle: station.title ?? null, objective: station.scenario, materialTopics: station.checklist.map(i => i.text) } });
     const r = await runOsceFeedback(ctx.userId, {
       scenario: snap.scenario, candidateInstructions: snap.candidateInstructions, checklist: snap.checklist, responses: attempt.responses,
       guidance: snap.guidance, expectedActivities: snap.expectedActivities,

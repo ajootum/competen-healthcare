@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { activeSessionsTitled, createLearningSession, getConnectedSession, getLearningSession, learningEvents, listLearningSessions, sessionStepSummaries } from "@/lib/individual/scholar/store";
+import { activeSessionsTitled, createLearningSession, getConnectedSession, getLearningSession, learnLessonRecords, learningEvents, listLearningSessions, sessionStepSummaries } from "@/lib/individual/scholar/store";
+import { isOpenable } from "@/lib/individual/scholar/guided-learn";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, parseScope, planSteps, resolveScope, scopeText, sectionProfiles, sessionTopics, storedScopeKind } from "@/lib/individual/scholar/learn";
@@ -71,7 +72,9 @@ export async function POST(req: Request) {
       await audit(ctx, "individual_scholar_learning_resumed", "individual_scholar_learning_session", same.session.id, { scope: kind, reason: "same_scope" });
       return NextResponse.json({
         session: sessionView({ id: same.session.id, recorded: true, title: displaySessionTitle(same.session.title), scopeKind: same.session.scopeKind, currentStep: Math.min(same.session.currentStep, Math.max(0, same.steps.length - 1)), status: same.session.status, coverage: null, steps: same.steps, topics: await sessionTopics(ctx.admin, ctx.userId, same.steps.flatMap(s => s.sections.map(x => x.chunkId))), profiles }),
+        // SCHOLAR-PERSISTENT-LEARNING-01: each lesson's server records (saved teaching of the lesson action, attempts), no AI.
         progress: same.progress, resumed: true,
+        lessons: await learnLessonRecords(ctx.admin, ctx.userId, same.steps, typeof body?.lessonAction === "string" && isOpenable(body.lessonAction) ? body.lessonAction : "teach").catch(() => []),
         note: "You were already learning this, so Scholar carried on with that session where you left it.",
         ...(connect ? { study: (await loadStudy(ctx.admin, ctx.userId, same.session.id, "learn", policy))?.bar ?? null } : {}),
       });

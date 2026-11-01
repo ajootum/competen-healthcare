@@ -99,7 +99,7 @@ export function groupActions(actions: readonly string[], start: string): { prima
   return { primary, more: MORE_ORDER.filter(a => a !== primary && actions.includes(a)), ask: actions.includes("ask") };
 }
 
-export const EXPANSION_LABEL: Record<Exclude<LearnMode, "notes">, string> = { library: "Use my notes + Competen library", research: "Research & Explain" };
+export const EXPANSION_LABEL: Record<Exclude<LearnMode, "notes">, string> = { library: "Use my notes + Competen library", research: "Research supporting this lesson" };
 /** Pure. The wider Learn-from modes the learner may switch to from `mode`, in order, only those policy offers. */
 export function expansionChoices(mode: LearnMode, offered: readonly LearnMode[]): Exclude<LearnMode, "notes">[] {
   const wider: Exclude<LearnMode, "notes">[] = mode === "notes" ? ["library", "research"] : mode === "library" ? ["research"] : [];

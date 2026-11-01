@@ -149,7 +149,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-PRACTICE-EXAMS-01 (720): OSCE practice offered (it degrades safely without 720), 8 minutes, 8 to 12 items.
       scholarOsce: { enabled: true, durationMinutes: 8, checklistMin: 8, checklistMax: 12 },
       // COMPETEN-RESEARCH-01: notes only. Research also needs the engine operational (HQ Research Sources).
-      scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25 },
+      scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25, relevance: "standard" },
       // SCHOLAR-SQIE-02: evidence recovery defaults to notes + library, external off, no source enabled.
       // SCHOLAR-SOURCE-QUALITY-01: only PubMed-indexed reviews, guidelines and trials whose title names the topic may explain.
       scholarRecovery: {

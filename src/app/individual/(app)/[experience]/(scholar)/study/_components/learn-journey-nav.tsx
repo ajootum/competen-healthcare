@@ -4,8 +4,9 @@ import { useId, useState } from "react";
 import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
 
 // SCHOLAR-COMPANION-01 P0b: THE JOURNEY NAVIGATOR. The session's lessons as an outline, each with its learning mark in
-// WORDS and an icon (never colour alone), the current one marked aria-current. Choosing one jumps there: the page
-// scrolls (smoothly unless reduced motion is asked for), focuses its heading, and loads what is SAVED -- never an AI call.
+// WORDS and an icon (never colour alone), the current one marked aria-current. Choosing one makes it the ACTIVE lesson
+// (SCHOLAR-PERSISTENT-LEARNING-01): the page scrolls to it (smoothly unless reduced motion is asked for), focuses its
+// heading, and shows its SAVED teaching with no AI call; only a lesson with nothing saved, in Guided learning, is taught.
 //   JourneyOutline   the list (the wide layout's sticky left column; also the phone outline sheet)
 //   JourneyBar       below 66rem of content width: one compact sticky bar, "Lesson 3 of 8 · 2 read", that opens the
 //                    outline. It replaces the old Previous/Next bar -- there is never a second sticky bar.
@@ -14,12 +15,15 @@ import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 export type NavLesson = { index: number; title: string; status: LessonStatus; revealed: boolean };
 
-function Mark({ icon }: { icon: LessonStatus["icon"] }) {
-  // Shapes differ, so the mark is legible without colour: a filled dot (current), a tick (checked), a half disc (read), a ring.
+export function Mark({ icon }: { icon: LessonStatus["icon"] }) {
+  // Shapes differ, so the mark is legible without colour: a filled dot (current), a filled disc with a tick (completed),
+  // a ring with a tick (checked), a ring with a centre dot (taught), a half disc (read), a dashed ring (not started).
   return (
     <svg aria-hidden="true" viewBox="0 0 16 16" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6">
       {icon === "current" && <circle cx="8" cy="8" r="5" fill="currentColor" />}
+      {icon === "completed" && <><circle cx="8" cy="8" r="6.6" fill="currentColor" /><path d="M5 8.2l2 2 4-4.2" stroke="white" /></>}
       {icon === "checked" && <><circle cx="8" cy="8" r="6.2" /><path d="M5 8.2l2 2 4-4.2" /></>}
+      {icon === "taught" && <><circle cx="8" cy="8" r="6.2" /><circle cx="8" cy="8" r="2.6" fill="currentColor" /></>}
       {icon === "read" && <><circle cx="8" cy="8" r="6.2" /><path d="M8 1.8a6.2 6.2 0 010 12.4z" fill="currentColor" /></>}
       {icon === "none" && <circle cx="8" cy="8" r="6.2" strokeDasharray="2.2 2" />}
     </svg>

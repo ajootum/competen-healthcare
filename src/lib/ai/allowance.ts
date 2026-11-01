@@ -70,12 +70,14 @@ export async function resolveRiskSubject(admin: any, ctx: RiskContext | undefine
   const text = subjectText(ctx);
   // SQIE D-1: the learner's own request words for rules of scope "request" (undefined: the whole subject, as before).
   const requestText = requestTextOf(ctx);
+  // Owner item 5 (1 Nov 2026): where it was asked, for the intent layer only (operating-mode.ts decideIntent).
+  const ic = ctx?.intentContext ? { intentContext: ctx.intentContext } : {};
   const frameworkCodes = [...(ctx?.frameworkCodes ?? [])];
   const ids = [...new Set(ctx?.competencyIds ?? [])].slice(0, 200);
-  if (!ids.length) return { text, requestText, competencyRisks: [], frameworkCodes };
+  if (!ids.length) return { text, requestText, ...ic, competencyRisks: [], frameworkCodes };
   try {
     const { data: comps, error } = await admin.from("framework_competencies").select("id, risk_category, cpu_id, domain_id").in("id", ids);
-    if (error || !comps) return { text, requestText, competencyRisks: ["high"], frameworkCodes };
+    if (error || !comps) return { text, requestText, ...ic, competencyRisks: ["high"], frameworkCodes };
     const cpuIds = [...new Set(comps.map((c: any) => c.cpu_id).filter(Boolean))];
     const domIds = [...new Set(comps.map((c: any) => c.domain_id).filter(Boolean))];
     const [cpus, doms] = await Promise.all([
@@ -84,10 +86,10 @@ export async function resolveRiskSubject(admin: any, ctx: RiskContext | undefine
     ]);
     const fwIds = [...new Set((doms.data ?? []).map((d: any) => d.framework_id))];
     const fws = fwIds.length ? await admin.from("frameworks").select("code").in("id", fwIds) : { data: [] };
-    if (cpus.error || doms.error || fws.error) return { text, requestText, competencyRisks: ["high"], frameworkCodes };
+    if (cpus.error || doms.error || fws.error) return { text, requestText, ...ic, competencyRisks: ["high"], frameworkCodes };
     const risks = [...comps.map((c: any) => c.risk_category), ...(cpus.data ?? []).map((c: any) => c.risk_category)].filter(Boolean).map((r: string) => r.toLowerCase());
-    return { text, requestText, competencyRisks: risks, frameworkCodes: [...frameworkCodes, ...(fws.data ?? []).map((f: any) => f.code).filter(Boolean)] };
-  } catch { return { text, requestText, competencyRisks: ["high"], frameworkCodes }; }
+    return { text, requestText, ...ic, competencyRisks: risks, frameworkCodes: [...frameworkCodes, ...(fws.data ?? []).map((f: any) => f.code).filter(Boolean)] };
+  } catch { return { text, requestText, ...ic, competencyRisks: ["high"], frameworkCodes }; }
 }
 
 export async function aiFairUseEnabled(admin: any): Promise<boolean> {

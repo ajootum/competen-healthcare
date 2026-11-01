@@ -2,8 +2,8 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readFileSync } from "node:fs";
 import { classifyRisk, resolveRiskPolicy, type ResolvedRiskSubject } from "./clinical-risk";
-import { CLARIFY, decideRisk, modeFor, REFUSAL, refusalFor, STRICT_DOC, type GateVerdict } from "./operating-mode";
-import { intentFeatures } from "./request-intent";
+import { CLARIFY, decideRisk, isSupportiveRefusal, modeFor, REFUSAL, REFUSAL_LEARN_UNRECOGNISED, refusalFor, STRICT_DOC, type GateVerdict } from "./operating-mode";
+import { intentFeatures, type IntentContext } from "./request-intent";
 import { withScholarRisk01 } from "../../../scripts/scholar-risk01-policy";
 
 // SCHOLAR-RISK-01 (owner GO 31 Oct 2026): education-first, risk-sensitive classification for Scholar. The starting point
@@ -134,6 +134,57 @@ describe("honest refusal words and the clarify question", () => {
     expect(intentFeatures("Explain this note").realPatient).toBeNull();
     const v = decideRisk(after, { text: "Explain this note\n\nThe patient in bed 3 is unresponsive: call for help.", requestText: "Explain this note", competencyRisks: [], frameworkCodes: [] }, "standard_educational", STRICT, null);
     expect(v.kind).toBe("classified");
+  });
+});
+
+// Owner instruction 1 Nov 2026 items 5 (educational intent with context) and 8 (spelling).
+describe("context and spelling (items 5 and 8)", () => {
+  const lesson: IntentContext = { surface: "learn", lessonTitle: "Donabedian model of quality: structure, process and outcome", objective: "Relate outcome measures to structure and process" };
+  const inLesson = (t: string, ctx: IntentContext | undefined = lesson, purpose: "education" | null = null) =>
+    decideRisk(after, { ...S(t), intentContext: ctx }, "standard_educational", STRICT, purpose);
+  it("inside a Donabedian lesson, 'what about the outcome bit?' is study, answered", () => {
+    expect(cat(inLesson("what about the outcome bit?"))).toBe(2);
+    // Without a study verb or question word: asked outside the lesson, study inside it.
+    expect(cat(decide(after, "the outcome bit again"))).toBe(3);
+    expect(inLesson("the outcome bit again")).toMatchObject({ kind: "classified", risk: { tier: "clinical_educational", rule: "intent:lesson_context" } });
+    expect(cat(inLesson("the outcome bit again", { surface: "personal_ai" }))).toBe(3);
+  });
+  it("a real patient inside a lesson is restricted, whatever the lesson, purpose or floor", () => {
+    for (const t of ["my patient in bed 3 is septic what now", "My patient in bed 3 has a poor outcome, what should I give?", "outcome: my patient right now is not breathing"]) {
+      expect(cat(inLesson(t)), t).toBe(4);
+      expect(cat(inLesson(t, lesson, "education")), t).toBe(4);
+    }
+  });
+  it("lesson context never turns a giving decision or a named person into study", () => {
+    const giving = { ...lesson, lessonTitle: "Paracetamol for fever: outcome" };
+    expect(cat(inLesson("Should I give paracetamol for a fever?", giving))).toBe(3);
+    expect(cat(inLesson("Mrs Jones has a fever, outcome?", giving))).toBe(3);
+  });
+  it("every high-risk request in the set stays restricted inside a lesson that shares its words", () => {
+    for (const t of SET.high as string[]) {
+      const ctx: IntentContext = { surface: "learn", lessonTitle: t, materialTopics: t.split(/\s+/) };
+      expect(cat(inLesson(t, ctx)), t).toBe(cat(decide(after, t)));
+    }
+  });
+  it("misspelt study questions are answered; a misspelt giving decision is not loosened", () => {
+    expect(answered(decide(after, "expalin sepssis managment"))).toBe(true);
+    expect(answered(decide(after, "Desribe the pathophysiology of hyperkalaemia"))).toBe(true);
+    expect(cat(decide(after, "shuld i giv him paracetamol"))).toBe(4);
+    expect(cat(decide(after, "shuld i giv him paracetamol", "education"))).toBe(4);
+  });
+  it("the validation set decides exactly as before when every request is asked inside a lesson with no shared words", () => {
+    const other: IntentContext = { surface: "learn", lessonTitle: "Quantum chromodynamics" };
+    for (const t of [...SET.educational, ...SET.ambiguous, ...SET.high] as string[]) expect(cat(inLesson(t, other)), t).toBe(cat(decide(after, t)));
+  });
+  it("unrecognised in Learn says what Learn can still do; elsewhere the general words", () => {
+    const v = decideRisk(before, { ...S("asdf qwerty"), intentContext: lesson }, "standard_educational", STRICT, null);
+    expect(v.risk.recovery).toBe("learn");
+    expect(refusalFor(v.risk)).toBe(REFUSAL_LEARN_UNRECOGNISED);
+    expect(REFUSAL_LEARN_UNRECOGNISED).toMatch(/notes/);
+    expect(REFUSAL_LEARN_UNRECOGNISED).toMatch(/references/);
+    expect(REFUSAL_LEARN_UNRECOGNISED).not.toMatch(/patient|medicine|urgent|emergency/i);
+    expect(isSupportiveRefusal(REFUSAL_LEARN_UNRECOGNISED)).toBe(true);
+    expect(refusalFor(decide(before, "asdf qwerty").risk)).toBe(REFUSAL.unrecognised);
   });
 });
 

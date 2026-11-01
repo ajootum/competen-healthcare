@@ -21,8 +21,8 @@ import {
   type LearnMode, type LessonSettings,
 } from "@/lib/individual/scholar/guided-learn";
 import {
-  DWELL_MS, createJourney, journeyKey, journeyStep, lessonStatus, parseSavedJourney, readCount, savedJourney, shouldSendPosition, startJourney,
-  type JourneyEffect, type JourneyEvent, type JourneyState,
+  PRIMARY_LABEL, createJourney, journeyFacts, journeyKey, journeyStep, lessonFacts, lessonStatus, parseSavedJourney, primaryAction, progressiveSplit, readCount, savedJourney, startJourney,
+  type JourneyEffect, type JourneyEvent, type JourneyState, type LessonFacts, type LessonRecord,
 } from "@/lib/individual/scholar/learn-journey";
 import { DEVICE_KEY, PositionSync, mergeResume, newDeviceId, type PositionDraft, type PositionPut, type ServerPosition, type SyncResult } from "@/lib/individual/scholar/learn-position";
 import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
@@ -33,7 +33,7 @@ import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi } from "
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
 import { usePaneGrid } from "@/components/ui/pane-grid";
-import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, LessonCard, LessonPlaceholder, ResumeBanner, lessonDomId, lessonHeadingId, type Activity } from "./learn-lesson-card";
+import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonHeadingId, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
 import { ApproachControl, offeredApproaches, type Approach, type ApproachResult } from "./learn-approach";
@@ -50,6 +50,13 @@ import { ApproachControl, offeredApproaches, type Approach, type ApproachResult 
 // lesson is taught by the learner's own choice (Continue, a Teach button) or, guided, when the workspace opens on it.
 // The lesson being read is Current; the server's current_step follows it after a dwell, and this device remembers how
 // far the column was revealed (learn-journey.ts says why that is not a server column).
+//
+// SCHOLAR-PERSISTENT-LEARNING-01 (owner, 1 Nov): ONE ACTIVE LESSON. The active lesson is shown in full; every other lesson
+// is a compact row (title, state in words and an icon, its one way in) -- tap to make it active. The active lesson is the
+// learner's choice (a tap, Next lesson, Previous, Resume), never the lesson scrolled into view, and only that choice moves
+// the server's current_step and the 790 position. Each lesson's state (read / taught / completed / assessed) comes from
+// the server records (learn-journey.ts lessonFacts), so nothing learned is hidden by where the position stands. Saved
+// teaching -- under any prompt version, depth or mode -- opens with no AI call; restoring a session never generates.
 
 const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
@@ -101,6 +108,10 @@ type Reply = {
   /** SCHOLAR-GUIDED-LEARNING-01: a lesson shown with its unsupported statements left out (a count, never which). */
   salvage?: { removed: number; note: string } | null;
   cached?: boolean;
+  /** SCHOLAR-PERSISTENT-LEARNING-01: a lesson saved under another prompt version or depth, opened with no AI call. */
+  savedEarlier?: { label: string; promptVersion: string; depth: string } | null;
+  /** Item 8: an Ask question's everyday-word slips corrected on the server (spelling.ts, deterministic); `original` as typed. */
+  spelling?: { original: string; display: string; corrections: { from: string; to: string }[] } | null;
 };
 /** `extra` and `target`: the request as it was made, so "Explain using approved references" can make it again. `step`: the lesson it belongs to. */
 type Card = { id: number; asked?: string; reply: Reply; extra?: Record<string, unknown>; target?: "lesson" | "ask"; step?: number };
@@ -160,6 +171,8 @@ export function LearnWorkspace(props: {
   initial: SessionView | null; initialProgress: Record<number, { actions: string[]; verdict: string | null }>; start: StartScope | null;
   /** SCHOLAR-CONTINUITY-01 (790): where the learner stopped on any device (null: none, or 790 absent). */
   initialPosition?: ServerPosition | null;
+  /** SCHOLAR-PERSISTENT-LEARNING-01: each lesson's server records (saved teaching, attempts), read with no AI. */
+  initialRecords?: LessonRecord[];
   actions: LearnAction[]; startAction: LearnAction; labels: Record<LearnAction, string>; consent: boolean; offMessage: string | null;
   checks: "offer" | "prompt" | "off"; depth: "brief" | "standard" | "detailed"; maxTurns: number; materials: { id: string; title: string }[];
   /** s7: when new AI is limited, the plain message from the student's standing. Saved learning stays available. */
@@ -200,6 +213,10 @@ export function LearnWorkspace(props: {
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
   const [, cols] = usePaneGrid({ container: rootEl, minMain: 460, start: { storageKey: "scholar.learn.sources.w", defaultPx: 240 }, end: { storageKey: "scholar.learn.ask.w", defaultPx: 300 } });
   const [progress, setProgress] = useState(props.initialProgress);
+  // SCHOLAR-PERSISTENT-LEARNING-01: the server records behind each lesson's state (a resumed scope brings its own).
+  const [records, setRecords] = useState<LessonRecord[]>(props.initialRecords ?? []);
+  /** Lessons whose saved teaching is being opened (open:true, never AI). */
+  const [opening, setOpening] = useState<Record<number, boolean>>({});
   /** The informal check, answered in its own lesson. `lastCheck`: the latest answered one per lesson (Explain my mistake). */
   const [check, setCheck] = useState<{ step: number; question: string; answer: string } | null>(null);
   const [lastCheck, setLastCheck] = useState<Record<number, { question: string; answer: string }>>({});
@@ -383,10 +400,13 @@ export function LearnWorkspace(props: {
     if (has(cardsRef.current)) { dispatch({ type: "savedLoaded", index: i, found: true }); return; }
     const s: LessonSettings = { mode, depth };
     if (requests.current.pending(lessonKey(session.id ?? session.title, stepNo, props.startAction, s))) return;
+    setOpening(o => ({ ...o, [stepNo]: true }));
     const r = await call(ACT_URL, { ...studyBody(bodyFor(st, props.startAction, s)), open: true });
+    setOpening(o => { const rest = { ...o }; delete rest[stepNo]; return rest; });
     const found = r.ok && r.json.cached === true && !!r.json.answer;
     if (found && !has(cardsRef.current)) { record(stepNo, r.json, props.startAction, {}, "lesson"); setTaught(t => ({ ...t, [stepNo]: s })); }
-    dispatch({ type: "savedLoaded", index: i, found });
+    // Answered "nothing saved" (not merely unreachable): the lesson offers Start learning instead of Review.
+    dispatch({ type: "savedLoaded", index: i, found, missing: r.ok && !found && (r.json.open === "generate" || r.json.open === "in_flight") });
   }, [session, props.startAction, mode, depth, bodyFor, studyBody, record, indexOf, dispatch]);
 
   // Prepare-next (policy scholar_learn_prepare_next, default OFF: then no request is made at all). The journey asks for
@@ -519,7 +539,7 @@ export function LearnWorkspace(props: {
     started.current = true;
     (async () => {
       setBusy("start");
-      const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start, ...(props.connect ? { connected: true, ...(props.objectiveText ? { objectiveText: props.objectiveText } : {}) } : {}) });
+      const r = await call("/api/individual/scholar/learn/sessions", { scope: props.start, lessonAction: props.startAction, ...(props.connect ? { connected: true, ...(props.objectiveText ? { objectiveText: props.objectiveText } : {}) } : {}) });
       setBusy("");
       if (!r.ok) { setError(r.json.error ?? "This session could not be started."); return; }
       // SCH-LEARN-UX-01: the address becomes the session's, so a reload or a return resumes it instead of starting again.
@@ -531,22 +551,23 @@ export function LearnWorkspace(props: {
         // Already being learned: carried on where it was left, recorded as a resume.
         opened.current = true; resumed.current = true;
         setProgress(r.json.progress ?? {});
+        setRecords(Array.isArray(r.json.lessons) ? r.json.lessons : []);
         void call(`/api/individual/scholar/learn/sessions/${r.json.session.id}`, { move: "resume", currentStep: r.json.session.currentStep }, "PATCH");
         // SCHOLAR-CONTINUITY-01: where it was left on any device, before the journey opens.
         serverPos.current = await fetchPosition(r.json.session.id);
       }
       setSession(r.json.resumed ? r.json.session : { ...r.json.session, currentStep: r.json.session.steps?.[0]?.step ?? 0 }); setNote(r.json.note ?? null);
     })();
-  }, [props.start, props.connect, props.objectiveText, session]);
+  }, [props.start, props.connect, props.objectiveText, props.startAction, session]);
   // A resumed session: recorded as a resume.
   useEffect(() => {
     if (props.initial?.id && !opened.current) { opened.current = true; void call(`/api/individual/scholar/learn/sessions/${props.initial.id}`, { move: "resume", currentStep: props.initial.currentStep }, "PATCH"); }
   }, [props.initial]);
 
   // THE JOURNEY OPENS, once per session. Revealed: as far as this device remembers, the server's current step, or the
-  // furthest lesson with a learning mark. Current: where this device says the learner stopped, else the server's step.
-  // Guided (and, as always, the first lesson of a new scope even in Manual): the current lesson is taught if nothing is
-  // saved. Every other lesson loads what is saved as it nears the screen.
+  // furthest lesson with a learning mark or saved teaching. Active: where this device or the server (the newer) says the
+  // learner stopped. A NEW scope (Guided, and as always its first lesson even in Manual) teaches its first lesson if
+  // nothing is saved; a RESUME only opens the active lesson's saved teaching -- restoring history never costs AI.
   const journeyFor = useRef<string | null>(null);
   useEffect(() => {
     if (!session?.steps.length) return;
@@ -559,30 +580,23 @@ export function LearnWorkspace(props: {
     // SCHOLAR-CONTINUITY-01: this device's copy merged with the server position (learn-position.ts mergeResume): the later wins.
     const merged = resumed.current ? mergeResume({ steps: session.steps.map(x => x.step), fallback: serverIdx, local: saved, server: serverPos.current }) : null;
     const current = merged ? merged.anchor : 0;
-    const j = createJourney({ count, current, revealedUpTo: merged ? merged.revealedUpTo : saved?.revealedUpTo, progress: session.steps.map(x => progress[x.step]), activities: saved?.activities });
+    const savedOf = session.steps.map(x => !!records.find(r => r.step === x.step)?.saved);
+    const j = createJourney({ count, current, revealedUpTo: merged ? merged.revealedUpTo : saved?.revealedUpTo, progress: session.steps.map(x => progress[x.step]), activities: saved?.activities, saved: savedOf });
     if (merged?.practiceOpen != null) { const p = merged.practiceOpen; setPracticeOpen(m => ({ ...m, [p]: true })); }
     serverAt.current = serverIdx; anchor.current = current;
-    if (resumed.current && current > 0) setBanner(current); else engaged.current = true;
-    const r = startJourney(j, !resumed.current || (chosenGuided ?? isGuided(rememberedGuided())));
+    // Resume: the furthest lesson taught (from the records) when the stored position is behind it -- a position pulled
+    // back by an older version of this page hides nothing; choosing it is the learner's (one tap, saved: no AI).
+    const furthest = session.steps.reduce((m, x, i) => (savedOf[i] || (progress[x.step]?.actions ?? []).some(a => isOpenable(a)) ? i : m), -1);
+    if (resumed.current && furthest > current) setBanner(furthest);
+    else if (resumed.current && current > 0) setBanner(current);
+    else engaged.current = true;
+    const r = startJourney(j, !resumed.current || (chosenGuided ?? isGuided(rememberedGuided())), resumed.current);
     jRef.current = r.state; setJourney(r.state);
     for (const f of r.effects) fxRef.current(f);
-  }, [session, progress, chosenGuided]);
+  }, [session, progress, records, chosenGuided]);
 
-  // Scrolling: the lesson crossing the reading band is Current; a lesson nearing the screen loads what is saved; the
-  // end of the column shows the Continue card. None of these can ask for a teach (learn-journey.ts).
-  const revealed = journey?.revealedUpTo ?? -1;
-  useEffect(() => {
-    const root = column.current;
-    if (!root || revealed < 0 || typeof IntersectionObserver === "undefined") return;
-    const idx = (el: Element) => Number((el as HTMLElement).dataset.lessonIndex);
-    const band = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) dispatch({ type: "viewed", index: idx(e.target) }); }, { rootMargin: "-35% 0px -55% 0px" });
-    const near = new IntersectionObserver(es => { for (const e of es) if (e.isIntersecting) dispatch({ type: "nearView", index: idx(e.target) }); }, { rootMargin: "400px 0px" });
-    const end = new IntersectionObserver(es => { for (const e of es) dispatch({ type: e.isIntersecting ? "scrollReachedEnd" : "scrollLeftEnd" }); });
-    root.querySelectorAll("[data-lesson-index]").forEach(el => { band.observe(el); near.observe(el); });
-    const sentinel = root.querySelector("[data-journey-end]");
-    if (sentinel) end.observe(sentinel);
-    return () => { band.disconnect(); near.disconnect(); end.disconnect(); };
-  }, [revealed, dispatch]);
+  // SCHOLAR-PERSISTENT-LEARNING-01: no scroll observer. Scrolling never changes the active lesson, never moves the
+  // position and never asks for anything; the 790 writer below only notes a scroll as an interaction (touch).
   // The learner's own input marks them as reading (a page merely loaded never moves their saved position).
   useEffect(() => {
     const on = () => { engaged.current = true; };
@@ -608,9 +622,10 @@ export function LearnWorkspace(props: {
     const read = (): PositionDraft | null => {
       const s = sessionRef.current, j = jRef.current;
       if (!s || !j) return null;
-      const at = s.steps[anchor.current] ?? s.steps[j.current];
+      // The ACTIVE lesson (the learner's choice), never the one scrolled into view; furthest only grows (790 keeps the maximum).
+      const at = s.steps[j.current];
       if (!at) return null;
-      const far = s.steps[Math.max(j.revealedUpTo, anchor.current)] ?? at;
+      const far = s.steps[Math.max(j.revealedUpTo, j.current)] ?? at;
       const practice = !!practiceRef.current[at.step];
       return {
         step: at.step, furthestStep: Math.max(far.step, at.step), cardId: `lesson-${at.step}${practice ? ":practice" : ""}`, sectionChunkId: at.sections[0]?.chunkId ?? null,
@@ -637,45 +652,28 @@ export function LearnWorkspace(props: {
   }, [syncSession]);
   // A practice panel opened or closed changes where the learner is in the lesson: written with the next write.
   useEffect(() => { practiceRef.current = practiceOpen; if (engaged.current) syncRef.current?.touch(); }, [practiceOpen]);
-  // The server's current_step follows the lesson in view after DWELL_MS (back as well as on: it is where the learner
-  // is, so another device resumes there). Never sent before the learner engages, never for the same lesson twice.
-  const cur = journey?.current ?? null;
-  useEffect(() => {
-    if (cur === null || !session?.id) return;
-    const t = setTimeout(() => {
-      if (!engaged.current || !shouldSendPosition(serverAt.current, cur)) return;
-      const st = session.steps[cur];
-      if (!st) return;
-      serverAt.current = cur; anchor.current = cur; persist();
-      void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step }, "PATCH");
-      syncRef.current?.event("lesson");
-    }, DWELL_MS);
-    return () => clearTimeout(t);
-  }, [cur, session, persist]);
-
-  /** The navigator: reveal as far as that lesson, scroll there, load what is saved (never a teach). */
-  const jump = useCallback((i: number) => {
+  /**
+   * THE POSITION RULE: the learner makes a lesson ACTIVE (a tap in the list or navigator, Next, Previous, Resume). Saved
+   * teaching opens with no AI; Guided learning teaches only a lesson with nothing saved. Only this moves current_step and
+   * the 790 position (furthest_step only ever grows).
+   */
+  const select = useCallback((i: number, how: "select" | "next" = "select") => {
     const j = jRef.current;
     if (!session || !j) return;
     const st = session.steps[i];
     if (!st) return;
-    engaged.current = true; anchor.current = i; serverAt.current = i; setBanner(null);
-    const move = i > j.current ? "skip" : i < j.current ? "revisit" : null;
-    dispatch({ type: "jumpTo", index: i });
+    engaged.current = true; setBanner(null);
+    if (i === j.current) { scrollToLesson(st.step); return; }
+    const hadThread = (cardsRef.current[session.steps[j.current]?.step ?? -1] ?? []).length > 0;
+    const move = i < j.current ? "revisit" : i > j.current + 1 || !hadThread ? "skip" : null;
+    anchor.current = i; serverAt.current = i;
+    dispatch(how === "next" ? { type: "next", guided } : { type: "select", index: i, guided });
     if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step, ...(move ? { move } : {}) }, "PATCH");
-    syncRef.current?.event("jump");
-  }, [session, dispatch]);
-  /** Continue to the next lesson: the learner's own choice. Guided, it is taught; Manual, it opens saved only. */
-  const continueOn = useCallback(() => {
-    const j = jRef.current;
-    if (!session || !j || j.revealedUpTo >= j.count - 1) return;
-    const i = j.revealedUpTo + 1, prev = session.steps[j.revealedUpTo];
-    const hadThread = (cardsRef.current[prev.step] ?? []).length > 0;
-    engaged.current = true; anchor.current = i; serverAt.current = i; setBanner(null);
-    dispatch({ type: "chooseContinue", guided });
-    if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: session.steps[i].step, ...(hadThread ? {} : { move: "skip" }) }, "PATCH");
-    syncRef.current?.event("continue");
-  }, [session, dispatch, guided]);
+    syncRef.current?.event(how === "next" ? "continue" : "jump");
+  }, [session, dispatch, guided, scrollToLesson]);
+  /** Next lesson: the one after the ACTIVE lesson, opened (saved) or taught (Guided, nothing saved) in one action. */
+  const next = useCallback(() => { const j = jRef.current; if (j && j.current < j.count - 1) select(j.current + 1, "next"); }, [select]);
+  const previous = useCallback(() => { const j = jRef.current; if (j && j.current > 0) select(j.current - 1); }, [select]);
   async function finish() {
     if (session?.id) await call(`/api/individual/scholar/learn/sessions/${session.id}`, { status: "completed" }, "PATCH");
     setSession(s => (s ? { ...s, status: "completed" } : s));
@@ -750,11 +748,17 @@ export function LearnWorkspace(props: {
   const j = journey;
   const shownUpTo = j ? j.revealedUpTo : Math.max(0, indexOf(at));
   const curIdx = j ? j.current : Math.max(0, indexOf(at));
+  // SCHOLAR-PERSISTENT-LEARNING-01: each lesson's state from the server records plus this visit (learn-journey.ts lessonFacts).
+  const visited = new Set([props.initialPosition?.step, props.initialPosition?.furthestStep].filter((x): x is number => typeof x === "number"));
+  const facts: LessonFacts[] = session.steps.map((s, i) => j
+    ? journeyFacts(j, i, { progress: progress[s.step], record: records.find(r => r.step === s.step) ?? null, visited: visited.has(s.step), check: props.checks })
+    : lessonFacts({ check: props.checks }));
   const navLessons: NavLesson[] = session.steps.map((s, i) => ({
     index: i, title: s.title || `Lesson ${i + 1}`, revealed: i <= shownUpTo,
-    status: j ? lessonStatus(j, i, progress[s.step]) : { label: "Not started", icon: "none", current: i === curIdx },
+    status: j ? lessonStatus(j, i, facts[i]) : { label: "Not started", icon: "none", current: i === curIdx },
   }));
-  const read = j ? readCount(j, session.steps.map(s => progress[s.step])) : 0;
+  const read = readCount(facts);
+  const rows: LessonRow[] = navLessons.map(l => ({ index: l.index, title: l.title, status: l.status, action: PRIMARY_LABEL[primaryAction(facts[l.index], false)] }));
   // Three columns only when the content area is wide enough (a container query, not a new viewport breakpoint): on a
   // tablet beside the app sidebar the 240px + 300px columns left the lesson too narrow and pushed Ask Scholar off-screen.
   const panel = (name: typeof tab) => (tab === name ? "block" : "hidden @min-[66rem]:block");
@@ -762,9 +766,8 @@ export function LearnWorkspace(props: {
   const group = groupActions(props.actions, props.startAction);
   const more = group.more.filter(a => a !== "deeper" && a !== "examples");
   const off = props.actions.filter(a => a !== "ask" && offReason(a));
-  const frontier = session.steps[shownUpTo];
-  const lastLesson = shownUpTo >= count - 1;
-  const onNext = () => (curIdx < shownUpTo ? jump(curIdx + 1) : continueOn());
+  const active = session.steps[curIdx];
+  const lastLesson = curIdx >= count - 1;
   // Wider Learn-from modes the learner may choose, beneath a lesson the notes could not fully support. Choosing one
   // switches Learn from (remembered like the selector) and teaches the lesson again from it. Never chosen for them.
   const expansionsFor = (c: Card, st: Step): Expansion[] => {
@@ -837,9 +840,13 @@ export function LearnWorkspace(props: {
     return (
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
         {/* Nothing here yet: a calm line and the one way in (the learner's choice). Manual: the starting action, as before. */}
+        {/* SCHOLAR-PERSISTENT-LEARNING-01: the one way in -- Review saved lesson (no AI), else Continue / Start learning. */}
         {!hasLesson && !preparing && !lessonMsg && pending?.step !== st.step && (
-          !props.consent ? <LessonPlaceholder label="" note="Learning needs AI help, which is off." />
-            : group.primary ? <LessonPlaceholder note="Not opened yet." label={working(group.primary) ? "Working…" : `${props.labels[group.primary as LearnAction]} this lesson`}
+          opening[st.step] ? <p role="status" className="mt-3 text-[13.5px] text-gray-700">Opening your saved lesson…</p>
+            : primaryAction(facts[i], true) === "review" ? <LessonPlaceholder note="You have saved teaching for this lesson. Opening it uses no AI." label={PRIMARY_LABEL.review} onTeach={() => void openLesson(st.step)} />
+            : !props.consent ? <LessonPlaceholder label="" note="Learning needs AI help, which is off." />
+            : group.primary ? <LessonPlaceholder note={primaryAction(facts[i], true) === "continue" ? "You started this lesson. Carry on where you left it." : "Not started yet."}
+                label={working(group.primary) ? "Working…" : PRIMARY_LABEL[primaryAction(facts[i], true)]}
                 disabled={busyHere || !canTeach} describedBy={offReason(group.primary) ? "learn-ai-why" : undefined}
                 onTeach={() => (guided ? dispatch({ type: "requestTeach", index: i }) : void act(group.primary!, {}, "lesson", undefined, st.step))} />
               : <LessonPlaceholder label="" note="Ask Scholar anything about this lesson." />
@@ -873,28 +880,33 @@ export function LearnWorkspace(props: {
           <button type="button" className={`${ghost} mt-3`} disabled={busyHere || !!offReason(group.primary)} onClick={() => void teachLesson(st.step, { mode, depth })}>Teach this lesson again with these settings</button>
         )}
 
-        <ApproachControl offered={offered} value={approachOf[st.step] ?? null} onChange={a => setApproachOf(m => ({ ...m, [st.step]: a }))}
-          onTeach={() => (!hasLesson ? dispatch({ type: "requestTeach", index: i }) : props.actions.includes("explain") ? void act("explain", {}, "lesson", undefined, st.step) : scrollToLesson(st.step))}
-          onExplain={props.actions.includes("explain") ? () => void act("explain", {}, "lesson", undefined, st.step) : undefined}
-          verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
-          run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent} />
-
         <ActivityRow label={`Activities for lesson ${i + 1}`} items={items} />
 
-        {/* More learning options (Simplify, Summarise...), behind one disclosure; Ask Scholar stays in view. */}
+        {/* SCHOLAR-PERSISTENT-LEARNING-01: the teaching approaches and the other ways to explain, as ONE optional, collapsed
+            "Teaching style" control. Every choice inside is the learner's click (an explicit request); Ask Scholar stays in view. */}
         <div className="mt-3 flex flex-wrap items-start gap-2">
-          {more.length > 0 && (
+          {(offered.length > 0 || more.length > 0) && (
             <details className="group min-w-0 flex-1 basis-[220px] rounded-xl border border-gray-200">
               <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-                <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>More learning options
+                <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Teaching style
+                <span className="min-w-0 truncate text-[12px] font-normal text-gray-600">· optional</span>
               </summary>
-              <div className="flex flex-wrap gap-2 border-t border-gray-200 px-3 py-2.5" role="group" aria-label="More learning options">
-                {more.map(a => (
-                  <button key={a} type="button" disabled={busyHere || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a, {}, "lesson", undefined, st.step)}
-                    className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>
-                    {working(a) ? "Working…" : props.labels[a as LearnAction]}
-                  </button>
-                ))}
+              <div className="border-t border-gray-200 px-3 pb-3">
+                <ApproachControl offered={offered} value={approachOf[st.step] ?? null} onChange={a => setApproachOf(m => ({ ...m, [st.step]: a }))}
+                  onTeach={() => (!hasLesson ? dispatch({ type: "requestTeach", index: i }) : props.actions.includes("explain") ? void act("explain", {}, "lesson", undefined, st.step) : scrollToLesson(st.step))}
+                  onExplain={props.actions.includes("explain") ? () => void act("explain", {}, "lesson", undefined, st.step) : undefined}
+                  verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
+                  run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent} />
+                {more.length > 0 && (
+                  <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Other ways to explain">
+                    {more.map(a => (
+                      <button key={a} type="button" disabled={busyHere || !props.consent || !!offReason(a)} aria-describedby={offReason(a) ? "learn-ai-why" : undefined} onClick={() => act(a, {}, "lesson", undefined, st.step)}
+                        className={`${chip} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>
+                        {working(a) ? "Working…" : props.labels[a as LearnAction]}
+                      </button>
+                    ))}
+                  </div>
+                )}
               </div>
             </details>
           )}
@@ -942,7 +954,7 @@ export function LearnWorkspace(props: {
         <aside aria-label="Lessons and sources" className={`${panel("sources")} rounded-2xl border border-gray-200 bg-white p-4 @min-[66rem]:sticky @min-[66rem]:top-4 @min-[66rem]:max-h-[calc(100vh-2rem)] @min-[66rem]:overflow-y-auto`}>
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Your lessons</p>
           <p className="mt-0.5 text-[12px] text-gray-600">{read} of {count} read. A learning record for you, not an assessment.</p>
-          <div className="mt-2"><JourneyOutline lessons={navLessons} onJump={jump} /></div>
+          <div className="mt-2"><JourneyOutline lessons={navLessons} onJump={select} /></div>
           {step && (
             <>
               <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">This lesson&apos;s sources</p>
@@ -963,7 +975,7 @@ export function LearnWorkspace(props: {
         {/* ── THE JOURNEY: the lessons revealed so far, one after another; the settings once, above them ── */}
         <div ref={column} className={`${panel("lesson")} min-w-0 space-y-4`} onPointerDown={() => { engaged.current = true; }}>
           {banner !== null && session.steps[banner] && (
-            <ResumeBanner lesson={banner + 1} title={session.steps[banner].title} onGo={() => { const b = banner; setBanner(null); jump(b); }} onDismiss={() => setBanner(null)} />
+            <ResumeBanner lesson={banner + 1} title={session.steps[banner].title} onGo={() => { const b = banner; setBanner(null); select(b); }} onDismiss={() => setBanner(null)} />
           )}
           {/* Lesson settings: secondary, collapsed, and in force for every lesson's requests. */}
           <details className="group rounded-xl border border-gray-200 bg-white">
@@ -974,8 +986,8 @@ export function LearnWorkspace(props: {
             <div className="space-y-3 border-t border-gray-200 px-3 py-3">
               <label className="flex items-start gap-2 text-[13.5px] text-gray-900">
                 <input type="checkbox" checked={guided} onChange={e => setGuided(e.target.checked)} className={`mt-0.5 h-4 w-4 pointer-coarse:h-5 pointer-coarse:w-5 ${focusRing}`} />
-                <span><span className="font-semibold">Teach each lesson when I continue to it</span>
-                  <span className="block text-[12px] text-gray-600">Off: choose {props.labels[props.startAction]} for each lesson yourself. Saved on this device. Scholar never moves to the next lesson for you, and scrolling never asks it to write anything.</span></span>
+                <span><span className="font-semibold">Guided learning: teach a lesson when I open it</span>
+                  <span className="block text-[12px] text-gray-600">On by default. A lesson you have saved teaching for always opens it, with no AI. Off: choose Start learning for each lesson yourself. Saved on this device. Scholar never moves to the next lesson for you, and scrolling never asks it to write anything.</span></span>
               </label>
               <div className="flex flex-wrap items-center gap-2 text-[13px] text-gray-700"><span id="learn-depth-l">Depth</span>
                 <DepthSegment value={depth} onChange={setDepth} disabled={!!busy} accent={accent} />
@@ -1003,22 +1015,24 @@ export function LearnWorkspace(props: {
             </p>
           )}
 
-          {session.steps.slice(0, shownUpTo + 1).map((st, i) => lesson(st, i))}
+          {/* SCHOLAR-PERSISTENT-LEARNING-01: ONE active lesson in full; the others as compact rows, in order, tap to make active. */}
+          <LessonList rows={rows.slice(0, curIdx)} onSelect={select} label="Earlier lessons" />
+          {session.steps.slice(curIdx, curIdx + 1).map(st => lesson(st, curIdx))}
 
-          {/* The end of the journey so far: reaching it asks for nothing; moving on is the learner's choice. */}
-          <div data-journey-end aria-hidden="true" className="h-px" />
-          {frontier && (
+          {/* After the active lesson: Previous / Next lesson -- the learner's choice, never reached by scrolling. */}
+          {active && (
             <ContinueCard accent={accent} last={lastLesson} completed={session.status === "completed"} disabled={!!busy}
-              next={!lastLesson ? { number: shownUpTo + 2, title: session.steps[shownUpTo + 1].title || `Lesson ${shownUpTo + 2}` } : null}
-              onContinue={continueOn} onFinish={() => void finish()} onReview={() => jump(0)}
-              onDeeper={props.actions.includes("deeper") && props.consent && !offReason("deeper") ? () => void act("deeper", {}, "lesson", undefined, frontier.step) : undefined}
-              onPractise={() => { setPracticeOpen(m => ({ ...m, [frontier.step]: true })); scrollToLesson(frontier.step); }}
+              next={!lastLesson ? { number: curIdx + 2, title: session.steps[curIdx + 1].title || `Lesson ${curIdx + 2}` } : null}
+              onContinue={next} onPrevious={curIdx > 0 ? previous : undefined} onFinish={() => void finish()} onReview={() => select(0)}
+              onDeeper={props.actions.includes("deeper") && props.consent && !offReason("deeper") ? () => void act("deeper", {}, "lesson", undefined, active.step) : undefined}
+              onPractise={() => { setPracticeOpen(m => ({ ...m, [active.step]: true })); scrollToLesson(active.step); }}
               otherTopicHref={experienceHref("scholar", "study/learn")} />
           )}
+          <LessonList rows={rows.slice(curIdx + 1)} onSelect={select} label="Later lessons" />
 
-          {/* Below 66rem of content width: the compact navigator (it replaces the old Previous/Next bar). */}
-          <JourneyBar lessons={navLessons} current={curIdx} read={read} onJump={jump}
-            trailing={!(curIdx >= shownUpTo && lastLesson) && !j?.endVisible ? <button type="button" className={`${btn} px-3`} style={{ background: accent }} onClick={onNext} disabled={!!busy && curIdx >= shownUpTo}>Next lesson</button> : null} />
+          {/* Below 66rem of content width: the compact sticky navigator; it reflects the ACTIVE lesson. */}
+          <JourneyBar lessons={navLessons} current={curIdx} read={read} onJump={select}
+            trailing={!lastLesson ? <button type="button" className={`${btn} px-3`} style={{ background: accent }} onClick={next} disabled={!!busy}>Next lesson</button> : null} />
         </div>
         <ResizeHandle {...cols.end.handleProps} label="Resize the Ask Scholar column" className="hidden @min-[66rem]:block @min-[66rem]:self-stretch" />
         {/* ── THE SCHOLAR ASSISTANT: ask anything about these notes, at any point ── */}
@@ -1144,7 +1158,12 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
   const cited = new Set(r.cited ?? []);
   return (
     <article className={`rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}>
-      {card.asked && <p className="mb-1 text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {card.asked}</p>}
+      {card.asked && (
+        <p className="mb-1 break-words text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {r.spelling && r.spelling.original === card.asked ? r.spelling.display : card.asked}
+          {/* Item 8: the reading Scholar used (spelling.ts, no AI), with what was typed kept beside it. */}
+          {r.spelling && r.spelling.original === card.asked && <span className="ml-1 text-[11.5px] text-gray-500">(corrected from &ldquo;{r.spelling.original}&rdquo;)</span>}
+        </p>
+      )}
       <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">{name}</p>
       {r.withheld ? <Withheld r={r} asked={card.asked} onRephrase={onRephrase} /> : (
         <>
@@ -1189,7 +1208,14 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
           <span>Saved {new Date(r.saved.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · private, for your own study · no new AI was used</span>
-          {onFresh && <button type="button" onClick={onFresh} className={`rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-semibold text-gray-800 hover:bg-gray-50 ${focusRing}`}>Explain it a new way</button>}
+          {onFresh && !r.savedEarlier && <button type="button" onClick={onFresh} className={`rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-semibold text-gray-800 hover:bg-gray-50 ${focusRing}`}>Explain it a new way</button>}
+        </p>
+      )}
+      {/* SCHOLAR-PERSISTENT-LEARNING-01: saved under another prompt version or depth -- shown as it is; rewriting is the learner's click. */}
+      {r.savedEarlier && (
+        <p className="mt-2 flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12.5px] text-gray-800">
+          <span className="min-w-0 break-words">{r.savedEarlier.label}</span>
+          {onFresh && <button type="button" onClick={onFresh} className={`${chip} border-gray-300 bg-white text-gray-900 hover:bg-gray-100`}>Refresh lesson</button>}
         </p>
       )}
       {r.savedForLater && <p className="mt-2 text-[12px] text-gray-500">Saved to your learning, so you can come back to it without using AI again.</p>}
@@ -1222,7 +1248,16 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  */
 function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }: { text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
   const parts = action === "teach" ? parseTeachAnswer(text) : null;
-  if (!parts) return <div className="mt-1 whitespace-pre-wrap break-words text-[14.5px] leading-relaxed text-gray-800"><Cited text={text} sources={sources} /></div>;
+  // SCHOLAR-PERSISTENT-LEARNING-01 item 4: PROGRESSIVE -- the start first, the rest one click away (no new AI call).
+  if (!parts) {
+    const { lead, more } = progressiveSplit(text);
+    return (
+      <div className="mt-1 break-words text-[14.5px] leading-relaxed text-gray-800">
+        <div className="whitespace-pre-wrap"><Cited text={lead} sources={sources} /></div>
+        {more && <ShowMore label="Show more"><div className="whitespace-pre-wrap"><Cited text={more} sources={sources} /></div></ShowMore>}
+      </div>
+    );
+  }
   const sub = "text-[12px] font-bold uppercase tracking-[0.1em]";
   return (
     <div className="mt-1 space-y-3 break-words text-[14.5px] leading-relaxed text-gray-800">
@@ -1234,10 +1269,12 @@ function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }:
         </div>
       )}
       {parts.example && (
-        <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-          <h4 className={`${sub} text-gray-600`}>Example from your notes</h4>
-          <p className="mt-0.5"><Cited text={parts.example} sources={sources} /></p>
-        </div>
+        <ShowMore label="Show more: an example from your notes">
+          <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+            <h4 className={`${sub} text-gray-600`}>Example from your notes</h4>
+            <p className="mt-0.5"><Cited text={parts.example} sources={sources} /></p>
+          </div>
+        </ShowMore>
       )}
       {parts.questions.length > 0 && (
         <div className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
@@ -1257,6 +1294,18 @@ function AnswerBody({ text, action, sources, onAnswer, canAnswer, renderCheck }:
         </div>
       )}
     </div>
+  );
+}
+
+/** A native disclosure for the rest of an answer: opens from the keyboard, announced as expandable, nothing fetched. */
+function ShowMore({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <details className="group mt-2 rounded-lg border border-gray-200">
+      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
+        <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>{label}
+      </summary>
+      <div className="border-t border-gray-200 px-3 py-2.5">{children}</div>
+    </details>
   );
 }
 

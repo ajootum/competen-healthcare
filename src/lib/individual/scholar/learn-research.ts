@@ -2,11 +2,13 @@ import { cachedResult, researchKey, researchQuery, runResearch, searchSources, t
 import { loadResearchEngine, planFor, researchOperational, researchUsage, type ResearchEngine } from "@/lib/holdings/research/load";
 import { toEvidenceRecord } from "@/lib/holdings/research/evidence";
 import { PROVIDER_LABEL, type OpenAccess, type ResearchItem } from "@/lib/holdings/research/providers";
+import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 import type { IndividualContext } from "../guard";
 import type { ScholarResearchPolicy } from "../policy";
 import { LEARN_RESEARCH_OPERATION, type ResearchEvidence } from "./generation";
 import { audit } from "./http";
 import { DEFAULT_QUALITY, gateResearch, queryKeywords, type EvidenceQuality, type NotUsedByIndex, type NotUsedReason } from "./source-quality";
+import { DEFAULT_RELEVANCE, buildResearchQuery, rankRelevant, type LessonContext, type RelevanceLevel } from "./research-relevance";
 import { LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, aiSpendToday, learnResearchToday, readResearchCache, writeResearchCache } from "./store";
 
 // ── LEARN: RESEARCH & EXPLAIN ── COMPETEN-RESEARCH-01 + ADDENDUM V2 ─────────────────────────────────────────────────────
@@ -48,8 +50,11 @@ export type LearnResearch = {
 const none = (state: LearnResearchState, message: string | null, codes: string[] = [], query: string | null = null): LearnResearch =>
   ({ state, message, query, scholarLink: null, items: [], evidence: [], calls: [], codes, sourceVersions: {}, excerptChars: 320, furtherReading: true, licensing: {} });
 
+/** SCHOLAR-RESEARCH-RELEVANCE-01: said when nothing found was directly relevant. Teaching carries on from the supported material. */
+export const NO_RELEVANT_RESEARCH = "No additional research directly relevant to this lesson was found.";
+
 const MESSAGE: Partial<Record<LearnResearchState, string>> = {
-  not_found: "No published research matching this topic was found. The answer below is from your notes.",
+  not_found: NO_RELEVANT_RESEARCH,
   failed: "The research sources could not be reached just now. The answer below is from your notes.",
 };
 
@@ -82,16 +87,33 @@ export function narrowPlan(plan: ResearchPlan, n: ResearchNarrowing): ResearchPl
   };
 }
 
+/** What a research request is about: the lesson (title, objective, key concepts, material topics) and the learner's question. */
+export type ResearchInput = { question?: string | null; topics: readonly string[]; title?: string | null; objective?: string | null; concepts?: readonly string[] | null };
+
+/**
+ * SCHOLAR-RESEARCH-RELEVANCE-01. The query that leaves Competen, built from the lesson's own distinctive concepts (quoted
+ * phrases first), not from generic topic words. Privacy as researchQuery: refused if the source text may identify a patient.
+ * Falls back to the engine's plain keyword query when the lesson yields no concept (a question of generic words only).
+ */
+export function lessonQuery(input: ResearchInput): ReturnType<typeof researchQuery> {
+  const ctx: LessonContext = { title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question };
+  const source = [input.title, input.objective, ...(input.concepts ?? []), ...input.topics.slice(0, 8), input.question].filter(Boolean).join(" ").slice(0, 1200);
+  if (findPatientIdentifiers(source).length) return { ok: false, reason: "identifier" };
+  const query = buildResearchQuery(ctx);
+  return query ? { ok: true, query } : researchQuery(input);
+}
+
 /**
  * The research for one Learn request, within the learner's limits and the engine's configuration.
  * `actionId`: the Scholar AI action this research serves, so its usage and cost are attributed to that action's outcome.
  * `quality`: SCHOLAR-SOURCE-QUALITY-01 -- every result (fresh or cached) leaves here GATED: only items passing the
  * source-quality rules remain evidence; the rest are reading. Every Scholar caller (Learn, evidence recovery) gets this.
  */
-export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: { question?: string | null; topics: readonly string[]; title?: string | null }, actionId: string | null = null, narrow: ResearchNarrowing | null = null, quality: EvidenceQuality = DEFAULT_QUALITY): Promise<LearnResearch> {
+export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: ResearchInput, actionId: string | null = null, narrow: ResearchNarrowing | null = null, quality: EvidenceQuality = DEFAULT_QUALITY): Promise<LearnResearch> {
+  const lesson = { ctx: { title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question } as LessonContext, level: (p.relevance ?? DEFAULT_RELEVANCE) as RelevanceLevel };
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
-  const q = researchQuery(input);
+  const q = lessonQuery(input);
   if (!q.ok) return none("refused", q.reason === "identifier" ? "Research was not run: the topic looks like it identifies a patient." : "There was no topic to research.", [`query_${q.reason}`]);
   const plan = narrow ? narrowPlan(planFor(engine, "scholar", "learn"), narrow) : planFor(engine, "scholar", "learn");
   // A narrowing that leaves no search source runs nothing. (An EMPTY list must be caught here: searchSources reads an
@@ -103,7 +125,7 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
   const usage = researchUsage(ctx.admin, { actionId, product: "scholar", operation: LEARN_RESEARCH_OPERATION, workflow: "basic", policy: plan.policy });
   if (cached) {
     await usage.record({ provider: "cache", capability: "search", requests: 0, results: cached.sources.length, outcome: "cache", latencyMs: 0, costUsd: 0 });
-    return gated({ ...fromResult(cachedResult(q.query, cached.sources as unknown[], plan)), ...rules }, quality);
+    return gated({ ...fromResult(cachedResult(q.query, cached.sources as unknown[], plan)), ...rules }, quality, lesson);
   }
 
   const [count, spend] = await Promise.all([learnResearchToday(ctx.admin, ctx.userId), aiSpendToday(ctx.admin, ctx.userId, LEARN_RESEARCH_OPERATION)]);
@@ -118,11 +140,33 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
   // One row per fresh search: counts and codes only, never the query text. It is what the learner's daily limit counts.
   await audit(ctx, LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, null,
     { action_id: actionId, query_chars: q.query.length, state: r.state, items: r.items.length, evidence: r.evidence.length, calls: r.calls, codes: r.codes });
-  return gated({ ...fromResult(r), ...rules }, quality);
+  return gated({ ...fromResult(r), ...rules }, quality, lesson);
 }
 
-/** Pure. Research as Scholar may use it: gated on the de-identified query that left Competen (SCHOLAR-SOURCE-QUALITY-01). */
-export const gated = (r: LearnResearch, quality: EvidenceQuality = DEFAULT_QUALITY): LearnResearch => gateResearch(r, queryKeywords(r.query), quality);
+/**
+ * Pure. Research as Scholar may use it: first RELEVANT to the lesson (SCHOLAR-RESEARCH-RELEVANCE-01, when the lesson is
+ * given), then gated on the de-identified query that left Competen (SCHOLAR-SOURCE-QUALITY-01).
+ */
+export const gated = (r: LearnResearch, quality: EvidenceQuality = DEFAULT_QUALITY, lesson?: { ctx: LessonContext; level?: RelevanceLevel }): LearnResearch =>
+  gateResearch(lesson ? relevant(r, lesson.ctx, lesson.level) : r, queryKeywords(r.query), quality);
+
+/**
+ * Pure. Only what is relevant to the lesson stays -- as evidence, as reading, or at all: an item below the bar is not
+ * presented even when PubMed or OpenAlex returned it. What stays is ranked by relevance, then authority, and the evidence
+ * indexes follow. Idempotent. When items were found and none is relevant, the state is not_found with the plain sentence.
+ */
+export function relevant(r: LearnResearch, ctx: LessonContext, level: RelevanceLevel = DEFAULT_RELEVANCE): LearnResearch {
+  if (!r.items.length) return r;
+  const { kept, dropped } = rankRelevant(r.items, ctx, level);
+  if (!dropped && kept.every((k, i) => k.index === i)) return r;
+  const at = new Map(kept.map((k, n) => [k.index, n]));
+  const evidence = kept.filter(k => r.evidence.includes(k.index)).map(k => at.get(k.index)!);
+  const notUsed: NotUsedByIndex = {};
+  for (const [i, why] of Object.entries(r.notUsed ?? {})) if (at.has(Number(i))) notUsed[at.get(Number(i))!] = why;
+  const codes = dropped ? [...r.codes, `relevance_dropped_${dropped}`] : r.codes;
+  const none = !kept.length;
+  return { ...r, items: kept.map(k => k.item), evidence, notUsed, codes, state: none ? "not_found" : r.state, message: none ? NO_RELEVANT_RESEARCH : r.message };
+}
 
 function fromResult(r: ResearchResult): Omit<LearnResearch, "excerptChars" | "furtherReading" | "licensing"> & Partial<LearnResearch> {
   return { state: r.state, message: MESSAGE[r.state] ?? null, query: r.query, scholarLink: r.scholarLink, items: r.items, evidence: r.evidence, calls: r.calls, codes: r.codes, sourceVersions: r.sourceVersions };

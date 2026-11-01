@@ -114,7 +114,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
-  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency"
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_question_offering" | "scholar_question_offer_days";
@@ -168,6 +168,8 @@ export type ScholarResearchPolicy = {
   /** Per learner per day: fresh research searches, and research-answer AI spend in US cents. */
   dailyMax: number;
   dailyCostCents: number;
+  /** SCHOLAR-RESEARCH-RELEVANCE-01: how closely a published item must match the lesson to be shown. Missing = standard. */
+  relevance?: "strict" | "standard";
 };
 /** SCHOLAR-SQIE-02: where evidence recovery may look. Notes, then the library, then (references only) external sources. */
 export const RECOVERY_MODES = ["notes_only", "notes_and_library", "notes_and_references"] as const;
@@ -1332,6 +1334,14 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Zero to fifty. Default: five.",
   },
   {
+    key: "scholar_research_relevance", kind: "choice", product: "Scholar",
+    label: "Research supporting a lesson: how closely it must match",
+    help: "Published research is shown for a lesson only when it names the lesson's own distinctive concepts (for example Donabedian, structure process outcome), not just general words such as quality, safety or care. Standard needs two distinctive concepts or one multi-word concept. Strict needs a distinctive concept in the title and more overlap. Research below the bar is not shown at all.",
+    options: [{ value: "standard", label: "Standard (default)" }, { value: "strict", label: "Strict" }],
+    fallback: "standard",
+    limitReason: "Standard or strict. Default: standard.",
+  },
+  {
     key: "scholar_research_daily_cost_cents", kind: "int", product: "Scholar", unit: "US cents",
     label: "Research AI spend per learner per day",
     help: "The most AI spend Research & Explain answers may use for one learner in a day, from the recorded cost of those answers. At the limit, Learn answers from the notes (and library) and says why.",
@@ -2298,7 +2308,8 @@ function resolveScholarOsce(published: Map<string, unknown>): ScholarOscePolicy 
 function resolveScholarResearch(published: Map<string, unknown>): ScholarResearchPolicy {
   const int = (key: IntPolicyKey) => clampInt(policyDef(key) as IntPolicy, published.get(policyPath(key)));
   const chosen = clampSet(policyDef("scholar_learn_source_modes") as SetPolicy, published.get(policyPath("scholar_learn_source_modes"))) as LearnSourceMode[];
-  return { modes: LEARN_SOURCE_MODES.filter(m => m === "notes" || chosen.includes(m)), dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents") };
+  return { modes: LEARN_SOURCE_MODES.filter(m => m === "notes" || chosen.includes(m)), dailyMax: int("scholar_research_daily_max"), dailyCostCents: int("scholar_research_daily_cost_cents"),
+    relevance: clampChoice(policyDef("scholar_research_relevance") as ChoicePolicy, published.get(policyPath("scholar_research_relevance"))) as "strict" | "standard" };
 }
 
 /** SCHOLAR-SQIE-02. Evidence recovery as configured: the enabled sources, in priority order. */

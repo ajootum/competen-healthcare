@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { AiTier } from "./fair-use-policy";
-import { firstKind, REFUSAL_KINDS, type RefusalKind } from "./request-intent";
+import { firstKind, REFUSAL_KINDS, type IntentContext, type RefusalKind } from "./request-intent";
 
 // ── HOLDINGS AI: CLINICAL RISK OF A REQUEST ── COMPETEN IND-007 owner decision D1, migration 412 ─────────────
 //
@@ -174,16 +174,22 @@ export type RiskContext = {
    *  confirmed a clarify question was for study. Never part of the subject text. */
   actorId?: string | null;
   purpose?: "education" | null;
+  /** Owner item 5 (1 Nov 2026): where the request was asked (request-intent.ts IntentContext). Read in memory by the intent
+   *  layer only, never part of the subject text and never recorded. It can only frame an unrecognised request as study. */
+  intentContext?: IntentContext | null;
 };
 /** The subject as the classifier sees it, after the engine has read competency risk and framework codes. */
 export type ResolvedRiskSubject = {
   text: string; competencyRisks: readonly string[]; frameworkCodes: readonly string[];
   /** What rules of scope "request" match. Absent: `text` (the whole subject). */
   requestText?: string;
+  /** Owner item 5: where the request was asked (RiskContext.intentContext). */
+  intentContext?: IntentContext | null;
 };
 /** `refusal`: SCHOLAR-RISK-01, why a high-risk decision is refused, for honest words. `boundary`: the educational
  *  boundary goes into the instructions (policy educationalSafeguards). Neither is recorded beyond tier and rule. */
-export type RiskDecision = { tier: RiskTier; rule: string; reason: string; refusal?: RefusalKind; boundary?: boolean };
+/** `recovery`: owner item 5, an unrecognised request asked in Learn, whose words offer the notes and research options. */
+export type RiskDecision = { tier: RiskTier; rule: string; reason: string; refusal?: RefusalKind; boundary?: boolean; recovery?: "learn" };
 
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const termPattern = (t: string) => t.endsWith("*") ? new RegExp(`(^|[^a-z0-9])${escape(t.slice(0, -1))}`) : new RegExp(`(^|[^a-z0-9])${escape(t)}($|[^a-z0-9])`);

@@ -272,6 +272,8 @@ const nextConfig: NextConfig = {
    */
   outputFileTracingIncludes: {
     "/api/individual/professional/document-drafts/export": ["./src/lib/individual/documents/fonts/*.ttf"],
+    // Saved-learning PDF (learning-export.ts) embeds the same Unicode fonts when a lesson holds characters outside Windows-1252.
+    "/api/individual/scholar/learn/export": ["./src/lib/individual/documents/fonts/*.ttf"],
     "/individual/\\[experience\\]/progress/documents": ["./src/lib/individual/documents/fonts/*.ttf"],
   },
 

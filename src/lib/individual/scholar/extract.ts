@@ -103,7 +103,26 @@ export type ExtractionQuality = {
    */
   aiReadUnits?: number[];
   aiTriedUnits?: number[];
+  /**
+   * SCHOLAR-IMAGE-RECOVERY: where each AI reading came from, so a reader can see how a section was made. One entry per
+   * request: the units it recovered, the model and prompt version that read them, and when. Stored as ai_provenance in
+   * the same extraction_quality jsonb (no migration; 406's CHECK allows extra keys).
+   */
+  aiProvenance?: AiReading[];
 };
+export type AiReading = { units: number[]; model: string; promptVersion: string; extractedAt: string };
+
+/** The label every AI-recovered section carries, wherever it is shown (material page, Learn and Revise sources). */
+export const AI_READ_LABEL = "Text read from the slide picture by AI";
+/** The same label for a page of a PDF. */
+export const AI_READ_PAGE_LABEL = "Text read from the page image by AI";
+/** Pure. The label for a section on `unit`, with the advice to check it against the original. */
+export const aiReadLabel = (unit: "page" | "slide" | "section", n: number | null): string =>
+  `${unit === "page" ? AI_READ_PAGE_LABEL : AI_READ_LABEL}${n !== null && unit !== "section" ? ` (${unit} ${n})` : ""} — check it against the original`;
+/** Pure. When and by which model/prompt a unit was read by AI, or null (no record, e.g. read before provenance was kept). */
+export function aiReadingOf(q: ExtractionQuality | null, unit: number): AiReading | null {
+  return q?.aiProvenance?.find(r => r.units.includes(unit)) ?? null;
+}
 
 /** Pure. The quality record stored with a material (migration 406), from what extraction and chunking produced. */
 export function extractionQuality(mime: MaterialMime, pages: readonly ExtractedPage[], chunks: readonly Chunk[]): ExtractionQuality {
@@ -117,7 +136,8 @@ export function qualitySummary(q: ExtractionQuality | null): { partial: boolean;
   if (!q) return { partial: false, text: "How completely this file was read was not recorded: it was uploaded before Scholar measured it." };
   const listOf = (u: readonly number[]) => u.length > 8 ? `${u.slice(0, 8).join(", ")} and ${u.length - 8} more` : u.join(", ");
   // SCHOLAR-UPLOAD-FIX: slides read by AI from their pictures are said, every time, never folded into "read".
-  const ai = q.aiReadUnits?.length ? ` ${q.aiReadUnits.length === 1 ? "Slide" : "Slides"} ${listOf(q.aiReadUnits)} ${q.aiReadUnits.length === 1 ? "was" : "were"} read by AI from a picture: check ${q.aiReadUnits.length === 1 ? "it" : "them"} against the slide${q.aiReadUnits.length === 1 ? "" : "s"}.` : "";
+  const U = q.unit === "page" ? "page" : "slide";
+  const ai = q.aiReadUnits?.length ? ` ${q.aiReadUnits.length === 1 ? U[0].toUpperCase() + U.slice(1) : U[0].toUpperCase() + U.slice(1) + "s"} ${listOf(q.aiReadUnits)} ${q.aiReadUnits.length === 1 ? "was" : "were"} read by AI from a picture: check ${q.aiReadUnits.length === 1 ? "it" : "them"} against the ${U}${q.aiReadUnits.length === 1 ? "" : "s"}.` : "";
   if (!q.emptyUnits.length) return { partial: false, text: (q.unit === "section" ? `Read in full: ${q.sections} section${q.sections === 1 ? "" : "s"}.` : `Every ${q.unit} was read: ${q.units} ${q.unit}${q.units === 1 ? "" : "s"}, ${q.sections} section${q.sections === 1 ? "" : "s"}.`) + ai };
   const list = listOf(q.emptyUnits);
   return { partial: true, text: `Partly read: ${q.emptyUnits.length} of ${q.units} ${q.unit}s held no readable text (${q.unit}${q.emptyUnits.length === 1 ? "" : "s"} ${list}). A scanned page or a picture-only slide cannot be read yet, so Scholar cannot teach from ${q.emptyUnits.length === 1 ? "it" : "them"}.${ai}` };
@@ -125,9 +145,10 @@ export function qualitySummary(q: ExtractionQuality | null): { partial: boolean;
 
 /** Pure. SCHOLAR-UPLOAD-FIX: the slides whose sections were read by AI from a picture -- labelled on every section. */
 export function aiReadSlides(q: ExtractionQuality | null): Set<number> {
+  // SCHOLAR-IMAGE-RECOVERY: a PDF's pages are recovered the same way (unit "page").
   // A section on a slide still recorded as empty can only have come from an AI reading (one whose record update
   // failed): it is labelled too, never shown as text the file itself held.
-  return new Set(q && q.unit === "slide" ? [...(q.aiReadUnits ?? []), ...q.emptyUnits] : []);
+  return new Set(q && (q.unit === "slide" || q.unit === "page") ? [...(q.aiReadUnits ?? []), ...q.emptyUnits] : []);
 }
 
 // ── UPLOAD-01 U1: OFFICE FILES ARE ZIP ARCHIVES -- SCREENED BEFORE ANYTHING IS DECOMPRESSED ────────────────

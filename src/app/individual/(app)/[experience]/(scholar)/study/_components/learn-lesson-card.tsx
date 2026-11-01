@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
+import { Mark } from "./learn-journey-nav";
 
 // SCHOLAR-COMPANION-01 P0b: THE PIECES OF THE CONTINUOUS JOURNEY. Presentation only: every button here runs an action
 // learn-client.tsx already has (Teach, Go deeper, Examples, the check, Practise, Apply, Finish); nothing here calls a
@@ -60,12 +62,42 @@ export function ActivityRow({ items, label }: { items: Activity[]; label: string
   );
 }
 
+/** One lesson that is not the active one: its number, title, state in words with an icon, and its one primary way in. */
+export type LessonRow = { index: number; title: string; status: LessonStatus; action: string };
+
 /**
- * The end of the journey so far. Reaching it never asks for anything: moving on is the learner's choice, from here.
- * The last lesson offers Finish and a look back over what was covered instead.
+ * SCHOLAR-PERSISTENT-LEARNING-01: the lessons that are not active, as a compact list. Tapping one makes it the active
+ * lesson (saved teaching shows at once with no AI; Guided learning teaches only one with nothing saved).
  */
-export function ContinueCard({ accent, next, onContinue, onDeeper, onPractise, otherTopicHref, last, completed, onFinish, onReview, disabled }: {
-  accent: string; next: { number: number; title: string } | null; onContinue: () => void; onDeeper?: () => void; onPractise: () => void;
+export function LessonList({ rows, onSelect, label }: { rows: LessonRow[]; onSelect: (index: number) => void; label: string }) {
+  if (!rows.length) return null;
+  return (
+    <nav aria-label={label}>
+      <ol className="space-y-1.5">
+        {rows.map(r => (
+          <li key={r.index}>
+            <button type="button" onClick={() => onSelect(r.index)}
+              className={`flex min-h-[44px] w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-gray-200 bg-white px-3 py-2 text-left hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+              <span className="flex min-w-0 flex-1 basis-[12rem] items-start gap-2 text-[14px] text-gray-900">
+                <span className="text-gray-700"><Mark icon={r.status.icon} /></span>
+                <span className="min-w-0 break-words"><span className="font-semibold">{r.index + 1}.</span> {r.title}</span>
+              </span>
+              <span className="inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-700">{r.status.label}</span>
+              <span className="text-[13px] font-semibold text-gray-900 underline underline-offset-2">{r.action}</span>
+            </button>
+          </li>
+        ))}
+      </ol>
+    </nav>
+  );
+}
+
+/**
+ * After the ACTIVE lesson: Previous, and Next lesson (which opens it saved, or in Guided learning teaches it, in one
+ * action). Never reached by scrolling alone: moving on is the learner's choice. The last lesson offers Finish instead.
+ */
+export function ContinueCard({ accent, next, onContinue, onPrevious, onDeeper, onPractise, otherTopicHref, last, completed, onFinish, onReview, disabled }: {
+  accent: string; next: { number: number; title: string } | null; onContinue: () => void; onPrevious?: () => void; onDeeper?: () => void; onPractise: () => void;
   otherTopicHref: string; last: boolean; completed: boolean; onFinish: () => void; onReview: () => void; disabled?: boolean;
 }) {
   return (
@@ -74,10 +106,11 @@ export function ContinueCard({ accent, next, onContinue, onDeeper, onPractise, o
       {completed && <p className="mt-1 text-[13.5px] text-gray-700">You can still revisit any lesson. Your progress here is a learning record for you, not an assessment.</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         {!last && next && (
-          <button type="button" className={btn} style={{ background: accent }} onClick={onContinue} disabled={disabled}>
-            <span className="min-w-0 break-words">Continue to lesson {next.number}: {next.title}</span>
+          <button type="button" className={`${btn} max-w-full`} style={{ background: accent }} onClick={onContinue} disabled={disabled}>
+            <span className="min-w-0 break-words">Next lesson: {next.number}. {next.title}</span>
           </button>
         )}
+        {onPrevious && <button type="button" className={ghost} onClick={onPrevious} disabled={disabled}>Previous lesson</button>}
         {last && !completed && <button type="button" className={btn} style={{ background: accent }} onClick={onFinish}>Finish session</button>}
         {last && <button type="button" className={ghost} onClick={onReview}>Review what you covered</button>}
         {onDeeper && <button type="button" className={ghost} onClick={onDeeper} disabled={disabled}>Go deeper</button>}
