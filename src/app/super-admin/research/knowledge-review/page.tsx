@@ -3,6 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { resourceReviewQueue } from "@/lib/knowledge/educator";
 import { FieldsForm } from "../_components/ResearchControls";
 import { StationPreview } from "../_components/KnowledgeStatus";
+import { QuestionView } from "../_components/QuestionView";
 
 // /super-admin/research/knowledge-review -- clinical review of knowledge resources (COMPETEN-KNOWLEDGE-RESEARCH-01 K3,
 // migration 442). Guarded by hq.quality.clinical.approve, the 395 reviewer right. Decisions go through the existing
@@ -28,6 +29,7 @@ export default async function KnowledgeReviewPage() {
             <h2 className="text-[15px] font-bold text-gray-900">{i.title}</h2>
             <p className="text-gray-600">{i.kind} · {i.origin === "ai_draft" ? "began as an AI draft, reviewed by an educator" : "written by an educator"} · {i.approvals} of {i.required} approvals · {i.competencies.length} competencies</p>
             {i.kind === "osce_station" ? <div className="mt-2"><StationPreview content={i.content} /></div>
+              : i.kind === "revision_question" ? <div className="mt-2"><QuestionView content={i.content} /></div>
               : <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded bg-gray-50 p-2 text-[12.5px] text-gray-900">{JSON.stringify(i.content, null, 2)}</pre>}
             <div className="mt-2">
               <FieldsForm action="decide" endpoint="/api/hq/clinical-review" submit="Record decision" done="Recorded."

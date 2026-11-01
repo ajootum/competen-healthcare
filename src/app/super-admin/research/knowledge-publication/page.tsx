@@ -3,6 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { listResources } from "@/lib/knowledge/educator";
 import { ActionButton } from "../_components/ResearchControls";
 import { StationPreview, StatusChip } from "../_components/KnowledgeStatus";
+import { QuestionView } from "../_components/QuestionView";
 
 // /super-admin/research/knowledge-publication -- publication of knowledge resources (COMPETEN-KNOWLEDGE-RESEARCH-01 K3,
 // migration 442). Guarded by hq.quality.knowledge.publish. Publication is a separate act: 442 refuses any version that
@@ -38,6 +39,7 @@ export default async function KnowledgePublicationPage() {
                     {v.state === "published" && r.status === "active" && <ActionButton endpoint={EP} body={{ action: "retire_version", versionId: v.id }} label="Retire this version" note="Reason (10 to 500 characters)" done="Retired. Learners are no longer given this version; until a newer one is published they are given none of this resource." />}
                   </div>
                   {r.kind === "osce_station" && v.status === "approved" && <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
+                  {r.kind === "revision_question" && <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">View question</summary><div className="mt-1"><QuestionView content={v.content} /></div></details>}
                 </div>
               ))}
               {r.status === "active" && <ActionButton endpoint={EP} body={{ action: "retire", resourceId: r.id }} label="Retire resource" done="Retired." />}

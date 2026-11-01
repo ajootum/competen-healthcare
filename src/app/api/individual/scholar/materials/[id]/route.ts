@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { deleteMaterial, fileMaterial, renameMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
+import { deleteMaterial, fileMaterial, questionIdsOfMaterial, renameMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
 import { withdrawCasesOf } from "@/lib/individual/scholar/clinical-routes";
 import { cleanTitle } from "@/lib/individual/scholar/library";
 import { audit } from "@/lib/individual/scholar/http";
+import { withdrawOffersOfQuestions } from "@/lib/question-offers/offers";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -58,9 +59,13 @@ export async function DELETE(_req: Request, ctx2: { params: Promise<{ id: string
   const { id } = await ctx2.params;
   // CLINICAL-REASONING-01 C-e: cases written from it are withdrawn from the shared library first.
   const withdrawn = await withdrawCasesOf(ctx.admin, ctx.userId, id);
+  // SQIE-LIBRARY-GAPS-01 (802): and every question offered to the Competen library from it that is not yet taken in (its
+  // content is purged, as the learner's own withdrawal does). A taken or promoted offer is the educator's own draft and stays.
+  const qIds = await questionIdsOfMaterial(ctx.admin, ctx.userId, id);
+  const offers = qIds?.length ? await withdrawOffersOfQuestions(ctx.admin, ctx.userId, qIds) : { withdrawn: 0, failed: qIds === null ? 1 : 0 };
   const r = await deleteMaterial(ctx.admin, ctx.userId, id);
   if (!r.found && r.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!r.ok) return NextResponse.json({ error: "That material could not be deleted just now. Nothing was removed. Try again shortly." }, { status: 500 });
-  await audit(ctx, "individual_scholar_material_erased", "individual_scholar_material", id, { case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed });
+  await audit(ctx, "individual_scholar_material_erased", "individual_scholar_material", id, { case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed, question_offers_withdrawn: offers.withdrawn, question_offer_withdrawals_failed: offers.failed });
   return NextResponse.json({ ok: true });
 }

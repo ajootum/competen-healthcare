@@ -58,7 +58,7 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
   const caseCount = qs.filter(q => q.kind === "case").length, practiceCount = qs.length - caseCount;
   // SQIE-LIBRARY-EXPANSION-01 (802): the learner's own practice questions they may offer, one at a time, under their separate
   // permission. Read only where it can matter (switch on, or something of theirs to withdraw). Unavailable without 802.
-  const [offerStatus, myOffers] = await Promise.all([questionOfferingStatus(ctx.admin, ctx.userId), myQuestionOffers(ctx.admin, ctx.userId)]);
+  const [offerStatus, myOffers] = await Promise.all([questionOfferingStatus(ctx.admin, ctx.userId), myQuestionOffers(ctx.admin, ctx.userId, { expireDays: policy.scholarQuestionOfferDays })]);
   const offerable = qs.filter(q => q.kind !== "case" && !q.library).slice(0, 30).map(q => {
     const f = effectiveKind(q) as LibraryFormat;
     return { id: q.id, stem: q.stem, formatLabel: LIBRARY_FORMAT_LABEL[f] ?? "Practice question", hasQuote: !!q.sourceQuote?.trim() };
