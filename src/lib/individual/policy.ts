@@ -117,7 +117,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_question_offering";
+  | "scholar_question_offering" | "scholar_question_offer_days";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1471,6 +1471,15 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Off until HQ switches it on (and migration 802 is applied). Withdrawing is never blocked. Nothing is approved automatically.",
   },
   {
+    // SQIE-LIBRARY-GAPS-01. Code only: an offer nobody has taken or declined expires and is withdrawn, its content purged.
+    key: "scholar_question_offer_days", kind: "choice", product: "Scholar",
+    label: "How long an untaken question offer waits",
+    help: "How many days an offered question may wait in the educator queue. After that it is withdrawn and its content removed, as if the student had withdrawn it, and the student sees it as withdrawn. An offer an educator has already taken in is never affected.",
+    options: [{ value: "30", label: "30 days" }, { value: "60", label: "60 days (default)" }, { value: "90", label: "90 days" }],
+    fallback: "60",
+    limitReason: "Only 30, 60 or 90 days. Applies to offers still waiting. Default 60.",
+  },
+  {
     key: "scholar_case_reasoning_feedback", kind: "choice", product: "Scholar",
     label: "Feedback on written reasoning",
     help: "How a written answer in a case gets feedback: AI reasoning feedback where it is available (labelled), or the student compares it with what a good answer contains.",
@@ -1865,6 +1874,8 @@ export type IndividualPolicy = {
   scholarCaseContribution: "on" | "off";
   /** SQIE-LIBRARY-EXPANSION-01 (802). Whether a student may grant the question-offering permission and offer a question. Default off. Withdrawal is never gated. */
   scholarQuestionOffering: "on" | "off";
+  /** SQIE-LIBRARY-GAPS-01. Days an untaken question offer waits before it is withdrawn and purged (30, 60 or 90). */
+  scholarQuestionOfferDays: 30 | 60 | 90;
   /** SCHOLAR-COMPANION-01. Whether the study plan is offered. Read it through isStudyPlanOn, which also needs 780. */
   scholarStudyPlan: boolean;
   /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
@@ -2025,6 +2036,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarStudySessions: clampChoice(policyDef("scholar_study_sessions") as ChoicePolicy, published.get(policyPath("scholar_study_sessions"))) === "on",
     scholarCaseContribution: clampChoice(policyDef("scholar_case_contribution") as ChoicePolicy, published.get(policyPath("scholar_case_contribution"))) as "on" | "off",
     scholarQuestionOffering: clampChoice(policyDef("scholar_question_offering") as ChoicePolicy, published.get(policyPath("scholar_question_offering"))) as "on" | "off",
+    scholarQuestionOfferDays: Number(clampChoice(policyDef("scholar_question_offer_days") as ChoicePolicy, published.get(policyPath("scholar_question_offer_days")))) as 30 | 60 | 90,
     scholarStudyPlan: clampChoice(policyDef("scholar_study_plan") as ChoicePolicy, published.get(policyPath("scholar_study_plan"))) === "on",
     scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),

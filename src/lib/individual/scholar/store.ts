@@ -611,6 +611,13 @@ async function questionExtras(admin: Admin, userId: string, ids: string[]): Prom
  * Practice questions and cases (372 kinds). REVISION-01: the 416 kinds are Revision's and are read through
  * revisionPool, so the practice and Apply surfaces, which render four options and one key, never receive them.
  */
+/** SQIE-LIBRARY-GAPS-01: the ids of every question (any kind) written from one material, read before the material is deleted. null = unreadable. */
+export async function questionIdsOfMaterial(admin: Admin, userId: string, materialId: string): Promise<string[] | null> {
+  if (!isUuid(materialId)) return [];
+  const { data, error } = await admin.from("individual_scholar_question").select("id").eq("user_id", userId).eq("material_id", materialId).limit(5000);
+  return error ? null : ((data ?? []) as any[]).map(r => String(r.id));
+}
+
 /**
  * SCHOLAR-QUESTION-INTELLIGENCE-01: the stored stems of one material's questions (every kind), reduced for duplicate
  * detection (question-intel.ts stemKey). Empty where unreadable: a repeat then costs a duplicate, never a refusal.

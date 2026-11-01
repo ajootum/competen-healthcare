@@ -165,11 +165,72 @@ export async function withdrawQuestionOffer(admin: any, args: { userId: string; 
   return error ? { ok: false, error: missing(error) ? QUESTION_OFFERING_UNAVAILABLE : "The offer could not be withdrawn just now." } : { ok: true, withdrawn: Number(data ?? 0) };
 }
 
+// ── SQIE-LIBRARY-GAPS-01: EXPIRY AND SOURCE DELETION ─────────────────────────────────────────────────────────────────────
+//
+// An offer still `offered` after the policy scholar_question_offer_days (30, 60 or 90, fallback 60) is withdrawn and its content
+// purged by the database, exactly as a withdrawal is. There is no 'expired' status and the withdrawn_reason CHECK (802) does not
+// know an 'expired' reason, so an expired offer is withdrawn with the reason 'administrative' and no schema is touched. It is
+// lazy and bounded: run when the learner's panel is read, and from the HQ queue load (200 rows a sweep). No cron. Taken and
+// promoted offers are never touched: they are the educator's own draft.
+
+export const OFFER_EXPIRY_CHOICES = [30, 60, 90] as const;
+export const OFFER_EXPIRY_FALLBACK = 60;
+export const OFFER_SWEEP_CAP = 200;
+
+/** Pure. The days an untaken offer waits: the policy value when it is one of the choices, otherwise 60. */
+export const offerExpiryDays = (v: unknown): number => {
+  const n = typeof v === "string" ? Number(v) : v;
+  return (OFFER_EXPIRY_CHOICES as readonly unknown[]).includes(n) ? (n as number) : OFFER_EXPIRY_FALLBACK;
+};
+/** Pure. The instant before which an offer that is still waiting has expired. */
+export const offerExpiryCutoff = (days: number, now: Date = new Date()): string => new Date(now.getTime() - offerExpiryDays(days) * 86_400_000).toISOString();
+
+/**
+ * Withdraw (and purge, in the database) every offer still `offered` past the expiry, oldest first, at most `limit` (default 200).
+ * `userId` limits it to one learner's offers (their panel), absent it sweeps the queue. Where 802 is absent: nothing to do.
+ * Never throws: a failed sweep leaves the offers exactly as they were.
+ */
+export async function expireStaleOffers(admin: any, args: { days: unknown; userId?: string; limit?: number; now?: Date }): Promise<{ expired: number; failed: number }> {
+  if (args.userId !== undefined && !UUID.test(args.userId)) return { expired: 0, failed: 0 };
+  const limit = Math.min(Math.max(Math.floor(args.limit ?? OFFER_SWEEP_CAP), 1), OFFER_SWEEP_CAP);
+  let q = admin.from("question_contribution_offer").select("id").eq("status", "offered").lt("offered_at", offerExpiryCutoff(offerExpiryDays(args.days), args.now));
+  if (args.userId) q = q.eq("user_id", args.userId);
+  const { data, error } = await q.order("offered_at", { ascending: true }).limit(limit);
+  if (error) return missing(error) ? { expired: 0, failed: 0 } : { expired: 0, failed: 1 };
+  const ids = ((data ?? []) as any[]).map(r => String(r.id)).filter(i => UUID.test(i));
+  if (!ids.length) return { expired: 0, failed: 0 };
+  // status = offered again in the update: an offer taken, declined or withdrawn since the read is not touched.
+  const { data: done, error: uErr } = await admin.from("question_contribution_offer").update({ status: "withdrawn", withdrawn_reason: "administrative" }).in("id", ids).eq("status", "offered").select("id");
+  return uErr ? { expired: 0, failed: ids.length } : { expired: ((done ?? []) as any[]).length, failed: 0 };
+}
+
+/**
+ * The learner deleted a material: every offer still `offered` whose source question belonged to it is withdrawn and purged,
+ * through the learner's own withdraw (withdrawQuestionOffer). A taken or promoted offer is the educator's draft and stays.
+ * `questionIds` are read BEFORE the material is deleted (they go with it). Never gated.
+ */
+export async function withdrawOffersOfQuestions(admin: any, userId: string, questionIds: readonly string[]): Promise<{ withdrawn: number; failed: number }> {
+  if (!UUID.test(userId)) return { withdrawn: 0, failed: 0 };
+  const keys = [...new Set(questionIds.filter(i => UUID.test(i)).map(questionSourceKey))];
+  let withdrawn = 0, failed = 0;
+  for (let i = 0; i < keys.length; i += 100) {
+    const { data, error } = await admin.from("question_contribution_offer").select("id").eq("user_id", userId).eq("status", "offered").in("source_key", keys.slice(i, i + 100));
+    if (error) { if (!missing(error)) failed++; continue; }
+    for (const o of (data ?? []) as any[]) {
+      const r = await withdrawQuestionOffer(admin, { userId, offerId: String(o.id) });
+      if (r.ok) withdrawn += r.withdrawn; else failed++;
+    }
+  }
+  return { withdrawn, failed };
+}
+
 export type MyOffer = { id: string; questionId: string | null; status: string; format: string; formatLabel: string; offeredAt: string };
 
 /** What a learner sees of their own offers: status and format, never anything of anybody else's. [] where 802 is absent. */
-export async function myQuestionOffers(admin: any, userId: string): Promise<MyOffer[] | null> {
+export async function myQuestionOffers(admin: any, userId: string, opts: { expireDays?: unknown } = {}): Promise<MyOffer[] | null> {
   if (!UUID.test(userId)) return null;
+  // SQIE-LIBRARY-GAPS-01: an offer that waited past the policy days is withdrawn before the panel reads. Only when asked for.
+  if (opts.expireDays !== undefined) await expireStaleOffers(admin, { days: opts.expireDays, userId });
   const { data, error } = await admin.from("question_contribution_offer").select("id, source_key, status, format, offered_at").eq("user_id", userId).order("offered_at", { ascending: false }).limit(200);
   if (error) return missing(error) ? [] : null;
   return ((data ?? []) as any[]).map(r => {

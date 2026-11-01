@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { dbRefusal } from "./governance";
+import { expireStaleOffers } from "@/lib/question-offers/offers";
 import { libraryKeyText, libraryFormatOf, LIBRARY_FORMAT_LABEL } from "@/lib/individual/scholar/library-format";
 
 // ── LEARNER OFFERS, THE HQ INTAKE ── SQIE-LIBRARY-EXPANSION-01 (owner GO 31 Oct 2026, item F), migration 802 ───────────────
@@ -26,7 +27,9 @@ export type LearnerOffer = {
 };
 
 /** The queue: offers waiting, and those taken (newest first). null when it cannot be read, [] where 802 is absent. */
-export async function listLearnerOffers(admin: any): Promise<LearnerOffer[] | null> {
+export async function listLearnerOffers(admin: any, opts: { expireDays?: unknown } = {}): Promise<LearnerOffer[] | null> {
+  // SQIE-LIBRARY-GAPS-01: a bounded sweep (200 rows) first: an offer that waited past the policy days is withdrawn and purged.
+  if (opts.expireDays !== undefined) await expireStaleOffers(admin, { days: opts.expireDays });
   const { data, error } = await admin.from("question_contribution_queue")
     .select("id, status, snapshot, format, ai_written, attestation, offered_at, taken_resource_id, taken_version_id")
     .order("offered_at", { ascending: false }).limit(200);
