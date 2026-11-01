@@ -101,7 +101,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       <OsceEntry admin={ctx.admin} userId={ctx.userId} studyId={sid} />
 
       <PaneGrid bp="lg" className="mb-8" fallbackMain="minmax(0,3fr)"
-        end={{ storageKey: "scholar.apply.side.w", defaultPx: c => Math.round((c - 20) * 0.4), fallback: "minmax(0,2fr)", label: "Resize the your cases panel", node: (
+        end={{ storageKey: "scholar.apply.side.w", defaultPx: { ratio: 0.4 }, fallback: "minmax(0,2fr)", label: "Resize the your cases panel", node: (
         <aside aria-labelledby="case-history-h" className="space-y-4">
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 id="case-history-h" className="text-[14px] font-bold text-gray-900">Your cases</h2>
