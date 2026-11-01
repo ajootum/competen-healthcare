@@ -8,11 +8,16 @@
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "./competency-view";
 import type { CatalogueCompetency } from "./catalogue";
-import { flashcardRows, flashcardSchema, revisionPool, topicsOfSections } from "./store";
 import {
-  buildDecks, flashcardView, recallCardOf, selectCards, topicGaps,
-  type CardSelection, type CitationMeta, type DeckSummary, type FlashcardView, type PersonalDeck, type TopicGap,
+  addDeckCards, chunksByIds, competencyChunks, createFlashcardDeck, deckArchiveSchema, deleteFlashcardDeck, flashcardDecks, flashcardRows, flashcardSchema,
+  learningStepsOfSections, listOsceAttempts, listOsceStations, osceSchema, revisionPool, studySessionsOfDecks, topicsOfSections,
+} from "./store";
+import {
+  buildDecks, cardLinksOf, flashcardView, mergeGaps, osceGapTopics, recallCardOf, recentOsceAttempts, selectCards, topicGaps,
+  type CardLinks, type CardSelection, type CitationMeta, type DeckSummary, type FlashcardView, type OsceGapAttempt, type PersonalDeck, type TopicGap,
 } from "./flashcards";
+import { copyPlan, mergePlan } from "./flashcard-decks";
+import { displaySessionTitle } from "./learn-search";
 import { rubricOf } from "./question-intel";
 import { CONTENT_STATUS_LABEL, REVISION_FORMATS } from "./config";
 import { loadContentReviewPolicy } from "@/lib/ai/content-review";
@@ -25,6 +30,8 @@ export type FlashcardLibrary = {
   today: string; cards: FlashcardView[]; decks: DeckSummary[]; personal: PersonalDeck[];
   /** Migration 730 is applied here: hand-written cards, decks, bookmarks, notes and issue reports are available. */
   schema730: boolean;
+  /** Migration 820 is applied here (archived_at on decks): archive controls are offered. Absent: they are hidden, nothing errors. */
+  archive820: boolean;
 };
 
 const todayOf = () => new Date().toISOString().slice(0, 10);
@@ -42,7 +49,8 @@ export async function loadFlashcards(ctx: Ctx): Promise<{ ok: true; data: Flashc
   const names = compIds.length || refIds.length ? await competencyLabels(ctx.admin, catalogue, [...new Set([...compIds, ...refIds])], new Map()) : new Map();
   const references = referenceCitations(refIds, names, catalogue);
   const views = cards.map(q => flashcardView(q, { ...rows.data.extras.get(q.id)!, competencyTitle: q.competencyId ? names.get(q.competencyId)?.title ?? null : null, references }, today));
-  return { ok: true, data: { today, cards: views, decks: buildDecks(views, rows.data.decks), personal: rows.data.decks, schema730: rows.data.schema730 } };
+  const archive820 = rows.data.schema730 && await deckArchiveSchema(ctx.admin, ctx.userId);
+  return { ok: true, data: { today, cards: views, decks: buildDecks(views, rows.data.decks, { alwaysBookmarked: rows.data.schema730 }), personal: rows.data.decks, schema730: rows.data.schema730, archive820 } };
 }
 
 /**
@@ -109,15 +117,127 @@ export async function loadCardSelection(ctx: Ctx, sel: CardSelection): Promise<C
 
 /**
  * Topic-level learning gaps: every revision question or card the caller answered wrongly (or did not remember) at least
- * once, grouped by topic, most missed first, with the key points and misconceptions its rubric records. [] when none.
+ * once, grouped by topic, most missed first, with the key points and misconceptions its rubric records; and (owner, 1 Nov
+ * 2026) the gaps of the learner's own recent OSCE practice runs, mapped to their own sections. [] when none.
  */
 export async function loadFlashcardGaps(ctx: Ctx, limit = 6): Promise<TopicGap[]> {
+  return (await loadFlashcardGapsDetailed(ctx, limit)).gaps;
+}
+
+/** The same gaps, and how many OSCE gaps were left out because they map to none of the learner's own sections (said in the UI). */
+export async function loadFlashcardGapsDetailed(ctx: Ctx, limit = 6): Promise<{ gaps: TopicGap[]; osceSkipped: number }> {
+  const [questions, osce] = await Promise.all([questionGaps(ctx, limit), osceGaps(ctx)]);
+  return { gaps: mergeGaps(questions, osce.gaps, limit), osceSkipped: osce.skipped };
+}
+
+async function questionGaps(ctx: Ctx, limit: number): Promise<TopicGap[]> {
   const pool = await revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] });
   if (!pool.ok) return [];
   const items = pool.data.questions.map(q => ({ q, misses: pool.data.stats.get(q.id)?.misses ?? 0 })).filter(x => x.misses > 0);
   if (!items.length) return [];
   const topics = await topicsOfSections(ctx.admin, ctx.userId, [...new Set(items.map(x => x.q.chunkId))]);
   return topicGaps(items, topics, limit);
+}
+
+/**
+ * OSCE practice gaps (720/721) as gap focus. The learner's own finished runs of the last 90 days (at most five), their
+ * missed and partly done checklist items, mapped to their own sections (osceGapTopics). Nothing new is generated here:
+ * the existing gap path writes the cards, metered as ever, grounded in those sections. Unreadable or absent: none.
+ */
+async function osceGaps(ctx: Ctx): Promise<{ gaps: TopicGap[]; skipped: number }> {
+  const none = { gaps: [] as TopicGap[], skipped: 0 };
+  try {
+    if (!(await osceSchema(ctx.admin, ctx.userId))) return none;
+    const attempts = await listOsceAttempts(ctx.admin, ctx.userId, null, 30);
+    if (!attempts.ok) return none;
+    const recent = recentOsceAttempts(attempts.data, new Date().toISOString());
+    if (!recent.length) return none;
+    const stations = await listOsceStations(ctx.admin, ctx.userId);
+    if (!stations.ok) return none;
+    const byStation = new Map(stations.data.map(s => [s.id, s]));
+    const inputs: OsceGapAttempt[] = recent.flatMap(a => {
+      const s = byStation.get(a.stationId);
+      if (!s) return [];
+      const list = Array.isArray(a.snapshot?.checklist) ? (a.snapshot!.checklist as unknown[]) : s.checklist;
+      const itemChunks = new Map<string, string>();
+      for (const raw of list) { const i = raw as { id?: unknown; chunkId?: unknown } | null; if (i && typeof i.id === "string" && typeof i.chunkId === "string") itemChunks.set(i.id, i.chunkId); }
+      return [{
+        id: a.id, finishedAt: a.finishedAt, status: a.status, gaps: a.gaps, revisionSuggestions: a.revisionSuggestions, itemChunks,
+        station: { title: s.title, topic: s.topic ?? null, materialId: s.materialId, chunkId: s.chunkId, competencyId: s.competencyId },
+      }];
+    });
+    const compIds = [...new Set(inputs.filter(i => !i.station.chunkId && i.station.competencyId).map(i => i.station.competencyId!))].slice(0, 6);
+    const competencySections = new Map<string, { chunkId: string; materialId: string }[]>();
+    await Promise.all(compIds.map(async id => {
+      const r = await competencyChunks(ctx.admin, ctx.userId, id, 12);
+      if (r.ok) competencySections.set(id, r.data.map(c => ({ chunkId: c.id, materialId: c.materialId })));
+    }));
+    const mapped = osceGapTopics(inputs, competencySections);
+    // Only sections that are the learner's own and still stored are given to the generator.
+    const owned = await chunksByIds(ctx.admin, ctx.userId, mapped.gaps.flatMap(g => g.chunkIds), false);
+    if (!owned.ok) return none;
+    const have = new Set(owned.data.map(c => c.id));
+    let skipped = mapped.skipped;
+    const gaps: TopicGap[] = [];
+    for (const g of mapped.gaps) {
+      const chunkIds = g.chunkIds.filter(c => have.has(c));
+      if (chunkIds.length) gaps.push({ ...g, chunkIds }); else skipped += g.missed;
+    }
+    return { gaps, skipped };
+  } catch { return none; }
+}
+
+/** Why OSCE gaps were left out, in plain words (null: none were). */
+export const osceSkippedNote = (n: number) =>
+  n > 0 ? `${n} gap${n === 1 ? "" : "s"} from your OSCE practice ${n === 1 ? "was" : "were"} left out: not linked to any section of your notes, so no card can be checked against them.` : null;
+
+/**
+ * Deck copy (owner, 1 Nov 2026): a new deck "<deck> (copy)" holding the same cards. Cards, their schedules and their review
+ * history are shared, not duplicated: only deck and deck-card rows are written. The source deck is looked up among the
+ * caller's own decks, so another learner's deck is simply not found.
+ */
+export async function copyDeck(ctx: Ctx, deckId: string, max: number): Promise<
+  { ok: true; id: string; title: string; cards: number } | { ok: false; reason: "not_found" | "invalid" | "not_provisioned" | "failed"; message: string }> {
+  const src = (await flashcardDecks(ctx.admin, ctx.userId)).find(d => d.id === deckId);
+  if (!src) return { ok: false, reason: "not_found", message: "That deck could not be found." };
+  const plan = copyPlan(src, max);
+  if (!plan.ok) return { ok: false, reason: "invalid", message: plan.message };
+  const made = await createFlashcardDeck(ctx.admin, ctx.userId, { title: plan.title, organiseBy: plan.organiseBy, organiseRef: plan.organiseRef, cardIds: plan.cardIds });
+  if (!made.ok) return { ok: false, reason: made.notProvisioned ? "not_provisioned" : "failed", message: made.notProvisioned ? "Decks are not available here yet." : "The deck could not be copied just now." };
+  return { ok: true, id: made.id, title: plan.title, cards: plan.cardIds.length };
+}
+
+/**
+ * Merge deck `fromId` into deck `intoId`: its cards that the other deck does not hold are added after the last one
+ * (duplicates skipped), then `fromId` is deleted. Both decks must be the caller's own. Cards, schedules and review history
+ * are untouched: only deck and deck-card rows are written. If adding fails nothing is deleted.
+ */
+export async function mergeDecks(ctx: Ctx, intoId: string, fromId: string, max: number): Promise<
+  { ok: true; added: number; skipped: number; total: number } | { ok: false; reason: "not_found" | "invalid" | "failed"; message: string }> {
+  const decks = await flashcardDecks(ctx.admin, ctx.userId);
+  const into = decks.find(d => d.id === intoId), from = decks.find(d => d.id === fromId);
+  if (!into || !from) return { ok: false, reason: "not_found", message: "That deck could not be found." };
+  const plan = mergePlan(into, from, max);
+  if (!plan.ok) return { ok: false, reason: "invalid", message: plan.message };
+  if (plan.add.length && !(await addDeckCards(ctx.admin, ctx.userId, into.id, plan.add))) return { ok: false, reason: "failed", message: "The decks could not be merged just now." };
+  if (!(await deleteFlashcardDeck(ctx.admin, ctx.userId, from.id))) return { ok: false, reason: "failed", message: "The cards were added, but the other deck could not be removed just now." };
+  return { ok: true, added: plan.add.length, skipped: plan.skipped, total: plan.total };
+}
+
+/**
+ * "From lesson" and "study session" links for cards (exact only): the saved Learn lesson whose step holds the card's own
+ * section, and the study session (740) one of its decks is linked to. Database reads only, keyed on the caller. Cards with
+ * neither are absent. Unreadable: none (the card then shows no link, never a guessed one).
+ */
+export async function loadCardLinks(ctx: Ctx, cards: readonly { id: string; chunkId: string; deckIds: readonly string[] }[]): Promise<Map<string, CardLinks>> {
+  if (!cards.length) return new Map();
+  try {
+    const [lessons, deckStudy] = await Promise.all([
+      learningStepsOfSections(ctx.admin, ctx.userId, [...new Set(cards.map(c => c.chunkId))]),
+      studySessionsOfDecks(ctx.admin, ctx.userId, [...new Set(cards.flatMap(c => c.deckIds))]),
+    ]);
+    return cardLinksOf(cards, lessons.map(l => ({ ...l, title: displaySessionTitle(l.title) })), new Map([...deckStudy].map(([k, v]) => [k, { sessionId: v.sessionId, title: displaySessionTitle(v.title) }])));
+  } catch { return new Map(); }
 }
 
 /**

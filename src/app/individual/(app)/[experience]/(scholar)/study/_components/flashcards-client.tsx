@@ -9,6 +9,8 @@ import { sourceHref, studyHref } from "./question-view";
 import { flashcardsHref } from "./revise-nav";
 import { carry, studyField } from "./study-active";
 import type { flashcardPrefill } from "@/lib/individual/scholar/study-carry";
+import { DECK_SORT_LABEL, groupByOrganise, searchDecks, sortDecks, type DeckSort } from "@/lib/individual/scholar/flashcard-decks";
+import type { PersonalDeck } from "@/lib/individual/scholar/flashcards";
 
 // SCHOLAR FLASHCARDS -- SCHOLAR-FLASHCARDS-01 (owner, 31 Oct 2026), to the owner mock-up.
 //
@@ -67,8 +69,8 @@ async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok:
   }
 }
 
-const Icon = ({ d, size = 18 }: { d: React.ReactNode; size?: number }) => (
-  <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
+const Icon = ({ d, size = 18, fill = false }: { d: React.ReactNode; size?: number; fill?: boolean }) => (
+  <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill={fill ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 );
 const I = {
   prev: <path d="M15 18l-6-6 6-6" />, next: <path d="M9 18l6-6-6-6" />, flip: <><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" /></>,
@@ -78,6 +80,9 @@ const I = {
   play: <path d="M7 4l12 8-12 8z" />, layers: <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>, cal: <><rect x="3" y="5" width="18" height="16" rx="2" /><path d="M3 10h18M8 3v4M16 3v4" /></>,
   pen: <><path d="M4 20h4l11-11-4-4L4 16z" /></>, down: <><path d="M12 3v12M7 10l5 5 5-5" /><path d="M4 21h16" /></>, spark: <path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z" />,
   doc: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5" /></>, target: <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>,
+  ask: <><circle cx="12" cy="12" r="9" /><path d="M9.6 9.4a2.4 2.4 0 1 1 3.4 2.2c-.7.4-1 .9-1 1.7M12 17h.01" /></>,
+  eye: <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" /></>,
+  revise: <><path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" /><path d="M12 8v4l3 2" /></>,
   list: <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />, gap: <><path d="M12 3v3M12 18v3M3 12h3M18 12h3" /><circle cx="12" cy="12" r="4" /></>, plus: <path d="M12 5v14M5 12h14" />,
 };
 
@@ -137,7 +142,11 @@ export type StudyCard = {
   editable: boolean; bookmarked: boolean; note: string | null; issue: string | null;
   /** SCHOLAR-FLASHCARDS-QA-01: the clinically sensitive marker (flashcard-sensitive.ts), or null. Shown with the answer. */
   sensitive?: { marker: string; reviewed: boolean } | null;
+  /** SCHOLAR-FLASHCARDS follow-up: the saved lesson this card's section belongs to, and the study session its deck is linked to (exact only). */
+  links?: { lesson: { title: string; href: string } | null; study: { title: string; href: string } | null } | null;
   answered: { recall: "again" | "remembered"; nextReviewAt: string | null } | null;
+  /** The card's schedule state when the session loaded (flashcards.ts ReviewState): "due" and "needs_practice" show "Needs revision". */
+  reviewState?: "new" | "due" | "needs_practice" | "remembered";
   /** Only for a card already rated in this session: answers stay on the server until the learner reveals them. */
   back: { text: string; explanation: string | null; quote: string | null } | null;
 };
@@ -222,6 +231,9 @@ export function FlashcardStudy(props: {
 
   if (!card) return <p className="text-[14px] text-gray-600">This session has no cards.</p>;
   const allDone = cards.every(c => c.answered);
+  // "Needs revision" is a schedule state, never a verdict: the last recall in this session was "Didn't remember", or (not yet rated
+  // here) the card is due or flagged for more practice. Rated "Remembered" in this session clears it.
+  const needsRevision = card.answered ? card.answered.recall === "again" : card.reviewState === "due" || card.reviewState === "needs_practice";
   const remembered = cards.filter(c => c.answered?.recall === "remembered").length;
 
   return (
@@ -229,7 +241,7 @@ export function FlashcardStudy(props: {
       <DeckHeader compact={!(finished || (allDone && props.completed))} title={props.deckTitle} cards={props.deckCards} lastRevised={props.lastRevised} position={at + 1} total={cards.length} answered={answered} />
 
       {finished || (allDone && props.completed) ? (
-        <div className="mt-6 space-y-3 rounded-2xl bg-[var(--cmp-surface-success)] p-5">
+        <div className="mt-6 space-y-3 rounded-2xl border p-5" style={{ background: "var(--cmp-fc-answer-surface)", borderColor: "var(--cmp-fc-answer-border)" }}>
           <p className="text-[16px] font-bold text-gray-900">Session finished: you remembered {remembered} of {cards.length}.</p>
           <p className="text-[13.5px] text-gray-700">Cards you did not remember come back sooner; the rest come back later, on the spaced review schedule. This is practice, not an assessment.</p>
           <div className="flex flex-wrap gap-2">
@@ -241,10 +253,10 @@ export function FlashcardStudy(props: {
         <>
           <div ref={focusRef} data-testid="card-focus" className="mx-auto mt-4 w-full max-w-[40rem] scroll-mt-[4.5rem] md:scroll-mt-[6rem]">
             <div className="w-full [perspective:1400px]">
-              <button type="button" onClick={() => void reveal()} aria-label={flipped ? "Show the question again" : "Reveal the answer"} aria-describedby="card-help"
-                className={`relative block min-h-[220px] w-full rounded-3xl text-left transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none md:min-h-[280px] ${focusRing} ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
-                <CardFace side="front" title="Question" badge="Q" text={card.front} hidden={flipped} footer={busy && !card.back ? "Showing the answer…" : "Tap to reveal answer"} />
-                <CardFace side="back" title="Answer" badge="A" text={card.back?.text ?? ""} hidden={!flipped} explanation={card.back?.explanation ?? null} footer="Tap to see the question" />
+              <button type="button" onClick={() => void reveal()} aria-label={flipped ? "Show the question again" : "Reveal the answer"} aria-describedby="card-help card-state"
+                className={`relative block min-h-[220px] w-full rounded-3xl text-left transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform-style:flat] motion-reduce:[transform:none] md:min-h-[280px] ${focusRing} ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
+                <CardFace side="front" hidden={flipped} text={card.front} footer={busy && !card.back ? "Showing the answer…" : "Tap to reveal answer"} needsRevision={needsRevision} bookmarked={card.bookmarked} />
+                <CardFace side="back" hidden={!flipped} text={card.back?.text ?? ""} explanation={card.back?.explanation ?? null} footer="Tap to see the question" needsRevision={needsRevision} bookmarked={card.bookmarked} />
               </button>
             </div>
           {flipped && card.sensitive && (
@@ -253,6 +265,7 @@ export function FlashcardStudy(props: {
               <span aria-hidden className="mt-px">⚠</span><span>{card.sensitive.marker}</span>
             </p>
           )}
+          <p id="card-state" className="sr-only">{flipped ? "Answer side." : "Question side."}{needsRevision ? " Needs revision." : ""}{card.bookmarked ? " Bookmarked." : ""}</p>
           <p id="card-help" className="sr-only">Space or Enter reveals the answer. Then press 1 for didn&apos;t remember or 2 for remembered. Arrow keys move between cards.</p>
 
           {card.answered ? (
@@ -262,14 +275,14 @@ export function FlashcardStudy(props: {
           ) : (
             <div className="mx-auto mt-4 grid max-w-xl grid-cols-2 gap-3">
               <button type="button" disabled={busy} onClick={() => void rate("again")} aria-keyshortcuts="1"
-                className={`flex min-h-[56px] flex-col items-center justify-center rounded-2xl border px-2 py-2 text-center disabled:opacity-50 ${focusRing}`}
-                style={{ background: "var(--cmp-surface-error)", borderColor: "color-mix(in srgb, var(--cmp-color-error) 30%, transparent)", color: "var(--cmp-text-error)" }}>
+                className={`flex min-h-[56px] flex-col items-center justify-center rounded-2xl border px-2 py-2 text-center disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}
+                style={{ background: "var(--cmp-fc-revise-surface)", borderColor: "var(--cmp-fc-revise-border)", color: "var(--cmp-fc-revise-ink)" }}>
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-bold"><Icon d={I.x} size={17} />Didn&apos;t remember</span>
                 <span className="text-[12.5px] font-medium">Review sooner</span>
               </button>
               <button type="button" disabled={busy} onClick={() => void rate("remembered")} aria-keyshortcuts="2"
-                className={`flex min-h-[56px] flex-col items-center justify-center rounded-2xl border px-2 py-2 text-center disabled:opacity-50 ${focusRing}`}
-                style={{ background: "var(--cmp-surface-success)", borderColor: "color-mix(in srgb, var(--cmp-color-success) 30%, transparent)", color: "var(--cmp-text-success)" }}>
+                className={`flex min-h-[56px] flex-col items-center justify-center rounded-2xl border px-2 py-2 text-center disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}
+                style={{ background: "var(--cmp-fc-answer-surface)", borderColor: "var(--cmp-fc-answer-border)", color: "var(--cmp-fc-answer-label)" }}>
                 <span className="inline-flex items-center gap-1.5 text-[15px] font-bold"><Icon d={I.check} size={17} />Remembered</span>
                 <span className="text-[12.5px] font-medium">Review later</span>
               </button>
@@ -287,7 +300,7 @@ export function FlashcardStudy(props: {
 
           <div className="mx-auto mt-4 grid max-w-xl grid-cols-[repeat(auto-fit,minmax(8.5rem,1fr))] gap-1">
             <ActionButton icon={I.note} label={card.note ? "Your note" : "Add note"} on={panel === "note"} disabled={!props.marksOn} onClick={() => setPanel(p => (p === "note" ? "" : "note"))} />
-            <ActionButton icon={I.bookmark} label={card.bookmarked ? "Bookmarked" : "Bookmark"} on={card.bookmarked} disabled={!props.marksOn}
+            <ActionButton icon={I.bookmark} bookmark label={card.bookmarked ? "Bookmarked" : "Bookmark"} on={card.bookmarked} disabled={!props.marksOn}
               onClick={async () => { const r = await call(`/api/individual/scholar/flashcards/${card.id}`, { bookmarked: !card.bookmarked }, "PATCH"); if (r.ok) update(card.id, { bookmarked: !card.bookmarked }); else setError(r.json.error ?? "That could not be saved."); }} />
             <ActionButton icon={I.source} label="View source" on={panel === "source"} onClick={() => setPanel(p => (p === "source" ? "" : "source"))} />
             <ActionButton icon={I.flag} label={card.issue ? "Issue reported" : "Report issue"} on={panel === "issue"} disabled={!props.marksOn} onClick={() => setPanel(p => (p === "issue" ? "" : "issue"))} />
@@ -317,28 +330,51 @@ export function FlashcardStudy(props: {
   );
 }
 
-function CardFace({ side, title, badge, text, hidden, footer, explanation = null }: { side: "front" | "back"; title: string; badge: string; text: string; hidden: boolean; footer: string; explanation?: string | null }) {
+/** One state label on a card: icon AND words, on the state's own tokens (globals.css --cmp-fc-*). Never colour alone. */
+function StatePill({ tone, icon, label, fill = false }: { tone: "revise" | "bookmark"; icon: React.ReactNode; label: string; fill?: boolean }) {
   return (
-    <span aria-hidden={hidden} className={`absolute inset-0 flex flex-col overflow-hidden rounded-3xl border border-gray-200 bg-white p-5 shadow-[0_6px_24px_rgba(17,24,39,0.08)] [backface-visibility:hidden] md:p-7 ${side === "back" ? "[transform:rotateY(180deg)]" : ""}`}>
-      <span aria-hidden className="pointer-events-none absolute -right-10 -top-10 h-28 w-56 rotate-[-8deg] rounded-[50%] bg-[var(--cmp-role-indigo-soft)]" />
-      <span className="relative flex items-center gap-3">
-        <span className="inline-flex h-9 w-9 items-center justify-center rounded-xl bg-[var(--cmp-role-indigo-soft)] text-[17px] font-extrabold text-[var(--cmp-role-indigo-ink)]">{badge}</span>
-        <span className="text-[15px] font-bold text-[var(--cmp-role-indigo-ink)]">{title}</span>
-      </span>
-      <span className={`relative mt-3 block flex-1 overflow-y-auto font-semibold leading-snug text-gray-900 ${side === "front" ? "text-[20px] md:text-[27px]" : "text-[18px] md:text-[22px]"}`} aria-live={side === "back" ? "polite" : undefined}>
-        {text}
-        {explanation && <span className="mt-3 block text-[14px] font-normal leading-relaxed text-gray-700">{explanation}</span>}
-      </span>
-      <span className="relative mt-3 inline-flex items-center justify-center gap-2 self-center text-[14px] text-gray-600"><Icon d={I.flip} size={16} />{footer}</span>
+    <span data-fc-state={tone} className="inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12.5px] font-semibold leading-5"
+      style={{ background: `var(--cmp-fc-${tone}-surface)`, borderColor: `var(--cmp-fc-${tone}-border)`, color: `var(--cmp-fc-${tone}-ink)` }}>
+      <Icon d={icon} size={14} fill={fill} />{label}
     </span>
   );
 }
 
-function ActionButton({ icon, label, on, disabled, onClick }: { icon: React.ReactNode; label: string; on?: boolean; disabled?: boolean; onClick: () => void }) {
+/** A face of the card. Question: neutral surface. Answer: calm tinted surface. Needs revision: muted warm edge + label. Bookmarked: icon + label.
+ *  With prefers-reduced-motion the faces swap in place (no 3D turn): the hidden one is simply not shown. */
+function CardFace({ side, text, hidden, footer, explanation = null, needsRevision, bookmarked }: { side: "front" | "back"; text: string; hidden: boolean; footer: string; explanation?: string | null; needsRevision: boolean; bookmarked: boolean }) {
+  const t = side === "front" ? "question" : "answer";
+  return (
+    <span aria-hidden={hidden} data-fc-face={t}
+      className={`absolute inset-0 flex flex-col overflow-hidden rounded-3xl border-2 p-4 shadow-[0_6px_24px_rgba(17,24,39,0.08)] [backface-visibility:hidden] motion-reduce:[backface-visibility:visible] md:p-7 ${side === "back" ? "[transform:rotateY(180deg)] motion-reduce:[transform:none]" : ""} ${hidden ? "motion-reduce:invisible" : ""}`}
+      style={{ background: `var(--cmp-fc-${t}-surface)`, borderColor: needsRevision ? "var(--cmp-fc-revise-border)" : `var(--cmp-fc-${t}-border)`, color: `var(--cmp-fc-${t}-ink)` }}>
+      <span className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `var(--cmp-fc-${t}-chip)`, color: `var(--cmp-fc-${t}-label)` }}>
+          <Icon d={side === "front" ? I.ask : I.eye} size={20} />
+        </span>
+        <span className="text-[15px] font-bold" style={{ color: `var(--cmp-fc-${t}-label)` }}>{side === "front" ? "Question" : "Answer"}</span>
+        {(needsRevision || bookmarked) && (
+          <span className="ml-auto flex flex-wrap justify-end gap-1.5">
+            {needsRevision && <StatePill tone="revise" icon={I.revise} label="Needs revision" />}
+            {bookmarked && <StatePill tone="bookmark" icon={I.bookmark} label="Bookmarked" fill />}
+          </span>
+        )}
+      </span>
+      <span className={`relative mt-3 block max-w-[60ch] flex-1 overflow-y-auto font-semibold leading-normal ${side === "front" ? "text-[20px] md:text-[27px]" : "text-[18px] md:text-[22px]"}`} aria-live={side === "back" ? "polite" : undefined}>
+        {text}
+        {explanation && <span className="mt-3 block text-[17px] font-normal leading-relaxed">{explanation}</span>}
+      </span>
+      <span className="relative mt-3 inline-flex items-center justify-center gap-2 self-center text-[15px]" style={{ color: `var(--cmp-fc-${t}-label)` }}><Icon d={I.flip} size={16} />{footer}</span>
+    </span>
+  );
+}
+
+function ActionButton({ icon, label, on, disabled, onClick, bookmark = false }: { icon: React.ReactNode; label: string; on?: boolean; disabled?: boolean; onClick: () => void; bookmark?: boolean }) {
   return (
     <button type="button" onClick={onClick} disabled={disabled} aria-pressed={on}
-      className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2 text-[13.5px] font-semibold disabled:opacity-40 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : "text-gray-800 hover:bg-gray-50"}`}>
-      <Icon d={icon} size={17} />{label}
+      className={`inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl px-2 text-[13.5px] font-semibold disabled:opacity-40 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on && !bookmark ? "bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : on ? "" : "text-gray-800 hover:bg-gray-50"}`}
+      style={on && bookmark ? { background: "var(--cmp-fc-bookmark-surface)", color: "var(--cmp-fc-bookmark-ink)" } : undefined}>
+      <Icon d={icon} size={17} fill={!!(on && bookmark)} />{label}
     </button>
   );
 }
@@ -420,6 +456,8 @@ function SourceLink({ card }: { card: StudyCard }) {
       <p className="mt-1 text-[13.5px] text-gray-700">
         {card.competency ? <>CFCA: {card.competency} · </> : null}{card.topic ? <>Topic: {card.topic} · </> : null}From: {from}
       </p>
+      {card.links?.lesson && <p className="mt-1 text-[13.5px] text-gray-700">From lesson: <Link href={card.links.lesson.href} className={`font-semibold underline ${focusRing}`}>{card.links.lesson.title}</Link></p>}
+      {card.links?.study && <p className="mt-1 text-[13.5px] text-gray-700">Study session: <Link href={card.links.study.href} className={`font-semibold underline ${focusRing}`}>{card.links.study.title}</Link></p>}
       {card.origin !== "library" && (
         <Link href={`${studyHref("learn")}?section=${card.chunkId}`} className={`mt-1 inline-flex items-center gap-1 text-[13.5px] font-semibold text-[var(--cmp-role-indigo-ink)] underline-offset-2 hover:underline ${focusRing}`}>Revise this topic in Learn →</Link>
       )}
@@ -499,7 +537,7 @@ export function DeckOptions({ deck, exports }: { deck: { key: string; id: string
         <li><button type="button" className={row} disabled={!!busy || !deck.total} onClick={() => study()}><Icon d={I.play} /><span><span className="font-semibold">{busy === "all" ? "Starting…" : "Study"}</span> (Active recall)</span></button></li>
         <li><Link href={flashcardsHref({ view: "cards", deck: deck.key })} className={row}><Icon d={I.layers} /><span className="font-semibold">All cards ({deck.total})</span></Link></li>
         <li><button type="button" className={row} disabled={!!busy || !deck.due} onClick={() => study("due")}><Icon d={I.cal} /><span className="flex-1 font-semibold">{busy === "due" ? "Starting…" : "Spaced review"}</span>
-          <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: "var(--cmp-surface-success)", color: "var(--cmp-text-success)" }}>{deck.due ? `Active · ${deck.due} due` : "Nothing due"}</span></button></li>
+          <span className="rounded-full px-2 py-0.5 text-[12px] font-semibold" style={{ background: "var(--cmp-fc-answer-surface)", color: "var(--cmp-fc-answer-label)" }}>{deck.due ? `Active · ${deck.due} due` : "Nothing due"}</span></button></li>
         <li><Link href={deck.id ? flashcardsHref({ view: "decks", edit: deck.id }) : flashcardsHref({ view: "cards", deck: deck.key })} className={row}><Icon d={I.pen} /><span className="font-semibold">Edit deck</span></Link></li>
       </ul>
       <div className="mt-2"><DownloadMenu decks={[deck.key]} formats={exports} /></div>
@@ -510,7 +548,9 @@ export function DeckOptions({ deck, exports }: { deck: { key: string; id: string
 
 export function CreateMore(props: {
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; decks: { id: string; title: string }[];
-  sourceModes: ("notes" | "notes_and_references")[]; perGeneration: number; aiNote: string | null; gaps: number; marksOn: boolean; preset?: "notes" | "competency" | "topic" | "gaps" | "write" | null;
+  sourceModes: ("notes" | "notes_and_references")[]; perGeneration: number; aiNote: string | null; gaps: number; marksOn: boolean;
+  /** OSCE gaps left out because they map to none of the learner's own sections (flashcard-service.ts osceSkippedNote). */
+  gapNote?: string | null; preset?: "notes" | "competency" | "topic" | "gaps" | "write" | null;
   /** SCHOLAR-SESSION-AI-02: the open study session's focus, on its existing row (the learner may change it). */
   scope?: ReturnType<typeof flashcardPrefill>;
 }) {
@@ -562,7 +602,12 @@ export function CreateMore(props: {
             </select>
           )}
           {open === "topic" && <input aria-label="Topic" value={topic} maxLength={120} onChange={e => setTopic(e.target.value)} placeholder="For example: renal system" className={`${field} w-full`} />}
-          {open === "gaps" && <p className="text-[13px] text-gray-700">Cards on what you missed: the key points and mistaken ideas from the questions you got wrong and the cards you did not remember, from your own notes.</p>}
+          {open === "gaps" && (
+            <div className="space-y-1">
+              <p className="text-[13px] text-gray-700">Cards on what you missed: the key points and mistaken ideas from the questions you got wrong, the cards you did not remember and your recent OSCE practice, from your own notes.</p>
+              {props.gapNote && <p role="note" className="text-[12.5px] text-gray-600">{props.gapNote}</p>}
+            </div>
+          )}
           {props.sourceModes.length > 1 && (
             <label className="block text-[13px] font-semibold text-gray-800">New cards from
               <select value={source} onChange={e => setSource(e.target.value as typeof source)} className={`${field} mt-1 block w-full`}>
@@ -627,15 +672,18 @@ export function WriteCard({ materials, decks }: { materials: { id: string; title
 
 // ── MY DECKS: create, rename, organise, remove; select several to study or download ──
 
-export type DeckRow = { key: string; id: string | null; kind: string; title: string; subtitle: string | null; total: number; due: number; fresh: number; needsPractice: number; remembered: number; lastStudiedAt: string | null; organiseBy?: string; organiseRef?: string | null };
+export type DeckRow = { key: string; id: string | null; kind: string; title: string; subtitle: string | null; total: number; due: number; fresh: number; needsPractice: number; remembered: number; lastStudiedAt: string | null; organiseBy?: PersonalDeck["organiseBy"]; organiseRef?: string | null; updatedAt?: string | null; archived?: boolean };
 
-export function DeckList({ decks, marksOn, exports, editId }: { decks: DeckRow[]; marksOn: boolean; exports: ExportFormat[]; editId: string | null }) {
+export function DeckList({ decks, marksOn, archiveOn, exports, editId }: { decks: DeckRow[]; marksOn: boolean; archiveOn: boolean; exports: ExportFormat[]; editId: string | null }) {
   const router = useRouter();
   const [chosen, setChosen] = useState<string[]>([]);
   const [msg, setMsg] = useState("");
   const [title, setTitle] = useState("");
   const [organiseBy, setOrganiseBy] = useState("personal");
   const [organiseRef, setOrganiseRef] = useState("");
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState<DeckSort>("recent");
+  const [showArchived, setShowArchived] = useState(false);
   async function create(e: React.FormEvent) {
     e.preventDefault();
     const r = await call("/api/individual/scholar/flashcards/decks", { ...studyField(), title, organiseBy, organiseRef: organiseBy === "personal" ? null : organiseRef });
@@ -648,11 +696,45 @@ export function DeckList({ decks, marksOn, exports, editId }: { decks: DeckRow[]
     if (r.ok && r.json.session?.id) router.push(carry(flashcardsHref({ session: r.json.session.id, deck: all.length === 1 ? all[0].key : null })));
     else setMsg(r.json.error ?? "Studying could not start just now.");
   }
-  const groups: [string, DeckRow[]][] = [["Your decks", decks.filter(d => d.kind === "personal")], ["All cards", decks.filter(d => d.kind === "all" || d.kind === "bookmarked")],
-    ["By document", decks.filter(d => d.kind === "document")], ["By topic", decks.filter(d => d.kind === "topic")], ["By competency", decks.filter(d => d.kind === "competency")]];
+  async function copy(d: DeckRow) {
+    const r = await call(`/api/individual/scholar/flashcards/decks/${d.id}`, undefined, "POST");
+    setMsg(r.ok ? `Copied as "${r.json.title}". The cards and their review history are shared with the original.` : r.json.error ?? "The deck could not be copied.");
+    if (r.ok) router.refresh();
+  }
+  async function archive(d: DeckRow, archived: boolean) {
+    const r = await call(`/api/individual/scholar/flashcards/decks/${d.id}`, { archived }, "PATCH");
+    setMsg(r.ok ? (archived ? `"${d.title}" is archived. Find it again under Show archived.` : `"${d.title}" is back in your list.`) : r.json.error ?? "The deck could not be changed.");
+    if (r.ok) router.refresh();
+  }
+  const personal = decks.filter(d => d.kind === "personal");
+  const archivedCount = personal.filter(d => d.archived).length;
+  const keep = (ds: DeckRow[]) => sortDecks(searchDecks(ds.filter(d => showArchived || !d.archived), search), sort);
+  const bookmarked = decks.find(d => d.kind === "bookmarked") ?? null;
+  const groups: [string, DeckRow[]][] = [
+    ["All cards", decks.filter(d => d.kind === "all")],
+    ...groupByOrganise(keep(personal)).map((g): [string, DeckRow[]] => [`Your decks: ${g.label.toLowerCase()}`, g.decks]),
+    ["By document", keep(decks.filter(d => d.kind === "document"))], ["By topic", keep(decks.filter(d => d.kind === "topic"))], ["By competency", keep(decks.filter(d => d.kind === "competency"))],
+  ];
+  const visible = groups.filter(([, ds]) => ds.length);
+  const others = personal.filter(d => !d.archived).map(d => ({ id: d.id!, title: d.title }));
   return (
     <section aria-labelledby="decks-h" className="space-y-4">
       <h2 id="decks-h" className="text-[18px] font-bold text-gray-900">My Decks</h2>
+      <div role="search" className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-200 bg-white p-3">
+        <label className="min-w-0 flex-1 text-[12.5px] font-semibold text-gray-700">Search decks
+          <input type="search" value={search} onChange={e => setSearch(e.target.value)} className={`${field} mt-1 block w-full`} placeholder="Part of a deck name" />
+        </label>
+        <label className="text-[12.5px] font-semibold text-gray-700">Sort by
+          <select value={sort} onChange={e => setSort(e.target.value as DeckSort)} className={`${field} mt-1 block`}>
+            {(Object.keys(DECK_SORT_LABEL) as DeckSort[]).map(k => <option key={k} value={k}>{DECK_SORT_LABEL[k]}</option>)}
+          </select>
+        </label>
+        {archiveOn && (
+          <label className="inline-flex min-h-[40px] items-center gap-1.5 text-[13px] font-semibold text-gray-700 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+            <input type="checkbox" checked={showArchived} onChange={e => setShowArchived(e.target.checked)} />Show archived{archivedCount ? ` (${archivedCount})` : ""}
+          </label>
+        )}
+      </div>
       {chosen.length > 0 && (
         <div className="sticky top-16 z-10 flex flex-wrap items-center gap-2 rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
           <span className="text-[13.5px] font-semibold text-gray-800">{chosen.length} deck{chosen.length === 1 ? "" : "s"} chosen</span>
@@ -662,22 +744,45 @@ export function DeckList({ decks, marksOn, exports, editId }: { decks: DeckRow[]
         </div>
       )}
       {msg && <p role="status" className="text-[13.5px] text-gray-800">{msg}</p>}
-      {groups.filter(([, ds]) => ds.length).map(([label, ds]) => (
+      {bookmarked && (
+        <section aria-labelledby="bm-h" className="rounded-2xl border border-gray-200 bg-white p-3">
+          <h3 id="bm-h" className="inline-flex items-center gap-2 text-[15px] font-bold text-gray-900"><Icon d={I.bookmark} size={17} />Bookmarked</h3>
+          <p className="mt-0.5 text-[12.5px] text-gray-600 tabular-nums">{bookmarked.total} card{bookmarked.total === 1 ? "" : "s"} · {bookmarked.due} due · {bookmarked.fresh} new{marksOn ? "" : " · bookmarks are not available here yet"}</p>
+          {bookmarked.total === 0 && marksOn && <p className="mt-1 text-[12.5px] text-gray-600">Nothing is bookmarked yet. Bookmark a card while you study or in All cards, and it appears here.</p>}
+          <div className="mt-2 flex flex-wrap gap-2">
+            {bookmarked.total > 0 ? (
+              <>
+                <Link href={flashcardsHref({ view: "cards", bookmarked: "1" })} className={ghost}>Browse bookmarked cards</Link>
+                <Link href={flashcardsHref({ deck: bookmarked.key })} className={ghost}>Review them</Link>
+              </>
+            ) : null}
+          </div>
+        </section>
+      )}
+      {visible.length === 0 && <p className="rounded-2xl border border-dashed border-gray-300 p-4 text-center text-[13.5px] text-gray-600">{search.trim() ? "No deck name matches that search." : "No decks to show."}</p>}
+      {visible.map(([label, ds]) => (
         <div key={label}>
           <h3 className="mb-1.5 text-[12.5px] font-bold uppercase tracking-[0.12em] text-gray-500">{label}</h3>
           <ul className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-2">
             {ds.map(d => (
-              <li key={d.key} className="rounded-2xl border border-gray-200 bg-white p-3">
+              <li key={d.key} className={`rounded-2xl border border-gray-200 bg-white p-3 ${d.archived ? "opacity-80" : ""}`}>
                 <div className="flex items-start gap-2">
                   <input type="checkbox" aria-label={`Choose ${d.title}`} className="mt-1.5" checked={chosen.includes(d.key)} onChange={() => setChosen(c => (c.includes(d.key) ? c.filter(x => x !== d.key) : [...c, d.key]))} />
                   <div className="min-w-0 flex-1">
                     <Link href={flashcardsHref({ deck: d.key })} className={`text-[14.5px] font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{d.title}</Link>
+                    {d.archived && <span className="ml-2 rounded-full bg-gray-100 px-2 py-0.5 text-[11.5px] font-semibold text-gray-700">Archived</span>}
                     {d.subtitle && <p className="text-[12px] text-gray-500">{d.subtitle}</p>}
                     <p className="mt-0.5 text-[12.5px] text-gray-600 tabular-nums">{d.total} cards · {d.due} due · {d.fresh} new · {d.needsPractice} need practice · last revised {when(d.lastStudiedAt).toLowerCase() === "today" ? "today" : when(d.lastStudiedAt)}</p>
                   </div>
                 </div>
-                {d.id && editId === d.id && <EditDeck deck={d} />}
-                {d.id && editId !== d.id && <p className="mt-1 text-right"><Link href={flashcardsHref({ view: "decks", edit: d.id })} className={`text-[12.5px] font-semibold underline ${focusRing}`}>Edit deck</Link></p>}
+                {d.id && editId === d.id && <EditDeck deck={d} others={others.filter(o => o.id !== d.id)} />}
+                {d.id && editId !== d.id && (
+                  <p className="mt-1 flex flex-wrap justify-end gap-x-3 gap-y-1">
+                    {marksOn && <button type="button" className={`text-[12.5px] font-semibold underline ${focusRing}`} onClick={() => copy(d)}>Copy</button>}
+                    {archiveOn && <button type="button" className={`text-[12.5px] font-semibold underline ${focusRing}`} onClick={() => archive(d, !d.archived)}>{d.archived ? "Unarchive" : "Archive"}</button>}
+                    <Link href={flashcardsHref({ view: "decks", edit: d.id })} className={`text-[12.5px] font-semibold underline ${focusRing}`}>Edit deck</Link>
+                  </p>
+                )}
               </li>
             ))}
           </ul>
@@ -700,10 +805,11 @@ export function DeckList({ decks, marksOn, exports, editId }: { decks: DeckRow[]
   );
 }
 
-function EditDeck({ deck }: { deck: DeckRow }) {
+function EditDeck({ deck, others }: { deck: DeckRow; others: { id: string; title: string }[] }) {
   const router = useRouter();
   const [title, setTitle] = useState(deck.title);
   const [msg, setMsg] = useState("");
+  const [into, setInto] = useState("");
   async function save(e: React.FormEvent) {
     e.preventDefault();
     const r = await call(`/api/individual/scholar/flashcards/decks/${deck.id}`, { title }, "PATCH");
@@ -714,13 +820,29 @@ function EditDeck({ deck }: { deck: DeckRow }) {
     const r = await call(`/api/individual/scholar/flashcards/decks/${deck.id}`, undefined, "DELETE");
     if (r.ok) router.push(flashcardsHref({ view: "decks" })); else setMsg(r.json.error ?? "The deck could not be removed.");
   }
+  async function merge() {
+    const target = others.find(o => o.id === into);
+    if (!target || !window.confirm(`Merge "${deck.title}" into "${target.title}"? Its cards are added there (any already there are skipped) and this deck is removed. The cards and their review history stay.`)) return;
+    const r = await call(`/api/individual/scholar/flashcards/decks/${into}`, { mergeFrom: deck.id }, "PATCH");
+    if (r.ok) router.push(flashcardsHref({ view: "decks" })); else setMsg(r.json.error ?? "The decks could not be merged.");
+  }
   return (
-    <form onSubmit={save} className="mt-2 flex flex-wrap items-center gap-2 border-t border-gray-100 pt-2">
-      <input aria-label="Deck name" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} className={`${field} min-w-0 flex-1`} />
-      <button type="submit" className={ghost}>Rename</button>
-      <button type="button" className={`${ghost} text-red-800`} onClick={remove}>Remove deck</button>
-      {msg && <span role="status" className="w-full text-[12.5px] text-gray-700">{msg}</span>}
-    </form>
+    <div className="mt-2 space-y-2 border-t border-gray-100 pt-2">
+      <form onSubmit={save} className="flex flex-wrap items-center gap-2">
+        <input aria-label="Deck name" value={title} maxLength={120} onChange={e => setTitle(e.target.value)} className={`${field} min-w-0 flex-1`} />
+        <button type="submit" className={ghost}>Rename</button>
+        <button type="button" className={`${ghost} text-red-800`} onClick={remove}>Remove deck</button>
+      </form>
+      {others.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <select aria-label="Merge into deck" value={into} onChange={e => setInto(e.target.value)} className={`${field} min-w-0 flex-1`}>
+            <option value="">Merge this deck into…</option>{others.map(o => <option key={o.id} value={o.id}>{o.title}</option>)}
+          </select>
+          <button type="button" className={ghost} disabled={!into} onClick={merge}>Merge</button>
+        </div>
+      )}
+      {msg && <p role="status" className="text-[12.5px] text-gray-700">{msg}</p>}
+    </div>
   );
 }
 
@@ -884,7 +1006,7 @@ export function DeckStart({ deck, perState }: { deck: { key: string; title: stri
   return (
     <div className="mt-5 space-y-4">
       <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2">
-        {stat("Due today", perState.due, "var(--cmp-role-revision-strong)")}{stat("Not studied yet", perState.fresh)}{stat("Needs more practice", perState.needsPractice, "var(--cmp-text-error)")}{stat("Remembered", perState.remembered, "var(--cmp-text-success)")}
+        {stat("Due today", perState.due, "var(--cmp-role-revision-strong)")}{stat("Not studied yet", perState.fresh)}{stat("Needs more practice", perState.needsPractice, "var(--cmp-fc-revise-ink)")}{stat("Remembered", perState.remembered, "var(--cmp-fc-answer-label)")}
       </div>
       <div className="flex flex-wrap gap-2">
         <button type="button" className={primary} style={{ background: indigo }} disabled={!!busy || !deck.total} onClick={() => study()}><Icon d={I.play} />{busy === "all" ? "Starting…" : `Study ${deck.title}`}</button>

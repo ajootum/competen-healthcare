@@ -770,6 +770,54 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 }
 }
 
+/* ── SCHOLAR FLASHCARD STATES (owner, 1 Nov 2026) ─────────────────────────────────────────────────────────────
+   One place to configure how a flashcard looks in each of its four states. Light values are references onto the
+   existing tokens (app surface/text, the Scholar theme, the revision and indigo roles), so they follow the
+   palette. A state is NEVER carried by colour alone: the card always also prints a text label and an icon
+   ("Question", "Answer", "Needs revision", "Bookmarked"). None of these is a correctness colour: no green
+   "right", no red "wrong"; "Needs revision" is a schedule state, in the muted revision (amber) family.
+   Pairs used (WCAG contrast, light): ink on question surface 15.39, label on question surface 7.58, ink on
+   answer surface 13.92, label on answer surface 7.44, revise ink on revise surface 6.49, bookmark ink on
+   bookmark surface 8.76. Dark values (below) are staged for the day the Scholar shell has a dark scheme: they
+   apply under [data-cmp-scheme="dark"] on or above .cmp-scholar, which nothing sets today. Dark pairs: 14.85,
+   9.89, 13.35, 9.02, 9.60, 9.72. */
+.cmp-scholar {
+  --cmp-fc-question-surface: var(--cmp-app-surface);
+  --cmp-fc-question-border: var(--cmp-app-border);
+  --cmp-fc-question-ink: var(--cmp-app-text);
+  --cmp-fc-question-label: var(--cmp-app-text-secondary);
+  --cmp-fc-question-chip: var(--cmp-neutral-100);
+  --cmp-fc-answer-surface: var(--cmp-theme-soft);
+  --cmp-fc-answer-border: var(--cmp-theme-border);
+  --cmp-fc-answer-ink: var(--cmp-app-text);
+  --cmp-fc-answer-label: var(--cmp-theme-ink);
+  --cmp-fc-answer-chip: var(--cmp-app-surface);
+  --cmp-fc-revise-surface: var(--cmp-role-revision-soft);
+  --cmp-fc-revise-border: var(--cmp-role-revision-accent);
+  --cmp-fc-revise-ink: var(--cmp-role-revision-ink);
+  --cmp-fc-bookmark-surface: var(--cmp-role-indigo-soft);
+  --cmp-fc-bookmark-border: color-mix(in srgb, var(--cmp-role-indigo-accent) 35%, transparent);
+  --cmp-fc-bookmark-ink: var(--cmp-role-indigo-ink);
+}
+[data-cmp-scheme="dark"] .cmp-scholar, .cmp-scholar[data-cmp-scheme="dark"] {
+  --cmp-fc-question-surface: #172033;
+  --cmp-fc-question-border: #64748B;
+  --cmp-fc-question-ink: #F1F5F9;
+  --cmp-fc-question-label: #BFCBDA;
+  --cmp-fc-question-chip: #1D2941;
+  --cmp-fc-answer-surface: #0E2A33;
+  --cmp-fc-answer-border: #2F7A8F;
+  --cmp-fc-answer-ink: #E6F4F8;
+  --cmp-fc-answer-label: #8FD3E4;
+  --cmp-fc-answer-chip: #12404D;
+  --cmp-fc-revise-surface: #3A2A0E;
+  --cmp-fc-revise-border: #D97706;
+  --cmp-fc-revise-ink: #FCD34D;
+  --cmp-fc-bookmark-surface: #232453;
+  --cmp-fc-bookmark-border: #6366F1;
+  --cmp-fc-bookmark-ink: #C7D2FE;
+}
+
 /* HFE-COLOR-02: a form field's edge must reach 3:1 (WCAG 1.4.11). The card border (#E2E8F0, 1.23:1) does not, so
    Scholar's fields take controlBorder. Unlayered on purpose, so it wins over each field's own border utility. */
 .cmp-scholar :is(input:not([type="radio"]):not([type="checkbox"]):not([type="range"]), select, textarea) {

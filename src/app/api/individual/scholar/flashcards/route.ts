@@ -14,6 +14,7 @@ export const dynamic = "force-dynamic";
 //
 // GET  ?deck=<id or key>&deck=...&card=<id>&topic=&competency=&material= -- the caller's own cards a selection names,
 //      as loadCardSelection returns them (flashcard-service.ts): what the downloads read. Nothing named: every card.
+//      &bookmarked=true narrows to the caller's own bookmarked cards (the Bookmarked entry in the deck list).
 // POST { materialId, chunkId?, front, back, deckId? } -- a card the learner writes by hand. No AI. Checked (length,
 //      a recall prompt, no patient identifier, not a repeat of a card they have), filed under their material, labelled
 //      as their own and never as clinically reviewed (730 binds it), on the spaced review schedule from today.
@@ -26,6 +27,7 @@ export async function GET(req: Request) {
   const r = await loadCardSelection(ctx, {
     deckIds: u.searchParams.getAll("deck").slice(0, 20), cardIds: u.searchParams.getAll("card").filter(isUuid).slice(0, 500),
     topic: u.searchParams.get("topic"), competencyId: u.searchParams.get("competency"), materialId: u.searchParams.get("material"),
+    bookmarked: ["true", "1"].includes(u.searchParams.get("bookmarked") ?? ""),
   });
   if (!r.ok) return NextResponse.json({ error: r.reason === "off" ? "Flashcards are not offered here." : "Your cards could not be read just now." }, { status: r.reason === "off" ? 403 : 503 });
   return NextResponse.json(r);

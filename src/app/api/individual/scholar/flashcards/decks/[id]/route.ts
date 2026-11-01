@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { addDeckCards, deleteFlashcardDeck, flashcardDecks, isUuid, ownedQuestionIds, removeDeckCards, updateFlashcardDeck } from "@/lib/individual/scholar/store";
-import { flashcardGate } from "@/lib/individual/scholar/flashcard-service";
+import { addDeckCards, deleteFlashcardDeck, flashcardDecks, isUuid, ownedQuestionIds, removeDeckCards, setDeckArchived, updateFlashcardDeck } from "@/lib/individual/scholar/store";
+import { copyDeck, flashcardGate, mergeDecks } from "@/lib/individual/scholar/flashcard-service";
 import { parseDeckFields } from "@/lib/individual/scholar/flashcards";
 import { audit } from "@/lib/individual/scholar/http";
 
@@ -14,6 +14,11 @@ export const dynamic = "force-dynamic";
 //   add     cards into this deck (after its last card), up to the policy's deck size
 //   remove  cards out of it; with moveTo, into that deck first (a MOVE). A deck references cards, so a move never
 //           copies or resets a card's schedule or review history.
+//   archived  true or false: archive the deck (hidden from the main list, never deleted) or bring it back. Needs migration 820:
+//             without it, 409 and nothing changes (the page hides the controls).
+//   mergeFrom another of the caller's decks: its cards this deck does not hold are added (duplicates skipped), then that
+//             deck is removed. Cards, schedules and review history are untouched.
+// POST (no body needed) makes a copy: "<deck> (copy)", the same cards by reference. Cards and their history are shared.
 // DELETE removes the deck. Its cards and their history stay.
 
 const ids = (v: unknown) => (Array.isArray(v) ? [...new Set(v.filter(isUuid))].slice(0, 1000) : []);
@@ -29,6 +34,21 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
   if (!deck) return NextResponse.json({ error: "That deck could not be found." }, { status: 404 });
   const body = await req.json().catch(() => ({}));
   const max = gate.policy.scholarFlashcardDeckMax;
+
+  if (body?.archived !== undefined) {
+    if (typeof body.archived !== "boolean") return NextResponse.json({ error: "Say whether to archive the deck." }, { status: 400 });
+    const r = await setDeckArchived(ctx.admin, ctx.userId, id, body.archived);
+    if (r !== "ok") return NextResponse.json({ error: r === "unavailable" ? "Archiving decks is not available here yet." : r === "not_found" ? "That deck could not be found." : "The deck could not be changed just now." }, { status: r === "unavailable" ? 409 : r === "not_found" ? 404 : 500 });
+    await audit(ctx, "individual_scholar_flashcard_deck_archived", "individual_scholar_flashcard_deck", id, { archived: body.archived });
+    return NextResponse.json({ ok: true });
+  }
+  if (body?.mergeFrom !== undefined) {
+    if (!isUuid(body.mergeFrom)) return NextResponse.json({ error: "Choose another of your decks to merge." }, { status: 400 });
+    const r = await mergeDecks(ctx, id, body.mergeFrom, max);
+    if (!r.ok) return NextResponse.json({ error: r.message }, { status: r.reason === "not_found" ? 404 : r.reason === "invalid" ? 400 : 500 });
+    await audit(ctx, "individual_scholar_flashcard_deck_merged", "individual_scholar_flashcard_deck", id, { added: r.added, skipped: r.skipped, from: body.mergeFrom });
+    return NextResponse.json({ ok: true, added: r.added, skipped: r.skipped, total: r.total });
+  }
 
   const fields = parseDeckFields(body, false);
   if (!fields.ok) return NextResponse.json({ error: fields.message }, { status: fields.identifier ? 422 : 400 });
@@ -61,6 +81,18 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
   }
   await audit(ctx, "individual_scholar_flashcard_deck_changed", "individual_scholar_flashcard_deck", id, { added: add.length, removed: remove.length, moved: body?.moveTo !== undefined && remove.length > 0, renamed: fields.title !== undefined });
   return NextResponse.json({ ok: true });
+}
+
+export async function POST(_req: Request, ctx2: { params: Promise<{ id: string }> }) {
+  const ctx = await requireIndividualContext("scholar");
+  if (isGuardRefusal(ctx)) return ctx;
+  const gate = await flashcardGate(ctx, true);
+  if ("refusal" in gate) return NextResponse.json({ error: gate.refusal.error }, { status: gate.refusal.status });
+  const { id } = await ctx2.params;
+  const r = await copyDeck(ctx, id, gate.policy.scholarFlashcardDeckMax);
+  if (!r.ok) return NextResponse.json({ error: r.message }, { status: r.reason === "not_found" ? 404 : r.reason === "invalid" ? 400 : r.reason === "not_provisioned" ? 409 : 500 });
+  await audit(ctx, "individual_scholar_flashcard_deck_made", "individual_scholar_flashcard_deck", r.id, { organise: "copy", cards: r.cards, copyOf: id });
+  return NextResponse.json({ id: r.id, title: r.title });
 }
 
 export async function DELETE(_req: Request, ctx2: { params: Promise<{ id: string }> }) {
