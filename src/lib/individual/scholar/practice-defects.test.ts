@@ -333,8 +333,10 @@ describe("Point 12 follow-ups: tablet layout by available width, the instructed 
   it("the station page has no viewport two-column split; the work column wraps at 20rem", () => {
     const page = readFileSync(`${study}/apply/osce/[stationId]/page.tsx`, "utf8");
     expect(page).not.toMatch(/md:grid-cols-\[minmax\(0,3fr\)/);
-    expect(page).toMatch(/className="flex flex-wrap items-start gap-5"/);
-    expect(page).toMatch(/className="min-w-0 flex-\[3_1_20rem\] space-y-5"/);
+    // Resizable panes (1 Nov 2026): the split is a container query on the page's own width (PaneGrid bp="@36rem"),
+    // still never a viewport breakpoint; below 36rem the columns stack.
+    expect(page).toMatch(/<PaneGrid bp="@36rem"/);
+    expect(page).not.toMatch(/(?:^|\s)(?:md|lg|xl):grid-cols-/m);
     const client = readFileSync(`${study}/_components/osce-client.tsx`, "utf8");
     expect(client).toMatch(/grid-cols-\[repeat\(auto-fit,minmax\(min\(100%,15rem\),1fr\)\)\]/);
     expect(client).toMatch(/sticky top-2/);
