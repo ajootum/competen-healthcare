@@ -33,7 +33,11 @@ import { maxBesideSibling } from "./resizable-math";
 //     A scroll region whose fixed max-height becomes draggable from `md` up (handle underneath; className keeps the old max-h).
 
 type Px = number | ((containerPx: number) => number);
-export type PaneOpt = { storageKey: string; defaultPx: Px; minPx?: number; fallback?: string };
+/** `{ ratio, gutter? }`: a share of the measured container (minus gutter px) -- plain data, so a SERVER page can pass it
+ *  (a function prop cannot cross the server/client boundary and crashes the page render). */
+export type PxRatio = { ratio: number; gutter?: number };
+export type PaneOpt = { storageKey: string; defaultPx: Px | PxRatio; minPx?: number; fallback?: string };
+const toPx = (v: Px | PxRatio): Px => (typeof v === "object" ? (c: number) => Math.round((c - (v.gutter ?? 20)) * v.ratio) : v);
 export type PaneSide = PaneOpt & { label: string; node?: ReactNode };
 export type PaneBp = "md" | "lg" | "xl" | "2xl" | "@36rem";
 
@@ -64,11 +68,11 @@ export function usePaneGrid({ container, minMain = MIN_MAIN_PX, start, end }: {
   const sMin = start?.minPx ?? MIN_PANE_PX, eMin = end?.minPx ?? MIN_PANE_PX;
   // One pane: up to 60% of the container. Two: each leaves the other at least its minimum (the end pane leaves the start pane its current size).
   const S = useResizable({
-    storageKey: start?.storageKey ?? "", axis: "x", side: "start", defaultPx: start?.defaultPx ?? sMin, minPx: sMin, container: box,
+    storageKey: start?.storageKey ?? "", axis: "x", side: "start", defaultPx: start ? toPx(start.defaultPx) : sMin, minPx: sMin, container: box,
     maxPx: c => (both ? Math.max(sMin, c - gutters - minMain - eMin) : maxBesideSibling(c, { min: sMin, minOther: minMain, gutter: HANDLE_GUTTER_PX })),
   });
   const E = useResizable({
-    storageKey: end?.storageKey ?? "", axis: "x", side: "end", defaultPx: end?.defaultPx ?? eMin, minPx: eMin, container: box,
+    storageKey: end?.storageKey ?? "", axis: "x", side: "end", defaultPx: end ? toPx(end.defaultPx) : eMin, minPx: eMin, container: box,
     maxPx: c => (both ? Math.max(eMin, c - gutters - minMain - (S.size ?? sMin)) : maxBesideSibling(c, { min: eMin, minOther: minMain, gutter: HANDLE_GUTTER_PX })),
   });
   const ready = (!start || S.size != null) && (!end || E.size != null);
