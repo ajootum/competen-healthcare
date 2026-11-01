@@ -151,7 +151,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
         // SCHOLAR-FLASHCARDS-QA-01: flagged, never rewritten (flashcard-sensitive.ts); shown with the answer.
         sensitive: c.sensitive?.marker ? { marker: c.sensitive.marker, reviewed: c.sensitive.reviewed } : null,
         answered: a ? { recall: a.correct ? "remembered" : "again", nextReviewAt: c.review.nextReviewAt } : null,
-        reviewState: c.review.state,
+        schedule: { lastQuality: c.review.lastQuality, nextReviewAt: c.review.nextReviewAt, status: c.review.status, reviews: c.review.reviews },
         back: a ? { text: c.back, explanation: c.explanation, quote: c.sources.find(x => x.origin === "notes")?.quote ?? null } : null,
       };
     });
@@ -162,7 +162,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
       <>
         {madeNote && <p role="status" className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-800">{madeNote}</p>}
         {studyCards.length < s.data.questionIds.length && <p className="text-[12.5px] text-gray-600">Some cards in this session are no longer stored (their material was removed, or a library card was withdrawn) and are left out.</p>}
-        <FlashcardStudy sessionId={s.data.session.id} deckTitle={studyDeck?.title ?? "Study session"} deckKey={studyDeck?.key ?? null} deckCards={studyDeck?.total ?? studyCards.length}
+        <FlashcardStudy sessionId={s.data.session.id} today={lib.data.today} deckTitle={studyDeck?.title ?? "Study session"} deckKey={studyDeck?.key ?? null} deckCards={studyDeck?.total ?? studyCards.length}
           lastRevised={studyDeck?.lastStudiedAt ?? null} cards={studyCards} marksOn={schema730} completed={s.data.session.status === "completed"} />
       </>,
       side(), false,

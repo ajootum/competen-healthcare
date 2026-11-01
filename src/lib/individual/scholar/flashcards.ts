@@ -157,6 +157,8 @@ export type ReviewState = "new" | "due" | "needs_practice" | "remembered";
 export const REVIEW_STATE_LABEL: Record<ReviewState, string> = { new: "Not studied yet", due: "Due today", needs_practice: "Needs more practice", remembered: "Remembered" };
 export type CardReview = {
   state: ReviewState; nextReviewAt: string | null; lastReviewedAt: string | null; reviews: number;
+  /** The last rating's SM-2 quality (individual_scholar_card.last_quality), or null when never rated. */
+  lastQuality: number | null;
   intervalDays: number | null; ease: number | null; status: "active" | "mastered" | null;
   /** Newest first, from the 391 review log. */
   history: { quality: number; recall: RecallChoice; at: string; intervalDays: number | null }[];
@@ -233,7 +235,7 @@ export function flashcardView(q: QuestionRow, x: CardRowExtras, today: string): 
     version: origin === "library" ? `Competen library version ${q.library!.versionNo}` : origin === "learner" ? `Your card, version ${x.contentVersion}` : q.promptVersion,
     material: { id: q.materialId, title: q.materialTitle }, chunkId: q.chunkId,
     review: {
-      state: reviewStateOf(x.card, today), nextReviewAt: x.card?.nextReviewAt ?? null, lastReviewedAt: x.card?.lastReviewedAt ?? null, reviews: x.card?.reviews ?? 0,
+      state: reviewStateOf(x.card, today), nextReviewAt: x.card?.nextReviewAt ?? null, lastReviewedAt: x.card?.lastReviewedAt ?? null, reviews: x.card?.reviews ?? 0, lastQuality: x.card?.lastQuality ?? null,
       intervalDays: x.card ? x.card.intervalDays : null, ease: x.card ? x.card.ease : null, status: x.card?.status ?? null,
       history: x.history.map(h => ({ ...h, recall: recallOf(h.quality) })),
     },

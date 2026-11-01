@@ -67,3 +67,29 @@ export function groupByOrganise<T extends { organiseBy?: PersonalDeck["organiseB
   return order.map(by => ({ by, label: ORGANISE_GROUP_LABEL[by], decks: decks.filter(d => (d.organiseBy ?? "personal") === by) })).filter(g => g.decks.length);
 }
 
+
+// ── "Needs revision": one rule, read from the card's schedule row, for every study and browse path ──
+
+/** A card's schedule row as the study surface needs it (individual_scholar_card): last_quality, next_review_at, status, reviews. */
+export type CardSchedule = { lastQuality: number | null; nextReviewAt: string | null; status: "active" | "mastered" | null; reviews: number };
+
+/**
+ * Pure. Whether a card shows "Needs revision": it has been reviewed and is due or overdue, OR its LAST rating was
+ * "Didn't remember" (last_quality < 3, which is also "needs more practice"). A card never reviewed is "Not studied yet",
+ * not a card to revise. A remembered card is off unless it is still due.
+ */
+export function needsRevisionOf(s: CardSchedule | null | undefined, today: string): boolean {
+  if (!s || s.reviews <= 0) return false;
+  if (s.status !== "mastered" && s.nextReviewAt !== null && s.nextReviewAt <= today) return true;
+  return s.lastQuality !== null && s.lastQuality < 3;
+}
+
+/** Pure. The schedule row straight after a rating in this session: Didn't remember = quality 1, Remembered = 4 (flashcards.ts RECALL). */
+export function scheduleAfterRating(prev: CardSchedule | null | undefined, recall: "again" | "remembered", nextReviewAt: string | null): CardSchedule {
+  return {
+    lastQuality: recall === "again" ? 1 : 4,
+    nextReviewAt,
+    status: prev?.status ?? "active",
+    reviews: (prev?.reviews ?? 0) + 1,
+  };
+}

@@ -70,5 +70,6 @@ describe("flashcards layout: by available width, one md viewport edge", () => {
   it("touch targets keep their pointer-coarse minimums", () => {
     expect(client).toMatch(/const ghost = `[^`]*pointer-coarse:min-h-\[var\(--cmp-touch-min\)\]/);
     expect(nav).toMatch(/pointer-coarse:min-h-\[var\(--cmp-touch-min\)\]/);
+    expect(client).toMatch(/inline-flex items-center[^`]*pointer-coarse:min-h-\[var\(--cmp-touch-min\)\][^`]*`[\s\S]{0,120}>Edit this card/);
   });
 });

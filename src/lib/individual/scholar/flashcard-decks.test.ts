@@ -3,7 +3,7 @@ import {
   buildDecks, cardLinksOf, mergeGaps, osceGapTopics, recentOsceAttempts, selectCards, flashcardView,
   type CardRowExtras, type FlashcardView, type OsceGapAttempt, type PersonalDeck, type TopicGap,
 } from "./flashcards";
-import { copyPlan, groupByOrganise, mergePlan, searchDecks, sortDecks } from "./flashcard-decks";
+import { copyPlan, groupByOrganise, mergePlan, needsRevisionOf, scheduleAfterRating, searchDecks, sortDecks, type CardSchedule } from "./flashcard-decks";
 import { copyDeck, mergeDecks } from "./flashcard-service";
 import { flashcardDecks, resetDeckArchiveSchema, setDeckArchived } from "./store";
 import type { QuestionRow } from "./store";
@@ -308,5 +308,37 @@ describe("archive fails closed while migration 820 is absent", () => {
     expect(await setDeckArchived(db.admin, U, deckId(9), true)).toBe("not_found");
     expect(db.tables.individual_scholar_flashcard_deck.find(d => d.id === deckId(9))?.archived_at).toBeNull();
     expect(db.writes.filter(w => LEARNING_TABLES.includes(w.table))).toEqual([]);
+  });
+});
+
+describe("Needs revision: read from the card's schedule row on every path", () => {
+  const T = "2026-11-01";
+  const row = (over: Partial<CardSchedule> = {}): CardSchedule => ({ lastQuality: 4, nextReviewAt: "2026-11-06", status: "active", reviews: 2, ...over });
+  it("a last rating of Didn't remember (quality 1) shows it, even with the next review tomorrow", () => {
+    expect(needsRevisionOf(row({ lastQuality: 1, nextReviewAt: "2026-11-02" }), T)).toBe(true);
+    expect(needsRevisionOf(row({ lastQuality: 2 }), T)).toBe(true);
+  });
+  it("due or overdue shows it; remembered and not yet due does not", () => {
+    expect(needsRevisionOf(row({ nextReviewAt: T }), T)).toBe(true);
+    expect(needsRevisionOf(row({ nextReviewAt: "2026-10-20" }), T)).toBe(true);
+    expect(needsRevisionOf(row(), T)).toBe(false);
+    expect(needsRevisionOf(row({ lastQuality: 3 }), T)).toBe(false);
+  });
+  it("a card never reviewed, or with no schedule row, is not one to revise; a mastered card is not due", () => {
+    expect(needsRevisionOf(row({ reviews: 0, lastQuality: null, nextReviewAt: T }), T)).toBe(false);
+    expect(needsRevisionOf(null, T)).toBe(false);
+    expect(needsRevisionOf(undefined, T)).toBe(false);
+    expect(needsRevisionOf(row({ status: "mastered", nextReviewAt: "2026-10-01" }), T)).toBe(false);
+  });
+  it("updates straight after a rating: Didn't remember turns it on, Remembered turns it off unless still due", () => {
+    const fresh = row({ lastQuality: null, nextReviewAt: T, reviews: 0 });
+    const again = scheduleAfterRating(fresh, "again", "2026-11-02");
+    expect(again).toMatchObject({ lastQuality: 1, nextReviewAt: "2026-11-02", reviews: 1 });
+    expect(needsRevisionOf(again, T)).toBe(true);
+    const ok = scheduleAfterRating(again, "remembered", "2026-11-02");
+    expect(ok.lastQuality).toBe(4);
+    expect(needsRevisionOf(ok, T)).toBe(false);
+    expect(needsRevisionOf(scheduleAfterRating(again, "remembered", T), T)).toBe(true);
+    expect(needsRevisionOf(scheduleAfterRating(null, "again", null), T)).toBe(true);
   });
 });

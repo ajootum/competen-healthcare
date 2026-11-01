@@ -9,7 +9,7 @@ import { sourceHref, studyHref } from "./question-view";
 import { flashcardsHref } from "./revise-nav";
 import { carry, studyField } from "./study-active";
 import type { flashcardPrefill } from "@/lib/individual/scholar/study-carry";
-import { DECK_SORT_LABEL, groupByOrganise, searchDecks, sortDecks, type DeckSort } from "@/lib/individual/scholar/flashcard-decks";
+import { DECK_SORT_LABEL, groupByOrganise, needsRevisionOf, scheduleAfterRating, searchDecks, sortDecks, type CardSchedule, type DeckSort } from "@/lib/individual/scholar/flashcard-decks";
 import type { PersonalDeck } from "@/lib/individual/scholar/flashcards";
 
 // SCHOLAR FLASHCARDS -- SCHOLAR-FLASHCARDS-01 (owner, 31 Oct 2026), to the owner mock-up.
@@ -145,14 +145,14 @@ export type StudyCard = {
   /** SCHOLAR-FLASHCARDS follow-up: the saved lesson this card's section belongs to, and the study session its deck is linked to (exact only). */
   links?: { lesson: { title: string; href: string } | null; study: { title: string; href: string } | null } | null;
   answered: { recall: "again" | "remembered"; nextReviewAt: string | null } | null;
-  /** The card's schedule state when the session loaded (flashcards.ts ReviewState): "due" and "needs_practice" show "Needs revision". */
-  reviewState?: "new" | "due" | "needs_practice" | "remembered";
+  /** The card's schedule row (last_quality, next_review_at, status, reviews), kept current in the session: "Needs revision" is read from it (flashcard-decks.ts needsRevisionOf). */
+  schedule?: CardSchedule | null;
   /** Only for a card already rated in this session: answers stay on the server until the learner reveals them. */
   back: { text: string; explanation: string | null; quote: string | null } | null;
 };
 
 export function FlashcardStudy(props: {
-  sessionId: string; deckTitle: string; deckKey: string | null; deckCards: number; lastRevised: string | null; cards: StudyCard[]; marksOn: boolean; completed: boolean;
+  sessionId: string; today: string; deckTitle: string; deckKey: string | null; deckCards: number; lastRevised: string | null; cards: StudyCard[]; marksOn: boolean; completed: boolean;
 }) {
   const router = useRouter();
   const [cards, setCards] = useState(props.cards);
@@ -202,7 +202,7 @@ export function FlashcardStudy(props: {
     const r = await call("/api/individual/scholar/revision/answer", { questionId: card.id, sessionId: props.sessionId, response: { quality: choice === "again" ? 1 : 4 } });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "Your rating could not be saved."); return; }
-    update(card.id, { answered: { recall: choice, nextReviewAt: r.json.feedback?.nextReviewAt ?? null } });
+    update(card.id, { answered: { recall: choice, nextReviewAt: r.json.feedback?.nextReviewAt ?? null }, schedule: scheduleAfterRating(card.schedule, choice, r.json.feedback?.nextReviewAt ?? null) });
     setStatus(`${choice === "again" ? "Review sooner" : "Review later"}: next review ${when(r.json.feedback?.nextReviewAt ?? null).toLowerCase() === "today" ? "today" : when(r.json.feedback?.nextReviewAt ?? null)}.`);
     const next = cards.findIndex((c, i) => i > at && !c.answered);
     const any = next >= 0 ? next : cards.findIndex(c => !c.answered && c.id !== card.id);
@@ -233,7 +233,7 @@ export function FlashcardStudy(props: {
   const allDone = cards.every(c => c.answered);
   // "Needs revision" is a schedule state, never a verdict: the last recall in this session was "Didn't remember", or (not yet rated
   // here) the card is due or flagged for more practice. Rated "Remembered" in this session clears it.
-  const needsRevision = card.answered ? card.answered.recall === "again" : card.reviewState === "due" || card.reviewState === "needs_practice";
+  const needsRevision = needsRevisionOf(card.schedule, props.today);
   const remembered = cards.filter(c => c.answered?.recall === "remembered").length;
 
   return (
@@ -306,7 +306,7 @@ export function FlashcardStudy(props: {
             <ActionButton icon={I.flag} label={card.issue ? "Issue reported" : "Report issue"} on={panel === "issue"} disabled={!props.marksOn} onClick={() => setPanel(p => (p === "issue" ? "" : "issue"))} />
           </div>
           {!props.marksOn && <p className="mt-1 text-center text-[12px] text-gray-500">Notes, bookmarks and reports are not available here yet.</p>}
-          {card.editable && <p className="mt-1 text-center"><button type="button" className={`text-[13px] font-semibold underline ${focusRing}`} onClick={() => setPanel(p => (p === "edit" ? "" : "edit"))}>Edit this card</button></p>}
+          {card.editable && <p className="mt-1 text-center"><button type="button" className={`inline-flex items-center text-[13px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} onClick={() => setPanel(p => (p === "edit" ? "" : "edit"))}>Edit this card</button></p>}
 
           {panel === "note" && <NotePanel card={card} onSaved={note => update(card.id, { note })} />}
           {panel === "issue" && <IssuePanel card={card} onSaved={issue => update(card.id, { issue })} />}
