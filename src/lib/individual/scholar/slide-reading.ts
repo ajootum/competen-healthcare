@@ -43,7 +43,9 @@ export function slideSkipReason(s: SlideImages): SlideSkip["reason"] | null {
 export async function pictureSlidePlan(admin: any, userId: string, materialId: string): Promise<{ slides: number[]; beyondCap: number } | null> {
   const [extras, chunks] = await Promise.all([materialExtras(admin, userId, [materialId]), listChunks(admin, userId, materialId)]);
   const q = extras.byId.get(materialId)?.quality ?? null;
-  if (!q || (q.unit !== "slide" && q.unit !== "page") || !q.emptyUnits.length || !chunks.ok) return null;
+  if (!q || (q.unit !== "slide" && q.unit !== "page") || !chunks.ok) return null;
+  // Nothing (left) to read -- every picture-only slide already read: an empty plan, not a failure.
+  if (!q.emptyUnits.length) return { slides: [], beyondCap: 0 };
   return planPictureSlides({ emptyUnits: q.emptyUnits, triedUnits: q.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL });
 }
 
@@ -147,7 +149,7 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   const additions: NewChunk[] = [];
   let model = "";
   if (pdf) {
-    const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }));
+    const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, Object.assign(await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }), { intentContext: { surface: "material" as const, activity: "transcribe" } }));
     const r = await runTranscription(ai.run, ctx.userId, { pdfBase64: pdf.base64, pages: pdf.pages.map((_, i) => i + 1) });
     const refused = meteredRefusal(ai.refusal());
     if (refused) return json(refused.status, await refused.json());

@@ -20,7 +20,7 @@ import {
 } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
-import { externalReferences, learnResearch, researchEvidence, scholarResearchOperational, type LearnResearch } from "@/lib/individual/scholar/learn-research";
+import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope } from "@/lib/individual/scholar/learn-research";
 import { qualityOf } from "@/lib/individual/scholar/source-quality";
 import { findSavedLesson, materialQualities, topicsOfSections } from "@/lib/individual/scholar/store";
 import { aiReadByMaterial, aiReadMark } from "@/lib/individual/scholar/learn-ai-read";
@@ -305,19 +305,22 @@ export async function POST(req: Request) {
     action, step, depth, mode, cached: true, artefact_id: a.id, dedupe_key: key, legacy: a.promptVersion.indexOf(promptVersion) !== 0, open, recorded,
     salvage_removed: salvagedCount(a.promptVersion), timing_ms: timing, ...extra,
   })); };
+  const lessonScope: LessonScope | null = lesson ? { title: lesson.title, objective: lesson.objective, focus: lesson.focus } : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
     const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
     // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
     // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
     const split = splitLearnAnswer(a.content);
-    const external = a.refs.filter(r => r?.kind === "external");
+    // SCHOLAR-RESEARCH-RELEVANCE-02: the saved record is never changed; what is SERVED is filtered against this lesson now (no AI).
+    const restored = restoreResearch(a.refs.filter(r => r?.kind === "external") as unknown as ExternalReference[], split.research, contextOf(withLessonScope({ topics, title: stepTitle, question: action === "ask" ? question : null }, lessonScope)), policy.scholarResearch.relevance);
+    const external = restored.references;
     return {
       action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
       sources: src.map(sourceOf),
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
-      research: external.length ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: null, references: external, ...(split.research ? { text: split.research } : {}) } : null,
+      research: restored.retrieved ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: restored.message, references: external, excludedCount: restored.excluded.length, ...(restored.text ? { text: restored.text } : {}) } : null,
       saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
     };
   };
@@ -473,7 +476,7 @@ export async function POST(req: Request) {
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
     // SCHOLAR-SOURCE-QUALITY-01: the result comes back GATED (source-quality.ts), so only abstracts that pass the HQ
     // source-quality rules can reach generation below; the rest are listed as reading only.
-    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery));
+    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery), lessonScope);
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   clock.mark("research");
@@ -488,6 +491,8 @@ export async function POST(req: Request) {
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
   // COMPETEN-RESEARCH-01: a research answer is its own operation; the notes part and the research part each count.
   let rr = r.ok ? r.research : null;
+  // SCHOLAR-RESEARCH-RELEVANCE-02: a summary that declares its own sources irrelevant cites nothing, shows nothing, saves nothing.
+  if (research && rr?.ok) { const w = withdrawDeclaredIrrelevant(research, rr.text); if (w !== research) { Object.assign(research, w); rr = null; } }
   if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
   // An Ask me / Challenge me answer must hold exactly ONE question: it is what the learner's reply is judged against (`clarify`).
   const asksQuestion = action === "ask_me" || action === "challenge";
@@ -563,6 +568,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
     research: research ? {
+      excludedCount: research.excluded?.length ?? 0,
       state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, references: externalReferences(research),
       message: research.message ?? (evidence.length && !rr ? "The research found did not add to this request, so nothing from it is shown." : !evidence.length && Object.keys(research.notUsed ?? {}).length ? RESEARCH_READING_ONLY
           : !evidence.length && research.items.length ? "Research found records without a verified abstract: listed as further reading only." : null),

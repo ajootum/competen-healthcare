@@ -221,6 +221,11 @@ export function decideIntent(rules: RiskPolicy, subject: ResolvedRiskSubject, ac
     return askOrConfirm(`intent:ambiguous_person:${d.rule}`, "real_patient", intent.clarifyAmbiguous);
   }
   // Unrecognised: as the policy says.
+  // Reading the learner's own uploaded material (slide pictures, exam pages): no learner words to recognise, so it is
+  // not an unrecognised QUESTION (unknown:no_subject / no_rule). Clinical educational floor; real-patient, identifier and
+  // every high-risk rule above have already run, and the extracted text is screened for identifiers before it is kept.
+  if (d.rule.startsWith("unknown:") && subject.intentContext?.surface === "material" && !(subject.requestText ?? "").trim())
+    return educational("intent:own_material", "The learner's own uploaded material being read, not a question.");
   if (d.rule === "unknown:no_rule") {
     if (intent.unknownHandling === "educational_if_study_intent" && f.questionFraming) return educational("intent:study_framing", "Not recognised by a rule, asked as a study question.");
     // Item 5: no study verb, but asked inside a lesson or material and about its content: study.

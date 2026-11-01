@@ -102,10 +102,10 @@ const ROUTE = read("src/app/api/individual/scholar/learn/act/route.ts");
 const CLIENT = read("src/app/individual/(app)/[experience]/(scholar)/study/_components/learn-client.tsx");
 /** True when every result learnResearch returns is gated, the route passes HQ's settings and generates from that result. */
 function learnGated(lr: string, route: string): boolean {
-  const returns = [...lr.matchAll(/^\s*return (.*fromResult\(.*)$/gm)].map(m => m[1]);
+  const returns = [...lr.matchAll(/^\s*(?:return|const g =) (.*fromResult\(.*)$/gm)].map(m => m[1]);
   return returns.length === 2 && returns.every(r => r.startsWith("gated(") && r.endsWith(", quality, lesson);"))
     && /export const gated = [\s\S]*?=>\s*gateResearch\(lesson \? relevant\(r, lesson\.ctx, lesson\.level\) : r, queryKeywords\(r\.query\), quality\);/.test(lr)
-    && /research = await learnResearch\([^;]*, qualityOf\(policy\.scholarRecovery\)\);/.test(route)
+    && /research = await learnResearch\([^;]*, qualityOf\(policy\.scholarRecovery\)(?:, lessonScope)?\);/.test(route)
     && /const evidence = \[\.\.\.\(research \? researchEvidence\(research\) : \[\]\)/.test(route)
     && (route.match(/\bresearch = /g) ?? []).length === 1; // the gated assignment, and nothing that replaces it
 }
@@ -116,7 +116,7 @@ describe("wiring: Learn cannot bypass the gate", () => {
     expect(CLIENT).toMatch(/RECOVERY_NOT_USED_LABEL\[r\.notUsed\]/); // the same student labels as recovery
   });
   it("PLANT: a fresh search returned ungated goes red", () => {
-    expect(learnGated(LR.replace("return gated({ ...fromResult(r), ...rules }, quality, lesson);", "return { ...fromResult(r), ...rules };"), ROUTE)).toBe(false);
+    expect(learnGated(LR.replace("const g = gated({ ...fromResult(r), ...rules }, quality, lesson);", "const g = { ...fromResult(r), ...rules };"), ROUTE)).toBe(false);
   });
   it("PLANT: a cached result returned ungated goes red", () => {
     expect(learnGated(LR.replace(/return gated\(\{ \.\.\.fromResult\(cachedResult\((.*)\), \.\.\.rules \}, quality, lesson\);/, "return { ...fromResult(cachedResult($1), ...rules };"), ROUTE)).toBe(false);
@@ -125,7 +125,7 @@ describe("wiring: Learn cannot bypass the gate", () => {
     expect(learnGated(LR.replace("gateResearch(lesson ? relevant(r, lesson.ctx, lesson.level) : r, queryKeywords(r.query), quality);", "r;"), ROUTE)).toBe(false);
   });
   it("PLANT: the route not passing HQ's settings, or re-assigning the research it generates from, goes red", () => {
-    expect(learnGated(LR, ROUTE.replace(", qualityOf(policy.scholarRecovery));", ");"))).toBe(false);
+    expect(learnGated(LR, ROUTE.replace(", qualityOf(policy.scholarRecovery), lessonScope);", ");"))).toBe(false);
     expect(learnGated(LR, ROUTE.replace("const evidence = [", "research = raw;\n  const evidence = ["))).toBe(false);
   });
 });

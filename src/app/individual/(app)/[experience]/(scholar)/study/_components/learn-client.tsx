@@ -80,7 +80,7 @@ type Reference = { tag: string; title: string; code: string | null; outcome: str
 type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null };
   /** SCHOLAR-SOURCE-QUALITY-01: why it is reading only (absent on answers saved before it). */
   notUsed?: keyof typeof RECOVERY_NOT_USED_LABEL | null };
-type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string };
+type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string; excludedCount?: number };
 const MODE_KEY = "scholar.learn.mode";
 const noSubscribe = () => () => {};
 const rememberedMode = (): string | null => { try { return window.localStorage.getItem(MODE_KEY); } catch { return null; } };
@@ -1508,6 +1508,7 @@ function ResearchBlock({ x }: { x: ResearchReply }) {
       {x.text && <div className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{x.text}</div>}
       {x.withheld && <p className="mt-1 text-[13px] text-gray-700">{x.withheld}</p>}
       {x.message && <p className="mt-1 text-[13px] text-gray-700">{x.message}</p>}
+      {!!x.excludedCount && <p className="mt-1 text-[12px] text-gray-600">{x.excludedCount === 1 ? "1 source was found but excluded as not relevant to this lesson." : `${x.excludedCount} sources were found but excluded as not relevant to this lesson.`}</p>}
       {support.length > 0 && (
         <div className="mt-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-indigo-900">Sources cited in this research summary</p>
