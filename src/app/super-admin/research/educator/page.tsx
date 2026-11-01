@@ -9,8 +9,10 @@ import { ActionButton, FieldsForm } from "../_components/ResearchControls";
 import { EditDraft, NewResource, SubmitDraft } from "../_components/KnowledgeControls";
 import { SnapshotView } from "../_components/SnapshotView";
 import { StationPreview, StatusChip } from "../_components/KnowledgeStatus";
+import { QuestionView } from "../_components/QuestionView";
 import { fieldsFromQuestionContent } from "@/lib/knowledge/question-format";
 import { listLearnerOffers } from "@/lib/knowledge/learner-offers";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 
 // /super-admin/research/educator -- CKRI educator knowledge improvement (COMPETEN-KNOWLEDGE-RESEARCH-01 K3, migration 442).
 // Guarded by hq.learning.ckri.educator. Only the measures the published policy releases to educators, as suppressed
@@ -26,7 +28,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
   const ctx = await requireHqCapability("hq.learning.ckri.educator");
   const sp = await searchParams;
   const [on, policy] = await Promise.all([ckriEnabled(ctx.admin), loadCkriPolicy(ctx.admin)]);
-  const [snaps, needs, resources, offers] = await Promise.all([listSnapshots(ctx.admin, policy.educatorMeasures), listNeeds(ctx.admin), listResources(ctx.admin), listLearnerOffers(ctx.admin)]);
+  const [snaps, needs, resources, offers] = await Promise.all([listSnapshots(ctx.admin, policy.educatorMeasures), listNeeds(ctx.admin), listResources(ctx.admin), loadIndividualPolicy(ctx.admin).then(ip => listLearnerOffers(ctx.admin, { expireDays: ip.scholarQuestionOfferDays }))]);
   const open = sp.snapshot && /^[0-9a-f-]{36}$/i.test(sp.snapshot) ? await readSnapshot(ctx.admin, sp.snapshot, policy.educatorMeasures) : null;
   // SQIE-COMPLETE-01: possible duplicates of each draft revision question, shown before it is submitted.
   const pool = resources?.some(r => r.kind === "revision_question" && r.versions.some(v => v.state === "draft")) ? await loadQuestionPool(ctx.admin) : null;
@@ -122,6 +124,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
                 <div key={v.id} className="ml-3 space-y-1 border-l border-gray-200 pl-3">
                   <div className="flex flex-wrap items-center gap-1.5"><span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} /><span>{v.origin === "ai_draft" ? "AI draft" : v.origin === "learner_contribution" ? "Drafted from a learner offer" : "Written by an educator"} · {v.educatorReviewed ? "educator-reviewed" : "not yet educator-reviewed"}{v.required !== null ? ` · ${v.approvals} of ${v.required} clinical approvals` : ""} · {v.competencies.length} competencies</span></div>
                   {r.kind === "osce_station" && v.state !== "draft" && <details><summary className="cursor-pointer font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
+                  {r.kind === "revision_question" && <details><summary className="cursor-pointer font-semibold text-teal-800">View question as a reviewer reads it</summary><div className="mt-1"><QuestionView content={v.content} /></div></details>}
                   {v.state === "draft" && <div className="flex flex-wrap gap-2">
                     <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} {...(r.kind === "revision_question" ? { questionFields: fieldsFromQuestionContent(v.content) } : {})} /></details>
                     <ActionButton endpoint={EP} body={{ action: "competencies_set", versionId: v.id }} label="Set competencies" done="Saved." note="CFCA competency ids" />
