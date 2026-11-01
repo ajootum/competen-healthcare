@@ -20,8 +20,10 @@
 //      completed, a practice answered) writes at once (coalesced over EVENT_COALESCE_MS); leaving the page (hidden, pagehide)
 //      flushes what is dirty with keepalive. One write in flight at a time; an unchanged position is not written again.
 //
-// ⚠ A bookmark, never assessment evidence. `unfinished` holds practice STATE only (which practice panel was open), never AI
-// output and never notes content.
+// ⚠ A bookmark, never assessment evidence. `unfinished` holds practice STATE only (which practice panel was open, and the learner's own
+// recall / quick-check marks as short codes per lesson), never AI output and never notes content.
+
+import { cleanMarks, type InlineMarks } from "./learn-inline";
 
 export const SYNC_INTERVAL_MS = 15_000;
 export const EVENT_COALESCE_MS = 300;
@@ -32,7 +34,8 @@ export type PositionDraft = {
   step: number; furthestStep: number; cardId: string; sectionChunkId: string | null; offsetHint: number | null;
   lastCompletedActivity: string | null; lastCompletedAt: string | null; unfinished: Unfinished | null;
 };
-export type Unfinished = { v: 1; practiceOpen?: number | null };
+/** `recall` / `quick`: SCHOLAR-INLINE-CHECKS-01, the learner's own recall rating and quick-check result per lesson step (learn-inline.ts; codes only). */
+export type Unfinished = { v: 1; practiceOpen?: number | null } & InlineMarks;
 export type PositionPut = PositionDraft & { deviceId: string; clientSeq: number; baseRevision: number | null; clientUpdatedAt: string };
 export type ServerPosition = PositionDraft & { deviceId: string; clientSeq: number; clientUpdatedAt: string; revision: number; updatedAt: string };
 export type WriteReason = "first" | "same_device" | "informed" | "progress" | "stale";
@@ -83,7 +86,10 @@ export const MAX_CLOCK_AHEAD_MS = 10 * 60_000;
 export function cleanUnfinished(v: unknown): Unfinished | null {
   if (!v || typeof v !== "object" || Array.isArray(v)) return null;
   const p = (v as Record<string, unknown>).practiceOpen;
-  return int(p, 0, 10000) ? { v: 1, practiceOpen: p as number } : null;
+  const marks = cleanMarks(v);
+  const out: Unfinished = { v: 1, ...marks };
+  if (int(p, 0, 10000)) out.practiceOpen = p as number;
+  return out.practiceOpen !== undefined || marks.recall || marks.quick ? out : null;
 }
 
 /** Pure. A PUT body as a position write, or why not. `nowMs` is the server's clock (an app clock, compared with device time only to refuse the far future). */
@@ -141,7 +147,7 @@ export function positionFromRow(r: unknown): ServerPosition | null {
 export function mergeResume(input: {
   steps: readonly number[]; fallback: number;
   local: { anchor: number; revealedUpTo: number; updatedAt: string } | null; server: ServerPosition | null;
-}): { anchor: number; revealedUpTo: number; from: "server" | "device" | "session"; practiceOpen: number | null } {
+}): { anchor: number; revealedUpTo: number; from: "server" | "device" | "session"; practiceOpen: number | null; marks: InlineMarks } {
   const last = Math.max(0, input.steps.length - 1);
   const clamp = (i: number) => Math.max(0, Math.min(last, Number.isInteger(i) ? i : 0));
   const idx = (stepNo: number) => { const i = input.steps.indexOf(stepNo); return i >= 0 ? i : -1; };
@@ -152,7 +158,9 @@ export function mergeResume(input: {
   const anchor = serverWins ? serverAt : input.local ? clamp(input.local.anchor) : clamp(input.fallback);
   const revealedUpTo = clamp(Math.max(anchor, input.local?.revealedUpTo ?? 0, serverFar));
   const practiceStep = serverWins ? s?.unfinished?.practiceOpen ?? null : null;
-  return { anchor, revealedUpTo, from: serverWins ? "server" : input.local ? "device" : "session", practiceOpen: practiceStep !== null && idx(practiceStep) >= 0 ? practiceStep : null };
+  return { anchor, revealedUpTo, from: serverWins ? "server" : input.local ? "device" : "session", practiceOpen: practiceStep !== null && idx(practiceStep) >= 0 ? practiceStep : null,
+    // The inline-check marks are the learner's own words on a lesson: read whichever copy is newer, never dropped for a position.
+    marks: cleanMarks(s?.unfinished) };
 }
 
 // ── WHEN THE PAGE WRITES ──

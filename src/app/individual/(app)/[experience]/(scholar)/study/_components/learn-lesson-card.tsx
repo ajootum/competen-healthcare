@@ -109,22 +109,25 @@ export function LessonList({ rows, onSelect, label }: { rows: LessonRow[]; onSel
  * After the ACTIVE lesson: Previous, and Next lesson (which opens it saved, or in Guided learning teaches it, in one
  * action). Never reached by scrolling alone: moving on is the learner's choice. The last lesson offers Finish instead.
  */
-export function ContinueCard({ accent, next, onContinue, onPrevious, onDeeper, onPractise, otherTopicHref, last, completed, onFinish, onReview, disabled }: {
+export function ContinueCard({ accent, next, onContinue, onPrevious, onDeeper, onPractise, otherTopicHref, last, completed, onFinish, onReview, disabled, blockedReason }: {
   accent: string; next: { number: number; title: string } | null; onContinue: () => void; onPrevious?: () => void; onDeeper?: () => void; onPractise: () => void;
   otherTopicHref: string; last: boolean; completed: boolean; onFinish: () => void; onReview: () => void; disabled?: boolean;
+  /** The required recall check is not finished: Next lesson and Finish wait, with this reason beside them. Everything else stays usable. */
+  blockedReason?: string;
 }) {
   return (
     <section aria-labelledby="journey-next-h" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
       <h3 id="journey-next-h" className="text-[15px] font-bold text-gray-900">{last ? (completed ? "Session completed" : "You have reached the last lesson") : "What next?"}</h3>
       {completed && <p className="mt-1 text-[13.5px] text-gray-700">You can still revisit any lesson. Your progress here is a learning record for you, not an assessment.</p>}
+      {blockedReason && <p id="journey-wait-why" role="status" className="mt-2 text-[13.5px] font-semibold text-gray-900">{blockedReason}</p>}
       <div className="mt-3 flex flex-wrap gap-2">
         {!last && next && (
-          <button type="button" className={`${btn} max-w-full`} style={{ background: accent }} onClick={onContinue} disabled={disabled}>
+          <button type="button" className={`${btn} max-w-full`} style={{ background: accent }} onClick={onContinue} disabled={disabled || !!blockedReason} aria-describedby={blockedReason ? "journey-wait-why" : undefined}>
             <span className="min-w-0 break-words">Next lesson: {next.number}. {next.title}</span>
           </button>
         )}
         {onPrevious && <button type="button" className={ghost} onClick={onPrevious} disabled={disabled}>Previous lesson</button>}
-        {last && !completed && <button type="button" className={btn} style={{ background: accent }} onClick={onFinish}>Finish session</button>}
+        {last && !completed && <button type="button" className={btn} style={{ background: accent }} onClick={onFinish} disabled={!!blockedReason} aria-describedby={blockedReason ? "journey-wait-why" : undefined}>Finish session</button>}
         {last && <button type="button" className={ghost} onClick={onReview}>Review what you covered</button>}
         {onDeeper && <button type="button" className={ghost} onClick={onDeeper} disabled={disabled}>Go deeper</button>}
         <button type="button" className={ghost} onClick={onPractise}>Practise this lesson</button>

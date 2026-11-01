@@ -101,7 +101,11 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams on, 15 questions, at most 30, every adaptive format (no flashcards).
       scholarAdaptiveExams: "on", scholarAdaptiveLength: 15, scholarAdaptiveMaxLength: 30, scholarAdaptiveFormats: ["mcq", "mrq", "short", "match", "sequence", "structured"],
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
-      scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarLearningLibrary: "on", scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
+      scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarLearningLibrary: "on",
+      // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
+      scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
+      scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
+      scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
       scholarStudySessions: false,
@@ -350,4 +354,29 @@ it("SCHOLAR-PAI-RESEARCH-01: the sufficiency threshold is HQ's choice of 0.5, 0.
   for (const v of ["0.9", 0.7, "", null]) expect(resolvePolicy([{ config_path: path, published: { value: v } }]).scholarRecovery.sufficiency).toBe(0.6);
   expect(validateDraft("scholar_recovery_sufficiency", "0.7")).toMatchObject({ ok: true, settings: { value: "0.7" } });
   expect(validateDraft("scholar_recovery_sufficiency", "0.95").ok).toBe(false);
+});
+
+it("SCHOLAR-INLINE-CHECKS-01: the six inline-check keys default to the lightweight set and clamp to their options", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({
+    scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180,
+    scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
+    scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
+  });
+  expect(p("scholar_learn_check_every", "3").scholarLearnCheckEvery).toBe("3");
+  expect(p("scholar_learn_check_every", "journey_end").scholarLearnCheckEvery).toBe("journey_end");
+  expect(p("scholar_learn_check_every", "7").scholarLearnCheckEvery).toBe("2");
+  expect(p("scholar_learn_check_required", "optional").scholarLearnCheckRequired).toBe("optional");
+  expect(p("scholar_learn_check_required", "never").scholarLearnCheckRequired).toBe("required");
+  expect(p("scholar_learn_save_missed_cards", "off").scholarLearnSaveMissedCards).toBe("off");
+  expect(p("scholar_learn_inline_recall", "off").scholarLearnInlineRecall).toBe("off");
+  expect(p("scholar_learn_inline_recall_placement", "every_lesson").scholarLearnInlineRecallPlacement).toBe("every_lesson");
+  expect(p("scholar_learn_inline_recall_placement", "lesson_end").scholarLearnInlineRecallPlacement).toBe("lesson_end");
+  expect(p("scholar_learn_inline_recall_placement", "substantial").scholarLearnInlineRecallPlacement).toBe("substantial");
+  expect(p("scholar_learn_inline_recall_placement", "never").scholarLearnInlineRecallPlacement).toBe("substantial");
+  expect(p("scholar_learn_inline_recall_min_words", 250).scholarLearnInlineRecallMinWords).toBe(250);
+  expect(p("scholar_learn_inline_recall_min_words", 5).scholarLearnInlineRecallMinWords).toBe(40);
+  expect(p("scholar_learn_inline_skippable", "off").scholarLearnInlineSkippable).toBe("off");
+  expect(validateDraft("scholar_learn_inline_checks", "off")).toMatchObject({ ok: true });
+  expect(validateDraft("scholar_learn_inline_application", "sometimes").ok).toBe(false);
 });

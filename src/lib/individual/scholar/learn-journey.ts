@@ -31,10 +31,15 @@
 // assessment evidence or a Passport record.
 
 import { OPENABLE_ACTIONS } from "./guided-learn";
+import type { QuickMark, RecallMark } from "./learn-inline";
 
 export type LessonState = "outline" | "saved" | "taught" | "checked";
 export type ActivityKind = "read" | "deeper" | "examples" | "practised" | "applied";
-export type Activities = Partial<Record<ActivityKind, boolean>> & { verdict?: string | null };
+/**
+ * `recalled` / `quickChecked` (SCHOLAR-INLINE-CHECKS-01): the learner's own recall rating on the inline card, and the result of the
+ * quick check marked by code. Neither is a score or verified competence (learn-inline.ts).
+ */
+export type Activities = Partial<Record<ActivityKind, boolean>> & { verdict?: string | null; recalled?: RecallMark; quickChecked?: QuickMark };
 
 export type JourneyState = {
   count: number;
@@ -82,6 +87,8 @@ export type JourneyEvent =
   | { type: "teachEnded"; index: number }
   | { type: "verdict"; index: number; value: string }
   | { type: "activity"; index: number; kind: ActivityKind }
+  /** An inline check's outcome (a recall rating, a quick-check result). Written at once; never a request. */
+  | { type: "mark"; index: number; recalled?: RecallMark; quickChecked?: QuickMark }
   | { type: "prefetchEnded" };
 
 export type JourneyOptions = { prepareNext: boolean };
@@ -234,6 +241,15 @@ export function journeyStep(s: JourneyState, e: JourneyEvent, o: JourneyOptions)
       const activities = s.activities.slice(); activities[e.index] = { ...activities[e.index], [e.kind]: true };
       return { state: { ...s, activities }, effects: [] };
     }
+    case "mark": {
+      if (!valid(e.index)) return none;
+      const activities = s.activities.slice();
+      const cur = activities[e.index] ?? {};
+      // A skip never replaces a rating the learner already gave.
+      const recalled = e.recalled && !(e.recalled === "skipped" && cur.recalled && cur.recalled !== "skipped") ? e.recalled : cur.recalled;
+      activities[e.index] = { ...cur, ...(recalled ? { recalled } : {}), ...(e.quickChecked ? { quickChecked: e.quickChecked } : {}) };
+      return { state: { ...s, activities }, effects: [] };
+    }
     case "prefetchEnded": return s.prefetching === null ? none : { state: { ...s, prefetching: null }, effects: [] };
   }
 }
@@ -263,22 +279,24 @@ const TEACH_FAMILY: readonly string[] = OPENABLE_ACTIONS;
 export function lessonFacts(x: {
   actions?: readonly string[]; verdict?: string | null; saved?: boolean; attempts?: number; visited?: boolean;
   live?: Activities; shown?: boolean; check: CheckRule;
+  /** A required recall check this lesson belongs to is not rated yet (learn-inline.ts): the lesson is not counted complete. */
+  recallPending?: boolean;
 }): LessonFacts {
   const actions = x.actions ?? [], live = x.live ?? {};
   const verdict = live.verdict ?? x.verdict ?? null;
   const read = !!x.visited || !!live.read || !!x.shown || actions.some(a => a !== "skip");
   const taught = !!x.saved || !!x.shown || actions.some(a => TEACH_FAMILY.includes(a));
   const assessed: Assessed = verdict && verdict in VERDICT_LABEL ? verdict as Assessed : (x.attempts ?? 0) > 0 || live.practised ? "practised" : null;
-  const completed = taught && read && (x.check === "prompt" ? !!verdict : true);
+  const completed = taught && read && !x.recallPending && (x.check === "prompt" ? !!verdict : true);
   return { read, taught, saved: !!x.saved || !!x.shown, completed, assessed };
 }
 
 /** Pure. One lesson's facts inside the journey: the server records merged with what this visit did. */
-export function journeyFacts(s: JourneyState, index: number, input: { progress?: StepProgress; record?: LessonRecord | null; visited?: boolean; check: CheckRule }): LessonFacts {
+export function journeyFacts(s: JourneyState, index: number, input: { progress?: StepProgress; record?: LessonRecord | null; visited?: boolean; check: CheckRule; recallPending?: boolean }): LessonFacts {
   return lessonFacts({
     // `hasSaved` starts from the records (createJourney) and is cleared only when the route says nothing is saved after all.
     actions: input.progress?.actions, verdict: input.progress?.verdict ?? null, saved: !!s.hasSaved[index],
-    attempts: input.record?.attempts ?? 0, visited: input.visited, live: s.activities[index], shown: s.lessons[index] === "saved" || s.lessons[index] === "taught", check: input.check,
+    attempts: input.record?.attempts ?? 0, visited: input.visited, live: s.activities[index], shown: s.lessons[index] === "saved" || s.lessons[index] === "taught", check: input.check, recallPending: input.recallPending,
   });
 }
 
@@ -373,6 +391,10 @@ export function parseSavedJourney(raw: string | null | undefined, count: number)
         for (const k of KINDS) if ((a as Activities)[k] === true) out[k] = true;
         const v = (a as Activities).verdict;
         if (typeof v === "string" && v in VERDICT_LABEL) out.verdict = v;
+        const rc = (a as Activities).recalled;
+        if (rc === "remembered" || rc === "again" || rc === "skipped") out.recalled = rc;
+        const qc = (a as Activities).quickChecked;
+        if (qc === "correct" || qc === "wrong") out.quickChecked = qc;
       }
       return out;
     });

@@ -94,11 +94,11 @@ describe("where the workspace opens", () => {
   const steps = [0, 1, 2, 3, 4, 5, 6, 7];
   it("the server wins when its device time is later than this device's copy", () => {
     const r = mergeResume({ steps, fallback: 0, local: { anchor: 2, revealedUpTo: 3, updatedAt: "2026-10-31T09:00:00.000Z" }, server: stored({ unfinished: { v: 1, practiceOpen: 5 } }) });
-    expect(r).toEqual({ anchor: 5, revealedUpTo: 6, from: "server", practiceOpen: 5 });
+    expect(r).toEqual({ anchor: 5, revealedUpTo: 6, from: "server", practiceOpen: 5, marks: {} });
   });
   it("this device wins when its copy is later, and still reveals as far as the server knows", () => {
     const r = mergeResume({ steps, fallback: 0, local: { anchor: 2, revealedUpTo: 3, updatedAt: "2026-10-31T12:00:00.000Z" }, server: stored() });
-    expect(r).toEqual({ anchor: 2, revealedUpTo: 6, from: "device", practiceOpen: null });
+    expect(r).toEqual({ anchor: 2, revealedUpTo: 6, from: "device", practiceOpen: null, marks: {} });
   });
   it("no server position (790 absent): the device copy, else the session's step", () => {
     expect(mergeResume({ steps, fallback: 4, local: null, server: null })).toMatchObject({ anchor: 4, from: "session" });
