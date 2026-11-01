@@ -57,27 +57,27 @@ describe("Learn Research & Explain: learnResearch leaves gated (cache path, thro
     // What the Learn route gives its model (route.ts: researchEvidence(research)).
     expect(researchEvidence(r).map(e => e.title)).toEqual([review.title]);
     // What the Learn route shows and saves (route.ts: externalReferences(research)).
+    // SCHOLAR-RESEARCH-RELEVANCE-01: the asymptomatic-bacteriuria guideline names none of the lesson's concepts, so it is no longer shown at all.
     expect(externalReferences(r).map(x => [x.title.slice(0, 14), x.tag, x.evidence, x.notUsed, x.excerpt === null])).toEqual([
       ["Acute pyelonep", "E1", true, null, false],
-      ["Clinical Pract", null, false, "off_topic", true],
+      ["Emphysematous ", null, false, "type_excluded", true], // ranked above the untyped item: authority breaks the tie
       ["Acute Pyelonep", null, false, "not_indexed", true],
-      ["Emphysematous ", null, false, "type_excluded", true],
     ]);
   });
   it("without the settings argument the defaults still gate (no caller can get the engine's raw list)", async () => {
     const r = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] });
     expect(researchEvidence(r).map(e => e.title)).toEqual([review.title]);
   });
-  it("HQ settings relax exactly as named: on topic off lets the guideline ground; any_verified alone does not let the untyped OpenAlex item", async () => {
+  it("HQ settings relax exactly as named: on topic off adds nothing the relevance filter has dropped; any_verified alone does not let the untyped OpenAlex item", async () => {
     const off = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] }, null, null, { ...DEFAULT_QUALITY, evidenceOnTopic: "off" });
-    expect(researchEvidence(off).map(e => e.title)).toEqual([asb.title, review.title]);
+    expect(researchEvidence(off).map(e => e.title)).toEqual([review.title]);
     const any = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] }, null, null, { ...DEFAULT_QUALITY, evidenceIndexed: "any_verified" });
     expect(externalReferences(any).find(x => x.url === ayurveda.url)?.notUsed).toBe("type_unknown");
   });
   it("when nothing passes: no abstract reaches generation, and every item is still listed as reading", async () => {
     const r = await learnResearch(ctx([asb, ayurveda, caseReport]), P, { question: Q, topics: [] });
     expect(researchEvidence(r)).toEqual([]);
-    expect(externalReferences(r).map(x => x.evidence)).toEqual([false, false, false]);
+    expect(externalReferences(r).map(x => x.evidence)).toEqual([false, false]);
   });
 });
 
@@ -103,8 +103,8 @@ const CLIENT = read("src/app/individual/(app)/[experience]/(scholar)/study/_comp
 /** True when every result learnResearch returns is gated, the route passes HQ's settings and generates from that result. */
 function learnGated(lr: string, route: string): boolean {
   const returns = [...lr.matchAll(/^\s*return (.*fromResult\(.*)$/gm)].map(m => m[1]);
-  return returns.length === 2 && returns.every(r => r.startsWith("gated(") && r.endsWith(", quality);"))
-    && /export const gated = \([^)]*\)[^=]*=> gateResearch\(r, queryKeywords\(r\.query\), quality\);/.test(lr)
+  return returns.length === 2 && returns.every(r => r.startsWith("gated(") && r.endsWith(", quality, lesson);"))
+    && /export const gated = [\s\S]*?=>\s*gateResearch\(lesson \? relevant\(r, lesson\.ctx, lesson\.level\) : r, queryKeywords\(r\.query\), quality\);/.test(lr)
     && /research = await learnResearch\([^;]*, qualityOf\(policy\.scholarRecovery\)\);/.test(route)
     && /const evidence = \[\.\.\.\(research \? researchEvidence\(research\) : \[\]\)/.test(route)
     && (route.match(/\bresearch = /g) ?? []).length === 1; // the gated assignment, and nothing that replaces it
@@ -116,13 +116,13 @@ describe("wiring: Learn cannot bypass the gate", () => {
     expect(CLIENT).toMatch(/RECOVERY_NOT_USED_LABEL\[r\.notUsed\]/); // the same student labels as recovery
   });
   it("PLANT: a fresh search returned ungated goes red", () => {
-    expect(learnGated(LR.replace("return gated({ ...fromResult(r), ...rules }, quality);", "return { ...fromResult(r), ...rules };"), ROUTE)).toBe(false);
+    expect(learnGated(LR.replace("return gated({ ...fromResult(r), ...rules }, quality, lesson);", "return { ...fromResult(r), ...rules };"), ROUTE)).toBe(false);
   });
   it("PLANT: a cached result returned ungated goes red", () => {
-    expect(learnGated(LR.replace(/return gated\(\{ \.\.\.fromResult\(cachedResult\((.*)\), \.\.\.rules \}, quality\);/, "return { ...fromResult(cachedResult($1), ...rules };"), ROUTE)).toBe(false);
+    expect(learnGated(LR.replace(/return gated\(\{ \.\.\.fromResult\(cachedResult\((.*)\), \.\.\.rules \}, quality, lesson\);/, "return { ...fromResult(cachedResult($1), ...rules };"), ROUTE)).toBe(false);
   });
   it("PLANT: gated() made a no-op goes red", () => {
-    expect(learnGated(LR.replace("=> gateResearch(r, queryKeywords(r.query), quality);", "=> r;"), ROUTE)).toBe(false);
+    expect(learnGated(LR.replace("gateResearch(lesson ? relevant(r, lesson.ctx, lesson.level) : r, queryKeywords(r.query), quality);", "r;"), ROUTE)).toBe(false);
   });
   it("PLANT: the route not passing HQ's settings, or re-assigning the research it generates from, goes red", () => {
     expect(learnGated(LR, ROUTE.replace(", qualityOf(policy.scholarRecovery));", ");"))).toBe(false);

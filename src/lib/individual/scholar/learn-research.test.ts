@@ -110,7 +110,7 @@ describe("references: real records only, labelled, saved apart", () => {
 
 describe("policy: Scholar's own settings; whether research can run is the engine's", () => {
   it("defaults to notes only, with the learner limits", () => {
-    expect(resolvePolicy([]).scholarResearch).toEqual({ modes: ["notes"], dailyMax: 5, dailyCostCents: 25 });
+    expect(resolvePolicy([]).scholarResearch).toEqual({ modes: ["notes"], dailyMax: 5, dailyCostCents: 25, relevance: "standard" });
   });
   it("notes is always offered; research is SHOWN only while the engine has it operational", () => {
     const modes = { config_path: policyPath("scholar_learn_source_modes"), published: { enabled: ["research", "library"] } };
