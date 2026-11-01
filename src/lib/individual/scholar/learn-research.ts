@@ -8,7 +8,7 @@ import type { ScholarResearchPolicy } from "../policy";
 import { LEARN_RESEARCH_OPERATION, type ResearchEvidence } from "./generation";
 import { audit } from "./http";
 import { DEFAULT_QUALITY, gateResearch, queryKeywords, type EvidenceQuality, type NotUsedByIndex, type NotUsedReason } from "./source-quality";
-import { DEFAULT_RELEVANCE, buildResearchQuery, rankRelevant, type LessonContext, type RelevanceLevel } from "./research-relevance";
+import { DEFAULT_RELEVANCE, buildResearchQuery, declaresIrrelevant, exclusionReason, lessonConcepts, lessonVocabulary, rankRelevant, scoreRelevance, type ExcludedSource, type LessonContext, type RelevanceLevel } from "./research-relevance";
 import { LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, aiSpendToday, learnResearchToday, readResearchCache, writeResearchCache } from "./store";
 
 // ── LEARN: RESEARCH & EXPLAIN ── COMPETEN-RESEARCH-01 + ADDENDUM V2 ─────────────────────────────────────────────────────
@@ -35,6 +35,14 @@ export type LearnResearch = {
    * that passed Scholar's source-quality gate (learnResearch applies it), never the engine's raw list.
    */
   evidence: number[];
+  /**
+   * SCHOLAR-RESEARCH-RELEVANCE-02: what the relevance filter did. `retrieved` is what the providers returned, `accepted` what
+   * remains in `items` (the only sources that reach the learner), `excluded` the rest with public ids and a reason code.
+   * Absent until the filter has run (an engine result that never went through `relevant`).
+   */
+  retrieved?: number;
+  accepted?: number;
+  excluded?: ExcludedSource[];
   /** SCHOLAR-SOURCE-QUALITY-01: engine evidence the gate stopped, by item index, with the rule it failed. Reading only. */
   notUsed?: NotUsedByIndex;
   calls: ProviderCall[];
@@ -91,6 +99,20 @@ export function narrowPlan(plan: ResearchPlan, n: ResearchNarrowing): ResearchPl
 export type ResearchInput = { question?: string | null; topics: readonly string[]; title?: string | null; objective?: string | null; concepts?: readonly string[] | null };
 
 /**
+ * SCHOLAR-RESEARCH-RELEVANCE-02: the lesson a request is for, from the lesson outline (title, objective, focus). When given,
+ * it REPLACES the material-wide title and topics: a deck about quality improvement and sepsis must not search sepsis for a
+ * lesson on the Donabedian model. Without it (an Ask, which has no lesson) the request stands as it was.
+ */
+export type LessonScope = { title?: string | null; objective?: string | null; focus?: readonly string[] | null };
+export function withLessonScope(input: ResearchInput, scope: LessonScope | null | undefined): ResearchInput {
+  if (!scope || !(scope.title || scope.objective || scope.focus?.length)) return input;
+  const focus = scope.focus?.length ? scope.focus : null;
+  return { ...input, title: scope.title ?? input.title ?? null, objective: scope.objective ?? input.objective ?? null, concepts: focus ?? input.concepts ?? null, topics: focus ?? [] };
+}
+/** Pure. The lesson context relevance is judged against, for a request. */
+export const contextOf = (input: ResearchInput): LessonContext => ({ title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question });
+
+/**
  * SCHOLAR-RESEARCH-RELEVANCE-01. The query that leaves Competen, built from the lesson's own distinctive concepts (quoted
  * phrases first), not from generic topic words. Privacy as researchQuery: refused if the source text may identify a patient.
  * Falls back to the engine's plain keyword query when the lesson yields no concept (a question of generic words only).
@@ -109,8 +131,9 @@ export function lessonQuery(input: ResearchInput): ReturnType<typeof researchQue
  * `quality`: SCHOLAR-SOURCE-QUALITY-01 -- every result (fresh or cached) leaves here GATED: only items passing the
  * source-quality rules remain evidence; the rest are reading. Every Scholar caller (Learn, evidence recovery) gets this.
  */
-export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: ResearchInput, actionId: string | null = null, narrow: ResearchNarrowing | null = null, quality: EvidenceQuality = DEFAULT_QUALITY): Promise<LearnResearch> {
-  const lesson = { ctx: { title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question } as LessonContext, level: (p.relevance ?? DEFAULT_RELEVANCE) as RelevanceLevel };
+export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: ResearchInput, actionId: string | null = null, narrow: ResearchNarrowing | null = null, quality: EvidenceQuality = DEFAULT_QUALITY, scope: LessonScope | null = null): Promise<LearnResearch> {
+  input = withLessonScope(input, scope);
+  const lesson = { ctx: contextOf(input), level: (p.relevance ?? DEFAULT_RELEVANCE) as RelevanceLevel };
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
   const q = lessonQuery(input);
@@ -137,10 +160,14 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
     cache: { read: async () => null, write: (k, items, providers, days) => writeResearchCache(ctx.admin, { key: k, provider: `holdings:${providers}`, policyVersion: `research:${Object.values(plan.registry).filter(x => x.status === "active").map(x => `${x.id}@${x.version}`).join(",")}`.slice(0, 200), sources: items as never, searches: 1, days }) },
     usage,
   });
-  // One row per fresh search: counts and codes only, never the query text. It is what the learner's daily limit counts.
+  const g = gated({ ...fromResult(r), ...rules }, quality, lesson);
+  // One row per fresh search: counts and codes only, never the query text or a title. It is what the learner's daily limit
+  // counts. SCHOLAR-RESEARCH-RELEVANCE-02: it also says what the relevance filter did (retrieved / accepted, and each
+  // excluded source as its public id and reason code), so a bad retrieval can be diagnosed without any learner text.
   await audit(ctx, LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, null,
-    { action_id: actionId, query_chars: q.query.length, state: r.state, items: r.items.length, evidence: r.evidence.length, calls: r.calls, codes: r.codes });
-  return gated({ ...fromResult(r), ...rules }, quality, lesson);
+    { action_id: actionId, query_chars: q.query.length, state: r.state, items: r.items.length, evidence: r.evidence.length, calls: r.calls, codes: r.codes,
+      retrieved: g.retrieved ?? r.items.length, accepted: g.accepted ?? g.items.length, excluded: (g.excluded ?? []).slice(0, 20).map(x => ({ pmid: x.pmid, doi: x.doi, reason: x.reason })) });
+  return g;
 }
 
 /**
@@ -156,16 +183,70 @@ export const gated = (r: LearnResearch, quality: EvidenceQuality = DEFAULT_QUALI
  * indexes follow. Idempotent. When items were found and none is relevant, the state is not_found with the plain sentence.
  */
 export function relevant(r: LearnResearch, ctx: LessonContext, level: RelevanceLevel = DEFAULT_RELEVANCE): LearnResearch {
-  if (!r.items.length) return r;
-  const { kept, dropped } = rankRelevant(r.items, ctx, level);
-  if (!dropped && kept.every((k, i) => k.index === i)) return r;
+  if (!r.items.length) return r.retrieved === undefined ? { ...r, retrieved: 0, accepted: 0, excluded: [] } : r;
+  const { kept, dropped, rejected } = rankRelevant(r.items, ctx, level);
+  const retrieved = r.retrieved ?? r.items.length;
+  const excluded: ExcludedSource[] = [...(r.excluded ?? []), ...rejected.map(x => ({ pmid: x.item.pmid, doi: x.item.doi, title: x.item.title, reason: x.reason }))];
+  if (!dropped && kept.every((k, i) => k.index === i)) return r.retrieved !== undefined ? r : { ...r, retrieved, accepted: kept.length, excluded };
   const at = new Map(kept.map((k, n) => [k.index, n]));
   const evidence = kept.filter(k => r.evidence.includes(k.index)).map(k => at.get(k.index)!);
   const notUsed: NotUsedByIndex = {};
   for (const [i, why] of Object.entries(r.notUsed ?? {})) if (at.has(Number(i))) notUsed[at.get(Number(i))!] = why;
   const codes = dropped ? [...r.codes, `relevance_dropped_${dropped}`] : r.codes;
   const none = !kept.length;
-  return { ...r, items: kept.map(k => k.item), evidence, notUsed, codes, state: none ? "not_found" : r.state, message: none ? NO_RELEVANT_RESEARCH : r.message };
+  return { ...r, items: kept.map(k => k.item), evidence, notUsed, codes, state: none ? "not_found" : r.state, message: none ? NO_RELEVANT_RESEARCH : r.message, retrieved, accepted: kept.length, excluded };
+}
+
+/**
+ * SCHOLAR-RESEARCH-RELEVANCE-02, pure. A research summary that says its own sources do not bear on the lesson ("the
+ * abstracts are not relevant to the topic ... no findings can be meaningfully added [E1] [E2]") must cite nothing: every
+ * source is excluded as model_declared_irrelevant and the plain sentence is shown instead. Otherwise returned unchanged.
+ */
+export function withdrawDeclaredIrrelevant(r: LearnResearch, summary: string | null | undefined): LearnResearch {
+  if (!r.items.length || !declaresIrrelevant(summary)) return r;
+  const excluded: ExcludedSource[] = [...(r.excluded ?? []), ...r.items.map(x => ({ pmid: x.pmid, doi: x.doi, title: x.title, reason: "model_declared_irrelevant" as const }))];
+  return { ...r, items: [], evidence: [], notUsed: {}, state: "not_found", message: NO_RELEVANT_RESEARCH, codes: [...r.codes, "relevance_model_declared_irrelevant"], retrieved: r.retrieved ?? r.items.length, accepted: 0, excluded };
+}
+
+/** What a saved research part looks like when served: only what is relevant to the lesson now. */
+export type RestoredResearch = { references: ExternalReference[]; text: string | null; message: string | null; excluded: ExcludedSource[]; retrieved: number; accepted: number };
+
+/**
+ * SCHOLAR-RESEARCH-RELEVANCE-02, pure, no AI. A saved teach/research artefact is an immutable record and is never changed;
+ * it is FILTERED when served. Its stored external references are judged against the lesson: a source the relevance rules
+ * refuse (or every source, when the saved summary itself declares them irrelevant) is left out of the sources, its excerpt
+ * goes with it, and its [E n] tags are taken out of the text -- a sentence that cited only excluded sources is removed.
+ * References saved after the filter existed carry `relevanceChecked` and are not re-scored (their stored excerpt is shorter
+ * than the abstract they were judged on). With no source left the research part is the plain no-research sentence and the
+ * notes-based teaching stands unchanged. A lesson that yields no concept cannot judge anything: nothing is removed then.
+ */
+export function restoreResearch(external: readonly ExternalReference[], text: string | null | undefined, ctx: LessonContext, level: RelevanceLevel = DEFAULT_RELEVANCE): RestoredResearch {
+  const declared = declaresIrrelevant(text);
+  const concepts = lessonConcepts(ctx), vocab = lessonVocabulary(ctx);
+  const excluded: ExcludedSource[] = [], kept: ExternalReference[] = [], gone = new Set<string>();
+  for (const ref of external) {
+    let reason: ExcludedSource["reason"] | null = null;
+    if (declared) reason = "model_declared_irrelevant";
+    else if (!ref.relevanceChecked && concepts.length) {
+      const s = scoreRelevance({ title: ref.title, abstract: ref.excerpt }, concepts, vocab, level);
+      if (!s.pass) reason = exclusionReason(s);
+    }
+    if (reason) { excluded.push({ pmid: ref.pmid, doi: ref.doi, title: ref.title, reason }); if (ref.tag) gone.add(ref.tag); } else kept.push(ref);
+  }
+  let shown: string | null = text?.trim() ? text : null;
+  if (shown && gone.size) {
+    // Line by line (a bullet is a unit), then sentence by sentence. A unit whose citations are ALL excluded goes with them;
+    // a unit citing a mix keeps its accepted tags only. Surviving tags keep their numbers: a claim never moves to another source.
+    const unit = (sen: string) => {
+      const tags = [...sen.matchAll(/\[(E\d+)\]/g)].map(m => m[1]);
+      if (tags.length && tags.every(t => gone.has(t))) return "";
+      return sen.replace(/\s*\[(E\d+)\]/g, (m, t: string) => (gone.has(t) ? "" : m));
+    };
+    shown = shown.split("\n").map(line => (line.match(/[^.!?]+[.!?]+(?:\s*\[E\d+\])*\s*|[^.!?]+$/g) ?? [line]).map(unit).join("").trimEnd()).filter(l => l.trim()).join("\n").trim() || null;
+  }
+  // A summary with no surviving cited source has nothing to stand on.
+  if (shown && (!kept.some(k => k.tag) || !/\[E\d+\]/.test(shown))) shown = null;
+  return { references: kept, text: shown, message: kept.length ? null : NO_RELEVANT_RESEARCH, excluded, retrieved: external.length, accepted: kept.length };
 }
 
 function fromResult(r: ResearchResult): Omit<LearnResearch, "excerptChars" | "furtherReading" | "licensing"> & Partial<LearnResearch> {
@@ -185,6 +266,8 @@ export type ExternalReference = {
   notUsed: NotUsedReason | null;
   /** SCHOLAR-SQIE-02: PubMed Central's open-access link and licence, when it was asked and has one. Never fetched. */
   openAccess: OpenAccess | null;
+  /** SCHOLAR-RESEARCH-RELEVANCE-02: set when the relevance filter judged this source against its lesson before it was saved. */
+  relevanceChecked?: boolean;
 };
 
 /**
@@ -209,6 +292,7 @@ export function externalReferences(r: LearnResearch): ExternalReference[] {
       excerpt: evidence && rec.abstract && max > 0 ? (rec.abstract.length > max ? `${rec.abstract.slice(0, max).replace(/\s+\S*$/, "")}…` : rec.abstract) : null,
       verified: rec.identity, retrievedAt: rec.retrievedAt, sourceVersion: rec.sourceVersion || null, reuse: evidence || !notUsed[i] ? rec.reuse : "metadata_only", notUsed: evidence ? null : notUsed[i] ?? null,
       openAccess: x.openAccess && !x.openAccess.retracted ? x.openAccess : null,
+      ...(r.retrieved !== undefined ? { relevanceChecked: true } : {}),
     };
   });
 }
