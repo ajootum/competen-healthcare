@@ -1325,7 +1325,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
           <span>Saved {new Date(r.saved.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · private, for your own study · no new AI was used</span>
-          {onFresh && !r.savedEarlier && <button type="button" onClick={onFresh} className={`rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-semibold text-gray-800 hover:bg-gray-50 ${focusRing}`}>Explain it a new way</button>}
+          {onFresh && !r.savedEarlier && <button type="button" onClick={onFresh} className={`rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Explain it a new way</button>}
         </p>
       )}
       {/* SCHOLAR-PERSISTENT-LEARNING-01: saved under another prompt version or depth -- shown as it is; rewriting is the learner's click. */}
