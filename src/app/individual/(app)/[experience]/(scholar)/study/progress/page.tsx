@@ -36,6 +36,12 @@ import { StudyNextCard, TopicProgressSection } from "../_components/topic-progre
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
 import { buildStudyPlan, unstartedMappedSections } from "@/lib/individual/scholar/study-plan";
 import { StudyPlanCard } from "../_components/study-plan-card";
+import { StudyCalendar } from "../_components/study-calendar";
+import { LastMonthlyReview, MonthlyBanner } from "../_components/monthly-progress";
+import { loadStudyCalendar, monthFromQuery } from "@/lib/individual/scholar/study-calendar-data";
+import { loadMonthlyOverview, monthlyReviewOn } from "@/lib/individual/scholar/monthly-review-data";
+import { nextMonth, prevMonth, monthOf, weakTopics, type MonthlyBreakdown } from "@/lib/individual/scholar/monthly-review";
+import { getEvaluation } from "@/lib/individual/scholar/store";
 
 const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
   no_notes: "No notes linked yet",
@@ -199,7 +205,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const fmtWeek = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string; study?: string }> }) {
+export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string; study?: string; month?: string }> }) {
   const sp = await searchParams;
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
@@ -258,6 +264,32 @@ export default async function ProgressPage({ params, searchParams }: { params: P
       studyId: study && isStudyId(sp.study) ? sp.study : null,
     })
     : null;
+  // SCHOLAR-MONTHLY-REVIEW-01: the study calendar (one calendar, extending the plan) and the monthly review's banner and last-result card.
+  // The calendar reads the plan the card above is built from; both fail closed, and an unreadable one is said, never drawn empty.
+  const calendarOn = policy.scholarStudyCalendar === "on";
+  const calMonth = monthFromQuery(sp.month, today);
+  const calPlan = planRead?.ok && planRead.data && tp?.ok
+    ? {
+      settings: { examDate: planRead.data.examDate, examLabel: planRead.data.examLabel, weeklyMinutes: planRead.data.weeklyMinutes, daysPerWeek: planRead.data.daysPerWeek, goal: planRead.data.goal, priorities: planRead.data.priorities },
+      entries: tp.data.topics, studyId: study && isStudyId(sp.study) ? sp.study : null,
+      unstarted: allRows?.ok && learner?.programme && learner.competencies
+        ? unstartedMappedSections({ mappings: allRows.data.mappings, concepts: allRows.data.concepts, questions: allRows.data.questions, attempts: allRows.data.attempts, competencies: learner.competencies.map(c => ({ id: c.id, title: c.title })) })
+        : [],
+    }
+    : null;
+  const calendar = calendarOn && rows.ok ? await loadStudyCalendar({ admin: ctx.admin, userId: ctx.userId, policy, month: calMonth, today, plan: calPlan }) : null;
+  const monthlyOverview = rows.ok && monthlyReviewOn(policy) ? await loadMonthlyOverview(ctx.admin, ctx.userId, policy, today) : null;
+  const lastReview = monthlyOverview?.latest ? await getEvaluation(ctx.admin, ctx.userId, monthlyOverview.latest.id) : null;
+  const lastBreakdown = lastReview?.ok && lastReview.data ? (lastReview.data.results?.monthly as MonthlyBreakdown | undefined) : undefined;
+  const calHref = (m: string | null) => {
+    const q = new URLSearchParams();
+    if (sp.period) q.set("period", sp.period);
+    if (sp.study) q.set("study", sp.study);
+    if (m && m !== monthOf(today)) q.set("month", m);
+    const s = q.toString();
+    return s ? `?${s}` : "?";
+  };
+
   const merged = showTopicProgress && tp?.ok && li?.ok ? mergeStudyNext(tp.data.studyNext, li.data.recommendations, 5, study && isStudyId(sp.study) ? sp.study : null) : null;
   const liShown = li?.ok ? (merged ? { ...li.data, recommendations: merged.rest } : li.data) : null;
 
@@ -293,6 +325,22 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 }) : null} />
               : <div className="mb-6"><Unreadable what="your study plan" /></div>)
               : planRead ? (planRead.notProvisioned ? null : <div className="mb-6"><Unreadable what="your study plan" /></div>) : null}
+            {monthlyOverview && monthlyOverview.nudges.length > 0 && !monthlyOverview.optedOut && (
+              <MonthlyBanner nudges={monthlyOverview.nudges.map(n => ({ month: n.month, recommended: n.recommended, late: n.late }))} evaluateHref={experienceHref("scholar", "study/evaluate")} />
+            )}
+            {monthlyOverview?.latest && lastBreakdown && !monthlyOverview.optedOut && (
+              <LastMonthlyReview
+                resultsHref={experienceHref("scholar", `study/evaluate/${monthlyOverview.latest.id}`)} evaluateHref={experienceHref("scholar", "study/evaluate")}
+                last={{
+                  id: monthlyOverview.latest.id, month: monthlyOverview.latest.month, createdAt: monthlyOverview.latest.createdAt, late: monthlyOverview.latest.late,
+                  retakes: monthlyOverview.latestRetakes,
+                  score: lastBreakdown.overall.percent !== null ? { correct: lastBreakdown.overall.correct, answered: lastBreakdown.overall.answered } : null,
+                  weak: weakTopics(lastBreakdown, 3),
+                }} />
+            )}
+            {calendarOn && (calendar
+              ? <StudyCalendar view={calendar.view} accent={x.accent} prevHref={calHref(prevMonth(calMonth))} nextHref={calHref(nextMonth(calMonth))} todayHref={calHref(null)} />
+              : <div className="mb-6"><Unreadable what="your study calendar" /></div>)}
             {showTopicProgress && (tp?.ok ? <StudyNextCard items={merged ? merged.items : tp.data.studyNext} accent={x.accent} />
               : tp ? <div className="mb-6"><Unreadable what="what to study next" /></div> : null)}
             {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} />

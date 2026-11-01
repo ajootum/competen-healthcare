@@ -192,8 +192,23 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         sections: [...PASSPORT_CATEGORIES], shareable: [...PASSPORT_CATEGORIES], purposes: [...DEFAULT_PURPOSES], recipient: "optional",
         presentation: "detailed", validity: "show", exportOn: "on", ai: "on",
       },
+      // SCHOLAR-MONTHLY-REVIEW-01: offered, 10 to 30 questions, two a section, core 60 / application 25 / gaps 15, five days before month end.
+      scholarMonthlyReview: "on", scholarMonthlyReviewMinQuestions: 10, scholarMonthlyReviewMaxQuestions: 30, scholarMonthlyReviewPerSection: 2,
+      scholarMonthlyReviewMix: "60_25_15", scholarMonthlyReviewRecommendDays: 5, scholarMonthlyReviewReminders: "on", scholarMonthlyReviewOptout: "allowed",
+      scholarStudyCalendar: "on",
     });
     expect(DEFAULT_POLICY.professionalProfile.jurisdictions.length).toBe(COUNTRIES.length);
+  });
+
+  it("SCHOLAR-MONTHLY-REVIEW-01: the fewest questions never exceeds the most, and a mix outside the list falls back", () => {
+    const r = resolvePolicy([
+      { config_path: policyPath("scholar_monthly_review_min_questions"), published: { value: 40 } },
+      { config_path: policyPath("scholar_monthly_review_max_questions"), published: { value: 20 } },
+      { config_path: policyPath("scholar_monthly_review_mix"), published: { value: "99_1_0" } },
+    ]);
+    expect([r.scholarMonthlyReviewMinQuestions, r.scholarMonthlyReviewMaxQuestions, r.scholarMonthlyReviewMix]).toEqual([20, 20, "60_25_15"]);
+    expect(validateDraft("scholar_monthly_review_mix", "50_30_20")).toMatchObject({ ok: true });
+    expect(validateDraft("scholar_monthly_review_per_section", 9).ok).toBe(false);
   });
 
 it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only from a published on", () => {    const path = policyPath("scholar_learn_prepare_next");    expect(DEFAULT_POLICY.scholarLearnPrepareNext).toBe(false);    expect(resolvePolicy([{ config_path: path, published: { value: "on" } }]).scholarLearnPrepareNext).toBe(true);    expect(resolvePolicy([{ config_path: path, published: { value: true } }]).scholarLearnPrepareNext).toBe(false);    expect(validateDraft("scholar_learn_prepare_next", "on")).toMatchObject({ ok: true, settings: { value: "on" } });    expect(validateDraft("scholar_learn_prepare_next", "ahead").ok).toBe(false);  });

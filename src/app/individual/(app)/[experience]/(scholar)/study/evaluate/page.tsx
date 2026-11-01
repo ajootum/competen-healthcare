@@ -16,6 +16,9 @@ import { CASE_CONTEXT_LABEL, EVALUATION_CONFIDENCE_LABEL, EVALUATION_LABEL, EVAL
 import { EvaluationView } from "../_components/evaluation-view";
 import { EvaluationStart, KeepContinuous } from "../_components/evaluation-client";
 import { evaluationHref, studyHref } from "../_components/question-view";
+import { MonthlyReviewPanel } from "../_components/monthly-review-panel";
+import { loadMonthlyOverview, monthlyReviewOn } from "@/lib/individual/scholar/monthly-review-data";
+import { monthOf } from "@/lib/individual/scholar/monthly-review";
 
 // Request-time only: it reads the release gate and the evidence, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -45,6 +48,10 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
     evaluateScope(ctx.admin, ctx.userId, policy, { kind: "all" }, { method: "existing", now: new Date().toISOString() }),
   ]);
   const mats = (materials.ok ? materials.data : []).filter(m => m.chunkCount > 0);
+  // SCHOLAR-MONTHLY-REVIEW-01: the optional monthly learning review (no migration; opt-out and resume need 830). Unreadable is said, never hidden.
+  const today = new Date().toISOString().slice(0, 10);
+  const monthlyOn = monthlyReviewOn(policy) && mats.length > 0;
+  const monthly = monthlyOn ? await loadMonthlyOverview(ctx.admin, ctx.userId, policy, today) : null;
   // SCHOLAR-SESSION-AI-02: the open study session (database reads only) only chooses EvaluationStart's first scope (D5).
   const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, "evaluate", policy);
   const counts = live.ok ? live.evaluation.evidence.counts : null;
@@ -63,6 +70,17 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
         </StatePanel>
       ) : (
         <div className="space-y-8">
+          {monthlyOn && (monthly ? (
+            <MonthlyReviewPanel
+              accent={x.accent} currentMonth={monthOf(today)} optedOut={monthly.optedOut} canOptOut={monthly.canOptOut} reminders={monthly.reminders}
+              nudges={monthly.nudges.map(n => ({ month: n.month, recommended: n.recommended, late: n.late }))}
+              panels={monthly.panels.map(p => ({
+                month: p.month, lessons: p.lessons, sections: p.sections, materials: p.materials, subjects: p.subjects, estimated: p.estimated, hasActivity: p.hasActivity, state: p.state,
+                original: p.original ? { id: p.original.id, createdAt: p.original.createdAt, late: p.original.late } : null,
+                retakes: p.retakes.map(r => ({ id: r.id, createdAt: r.createdAt, late: r.late })), resumeHref: p.resumeHref, recommended: p.recommended, late: p.late,
+              }))} />
+          ) : <StatePanel title="Your monthly review could not be read just now"><p>Your study records could not be read. The rest of Evaluate is still here.</p></StatePanel>)}
+
           <section aria-labelledby="ev-now-h">
             <div className="flex flex-wrap items-end justify-between gap-3">
               <div>
