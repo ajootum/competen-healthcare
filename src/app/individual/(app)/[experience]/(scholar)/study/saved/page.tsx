@@ -110,9 +110,13 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
               <div className="mt-3 space-y-4">
                 {[...byMaterial.entries()].map(([materialId, list]) => (
                   <section key={materialId} aria-labelledby={`m-${materialId}`} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-                    <h3 id={`m-${materialId}`} className="text-[15px] font-bold text-gray-900">
-                      <Link href={experienceHref("scholar", `study/${materialId}`)} className={`underline-offset-2 hover:underline ${focusRing}`}>{titles.get(materialId) ?? "Your material"}</Link>
-                    </h3>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h3 id={`m-${materialId}`} className="text-[15px] font-bold text-gray-900">
+                        <Link href={experienceHref("scholar", `study/${materialId}`)} className={`underline-offset-2 hover:underline ${focusRing}`}>{titles.get(materialId) ?? "Your material"}</Link>
+                      </h3>
+                      {/* Stored teaching as a PDF: no AI, no allowance (api/individual/scholar/learn/export). */}
+                      <a href={`/api/individual/scholar/learn/export?material=${materialId}`} className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[13px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Download PDF</a>
+                    </div>
                     <ul className="mt-2 space-y-2">
                       {list.map(a => (
                         <li key={a.id}>
