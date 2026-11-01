@@ -5,6 +5,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { listQualificationTerms, listStudioCatalogues, listStudioProgrammes, loadProgrammePreview, type PreviewRow } from "@/lib/individual/programme-framework";
 import { listComponents } from "@/lib/competency/studio-components";
 import { EntryEditor, QualificationForm, type LevelOption } from "../_studio/StudioForms";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 // /super-admin/competencies/programmes -- CFCA-STUDIO-P1 items 4, 9, 10: Programme Frameworks. Configure what a
 // programme requires of each shared competency (requirement, target level, CCHU components) and PREVIEW the exact
@@ -54,7 +55,7 @@ export default async function ProgrammeFrameworksPage({ searchParams }: { search
           The programme frameworks could not be read just now (or migration 660 is not applied here). Nothing below can be trusted until this page loads cleanly.
         </p>
       ) : (
-        <div className="grid gap-6 lg:grid-cols-[18rem_minmax(0,1fr)]">
+        <PaneGrid bp="lg" start={{ storageKey: "competencies.programmes.nav.w", defaultPx: 288, label: "Resize the programmes list", node: (
           <nav aria-label="Programmes and catalogues" className="space-y-4">
             <section>
               <h2 className="text-[12px] font-bold uppercase tracking-[0.14em] text-gray-500">Programmes</h2>
@@ -85,7 +86,7 @@ export default async function ProgrammeFrameworksPage({ searchParams }: { search
               </ul>
             </section>
           </nav>
-
+        ) }}>
           <main className="min-w-0 space-y-4">
             {!preview && <p className="text-[13.5px] text-gray-600">Choose a programme to see exactly what its learners are offered, or a catalogue to preview and configure it as a draft.</p>}
             {preview && "error" in preview && <p role="alert" className="text-[13.5px] text-[var(--cmp-text-critical)]">{preview.error}</p>}
@@ -129,7 +130,7 @@ export default async function ProgrammeFrameworksPage({ searchParams }: { search
               </>
             )}
           </main>
-        </div>
+        </PaneGrid>
       )}
     </div>
   );

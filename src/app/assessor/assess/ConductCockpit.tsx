@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { METHOD_LABELS, OUTCOME_CONFIG, type AssessmentMethod, type DecisionOutcome } from "@/lib/ckcm";
 import { outcomeFor } from "@/lib/engines/outcomes";
 import { SignaturePad, VoiceNoteButton, ScanButton } from "./CaptureTools";
@@ -394,8 +395,8 @@ export default function ConductCockpit({
       </div>
 
       {/* ── Main grid ──────────────────────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-[210px_minmax(0,1fr)] xl:grid-cols-[210px_minmax(0,1fr)_290px]">
-        {/* Workflow */}
+      <PaneGrid bp="lg" endBp="xl"
+        start={{ storageKey: "assessor.assess.workflow.w", defaultPx: 210, minPx: 160, label: "Resize the workflow panel", node: (
         <div className="bg-white border border-gray-200 rounded-xl p-4 h-fit">
           <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Assessment Workflow</p>
           <ol className="space-y-1">
@@ -426,7 +427,116 @@ export default function ConductCockpit({
             <p className="text-[9px] text-gray-400 mt-2">Validation is completed by an educator after submission.</p>
           </div>
         </div>
+        ) }}
+        end={{ storageKey: "assessor.assess.rail.w", defaultPx: 290, label: "Resize the side rail", node: (
+        <div className="space-y-3 lg:col-span-3 xl:col-span-1 grid gap-3 md:grid-cols-2 xl:grid-cols-1 xl:block">
+          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Key Metrics</p>
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between"><span className="text-gray-500">Completion</span><span className="font-bold text-gray-900">{pct}%</span></div>
+              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} /></div>
+              <div className="flex items-center justify-between"><span className="text-gray-500">Competencies scored</span><span className="font-bold text-gray-900">{scoredCount}/{totalComps}</span></div>
+              <div className="flex items-center justify-between"><span className="text-gray-500">Average score</span><span className="font-bold text-gray-900">{avg != null ? avg.toFixed(1) : "—"}</span></div>
+              <div className="flex items-center justify-between"><span className="text-gray-500">Critical items unconfirmed</span>
+                <span className={`font-bold ${criticalRemaining > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{criticalRemaining}</span></div>
+              <div className="flex items-center justify-between"><span className="text-gray-500">Evidence files (learner + session)</span><span className="font-bold text-gray-900">{evidenceTotal + uploads.length}</span></div>
+            </div>
+          </div>
 
+          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Assessment Assistant</p>
+            <p className="text-[9px] text-gray-400 mb-2.5">Rule-based signals from this learner&apos;s records — no generative AI runs in-session.</p>
+            <ul className="space-y-1.5 text-xs text-gray-600">
+              {riskNotes.map((n, i) => <li key={`r${i}`} className="flex gap-1.5"><span>🚩</span>{n}</li>)}
+              {focusAreas.map((n, i) => <li key={`f${i}`} className="flex gap-1.5"><span>🎯</span>Previously not passed: {n}</li>)}
+              {expiringSoon.map((n, i) => <li key={`e${i}`} className="flex gap-1.5"><span>⏳</span>Renewal due soon: {n}</li>)}
+              {criticalRemaining > 0 && <li className="flex gap-1.5 text-[var(--cmp-text-critical)]"><span>⚠️</span>{criticalRemaining} critical checklist item{criticalRemaining === 1 ? "" : "s"} not yet confirmed</li>}
+              {riskNotes.length + focusAreas.length + expiringSoon.length === 0 && criticalRemaining === 0 && (
+                <li className="text-gray-400">No risk signals on this learner&apos;s decision record.</li>
+              )}
+            </ul>
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <button onClick={askAi} disabled={aiBusy || !!result}
+                className="w-full text-[11px] font-bold text-white bg-indigo-600 rounded-lg px-3 py-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors">
+                {aiBusy ? "Thinking…" : openComp ? "✨ AI suggestions for this competency" : "✨ Get AI suggestions"}
+              </button>
+              {aiError && <p className="text-[10px] text-[var(--cmp-text-critical)] mt-1.5">{aiError}</p>}
+              {aiText && (
+                <div className="mt-2 bg-indigo-50/60 border border-indigo-100 rounded-lg p-2.5">
+                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{aiText}</p>
+                  <p className="text-[8px] text-gray-400 mt-1.5">Generated by Claude from governed framework content — advisory only; the decision is yours.</p>
+                </div>
+              )}
+              <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(copilotPrompt)}`}
+                className="mt-2 block text-center text-[10px] font-semibold text-indigo-500 hover:underline">
+                Open full AI Copilot →
+              </Link>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Related Resources</p>
+            <div className="space-y-1 text-xs">
+              <Link href={`/assessor/passports?n=${nurseId}`} className="block text-indigo-600 hover:underline">🛂 Learner passport</Link>
+              <Link href="/assessor/logbook" className="block text-indigo-600 hover:underline">🖊️ Evidence Validation Centre</Link>
+              <Link href="/assessor/frameworks" className="block text-indigo-600 hover:underline">🗂️ Assessment frameworks</Link>
+              <Link href="/dashboard/knowledge" className="block text-indigo-600 hover:underline">🔬 Knowledge Hub</Link>
+            </div>
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Session Timeline</p>
+            <ul className="space-y-1.5 text-[11px] text-gray-600">
+              <li className="flex gap-2"><span className="text-gray-400 font-mono shrink-0">—</span>Assessment session opened</li>
+              {timeline.map((t, i) => (
+                <li key={i} className="flex gap-2"><span className="text-gray-400 font-mono shrink-0">{t.at}</span>{t.label}</li>
+              ))}
+            </ul>
+            {uploads.length > 0 && (
+              <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-50">
+                {uploads.length} file{uploads.length === 1 ? "" : "s"} attached this session
+              </p>
+            )}
+          </div>
+
+          <div className="bg-white border border-gray-200 rounded-xl p-4">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Communication</p>
+            <div className="flex gap-1 mb-2">
+              {(["learner", "educators"] as const).map(t => (
+                <button key={t} onClick={() => { setMsgTo(t); setMsgSent(null); }}
+                  className={`flex-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors ${
+                    msgTo === t ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300"}`}>
+                  {t === "learner" ? `💬 ${nurseName.split(" ")[0]}` : "💬 Educators"}
+                </button>
+              ))}
+            </div>
+            <textarea value={msgText} onChange={e => setMsgText(e.target.value)} rows={2} maxLength={1000}
+              placeholder={msgTo === "learner" ? `Message ${nurseName}…` : "Message the hospital educators…"}
+              className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-indigo-400" />
+            <button onClick={sendMessage} disabled={msgBusy || !msgText.trim()}
+              className="mt-1 w-full text-[11px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 disabled:opacity-50 transition-colors">
+              {msgBusy ? "Sending…" : "Send message"}
+            </button>
+            {msgSent && <p className="text-[10px] text-[var(--cmp-text-success)] mt-1">✓ {msgSent}</p>}
+
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              {reqSent ? (
+                <p className="text-xs text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2">✓ Evidence request sent to {nurseName}.</p>
+              ) : (
+                <div className="space-y-2">
+                  <input value={reqNote} onChange={e => setReqNote(e.target.value)} placeholder="What evidence do you need? (optional)"
+                    className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-indigo-400" />
+                  <button onClick={requestEvidence} disabled={reqBusy}
+                    className="w-full text-[11px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 disabled:opacity-50 transition-colors">
+                    {reqBusy ? "Sending…" : "📎 Request additional evidence"}
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-[9px] text-gray-400 mt-2">Messages deliver as one-way notifications — threaded chat is a future module.</p>
+          </div>
+        </div>
+        ) }}>
         {/* Domains */}
         <div className="space-y-3 min-w-0">
           <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-2 flex-wrap">
@@ -595,116 +705,7 @@ export default function ConductCockpit({
             </div>
           )}
         </div>
-
-        {/* Rail */}
-        <div className="space-y-3 lg:col-span-2 xl:col-span-1 grid gap-3 md:grid-cols-2 xl:grid-cols-1 xl:block">
-          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-3">Key Metrics</p>
-            <div className="space-y-2.5 text-xs">
-              <div className="flex items-center justify-between"><span className="text-gray-500">Completion</span><span className="font-bold text-gray-900">{pct}%</span></div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-indigo-500 rounded-full transition-all" style={{ width: `${pct}%` }} /></div>
-              <div className="flex items-center justify-between"><span className="text-gray-500">Competencies scored</span><span className="font-bold text-gray-900">{scoredCount}/{totalComps}</span></div>
-              <div className="flex items-center justify-between"><span className="text-gray-500">Average score</span><span className="font-bold text-gray-900">{avg != null ? avg.toFixed(1) : "—"}</span></div>
-              <div className="flex items-center justify-between"><span className="text-gray-500">Critical items unconfirmed</span>
-                <span className={`font-bold ${criticalRemaining > 0 ? "text-[var(--cmp-text-critical)]" : "text-gray-900"}`}>{criticalRemaining}</span></div>
-              <div className="flex items-center justify-between"><span className="text-gray-500">Evidence files (learner + session)</span><span className="font-bold text-gray-900">{evidenceTotal + uploads.length}</span></div>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Assessment Assistant</p>
-            <p className="text-[9px] text-gray-400 mb-2.5">Rule-based signals from this learner&apos;s records — no generative AI runs in-session.</p>
-            <ul className="space-y-1.5 text-xs text-gray-600">
-              {riskNotes.map((n, i) => <li key={`r${i}`} className="flex gap-1.5"><span>🚩</span>{n}</li>)}
-              {focusAreas.map((n, i) => <li key={`f${i}`} className="flex gap-1.5"><span>🎯</span>Previously not passed: {n}</li>)}
-              {expiringSoon.map((n, i) => <li key={`e${i}`} className="flex gap-1.5"><span>⏳</span>Renewal due soon: {n}</li>)}
-              {criticalRemaining > 0 && <li className="flex gap-1.5 text-[var(--cmp-text-critical)]"><span>⚠️</span>{criticalRemaining} critical checklist item{criticalRemaining === 1 ? "" : "s"} not yet confirmed</li>}
-              {riskNotes.length + focusAreas.length + expiringSoon.length === 0 && criticalRemaining === 0 && (
-                <li className="text-gray-400">No risk signals on this learner&apos;s decision record.</li>
-              )}
-            </ul>
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              <button onClick={askAi} disabled={aiBusy || !!result}
-                className="w-full text-[11px] font-bold text-white bg-indigo-600 rounded-lg px-3 py-2 hover:bg-indigo-700 disabled:opacity-50 transition-colors">
-                {aiBusy ? "Thinking…" : openComp ? "✨ AI suggestions for this competency" : "✨ Get AI suggestions"}
-              </button>
-              {aiError && <p className="text-[10px] text-[var(--cmp-text-critical)] mt-1.5">{aiError}</p>}
-              {aiText && (
-                <div className="mt-2 bg-indigo-50/60 border border-indigo-100 rounded-lg p-2.5">
-                  <p className="text-[11px] text-gray-700 whitespace-pre-wrap">{aiText}</p>
-                  <p className="text-[8px] text-gray-400 mt-1.5">Generated by Claude from governed framework content — advisory only; the decision is yours.</p>
-                </div>
-              )}
-              <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(copilotPrompt)}`}
-                className="mt-2 block text-center text-[10px] font-semibold text-indigo-500 hover:underline">
-                Open full AI Copilot →
-              </Link>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Related Resources</p>
-            <div className="space-y-1 text-xs">
-              <Link href={`/assessor/passports?n=${nurseId}`} className="block text-indigo-600 hover:underline">🛂 Learner passport</Link>
-              <Link href="/assessor/logbook" className="block text-indigo-600 hover:underline">🖊️ Evidence Validation Centre</Link>
-              <Link href="/assessor/frameworks" className="block text-indigo-600 hover:underline">🗂️ Assessment frameworks</Link>
-              <Link href="/dashboard/knowledge" className="block text-indigo-600 hover:underline">🔬 Knowledge Hub</Link>
-            </div>
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4 xl:mb-3">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Session Timeline</p>
-            <ul className="space-y-1.5 text-[11px] text-gray-600">
-              <li className="flex gap-2"><span className="text-gray-400 font-mono shrink-0">—</span>Assessment session opened</li>
-              {timeline.map((t, i) => (
-                <li key={i} className="flex gap-2"><span className="text-gray-400 font-mono shrink-0">{t.at}</span>{t.label}</li>
-              ))}
-            </ul>
-            {uploads.length > 0 && (
-              <p className="text-[10px] text-gray-400 mt-2 pt-2 border-t border-gray-50">
-                {uploads.length} file{uploads.length === 1 ? "" : "s"} attached this session
-              </p>
-            )}
-          </div>
-
-          <div className="bg-white border border-gray-200 rounded-xl p-4">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2.5">Communication</p>
-            <div className="flex gap-1 mb-2">
-              {(["learner", "educators"] as const).map(t => (
-                <button key={t} onClick={() => { setMsgTo(t); setMsgSent(null); }}
-                  className={`flex-1 text-[10px] font-semibold px-2 py-1 rounded-lg border transition-colors ${
-                    msgTo === t ? "bg-indigo-600 text-white border-indigo-600" : "bg-white text-gray-500 border-gray-200 hover:border-indigo-300"}`}>
-                  {t === "learner" ? `💬 ${nurseName.split(" ")[0]}` : "💬 Educators"}
-                </button>
-              ))}
-            </div>
-            <textarea value={msgText} onChange={e => setMsgText(e.target.value)} rows={2} maxLength={1000}
-              placeholder={msgTo === "learner" ? `Message ${nurseName}…` : "Message the hospital educators…"}
-              className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-indigo-400" />
-            <button onClick={sendMessage} disabled={msgBusy || !msgText.trim()}
-              className="mt-1 w-full text-[11px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 disabled:opacity-50 transition-colors">
-              {msgBusy ? "Sending…" : "Send message"}
-            </button>
-            {msgSent && <p className="text-[10px] text-[var(--cmp-text-success)] mt-1">✓ {msgSent}</p>}
-
-            <div className="mt-3 pt-3 border-t border-gray-100">
-              {reqSent ? (
-                <p className="text-xs text-[var(--cmp-text-success)] bg-[var(--cmp-surface-success)] border border-[var(--cmp-color-success)] rounded-lg px-3 py-2">✓ Evidence request sent to {nurseName}.</p>
-              ) : (
-                <div className="space-y-2">
-                  <input value={reqNote} onChange={e => setReqNote(e.target.value)} placeholder="What evidence do you need? (optional)"
-                    className="w-full text-xs border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-600 focus:outline-none focus:border-indigo-400" />
-                  <button onClick={requestEvidence} disabled={reqBusy}
-                    className="w-full text-[11px] font-semibold text-indigo-600 border border-indigo-200 rounded-lg px-3 py-2 hover:bg-indigo-50 disabled:opacity-50 transition-colors">
-                    {reqBusy ? "Sending…" : "📎 Request additional evidence"}
-                  </button>
-                </div>
-              )}
-            </div>
-            <p className="text-[9px] text-gray-400 mt-2">Messages deliver as one-way notifications — threaded chat is a future module.</p>
-          </div>
-        </div>
-      </div>
+      </PaneGrid>
 
       {/* ── Decision band ──────────────────────────────────────────────────── */}
       <div id="decision-band" className="bg-white border border-gray-200 rounded-xl p-5">

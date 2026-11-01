@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { ResizeHandle } from "@/components/ui/resizable";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { INFORMAL_CHECK_LABEL, LEARN_MODE_LABEL, NOT_IN_NOTES_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import type { SessionView } from "@/lib/individual/scholar/learn-view";
@@ -31,6 +32,7 @@ import { citationSegments, citedTags, parseTeachAnswer, questionText, replyState
 import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi } from "@/app/individual/_components/ai/PersonalAiAnswer";
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
+import { usePaneGrid } from "@/components/ui/pane-grid";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, LessonCard, LessonPlaceholder, ResumeBanner, lessonDomId, lessonHeadingId, type Activity } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
@@ -193,6 +195,10 @@ export function LearnWorkspace(props: {
   const mode: LearnMode = pick && modes.includes(pick) ? pick : "notes";
   const setMode = (m: LearnMode) => { setChosen(m); try { window.localStorage.setItem(MODE_KEY, m); } catch { /* not remembered */ } };
   const [tab, setTab] = useState<"lesson" | "sources" | "ask">(props.openAsk ? "ask" : "lesson");
+  // Drag-to-resize (owner, 1 Nov): the lessons+sources column and Ask Scholar, in the three-column layout only. Today's
+  // 240px / 300px are the defaults; each side is at least 200px and the lesson keeps 420px (+ the two 20px dividers).
+  const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
+  const [, cols] = usePaneGrid({ container: rootEl, minMain: 460, start: { storageKey: "scholar.learn.sources.w", defaultPx: 240 }, end: { storageKey: "scholar.learn.ask.w", defaultPx: 300 } });
   const [progress, setProgress] = useState(props.initialProgress);
   /** The informal check, answered in its own lesson. `lastCheck`: the latest answered one per lesson (Explain my mistake). */
   const [check, setCheck] = useState<{ step: number; question: string; answer: string } | null>(null);
@@ -905,7 +911,7 @@ export function LearnWorkspace(props: {
   };
 
   return (
-    <div className="@container">
+    <div ref={setRootEl} className="@container">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-[17px] font-bold text-gray-900">{session.title}</h2>
         <p className="text-[12.5px] text-gray-600">
@@ -929,7 +935,9 @@ export function LearnWorkspace(props: {
         ))}
       </div>
 
-      <div className="@min-[66rem]:grid @min-[66rem]:grid-cols-[240px_minmax(0,1fr)_300px] @min-[66rem]:items-start @min-[66rem]:gap-5">
+      {/* The two dividers are 20px columns (the old gap-5); the Ask column also yields to the lesson's 420px if the container narrows. */}
+      <div className="@min-[66rem]:grid @min-[66rem]:grid-cols-[var(--l-w,240px)_auto_minmax(0,1fr)_auto_var(--r-w,300px)] @min-[66rem]:items-start @min-[66rem]:gap-0"
+        style={{ "--l-w": `${cols.start.size ?? 240}px`, "--r-w": `min(${cols.end.size ?? 300}px, max(200px, calc(100cqw - 460px - var(--l-w))))` } as CSSProperties}>
         {/* ── THE NAVIGATOR AND SOURCES: the lessons with their marks, and the current lesson's own sections ── */}
         <aside aria-label="Lessons and sources" className={`${panel("sources")} rounded-2xl border border-gray-200 bg-white p-4 @min-[66rem]:sticky @min-[66rem]:top-4 @min-[66rem]:max-h-[calc(100vh-2rem)] @min-[66rem]:overflow-y-auto`}>
           <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Your lessons</p>
@@ -949,6 +957,8 @@ export function LearnWorkspace(props: {
             </>
           )}
         </aside>
+
+        <ResizeHandle {...cols.start.handleProps} label="Resize the lessons and sources column" className="hidden @min-[66rem]:block @min-[66rem]:self-stretch" />
 
         {/* ── THE JOURNEY: the lessons revealed so far, one after another; the settings once, above them ── */}
         <div ref={column} className={`${panel("lesson")} min-w-0 space-y-4`} onPointerDown={() => { engaged.current = true; }}>
@@ -1010,6 +1020,7 @@ export function LearnWorkspace(props: {
           <JourneyBar lessons={navLessons} current={curIdx} read={read} onJump={jump}
             trailing={!(curIdx >= shownUpTo && lastLesson) && !j?.endVisible ? <button type="button" className={`${btn} px-3`} style={{ background: accent }} onClick={onNext} disabled={!!busy && curIdx >= shownUpTo}>Next lesson</button> : null} />
         </div>
+        <ResizeHandle {...cols.end.handleProps} label="Resize the Ask Scholar column" className="hidden @min-[66rem]:block @min-[66rem]:self-stretch" />
         {/* ── THE SCHOLAR ASSISTANT: ask anything about these notes, at any point ── */}
         <aside aria-labelledby="ask-h" className={`${panel("ask")} rounded-2xl border border-gray-200 bg-white p-4`}>
           <h3 id="ask-h" className="text-[14px] font-bold text-gray-900">Ask Scholar</h3>

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { locationTone } from "@/app/practice/(shell)/calendar/planner-ui";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
 
 // CP-BULK-BOOKING-001 s5, s6 and s11: pick a session, fill its free slots, review, book.
 //
@@ -87,6 +89,7 @@ export default function BulkWorkspace(props: {
   defaultModeId: string | null;
 }) {
   const router = useRouter();
+  const [bindGrid, rz] = usePaneGrid({ end: { storageKey: "practice.bulk-booking.summary.w", defaultPx: 260 } });
   const [selected, setSelected] = useState<Session | null>(props.sessions[0] ?? null);
   const [rows, setRows] = useState<Row[]>(() => seed(props.sessions[0] ?? null, props));
   const [busy, setBusy] = useState(false);
@@ -260,7 +263,7 @@ export default function BulkWorkspace(props: {
 
       {/* ── 3. The grid ───────────────────────────────────────────────────────────────────────── */}
       {selected && (
-        <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-[1fr_260px]">
+        <div ref={bindGrid} style={rz.style} className="mt-4 grid grid-cols-1 gap-4 lg:gap-x-0 lg:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
           {/* min-w-0 -- see PathwaysWorkspace: the inner overflow-x-auto cannot engage without it. */}
           <section className="min-w-0 rounded-xl border border-gray-200 bg-white">
             <div className="border-b border-gray-100 px-4 py-2.5">
@@ -374,6 +377,7 @@ export default function BulkWorkspace(props: {
           </section>
 
           {/* ── 4. s11's summary ────────────────────────────────────────────────────────────── */}
+          <ResizeHandle {...rz.end.handleProps} label="Resize the booking summary" className="hidden lg:block lg:self-stretch" />
           <aside className="h-fit rounded-xl border border-gray-200 bg-white p-4">
             <h2 className="text-[13px] font-bold text-gray-900">Booking summary</h2>
             <dl className="mt-2 space-y-1.5 text-[12.5px]">

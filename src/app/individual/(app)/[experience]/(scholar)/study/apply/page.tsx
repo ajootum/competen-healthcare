@@ -7,6 +7,7 @@ import { experienceModulePage, gatedMetadata } from "../../../../../_components/
 import { experienceHref } from "@/lib/individual/experiences";
 import { countDue, listQuestions, type QuestionRow } from "@/lib/individual/scholar/store";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../_components/chrome";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
@@ -99,17 +100,8 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       <ExamPapersSection admin={ctx.admin} userId={ctx.userId} variant="apply" />
       <OsceEntry admin={ctx.admin} userId={ctx.userId} studyId={sid} />
 
-      <div className="mb-8 grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-        <div className="space-y-5">
-          <CaseStart entries={policy.scholarCaseEntries} contexts={policy.scholarCaseContexts} mode={policy.scholarCaseMode} libraryOn={libraryOn}
-            materials={(materials.ok ? materials.data : []).filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title }))}
-            competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote} preset={preset} />
-          {libraryOn && candidacy && casePolicy && (
-            <CaseOfferPanel libraryOn={libraryOn} offering={offeringOn(libraryOn, policy)} granted={candidacy.granted && candidacy.current} attestationVersion={casePolicy.attestationVersion}
-              text={ATTESTATION_TEXT[casePolicy.attestationVersion] ?? null} cases={privateCases.ok ? privateCases.data.map(c => ({ id: c.id, title: c.title })) : []}
-              offers={(offers ?? []).map(o => ({ sourceKey: o.sourceKey, status: o.status, reasons: o.reasons }))} />
-          )}
-        </div>
+      <PaneGrid bp="lg" className="mb-8" fallbackMain="minmax(0,3fr)"
+        end={{ storageKey: "scholar.apply.side.w", defaultPx: c => Math.round((c - 20) * 0.4), fallback: "minmax(0,2fr)", label: "Resize the your cases panel", node: (
         <aside aria-labelledby="case-history-h" className="space-y-4">
           <section className="rounded-2xl border border-gray-200 bg-white p-4">
             <h2 id="case-history-h" className="text-[14px] font-bold text-gray-900">Your cases</h2>
@@ -131,7 +123,18 @@ export default async function Apply({ params, searchParams }: { params: Promise<
             )}
           </section>
         </aside>
-      </div>
+        ) }}>
+        <div className="space-y-5">
+          <CaseStart entries={policy.scholarCaseEntries} contexts={policy.scholarCaseContexts} mode={policy.scholarCaseMode} libraryOn={libraryOn}
+            materials={(materials.ok ? materials.data : []).filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title }))}
+            competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote} preset={preset} />
+          {libraryOn && candidacy && casePolicy && (
+            <CaseOfferPanel libraryOn={libraryOn} offering={offeringOn(libraryOn, policy)} granted={candidacy.granted && candidacy.current} attestationVersion={casePolicy.attestationVersion}
+              text={ATTESTATION_TEXT[casePolicy.attestationVersion] ?? null} cases={privateCases.ok ? privateCases.data.map(c => ({ id: c.id, title: c.title })) : []}
+              offers={(offers ?? []).map(o => ({ sourceKey: o.sourceKey, status: o.status, reasons: o.reasons }))} />
+          )}
+        </div>
+      </PaneGrid>
 
       <section aria-labelledby="own-cases-h">
         <h2 id="own-cases-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your practice scenarios</h2>

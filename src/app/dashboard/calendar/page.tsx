@@ -2,6 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadCalendar, EVENT_CAT } from "@/lib/calendar-centre";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 // PW-003 Calendar & Schedule Centre — unified calendar aggregating the person's real shifts, task deadlines,
 // learning due dates and competency renewals. Day time-grid + Agenda views (via ?view=), mini-month, summary
@@ -90,8 +91,9 @@ export default async function CalendarCentrePage({ searchParams }: { searchParam
         <Summary icon="🎯" label="On-Call" value={d.nextOnCall ? "Scheduled" : "None"} sub={d.nextOnCall ? new Date(d.nextOnCall.start).toLocaleDateString("en-GB", { day: "numeric", month: "short" }) : "not on call"} tint="bg-[var(--cmp-surface-error)]" />
       </div>
 
-      <div className="grid lg:grid-cols-[240px_minmax(0,1fr)_280px] gap-5 items-start">
-        {/* Left: mini-month + filters */}
+      <PaneGrid bp="lg" className="items-start"
+        start={{ storageKey: "dashboard.calendar.left.w", defaultPx: 240, label: "Resize the calendar filters", node: (
+
         <div className="space-y-5">
           <div className="bg-white rounded-xl border border-gray-200 p-3">
             <div className="flex items-center justify-between mb-2">
@@ -123,6 +125,52 @@ export default async function CalendarCentrePage({ searchParams }: { searchParam
             </div>
           </div>
         </div>
+        ) }}
+        end={{ storageKey: "dashboard.calendar.right.w", defaultPx: 280, label: "Resize the side panel", node: (
+
+        <div className="space-y-5">
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Upcoming (Next 7 Days)</h3>
+            {d.upcoming.length > 0 ? (
+              <div className="space-y-2.5">
+                {d.upcoming.map((e: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                  <Link key={e.id} href={e.href} className="flex gap-2.5 group">
+                    <span className="w-1 rounded-full shrink-0" style={{ background: e.color }} />
+                    <div className="min-w-0"><p className="text-[12px] font-medium text-gray-800 group-hover:text-blue-700 truncate">{e.title}</p><p className="text-[10px] text-gray-400">{new Date(e.start).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}{!e.allDay && ` · ${fmtTime(e.start)}`}</p></div>
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="text-xs text-gray-400 py-4 text-center">Nothing in the next 7 days.</p>}
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">My Tasks on Calendar</h3>
+            <div className="space-y-1.5 text-sm">
+              <Link href="/dashboard/tasks?tab=all" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-error)]">Overdue</span><span className="font-semibold text-gray-900">{d.taskCounts.overdue}</span></Link>
+              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-warning)]">Due Today</span><span className="font-semibold text-gray-900">{d.taskCounts.today}</span></Link>
+              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-information)]">Due This Week</span><span className="font-semibold text-gray-900">{d.taskCounts.week}</span></Link>
+            </div>
+            <Link href="/dashboard/tasks" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-2">Go to Task Centre →</Link>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-2">On-Call / Availability</h3>
+            <div className="flex items-center justify-between text-sm"><span className="text-gray-500">Status</span><span className={`font-medium ${d.nextOnCall ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{d.nextOnCall ? "On-call scheduled" : "Available"}</span></div>
+            {d.nextOnCall && <div className="flex items-center justify-between text-sm mt-1"><span className="text-gray-500">Next on-call</span><span className="text-gray-800">{new Date(d.nextOnCall.start).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></div>}
+            <Link href="/dashboard/shift" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-2">View shift workspace →</Link>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-4">
+            <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
+            <div className="grid grid-cols-2 gap-2">
+              <Link href="/dashboard/tasks" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">☑ Add Task</Link>
+              <Link href="/dashboard/shift" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">🩺 My Shift</Link>
+              <Link href="/dashboard/learning" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">📚 Learning</Link>
+              <Link href="/dashboard/notifications" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">🔔 Alerts</Link>
+            </div>
+          </div>
+        </div>
+        ) }}>
 
         {/* Main: Day grid or Agenda */}
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
@@ -172,49 +220,7 @@ export default async function CalendarCentrePage({ searchParams }: { searchParam
         </div>
 
         {/* Right rail */}
-        <div className="space-y-5">
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Upcoming (Next 7 Days)</h3>
-            {d.upcoming.length > 0 ? (
-              <div className="space-y-2.5">
-                {d.upcoming.map((e: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                  <Link key={e.id} href={e.href} className="flex gap-2.5 group">
-                    <span className="w-1 rounded-full shrink-0" style={{ background: e.color }} />
-                    <div className="min-w-0"><p className="text-[12px] font-medium text-gray-800 group-hover:text-blue-700 truncate">{e.title}</p><p className="text-[10px] text-gray-400">{new Date(e.start).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}{!e.allDay && ` · ${fmtTime(e.start)}`}</p></div>
-                  </Link>
-                ))}
-              </div>
-            ) : <p className="text-xs text-gray-400 py-4 text-center">Nothing in the next 7 days.</p>}
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">My Tasks on Calendar</h3>
-            <div className="space-y-1.5 text-sm">
-              <Link href="/dashboard/tasks?tab=all" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-error)]">Overdue</span><span className="font-semibold text-gray-900">{d.taskCounts.overdue}</span></Link>
-              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-warning)]">Due Today</span><span className="font-semibold text-gray-900">{d.taskCounts.today}</span></Link>
-              <Link href="/dashboard/tasks" className="flex items-center justify-between hover:bg-gray-50 rounded px-1 py-0.5"><span className="text-[var(--cmp-text-information)]">Due This Week</span><span className="font-semibold text-gray-900">{d.taskCounts.week}</span></Link>
-            </div>
-            <Link href="/dashboard/tasks" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-2">Go to Task Centre →</Link>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-2">On-Call / Availability</h3>
-            <div className="flex items-center justify-between text-sm"><span className="text-gray-500">Status</span><span className={`font-medium ${d.nextOnCall ? "text-[var(--cmp-text-error)]" : "text-[var(--cmp-text-success)]"}`}>{d.nextOnCall ? "On-call scheduled" : "Available"}</span></div>
-            {d.nextOnCall && <div className="flex items-center justify-between text-sm mt-1"><span className="text-gray-500">Next on-call</span><span className="text-gray-800">{new Date(d.nextOnCall.start).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></div>}
-            <Link href="/dashboard/shift" className="block text-center text-[12px] font-medium text-[var(--cmp-text-information)] hover:underline pt-2">View shift workspace →</Link>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-4">
-            <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
-            <div className="grid grid-cols-2 gap-2">
-              <Link href="/dashboard/tasks" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">☑ Add Task</Link>
-              <Link href="/dashboard/shift" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">🩺 My Shift</Link>
-              <Link href="/dashboard/learning" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">📚 Learning</Link>
-              <Link href="/dashboard/notifications" className="text-[12px] font-medium text-gray-600 border border-gray-200 rounded-lg py-2 text-center hover:bg-gray-50">🔔 Alerts</Link>
-            </div>
-          </div>
-        </div>
-      </div>
+      </PaneGrid>
       <p className="text-[11px] text-gray-400">Events aggregate your real shifts, task deadlines, learning due dates and competency renewals. Week / resource / team views and drag-drop scheduling are progressive.</p>
     </div>
   );

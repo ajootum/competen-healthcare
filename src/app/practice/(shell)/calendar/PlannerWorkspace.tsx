@@ -23,6 +23,9 @@ import ContextPanel from "./ContextPanel";
 import AddActivityForm, { type AddDraft } from "./AddActivityForm";
 import FullScreenSheet from "../_responsive/FullScreenSheet";
 import { useBelowMd } from "./use-below-md";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
+
 
 // ────────────────────────────────────────────────────────────────────────────────────────────────────
 // THE PRACTICE PLANNER -- CP-PLAN-002's four views over one payload, compressed by CPR-PLN-002.
@@ -79,6 +82,10 @@ export default function PlannerWorkspace({
   dayOperations?: ReactNode;
 }) {
   const router = useRouter();
+  // Drag-to-resize side panes from xl up (the layouts below are single-column under it). Week has a pane on each
+  // side of the day canvas; Day, Month and Agenda share one inspector width.
+  const [bindWeek, rzWeek] = usePaneGrid({ start: { storageKey: "practice.planner.week.panel.w", defaultPx: 320 }, end: { storageKey: "practice.planner.week.inspector.w", defaultPx: 330 } });
+  const [bindGrid, rz] = usePaneGrid({ end: { storageKey: "practice.planner.inspector.w", defaultPx: 330 } });
   // CPR-MOB-001 s8: one behavioural breakpoint question, for the ONE surface that must MOUNT
   // differently on a phone (the add form's full-screen sheet). Everything else on this screen adapts
   // by CSS alone.
@@ -420,10 +427,11 @@ export default function PlannerWorkspace({
 
       {/* ── THE FOUR COMPOSITIONS (s6) ─────────────────────────────────────────────────────────── */}
       {period.view === "week" ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[320px_minmax(0,1fr)_330px]">
+        <div ref={bindWeek} style={rzWeek.style} className="grid grid-cols-1 gap-4 xl:gap-x-0 xl:grid-cols-[var(--rz-s)_auto_minmax(0,1fr)_auto_var(--rz-e)]">
           <WeekPanel week={range} selectedDate={day.date} canManage={canManage}
             dragging={dragging} onDropDay={dropOnDay}
             onAdd={date => openAdd({ planDate: date })} urlState={urlState} />
+          <ResizeHandle {...rzWeek.start.handleProps} label="Resize the week panel" className="hidden xl:block xl:self-stretch" />
           {/* CPR-MOB-001 s8: "Week -- stacked day cards with activity/location/booked/free summary."
               My Week's cards above ARE that face, so below md Week mode is those cards and nothing
               else; the selected-day canvas and the inspector return at md. The wrapper is a visual
@@ -432,6 +440,7 @@ export default function PlannerWorkspace({
               same gap. Each card's "Open Day view" is the one-action route onward (HFE-10). */}
           <div className="max-md:hidden grid gap-4 xl:contents">
             {detail}
+            <ResizeHandle {...rzWeek.end.handleProps} label="Resize the day inspector" className="hidden xl:block xl:self-stretch" />
             {inspector}
           </div>
         </div>
@@ -440,15 +449,17 @@ export default function PlannerWorkspace({
           {/* s6: Day mode's primary content is the timeline, the appointments, the availability and
               the booking controls; the activity canvas and the inspector follow as context. */}
           {dayOperations}
-          <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+          <div ref={bindGrid} style={rz.style} className="grid grid-cols-1 gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
             {detail}
+            <ResizeHandle {...rz.end.handleProps} label="Resize the day inspector" className="hidden xl:block xl:self-stretch" />
             {inspector}
           </div>
         </div>
       ) : period.view === "month" ? (
-        <div className="grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+        <div ref={bindGrid} style={rz.style} className="grid grid-cols-1 gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
           <MonthGrid range={range} period={period} filters={filters} urlState={urlState}
             selectedDate={day.date} />
+          <ResizeHandle {...rz.end.handleProps} label="Resize the day inspector" className="hidden xl:block xl:self-stretch" />
           {inspector}
         </div>
       ) : (
@@ -458,10 +469,11 @@ export default function PlannerWorkspace({
         // selects an item, and closing the selection returns the list to full width. The preview is
         // the same ContextPanel the Day Inspector's Overview renders, so the counts, the outcomes and
         // the honesty sentences cannot diverge between the two surfaces (HFE-07, s14).
-        <div className={session
-          ? "grid grid-cols-1 gap-4 xl:grid-cols-[minmax(0,1fr)_330px]"
+        <div ref={bindGrid} style={rz.style} className={session
+          ? "grid grid-cols-1 gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]"
           : "grid grid-cols-1 gap-4"}>
           <AgendaList range={range} period={period} filters={filters} urlState={urlState} />
+          {session && <ResizeHandle {...rz.end.handleProps} label="Resize the item preview" className="hidden xl:block xl:self-stretch" />}
           {session && (
             <aside className="self-start rounded-2xl border border-gray-200 bg-white">
               <div className="flex items-center gap-2 border-b border-gray-100 px-4 py-3">

@@ -15,6 +15,7 @@ import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { ADAPTIVE_HELP, ADAPTIVE_RULE, REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice, EmptyState } from "../../../../../_components/chrome";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
@@ -150,7 +151,73 @@ export default async function Revise({ params, searchParams }: { params: Promise
     <>
       {header}
       {papers}
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <PaneGrid bp="lg" fallbackMain="minmax(0,3fr)"
+        end={{ storageKey: "scholar.revise.side.w", defaultPx: c => Math.round((c - 20) * 0.4), fallback: "minmax(0,2fr)", label: "Resize the revision progress panel", node: (
+        <aside aria-labelledby="intel-h" className="space-y-4">
+          <h2 id="intel-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">How your revision is going</h2>
+          <p className="text-[12.5px] text-gray-600">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>
+          {!insights ? <Unreadable what="your revision history" /> : (
+            <>
+              {policy.scholarRevisionRecommendations === "on" && insights.recommendations.length > 0 && (
+                <section aria-labelledby="rec-h" className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <h3 id="rec-h" className="text-[14px] font-bold text-gray-900">What to revise next</h3>
+                  <ul className="mt-2 space-y-2">
+                    {insights.recommendations.map(r => (
+                      <li key={r.id} className="text-[13.5px]">
+                        {"learnSection" in r.action
+                          ? <Link href={`${studyHref("learn")}?section=${r.action.learnSection}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{r.title}</Link>
+                          : <span className="font-semibold text-gray-900">{r.title}</span>}
+                        <span className="block text-[12.5px] text-gray-600">{r.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+              )}
+              <dl className="grid grid-cols-2 gap-3">
+                <Stat label="Cards due now" value={String(insights.due)} />
+                <Stat label="Due in the next 7 days" value={String(insights.upcoming7)} />
+                <Stat label={`Reviews, last ${policy.scholarInsightWindowDays} days`} value={insights.completedReviews.state === "measured" ? String(insights.completedReviews.reviews) : "Not measured"} note={insights.completedReviews.state === "measured" ? null : insights.completedReviews.reason} />
+                <Stat label="Recall" value={insights.recall.state === "measured" ? `${insights.recall.recalledShare}%` : insights.recall.state === "insufficient" ? "Not enough yet" : "Not measured"}
+                  note={insights.recall.state === "measured" ? `of ${insights.recall.reviews} reviews graded Okay or better` : insights.recall.state === "insufficient" ? `${insights.recall.have} of ${insights.recall.need} reviews needed` : insights.recall.reason} />
+                <Stat label="Materials revised" value={`${insights.coverage.revised} of ${insights.coverage.of}`} />
+                <Stat label="Answers marked" value={`${insights.marking.deterministic + insights.marking.self_graded + insights.marking.ai_evaluation}`}
+                  note={`by code ${insights.marking.deterministic} · by you ${insights.marking.self_graded} · by AI evaluation ${insights.marking.ai_evaluation}`} />
+              </dl>
+              <section aria-labelledby="ret-h" className="rounded-2xl border border-gray-200 bg-white p-4">
+                <h3 id="ret-h" className="text-[14px] font-bold text-gray-900">Recall over six weeks</h3>
+                {insights.retention.state !== "measured" ? <p className="mt-1 text-[13px] text-gray-600">{insights.retention.state === "insufficient" ? `Not enough reviews yet (${insights.retention.have} of ${insights.retention.need}).` : insights.retention.reason}</p> : (
+                  <table className="mt-2 w-full text-[13px]">
+                    <caption className="sr-only">Reviews and the share graded Okay or better, by week</caption>
+                    <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col" className="font-semibold">Week of</th><th scope="col" className="font-semibold">Reviews</th><th scope="col" className="font-semibold">Recalled</th></tr></thead>
+                    <tbody>{insights.retention.weeks.map(w => (
+                      <tr key={w.weekStart} className="border-t border-gray-100"><td>{new Date(`${w.weekStart}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</td>
+                        <td className="tabular-nums">{w.reviews}</td><td className="tabular-nums">{w.recalledShare === null ? "No reviews" : `${w.recalledShare}%`}</td></tr>
+                    ))}</tbody>
+                  </table>
+                )}
+              </section>
+              <section aria-labelledby="hard-h" className="rounded-2xl border border-gray-200 bg-white p-4">
+                <h3 id="hard-h" className="text-[14px] font-bold text-gray-900">What you keep missing</h3>
+                {insights.repeatedDifficulties.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing missed more than once.</p> : (
+                  <ul className="mt-2 space-y-2">{insights.repeatedDifficulties.map(d => (
+                    <li key={d.questionId} className="text-[13px]"><span className="text-gray-900">{d.stem}</span> <span className="text-gray-500">· missed {d.misses} times</span>
+                      <Link href={`${studyHref("learn")}?section=${d.chunkId}`} className={`ml-2 font-semibold underline ${focusRing}`}>Teach me this</Link></li>
+                  ))}</ul>
+                )}
+              </section>
+              <section aria-labelledby="comp-h" className="rounded-2xl border border-gray-200 bg-white p-4">
+                <h3 id="comp-h" className="text-[14px] font-bold text-gray-900">Revision by competency</h3>
+                <p className="text-[12px] text-gray-600">Questions answered on competencies your notes are linked to. Practised, not achieved.</p>
+                {insights.competencyActivity.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Not measured: none of your revision questions is linked to a competency yet. Revision works without a catalogue.</p> : (
+                  <ul className="mt-2 space-y-1">{insights.competencyActivity.slice(0, 8).map(c => (
+                    <li key={c.competencyId} className="flex justify-between gap-2 text-[13px]"><span className="text-gray-900">{compNames.get(c.competencyId)?.title ?? "A competency"}</span><span className="tabular-nums text-gray-600">{c.answered} answered</span></li>
+                  ))}</ul>
+                )}
+              </section>
+            </>
+          )}
+        </aside>
+        ) }}>
         <div className="space-y-5">
           <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
@@ -218,72 +285,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
               : <CardReview cards={cardViews} />}
           </section>
         </div>
-
-        <aside aria-labelledby="intel-h" className="space-y-4">
-          <h2 id="intel-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">How your revision is going</h2>
-          <p className="text-[12.5px] text-gray-600">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>
-          {!insights ? <Unreadable what="your revision history" /> : (
-            <>
-              {policy.scholarRevisionRecommendations === "on" && insights.recommendations.length > 0 && (
-                <section aria-labelledby="rec-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <h3 id="rec-h" className="text-[14px] font-bold text-gray-900">What to revise next</h3>
-                  <ul className="mt-2 space-y-2">
-                    {insights.recommendations.map(r => (
-                      <li key={r.id} className="text-[13.5px]">
-                        {"learnSection" in r.action
-                          ? <Link href={`${studyHref("learn")}?section=${r.action.learnSection}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{r.title}</Link>
-                          : <span className="font-semibold text-gray-900">{r.title}</span>}
-                        <span className="block text-[12.5px] text-gray-600">{r.reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </section>
-              )}
-              <dl className="grid grid-cols-2 gap-3">
-                <Stat label="Cards due now" value={String(insights.due)} />
-                <Stat label="Due in the next 7 days" value={String(insights.upcoming7)} />
-                <Stat label={`Reviews, last ${policy.scholarInsightWindowDays} days`} value={insights.completedReviews.state === "measured" ? String(insights.completedReviews.reviews) : "Not measured"} note={insights.completedReviews.state === "measured" ? null : insights.completedReviews.reason} />
-                <Stat label="Recall" value={insights.recall.state === "measured" ? `${insights.recall.recalledShare}%` : insights.recall.state === "insufficient" ? "Not enough yet" : "Not measured"}
-                  note={insights.recall.state === "measured" ? `of ${insights.recall.reviews} reviews graded Okay or better` : insights.recall.state === "insufficient" ? `${insights.recall.have} of ${insights.recall.need} reviews needed` : insights.recall.reason} />
-                <Stat label="Materials revised" value={`${insights.coverage.revised} of ${insights.coverage.of}`} />
-                <Stat label="Answers marked" value={`${insights.marking.deterministic + insights.marking.self_graded + insights.marking.ai_evaluation}`}
-                  note={`by code ${insights.marking.deterministic} · by you ${insights.marking.self_graded} · by AI evaluation ${insights.marking.ai_evaluation}`} />
-              </dl>
-              <section aria-labelledby="ret-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                <h3 id="ret-h" className="text-[14px] font-bold text-gray-900">Recall over six weeks</h3>
-                {insights.retention.state !== "measured" ? <p className="mt-1 text-[13px] text-gray-600">{insights.retention.state === "insufficient" ? `Not enough reviews yet (${insights.retention.have} of ${insights.retention.need}).` : insights.retention.reason}</p> : (
-                  <table className="mt-2 w-full text-[13px]">
-                    <caption className="sr-only">Reviews and the share graded Okay or better, by week</caption>
-                    <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col" className="font-semibold">Week of</th><th scope="col" className="font-semibold">Reviews</th><th scope="col" className="font-semibold">Recalled</th></tr></thead>
-                    <tbody>{insights.retention.weeks.map(w => (
-                      <tr key={w.weekStart} className="border-t border-gray-100"><td>{new Date(`${w.weekStart}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</td>
-                        <td className="tabular-nums">{w.reviews}</td><td className="tabular-nums">{w.recalledShare === null ? "No reviews" : `${w.recalledShare}%`}</td></tr>
-                    ))}</tbody>
-                  </table>
-                )}
-              </section>
-              <section aria-labelledby="hard-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                <h3 id="hard-h" className="text-[14px] font-bold text-gray-900">What you keep missing</h3>
-                {insights.repeatedDifficulties.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing missed more than once.</p> : (
-                  <ul className="mt-2 space-y-2">{insights.repeatedDifficulties.map(d => (
-                    <li key={d.questionId} className="text-[13px]"><span className="text-gray-900">{d.stem}</span> <span className="text-gray-500">· missed {d.misses} times</span>
-                      <Link href={`${studyHref("learn")}?section=${d.chunkId}`} className={`ml-2 font-semibold underline ${focusRing}`}>Teach me this</Link></li>
-                  ))}</ul>
-                )}
-              </section>
-              <section aria-labelledby="comp-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                <h3 id="comp-h" className="text-[14px] font-bold text-gray-900">Revision by competency</h3>
-                <p className="text-[12px] text-gray-600">Questions answered on competencies your notes are linked to. Practised, not achieved.</p>
-                {insights.competencyActivity.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Not measured: none of your revision questions is linked to a competency yet. Revision works without a catalogue.</p> : (
-                  <ul className="mt-2 space-y-1">{insights.competencyActivity.slice(0, 8).map(c => (
-                    <li key={c.competencyId} className="flex justify-between gap-2 text-[13px]"><span className="text-gray-900">{compNames.get(c.competencyId)?.title ?? "A competency"}</span><span className="tabular-nums text-gray-600">{c.answered} answered</span></li>
-                  ))}</ul>
-                )}
-              </section>
-            </>
-          )}
-        </aside>
-      </div>
+      </PaneGrid>
     </>
   );
 }

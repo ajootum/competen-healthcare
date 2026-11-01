@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { SKILL_TYPE_LABELS } from "@/lib/ckcm";
+import { ResizeHandle, useResizable } from "@/components/ui/resizable";
 
 type Skill = {
   id: string; name: string; description: string | null; skill_type: string;
@@ -17,6 +18,12 @@ export default function SkillBuilder({ skills, links, competencies }: {
   skills: Skill[]; links: SkillLink[]; competencies: CompOption[];
 }) {
   const router = useRouter();
+  // Drag-to-resize from lg up (where the three columns exist): library width, linked-competencies width, library list height.
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const sideMax = (c: number) => Math.max(200, Math.floor((c - 420 - 2 * 44) / 2));
+  const libW = useResizable({ storageKey: "studio.skills.library.w", axis: "x", defaultPx: 280, minPx: 200, maxPx: sideMax, container: box });
+  const linkW = useResizable({ storageKey: "studio.skills.links.w", axis: "x", side: "end", defaultPx: 280, minPx: 200, maxPx: sideMax, container: box });
+  const libH = useResizable({ storageKey: "studio.skills.library.h", axis: "y", defaultPx: 416, minPx: 160, maxPx: 960 });
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
@@ -71,7 +78,8 @@ export default function SkillBuilder({ skills, links, competencies }: {
   const label = "text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-1 block";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_280px] gap-5">
+    <div ref={setBox} className="grid grid-cols-1 lg:grid-cols-[var(--rz-l)_auto_minmax(0,1fr)_auto_var(--rz-r)] gap-5 lg:gap-0"
+      style={{ "--rz-l": `${libW.size}px`, "--rz-r": `${linkW.size}px` } as CSSProperties}>
       {/* LEFT — library */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
         <button onClick={() => select(null)}
@@ -83,7 +91,7 @@ export default function SkillBuilder({ skills, links, competencies }: {
           <option value="all">All types</option>
           {Object.entries(SKILL_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
         </select>
-        <div className="flex flex-col gap-1 max-h-[26rem] overflow-y-auto">
+        <div className="flex flex-col gap-1 max-h-[26rem] md:max-h-[var(--rz-h)] overflow-y-auto" style={{ "--rz-h": `${libH.size}px` } as CSSProperties}>
           {visible.length === 0 && <p className="text-xs text-gray-500 py-4 text-center">No skills yet — create the first one.</p>}
           {visible.map(s => {
             const t = SKILL_TYPE_LABELS[s.skill_type] ?? SKILL_TYPE_LABELS.psychomotor;
@@ -100,7 +108,9 @@ export default function SkillBuilder({ skills, links, competencies }: {
             );
           })}
         </div>
+        <ResizeHandle {...libH.handleProps} label="Resize the skill list height" className="hidden md:block" />
       </div>
+      <ResizeHandle {...libW.handleProps} label="Resize the skill library" className="hidden lg:block" />
 
       {/* MIDDLE — form */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
@@ -147,6 +157,8 @@ export default function SkillBuilder({ skills, links, competencies }: {
           </div>
         </div>
       </div>
+
+      <ResizeHandle {...linkW.handleProps} label="Resize the linked competencies panel" className="hidden lg:block" />
 
       {/* RIGHT — live relationships */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">

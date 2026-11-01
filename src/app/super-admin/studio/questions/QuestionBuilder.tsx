@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
+import { ResizeHandle, useResizable } from "@/components/ui/resizable";
 
 type Bank = { id: string; name: string; description: string | null; cpu_id: string | null; pass_mark: number; validity_months: number; time_limit_minutes: number | null };
 type Question = { id: string; bank_id: string; content: string; options: string[]; correct_answer: string; explanation: string | null };
@@ -14,6 +15,10 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
   banks: Bank[]; questions: Question[]; cpus: Cpu[]; attempts: Attempt[];
 }) {
   const router = useRouter();
+  // Drag-to-resize from lg up (where the two columns exist): bank list width and height.
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const bankW = useResizable({ storageKey: "studio.questions.banks.w", axis: "x", defaultPx: 300, minPx: 200, maxPx: c => Math.max(200, Math.min(Math.floor(c * 0.6), c - 44 - 420)), container: box });
+  const bankH = useResizable({ storageKey: "studio.questions.banks.h", axis: "y", defaultPx: 384, minPx: 160, maxPx: 960 });
   const [selectedId, setSelectedId] = useState<string | null>(banks[0]?.id ?? null);
   const [showNew, setShowNew] = useState(false);
   const [bankForm, setBankForm] = useState({ name: "", cpu_id: "", pass_mark: "80", validity_months: "24" });
@@ -43,7 +48,8 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
   const input = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[300px_1fr] gap-5">
+    <div ref={setBox} className="grid grid-cols-1 lg:grid-cols-[var(--rz-l)_auto_minmax(0,1fr)] gap-5 lg:gap-0"
+      style={{ "--rz-l": `${bankW.size}px` } as CSSProperties}>
       {/* LEFT — banks */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
         <button onClick={() => setShowNew(v => !v)}
@@ -79,7 +85,7 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
             </button>
           </div>
         )}
-        <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+        <div className="flex flex-col gap-1 max-h-96 md:max-h-[var(--rz-h)] overflow-y-auto" style={{ "--rz-h": `${bankH.size}px` } as CSSProperties}>
           {banks.length === 0 && <p className="text-xs text-gray-500 py-4 text-center">No banks yet.</p>}
           {banks.map(b => (
             <button key={b.id} onClick={() => { setSelectedId(b.id); setError(null); }}
@@ -94,7 +100,9 @@ export default function QuestionBuilder({ banks, questions, cpus, attempts }: {
             </button>
           ))}
         </div>
+        <ResizeHandle {...bankH.handleProps} label="Resize the bank list height" className="hidden md:block" />
       </div>
+      <ResizeHandle {...bankW.handleProps} label="Resize the bank list" className="hidden lg:block" />
 
       {/* RIGHT — questions editor */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { requireAnalyticsAccess } from "@/lib/analytics";
 import { StatTiles, Card } from "../reports/ui";
 
@@ -105,26 +106,7 @@ export default async function AssessmentStudioPage() {
         { label: "Question Bank", value: String(questionCount ?? 0), sub: "MCQ items" },
       ]} />
 
-      <div className="grid lg:grid-cols-[minmax(0,1fr)_280px] gap-4 mb-4">
-        <div className="min-w-0">
-          <Card title="Assessment Studio Modules">
-            <div className="grid sm:grid-cols-2 gap-2">
-              {MODULES.map(m => m.soon ? (
-                <div key={m.name} className="border border-gray-100 rounded-lg px-3 py-2.5 opacity-60 select-none">
-                  <p className="text-xs font-semibold text-gray-500">{m.icon} {m.name} <span className="text-[8px] font-bold uppercase bg-gray-100 text-gray-400 rounded px-1 py-0.5 ml-1">soon</span></p>
-                  <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
-                </div>
-              ) : (
-                <Link key={m.name} href={m.href!} className="border border-gray-100 rounded-lg px-3 py-2.5 hover:border-indigo-300 transition-colors">
-                  <p className="text-xs font-semibold text-gray-800">{m.icon} {m.name}</p>
-                  <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
-                  {m.count && <p className="text-[9px] text-indigo-500 mt-1">{m.count}</p>}
-                </Link>
-              ))}
-            </div>
-          </Card>
-        </div>
-
+      <PaneGrid bp="lg" className="mb-4" end={{ storageKey: "assessor.studio.rail.w", defaultPx: 280, label: "Resize the side panel", node: (
         <div className="space-y-4">
           <Card title="Quick Actions">
             <div className="grid grid-cols-2 gap-1.5">
@@ -150,7 +132,26 @@ export default async function AssessmentStudioPage() {
             ) : <p className="text-xs text-gray-400">No assets authored yet.</p>}
           </Card>
         </div>
-      </div>
+      ) }}>
+        <div className="min-w-0">
+          <Card title="Assessment Studio Modules">
+            <div className="grid sm:grid-cols-2 gap-2">
+              {MODULES.map(m => m.soon ? (
+                <div key={m.name} className="border border-gray-100 rounded-lg px-3 py-2.5 opacity-60 select-none">
+                  <p className="text-xs font-semibold text-gray-500">{m.icon} {m.name} <span className="text-[8px] font-bold uppercase bg-gray-100 text-gray-400 rounded px-1 py-0.5 ml-1">soon</span></p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
+                </div>
+              ) : (
+                <Link key={m.name} href={m.href!} className="border border-gray-100 rounded-lg px-3 py-2.5 hover:border-indigo-300 transition-colors">
+                  <p className="text-xs font-semibold text-gray-800">{m.icon} {m.name}</p>
+                  <p className="text-[10px] text-gray-400 mt-0.5 leading-snug">{m.desc}</p>
+                  {m.count && <p className="text-[9px] text-indigo-500 mt-1">{m.count}</p>}
+                </Link>
+              ))}
+            </div>
+          </Card>
+        </div>
+      </PaneGrid>
 
       <Card title="Powers the Assessment Ecosystem" sub="publishing synchronises downstream automatically — these modules read the same governed tables">
         <div className="flex items-stretch gap-1.5 overflow-x-auto pb-1">

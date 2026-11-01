@@ -13,6 +13,7 @@ import PatientsScreen from "./PatientsScreen";
 import RegisterNavigator from "./RegisterNavigator";
 import RegistryConsole from "./RegistryConsole";
 import ContextPanel from "./ContextPanel";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import type {
   CohortSortView, CohortView, FamilyView, ScreenCapabilities, SearchView, SummaryView, WorklistsView,
 } from "./types";
@@ -213,7 +214,8 @@ export default async function PatientsPage({ searchParams }: {
             />
           }
           registration={regWorkspace ? (
-            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <PaneGrid bp="lg" gap="gap-4" className="items-start"
+              end={{ storageKey: "practice.patients.registration.context.w", defaultPx: 320, label: "Resize the registration context panel" }}>
               <RegistryConsole
                 canCreate={canCreate}
                 canStartEncounter={capabilities.mayStartEncounter}
@@ -224,7 +226,7 @@ export default async function PatientsPage({ searchParams }: {
                   waiting, who was registered, and what this screen refuses. It stays with the form
                   rather than with the workspace, because that is the job it belongs to. */}
               <ContextPanel w={regWorkspace} />
-            </div>
+            </PaneGrid>
           ) : null}
         />
       </div>

@@ -147,6 +147,9 @@ import { TimeInput } from "@/components/ui/wall-clock";
 // The shared encounter visual language. Follow-up is the first tab on it; the other seven follow.
 import { PANEL, SectionHeader, EmptyState, Tip, Advisory } from "@/components/practice/EncounterKit";
 import DiagnosisWorkspace from "./DiagnosisWorkspace";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
+
 import ProcedureWorkspace from "./ProcedureWorkspace";
 
 // CPR-ENC-002's consultation surface: the comp's eight-tab main workspace and the right-hand actions
@@ -393,6 +396,7 @@ export default function EncounterConsole(props: {
   const locked = LOCKED_STATUSES.includes(props.status) || props.status === "CANCELLED";
   const editable = props.canEdit && !locked;
 
+  const [bindGrid, rz] = usePaneGrid({ end: { storageKey: "practice.encounter.rail.w", defaultPx: 320 } });
   const [tab, setTab] = useState("overview");
   // ── CPR-MOB-001 s10: THE TAB THE CODE JUST SWITCHED TO HAS TO BE THE TAB YOU CAN SEE ──────────────
   //
@@ -1116,7 +1120,7 @@ export default function EncounterConsole(props: {
         : <p className="mt-2 text-[12px] text-gray-400">{empty}</p>;
 
   return (
-    <div className="mt-4 grid gap-4 xl:grid-cols-[1fr_320px]">
+    <div ref={bindGrid} style={rz.style} className="mt-4 grid gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
       {/* ══ CENTRE: CPR-ENC-003 s3's FOUR COGNITIVE BLOCKS ═══════════════════════════════════════ */}
       {/* ⚠ min-w-0 IS LOAD-BEARING AND ITS ABSENCE MADE THE WHOLE PAGE SCROLL SIDEWAYS.
 
@@ -2732,6 +2736,7 @@ export default function EncounterConsole(props: {
           weight. Patient safety -- the allergy line -- was the SECOND thing in the rail, under the
           encounter's start time. Anything inserted here must take a tier, and the tier decides where
           it goes. */}
+      <ResizeHandle {...rz.end.handleProps} label="Resize the encounter side panel" className="hidden xl:block xl:self-stretch" />
       <aside className={`flex flex-col gap-3 ${RAIL}`}>
         {/* HIGHEST (s11). */}
         {props.railSafety}

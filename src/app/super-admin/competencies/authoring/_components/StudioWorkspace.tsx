@@ -11,6 +11,8 @@ import { announceAreaMove, announceCompetencyMove, dropAction, expandOrder, grou
 import { AddAreaForm, AreaHeading, MoveSelect } from "./OrganiseControls";
 import { FrameworkMap } from "./FrameworkMap";
 import { SubmitRevisionReview } from "./RevisionBanner";
+import { ResizableColumns, ResizeHandle, useResizable } from "@/components/ui/resizable";
+import { announceBulkDone, announceBulkStopped, bulkProgress, clearSelection, keepVisible, selectAllIn, toggleId, toMove } from "@/lib/competency/domain-selection";
 import { movedPosition, revisionTags, type CritMark, type PublishedFields, type RevMark } from "@/lib/competency/revision-ui";
 
 // CFCA-STUDIO-UX-02, the Competencies tab of one framework: a compact searchable explorer (domains, competencies,
@@ -140,6 +142,12 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   const drag = useRef<PointerDrag | null>(null);
   const focusNext = useRef<string | null>(null);
   const root = useRef<HTMLDivElement>(null);
+  // The list's height is the user's (drag handle under the list, remembered per browser); until then it fills what the panel allows.
+  const { size: listH, bindTarget: bindList, handleProps: listHandle } = useResizable<HTMLDivElement>({ storageKey: "studio.explorer.h", axis: "y", minPx: 160, maxPx: vh => Math.max(160, vh - 64) });
+  const [pickedDomains, setPickedDomains] = useState<Set<string>>(new Set());
+  const [bulkTarget, setBulkTarget] = useState("");
+  const [bulkRun, setBulkRun] = useState<{ done: number; total: number } | null>(null);
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const reorderable = canReorder && editable;
   const reorderLists = reorderable && !query; // a filtered list has no whole order to move within
 
@@ -279,6 +287,36 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
     setOpen(s => new Set(s).add(a.domainId));
     return act(a, announceCompetencyMove(name, domains.find(d => d.id === a.domainId)?.name ?? "the domain"), v => ({ ...v, domains: moveCompetency(v.domains, a.competencyId, a.domainId) }));
   }
+  // Bulk: several domains to one Area (or Unassigned) with the existing set_domain_area request, one domain at a time.
+  const bulk = organiseLists && hasAreas;
+  const pickedNow = useMemo(() => keepVisible(pickedDomains, bulk ? domains.map(d => d.id) : []), [pickedDomains, bulk, domains]);
+  async function bulkMove() {
+    if (busy || !bulk || !bulkTarget) return;
+    const areaId = bulkTarget === "__none" ? null : bulkTarget;
+    const ids = toMove(pickedNow, domains, areaId);
+    const areaName = view.areas.find(a => a.id === areaId)?.name ?? null;
+    if (!ids.length) { setSay("Nothing to move: the selected domains are already there."); return; }
+    setFail(null); setSay(""); setSaving(true);
+    let done = 0, stopped: string | null = null;
+    try {
+      for (const id of ids) {
+        setBulkRun({ done, total: ids.length });
+        const name = domains.find(d => d.id === id)?.name ?? "a domain";
+        let why: string | null = null;
+        try {
+          const res = await fetch(AUTHORING, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "set_domain_area", domainId: id, areaId, frameworkId }) });
+          if (!res.ok) why = (await res.json().catch(() => ({})))?.error ?? "it could not be saved.";
+        } catch { why = "check your connection."; }
+        if (why) { stopped = announceBulkStopped(done, ids.length, name, why); break; }
+        done++;
+        setView(v => ({ ...v, domains: setDomainArea(v.domains, id, areaId) }));
+        setPickedDomains(sel => { const n = new Set(sel); n.delete(id); return n; });
+      }
+    } finally { setBulkRun(null); setSaving(false); }
+    if (stopped) { setFail(stopped); setSay(stopped); } else { setSay(`${announceBulkDone(done, areaName)}${draftMode ? " Saved to the draft layout. Learners keep the published structure." : ""}`); setBulkTarget(""); }
+    if (done > 0) startRefresh(() => router.refresh());
+    if (!stopped) titleRef.current?.focus();
+  }
   /** What the pointer drag `d` carries, read from the list it started in. */
   function dragSource(d: PointerDrag | null): DragSource | null {
     if (!d) return null;
@@ -319,30 +357,38 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   };
 
   return (
-    <div className="grid gap-5 md:grid-cols-[minmax(15rem,20rem)_minmax(0,1fr)]" ref={root}>
+    <div className="grid gap-5" ref={root}>
       <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{say}</p>
-      <div role="group" aria-label="Framework view" className="flex gap-2 md:col-span-2">
+      <div role="group" aria-label="Framework view" className="flex gap-2">
         {(["tree", "map"] as const).map(m => (
           <button key={m} type="button" aria-pressed={mode === m} onClick={() => setMode(m)}
             className={`rounded-lg border px-3 py-1.5 text-[13px] font-semibold focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700 pointer-coarse:min-h-[var(--cmp-touch-min)] ${mode === m ? "border-teal-900 bg-teal-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}>{m === "tree" ? "Tree" : "Map"}</button>
         ))}
       </div>
       {mode === "map" ? (
-        <div className="min-w-0 md:col-span-2">
+        <div className="min-w-0">
           <FrameworkMap domains={domains} areas={hasAreas ? view.areas : undefined} activeId={active} status={MAP_STATUS}
             onSelect={id => { choose(id); const d = domains.find(x => x.competencies.some(c => c.id === id)); if (d) setOpen(s => new Set(s).add(d.id)); setMode("tree"); setSay(`Opened ${all.find(x => x.c.id === id)?.c.name ?? "the competency"} in the editor.`); }} />
         </div>
-      ) : (<>
-      <aside aria-label="Competency explorer" className="flex max-h-[calc(100vh-12rem)] flex-col rounded-2xl border border-gray-200 bg-white md:sticky md:top-4">
-        <div className="border-b border-gray-100 p-4">
-          <div className="flex items-baseline justify-between"><h2 className="text-[15px] font-bold text-gray-900">Competency explorer</h2><span className="text-[12px] text-gray-500">{domains.length} domains</span></div>
+      ) : (
+      <ResizableColumns storageKey="studio.explorer.w" defaultLeft={320} minLeft={240} minRight={420} label="Resize the explorer"
+        left={
+      <aside aria-label="Competency explorer" className="flex max-h-[calc(100vh-12rem)] min-w-0 flex-col rounded-2xl border border-gray-200 bg-white md:sticky md:top-4 md:max-h-[calc(100vh-2rem)]">
+        <div className="border-b border-gray-100 px-4 pb-3 pt-4">
+          <div className="flex items-baseline justify-between"><h2 ref={titleRef} tabIndex={-1} className="text-[15px] font-bold text-gray-900 focus:outline-none">Competency explorer</h2><span className="text-[12px] text-gray-500">{domains.length} domains</span></div>
           <label className="sr-only" htmlFor="cx-q">Find a competency or code</label>
-          <input id="cx-q" value={q} onChange={e => setQ(e.target.value)} placeholder="Find a competency or code…" className="mt-3 block w-full rounded-lg border border-gray-300 px-3 py-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)]" />
-          {reorderable && <p className="mt-2 text-[11.5px] text-gray-600">{query ? "Clear the search to reorder domains and competencies." : "Drag a row, or use the arrow buttons, to change the order."}{draftMode ? " Learners keep the published order until a draft layout is published." : ""}</p>}
-          {organiseLists && <p className="mt-1 text-[11.5px] text-gray-600">Drag a domain onto an Area, or a competency onto a domain, or use Move to… and Move. These are organisational moves: no clinical re-review.</p>}
+          <input id="cx-q" value={q} onChange={e => { setQ(e.target.value); if (e.target.value.trim()) setPickedDomains(clearSelection()); }} placeholder="Find a competency or code…" className="mt-2 block w-full rounded-lg border border-gray-300 px-3 py-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)]" />
+          {(reorderable || organiseLists) && (
+            <details className="mt-2">
+              <summary className="cursor-pointer text-[12px] font-semibold text-teal-800 pointer-coarse:flex pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:items-center">How to organise</summary>
+              {reorderable && <p className="mt-1 text-[11.5px] text-gray-600">{query ? "Clear the search to reorder domains and competencies." : "Drag a row, or use the arrow buttons, to change the order."}{draftMode ? " Learners keep the published order until a draft layout is published." : ""}</p>}
+              {organiseLists && <p className="mt-1 text-[11.5px] text-gray-600">Drag a domain onto an Area, or a competency onto a domain, or use Move to… and Move. These are organisational moves: no clinical re-review.{hasAreas ? " To move several domains at once, tick them and use Move to… below the list." : ""}</p>}
+            </details>
+          )}
           {fail && <p role="alert" className="mt-2 text-[12.5px] font-medium text-red-700">{fail}</p>}
         </div>
-        <div className="min-h-0 flex-1 overflow-y-auto py-1">
+        <div ref={bindList} style={listH != null ? ({ "--cx-h": `${listH}px` } as React.CSSProperties) : undefined}
+          className={`min-h-0 flex-1 overflow-y-auto py-1 md:min-h-[160px] ${listH != null ? "md:[flex:0_1_auto] md:[height:var(--cx-h)]" : ""}`}>
           {organiseLists && (
             <details className="mx-2 mb-1 rounded-lg border border-gray-200 px-2 py-1">
               <summary className="cursor-pointer py-1 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)]">{hasAreas ? "Add an Area" : "Group domains into Areas"}</summary>
@@ -361,7 +407,8 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
             return (
               <div key={d.id} {...(organiseLists ? { "data-drop-domain": d.id } : {})} className={over === `dom|${d.id}` ? overCls : undefined}>
                 <div {...(reorderLists ? rx.row(dg, di) : {})} className={`flex items-center gap-1 pr-2 hover:bg-gray-50 ${reorderLists && over === sameKeyFor(dg, di) ? overCls : ""}`}>
-                  {reorderLists && rx.grip(dg, di, "pl-2")}
+                  {bulk && <input type="checkbox" aria-label={`Select ${d.name}`} checked={pickedNow.has(d.id)} disabled={busy} onChange={() => setPickedDomains(toggleId(pickedNow, d.id))} className="ml-2 shrink-0 pointer-coarse:h-5 pointer-coarse:w-5" />}
+                  {reorderLists && rx.grip(dg, di, bulk ? "" : "pl-2")}
                   <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => toggle(s, d.id))}
                     className="flex min-w-0 flex-1 items-center justify-between px-2 py-2.5 text-left text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)]">
                     <span className="min-w-0"><span aria-hidden className="mr-1.5 inline-block w-3 text-gray-500">{isOpen ? "▾" : "▸"}</span>{d.name}</span>
@@ -410,6 +457,12 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
                   organise={organiseLists && !!grp.area} rowProps={organiseLists && grp.area ? rx.row(areaGroup, gi) : undefined} grip={organiseLists && grp.area ? rx.grip(areaGroup, gi) : undefined} buttons={organiseLists && grp.area ? rx.buttons(areaGroup, gi) : undefined}
                   onRename={name => act({ action: "rename_area", areaId, name }, `Renamed the Area to ${name}.`, v => ({ ...v, areas: v.areas.map(a => (a.id === areaId ? { ...a, name } : a)) }))}
                   onDelete={() => { if (areaId && window.confirm(`Delete the empty Area ${grp.area!.name}?`)) void act({ action: "delete_area", areaId }, `Deleted the Area ${grp.area!.name}.`, v => ({ ...v, areas: v.areas.filter(a => a.id !== areaId) })); }} />
+                {bulk && grp.domains.length > 0 && (
+                  <div className="px-3 pb-1">
+                    <button type="button" className={`${link} pointer-coarse:min-h-[var(--cmp-touch-min)]`} disabled={busy} onClick={() => setPickedDomains(selectAllIn(pickedNow, grp.domains.map(d => d.id)))}
+                      aria-label={grp.area ? `Select all domains in ${grp.area.name}` : "Select all unassigned domains"}>{grp.area ? "Select all" : "Select all unassigned"}</button>
+                  </div>
+                )}
                 {rendered}
                 {!grp.domains.length && <p className="px-3 py-2 text-[12px] text-gray-600">No domain in this Area. {organiseLists ? "Drag a domain here, or use Move to Area on a domain." : ""}</p>}
               </section>
@@ -431,16 +484,33 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
             </details>
           )}
         </div>
-        <div className="border-t border-gray-100 p-4">
-          <p className="flex flex-wrap gap-3 text-[11.5px] text-gray-600">
+        <ResizeHandle {...listHandle} label="Resize the competency list" className="hidden shrink-0 md:block" />
+        {bulk && pickedNow.size > 0 && (
+          <div role="group" aria-label="Move the selected domains" className="flex flex-wrap items-center gap-2 border-t border-gray-100 bg-teal-50/60 px-3 py-2">
+            <span className="text-[12.5px] font-semibold text-gray-900">{pickedNow.size} selected</span>
+            <label className="sr-only" htmlFor="cx-bulk-area">Move the selected domains to</label>
+            <select id="cx-bulk-area" value={bulkTarget} disabled={busy} onChange={e => setBulkTarget(e.target.value)} className="min-w-0 flex-1 rounded-lg border border-gray-300 bg-white px-2 py-1 text-[13px] pointer-coarse:min-h-[var(--cmp-touch-min)]">
+              <option value="">Move to…</option>
+              {view.areas.map(a => <option key={a.id} value={a.id}>{a.name}</option>)}
+              <option value="__none">Unassigned</option>
+            </select>
+            <button type="button" className={link} disabled={busy || !bulkTarget} onClick={() => void bulkMove()}>Move</button>
+            <button type="button" className={link} disabled={busy} onClick={() => setPickedDomains(clearSelection())}>Clear</button>
+            {bulkRun && <span role="status" className="basis-full text-[12px] text-gray-700">{bulkProgress(bulkRun.done, bulkRun.total)}</span>}
+          </div>
+        )}
+        <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 border-t border-gray-100 px-4 py-2">
+          <p className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-gray-600">
             {(["eligible", "in_review", "approved", "changes_requested"] as StudioStatus[]).map(s => <span key={s} className="inline-flex items-center gap-1"><span className={`h-2 w-2 rounded-full ${DOT[s]}`} />{CHIP[s][0]}</span>)}
           </p>
-          <div className="mt-2 flex items-center justify-between">
+          <span className="flex items-center gap-3">
             <span className="text-[12.5px] text-gray-700">{picked.size} selected</span>
             <ReviewButton frameworkId={frameworkId} scope={{ kind: "competencies", ids: [...picked] }} revision={revOpen} label="Review selected →" className={link} disabled={!picked.size || !editable} />
-          </div>
+          </span>
         </div>
       </aside>
+        }
+        right={
 
       <section aria-label="Competency" className="min-w-0 rounded-2xl border border-gray-200 bg-white">
         {!cur ? <p className="p-6 text-[13.5px] text-gray-600">This framework has no competency yet. Add one from Overview &amp; governance.</p> : (() => {
@@ -491,7 +561,8 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
           );
         })()}
       </section>
-      </>)}
+        } />
+      )}
     </div>
   );
 }

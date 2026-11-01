@@ -4,6 +4,7 @@ import Link from "next/link";
 import CopilotChat, { type PinnedResource } from "./CopilotChat";
 import { loadCopilotHub } from "@/lib/copilot-hub";
 import { aiStatus } from "@/lib/ai/config";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 // PW-009 Personal AI Copilot — the streaming clinical chat (existing CopilotChat → /api/copilot) wrapped in the
 // PW-009 command surface: real AI-usage KPIs (plat_ai_requests), rule-based AI insights + AI-prioritised tasks,
@@ -73,8 +74,9 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
         <Kpi icon="🗂️" label="Knowledge Base" value={d.kpis.knowledge} sub="Governed articles" />
       </div>
 
-      <div className="grid lg:grid-cols-[240px_minmax(0,1fr)_300px] gap-5 items-start">
-        {/* Left: quick actions + recent activity */}
+      <PaneGrid bp="lg" className="items-start"
+        start={{ storageKey: "dashboard.copilot.left.w", defaultPx: 240, label: "Resize the quick actions panel", node: (
+
         <div className="space-y-5">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
@@ -95,14 +97,9 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
             ) : <p className="text-[12px] text-gray-400 py-3 text-center">Your AI activity will appear here. Conversations are session-based.</p>}
           </div>
         </div>
+        ) }}
+        end={{ storageKey: "dashboard.copilot.right.w", defaultPx: 300, label: "Resize the insights panel", node: (
 
-        {/* Center: chat */}
-        <div>
-          <div className="mb-2 text-sm text-gray-600">Hello <span className="font-semibold">{firstName}</span> 👋 — how can I help you today?</div>
-          <CopilotChat pinned={pinned} autoPrompt={scenario ?? null} />
-        </div>
-
-        {/* Right: insights + prioritised tasks + recommended */}
         <div className="space-y-5">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">AI Insights For You</h3>
@@ -145,7 +142,16 @@ export default async function CopilotPage({ searchParams }: { searchParams: Prom
             ) : <p className="text-[12px] text-gray-400 py-3 text-center">No recommendations right now.</p>}
           </div>
         </div>
-      </div>
+        ) }}>
+
+        {/* Center: chat */}
+        <div>
+          <div className="mb-2 text-sm text-gray-600">Hello <span className="font-semibold">{firstName}</span> 👋 — how can I help you today?</div>
+          <CopilotChat pinned={pinned} autoPrompt={scenario ?? null} />
+        </div>
+
+        {/* Right: insights + prioritised tasks + recommended */}
+      </PaneGrid>
       <p className="text-[11px] text-gray-400">Usage &amp; accuracy are your real AI-gateway history. Insights, prioritised tasks and recommendations derive from your live records. AI responses can be imprecise — verify critical information.</p>
     </div>
   );

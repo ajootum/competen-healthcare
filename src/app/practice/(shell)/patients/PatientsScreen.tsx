@@ -8,6 +8,8 @@ import CardList from "../_responsive/CardList";
 import { SCREEN_REFUSES } from "./refusals";
 import UniversalSearch from "./UniversalSearch";
 import WorklistTiles from "./WorklistTiles";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
 import CohortTable from "./CohortTable";
 import ContextBanner from "./ContextBanner";
 import SummaryPanel from "./SummaryPanel";
@@ -94,6 +96,7 @@ export default function PatientsScreen(props: {
   periodFilter: { fromDate: string; toDate: string; clearHref: string } | null;
 }) {
   const router = useRouter();
+  const [bindGrid, rz] = usePaneGrid({ end: { storageKey: "practice.patients.rail.w", defaultPx: 336 } });
   const [pending, startTransition] = useTransition();
   const { selectedList, patientId, query, page, scope, sort, registerOpen, registerIntent } = props;
 
@@ -312,7 +315,7 @@ export default function PatientsScreen(props: {
       </div>
 
       {/* ── s3 BOTTOM: the longitudinal register, with the comp's right rail beside it ────────────── */}
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_336px]">
+      <div ref={bindGrid} style={rz.style} className="grid items-start gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
         <div className="flex min-w-0 flex-col gap-4">
           {props.summary && (
             <ContextBanner banner={props.summary.banner} onClose={() => go({ patient: null })} />
@@ -341,6 +344,7 @@ export default function PatientsScreen(props: {
           </p>
         </div>
 
+        <ResizeHandle {...rz.end.handleProps} label="Resize the patient side panel" className="hidden xl:block xl:self-stretch" />
         <aside className="flex flex-col gap-4 xl:sticky xl:top-4">
           {patientId && (
             <SummaryPanel

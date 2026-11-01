@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, type CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { SCORING_METHOD_LABELS } from "@/lib/ckcm";
+import { ResizeHandle, useResizable } from "@/components/ui/resizable";
 
 type SkillRow = { id: string; name: string; competency: string; framework: string };
 type Checklist = { id: string; skill_id: string; name: string; description: string | null; assessor_instructions: string | null };
@@ -18,6 +19,12 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
   skills: SkillRow[]; checklists: Checklist[]; items: Item[];
 }) {
   const router = useRouter();
+  // Drag-to-resize from lg up (where the three columns exist): library width, chain width, library list height.
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const sideMax = (c: number) => Math.max(200, Math.floor((c - 420 - 2 * 44) / 2));
+  const libW = useResizable({ storageKey: "studio.checklists.library.w", axis: "x", defaultPx: 280, minPx: 200, maxPx: sideMax, container: box });
+  const chainW = useResizable({ storageKey: "studio.checklists.chain.w", axis: "x", side: "end", defaultPx: 260, minPx: 200, maxPx: sideMax, container: box });
+  const libH = useResizable({ storageKey: "studio.checklists.library.h", axis: "y", defaultPx: 384, minPx: 160, maxPx: 960 });
   const [selectedId, setSelectedId] = useState<string | null>(checklists[0]?.id ?? null);
   const [search, setSearch] = useState("");
   const [showNew, setShowNew] = useState(false);
@@ -60,7 +67,8 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
   const input = "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-teal-500/30";
 
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr_260px] gap-5">
+    <div ref={setBox} className="grid grid-cols-1 lg:grid-cols-[var(--rz-l)_auto_minmax(0,1fr)_auto_var(--rz-r)] gap-5 lg:gap-0"
+      style={{ "--rz-l": `${libW.size}px`, "--rz-r": `${chainW.size}px` } as CSSProperties}>
       {/* LEFT — checklist library */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">
         <button onClick={() => setShowNew(v => !v)}
@@ -87,7 +95,7 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
           </div>
         )}
         <input className={`${input} mb-2`} placeholder="Search…" value={search} onChange={e => setSearch(e.target.value)} />
-        <div className="flex flex-col gap-1 max-h-96 overflow-y-auto">
+        <div className="flex flex-col gap-1 max-h-96 md:max-h-[var(--rz-h)] overflow-y-auto" style={{ "--rz-h": `${libH.size}px` } as CSSProperties}>
           {visibleChecklists.length === 0 && <p className="text-xs text-gray-500 py-4 text-center">No checklists yet.</p>}
           {visibleChecklists.map(c => (
             <button key={c.id} onClick={() => { setSelectedId(c.id); setError(null); }}
@@ -99,7 +107,9 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
             </button>
           ))}
         </div>
+        <ResizeHandle {...libH.handleProps} label="Resize the checklist list height" className="hidden md:block" />
       </div>
+      <ResizeHandle {...libW.handleProps} label="Resize the checklist library" className="hidden lg:block" />
 
       {/* MIDDLE — items editor */}
       <div className="bg-white rounded-xl border border-gray-100 p-5 self-start">
@@ -182,6 +192,8 @@ export default function ChecklistBuilder({ skills, checklists, items }: {
           </>
         )}
       </div>
+
+      <ResizeHandle {...chainW.handleProps} label="Resize the linked chain panel" className="hidden lg:block" />
 
       {/* RIGHT — relationships chain */}
       <div className="bg-white rounded-xl border border-gray-100 p-4 self-start">

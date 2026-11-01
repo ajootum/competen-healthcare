@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { individualShell, gatedMetadata } from "../../../../_components/shell-context";
 import { StatePanel } from "../../../../_components/chrome";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { allActivities } from "@/lib/learning/blueprint";
 import { learningEnabled } from "@/lib/learning/policy";
 import { EVIDENCE_LABEL, OUTCOME_LABEL, learnState } from "@/lib/learning/record";
@@ -68,7 +69,8 @@ export default async function RecordPage({ params, searchParams }: { params: Pro
 
   return (
     <LearningShell live={live} current="mine">
-      <div className="grid gap-6 lg:grid-cols-[16rem_1fr]">
+      <PaneGrid bp="lg" gap="gap-6"
+        start={{ storageKey: "scholar.record.contents.w", defaultPx: 256, label: "Resize the course contents", node: (
         <nav aria-label="Course contents" className="space-y-3">
           <p className="text-[15px] font-bold text-gray-900">{title}</p>
           {content.modules.map(m => (
@@ -78,6 +80,7 @@ export default async function RecordPage({ params, searchParams }: { params: Pro
                   <span aria-hidden>{doneKeys.has(a.id) ? "✓" : "○"}</span><span>{a.title}</span><span className="sr-only">{doneKeys.has(a.id) ? "(done)" : "(not done)"}</span></Link></li>))}</ul>
             </div>))}
         </nav>
+        ) }}>
         <section className="min-w-0 space-y-5">
           {completed && (
             <StatePanel title={sp.done ? "You have completed the course" : "Completed"}>
@@ -111,7 +114,7 @@ export default async function RecordPage({ params, searchParams }: { params: Pro
           )}
           {!completed && <WithdrawButton recordId={record.id} />}
         </section>
-      </div>
+      </PaneGrid>
     </LearningShell>
   );
 }

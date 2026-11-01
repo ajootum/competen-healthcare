@@ -3,6 +3,9 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
+
 import { tintedCard, tintedChip, tintedFigure } from "@/lib/practice/palette";
 import {
   PARAMETER_CATEGORIES, COLLECTION_RULES, PARAMETER_DATA_TYPES, RISK_CLASSES, CONFIG_LEVELS,
@@ -28,6 +31,7 @@ const hueOf = (category: string) => CATEGORY_HUE[category] ?? CATEGORY_HUE_UNKEY
 
 export default function ParameterLibraryConsole({ library }: { library: ParameterLibrary }) {
   const router = useRouter();
+  const [bindGrid, rz] = usePaneGrid({ end: { storageKey: "practice.clinical-parameters.rail.w", defaultPx: 330 } });
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [category, setCategory] = useState("all");
@@ -143,7 +147,7 @@ export default function ParameterLibraryConsole({ library }: { library: Paramete
         ))}
       </div>
 
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_330px]">
+      <div ref={bindGrid} style={rz.style} className="grid items-start gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
         <div className="flex flex-col gap-4">
 
           {/* ── Filters ────────────────────────────────────────────────────────────────────────── */}
@@ -292,6 +296,7 @@ export default function ParameterLibraryConsole({ library }: { library: Paramete
         </div>
 
         {/* ── Right rail ───────────────────────────────────────────────────────────────────────── */}
+        <ResizeHandle {...rz.end.handleProps} label="Resize the parameter side panel" className="hidden xl:block xl:self-stretch" />
         <div className="flex flex-col gap-4">
 
           {/* Create or clone. s10.1's third bullet. */}

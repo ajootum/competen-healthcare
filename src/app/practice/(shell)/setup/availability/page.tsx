@@ -9,6 +9,7 @@ import AvailabilityConsole from "./AvailabilityConsole";
 import ExpandableCard from "./ExpandableCard";
 import WeekBoard from "./WeekBoard";
 import StepNav, { type Step } from "./StepNav";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import PatientPreview, { type PreviewDay } from "./PatientPreview";
 
 // CPR-SCH-002 v4 — Availability & Scheduling, redesigned as a guided workflow.
@@ -165,7 +166,9 @@ export default async function AvailabilityConfigPage({ searchParams }: {
           </Link>
         </div>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[250px_minmax(0,1fr)_290px]">
+        <PaneGrid bp="xl" gap="gap-4" className="items-start"
+          start={{ storageKey: "practice.availability.steps.w", defaultPx: 250, label: "Resize the setup steps panel" }}
+          end={{ storageKey: "practice.availability.preview.w", defaultPx: 290, label: "Resize the patient preview panel" }}>
           <StepNav steps={steps} activeStep={activeStep} />
 
           <div className="flex min-w-0 flex-col gap-4">
@@ -341,7 +344,7 @@ export default async function AvailabilityConfigPage({ searchParams }: {
               offerableCount={offerableCount}
             />
           </div>
-        </div>
+        </PaneGrid>
       </div>
 
       {/* ── Sticky footer ─────────────────────────────────────────────────────────────────────────

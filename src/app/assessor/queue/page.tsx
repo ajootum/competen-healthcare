@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { generateAssessorQueue } from "@/lib/engines/tasks";
 import InboxTable, { type InboxRow } from "./InboxTable";
 import RequestQueue, { type RequestRow } from "./RequestQueue";
@@ -143,7 +144,66 @@ export default async function AssessmentInboxPage() {
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_280px] gap-5 items-start">
+      <PaneGrid bp="xl" className="items-start" end={{ storageKey: "assessor.queue.rail.w", defaultPx: 280, label: "Resize the side rail", node: (
+        /* Right rail */
+        <div className="flex flex-col gap-4">
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-xs font-bold text-gray-800">Upcoming Deadlines</h2>
+              <Link href="/assessor/calendar" className="text-[10px] font-semibold text-indigo-600 hover:underline">View Calendar</Link>
+            </div>
+            <div className="flex flex-col gap-2">
+              {[
+                { label: "Today", n: todayDue, cls: "bg-[var(--cmp-color-critical)]" },
+                { label: "This Week", n: dueThisWeek, cls: "bg-[var(--cmp-color-warning)]" },
+                { label: "Next Week", n: nextWeekDue, cls: "bg-[var(--cmp-color-information)]" },
+              ].map(d => (
+                <div key={d.label} className="flex items-center gap-2.5">
+                  <span className={`w-5 h-5 rounded-full ${d.cls} text-white text-[10px] font-bold flex items-center justify-center shrink-0`}>{d.n}</span>
+                  <span className="text-xs font-semibold text-gray-700 flex-1">{d.label}</span>
+                  <span className="text-[10px] text-gray-400">{d.n} session{d.n === 1 ? "" : "s"} due</span>
+                </div>
+              ))}
+            </div>
+            <Link href="/assessor/calendar"
+              className="block mt-3 text-center text-[11px] font-semibold text-indigo-700 border border-indigo-200 hover:bg-indigo-50 py-2 rounded-lg transition-colors">
+              📅 View Full Calendar
+            </Link>
+          </div>
+
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <h2 className="text-xs font-bold text-gray-800 mb-3">Assessment Types</h2>
+            {rows.length === 0 ? (
+              <p className="text-[10px] text-gray-400">No queued assessments to break down.</p>
+            ) : (
+              <>
+                <div className="relative w-28 mx-auto">
+                  <svg viewBox="0 0 100 100" className="w-full -rotate-90">
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="12" />
+                    {arcs.filter(a => a.pct > 0).map(a => (
+                      <circle key={a.label} cx="50" cy="50" r="40" fill="none" stroke={a.color} strokeWidth="12"
+                        strokeDasharray={`${(a.pct / 100) * C} ${C}`} strokeDashoffset={-(a.offset / 100) * C} />
+                    ))}
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <p className="text-lg font-extrabold text-gray-900 leading-none">{rows.length}</p>
+                    <p className="text-[9px] text-gray-400">tasks</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-col gap-1">
+                  {donut.map(d => (
+                    <div key={d.label} className="flex items-center gap-2 text-[11px]">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                      <span className="text-gray-500 flex-1">{d.label}</span>
+                      <span className="font-semibold text-gray-700">{d.n} ({Math.round(d.pct)}%)</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) }}>
         <div className="min-w-0 flex flex-col gap-4">
           <InboxTable rows={rows} />
 
@@ -209,66 +269,7 @@ export default async function AssessmentInboxPage() {
             Due dates appear when a session is scheduled.
           </p>
         </div>
-
-        {/* Right rail */}
-        <div className="flex flex-col gap-4">
-          <div className="bg-white border border-gray-100 rounded-2xl p-4">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-xs font-bold text-gray-800">Upcoming Deadlines</h2>
-              <Link href="/assessor/calendar" className="text-[10px] font-semibold text-indigo-600 hover:underline">View Calendar</Link>
-            </div>
-            <div className="flex flex-col gap-2">
-              {[
-                { label: "Today", n: todayDue, cls: "bg-[var(--cmp-color-critical)]" },
-                { label: "This Week", n: dueThisWeek, cls: "bg-[var(--cmp-color-warning)]" },
-                { label: "Next Week", n: nextWeekDue, cls: "bg-[var(--cmp-color-information)]" },
-              ].map(d => (
-                <div key={d.label} className="flex items-center gap-2.5">
-                  <span className={`w-5 h-5 rounded-full ${d.cls} text-white text-[10px] font-bold flex items-center justify-center shrink-0`}>{d.n}</span>
-                  <span className="text-xs font-semibold text-gray-700 flex-1">{d.label}</span>
-                  <span className="text-[10px] text-gray-400">{d.n} session{d.n === 1 ? "" : "s"} due</span>
-                </div>
-              ))}
-            </div>
-            <Link href="/assessor/calendar"
-              className="block mt-3 text-center text-[11px] font-semibold text-indigo-700 border border-indigo-200 hover:bg-indigo-50 py-2 rounded-lg transition-colors">
-              📅 View Full Calendar
-            </Link>
-          </div>
-
-          <div className="bg-white border border-gray-100 rounded-2xl p-4">
-            <h2 className="text-xs font-bold text-gray-800 mb-3">Assessment Types</h2>
-            {rows.length === 0 ? (
-              <p className="text-[10px] text-gray-400">No queued assessments to break down.</p>
-            ) : (
-              <>
-                <div className="relative w-28 mx-auto">
-                  <svg viewBox="0 0 100 100" className="w-full -rotate-90">
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="12" />
-                    {arcs.filter(a => a.pct > 0).map(a => (
-                      <circle key={a.label} cx="50" cy="50" r="40" fill="none" stroke={a.color} strokeWidth="12"
-                        strokeDasharray={`${(a.pct / 100) * C} ${C}`} strokeDashoffset={-(a.offset / 100) * C} />
-                    ))}
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="text-lg font-extrabold text-gray-900 leading-none">{rows.length}</p>
-                    <p className="text-[9px] text-gray-400">tasks</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-col gap-1">
-                  {donut.map(d => (
-                    <div key={d.label} className="flex items-center gap-2 text-[11px]">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                      <span className="text-gray-500 flex-1">{d.label}</span>
-                      <span className="font-semibold text-gray-700">{d.n} ({Math.round(d.pct)}%)</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      </PaneGrid>
     </div>
   );
 }

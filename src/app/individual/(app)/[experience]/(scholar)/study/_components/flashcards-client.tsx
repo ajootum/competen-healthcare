@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
 import { sourceHref, studyHref } from "./question-view";
 import { flashcardsHref } from "./revise-nav";
 import { carry, studyField } from "./study-active";
@@ -31,10 +33,30 @@ const indigo = "var(--cmp-role-indigo-strong)";
 // SCHOLAR-FLASHCARDS-QA-01: the Flashcards page layout, by the content area's own width (Tailwind container queries on
 // the @container wrapper in page.tsx), never a viewport breakpoint. Card column at least 22rem, Deck Options at least
 // 16rem: under 39rem they stack. The 11.5rem Revise column appears from 56rem. Exported for the layout test.
-export const FLASHCARDS_GRID = "grid grid-cols-1 items-start gap-4 @min-[39rem]:grid-cols-[minmax(22rem,1fr)_minmax(16rem,20rem)] @min-[56rem]:grid-cols-[11.5rem_minmax(22rem,1fr)_16rem]";
+export const FLASHCARDS_GRID = "grid grid-cols-1 items-start gap-4 @min-[39rem]:grid-cols-[minmax(22rem,1fr)_minmax(16rem,20rem)] @min-[56rem]:grid-cols-[var(--fc-nav,11.5rem)_auto_minmax(22rem,1fr)_auto_var(--fc-side,16rem)] @min-[56rem]:gap-0";
 export const FLASHCARDS_NAV = "min-w-0 col-span-full @min-[56rem]:col-span-1 @min-[56rem]:col-start-1 @min-[56rem]:row-start-1";
-export const FLASHCARDS_MAIN = "min-w-0 space-y-4 @min-[56rem]:col-start-2 @min-[56rem]:row-start-1";
-export const FLASHCARDS_SIDE = "min-w-0 space-y-4 @min-[56rem]:col-start-3 @min-[56rem]:row-start-1";
+export const FLASHCARDS_MAIN = "min-w-0 space-y-4 @min-[56rem]:col-start-3 @min-[56rem]:row-start-1";
+export const FLASHCARDS_SIDE = "min-w-0 space-y-4 @min-[56rem]:col-start-5 @min-[56rem]:row-start-1";
+const FLASHCARDS_HANDLE = "hidden @min-[56rem]:block @min-[56rem]:row-start-1 @min-[56rem]:self-stretch";
+
+/** Drag-to-resize (owner, 1 Nov): from 56rem the Revise column and Deck Options can be resized (11.5rem / 16rem by default,
+ *  at least 160px / 200px; the card column keeps 22rem). The two 20px dividers are columns of the grid, hidden below 56rem. */
+export function FlashcardsGrid({ nav, main, side }: { nav: ReactNode; main: ReactNode; side: ReactNode }) {
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const [, cols] = usePaneGrid({ container: box, minMain: 352,
+    start: { storageKey: "scholar.flashcards.nav.w", defaultPx: 184, minPx: 160 },
+    end: { storageKey: "scholar.flashcards.side.w", defaultPx: 256, minPx: 200 } });
+  return (
+    <div ref={setBox} className={FLASHCARDS_GRID}
+      style={{ "--fc-nav": `${cols.start.size ?? 184}px`, "--fc-side": `min(${cols.end.size ?? 256}px, max(200px, calc(100cqw - 40px - 22rem - var(--fc-nav))))` } as CSSProperties}>
+      {nav}
+      <ResizeHandle {...cols.start.handleProps} label="Resize the Revise column" className={`${FLASHCARDS_HANDLE} @min-[56rem]:col-start-2`} />
+      {main}
+      <ResizeHandle {...cols.end.handleProps} label="Resize the Deck Options column" className={`${FLASHCARDS_HANDLE} @min-[56rem]:col-start-4`} />
+      {side}
+    </div>
+  );
+}
 
 async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; status: number; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   try {

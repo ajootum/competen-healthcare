@@ -19,7 +19,7 @@ import { studyHref } from "../../_components/question-view";
 import { ReviseNav, flashcardsHref, type ReviseNavKey } from "../../_components/revise-nav";
 import {
   CardBrowser, CreateMore, DeckHeader, DeckList, DeckOptions, DeckStart, FlashcardStudy, HowItWorks,
-  FLASHCARDS_GRID, FLASHCARDS_MAIN, FLASHCARDS_NAV, FLASHCARDS_SIDE,
+  FlashcardsGrid, FLASHCARDS_MAIN, FLASHCARDS_NAV, FLASHCARDS_SIDE,
   type CardRow, type DeckRow, type ExportFormat, type StudyCard,
 } from "../../_components/flashcards-client";
 
@@ -72,8 +72,9 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
           From 39rem the card column (22rem and up) and Deck Options (16rem and up) sit side by side; from 56rem the nav
           is its own column too. CPR-MOB-001's single md viewport edge is untouched. */}
       <div data-testid="flashcards-shell" className="@container">
-      <div className={FLASHCARDS_GRID}>
-        <div className={FLASHCARDS_NAV}><ReviseNav current={navKey} adaptive={policy.scholarAdaptiveExams === "on"} container studyId={sid} /></div>
+      <FlashcardsGrid
+        nav={<div className={FLASHCARDS_NAV}><ReviseNav current={navKey} adaptive={policy.scholarAdaptiveExams === "on"} container studyId={sid} /></div>}
+        main={(
         <div className={FLASHCARDS_MAIN}>
           <nav aria-label="Breadcrumb" className="text-[13.5px] text-gray-600">
             <ol className="flex flex-wrap items-center gap-1.5">
@@ -86,8 +87,8 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
           {main}
           {notice && <BoundaryNotice notice={FORMATIVE_NOTICE} />}
         </div>
-        <aside aria-label="Deck options and new flashcards" className={FLASHCARDS_SIDE}>{side}</aside>
-      </div>
+        )}
+        side={<aside aria-label="Deck options and new flashcards" className={FLASHCARDS_SIDE}>{side}</aside>} />
       </div>
     </>
   );

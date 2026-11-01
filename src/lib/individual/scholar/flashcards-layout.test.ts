@@ -20,12 +20,16 @@ describe("flashcards layout: by available width, one md viewport edge", () => {
   });
   it("the page grid sits in an @container and switches on the container's width, not the viewport's", () => {
     expect(page).toMatch(/className="@container"/);
-    expect(page).toMatch(/className=\{FLASHCARDS_GRID\}/);
+    expect(page).toMatch(/<FlashcardsGrid\s/);
+    expect(client).toMatch(/<div ref=\{setBox\} className=\{FLASHCARDS_GRID\}/);
     expect(page).toMatch(/<ReviseNav [^>]*container[^>]*\/>/);
     const grid = constant("FLASHCARDS_GRID");
     expect(grid).toMatch(/^grid grid-cols-1 /);
     expect(grid).toContain("@min-[39rem]:grid-cols-[minmax(22rem,1fr)_minmax(16rem,20rem)]");
-    expect(grid).toContain("@min-[56rem]:grid-cols-[11.5rem_minmax(22rem,1fr)_16rem]");
+    // From 56rem: nav | divider | card | divider | Deck Options. The nav and Deck Options widths default to 11.5rem / 16rem and are the user's to drag (CSS variables).
+    expect(grid).toContain("@min-[56rem]:grid-cols-[var(--fc-nav,11.5rem)_auto_minmax(22rem,1fr)_auto_var(--fc-side,16rem)]");
+    expect(client).toMatch(/defaultPx: 184,/);
+    expect(client).toMatch(/defaultPx: 256,/);
     expect(grid).not.toMatch(/(^|\s)(sm|md|lg|xl):/);
     // The Revise nav is a row until the content area has room for its column.
     expect(nav).toContain("@min-[56rem]:flex-col");
@@ -35,7 +39,7 @@ describe("flashcards layout: by available width, one md viewport edge", () => {
     const cardMax = 40 * REM; // max-w-[40rem]
     const cardWidth = (area: number, md: boolean) => {
       const pad = 2 * (md ? sectionPad.md : sectionPad.phone);
-      const col = area >= 56 * REM ? area - 11.5 * REM - 16 * REM - 2 * 16 : area >= 39 * REM ? area - 16 * REM - 16 : area;
+      const col = area >= 56 * REM ? area - 11.5 * REM - 16 * REM - 2 * 20 : area >= 39 * REM ? area - 16 * REM - 16 : area;
       return Math.min(cardMax, col - pad);
     };
     expect(cardWidth(517, true)).toBeGreaterThanOrEqual(400); // tablet 768: content area 517 (was 43px)

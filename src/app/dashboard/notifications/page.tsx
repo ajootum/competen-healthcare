@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadNotificationCentre, CAT } from "@/lib/notification-centre";
 import MarkRead from "@/components/notifications/MarkRead";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 // PW-004 Notification Centre — unified feed aggregating the real notifications store + derived cross-module
 // events (overdue tasks, expiring competencies, mandatory learning). KPI ribbon, category panel, grouped feed,
@@ -98,8 +99,9 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
         <Kpi label="Archived" value={d.kpis.archived} tone="text-gray-500" sub="Read" icon="🗄️" />
       </div>
 
-      <div className="grid lg:grid-cols-[220px_minmax(0,1fr)_300px] gap-5 items-start">
-        {/* Left category panel */}
+      <PaneGrid bp="lg" className="items-start"
+        start={{ storageKey: "dashboard.notifications.left.w", defaultPx: 220, label: "Resize the category panel", node: (
+
         <div className="bg-white rounded-xl border border-gray-200 p-3 space-y-1">
           <p className="text-[11px] font-semibold text-gray-400 uppercase tracking-wide px-2 pb-1">Categories</p>
           <Link href={qp({ unread })} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm ${!cat ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}><span>🔔 All Notifications</span><span className="text-[11px] text-gray-400">{d.feed.length}</span></Link>
@@ -111,31 +113,9 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
             <Link href={qp({ cat, unread: unread === "1" ? undefined : "1" })} className={`flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-sm ${unread === "1" ? "bg-[var(--cmp-surface-information)] text-blue-700 font-medium" : "text-gray-600 hover:bg-gray-50"}`}>{unread === "1" ? "☑" : "☐"} Unread only</Link>
           </div>
         </div>
+        ) }}
+        end={{ storageKey: "dashboard.notifications.right.w", defaultPx: 300, label: "Resize the detail panel", node: (
 
-        {/* Main feed */}
-        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-gray-900">{cat ? CAT[cat]?.label : "All Notifications"}</h2>
-            <span className="text-[11px] text-gray-400">{feed.length} shown</span>
-          </div>
-          <div className="divide-y divide-gray-50">
-            {high.length > 0 && <>
-              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-[var(--cmp-text-error)] uppercase tracking-wide">High Priority</p>
-              {high.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
-            </>}
-            {today.length > 0 && <>
-              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Today</p>
-              {today.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
-            </>}
-            {earlier.length > 0 && <>
-              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Earlier</p>
-              {earlier.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
-            </>}
-            {feed.length === 0 && <p className="px-4 py-16 text-center text-sm text-gray-400">{d.feed.length === 0 ? "No notifications — you're all caught up. 🎉" : "Nothing matches this filter."}</p>}
-          </div>
-        </div>
-
-        {/* Right detail + donut */}
         <div className="space-y-5">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Notification Details</h3>
@@ -181,7 +161,33 @@ export default async function NotificationCentrePage({ searchParams }: { searchP
             ) : <p className="text-xs text-gray-400 py-4 text-center">No notifications.</p>}
           </div>
         </div>
-      </div>
+        ) }}>
+
+        {/* Main feed */}
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-900">{cat ? CAT[cat]?.label : "All Notifications"}</h2>
+            <span className="text-[11px] text-gray-400">{feed.length} shown</span>
+          </div>
+          <div className="divide-y divide-gray-50">
+            {high.length > 0 && <>
+              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-[var(--cmp-text-error)] uppercase tracking-wide">High Priority</p>
+              {high.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
+            </>}
+            {today.length > 0 && <>
+              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Today</p>
+              {today.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
+            </>}
+            {earlier.length > 0 && <>
+              <p className="px-4 pt-2 pb-1 text-[10px] font-bold text-gray-400 uppercase tracking-wide">Earlier</p>
+              {earlier.map(n => <Row key={n.id} n={n} selHref={qp({ cat, unread, sel: n.id })} />)}
+            </>}
+            {feed.length === 0 && <p className="px-4 py-16 text-center text-sm text-gray-400">{d.feed.length === 0 ? "No notifications — you're all caught up. 🎉" : "Nothing matches this filter."}</p>}
+          </div>
+        </div>
+
+        {/* Right detail + donut */}
+      </PaneGrid>
       <p className="text-[11px] text-gray-400">Category &amp; priority are derived from notification type/source. Live alerts marked as read update instantly; derived items link to their source surface.</p>
     </div>
   );

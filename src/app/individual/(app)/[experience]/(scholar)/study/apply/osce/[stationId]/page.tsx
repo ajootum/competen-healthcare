@@ -7,6 +7,7 @@ import { withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../../_components/chrome";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import StudyNav from "../../../_components/StudyNav";
 import { countDue, getOsceStation, listOsceAttempts, readConsent } from "@/lib/individual/scholar/store";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
@@ -102,21 +103,9 @@ export default async function OsceStationPage({ params, searchParams }: { params
       {/* Two columns only where the MAIN AREA has room for both (a 20rem work column beside a 14rem aside), not at a
           viewport edge: on a 768px tablet the shell sidebar leaves about 517px, so the aside wraps below the run and the
           checklist keeps the full width (coordinator browser check, 31 Oct 2026). CPR-MOB-001 keeps its single md edge. */}
-      <div className="flex flex-wrap items-start gap-5">
-        <div className="min-w-0 flex-[3_1_20rem] space-y-5">
-          {stillPublished || pending || openRun ? (
-            <OsceRunner key={pending?.id ?? openRun?.id ?? "new"} station={stationView(station)}
-              checklist={pendingSnap ? checklistView(pendingSnap.checklist) : null}
-              aiNote={aiNote} pending={pending ? { attemptId: pending.id, timeUp: pending.timeUp } : null} hasOpenRun={!!openRun} />
-          ) : null}
-          {last && (
-            <section aria-labelledby="osce-last-h" className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4 md:p-5">
-              <h2 id="osce-last-h" className="text-[16px] font-bold text-gray-900">Your last marked run</h2>
-              <ResultView r={last} />
-            </section>
-          )}
-        </div>
-        <aside aria-labelledby="osce-about-h" className="min-w-0 flex-[2_1_14rem] space-y-4">
+      <PaneGrid bp="@36rem" className="@min-[36rem]:items-start" fallbackMain="minmax(0,3fr)"
+        end={{ storageKey: "scholar.osce.side.w", defaultPx: c => Math.round((c - 20) * 0.4), fallback: "minmax(0,2fr)", label: "Resize the About this station panel", node: (
+        <aside aria-labelledby="osce-about-h" className="min-w-0 space-y-4">
           <section className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4">
             <h2 id="osce-about-h" className="text-[14px] font-bold text-gray-900">About this station</h2>
             <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[13px]">
@@ -155,7 +144,21 @@ export default async function OsceStationPage({ params, searchParams }: { params
           </section>
           <DeleteStation stationId={station.id} />
         </aside>
-      </div>
+        ) }}>
+        <div className="min-w-0 space-y-5">
+          {stillPublished || pending || openRun ? (
+            <OsceRunner key={pending?.id ?? openRun?.id ?? "new"} station={stationView(station)}
+              checklist={pendingSnap ? checklistView(pendingSnap.checklist) : null}
+              aiNote={aiNote} pending={pending ? { attemptId: pending.id, timeUp: pending.timeUp } : null} hasOpenRun={!!openRun} />
+          ) : null}
+          {last && (
+            <section aria-labelledby="osce-last-h" className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4 md:p-5">
+              <h2 id="osce-last-h" className="text-[16px] font-bold text-gray-900">Your last marked run</h2>
+              <ResultView r={last} />
+            </section>
+          )}
+        </div>
+      </PaneGrid>
     </>
   );
 }
