@@ -126,8 +126,10 @@ const QUESTION_FRAMING = /\b(what|how|why|when|which|where|who|is|are|does|do|ca
 // (my patient, bed 3, right now, identifiers, personal safety), and operating-mode.ts decideIntent uses it only for a
 // request no rule recognised -- never to turn a giving decision or a named person into study.
 
-export type IntentSurface = "learn" | "personal_ai" | "revise" | "apply" | "evaluate";
-export const INTENT_SURFACES: readonly IntentSurface[] = ["learn", "personal_ai", "revise", "apply", "evaluate"];
+// "material": the system reading the learner's OWN uploaded material (picture-only slide or exam-page transcription) --
+// there are no learner request words to classify (operating-mode.ts decideIntent).
+export type IntentSurface = "learn" | "personal_ai" | "revise" | "apply" | "evaluate" | "material";
+export const INTENT_SURFACES: readonly IntentSurface[] = ["learn", "personal_ai", "revise", "apply", "evaluate", "material"];
 export type IntentContext = {
   surface: IntentSurface;
   lessonTitle?: string | null;
