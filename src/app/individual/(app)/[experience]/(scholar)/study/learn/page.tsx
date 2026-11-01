@@ -4,7 +4,7 @@ import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy, shownLearnModes } from "@/lib/individual/policy";
 import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
-import { countDue, getLearningPosition, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learnLessonRecords, learningEvents, librarySchema, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
+import { countDue, getLearningPosition, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learnLessonRecords, learningEvents, librarySchema, listMappings, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
 import type { LessonRecord } from "@/lib/individual/scholar/learn-journey";
 import { sectionProfiles, sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
@@ -139,7 +139,10 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
-          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} objectiveText={studyOn && one(q.study) === "new" && start && start.kind !== "competency" ? cleanObjectiveText(one(q.obj)) ?? undefined : undefined} openAsk={q.panel === "ask"} prepareNext={policy.scholarLearnPrepareNext} ownCards={policy.scholarFlashcards === "on"} notesOn={policy.scholarLearningLibrary === "on" && await librarySchema(ctx.admin, ctx.userId)} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
+          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} objectiveText={studyOn && one(q.study) === "new" && start && start.kind !== "competency" ? cleanObjectiveText(one(q.obj)) ?? undefined : undefined} openAsk={q.panel === "ask"} prepareNext={policy.scholarLearnPrepareNext} ownCards={policy.scholarFlashcards === "on"} applyChunkIds={await applyChunkIds(ctx.admin, ctx.userId)}
+          inline={{ recall: policy.scholarLearnInlineRecall, placement: policy.scholarLearnInlineRecallPlacement, minWords: policy.scholarLearnInlineRecallMinWords, checks: policy.scholarLearnInlineChecks, application: policy.scholarLearnInlineApplication, skippable: policy.scholarLearnInlineSkippable, required: policy.scholarLearnCheckRequired, every: policy.scholarLearnCheckEvery, saveMissed: policy.scholarLearnSaveMissedCards }}
+          styleOn={{ guide: policy.scholarLearnStyleGuide, challenge: policy.scholarLearnStyleChallenge, moreMenu: policy.scholarLearnMoreMenu }}
+          notesOn={policy.scholarLearningLibrary === "on" && await librarySchema(ctx.admin, ctx.userId)} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}
     </>
@@ -181,4 +184,14 @@ async function Discover({ admin, userId, q, library, studyOn }: { admin: unknown
       <RecentlyAdded docs={l.recent} studyOn={studyOn} />
     </>
   );
+}
+
+/**
+ * SCHOLAR-INLINE-CHECKS-01: the sections the learner has accepted a competency mapping for -- the one reliable signal that content is
+ * clinically relevant, so the Apply case is offered only there (never on non-clinical content). Reads only, no AI; empty when the
+ * mappings are absent or unreadable, so Apply fails closed.
+ */
+async function applyChunkIds(admin: unknown, userId: string): Promise<string[]> {
+  const m = await listMappings(admin, userId).catch(() => null);
+  return m && m.ok ? [...new Set(m.data.mappings.filter(x => x.state === "accepted").map(x => x.chunkId))].slice(0, 2000) : [];
 }

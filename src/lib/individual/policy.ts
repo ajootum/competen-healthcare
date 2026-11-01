@@ -74,7 +74,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
   | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
   | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
-  | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max";
+  | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -117,7 +117,10 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library";
+  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
+  | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
+  | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
+  | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1091,6 +1094,82 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Search, notes, kept versions and lesson links need migration 820. Without it, the library still lists and filters saved teaching, and search is a basic match over the newest 500. Default: offered.",
   },
+  // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): short checks INSIDE the scrolling lesson. No new stage, engine or AI call: the
+  // recall card reads the saved lesson, the quick check reads a stored question (writing one stays the learner's click), the
+  // application check is the existing Apply link. Self-rated recall, code-marked checks and verified competence stay distinct.
+  {
+    key: "scholar_learn_inline_recall", kind: "choice", product: "Scholar",
+    label: "Recall card inside a lesson",
+    help: "Whether a lesson shows a short \"Check your recall\" card after its teaching: a question from the saved lesson, the learner turns it over and rates their own recall. Built from the saved lesson, so it uses no AI. Self-rated, not a test score.",
+    options: [{ value: "on", label: "Show recall cards" }, { value: "off", label: "Do not show" }],
+    fallback: "on",
+    limitReason: "Only a lesson that already holds a check question or key points gets a card. Nothing is generated. Default: on.",
+  },
+  {
+    key: "scholar_learn_inline_recall_placement", kind: "choice", product: "Scholar",
+    label: "Where optional recall cards appear",
+    help: "Used when the end-of-lesson recall check is optional (the required check follows the setting for how often it comes). After a substantial lesson (long enough, see the length below), after every lesson, or once after the last lesson.",
+    options: [{ value: "substantial", label: "After a substantial lesson" }, { value: "every_lesson", label: "After every lesson" }, { value: "lesson_end", label: "Once, after the last lesson" }],
+    fallback: "substantial",
+    limitReason: "At most one recall card per lesson, and only where the saved lesson holds a question. Default: after a substantial lesson.",
+  },
+
+
+  {
+    key: "scholar_learn_inline_recall_min_words", kind: "int", product: "Scholar", unit: "words",
+    label: "A substantial lesson has at least",
+    help: "A lesson counts as substantial for recall cards when its teaching text has at least this many words.",
+    fallback: 180, min: 40, max: 1000,
+    limitReason: "Forty to a thousand words. Used only when recall cards appear after a substantial lesson. Default: 180.",
+  },
+  {
+    key: "scholar_learn_inline_checks", kind: "choice", product: "Scholar",
+    label: "Quick knowledge check inside a lesson",
+    help: "Whether a lesson offers a collapsed \"Quick check: 1 question\": a question already stored for the lesson's section, marked by code against the stored answer. Writing a new question remains the student's own click and uses their AI allowance. Formative, not verified competence.",
+    options: [{ value: "on", label: "Offer the quick check" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Uses stored questions first. A missed question reaches the mistake notebook and Revise as it already does. Default: on.",
+  },
+  {
+    key: "scholar_learn_inline_application", kind: "choice", product: "Scholar",
+    label: "Application check at the end of the journey",
+    help: "Whether the last lesson offers one optional \"Apply it: try a short case\" card that opens the existing clinical case practice. Offered once, after the final lesson.",
+    options: [{ value: "on", label: "Offer once at the end" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "The case itself is the existing Apply practice, with its own policy. Default: on.",
+  },
+  {
+    key: "scholar_learn_check_required", kind: "choice", product: "Scholar",
+    label: "End-of-lesson recall check",
+    help: "Required: the next lesson and the lesson counting as complete wait until the student has revealed the answer and rated their own recall (either rating counts: it is not a pass mark). Optional: the check can be skipped. A lesson with no saved question has no check and nothing waits. It never blocks earlier lessons, navigation, saving or leaving.",
+    options: [{ value: "required", label: "Required to continue" }, { value: "optional", label: "Optional" }],
+    fallback: "required",
+    limitReason: "Self-rated only: never a score, an assessment or verified competence. Default: required.",
+  },
+  {
+    key: "scholar_learn_check_every", kind: "choice", product: "Scholar",
+    label: "How often the required recall check comes",
+    help: "The required end-of-lesson recall check comes as a block after every 1, 2 or 3 lessons (after lessons 2, 4, 6 by default), or once after the last lesson. A block always closes after the final lesson. A block holds one card for each lesson it covers, from that saved lesson's own content: nothing is generated, and a lesson with no saved question adds none.",
+    options: [{ value: "1", label: "After every lesson" }, { value: "2", label: "After every 2 lessons" }, { value: "3", label: "After every 3 lessons" }, { value: "journey_end", label: "Once, after the last lesson" }],
+    fallback: "2",
+    limitReason: "Used while the check is required. Self-rated recall only, never a score. Default: every 2 lessons.",
+  },
+  {
+    key: "scholar_learn_save_missed_cards", kind: "choice", product: "Scholar",
+    label: "Offer to save a missed recall as a flashcard",
+    help: "After \"Didn't remember\", whether \"Save as a flashcard to revise\" is ticked to begin with. The student can untick it. Saving makes their own card (no AI) when they continue or press Save.",
+    options: [{ value: "on", label: "Ticked to begin with" }, { value: "off", label: "Unticked" }],
+    fallback: "on",
+    limitReason: "The card is the student's own, drafted from the saved lesson, with nothing generated. Default: ticked.",
+  },
+  {
+    key: "scholar_learn_inline_skippable", kind: "choice", product: "Scholar",
+    label: "Inline checks can be skipped",
+    help: "Whether the student may skip an optional inline item (a recall card while the end-of-lesson check is optional, the application card). Ignored for the required end-of-lesson recall check. An inline check never blocks scrolling.",
+    options: [{ value: "on", label: "Can be skipped" }, { value: "off", label: "Stays open until answered" }],
+    fallback: "on",
+    limitReason: "A check never blocks scrolling or the next lesson. Default: skippable.",
+  },
   // SCHOLAR-COMPANION-01 P1: the mistake notebook reads the learner's own wrong attempts back. Data only, no AI, no cost.
   {
     key: "scholar_mistake_notebook", kind: "choice", product: "Scholar",
@@ -1662,6 +1741,31 @@ export const POLICIES: readonly PolicyDef[] = [
   ...PROFESSIONAL_PLAN_POLICIES,
   ...PROFESSIONAL_COMPETENCY_POLICIES,
   ...PASSPORT_POLICIES,
+  // SCHOLAR-LEARN-STYLE-01 (owner GO, Teaching Style and Practice HFE redesign): three teaching styles, Explain always on. One contiguous block.
+  {
+    key: "scholar_learn_style_guide", kind: "choice", product: "Scholar",
+    label: "Teaching style: Guide me",
+    help: "Whether Learn offers \"Guide me\" (step-by-step learning with questions and prompts) as one of its three teaching styles. It runs the existing Guide action, with the same allowance and model checks. Explain is always offered.",
+    options: [{ value: "on", label: "Offer Guide me" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Only shown where the Guide action is also offered by the learning actions. Default: offered.",
+  },
+  {
+    key: "scholar_learn_style_challenge", kind: "choice", product: "Scholar",
+    label: "Teaching style: Challenge me",
+    help: "Whether Learn offers \"Challenge me\" (questioning, teach-back and harder reasoning) as one of its three teaching styles. \"Ask me a question\" and \"Teach it back\" are its follow-on steps. Hidden, they move to the More menu. Explain is always offered.",
+    options: [{ value: "on", label: "Offer Challenge me" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Only shown where the Challenge action is also offered by the learning actions. Default: offered.",
+  },
+  {
+    key: "scholar_learn_more_menu", kind: "choice", product: "Scholar",
+    label: "Learn: the More menu",
+    help: "Whether a lesson has a discreet \"More\" menu holding the other teaching actions (High-yield, Simplify, Summarise and the like). Explain my mistake appears on its own after a wrong check, whatever this says.",
+    options: [{ value: "on", label: "Offer the More menu" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Only actions the learning actions policy already offers appear. Default: offered.",
+  },
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -1882,6 +1986,16 @@ export type IndividualPolicy = {
   scholarMistakeNotebook: "on" | "off";
   /** SCHOLAR-LIBRARY-01. */
   scholarLearningLibrary: "on" | "off";
+  /** SCHOLAR-INLINE-CHECKS-01: checks inside the scrolling lesson. */
+  scholarLearnInlineRecall: "on" | "off";
+  scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
+  scholarLearnInlineRecallMinWords: number;
+  scholarLearnInlineChecks: "on" | "off";
+  scholarLearnInlineApplication: "on" | "off";
+  scholarLearnInlineSkippable: "on" | "off";
+  scholarLearnCheckRequired: "required" | "optional";
+  scholarLearnSaveMissedCards: "on" | "off";
+  scholarLearnCheckEvery: "1" | "2" | "3" | "journey_end";
   scholarFlashcardsPerGeneration: number;
   scholarFlashcardDeckMax: number;
   /** Always includes notes. */
@@ -1956,6 +2070,10 @@ export type IndividualPolicy = {
   professionalCompetency: ProfessionalCompetencyPolicy;
   /** COMPETEN-PROFESSIONAL-PASSPORT-01: the lifelong Passport and its shared views, as configured. */
   professionalPassport: PassportPolicy;
+  /** SCHOLAR-LEARN-STYLE-01: the Guide me and Challenge me teaching styles and the More menu (Explain is always on). */
+  scholarLearnStyleGuide: "on" | "off";
+  scholarLearnStyleChallenge: "on" | "off";
+  scholarLearnMoreMenu: "on" | "off";
 };
 
 /** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
@@ -2049,6 +2167,15 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
     scholarMistakeNotebook: clampChoice(policyDef("scholar_mistake_notebook") as ChoicePolicy, published.get(policyPath("scholar_mistake_notebook"))) as "on" | "off",
     scholarLearningLibrary: clampChoice(policyDef("scholar_learning_library") as ChoicePolicy, published.get(policyPath("scholar_learning_library"))) as "on" | "off",
+    scholarLearnInlineRecall: clampChoice(policyDef("scholar_learn_inline_recall") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall"))) as "on" | "off",
+    scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
+    scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),
+    scholarLearnInlineChecks: clampChoice(policyDef("scholar_learn_inline_checks") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_checks"))) as "on" | "off",
+    scholarLearnInlineApplication: clampChoice(policyDef("scholar_learn_inline_application") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_application"))) as "on" | "off",
+    scholarLearnInlineSkippable: clampChoice(policyDef("scholar_learn_inline_skippable") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_skippable"))) as "on" | "off",
+    scholarLearnCheckRequired: clampChoice(policyDef("scholar_learn_check_required") as ChoicePolicy, published.get(policyPath("scholar_learn_check_required"))) as "required" | "optional",
+    scholarLearnCheckEvery: clampChoice(policyDef("scholar_learn_check_every") as ChoicePolicy, published.get(policyPath("scholar_learn_check_every"))) as "1" | "2" | "3" | "journey_end",
+    scholarLearnSaveMissedCards: clampChoice(policyDef("scholar_learn_save_missed_cards") as ChoicePolicy, published.get(policyPath("scholar_learn_save_missed_cards"))) as "on" | "off",
     scholarFlashcardsPerGeneration: int("scholar_flashcards_per_generation"),
     scholarFlashcardDeckMax: int("scholar_flashcard_deck_max"),
     scholarFlashcardSourceModes: (() => { const m = clampSet(policyDef("scholar_flashcard_source_modes") as SetPolicy, published.get(policyPath("scholar_flashcard_source_modes"))) as ("notes" | "notes_and_references")[]; return m.includes("notes") ? m : ["notes" as const, ...m]; })(),
@@ -2104,6 +2231,9 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     professionalPlan: resolveProfessionalPlan(published),
     professionalCompetency: resolveProfessionalCompetency(published),
     professionalPassport: resolvePassport(published),
+    scholarLearnStyleGuide: clampChoice(policyDef("scholar_learn_style_guide") as ChoicePolicy, published.get(policyPath("scholar_learn_style_guide"))) as "on" | "off",
+    scholarLearnStyleChallenge: clampChoice(policyDef("scholar_learn_style_challenge") as ChoicePolicy, published.get(policyPath("scholar_learn_style_challenge"))) as "on" | "off",
+    scholarLearnMoreMenu: clampChoice(policyDef("scholar_learn_more_menu") as ChoicePolicy, published.get(policyPath("scholar_learn_more_menu"))) as "on" | "off",
   };
 }
 
