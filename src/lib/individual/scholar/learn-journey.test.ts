@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  createJourney, journeyStep, lessonStatus, parseSavedJourney, readCount, savedJourney, shouldSendPosition, startJourney,
+  createJourney, journeyFacts, journeyStep, lessonStatus, parseSavedJourney, readCount, savedJourney, startJourney,
   type JourneyEffect, type JourneyEvent, type JourneyState,
 } from "./learn-journey";
 
@@ -74,17 +74,18 @@ describe("the generate rule", () => {
     // the aborted lesson may still be saved by the route: viewing it again opens it (saved only), never a teach
     expect(journeyStep(s, { type: "viewed", index: 0 }, OFF).effects).toEqual([{ kind: "open", index: 0 }]);
   });
-  it("PROPERTY: over random event sequences, only chooseContinue / requestTeach emit a teach, and in flight <= 1", () => {
+  it("PROPERTY: over random event sequences, only a learner's choice emits a teach, never for a saved lesson, and in flight <= 1", () => {
     let seed = 7;
     const rnd = (n: number) => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed % n; };
     for (let trial = 0; trial < 300; trial++) {
       const count = 1 + rnd(8);
-      let s = createJourney({ count, current: rnd(count), revealedUpTo: rnd(count) });
+      let s = createJourney({ count, current: rnd(count), revealedUpTo: rnd(count), saved: Array.from({ length: count }, () => rnd(3) === 0) });
       let inFlight = new Set<number>(), prefetches = 0;
       for (let k = 0; k < 40; k++) {
         const i = rnd(count + 1) - (rnd(5) === 0 ? 1 : 0);
         const pool: JourneyEvent[] = [
           { type: "viewed", index: i }, { type: "nearView", index: i }, { type: "scrollReachedEnd" }, { type: "scrollLeftEnd" }, { type: "chooseContinue", guided: rnd(2) === 0 },
+          { type: "select", index: i, guided: rnd(2) === 0 }, { type: "next", guided: rnd(2) === 0 },
           { type: "jumpTo", index: i }, { type: "requestTeach", index: i }, { type: "savedLoaded", index: i, found: rnd(2) === 0 },
           { type: "taught", index: i }, { type: "teachEnded", index: i }, { type: "verdict", index: i, value: "partly" },
           { type: "activity", index: i, kind: "practised" }, { type: "prefetchEnded" },
@@ -92,10 +93,14 @@ describe("the generate rule", () => {
         const e = pool[rnd(pool.length)];
         const r = journeyStep(s, e, rnd(2) ? ON : OFF);
         for (const f of r.effects) {
-          if (f.kind === "teach") { expect(["chooseContinue", "requestTeach"]).toContain(e.type); expect(f.auto).toBe(false); inFlight.add(f.index); }
+          if (f.kind === "teach") {
+            expect(["chooseContinue", "next", "select", "requestTeach"]).toContain(e.type); expect(f.auto).toBe(false); inFlight.add(f.index);
+            if (e.type !== "requestTeach") { expect("guided" in e && e.guided).toBe(true); expect(s.hasSaved[f.index]).toBe(false); } // never for a saved lesson
+          }
           if (f.kind === "abort") inFlight.delete(f.index);
           if (f.kind === "prefetch") { expect(e.type).toBe("taught"); prefetches++; }
-          if (f.kind === "open") expect(["viewed", "nearView", "jumpTo", "chooseContinue"]).toContain(e.type);
+          if (f.kind === "open") expect(["viewed", "nearView", "jumpTo", "chooseContinue", "next", "select"]).toContain(e.type);
+          if (e.type === "viewed" || e.type === "nearView") expect(r.state.current).toBe(s.current); // scrolling never moves the active lesson
         }
         if (r.state.generating === null) inFlight = new Set();
         expect(inFlight.size).toBeLessThanOrEqual(1);
@@ -127,11 +132,13 @@ describe("prefetch", () => {
 describe("navigator status", () => {
   it("says it in words, not colour", () => {
     let s = createJourney({ count: 3, current: 0 });
-    expect(lessonStatus(s, 1).label).toBe("Not started");
+    const f = (i: number, progress?: { actions: string[]; verdict: string | null }) => journeyFacts(s, i, { progress, check: "offer" });
+    expect(lessonStatus(s, 1, f(1)).label).toBe("Not started");
     s = run(s, [{ type: "taught", index: 0 }, { type: "verdict", index: 0, value: "not_yet" }]).state;
-    expect(lessonStatus(s, 0)).toEqual({ label: "Current · Checked: not yet", icon: "current", current: true });
-    expect(lessonStatus(s, 2, { actions: ["teach"], verdict: null }).label).toBe("Read");
-    expect(readCount(s, [undefined, undefined, { actions: ["skip"], verdict: null }])).toBe(1); // a skip is not reading
+    expect(lessonStatus(s, 0, f(0))).toEqual({ label: "Current · Completed · Checked: not yet", icon: "current", current: true });
+    expect(lessonStatus(s, 2, f(2, { actions: ["teach"], verdict: null }))).toEqual({ label: "Completed", icon: "completed", current: false });
+    expect(lessonStatus(s, 2, f(2, { actions: ["resume"], verdict: null })).label).toBe("Read");
+    expect(readCount([f(0), f(1), f(2, { actions: ["skip"], verdict: null })])).toBe(1); // a skip is not reading
   });
 });
 
@@ -149,9 +156,10 @@ describe("continue where I stopped (device copy)", () => {
     expect(parseSavedJourney(null, 3)).toBeNull();
     expect(parseSavedJourney(JSON.stringify({ v: 1, revealedUpTo: 1, anchor: 0, activities: [{ verdict: "<b>", read: "yes" }] }), 3)?.activities[0]).toEqual({});
   });
-  it("sends a position only on a real move", () => {
-    expect(shouldSendPosition(2, 2)).toBe(false);
-    expect(shouldSendPosition(2, 1)).toBe(true);
-    expect(shouldSendPosition(0, -1)).toBe(false);
+  it("THE POSITION RULE: scrolling back never moves the active lesson; only the learner's choice does", () => {
+    let s = run(createJourney({ count: 7, current: 6, revealedUpTo: 6 }), [{ type: "viewed", index: 0 }, { type: "nearView", index: 1 }, { type: "viewed", index: 2 }]).state;
+    expect(s.current).toBe(6); expect(s.revealedUpTo).toBe(6);
+    s = journeyStep(s, { type: "select", index: 2, guided: true }, OFF).state;
+    expect(s.current).toBe(2); expect(s.revealedUpTo).toBe(6); // revisiting never shrinks what was reached
   });
 });

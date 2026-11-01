@@ -22,7 +22,9 @@ import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { externalReferences, learnResearch, researchEvidence, scholarResearchOperational, type LearnResearch } from "@/lib/individual/scholar/learn-research";
 import { qualityOf } from "@/lib/individual/scholar/source-quality";
-import { topicsOfSections } from "@/lib/individual/scholar/store";
+import { findSavedLesson, topicsOfSections } from "@/lib/individual/scholar/store";
+import { SAVED_EARLIER_LABEL } from "@/lib/individual/scholar/learn-journey";
+import { normaliseLearnerText, vocabularyOf } from "@/lib/individual/scholar/spelling";
 import type { LearnSourceMode } from "@/lib/individual/policy";
 import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { groundingOutcome, keyTermsOf, parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, relatedSections, widerMode, type Grounding, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
@@ -82,6 +84,11 @@ export const dynamic = "force-dynamic";
 //                      it and nothing is writing it, and only while the standing and allowance allow it. Same metered
 //                      runner and checks; nothing is recorded as learning; the audit row says prepared: true.
 //   CACHE FIRST: a saved Teach Me under an earlier prompt version (LEARN_TEACH_LEGACY) is still served, with no AI call.
+//   SCHOLAR-PERSISTENT-LEARNING-01 (owner, 1 Nov): an OPEN (or a prepare) that the exact key misses falls back to the
+//   newest saved artefact of the same action for this learner, material and the lesson's own chunk set -- any prompt
+//   version, depth or mode (store.ts findSavedLesson) -- labelled savedEarlier when it differs. Never generated. Opening
+//   a lesson is a read: it records the learning event, but never moves the session's current_step (the learner's
+//   explicit choice does that, through PATCH sessions/[id]).
 //   DEDUPE: two identical requests never both call the AI (learn-flight.ts claimFlight); the later one is served the
 //   first one's lesson. TIMINGS: every audit row carries timing_ms by stage. SALVAGE: a Teach Me lesson whose
 //   unsupported parts were left out (generation.ts checkTeachAnswer) carries salvage { removed, note }.
@@ -144,13 +151,19 @@ export async function POST(req: Request) {
   const treq = isTeachingAction(action) ? parseTeachingRequest(action, body) : null;
   if (treq && !treq.ok) return NextResponse.json({ error: treq.error }, { status: 400 });
   const teachingRequest = treq?.ok ? treq.value : null;
-  if ([question, answer, ...(teachingRequest ? teachingTexts(teachingRequest) : [])].some(t => t && findPatientIdentifiers(t).length))
+  // SCHOLAR-PERSISTENT-LEARNING-01 item 8 (Learn side): an Ask question's obvious everyday-word slips, corrected
+  // deterministically (spelling.ts, no AI). The question as TYPED is what is screened, stored and shown beside the reading;
+  // the search reads both, and the lesson terms and the prompt read the corrected one (re-read below against the
+  // learner's own passages, whose words are never corrected). Check answers are marked as typed and never normalised.
+  let spelt = action === "ask" ? normaliseLearnerText(question) : null;
+  const searchText = spelt && spelt.display !== question ? `${question} ${spelt.display}` : question;
+  if ([question, spelt?.display ?? "", answer, ...(teachingRequest ? teachingTexts(teachingRequest) : [])].some(t => t && findPatientIdentifiers(t).length))
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
 
   // ── the passages: the step's own sections, by the caller's id ──
   const sessionId = isUuid(body?.sessionId) ? body.sessionId as string : null;
   let stepIds: string[] = [], scopeIds: string[] = [], step = Number.isInteger(body?.step) ? Number(body.step) : 0;
-  let recorded = false, stepTitle: string | null = null, sessionMaterials: string[] = [];
+  let recorded = false, stepTitle: string | null = null, sessionMaterials: string[] = [], sessionStep: number | null = null;
   if (sessionId) {
     const s = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your session could not be read just now." }, { status: 503 });
@@ -168,6 +181,7 @@ export async function POST(req: Request) {
     // A prepared lesson is not learning: nothing is recorded for it until the learner opens it.
     step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = !prepare; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
     sessionMaterials = [...new Set(s.data.steps.flatMap(x => x.sections.map(y => y.materialId)))];
+    sessionStep = s.data.session.currentStep;
   } else if (prepare) {
     return notPrepared("no_session");
   } else {
@@ -177,14 +191,18 @@ export async function POST(req: Request) {
   }
   let passages: Passage[] | null;
   if (action === "ask") {
-    const tsq = toTsQuery(question);
+    const tsq = toTsQuery(searchText);
     const found = tsq ? await searchCandidates(ctx.admin, ctx.userId, tsq, { chunkIds: scopeIds }) : null;
     if (found && !found.ok) return NextResponse.json({ error: "Your notes could not be searched just now. Try again shortly." }, { status: 503 });
-    const ranked = found?.ok ? spreadAcrossMaterials(rankChunks(question, found.data, 40), RETRIEVAL_LIMIT) : [];
+    const ranked = found?.ok ? spreadAcrossMaterials(rankChunks(searchText, found.data, 40), RETRIEVAL_LIMIT) : [];
     passages = ranked.length ? await toPassages(ctx.admin, ctx.userId, ranked) : await ownPassages(ctx.admin, ctx.userId, stepIds);
   } else passages = await ownPassages(ctx.admin, ctx.userId, stepIds);
   if (!passages?.length) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
   if (!sessionMaterials.length) sessionMaterials = [...new Set(passages.map(p => p.materialId))];
+  if (spelt) spelt = normaliseLearnerText(question, { vocabulary: vocabularyOf(passages.map(p => p.content)) });
+  /** What the learner meant: the corrected reading of an Ask question (the question as typed when nothing was corrected). */
+  const meant = spelt?.display || question;
+  const spelling = spelt && spelt.corrections.length ? { original: spelt.original, display: spelt.display, corrections: spelt.corrections.map(c => ({ from: c.from, to: c.to })) } : null;
 
   // ── SCHOLAR-LEARN-FIX-01: the lesson, its key terms and how well its passages hold them (no AI) ──
   // The lesson's title and objective come from its own sections' headings and topics (learn.lessonOutline). A thin or
@@ -196,7 +214,7 @@ export async function POST(req: Request) {
     : lessonOutline({ step, sections: passages.map(p => ({ chunkId: p.chunkId, materialId: p.materialId, ordinal: p.ordinal, pageFrom: p.pageFrom, pageTo: p.pageTo, materialTitle: p.materialTitle, unit: p.unit ?? "page" })) },
       await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)), new Map(passages.map(p => [p.chunkId, sectionProfile(p.content)])));
   clock.mark("passages_outline");
-  const lessonTerms = action === "ask" ? keyTermsOf(question) : lesson ? keyTermsOf(lesson.focus.join(" ")).slice(0, 8) : [];
+  const lessonTerms = action === "ask" ? keyTermsOf(meant) : lesson ? keyTermsOf(lesson.focus.join(" ")).slice(0, 8) : [];
   let grounding: Grounding = groundingOutcome(lessonTerms, passages, policy.scholarRecovery.sufficiency);
   const related = { sameMaterial: 0, otherMaterials: 0 };
   const thin = passages.reduce((n, p) => n + p.content.length, 0) < TEACH_THIN_CHARS;
@@ -240,7 +258,7 @@ export async function POST(req: Request) {
     mode === "notes" ? Promise.resolve(null) : topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)),
   ]);
   const topics = topicMap ? [...new Set([...topicMap.values()].flat())] : [];
-  let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? question : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
+  let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? meant : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
   const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
@@ -287,11 +305,14 @@ export async function POST(req: Request) {
       saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
     };
   };
+  // SCHOLAR-PERSISTENT-LEARNING-01, THE POSITION RULE: a lesson answered here moves current_step only FORWARD (a reply that
+  // lands after the learner went back never pulls it back); moving back is the learner's explicit PATCH sessions/[id].
+  const advances = sessionStep === null || step > sessionStep;
   // The learner opened a saved lesson: recorded as before (the two writes are independent, so together).
   const openedSaved = async (saved: ArtefactRow) => {
     if (recorded && sessionId && policy.scholarLearningHistory === "record") await Promise.all([
       recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: null, chunkIds: saved.sources }),
-      updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
+      open || !advances ? Promise.resolve("ok" as const) : updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
     ]);
   };
   clock.mark("references");
@@ -304,6 +325,22 @@ export async function POST(req: Request) {
       await openedSaved(saved);
       served(saved, {});
       return NextResponse.json(savedReply(saved, { cached: true }));
+    }
+  }
+  // SCHOLAR-PERSISTENT-LEARNING-01: the exact key missed -- the newest lesson saved for this chunk set, under any version or
+  // settings. Its sources beyond this request's passages are read (the learner's own, by id) so its [S n] tags stay true.
+  if ((open || prepare) && body?.fresh !== true && isArtefactAction(action) && !recovery && !hasHistory) {
+    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds });
+    const missing = earlier ? earlier.sources.filter(id => !passages!.some(p => p.chunkId === id)) : [];
+    const extra = earlier && missing.length ? await ownPassages(ctx.admin, ctx.userId, missing) : [];
+    clock.mark("cache_fallback");
+    if (earlier && extra) {
+      if (prepare) return notPrepared("saved", { step });
+      passages = [...passages, ...extra];
+      const differs = earlier.promptVersion.indexOf(promptVersion) !== 0 || earlier.depth !== depth;
+      await openedSaved(earlier);
+      served(earlier, { fallback: true });
+      return NextResponse.json(savedReply(earlier, { cached: true, ...(differs ? { savedEarlier: { label: SAVED_EARLIER_LABEL, promptVersion: earlier.promptVersion, depth: earlier.depth } } : {}) }));
     }
   }
   if (prepare && !key) return notPrepared("not_storable", { step });
@@ -371,7 +408,7 @@ export async function POST(req: Request) {
     const t = raw as { speaker?: unknown; text?: unknown } | null;
     return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim() ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
-  const prompt = teachingRequest ? teachingPrompt(teachingRequest, examEvidence) : action === "ask" ? question : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as ClassicLearnAction | "check"];
+  const prompt = teachingRequest ? teachingPrompt(teachingRequest, examEvidence) : action === "ask" ? meant : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as ClassicLearnAction | "check"];
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
@@ -391,6 +428,9 @@ export async function POST(req: Request) {
     references = [...have, ...recovered.inputs.references.filter(x => !have.some(y => y.competencyId === x.competencyId))];
   }
   const risk = await scholarRisk(ctx.admin, ctx.userId, { text: prompt, passages, purpose: purposeFrom(body) });
+  // Consolidated improvement item 5: the question is read in the context of this lesson (study framing by overlap only;
+  // real-patient, administration, emergency, safety and identifier signals still win -- request-intent.ts).
+  Object.assign(risk, { intentContext: { surface: "learn" as const, lessonTitle: lesson?.title ?? stepTitle ?? undefined, objective: lesson?.objective ?? undefined, materialTopics: topics } });
   clock.mark("risk");
   // COMPETEN-RESEARCH-01, research workflow. DISCOVERY IS NOT GENERATION (commissioning GO, 28 Oct):
   //   (1) the REQUEST's clinical risk is classified as for every Learn request (its prompt and passages). With metering
@@ -494,13 +534,13 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     await Promise.all([
       recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId) }),
-      updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
+      advances ? updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }) : Promise.resolve("ok" as const),
     ]);
   }
 
   const sources = passages.map((p, i) => ({ tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400) }));
   const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
-    references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields,
+    references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields, ...(spelling ? { spelling } : {}),
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
     research: research ? {

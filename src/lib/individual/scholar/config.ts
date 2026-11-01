@@ -374,7 +374,7 @@ export const LEARN_NOT_COVERED_LABEL = "Not covered in your notes";
 export const LEARN_NOT_COVERED_NOTE = "The explanation above uses only what your notes support. Scholar did not explain these.";
 export const LEARN_WIDER_LABEL = "Explore wider sources";
 /** COMPETEN-RESEARCH-01: the three Learn modes, as the learner sees them. */
-export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + Competen library", research: "Research & Explain" } as const;
+export const LEARN_MODE_LABEL = { notes: "My notes only", library: "My notes + Competen library", research: "Research supporting this lesson" } as const;
 
 /** SCHOLAR-SQIE-02 s7: evidence recovery, as the learner sees it. No internal activity names, no eligibility terms. */
 export const RECOVERY_PROMPT = "Your notes do not contain enough information to fully explain this topic. Would you like to explore additional learning resources?";

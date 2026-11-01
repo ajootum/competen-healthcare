@@ -49,6 +49,9 @@ vi.mock("@/lib/individual/scholar/store", async orig => {
     toPassages: async () => [],
     listArtefacts: async () => ({ ok: true, data: [] }),
     findArtefact: async (_a: unknown, _u: string, key: string) => (db.artefacts.get(key) as never) ?? null,
+    // SCHOLAR-PERSISTENT-LEARNING-01: the fallback's read, over the same saved rows, with the real pure match.
+    findSavedLesson: async (_a: unknown, _u: string, q: { action: string; materialId: string | null; chunkIds: string[] }) =>
+      (await import("./learn-journey")).newestSavedLesson([...db.artefacts.values()] as never[], q),
     saveArtefact: async (_a: unknown, _u: string, a: Record<string, unknown>) => {
       db.artefacts.set(a.dedupeKey as string, { id: `art-${db.artefacts.size + 1}`, materialId: a.materialId, action: a.action, depth: a.depth, content: a.content, background: a.background,
         flags: a.flags, refs: a.refs, model: a.model, promptVersion: a.promptVersion, reviewStatus: "private_formative", createdAt: "2026-10-31T00:00:00Z", sources: a.chunkIds });
@@ -169,6 +172,45 @@ describe("cache first: a saved lesson opens with no AI call", () => {
     const o2 = await teach({ open: true });
     expect(o2.json).toMatchObject({ cached: true, artefactId: "art-1" });
     expect(db.aiCalls).toBe(1);
+  });
+});
+
+describe("SCHOLAR-PERSISTENT-LEARNING-01: saved teaching reopens with no AI, whatever it was saved under", () => {
+  it("open falls back to the newest lesson saved for this chunk set under another depth / prompt: no AI, labelled", async () => {
+    await teach({ depth: "brief" });
+    const [[, row]] = [...db.artefacts];
+    db.artefacts = new Map([["older-key", { ...row, id: "art-old", promptVersion: "scholar-learn-v3:teach+scholar-learn-teach-v0/standard" }]]);
+    db.aiCalls = 0; db.sessionUpdates = [];
+    const o = await teach({ open: true, depth: "standard" });
+    expect(db.aiCalls).toBe(0);
+    expect(o.json).toMatchObject({ cached: true, artefactId: "art-old", savedEarlier: { label: "Saved earlier — Refresh lesson for the latest version" } });
+    expect(db.sessionUpdates).toEqual([]); // opening is a read: current_step is the learner's choice, never moved by an open
+    await settle();
+    expect(rows("scholar_learn_served").at(-1)).toMatchObject({ fallback: true, open: true });
+  });
+  it("only an open (or a prepare) falls back: an explicit Teach with other settings writes a new lesson", async () => {
+    await teach({ depth: "brief" });
+    db.aiCalls = 0;
+    const t = await teach({ depth: "detailed" });
+    expect(t.json.cached).toBe(false);
+    expect(db.aiCalls).toBe(1);
+  });
+  it("a lesson answered here moves current_step only forward; never back to a lesson the learner left", async () => {
+    db.currentStep = 3;
+    await teach();
+    expect(db.aiCalls).toBe(1);
+    expect(db.sessionUpdates).toEqual([]);
+    db.currentStep = 0; db.artefacts = new Map();
+    await teach();
+    expect(db.sessionUpdates).toEqual([{ currentStep: 1 }]);
+  });
+  it("another lesson's artefact that merely cites these sections is not this lesson", async () => {
+    const [[, row]] = [...(await teach(), db.artefacts)];
+    db.artefacts = new Map([["k", { ...row, id: "art-x", sources: [C[1], C[0]] }]]);
+    db.aiCalls = 0;
+    const o = await teach({ open: true, depth: "detailed" });
+    expect(o.json).toMatchObject({ open: "generate", cached: false });
+    expect(db.aiCalls).toBe(0);
   });
 });
 
