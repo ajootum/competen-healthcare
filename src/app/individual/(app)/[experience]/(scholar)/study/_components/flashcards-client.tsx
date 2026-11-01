@@ -25,42 +25,49 @@ import type { PersonalDeck } from "@/lib/individual/scholar/flashcards";
 // SCHOLAR-FLASHCARDS-QA-01 (staging browser check): only the one md viewport edge here; everything else wraps by the
 // width it has. In a study session the header is one line and the card with its two buttons is brought into view on
 // start and on previous / next (and only then), so on a phone the card and both buttons fit the first screen.
+// FLASHCARD LEARNING EXPERIENCE (owner GO, 1 Nov 2026): three experiences -- Study cards, Test myself, Create & manage
+// (flashcards-modes.tsx, flashcard-experience.ts). A study session is ONE large card across the whole main column with no side
+// column: creation and editing live in Create & manage. Typed practice (?practice=typed): the learner types an answer, the
+// back is fetched only when they check it, and the typed text stays in this component's memory -- never sent, never stored.
 
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const ghost = `inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const primary = `inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const field = `rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const indigo = "var(--cmp-role-indigo-strong)";
+export const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
+export const ghost = `inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border border-gray-300 bg-white px-3.5 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+export const primary = `inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+export const field = `rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+export const indigo = "var(--cmp-role-indigo-strong)";
 
 // SCHOLAR-FLASHCARDS-QA-01: the Flashcards page layout, by the content area's own width (Tailwind container queries on
 // the @container wrapper in page.tsx), never a viewport breakpoint. Card column at least 22rem, Deck Options at least
 // 16rem: under 39rem they stack. The 11.5rem Revise column appears from 56rem. Exported for the layout test.
 export const FLASHCARDS_GRID = "grid grid-cols-1 items-start gap-4 @min-[39rem]:grid-cols-[minmax(22rem,1fr)_minmax(16rem,20rem)] @min-[56rem]:grid-cols-[var(--fc-nav,11.5rem)_auto_minmax(22rem,1fr)_auto_var(--fc-side,16rem)] @min-[56rem]:gap-0";
 export const FLASHCARDS_NAV = "min-w-0 col-span-full @min-[56rem]:col-span-1 @min-[56rem]:col-start-1 @min-[56rem]:row-start-1";
+/** A study session (and any view with nothing beside it): no side column, so the main column takes the whole width. */
+export const FLASHCARDS_GRID_SOLO = "grid grid-cols-1 items-start gap-4 @min-[56rem]:grid-cols-[var(--fc-nav,11.5rem)_auto_minmax(22rem,1fr)] @min-[56rem]:gap-0";
 export const FLASHCARDS_MAIN = "min-w-0 space-y-4 @min-[56rem]:col-start-3 @min-[56rem]:row-start-1";
 export const FLASHCARDS_SIDE = "min-w-0 space-y-4 @min-[56rem]:col-start-5 @min-[56rem]:row-start-1";
 const FLASHCARDS_HANDLE = "hidden @min-[56rem]:block @min-[56rem]:row-start-1 @min-[56rem]:self-stretch";
 
 /** Drag-to-resize (owner, 1 Nov): from 56rem the Revise column and Deck Options can be resized (11.5rem / 16rem by default,
  *  at least 160px / 200px; the card column keeps 22rem). The two 20px dividers are columns of the grid, hidden below 56rem. */
-export function FlashcardsGrid({ nav, main, side }: { nav: ReactNode; main: ReactNode; side: ReactNode }) {
+export function FlashcardsGrid({ nav, main, side }: { nav: ReactNode; main: ReactNode; side: ReactNode | null }) {
   const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const solo = !side;
   const [, cols] = usePaneGrid({ container: box, minMain: 352,
     start: { storageKey: "scholar.flashcards.nav.w", defaultPx: 184, minPx: 160 },
-    end: { storageKey: "scholar.flashcards.side.w", defaultPx: 256, minPx: 200 } });
+    end: solo ? undefined : { storageKey: "scholar.flashcards.side.w", defaultPx: 256, minPx: 200 } });
   return (
-    <div ref={setBox} className={FLASHCARDS_GRID}
+    <div ref={setBox} className={solo ? FLASHCARDS_GRID_SOLO : FLASHCARDS_GRID}
       style={{ "--fc-nav": `${cols.start.size ?? 184}px`, "--fc-side": `min(${cols.end.size ?? 256}px, max(200px, calc(100cqw - 40px - 22rem - var(--fc-nav))))` } as CSSProperties}>
       {nav}
       <ResizeHandle {...cols.start.handleProps} label="Resize the Revise column" className={`${FLASHCARDS_HANDLE} @min-[56rem]:col-start-2`} />
       {main}
-      <ResizeHandle {...cols.end.handleProps} label="Resize the Deck Options column" className={`${FLASHCARDS_HANDLE} @min-[56rem]:col-start-4`} />
+      {!solo && <ResizeHandle {...cols.end.handleProps} label="Resize the Deck Options column" className={`${FLASHCARDS_HANDLE} @min-[56rem]:col-start-4`} />}
       {side}
     </div>
   );
 }
 
-async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; status: number; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
+export async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; status: number; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
   try {
     const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: body === undefined ? undefined : JSON.stringify(body) });
     return { ok: res.ok, status: res.status, json: await res.json().catch(() => ({})) };
@@ -69,10 +76,10 @@ async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok:
   }
 }
 
-const Icon = ({ d, size = 18, fill = false }: { d: React.ReactNode; size?: number; fill?: boolean }) => (
+export const Icon = ({ d, size = 18, fill = false }: { d: React.ReactNode; size?: number; fill?: boolean }) => (
   <svg aria-hidden width={size} height={size} viewBox="0 0 24 24" fill={fill ? "currentColor" : "none"} stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round">{d}</svg>
 );
-const I = {
+export const I = {
   prev: <path d="M15 18l-6-6 6-6" />, next: <path d="M9 18l6-6-6-6" />, flip: <><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16" /><path d="M3 21v-5h5" /></>,
   x: <path d="M6 6l12 12M18 6L6 18" />, check: <path d="M5 12l5 5 9-11" />, note: <><path d="M4 20h4l10-10-4-4L4 16z" /><path d="M14 6l4 4" /></>,
   bookmark: <path d="M6 3h12v18l-6-4-6 4z" />, source: <><circle cx="12" cy="12" r="9" /><path d="M12 8v4l3 2" /></>, flag: <><path d="M12 3l9 16H3z" /><path d="M12 10v4M12 17h.01" /></>,
@@ -91,7 +98,7 @@ export const ISSUE_CODES = [
   { value: "difficulty", label: "Wrong difficulty" }, { value: "relevance", label: "Not relevant" },
 ] as const;
 
-const when = (iso: string | null) => {
+export const when = (iso: string | null) => {
   if (!iso) return "Not yet";
   const d = iso.slice(0, 10), today = new Date().toISOString().slice(0, 10);
   if (d === today) return "Today";
@@ -153,6 +160,8 @@ export type StudyCard = {
 
 export function FlashcardStudy(props: {
   sessionId: string; today: string; deckTitle: string; deckKey: string | null; deckCards: number; lastRevised: string | null; cards: StudyCard[]; marksOn: boolean; completed: boolean;
+  /** "typed": the learner types an answer before the card's answer is fetched (a self-rated flashcard review; the text is never sent). */
+  practice?: "typed" | null;
 }) {
   const router = useRouter();
   const [cards, setCards] = useState(props.cards);
@@ -160,7 +169,10 @@ export function FlashcardStudy(props: {
   const [flipped, setFlipped] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [panel, setPanel] = useState<"" | "note" | "source" | "issue" | "edit">("");
+  const [panel, setPanel] = useState<"" | "note" | "source" | "issue">("");
+  const typedMode = props.practice === "typed";
+  // Typed practice: what the learner has typed, by card. This component's memory only -- never sent to the server, never stored.
+  const [typed, setTyped] = useState<Record<string, string>>({});
   const [status, setStatus] = useState("");
   const [finished, setFinished] = useState(props.completed);
   const card = cards[Math.min(at, cards.length - 1)];
@@ -196,7 +208,8 @@ export function FlashcardStudy(props: {
 
   const rate = useCallback(async (choice: "again" | "remembered") => {
     if (!card || busy || card.answered) return;
-    if (!card.back) { await reveal(); return; }
+    // Typed practice: the answer is shown only by "Check my answer" / "I don't know", so a rating cannot reveal it.
+    if (!card.back) { if (!typedMode) await reveal(); return; }
     setBusy(true); setError("");
     // SM-2 qualities (flashcards.ts RECALL): Didn't remember = 1 (a lapse), Remembered = 4 (a recall).
     const r = await call("/api/individual/scholar/revision/answer", { questionId: card.id, sessionId: props.sessionId, response: { quality: choice === "again" ? 1 : 4 } });
@@ -207,19 +220,20 @@ export function FlashcardStudy(props: {
     const next = cards.findIndex((c, i) => i > at && !c.answered);
     const any = next >= 0 ? next : cards.findIndex(c => !c.answered && c.id !== card.id);
     if (any >= 0) setTimeout(() => go(any), 450);
-  }, [card, busy, cards, at, go, reveal, props.sessionId]);
+  }, [card, busy, cards, at, go, reveal, props.sessionId, typedMode]);
 
   async function finish() {
     await call(`/api/individual/scholar/revision/sessions/${props.sessionId}`, { complete: true }, "PATCH");
     setFinished(true); router.refresh();
   }
 
-  // Keyboard: Space or Enter flips, 1 Didn't remember, 2 Remembered, arrows previous and next. Never while typing.
+  // Keyboard: Space or Enter flips, 1 Didn't remember, 2 Remembered, arrows previous and next. Never while typing (so never
+  // in the typed-answer box), and in typed practice Space does not reveal: the answer comes only from checking.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement | null;
       if (!t || ["INPUT", "TEXTAREA", "SELECT"].includes(t.tagName) || t.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === " " && t.tagName !== "BUTTON" && t.tagName !== "A") { e.preventDefault(); void reveal(); }
+      if (e.key === " " && !typedMode && t.tagName !== "BUTTON" && t.tagName !== "A") { e.preventDefault(); void reveal(); }
       else if (e.key === "1") void rate("again");
       else if (e.key === "2") void rate("remembered");
       else if (e.key === "ArrowLeft") go(at - 1);
@@ -227,7 +241,7 @@ export function FlashcardStudy(props: {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [reveal, rate, go, at]);
+  }, [reveal, rate, go, at, typedMode]);
 
   if (!card) return <p className="text-[14px] text-gray-600">This session has no cards.</p>;
   const allDone = cards.every(c => c.answered);
@@ -235,6 +249,8 @@ export function FlashcardStudy(props: {
   // here) the card is due or flagged for more practice. Rated "Remembered" in this session clears it.
   const needsRevision = needsRevisionOf(card.schedule, props.today);
   const remembered = cards.filter(c => c.answered?.recall === "remembered").length;
+  const revealed = typedMode ? !!card.back : flipped;
+  const typedText = typed[card.id] ?? "";
 
   return (
     <section aria-label="Study flashcards" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
@@ -251,28 +267,67 @@ export function FlashcardStudy(props: {
         </div>
       ) : (
         <>
-          <div ref={focusRef} data-testid="card-focus" className="mx-auto mt-4 w-full max-w-[40rem] scroll-mt-[4.5rem] md:scroll-mt-[6rem]">
-            <div className="w-full [perspective:1400px]">
-              <button type="button" onClick={() => void reveal()} aria-label={flipped ? "Show the question again" : "Reveal the answer"} aria-describedby="card-help card-state"
-                className={`relative block min-h-[220px] w-full rounded-3xl text-left transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform-style:flat] motion-reduce:[transform:none] md:min-h-[280px] ${focusRing} ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
-                <CardFace side="front" hidden={flipped} text={card.front} footer={busy && !card.back ? "Showing the answer…" : "Tap to reveal answer"} needsRevision={needsRevision} bookmarked={card.bookmarked} />
-                <CardFace side="back" hidden={!flipped} text={card.back?.text ?? ""} explanation={card.back?.explanation ?? null} footer="Tap to see the question" needsRevision={needsRevision} bookmarked={card.bookmarked} />
-              </button>
+          <div ref={focusRef} data-testid="card-focus" className="mx-auto mt-4 w-full max-w-[52rem] scroll-mt-[4.5rem] md:scroll-mt-[6rem]">
+            {typedMode ? (
+              <div data-fc-face="question" aria-describedby="card-help card-state"
+                className="flex min-h-[240px] w-full flex-col rounded-3xl border-2 p-4 shadow-[0_6px_24px_rgba(17,24,39,0.08)] md:min-h-[340px] md:p-7"
+                style={{ background: "var(--cmp-fc-question-surface)", borderColor: needsRevision ? "var(--cmp-fc-revise-border)" : "var(--cmp-fc-question-border)", color: "var(--cmp-fc-question-ink)" }}>
+                <FaceHeader t="question" side="front" needsRevision={needsRevision} bookmarked={card.bookmarked} />
+                <p className="mt-3 max-w-[60ch] flex-1 text-[22px] font-semibold leading-normal md:text-[30px]">{card.front}</p>
+              </div>
+            ) : (
+              <div className="w-full [perspective:1400px]">
+                <button type="button" onClick={() => void reveal()} aria-label={flipped ? "Show the question again" : "Reveal the answer"} aria-describedby="card-help card-state"
+                  className={`relative block min-h-[240px] w-full rounded-3xl text-left transition-transform duration-500 [transform-style:preserve-3d] motion-reduce:transition-none motion-reduce:[transform-style:flat] motion-reduce:[transform:none] md:min-h-[340px] ${focusRing} ${flipped ? "[transform:rotateY(180deg)]" : ""}`}>
+                  <CardFace side="front" hidden={flipped} text={card.front} footer={busy && !card.back ? "Showing the answer…" : "Tap to reveal answer"} needsRevision={needsRevision} bookmarked={card.bookmarked} />
+                  <CardFace side="back" hidden={!flipped} text={card.back?.text ?? ""} explanation={card.back?.explanation ?? null} footer="Tap to see the question" needsRevision={needsRevision} bookmarked={card.bookmarked} />
+                </button>
+              </div>
+            )}
+
+          {typedMode && !card.back && (
+            <div className="mt-4 space-y-2">
+              <label htmlFor="typed-answer" className="block text-[15px] font-semibold text-gray-900">Type your answer</label>
+              <textarea id="typed-answer" data-testid="typed-answer" rows={4} maxLength={1000} value={typedText} autoComplete="off" spellCheck
+                onChange={e => setTyped(t => ({ ...t, [card.id]: e.target.value }))}
+                className={`${field} block w-full text-[16px]`} placeholder="Write what you remember, in your own words" />
+              <p className="text-[12.5px] text-gray-600">Your typed answer is not saved. It stays on this screen and is gone when you leave it.</p>
+              <div className="flex flex-wrap gap-2">
+                <button type="button" className={primary} style={{ background: indigo }} disabled={busy || !typedText.trim()} onClick={() => void reveal()}>{busy ? "Checking…" : "Check my answer"}</button>
+                <button type="button" className={ghost} disabled={busy} onClick={() => void reveal()}>I don&apos;t know</button>
+              </div>
             </div>
-          {flipped && card.sensitive && (
+          )}
+          {typedMode && card.back && (
+            <div className="mt-4 space-y-2">
+              <div data-testid="typed-compare" className="grid grid-cols-1 gap-3 @min-[36rem]:grid-cols-2">
+                <section aria-labelledby="your-answer-h" className="rounded-2xl border border-gray-200 bg-white p-4">
+                  <h3 id="your-answer-h" className="text-[14px] font-bold text-gray-900">Your answer</h3>
+                  <p className="mt-1 whitespace-pre-wrap text-[16px] leading-relaxed text-gray-900">{typedText.trim() ? typedText : card.answered ? "Not shown: typed answers are not saved." : "You did not type an answer."}</p>
+                </section>
+                <section aria-labelledby="card-answer-h" className="rounded-2xl border p-4" style={{ background: "var(--cmp-fc-answer-surface)", borderColor: "var(--cmp-fc-answer-border)", color: "var(--cmp-fc-answer-ink)" }}>
+                  <h3 id="card-answer-h" className="text-[14px] font-bold" style={{ color: "var(--cmp-fc-answer-label)" }}>Card answer</h3>
+                  <p className="mt-1 text-[16px] font-semibold leading-relaxed">{card.back.text}</p>
+                  {card.back.explanation && <p className="mt-2 text-[15px] leading-relaxed">{card.back.explanation}</p>}
+                </section>
+              </div>
+              {!card.answered && <p className="text-[13px] text-gray-700">You judge your own answer. This counts as a flashcard review. Your typed answer is not saved.</p>}
+            </div>
+          )}
+          {revealed && card.sensitive && (
             <p role="note" className="mx-auto mt-3 flex max-w-xl items-start gap-2 rounded-xl border px-3 py-2 text-[13px] font-semibold"
               style={{ background: "var(--cmp-surface-warning)", borderColor: "color-mix(in srgb, var(--cmp-color-warning) 35%, transparent)", color: "var(--cmp-text-warning)" }}>
               <span aria-hidden className="mt-px">⚠</span><span>{card.sensitive.marker}</span>
             </p>
           )}
-          <p id="card-state" className="sr-only">{flipped ? "Answer side." : "Question side."}{needsRevision ? " Needs revision." : ""}{card.bookmarked ? " Bookmarked." : ""}</p>
-          <p id="card-help" className="sr-only">Space or Enter reveals the answer. Then press 1 for didn&apos;t remember or 2 for remembered. Arrow keys move between cards.</p>
+          <p id="card-state" className="sr-only">{revealed ? "Answer side." : "Question side."}{needsRevision ? " Needs revision." : ""}{card.bookmarked ? " Bookmarked." : ""}</p>
+          <p id="card-help" className="sr-only">{typedMode ? "Type your answer, then choose Check my answer. After the answer shows, press 1 for didn't remember or 2 for remembered. Arrow keys move between cards when you are not typing." : "Space or Enter reveals the answer. Then press 1 for didn't remember or 2 for remembered. Arrow keys move between cards."}</p>
 
           {card.answered ? (
             <p role="status" className="mx-auto mt-4 max-w-xl rounded-xl bg-gray-50 px-4 py-2.5 text-center text-[14px] text-gray-800">
               You rated this card <span className="font-semibold">{card.answered.recall === "remembered" ? "Remembered" : "Didn't remember"}</span>. Next review: {when(card.answered.nextReviewAt)}.
             </p>
-          ) : (
+          ) : (!typedMode || card.back) && (
             <div className="mx-auto mt-4 grid max-w-xl grid-cols-2 gap-3">
               <button type="button" disabled={busy} onClick={() => void rate("again")} aria-keyshortcuts="1"
                 className={`flex min-h-[56px] flex-col items-center justify-center rounded-2xl border px-2 py-2 text-center disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}
@@ -290,7 +345,7 @@ export function FlashcardStudy(props: {
           )}
           </div>
           {/* Previous and next under the buttons at every width, so they stay within reach and the card keeps the column. */}
-          <div className="mx-auto mt-3 flex max-w-[40rem] justify-between">
+          <div className="mx-auto mt-3 flex max-w-[52rem] justify-between">
             <button type="button" onClick={() => go(at - 1)} disabled={at === 0} aria-label="Previous card" className={ghost}><Icon d={I.prev} />Previous</button>
             <button type="button" onClick={() => go(at + 1)} disabled={at >= cards.length - 1} aria-label="Next card" className={ghost}>Next<Icon d={I.next} /></button>
           </div>
@@ -306,11 +361,10 @@ export function FlashcardStudy(props: {
             <ActionButton icon={I.flag} label={card.issue ? "Issue reported" : "Report issue"} on={panel === "issue"} disabled={!props.marksOn} onClick={() => setPanel(p => (p === "issue" ? "" : "issue"))} />
           </div>
           {!props.marksOn && <p className="mt-1 text-center text-[12px] text-gray-500">Notes, bookmarks and reports are not available here yet.</p>}
-          {card.editable && <p className="mt-1 text-center"><button type="button" className={`inline-flex items-center text-[13px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} onClick={() => setPanel(p => (p === "edit" ? "" : "edit"))}>Edit this card</button></p>}
+          {card.editable && <p className="mt-1 text-center"><Link href={carry(flashcardsHref({ view: "cards", edit: card.id }))} className={`inline-flex items-center text-[13px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Edit this card in Create &amp; manage</Link></p>}
 
           {panel === "note" && <NotePanel card={card} onSaved={note => update(card.id, { note })} />}
           {panel === "issue" && <IssuePanel card={card} onSaved={issue => update(card.id, { issue })} />}
-          {panel === "edit" && <EditCard id={card.id} front={card.front} back={card.back?.text ?? ""} onSaved={() => router.refresh()} />}
           {panel === "source" && (
             <div className="mt-3 rounded-2xl border border-gray-200 p-4 text-[13.5px]">
               <p className="font-semibold text-gray-900">{card.originLabel}</p>
@@ -340,6 +394,24 @@ function StatePill({ tone, icon, label, fill = false }: { tone: "revise" | "book
   );
 }
 
+/** The header row of a card face: its icon and name, then the state pills (words and icon, never colour alone). */
+function FaceHeader({ t, side, needsRevision, bookmarked }: { t: "question" | "answer"; side: "front" | "back"; needsRevision: boolean; bookmarked: boolean }) {
+  return (
+    <span className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5">
+      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `var(--cmp-fc-${t}-chip)`, color: `var(--cmp-fc-${t}-label)` }}>
+        <Icon d={side === "front" ? I.ask : I.eye} size={20} />
+      </span>
+      <span className="text-[15px] font-bold" style={{ color: `var(--cmp-fc-${t}-label)` }}>{side === "front" ? "Question" : "Answer"}</span>
+      {(needsRevision || bookmarked) && (
+        <span className="ml-auto flex flex-wrap justify-end gap-1.5">
+          {needsRevision && <StatePill tone="revise" icon={I.revise} label="Needs revision" />}
+          {bookmarked && <StatePill tone="bookmark" icon={I.bookmark} label="Bookmarked" fill />}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /** A face of the card. Question: neutral surface. Answer: calm tinted surface. Needs revision: muted warm edge + label. Bookmarked: icon + label.
  *  With prefers-reduced-motion the faces swap in place (no 3D turn): the hidden one is simply not shown. */
 function CardFace({ side, text, hidden, footer, explanation = null, needsRevision, bookmarked }: { side: "front" | "back"; text: string; hidden: boolean; footer: string; explanation?: string | null; needsRevision: boolean; bookmarked: boolean }) {
@@ -348,19 +420,8 @@ function CardFace({ side, text, hidden, footer, explanation = null, needsRevisio
     <span aria-hidden={hidden} data-fc-face={t}
       className={`absolute inset-0 flex flex-col overflow-hidden rounded-3xl border-2 p-4 shadow-[0_6px_24px_rgba(17,24,39,0.08)] [backface-visibility:hidden] motion-reduce:[backface-visibility:visible] md:p-7 ${side === "back" ? "[transform:rotateY(180deg)] motion-reduce:[transform:none]" : ""} ${hidden ? "motion-reduce:invisible" : ""}`}
       style={{ background: `var(--cmp-fc-${t}-surface)`, borderColor: needsRevision ? "var(--cmp-fc-revise-border)" : `var(--cmp-fc-${t}-border)`, color: `var(--cmp-fc-${t}-ink)` }}>
-      <span className="relative flex flex-wrap items-center gap-x-3 gap-y-1.5">
-        <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: `var(--cmp-fc-${t}-chip)`, color: `var(--cmp-fc-${t}-label)` }}>
-          <Icon d={side === "front" ? I.ask : I.eye} size={20} />
-        </span>
-        <span className="text-[15px] font-bold" style={{ color: `var(--cmp-fc-${t}-label)` }}>{side === "front" ? "Question" : "Answer"}</span>
-        {(needsRevision || bookmarked) && (
-          <span className="ml-auto flex flex-wrap justify-end gap-1.5">
-            {needsRevision && <StatePill tone="revise" icon={I.revise} label="Needs revision" />}
-            {bookmarked && <StatePill tone="bookmark" icon={I.bookmark} label="Bookmarked" fill />}
-          </span>
-        )}
-      </span>
-      <span className={`relative mt-3 block max-w-[60ch] flex-1 overflow-y-auto font-semibold leading-normal ${side === "front" ? "text-[20px] md:text-[27px]" : "text-[18px] md:text-[22px]"}`} aria-live={side === "back" ? "polite" : undefined}>
+      <FaceHeader t={t} side={side} needsRevision={needsRevision} bookmarked={bookmarked} />
+      <span className={`relative mt-3 block max-w-[60ch] flex-1 overflow-y-auto font-semibold leading-normal ${side === "front" ? "text-[22px] md:text-[30px]" : "text-[19px] md:text-[24px]"}`} aria-live={side === "back" ? "polite" : undefined}>
         {text}
         {explanation && <span className="mt-3 block text-[17px] font-normal leading-relaxed">{explanation}</span>}
       </span>
@@ -553,11 +614,13 @@ export function CreateMore(props: {
   gapNote?: string | null; preset?: "notes" | "competency" | "topic" | "gaps" | "write" | null;
   /** SCHOLAR-SESSION-AI-02: the open study session's focus, on its existing row (the learner may change it). */
   scope?: ReturnType<typeof flashcardPrefill>;
+  /** ?material=<id> (from a lesson with no cards yet): that material is ticked in "From my notes". */
+  presetMaterial?: string | null;
 }) {
   const router = useRouter();
   const sc = props.preset ? null : props.scope ?? null;
   const [open, setOpen] = useState<"" | "notes" | "competency" | "topic" | "gaps" | "write">(props.preset ?? sc?.open ?? "");
-  const [materials, setMaterials] = useState<string[]>(sc?.materialIds ?? []);
+  const [materials, setMaterials] = useState<string[]>(sc?.materialIds ?? (props.presetMaterial && props.materials.some(m => m.id === props.presetMaterial) ? [props.presetMaterial] : []));
   const [competency, setCompetency] = useState(sc?.competencyId ?? "");
   const [topic, setTopic] = useState(sc?.topic ?? "");
   const [deckId, setDeckId] = useState("");
@@ -854,16 +917,19 @@ export type CardRow = {
   recent: ("again" | "remembered")[]; bookmarked: boolean; note: string | null; issue: string | null; editable: boolean; deckIds: string[]; createdAt: string; version: string;
 };
 
-export function CardBrowser({ cards, decks, currentDeck, marksOn, filters }: {
+export function CardBrowser({ cards, decks, currentDeck, marksOn, filters, editId = null }: {
   cards: CardRow[]; decks: { id: string; title: string }[]; currentDeck: { key: string; id: string | null; title: string } | null; marksOn: boolean;
   filters: { q: string; state: string; bookmarked: boolean; origin: string };
+  /** ?edit=<card id> (the link from a study session): that card, if it is the learner's own, opens for editing. */
+  editId?: string | null;
 }) {
   const router = useRouter();
   const [chosen, setChosen] = useState<string[]>([]);
   const [target, setTarget] = useState("");
   const [newDeck, setNewDeck] = useState("");
   const [msg, setMsg] = useState("");
-  const [editing, setEditing] = useState<string | null>(null);
+  const [editing, setEditing] = useState<string | null>(editId && cards.some(c => c.id === editId && c.editable) ? editId : null);
+  useEffect(() => { if (editing && editing === editId) document.getElementById(`card-${editing}`)?.scrollIntoView({ block: "center" }); }, [editing, editId]);
   const formRef = useRef<HTMLFormElement>(null);
   const allChosen = chosen.length === cards.length && cards.length > 0;
   const toggle = (id: string) => setChosen(c => (c.includes(id) ? c.filter(x => x !== id) : [...c, id]));
@@ -944,7 +1010,7 @@ export function CardBrowser({ cards, decks, currentDeck, marksOn, filters }: {
           <label className="inline-flex items-center gap-2 text-[13px] font-semibold text-gray-700"><input type="checkbox" checked={allChosen} onChange={() => setChosen(allChosen ? [] : cards.map(c => c.id))} />Choose all {cards.length}</label>
           <ul className="space-y-2">
             {cards.map(c => (
-              <li key={c.id} className="rounded-2xl border border-gray-200 bg-white p-3">
+              <li key={c.id} id={`card-${c.id}`} className="scroll-mt-24 rounded-2xl border border-gray-200 bg-white p-3">
                 <div className="flex items-start gap-2">
                   <input type="checkbox" aria-label="Choose this card" className="mt-1.5" checked={chosen.includes(c.id)} onChange={() => toggle(c.id)} />
                   <div className="min-w-0 flex-1">
@@ -1020,13 +1086,13 @@ export function DeckStart({ deck, perState }: { deck: { key: string; title: stri
 
 export function HowItWorks() {
   const steps = [
-    { icon: I.doc, title: "Generate or select flashcards", text: "From your notes, the library or your learning gaps" },
+    { icon: I.doc, title: "Make or choose cards", text: "In Create & manage: from your notes, the library or your learning gaps" },
     { icon: I.layers, title: "Study & rate recall", text: "Flip, answer and mark “Remembered” or “Review again”" },
     { icon: I.cal, title: "Revise smarter", text: "Cards are scheduled using spaced repetition to strengthen memory" },
   ];
   return (
-    <section aria-labelledby="how-h" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
-      <h2 id="how-h" className="inline-flex items-center gap-2 text-[17px] font-bold text-gray-900"><span style={{ color: indigo }}><Icon d={<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>} /></span>How it works</h2>
+    <details className="rounded-3xl border border-gray-200 bg-white p-4">
+      <summary className={`inline-flex min-h-[40px] cursor-pointer items-center gap-2 text-[15px] font-bold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><span style={{ color: indigo }}><Icon d={<><circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" /></>} size={17} /></span>How it works</summary>
       <ol className="mt-3 grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-4">
         {steps.map((s, i) => (
           <li key={s.title} className="flex gap-3">
@@ -1036,6 +1102,6 @@ export function HowItWorks() {
           </li>
         ))}
       </ol>
-    </section>
+    </details>
   );
 }

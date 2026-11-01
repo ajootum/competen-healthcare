@@ -26,6 +26,7 @@ import { writeClozeItems } from "@/lib/individual/scholar/cloze-service";
 import { isClozeQuestion } from "@/lib/individual/scholar/cloze";
 import { revisionItemView } from "@/lib/individual/scholar/revision-view";
 import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/individual/scholar/flashcards";
+import { withoutFlashcards } from "@/lib/individual/scholar/flashcard-experience";
 import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
 import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
@@ -70,6 +71,10 @@ export const dynamic = "force-dynamic";
 //   New cards are written to the level mix of policy scholar_flashcard_level_mix (SCHOLAR-FLASHCARDS-QA-01), only at the
 //   levels the passage supports; the audit row records the mix, the fallbacks and why.
 //   A governed library question whose stem stands alone is studied as a card (flashcards.ts recallCardOf), library first.
+// SCHOLAR FLASHCARDS EXPERIENCE (Test myself): excludeFlashcards true, in a mode other than flashcards, takes every one of the
+//   learner's flashcards out of the pool (flashcard-experience.ts withoutFlashcards: their own cards, cards from their notes and
+//   governed library questions offered as recall cards), so a test never moves a card's schedule or enters its review history.
+//   The card ids are read on the server; nothing about them is taken from the request.
 // GET lists the student's recent revision sessions to resume.
 
 const pickFormats = (v: unknown, allowed: readonly RevisionFormat[]): RevisionFormat[] => {
@@ -175,6 +180,13 @@ export async function POST(req: Request) {
   const sourceMode: SourceMode = isSourceMode(body?.source) && (mode !== "flashcards" || policy.scholarFlashcardSourceModes.includes(body.source)) ? body.source : "notes";
   const loader = await generationContextLoader(ctx.admin, ctx.userId, policy);
   const kinds = mode === "flashcards" ? (["flashcard"] as RevisionFormat[]) : formats;
+  // Test myself: the learner's flashcards, read here (server-derived), are kept out of this session.
+  let cardIds: Set<string> | null = null;
+  if (body?.excludeFlashcards === true && mode !== "flashcards") {
+    const own = await loadFlashcards(ctx);
+    if (!own.ok) return NextResponse.json({ error: "Your cards could not be read just now." }, { status: 503 });
+    cardIds = new Set(own.data.cards.map(c => c.id));
+  }
   const seed = `${ctx.userId}:${new Date().toISOString().slice(0, 10)}:${mode}`;
 
   // SCHOLAR-FLASHCARDS-01: generating INTO a deck takes cards not yet in it, and adds them to it (by reference).
@@ -189,7 +201,12 @@ export async function POST(req: Request) {
     // Flashcards: cards, and governed library questions that stand alone as a recall prompt (recallCardOf).
     const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds: mode === "flashcards" ? ["flashcard", "mcq"] : kinds, extraIds: libraryIds });
     if (!p.ok) return null;
-    const qs = mode === "flashcards" ? p.data.questions.map(recallCardOf).filter((q): q is QuestionRow => !!q) : p.data.questions;
+    let qs = mode === "flashcards" ? p.data.questions.map(recallCardOf).filter((q): q is QuestionRow => !!q) : p.data.questions;
+    if (cardIds) {
+      // A library copy made during this request is not in cardIds yet, but is a card all the same if it stands alone as a recall prompt.
+      const keep = new Set(withoutFlashcards(qs.map(q => q.id), cardIds));
+      qs = qs.filter(q => keep.has(q.id) && !recallCardOf(q));
+    }
     const items: PoolItem[] = qs.filter(q => !!keyOf(q) && !inDeck.has(q.id)).map(q => {
       const s = p.data.stats.get(q.id)!;
       // SCHOLAR-SQIE-LEARNER-01: what its rubric lists as misconceptions and its topic, for the preference in Weak areas.
@@ -243,7 +260,7 @@ export async function POST(req: Request) {
       // SCHOLAR-FLASHCARDS-01: as cards, only a library question whose stem stands alone as a recall prompt.
       // As cards: a flashcard, or a single best answer question whose stem stands alone. Otherwise: the formats asked for.
       const fits = mode === "flashcards" ? library.filter(x => formatOfLibrary(x) === "flashcard" || (formatOfLibrary(x) === "mcq" && libraryRecallFits(x.stem)))
-        : library.filter(x => (kinds as readonly string[]).includes(formatOfLibrary(x)));
+        : library.filter(x => (kinds as readonly string[]).includes(formatOfLibrary(x)) && !(cardIds && formatOfLibrary(x) === "mcq" && libraryRecallFits(x.stem)));
       const picks = pickLibraryQuestions({ questions: fits, sections: libSections, exclude: held, limit: pick.shortfall });
       const copies = await insertLibraryCopies(ctx.admin, ctx.userId, picks);
       if (copies.ids.length) {
