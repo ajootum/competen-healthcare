@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import type { IndividualContext } from "../guard";
 import { loadIndividualPolicy } from "../policy";
-import { PPTX_MIME } from "./config";
+import { PDF_MIME, PPTX_MIME } from "./config";
 import { chunkPages, findPatientIdentifiers, pictureSlideImages, type SlideImages } from "./extract";
 import { addPictureSlideSections, getMaterial, listChunks, materialBytes, materialExtras } from "./store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
@@ -43,8 +43,27 @@ export function slideSkipReason(s: SlideImages): SlideSkip["reason"] | null {
 export async function pictureSlidePlan(admin: any, userId: string, materialId: string): Promise<{ slides: number[]; beyondCap: number } | null> {
   const [extras, chunks] = await Promise.all([materialExtras(admin, userId, [materialId]), listChunks(admin, userId, materialId)]);
   const q = extras.byId.get(materialId)?.quality ?? null;
-  if (!q || q.unit !== "slide" || !q.emptyUnits.length || !chunks.ok) return null;
+  if (!q || (q.unit !== "slide" && q.unit !== "page") || !q.emptyUnits.length || !chunks.ok) return null;
   return planPictureSlides({ emptyUnits: q.emptyUnits, triedUnits: q.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL });
+}
+
+/**
+ * SCHOLAR-IMAGE-RECOVERY: the named pages of the learner's own PDF, copied one after another into a new PDF (the
+ * original is never changed), for the same transcription runner. `pages` are the original page numbers that were copied.
+ */
+async function pdfPagesPdf(bytes: Uint8Array, wanted: readonly number[]): Promise<{ base64: string; pages: number[] } | null> {
+  try {
+    const { PDFDocument } = await import("pdf-lib");
+    const src = await PDFDocument.load(bytes, { ignoreEncryption: false, updateMetadata: false });
+    const total = src.getPageCount();
+    const pages = wanted.filter(n => n >= 1 && n <= total);
+    if (!pages.length) return null;
+    const out = await PDFDocument.create();
+    for (const copied of await out.copyPages(src, pages.map(n => n - 1))) out.addPage(copied);
+    return { base64: Buffer.from(await out.save()).toString("base64"), pages };
+  } catch {
+    return null;
+  }
 }
 
 /** One page per slide, each slide's pictures stacked in the order the slide shows them. */
@@ -94,7 +113,8 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   const material = await getMaterial(ctx.admin, ctx.userId, materialId);
   if (!material.ok) return json(503, { error: "That material could not be read just now." });
   if (!material.data) return json(404, { error: "Not found" });
-  if (material.data.mimeType !== PPTX_MIME) return json(409, { error: "Only a PowerPoint's picture-only slides can be read this way." });
+  const isPdf = material.data.mimeType === PDF_MIME;
+  if (material.data.mimeType !== PPTX_MIME && !isPdf) return json(409, { error: "Only the picture-only slides of a PowerPoint, or the image-only pages of a PDF, can be read this way." });
   const plan = await pictureSlidePlan(ctx.admin, ctx.userId, materialId);
   if (!plan) return json(503, { error: "Which slides held no text could not be read just now." });
   if (!plan.slides.length) return json(200, { read: [], skipped: [], remaining: 0, beyondCap: plan.beyondCap });
@@ -105,16 +125,23 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   if (!bytes) return json(503, { error: "Your original file could not be read just now. Try again shortly." });
 
   const batch = plan.slides.slice(0, TRANSCRIBE_BATCH);
-  const images = await pictureSlideImages(bytes, batch);
-  if (!images.ok) return json(422, { error: "The slides' pictures could not be read from your file." });
   const skipped: SlideSkip[] = [];
-  const sendable: SlideImages[] = [];
-  for (const s of images.slides) {
-    const why = slideSkipReason(s);
-    if (why) skipped.push({ slide: s.slide, reason: why }); else sendable.push(s);
+  let pdf: { base64: string; pages: number[] } | null;
+  if (isPdf) {
+    // An image-only PDF page IS its picture: the page itself is sent, no extraction of pictures from it.
+    pdf = await pdfPagesPdf(bytes, batch);
+    for (const n of batch) if (!pdf?.pages.includes(n)) skipped.push({ slide: n, reason: "unsupported" });
+  } else {
+    const images = await pictureSlideImages(bytes, batch);
+    if (!images.ok) return json(422, { error: "The slides' pictures could not be read from your file." });
+    const sendable: SlideImages[] = [];
+    for (const s of images.slides) {
+      const why = slideSkipReason(s);
+      if (why) skipped.push({ slide: s.slide, reason: why }); else sendable.push(s);
+    }
+    pdf = sendable.length ? await slidesPdf(sendable) : null;
+    for (const s of sendable) if (!pdf?.pages.includes(s.slide)) skipped.push({ slide: s.slide, reason: "unsupported" });
   }
-  const pdf = sendable.length ? await slidesPdf(sendable) : null;
-  for (const s of sendable) if (!pdf?.pages.includes(s.slide)) skipped.push({ slide: s.slide, reason: "unsupported" });
 
   const read: number[] = [];
   const additions: NewChunk[] = [];
@@ -143,11 +170,38 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   }
 
   const tried = [...read, ...skipped.map(s => s.slide)];
-  const saved = await addPictureSlideSections(ctx.admin, ctx.userId, materialId, { additions, read, tried, extractorTag: SLIDE_EXTRACTOR_TAG });
+  // SCHOLAR-IMAGE-RECOVERY: provenance kept on the material -- which model and prompt version read these units, and when.
+  const saved = await addPictureSlideSections(ctx.admin, ctx.userId, materialId, {
+    additions, read, tried, extractorTag: SLIDE_EXTRACTOR_TAG,
+    provenance: model ? { model, promptVersion: TRANSCRIBE_PROMPT_VERSION, extractedAt: new Date().toISOString() } : null,
+  });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_slide_transcribe", materialId, {
     asked: batch, read, skipped: skipped.map(s => `${s.slide}:${s.reason}`), model, prompt_version: model ? TRANSCRIBE_PROMPT_VERSION : null,
     saved: saved.ok ? saved.added : `error:${saved.error}`, recorded: saved.ok ? saved.recorded : false,
   });
   if (!saved.ok) return json(500, { error: "The slides were read but could not be saved. Nothing was added. Try again shortly." });
   return json(200, { read, skipped: skipped.sort((a, b) => a.slide - b.slide), remaining: Math.max(0, plan.slides.length - batch.length), beyondCap: plan.beyondCap });
+}
+
+/**
+ * SCHOLAR-IMAGE-RECOVERY: the first picture on one slide of the caller's own PowerPoint, so a section read by AI can be
+ * compared with what the slide shows. No AI and no policy gate: it only hands back the learner's own file's picture
+ * (read by the caller's own user id; another person's material is "not found"). Converted pictures are PNG.
+ */
+export async function slideOriginalImage(ctx: IndividualContext, materialId: string, slide: number): Promise<{ status: number; error?: string; bytes?: Uint8Array; type?: string }> {
+  if (!Number.isInteger(slide) || slide < 1) return { status: 400, error: "Name a slide." };
+  const material = await getMaterial(ctx.admin, ctx.userId, materialId);
+  if (!material.ok) return { status: 503, error: "That material could not be read just now." };
+  if (!material.data) return { status: 404, error: "Not found" };
+  if (material.data.mimeType !== PPTX_MIME) return { status: 409, error: "Only a PowerPoint's slide pictures are shown here. Open the original file for other kinds." };
+  const bytes = await materialBytes(ctx.admin, ctx.userId, materialId);
+  if (!bytes) return { status: 503, error: "Your original file could not be read just now." };
+  const r = await pictureSlideImages(bytes, [slide]);
+  const img = r.ok ? r.slides[0]?.images[0] : null;
+  if (!img) return { status: 404, error: "That slide has no picture Scholar can show." };
+  if (isConvertibleKind(img.kind)) {
+    const png = await convertToPng(img.bytes);
+    return png ? { status: 200, bytes: png, type: "image/png" } : { status: 404, error: "That slide's picture could not be shown." };
+  }
+  return { status: 200, bytes: img.bytes, type: img.kind === "jpeg" ? "image/jpeg" : "image/png" };
 }

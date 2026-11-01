@@ -4,13 +4,13 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
+import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PDF_MIME, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
 import { analysedProgrammes, analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
 import { AnalysePanel, PictureSlides, SectionTopics, type CompetencyOption, type MappingView } from "../_components/competency-client";
 import { OrganiseMaterial } from "../_components/library-client";
-import { aiReadSlides, citeChunk, qualitySummary } from "@/lib/individual/scholar/extract";
+import { aiReadLabel, aiReadSlides, aiReadingOf, citeChunk, qualitySummary } from "@/lib/individual/scholar/extract";
 import { MAX_AI_SLIDES_PER_MATERIAL, planPictureSlides } from "@/lib/individual/scholar/slide-images";
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
@@ -120,9 +120,13 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   // every section such a reading added is labelled. Labelled from the stored quality record, whatever the policy is now.
   const rawQuality = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
   const aiRead = aiReadSlides(rawQuality);
-  const pictures = policy.scholarMaterialImageSlides === "ai_transcription" && m.mimeType === PPTX_MIME && rawQuality?.unit === "slide" && chunks.ok
+  // SCHOLAR-IMAGE-RECOVERY: a PDF's image-only pages are recovered the same way as a PowerPoint's picture-only slides.
+  const recoverable = (m.mimeType === PPTX_MIME && rawQuality?.unit === "slide") || (m.mimeType === PDF_MIME && rawQuality?.unit === "page");
+  const policyOn = policy.scholarMaterialImageSlides === "ai_transcription";
+  const pictures = recoverable && rawQuality && chunks.ok && (policyOn || rawQuality.emptyUnits.length)
     ? planPictureSlides({ emptyUnits: rawQuality.emptyUnits, triedUnits: rawQuality.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
     : null;
+  const unreadableUnits = recoverable && rawQuality ? rawQuality.emptyUnits.length : 0;
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -145,13 +149,16 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.text}</p>
       )}
       {pictures && (
-        <PictureSlides materialId={m.id} slides={pictures.slides.length} beyondCap={pictures.beyondCap} consent={consentOn} />
+        <PictureSlides materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
+          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} />
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
         <Link href={experienceHref("scholar", `study/learn?material=${m.id}`)} className={secondaryBtn}>Teach me this material</Link>
         {studyOn && <Link href={experienceHref("scholar", `study/learn?material=${m.id}&study=new`)} className={secondaryBtn}>Study this</Link>}
         <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>Download original</a>
+        {/* Saved learning as a PDF: stored teaching only, no AI (api/individual/scholar/learn/export). */}
+        <a href={`/api/individual/scholar/learn/export?material=${m.id}`} className={secondaryBtn}>Download saved lessons (PDF)</a>
         <DeleteMaterial id={m.id} title={m.title} />
       </div>
       {/* COMPETEN-SCHOLAR-EXAM-PAPERS-01: a past or practice paper is studied question by question in Apply. Absent
@@ -231,9 +238,28 @@ export default async function MaterialPage({ params, searchParams }: { params: P
                     {citeChunk(c, unit).replace(/^./, s => s.toUpperCase())}{c.pageFrom !== null ? ` · section ${c.ordinal}` : ""}
                   </p>
                   {c.pageFrom !== null && aiRead.has(c.pageFrom) && (
-                    <p className="mt-1 inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[12.5px] font-semibold text-amber-950">
-                      Read by AI from a picture on slide {c.pageFrom} — check it against the slide
-                    </p>
+                    <div className="mt-1">
+                      <p className="inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[12.5px] font-semibold text-amber-950">
+                        {aiReadLabel(unit, c.pageFrom)}
+                      </p>
+                      {(() => {
+                        const r = aiReadingOf(rawQuality, c.pageFrom);
+                        return r ? <span className="ml-2 text-[12px] text-gray-600">Read {r.extractedAt.slice(0, 10)} · {r.model} · {r.promptVersion}</span> : null;
+                      })()}
+                      {/* Compare with the original: a PowerPoint's own slide picture, or the PDF opened at that page. */}
+                      {m.mimeType === PPTX_MIME && (
+                        <details className="mt-1">
+                          <summary className={`cursor-pointer text-[12.5px] font-semibold ${focusRing}`} style={{ color: x.accent }}>Compare with the original slide picture</summary>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served privately by the slides route */}
+                          <img src={`/api/individual/scholar/materials/${m.id}/slides?slide=${c.pageFrom}`} alt={`The original picture on slide ${c.pageFrom}`} loading="lazy"
+                            className="mt-1 max-h-72 max-w-full rounded-md border border-gray-200" />
+                        </details>
+                      )}
+                      {m.mimeType === PDF_MIME && (
+                        <a href={`/api/individual/scholar/materials/${m.id}#page=${c.pageFrom}`} target="_blank" rel="noreferrer"
+                          className={`ml-2 text-[12.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Open the original at page {c.pageFrom}</a>
+                      )}
+                    </div>
                   )}
                   <details className="mt-1 group">
                     <summary className={`cursor-pointer list-none text-[14px] leading-relaxed text-gray-800 ${focusRing}`}>

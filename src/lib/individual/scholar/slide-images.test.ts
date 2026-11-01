@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import sharp from "sharp";
 import { MAX_AI_SLIDES_PER_MATERIAL, hasReadableText, imageKind, mediaPart, parseRels, planChunkInsertion, planPictureSlides, slidePictures } from "./slide-images";
-import { aiReadSlides, pictureSlideImages, qualitySummary, slidePartNames } from "./extract";
+import { AI_READ_LABEL, aiReadLabel, aiReadSlides, aiReadingOf, pictureSlideImages, qualitySummary, slidePartNames } from "./extract";
 import { slideSkipReason } from "./slide-reading";
 import { CONVERT_MAX_DIMENSION, MAX_CONVERT_INPUT_BYTES, convertToPng } from "./slide-convert";
 
@@ -123,7 +123,21 @@ describe("the transcription and the record", () => {
     expect([...aiReadSlides(q)].sort()).toEqual([33, 38]); // a section on a slide still recorded empty can only be AI-read
     expect(qualitySummary(q).text).toContain("Slide 33 was read by AI from a picture: check it against the slide.");
     expect(qualitySummary({ ...q, emptyUnits: [] }).partial).toBe(false);
-    expect(aiReadSlides({ unit: "page", units: 3, emptyUnits: [2], chars: 1, sections: 1 }).size).toBe(0);
+    expect(aiReadSlides({ unit: "section", units: 1, emptyUnits: [], chars: 1, sections: 1 }).size).toBe(0);
+  });
+  it("a PDF's image-only pages are recovered and labelled the same way (SCHOLAR-IMAGE-RECOVERY)", () => {
+    const q = { unit: "page" as const, units: 6, emptyUnits: [4], chars: 100, sections: 5, aiReadUnits: [2], aiTriedUnits: [2] };
+    expect([...aiReadSlides(q)].sort()).toEqual([2, 4]);
+    expect(qualitySummary(q).text).toContain("Page 2 was read by AI from a picture: check it against the page.");
+    expect(aiReadLabel("page", 2)).toBe("Text read from the page image by AI (page 2) — check it against the original");
+  });
+  it("the label says the text was read from the slide picture by AI, and provenance is found by unit", () => {
+    expect(aiReadLabel("slide", 33)).toContain(`${AI_READ_LABEL} (slide 33)`);
+    const q = { unit: "slide" as const, units: 49, emptyUnits: [], chars: 1, sections: 1, aiReadUnits: [33, 34],
+      aiProvenance: [{ units: [33], model: "m1", promptVersion: "exam-transcribe-v1", extractedAt: "2026-11-01T10:00:00.000Z" }] };
+    expect(aiReadingOf(q, 33)?.model).toBe("m1");
+    expect(aiReadingOf(q, 34)).toBeNull();
+    expect(aiReadingOf(null, 33)).toBeNull();
   });
   it("a slide with no usable picture is skipped with its reason", () => {
     expect(slideSkipReason({ slide: 3, images: [], unsupported: ["emf"], tooLarge: false })).toBe("unsupported");
