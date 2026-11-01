@@ -152,7 +152,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
       {header}
       {papers}
       <PaneGrid bp="lg" fallbackMain="minmax(0,3fr)"
-        end={{ storageKey: "scholar.revise.side.w", defaultPx: c => Math.round((c - 20) * 0.4), fallback: "minmax(0,2fr)", label: "Resize the revision progress panel", node: (
+        end={{ storageKey: "scholar.revise.side.w", defaultPx: { ratio: 0.4 }, fallback: "minmax(0,2fr)", label: "Resize the revision progress panel", node: (
         <aside aria-labelledby="intel-h" className="space-y-4">
           <h2 id="intel-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">How your revision is going</h2>
           <p className="text-[12.5px] text-gray-600">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>

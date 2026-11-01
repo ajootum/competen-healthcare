@@ -104,7 +104,7 @@ export default async function OsceStationPage({ params, searchParams }: { params
           viewport edge: on a 768px tablet the shell sidebar leaves about 517px, so the aside wraps below the run and the
           checklist keeps the full width (coordinator browser check, 31 Oct 2026). CPR-MOB-001 keeps its single md edge. */}
       <PaneGrid bp="@36rem" className="@min-[36rem]:items-start" fallbackMain="minmax(0,3fr)"
-        end={{ storageKey: "scholar.osce.side.w", defaultPx: c => Math.round((c - 20) * 0.4), fallback: "minmax(0,2fr)", label: "Resize the About this station panel", node: (
+        end={{ storageKey: "scholar.osce.side.w", defaultPx: { ratio: 0.4 }, fallback: "minmax(0,2fr)", label: "Resize the About this station panel", node: (
         <aside aria-labelledby="osce-about-h" className="min-w-0 space-y-4">
           <section className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4">
             <h2 id="osce-about-h" className="text-[14px] font-bold text-gray-900">About this station</h2>
