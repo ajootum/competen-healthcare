@@ -5,8 +5,11 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../../_components/chrome";
 import StudyNav from "../../_components/StudyNav";
-import { countDue, getEvaluation, loadPassportEvaluations } from "@/lib/individual/scholar/store";
-import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { countDue, getEvaluation, getStudyPlan, loadPassportEvaluations, studyPlanSchema } from "@/lib/individual/scholar/store";
+import { isStudyPlanOn, loadIndividualPolicy } from "@/lib/individual/policy";
+import { listMonthlyReviews, monthlyReviewOn } from "@/lib/individual/scholar/monthly-review-data";
+import { monthStanding, weakTopics, type MonthlyBreakdown } from "@/lib/individual/scholar/monthly-review";
+import { MonthlyResults, type MonthlyResultsView } from "../../_components/monthly-results";
 import { EVALUATION_CONFIDENCE_LABEL, EVALUATION_LABEL, EVALUATION_METHOD_LABEL } from "@/lib/individual/scholar/config";
 import { EvaluationView } from "../../_components/evaluation-view";
 import { EvaluationActions, PassportEvaluationChoice } from "../../_components/evaluation-client";
@@ -44,6 +47,26 @@ export default async function EvaluationRecordPage({ params, searchParams }: { p
   const e = r.data;
   const res = e.results;
   const counts = e.evidenceRefs?.counts ?? {};
+  // SCHOLAR-MONTHLY-REVIEW-01: a monthly learning review shows its results by topic first. The six dimensions below are unchanged.
+  const mr = e.context?.monthlyReview as { month: string; late: boolean; retakeOf?: string | null; blueprint?: { length: number; totals: { core: number; application: number; gaps: number }; sections: unknown[]; omittedSections: number } } | undefined;
+  const breakdown = res?.monthly as MonthlyBreakdown | undefined;
+  let monthlyView: MonthlyResultsView | null = null;
+  if (mr && breakdown) {
+    const all = await listMonthlyReviews(ctx.admin, ctx.userId);
+    const standing = monthStanding(all ?? [], mr.month);
+    const planOn = policy.scholarStudyPlan && isStudyPlanOn(policy, await studyPlanSchema(ctx.admin, ctx.userId));
+    const plan = planOn ? await getStudyPlan(ctx.admin, ctx.userId) : null;
+    const weak = weakTopics(breakdown);
+    monthlyView = {
+      month: mr.month, breakdown, planned: mr.blueprint?.length ?? breakdown.overall.asked, late: mr.late === true,
+      original: all ? standing.original?.id === e.id : (mr.retakeOf ?? null) === null, originalId: standing.original?.id ?? mr.retakeOf ?? null,
+      retakes: standing.retakes.map(x => ({ id: x.id, createdAt: x.createdAt })),
+      blueprint: mr.blueprint ? { sections: mr.blueprint.sections.length, core: mr.blueprint.totals.core, application: mr.blueprint.totals.application, gaps: mr.blueprint.totals.gaps, omitted: mr.blueprint.omittedSections } : null,
+      canRetake: monthlyReviewOn(policy), weak,
+      plan: plan?.ok ? { priorities: plan.data?.priorities ?? [], settings: plan.data ? { examDate: plan.data.examDate ?? "", examLabel: plan.data.examLabel ?? "", weeklyMinutes: plan.data.weeklyMinutes, daysPerWeek: plan.data.daysPerWeek, goal: plan.data.goal ?? "" } : null } : null,
+      progressHref: studyHref("progress"),
+    };
+  }
   return (
     <>
       {header}
@@ -53,12 +76,13 @@ export default async function EvaluationRecordPage({ params, searchParams }: { p
           {" · "}<span className="font-semibold">{EVALUATION_CONFIDENCE_LABEL[e.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? e.confidence}</span>
           {e.supersedesId ? <> · follows <Link href={evaluationHref(e.supersedesId)} className={`underline ${focusRing}`}>an earlier evaluation</Link></> : null}
         </p>
-        <EvaluationActions id={e.id} scope={e.scope ?? { kind: "all" }} />
+        {mr ? null : <EvaluationActions id={e.id} scope={e.scope ?? { kind: "all" }} />}
       </div>
       {/* PROGRESS-01 P5: the student chooses whether this evaluation appears in their Passport. Fail-closed without 427. */}
       {policy.scholarPassportEvaluations === "offer" && inPassport.ok && (
         <div className="mb-5"><PassportEvaluationChoice evaluationId={e.id} shown={inPassport.data.some(x => x.evaluationId === e.id)} suggested={`Evaluation: ${e.scope?.label ?? "my learning"}`} /></div>
       )}
+      {monthlyView && <MonthlyResults v={monthlyView} accent={x.accent} />}
       <EvaluationView r={res} confidence={res.confidenceDetail} limitations={e.limitations} cfca={e.cfca?.tree ?? null} />
       <section aria-labelledby="ev-prov-h" className="mt-5 rounded-2xl border border-gray-200 bg-white p-4">
         <h2 id="ev-prov-h" className="text-[14px] font-bold text-gray-900">How this evaluation was made</h2>

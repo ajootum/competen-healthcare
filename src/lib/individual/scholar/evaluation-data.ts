@@ -14,9 +14,12 @@ import { loadLearnerCatalogue } from "./competency-view";
 import { CASE_CONTEXT_LABEL, CASE_CONTEXTS, type CaseContext } from "./config";
 import { evaluate, type ECompetency, type EvaluationRules, type EvidenceSet, type Evaluation } from "./evaluation";
 import type { IndividualPolicy } from "../policy";
+import { expandBlueprint, isMonth, monthLabel, parseBlueprint, type Blueprint } from "./monthly-review";
 
-export type EvaluationScope = LearningScope | { kind: "all" } | { kind: "outcome"; competencyId: string; outcome: string } | { kind: "context"; context: CaseContext };
-export type ScopeView = { kind: EvaluationScope["kind"]; label: string; ids?: string[]; outcome?: string; context?: string };
+/** SCHOLAR-MONTHLY-REVIEW-01: a calendar month's review. Its sections are the blueprint's; the blueprint itself rides along to be kept in the evaluation's context. */
+export type MonthScope = { kind: "month"; month: string; chunkIds: string[]; blueprint: Blueprint; retakeOf: string | null };
+export type EvaluationScope = LearningScope | { kind: "all" } | { kind: "outcome"; competencyId: string; outcome: string } | { kind: "context"; context: CaseContext } | MonthScope;
+export type ScopeView = { kind: EvaluationScope["kind"]; label: string; ids?: string[]; outcome?: string; context?: string; month?: string };
 
 /** A scope from a request body. A string is the reason it was refused. Learn and Revision's scopes, plus all, outcome and context. */
 export function parseEvaluationScope(s: Record<string, unknown> | null | undefined, parse: (b: { scope?: Record<string, unknown> }) => LearningScope | string): EvaluationScope | string {
@@ -25,6 +28,13 @@ export function parseEvaluationScope(s: Record<string, unknown> | null | undefin
   if (v.kind === "outcome") {
     const outcome = typeof v.outcome === "string" ? v.outcome.trim() : "";
     return isUuid(v.competencyId) && outcome.length >= 2 && outcome.length <= 500 ? { kind: "outcome", competencyId: v.competencyId as string, outcome } : "Choose a learning outcome.";
+  }
+  if (v.kind === "month") {
+    if (!isMonth(v.month)) return "Choose a month.";
+    const blueprint = expandBlueprint(v.bp, v.month) ?? parseBlueprint(v.blueprint, v.month);
+    if (!blueprint) return "That monthly review could not be read. Start it again from Evaluate.";
+    const retake = typeof v.retakeOf === "string" && isUuid(v.retakeOf) ? v.retakeOf : null;
+    return { kind: "month", month: v.month, chunkIds: blueprint.sections.map(x => x.chunkId), blueprint, retakeOf: retake };
   }
   if (v.kind === "context") return (CASE_CONTEXTS as readonly string[]).includes(v.context as string) ? { kind: "context", context: v.context as CaseContext } : "Choose a clinical context.";
   return parse({ scope: v });
@@ -81,6 +91,11 @@ export async function evaluateScope(admin: any, userId: string, policy: Individu
       sections = all.data.filter(s => used.has(s.chunkId));
       view = { kind: "context", label: `${CASE_CONTEXT_LABEL[scope.context]} cases`, context: scope.context };
     }
+  } else if (scope.kind === "month") {
+    const r = await resolveScope(admin, userId, { kind: "sources", materialIds: [], chunkIds: scope.chunkIds, topics: [] });
+    if (!r.ok) return r;
+    sections = r.sections;
+    view = { kind: "month", label: `Monthly learning review: ${monthLabel(scope.month)}`, ids: scope.chunkIds, month: scope.month };
   } else if (scope.kind === "outcome") {
     const r = await resolveScope(admin, userId, { kind: "competency", competencyId: scope.competencyId });
     if (!r.ok) return r;

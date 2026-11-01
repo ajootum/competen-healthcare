@@ -4166,3 +4166,203 @@ export async function insertAttemptCorrection(admin: Admin, userId: string, c: {
     return row ? { ok: true, correction: row } : { ok: false, error: "failed" };
   } catch { return { ok: false, error: "failed" }; }
 }
+
+
+// ══════════════════════════════════════════════════════════════════════════════════════════════════════════════════
+// ── SCHOLAR-MONTHLY-REVIEW-01 (owner GO, 1 Nov 2026): THE STUDY CALENDAR ENTRIES (830) AND THE MONTH'S RECORDS ────────
+//
+// The store is the only Scholar write site, so everything the monthly review and the calendar read or write lives here, keyed
+// on the caller's own user_id. The pure rules are in monthly-review.ts and study-calendar.ts, the assembly in
+// monthly-review-data.ts and study-calendar-data.ts. A card's schedule is read (to show when it is due) and NEVER written.
+//
+// 830 keeps three small things the calendar cannot derive: a planned activity moved to another day, a monthly review date
+// moved (or a review waiting to resume), and the choice not to be shown monthly review suggestions. FAIL CLOSED: where 830 is
+// absent the calendar shows everything it can derive, offers no Move button, hides the opt-out, and the writes answer
+// "not provisioned". The monthly review itself needs no migration.
+
+type MonthlyActivityRecords = import("./monthly-review").ActivityRecords;
+export type StoredCalendarEntry = { kind: "plan_activity" | "monthly_review" | "preference"; ref: string; originalDate: string | null; scheduledDate: string | null; value: Record<string, unknown> | null };
+const CAL_COLS = "kind, ref, original_date, scheduled_date, value";
+const toCalendarEntry = (r: any): StoredCalendarEntry => ({
+  kind: r.kind, ref: r.ref, originalDate: r.original_date ?? null, scheduledDate: r.scheduled_date ?? null,
+  value: r.value && typeof r.value === "object" && !Array.isArray(r.value) ? r.value : null,
+});
+
+let cal830: boolean | null = null;
+/** Whether migration 830 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function calendarSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (cal830 !== null) return cal830;
+  try {
+    const { error } = await admin.from("individual_scholar_calendar_entry").select("id").eq("user_id", userId).limit(1);
+    if (!error) return (cal830 = true);
+    if (isNotProvisioned(error)) cal830 = false;
+    return false;
+  } catch { return false; }
+}
+/** Tests only: forget what was detected. */
+export const resetCalendarSchema = () => { cal830 = null; };
+
+/** The caller's calendar entries. Not provisioned (830 absent) is told apart from unreadable. */
+export async function listCalendarEntries(admin: Admin, userId: string): Promise<Read<StoredCalendarEntry[]>> {
+  if (cal830 === false) return { ok: false, notProvisioned: true };
+  try {
+    const { data, error } = await admin.from("individual_scholar_calendar_entry").select(CAL_COLS).eq("user_id", userId).limit(2000);
+    if (error) { if (isNotProvisioned(error)) cal830 = false; return { ok: false, notProvisioned: isNotProvisioned(error) }; }
+    cal830 = true;
+    return { ok: true, data: ((data ?? []) as any[]).map(toCalendarEntry) };
+  } catch { return { ok: false, notProvisioned: false }; }
+}
+
+export type CalendarEntryPatch = { originalDate?: string | null; scheduledDate?: string | null; value?: Record<string, unknown> | null };
+/**
+ * Save (insert or change) one entry. A field left out of the patch keeps what the row has, so a review waiting to resume does
+ * not lose a moved date, and the other way round. The caller validated the dates (validateMove), the kind and the reference.
+ */
+export async function putCalendarEntry(admin: Admin, userId: string, kind: StoredCalendarEntry["kind"], ref: string, patch: CalendarEntryPatch): Promise<"ok" | "not_provisioned" | "failed"> {
+  if (cal830 === false) return "not_provisioned";
+  try {
+    const { data: cur, error: rErr } = await admin.from("individual_scholar_calendar_entry").select(CAL_COLS).eq("user_id", userId).eq("kind", kind).eq("ref", ref).maybeSingle();
+    if (rErr) { if (isNotProvisioned(rErr)) { cal830 = false; return "not_provisioned"; } return "failed"; }
+    const had = cur ? toCalendarEntry(cur) : null;
+    const { error } = await admin.from("individual_scholar_calendar_entry").upsert({
+      user_id: userId, kind, ref,
+      original_date: patch.originalDate !== undefined ? patch.originalDate : had?.originalDate ?? null,
+      scheduled_date: patch.scheduledDate !== undefined ? patch.scheduledDate : had?.scheduledDate ?? null,
+      value: patch.value !== undefined ? patch.value : had?.value ?? null,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "user_id,kind,ref" });
+    if (error) { if (isNotProvisioned(error)) { cal830 = false; return "not_provisioned"; } return "failed"; }
+    cal830 = true;
+    return "ok";
+  } catch { return "failed"; }
+}
+
+/** Remove one entry (put a moved activity back, or turn suggestions back on). */
+export async function removeCalendarEntry(admin: Admin, userId: string, kind: StoredCalendarEntry["kind"], ref: string): Promise<"ok" | "not_provisioned" | "failed"> {
+  if (cal830 === false) return "not_provisioned";
+  try {
+    const { error } = await admin.from("individual_scholar_calendar_entry").delete().eq("user_id", userId).eq("kind", kind).eq("ref", ref);
+    if (error) { if (isNotProvisioned(error)) { cal830 = false; return "not_provisioned"; } return "failed"; }
+    return "ok";
+  } catch { return "failed"; }
+}
+
+async function inBatchesOf(admin: Admin, table: string, cols: string, col: string, userId: string, ids: readonly string[], size = 150): Promise<any[]> {
+  const out: any[] = [];
+  const uniq = [...new Set(ids)].filter(Boolean);
+  for (let i = 0; i < uniq.length; i += size) {
+    const r = await admin.from(table).select(cols).eq("user_id", userId).in(col, uniq.slice(i, i + size));
+    if (r.error && !isNotProvisioned(r.error)) throw new Error(r.error.message ?? "read failed");
+    out.push(...(r.error ? [] : r.data ?? []));
+  }
+  return out;
+}
+
+export type MonthRecords = { records: MonthlyActivityRecords; evaluations: { id: string; scopeKind: string | null; label: string | null; at: string }[] };
+/**
+ * The caller's own dated records from the first day of `fromMonth` to the last day of `toMonth`: lessons (learning events), answers,
+ * spaced reviews, revision and case sessions, materials added and evaluations made, with each section's topics and competency
+ * links. Only real dates. null when a core source cannot be read (never a calm empty). `competencies` is handed in by the caller.
+ */
+export async function monthRecords(admin: Admin, userId: string, fromMonth: string, toMonth: string, competencies: readonly { id: string; title: string }[]): Promise<MonthRecords | null> {
+  const nextOf = (m: string) => { const y = Number(m.slice(0, 4)), mo = Number(m.slice(5, 7)); return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`; };
+  const from = `${fromMonth}-01T00:00:00.000Z`, to = `${nextOf(toMonth)}-01T00:00:00.000Z`;
+  const soft = async (q: PromiseLike<{ data: any; error: any }>) => { const r = await q; return r.error && isNotProvisioned(r.error) ? { data: [] as any[], error: null } : r; };
+  try {
+    const [ev, att, rev, rs, cs, mats, evs] = await Promise.all([
+      soft(admin.from("individual_scholar_learning_event").select("session_id, step, created_at").eq("user_id", userId).gte("created_at", from).lt("created_at", to).limit(5000)),
+      admin.from("individual_scholar_attempt").select("question_id, answered_at, revision_session_id").eq("user_id", userId).gte("answered_at", from).lt("answered_at", to).limit(20000),
+      soft(admin.from("individual_scholar_review").select("card_id, reviewed_at").eq("user_id", userId).gte("reviewed_at", from).lt("reviewed_at", to).limit(20000)),
+      soft(admin.from("individual_scholar_revision_session").select("id, mode, created_at").eq("user_id", userId).gte("created_at", from).lt("created_at", to).limit(2000)),
+      soft(admin.from("individual_scholar_case_session").select("id, private_case_id, created_at").eq("user_id", userId).gte("created_at", from).lt("created_at", to).limit(2000)),
+      admin.from("individual_scholar_material").select("id, title, created_at").eq("user_id", userId).gte("created_at", from).lt("created_at", to).limit(500),
+      soft(admin.from("individual_scholar_evaluation").select("id, scope, created_at").eq("user_id", userId).gte("created_at", from).lt("created_at", to).limit(500)),
+    ]);
+    if ([att, mats].some(r => r.error)) return null;
+    const events = (ev.data ?? []) as any[];
+    const sessionIds = [...new Set(events.map(e => e.session_id as string))];
+    const caseIds = [...new Set(((cs.data ?? []) as any[]).map(c => c.private_case_id as string).filter(Boolean))];
+    const cardIds = [...new Set(((rev.data ?? []) as any[]).map(r => r.card_id as string))];
+    const [sessions, steps, caseSrc, cards] = await Promise.all([
+      inBatchesOf(admin, "individual_scholar_learning_session", "id, title", "id", userId, sessionIds),
+      inBatchesOf(admin, "individual_scholar_learning_step", "session_id, step, chunk_id, material_id", "session_id", userId, sessionIds),
+      inBatchesOf(admin, "individual_scholar_case_source", "case_id, chunk_id", "case_id", userId, caseIds),
+      inBatchesOf(admin, "individual_scholar_card", "id, question_id", "id", userId, cardIds),
+    ]);
+    const qIds = [...((att.data ?? []) as any[]).map(a => a.question_id as string), ...cards.map(c => c.question_id as string)];
+    const questions = await inBatchesOf(admin, "individual_scholar_question", "id, chunk_id, material_id", "id", userId, qIds);
+    const qChunk = new Map(questions.map(q => [q.id as string, { chunkId: q.chunk_id as string, materialId: q.material_id as string }]));
+    const cardQ = new Map(cards.map(c => [c.id as string, c.question_id as string]));
+    const chunkMaterial = new Map<string, string>();
+    for (const q of questions) chunkMaterial.set(q.chunk_id, q.material_id);
+    for (const s of steps) chunkMaterial.set(s.chunk_id, s.material_id);
+    const loose = caseSrc.map(c => c.chunk_id as string).filter(id => !chunkMaterial.has(id));
+    for (const c of await inBatchesOf(admin, "individual_scholar_chunk", "id, material_id", "id", userId, loose)) chunkMaterial.set(c.id, c.material_id);
+    const refs = await sectionsOf(admin, userId, [...new Set(chunkMaterial.values())]);
+    if (!refs.ok) return null;
+    const wanted = new Set(chunkMaterial.keys());
+    const sections = refs.data.filter(s => wanted.has(s.chunkId)).map(s => ({ chunkId: s.chunkId, materialId: s.materialId, materialTitle: s.materialTitle, label: s.pageFrom !== null ? `${s.unit} ${s.pageFrom}` : `section ${s.ordinal}` }));
+    const chunkIds = sections.map(s => s.chunkId);
+    const [topicMap, links] = await Promise.all([topicsOfSections(admin, userId, chunkIds), sectionLinks(admin, userId, chunkIds)]);
+
+    const title = new Map(sessions.map(s => [s.id as string, String(s.title ?? "A lesson")]));
+    const stepChunks = new Map<string, string[]>();
+    for (const s of steps) { const k = `${s.session_id}:${s.step}`; stepChunks.set(k, [...(stepChunks.get(k) ?? []), s.chunk_id]); }
+    const caseChunks = new Map<string, string[]>();
+    for (const c of caseSrc) caseChunks.set(c.case_id, [...(caseChunks.get(c.case_id) ?? []), c.chunk_id]);
+    const records: MonthlyActivityRecords = {
+      sections,
+      lessons: events.map(e => ({ sessionId: e.session_id as string, step: Number(e.step), title: title.get(e.session_id) ?? "A lesson", chunkIds: stepChunks.get(`${e.session_id}:${e.step}`) ?? [], at: e.created_at as string })),
+      materials: ((mats.data ?? []) as any[]).map(m => ({ id: m.id, title: m.title, at: m.created_at })),
+      answers: ((att.data ?? []) as any[]).flatMap(a => { const q = qChunk.get(a.question_id); return q ? [{ questionId: a.question_id as string, chunkId: q.chunkId, at: a.answered_at as string, sessionId: (a.revision_session_id as string | null) ?? null }] : []; }),
+      reviews: ((rev.data ?? []) as any[]).flatMap(r => { const q = qChunk.get(cardQ.get(r.card_id) ?? ""); return q ? [{ chunkId: q.chunkId, at: r.reviewed_at as string }] : []; }),
+      revisionSessions: ((rs.data ?? []) as any[]).map(s => ({ id: s.id as string, mode: s.mode as string, at: s.created_at as string })),
+      caseSessions: ((cs.data ?? []) as any[]).map(c => ({ id: c.id as string, at: c.created_at as string, chunkIds: caseChunks.get(c.private_case_id) ?? [] })),
+      topics: Object.fromEntries([...topicMap.entries()]), links: links.map(l => ({ chunkId: l.chunkId, competencyId: l.competencyId })),
+      competencies: [...competencies],
+    };
+    return { records, evaluations: ((evs.data ?? []) as any[]).map(e => ({ id: e.id, scopeKind: e.scope?.kind ?? null, label: e.scope?.label ?? null, at: e.created_at })) };
+  } catch { return null; }
+}
+
+/** The caller's active cards by the day their review is due (YYYY-MM-DD -> count). Read only: a card schedule is never written here. null when unreadable. */
+export async function cardDueDates(admin: Admin, userId: string): Promise<Record<string, number> | null> {
+  const { data, error } = await admin.from("individual_scholar_card").select("next_review_at").eq("user_id", userId).eq("status", "active").limit(5000);
+  if (error) return isNotProvisioned(error) ? {} : null;
+  const out: Record<string, number> = {};
+  for (const r of (data ?? []) as any[]) { const d = String(r.next_review_at).slice(0, 10); out[d] = (out[d] ?? 0) + 1; }
+  return out;
+}
+
+export type MonthlyReviewRecord = { id: string; month: string; createdAt: string; retakeOf: string | null; late: boolean; freshSessionId: string | null; label: string; confidence: string };
+/** The caller's monthly reviews (the evaluations whose scope is a month), newest first. Light: no results are read. null when unreadable. */
+export async function listMonthlyReviewRecords(admin: Admin, userId: string): Promise<MonthlyReviewRecord[] | null> {
+  const { data, error } = await admin.from("individual_scholar_evaluation").select("id, scope, context, confidence, fresh_session_id, created_at")
+    .eq("user_id", userId).filter("scope->>kind", "eq", "month").order("created_at", { ascending: false }).limit(200);
+  if (error) return isNotProvisioned(error) ? [] : null;
+  return ((data ?? []) as any[]).flatMap(r => {
+    const month = r.scope?.month;
+    if (typeof month !== "string" || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) return [];
+    const m = r.context?.monthlyReview ?? {};
+    return [{ id: r.id, month, createdAt: r.created_at, retakeOf: typeof m.retakeOf === "string" ? m.retakeOf : null, late: m.late === true, freshSessionId: r.fresh_session_id ?? null, label: String(r.scope?.label ?? ""), confidence: r.confidence }];
+  });
+}
+
+/** The monthly review already made from this sitting, if any: asking twice returns it, never a second "original". */
+export async function monthlyReviewForSession(admin: Admin, userId: string, sessionId: string): Promise<string | null> {
+  const { data } = await admin.from("individual_scholar_evaluation").select("id").eq("user_id", userId).eq("fresh_session_id", sessionId).filter("scope->>kind", "eq", "month").limit(1);
+  return (data ?? [])[0]?.id ?? null;
+}
+
+/** The questions of a finished sitting, with the section each belongs to and whether it is a case-step (application) question. */
+export async function sittingQuestions(admin: Admin, userId: string, ids: readonly string[]): Promise<{ id: string; chunkId: string; application: boolean }[]> {
+  const rows = await inBatchesOf(admin, "individual_scholar_question", "id, chunk_id, kind, case_id", "id", userId, ids);
+  const byId = new Map(rows.map(r => [r.id as string, r]));
+  return ids.flatMap(id => { const r = byId.get(id); return r ? [{ id, chunkId: r.chunk_id as string, application: r.kind === "case" || !!r.case_id }] : []; });
+}
+
+/** Remove an unanswered revision sitting the caller made only to have questions written for it. Owner-keyed. */
+export async function discardRevisionSession(admin: Admin, userId: string, id: string): Promise<void> {
+  if (!isUuid(id)) return;
+  await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId).eq("id", id);
+}

@@ -74,7 +74,9 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
   | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
   | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
-  | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words";
+  | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
+  | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
+  | "scholar_monthly_review_max_new";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -118,6 +120,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
+  | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu";
@@ -705,6 +708,91 @@ const PASSPORT_POLICIES: readonly PolicyDef[] = [
     help: "Whether a person may ask the personal AI to draft a view's summary or explain credential categories. AI fair use applies. It never shares, never creates or changes a record, an issuer or a status, and nothing is used unless the person keeps it.",
     options: [{ value: "on", label: "On, when the person asks" }, { value: "off", label: "Off" }], fallback: "on",
     limitReason: "Two choices. The Passport, sharing and verification work fully without AI.",
+  },
+];
+
+// SCHOLAR-MONTHLY-REVIEW-01 (owner GO, 1 Nov 2026): the monthly learning review and the study calendar. One contiguous block.
+// The review is OPTIONAL and formative: it is recommended, never required, and nothing waits on it. The calendar is a view.
+const SCHOLAR_MONTHLY_POLICIES: readonly PolicyDef[] = [
+  {
+    key: "scholar_monthly_review", kind: "choice", product: "Scholar",
+    label: "Monthly learning review",
+    help: "Whether Evaluate offers a short optional review of what the student studied in a calendar month: a balanced test of questions from the sections they actually worked on, with feedback at the end and topic-level results. It is recommended, never required. Formative practice only: never verified competence.",
+    options: [{ value: "on", label: "Offer the review" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Needs no migration. Stored questions are used first. New ones are written only where revision generation, the student's AI consent and their allowance permit. Default: offered.",
+  },
+  {
+    key: "scholar_monthly_review_min_questions", kind: "int", product: "Scholar", unit: "questions",
+    label: "Monthly review: fewest questions",
+    help: "A review is never shorter than this when enough questions can be found. Where fewer can be found (no AI, few stored questions) a shorter review is run and says so.",
+    fallback: 10, min: 3, max: 50,
+    limitReason: "Three to fifty, and never above the most questions. Default: ten.",
+  },
+  {
+    key: "scholar_monthly_review_max_questions", kind: "int", product: "Scholar", unit: "questions",
+    label: "Monthly review: most questions",
+    help: "A review is never longer than this, however many sections the student worked on.",
+    fallback: 30, min: 5, max: 50,
+    limitReason: "Five to fifty (the revision session limit). Default: thirty.",
+  },
+  {
+    key: "scholar_monthly_review_per_section", kind: "int", product: "Scholar", unit: "questions",
+    label: "Monthly review: questions per section",
+    help: "The length of a review is the number of sections the student worked on in the month times this, held between the fewest and the most questions.",
+    fallback: 2, min: 1, max: 5,
+    limitReason: "One to five. Default: two.",
+  },
+  {
+    key: "scholar_monthly_review_max_new", kind: "int", product: "Scholar", unit: "questions",
+    label: "Monthly review: most new questions written when it starts",
+    help: "Where the student has too few stored questions, at most this many new ones are written (through the existing revision route, its consent, allowance and checks) when a review starts. The rest of the review is shorter, and it says so. Keeps the start quick and the AI cost bounded.",
+    fallback: 10, min: 0, max: 30,
+    limitReason: "Zero (stored questions only) to thirty. Default: ten.",
+  },
+  {
+    key: "scholar_monthly_review_mix", kind: "choice", product: "Scholar",
+    label: "Monthly review: balance of questions",
+    help: "The share of a review that is core knowledge, application (scenario and case-step questions) and previously identified gaps (questions the student missed before). A kind with nothing stored for it hands its share to core knowledge, and the review says so.",
+    options: [
+      { value: "60_25_15", label: "Core 60%, application 25%, gaps 15%" },
+      { value: "50_30_20", label: "Core 50%, application 30%, gaps 20%" },
+      { value: "70_20_10", label: "Core 70%, application 20%, gaps 10%" },
+      { value: "40_30_30", label: "Core 40%, application 30%, gaps 30%" },
+    ],
+    fallback: "60_25_15",
+    limitReason: "Four fixed balances that each add up to a whole. Default: core 60, application 25, gaps 15.",
+  },
+  {
+    key: "scholar_monthly_review_recommend_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Monthly review: days before month end it is recommended",
+    help: "The calendar marks the recommended date for the review this many days before the end of the month. The student can move it, and can take the review any time, including after the month ends.",
+    fallback: 5, min: 0, max: 20,
+    limitReason: "Zero to twenty days. Default: five.",
+  },
+  {
+    key: "scholar_monthly_review_reminders", kind: "choice", product: "Scholar",
+    label: "Monthly review: in-app reminders",
+    help: "Whether the calendar marks the recommended date and Progress and Evaluate show a banner when a review is due. In the app only: no email and no notification is sent.",
+    options: [{ value: "on", label: "Remind in the app" }, { value: "off", label: "Do not remind" }],
+    fallback: "on",
+    limitReason: "In-app only. Default: remind.",
+  },
+  {
+    key: "scholar_monthly_review_optout", kind: "choice", product: "Scholar",
+    label: "Monthly review: students may opt out of suggestions",
+    help: "Whether a student may choose not to be shown monthly review suggestions. Their choice is kept with their study calendar settings and is theirs to undo.",
+    options: [{ value: "allowed", label: "Students may opt out" }, { value: "not_allowed", label: "Always suggest" }],
+    fallback: "allowed",
+    limitReason: "Keeping the choice needs migration 830. Without it the option is hidden. Default: allowed.",
+  },
+  {
+    key: "scholar_study_calendar", kind: "choice", product: "Scholar",
+    label: "Study calendar",
+    help: "Whether Progress shows a month calendar of the student's planned study, cards due for revision, what they completed and the monthly review. A view of existing records: moving a planned activity or the review changes the plan only, never when a card is due.",
+    options: [{ value: "on", label: "Offer the calendar" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Moving planned activities and the review needs migration 830. Without it the calendar is shown without a Move button. Default: offered.",
   },
 ];
 
@@ -1741,6 +1829,7 @@ export const POLICIES: readonly PolicyDef[] = [
   ...PROFESSIONAL_PLAN_POLICIES,
   ...PROFESSIONAL_COMPETENCY_POLICIES,
   ...PASSPORT_POLICIES,
+  ...SCHOLAR_MONTHLY_POLICIES,
   // SCHOLAR-LEARN-STYLE-01 (owner GO, Teaching Style and Practice HFE redesign): three teaching styles, Explain always on. One contiguous block.
   {
     key: "scholar_learn_style_guide", kind: "choice", product: "Scholar",
@@ -2070,6 +2159,19 @@ export type IndividualPolicy = {
   professionalCompetency: ProfessionalCompetencyPolicy;
   /** COMPETEN-PROFESSIONAL-PASSPORT-01: the lifelong Passport and its shared views, as configured. */
   professionalPassport: PassportPolicy;
+  /** SCHOLAR-MONTHLY-REVIEW-01. The optional monthly learning review and the study calendar. */
+  scholarMonthlyReview: "on" | "off";
+  scholarMonthlyReviewMinQuestions: number;
+  scholarMonthlyReviewMaxQuestions: number;
+  scholarMonthlyReviewPerSection: number;
+  /** The most new questions written when a review starts (0 = stored only). */
+  scholarMonthlyReviewMaxNew: number;
+  /** "core_application_gaps" shares, for example "60_25_15". */
+  scholarMonthlyReviewMix: "60_25_15" | "50_30_20" | "70_20_10" | "40_30_30";
+  scholarMonthlyReviewRecommendDays: number;
+  scholarMonthlyReviewReminders: "on" | "off";
+  scholarMonthlyReviewOptout: "allowed" | "not_allowed";
+  scholarStudyCalendar: "on" | "off";
   /** SCHOLAR-LEARN-STYLE-01: the Guide me and Challenge me teaching styles and the More menu (Explain is always on). */
   scholarLearnStyleGuide: "on" | "off";
   scholarLearnStyleChallenge: "on" | "off";
@@ -2231,6 +2333,17 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     professionalPlan: resolveProfessionalPlan(published),
     professionalCompetency: resolveProfessionalCompetency(published),
     professionalPassport: resolvePassport(published),
+    // SCHOLAR-MONTHLY-REVIEW-01: one contiguous block.
+    scholarMonthlyReview: clampChoice(policyDef("scholar_monthly_review") as ChoicePolicy, published.get(policyPath("scholar_monthly_review"))) as "on" | "off",
+    scholarMonthlyReviewMinQuestions: Math.min(int("scholar_monthly_review_min_questions"), int("scholar_monthly_review_max_questions")),
+    scholarMonthlyReviewMaxQuestions: int("scholar_monthly_review_max_questions"),
+    scholarMonthlyReviewPerSection: int("scholar_monthly_review_per_section"),
+    scholarMonthlyReviewMaxNew: int("scholar_monthly_review_max_new"),
+    scholarMonthlyReviewMix: clampChoice(policyDef("scholar_monthly_review_mix") as ChoicePolicy, published.get(policyPath("scholar_monthly_review_mix"))) as "60_25_15" | "50_30_20" | "70_20_10" | "40_30_30",
+    scholarMonthlyReviewRecommendDays: int("scholar_monthly_review_recommend_days"),
+    scholarMonthlyReviewReminders: clampChoice(policyDef("scholar_monthly_review_reminders") as ChoicePolicy, published.get(policyPath("scholar_monthly_review_reminders"))) as "on" | "off",
+    scholarMonthlyReviewOptout: clampChoice(policyDef("scholar_monthly_review_optout") as ChoicePolicy, published.get(policyPath("scholar_monthly_review_optout"))) as "allowed" | "not_allowed",
+    scholarStudyCalendar: clampChoice(policyDef("scholar_study_calendar") as ChoicePolicy, published.get(policyPath("scholar_study_calendar"))) as "on" | "off",
     scholarLearnStyleGuide: clampChoice(policyDef("scholar_learn_style_guide") as ChoicePolicy, published.get(policyPath("scholar_learn_style_guide"))) as "on" | "off",
     scholarLearnStyleChallenge: clampChoice(policyDef("scholar_learn_style_challenge") as ChoicePolicy, published.get(policyPath("scholar_learn_style_challenge"))) as "on" | "off",
     scholarLearnMoreMenu: clampChoice(policyDef("scholar_learn_more_menu") as ChoicePolicy, published.get(policyPath("scholar_learn_more_menu"))) as "on" | "off",
