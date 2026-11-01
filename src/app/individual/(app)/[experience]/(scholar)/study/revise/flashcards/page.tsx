@@ -6,10 +6,11 @@ import { flashcardPrefill, withStudy } from "@/lib/individual/scholar/study-carr
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { countDue, getRevisionSession, listMaterials, readConsent } from "@/lib/individual/scholar/store";
+import { countDue, getRevisionSession, listMaterials, listRevisionSessions, readConsent } from "@/lib/individual/scholar/store";
 import { applyContentReview, loadCardLinks, loadFlashcardGapsDetailed, loadFlashcards, osceSkippedNote } from "@/lib/individual/scholar/flashcard-service";
 import { REVIEW_STATE_LABEL, filterCards, recallOf, spacedViews, type CardOrigin, type DeckSummary, type FlashcardView, type ReviewState } from "@/lib/individual/scholar/flashcards";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
+import { cardsOfMaterial, experienceOf, testScopeOf, unfinishedFlashcardSession, type FlashcardExperience } from "@/lib/individual/scholar/flashcard-experience";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
@@ -22,6 +23,7 @@ import {
   FlashcardsGrid, FLASHCARDS_MAIN, FLASHCARDS_NAV, FLASHCARDS_SIDE,
   type CardRow, type DeckRow, type ExportFormat, type StudyCard,
 } from "../../_components/flashcards-client";
+import { FlashcardModeNav, MaterialCards, ResumePanel, TestTiles } from "../../_components/flashcards-modes";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -29,11 +31,17 @@ export const dynamic = "force-dynamic";
 
 // FLASHCARDS -- SCHOLAR-FLASHCARDS-01 (owner, 31 Oct 2026), under Revise, to the owner mock-up.
 //
-// ?session=<id>[&deck=<key>]  study a session card by card (a 417 session in mode flashcards: resumable, its ratings on
-//                              the existing SM-2 and the 391 log). ?deck=<key> chooses the deck the side column acts on.
-// ?view=cards|decks|history    All cards (search, filter, bookmark, edit your own, combine and move between decks),
-//                              My Decks (make, rename, organise, remove; several at once to study or download), and
-//                              Revision History (due today, needs more practice, remembered, next review, history, gaps).
+// FLASHCARD LEARNING EXPERIENCE (owner GO, 1 Nov 2026): three experiences under one segmented control (flashcards-modes.tsx).
+//   Study cards (default)   deck choice, study all / spaced / missed, "Continue where you left off" (the newest unfinished
+//                           flashcards session, read from the database), and ?material=<id>[&section=<id>] -- the cards of one lesson.
+//                           Creation is NOT here. ?view=history (Revision History) belongs to Study.
+//   Test myself             ?view=test -- type the answers, a multiple-choice quiz on the deck's topics (a Revise session that keeps
+//                           every flashcard out), adaptive exam, apply it in a case.
+//   Create & manage         ?view=manage -- Create More Flashcards, write a card, Deck Options; ?view=cards (All cards, and
+//                           ?edit=<card id>) and ?view=decks (My Decks) are reached from it.
+// ?session=<id>[&deck=<key>][&practice=typed]  study a session card by card, ONE large card, no side column (a 417 session in
+//                              mode flashcards: resumable, its ratings on the existing SM-2 and the 391 log). Typed practice
+//                              fetches a card's answer only after the learner checks theirs; what they type is never sent.
 // Formative throughout; private to the learner; nothing is published. Rating and flipping never call AI.
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -43,7 +51,7 @@ export async function generateMetadata(): Promise<Metadata> {
 /** 2026-10-12T... as 12 October 2026 (UTC), for a library card's clinically reviewed date. */
 const ukDate = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? iso.slice(0, 10) : d.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" }); };
 
-type Search = { session?: string; deck?: string; view?: string; q?: string; state?: string; origin?: string; bookmarked?: string; edit?: string; create?: string; made?: string; lib?: string; note?: string; study?: string };
+type Search = { session?: string; deck?: string; view?: string; material?: string; section?: string; practice?: string; q?: string; state?: string; origin?: string; bookmarked?: string; edit?: string; create?: string; made?: string; lib?: string; note?: string; study?: string };
 
 const glyphOf = (title: string) => title.trim().slice(0, 1).toUpperCase() || "F";
 
@@ -57,14 +65,16 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   const study = await loadStudy(ctx.admin, ctx.userId, q.study, "revise", policy);
   const sid = study?.session.id ?? null;
   const navKey: ReviseNavKey = q.view === "history" ? "history" : q.view === "decks" ? "decks" : "flashcards";
-  const crumb = q.view === "history" ? "Revision History" : q.view === "decks" ? "My Decks" : q.view === "cards" ? "All cards" : null;
+  const crumb = q.view === "history" ? "Revision History" : q.view === "decks" ? "My Decks" : q.view === "cards" ? "All cards" : q.view === "test" ? "Test myself" : q.view === "manage" ? "Create & manage" : null;
   const top = (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow="Revise" title="Flashcards" />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
     </>
   );
-  const shell = (main: React.ReactNode, side: React.ReactNode, notice = true) => (
+  // `side` null: no side column at all and the main column takes the whole width (a study session, Study, Test, Revision History).
+  // `mode`: the experience the segmented control marks; null in a study session, which is focus mode.
+  const shell = (main: React.ReactNode, side: React.ReactNode | null, notice = true, mode: FlashcardExperience | null = null) => (
     <>
       {top}
       {/* SCHOLAR-FLASHCARDS-QA-01: laid out by the width the content area HAS (a container query), not the viewport:
@@ -84,11 +94,12 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
               {crumb && <><li aria-hidden>›</li><li aria-current="page" className="font-semibold text-gray-900">{crumb}</li></>}
             </ol>
           </nav>
+          {mode && <FlashcardModeNav current={mode} deck={q.deck ?? null} studyId={sid} />}
           {main}
           {notice && <BoundaryNotice notice={FORMATIVE_NOTICE} />}
         </div>
         )}
-        side={<aside aria-label="Deck options and new flashcards" className={FLASHCARDS_SIDE}>{side}</aside>} />
+        side={side ? <aside aria-label="Deck options and card creation" className={FLASHCARDS_SIDE}>{side}</aside> : null} />
       </div>
     </>
   );
@@ -115,22 +126,32 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
       : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Your saved and library cards are used.` : null;
   const mats = materials.ok ? materials.data.filter(m => m.chunkCount > 0).map(m => ({ id: m.id, title: m.title })) : [];
   const personal = decks.filter(d => d.kind === "personal" && d.id && !d.archived).map(d => ({ id: d.id!, title: d.title }));
-  const side = (preset: string | null = null) => (
-    <>
-      <DeckOptions deck={{ key: deck.key, id: deck.id, title: deck.title, total: deck.total, due: deck.due + deck.fresh }} exports={exports} />
-      <CreateMore materials={mats} competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} decks={personal}
-        sourceModes={policy.scholarFlashcardSourceModes} perGeneration={policy.scholarFlashcardsPerGeneration} aiNote={aiNote} gaps={gaps.length} gapNote={osceSkippedNote(gapInfo.osceSkipped)} marksOn={schema730}
-        preset={preset === "notes" || preset === "competency" || preset === "topic" || preset === "gaps" || preset === "write" ? preset : null}
-        scope={flashcardPrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
-      {!schema730 && <p className="rounded-2xl border border-gray-200 bg-white p-4 text-[13px] text-gray-600">Decks of your own, cards you write yourself, bookmarks and notes are not available here yet. Flashcards from your notes and the Competen library work as usual.</p>}
-    </>
+  const deckOptions = <DeckOptions deck={{ key: deck.key, id: deck.id, title: deck.title, total: deck.total, due: deck.due + deck.fresh }} exports={exports} />;
+  const createMore = (preset: string | null = null, material: string | null = null) => (
+    <CreateMore materials={mats} competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} decks={personal}
+      sourceModes={policy.scholarFlashcardSourceModes} perGeneration={policy.scholarFlashcardsPerGeneration} aiNote={aiNote} gaps={gaps.length} gapNote={osceSkippedNote(gapInfo.osceSkipped)} marksOn={schema730}
+      preset={preset === "notes" || preset === "competency" || preset === "topic" || preset === "gaps" || preset === "write" ? preset : null} presetMaterial={material}
+      scope={flashcardPrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
+  );
+  const noDecksNote = !schema730 && <p className="rounded-2xl border border-gray-200 bg-white p-4 text-[13px] text-gray-600">Decks of your own, cards you write yourself, bookmarks and notes are not available here yet. Flashcards from your notes and the Competen library work as usual.</p>;
+  // All cards and My Decks keep Deck Options and Create More Flashcards beside them.
+  const side = (preset: string | null = null) => <>{deckOptions}{createMore(preset)}{noDecksNote}</>;
+  // The deck chooser shared by Study and Test: the learner's own decks, All cards and Bookmarked.
+  const deckChips = (hrefOf: (key: string) => string) => liveDecks.length > 1 && (
+    <div className="mt-4 flex flex-wrap gap-1.5">
+      {liveDecks.filter(d => d.kind === "all" || d.kind === "personal" || (d.kind === "bookmarked" && d.total > 0)).slice(0, 8).map(d => (
+        <Link key={d.key} href={withStudy(hrefOf(d.key), sid)} aria-current={d.key === deck.key ? "true" : undefined}
+          className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${d.key === deck.key ? "border-[var(--cmp-role-indigo-ink)] bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>{d.title} ({d.total})</Link>
+      ))}
+      <Link href={withStudy(flashcardsHref({ view: "decks" }), sid)} className={`inline-flex items-center rounded-full px-3 py-1 text-[12.5px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>All decks</Link>
+    </div>
   );
 
   // ── one study session: run it, or resume it where the learner left it ──
   if (q.session) {
     const s = await getRevisionSession(ctx.admin, ctx.userId, q.session);
-    if (!s.ok) return shell(<Unreadable what="this study session" />, side());
-    if (!s.data) return shell(<StatePanel title="That study session could not be found" actions={<Link href={flashcardsHref()} className={focusRing}>Back to Flashcards</Link>}><p>It may have been removed with the materials it used.</p></StatePanel>, side());
+    if (!s.ok) return shell(<Unreadable what="this study session" />, null);
+    if (!s.data) return shell(<StatePanel title="That study session could not be found" actions={<Link href={flashcardsHref()} className={focusRing}>Back to Flashcards</Link>}><p>It may have been removed with the materials it used.</p></StatePanel>, null);
     if (s.data.session.mode !== "flashcards") redirect(`${studyHref("revise")}?session=${s.data.session.id}`);
     // The session's cards, flagged by the published clinical educational content review rules.
     const inSession = new Set(s.data.questionIds);
@@ -163,9 +184,9 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
         {madeNote && <p role="status" className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-800">{madeNote}</p>}
         {studyCards.length < s.data.questionIds.length && <p className="text-[12.5px] text-gray-600">Some cards in this session are no longer stored (their material was removed, or a library card was withdrawn) and are left out.</p>}
         <FlashcardStudy sessionId={s.data.session.id} today={lib.data.today} deckTitle={studyDeck?.title ?? "Study session"} deckKey={studyDeck?.key ?? null} deckCards={studyDeck?.total ?? studyCards.length}
-          lastRevised={studyDeck?.lastStudiedAt ?? null} cards={studyCards} marksOn={schema730} completed={s.data.session.status === "completed"} />
+          lastRevised={studyDeck?.lastStudiedAt ?? null} cards={studyCards} marksOn={schema730} completed={s.data.session.status === "completed"} practice={q.practice === "typed" ? "typed" : null} />
       </>,
-      side(), false,
+      null, false,
     );
   }
 
@@ -180,8 +201,8 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
     }));
     return shell(
       <CardBrowser cards={rows} decks={personal} currentDeck={q.deck ? { key: deck.key, id: deck.id, title: deck.title } : null} marksOn={schema730}
-        filters={{ q: q.q ?? "", state: q.state ?? "", bookmarked: q.bookmarked === "1", origin: q.origin ?? "" }} />,
-      side(q.create ?? null),
+        filters={{ q: q.q ?? "", state: q.state ?? "", bookmarked: q.bookmarked === "1", origin: q.origin ?? "" }} editId={q.edit ?? null} />,
+      side(q.create ?? null), true, experienceOf(q.view),
     );
   }
 
@@ -191,7 +212,48 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
       const p = lib.data.personal.find(x => x.id === d.id);
       return { key: d.key, id: d.id, kind: d.kind, title: d.title, subtitle: d.subtitle, total: d.total, due: d.due, fresh: d.fresh, needsPractice: d.needsPractice, remembered: d.remembered, lastStudiedAt: d.lastStudiedAt, organiseBy: p?.organiseBy, organiseRef: p?.organiseRef ?? null, updatedAt: d.updatedAt ?? null, archived: !!d.archived };
     });
-    return shell(<DeckList decks={rows} marksOn={schema730} archiveOn={archive820} exports={exports} editId={q.edit ?? null} />, side(q.create ?? null));
+    return shell(<DeckList decks={rows} marksOn={schema730} archiveOn={archive820} exports={exports} editId={q.edit ?? null} />, side(q.create ?? null), true, experienceOf(q.view));
+  }
+
+  // ── Create & manage: make cards, write one, Deck Options, and the two browsers ──
+  if (q.view === "manage") {
+    const linkCard = `flex min-h-[44px] items-center justify-between gap-2 rounded-2xl border border-gray-200 bg-white px-4 py-2.5 text-[14.5px] font-semibold text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+    return shell(
+      <>
+        <section aria-labelledby="manage-h" className="space-y-3">
+          <h2 id="manage-h" className="text-[18px] font-bold text-gray-900">Create &amp; manage</h2>
+          <p className="text-[13.5px] text-gray-700">Make new cards, write your own, and organise the cards you have. To study them, go to <Link href={withStudy(flashcardsHref({ deck: q.deck }), sid)} className={`font-semibold underline ${focusRing}`}>Study cards</Link>.</p>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-2">
+            <Link href={withStudy(flashcardsHref({ view: "cards", deck: q.deck }), sid)} className={linkCard}>All cards<span className="tabular-nums text-gray-600">{cards.length}</span></Link>
+            <Link href={withStudy(flashcardsHref({ view: "decks" }), sid)} className={linkCard}>My Decks<span className="tabular-nums text-gray-600">{decks.filter(d => d.kind === "personal" && !d.archived).length}</span></Link>
+          </div>
+        </section>
+        {createMore(q.create ?? null, q.material ?? null)}
+        {noDecksNote}
+      </>,
+      deckOptions, true, "manage",
+    );
+  }
+
+  // ── Test myself: the chosen deck, tested three ways ──
+  if (q.view === "test") {
+    const deckCards = cards.filter(c => deck.cardIds.includes(c.id));
+    const section = deckCards[0]?.chunkId;
+    return shell(
+      <>
+        <section aria-labelledby="test-h" className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
+          <h2 id="test-h" className="text-[18px] font-bold text-gray-900">Test myself</h2>
+          <p className="mt-0.5 text-[13.5px] text-gray-700">Deck: <span className="font-semibold">{deck.title}</span> · {deck.total} card{deck.total === 1 ? "" : "s"}</p>
+          {deckChips(key => flashcardsHref({ view: "test", deck: key }))}
+          <div className="mt-4">
+            <TestTiles deck={{ key: deck.key, title: deck.title, total: deck.total }} scope={testScopeOf(deckCards)}
+              adaptiveHref={policy.scholarAdaptiveExams === "on" ? studyHref("revise/adaptive") : null}
+              applyHref={section ? `${studyHref("apply")}?section=${section}&from=revision` : studyHref("apply")} />
+          </div>
+        </section>
+      </>,
+      null, false, "test",
+    );
   }
 
   // ── Revision History: the spaced repetition views, history and topic-level gaps ──
@@ -222,12 +284,17 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
                     <span className="font-semibold text-gray-900">{g.label}</span> <span className="text-gray-600">· {g.source === "osce" ? `${g.missed} gap${g.missed === 1 ? "" : "s"} in OSCE practice` : `missed ${g.missed} time${g.missed === 1 ? "" : "s"}`}</span>
                     {g.keyPoints.length > 0 && <span className="block text-[12.5px] text-gray-700">Key points: {g.keyPoints.slice(0, 3).join("; ")}</span>}
                     {g.misconceptions.length > 0 && <span className="block text-[12.5px] text-gray-700">Watch for: {g.misconceptions.slice(0, 2).join("; ")}</span>}
+                    {(() => {
+                      // Cards that already cover this gap's sections: studied as that lesson's cards (same cards, same history).
+                      const own = cards.find(c => g.chunkIds.includes(c.chunkId));
+                      return own ? <Link href={withStudy(flashcardsHref({ material: own.material.id, section: own.chunkId }), sid)} className={`mr-3 text-[12.5px] font-semibold underline ${focusRing}`}>Study cards on this topic</Link> : null;
+                    })()}
                     <Link href={`${studyHref("learn")}?section=${g.chunkIds[0]}`} className={`text-[12.5px] font-semibold underline ${focusRing}`}>Revise this topic in Learn</Link>
                   </li>
                 ))}
               </ul>
               {osceSkippedNote(gapInfo.osceSkipped) && <p role="note" className="mt-2 text-[12.5px] text-gray-600">{osceSkippedNote(gapInfo.osceSkipped)}</p>}
-              <Link href={flashcardsHref({ view: "history", create: "gaps" })} className={`mt-3 inline-flex text-[13.5px] font-semibold underline ${focusRing}`}>Make cards for my gaps</Link>
+              <Link href={flashcardsHref({ view: "manage", create: "gaps" })} className={`mt-3 inline-flex items-center text-[13.5px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Make cards for my gaps</Link>
             </>
           )}
         </section>
@@ -249,34 +316,49 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
           )}
         </section>
       </section>,
-      side(q.create ?? null),
+      null, true, "study",
     );
   }
 
-  // ── the deck: its header, where it stands, and study ──
+  // ── Study cards (the landing): continue where you left off, a lesson's cards, then the chosen deck ──
+  // Cross-device resume: the newest unfinished flashcards session, from the database (never from this browser).
+  const sessions = await listRevisionSessions(ctx.admin, ctx.userId, 20);
+  const open = sessions.ok ? unfinishedFlashcardSession(sessions.data) : null;
+  const openSession = open ? await getRevisionSession(ctx.admin, ctx.userId, open.id) : null;
+  let resume: { id: string; title: string; position: number; total: number } | null = null;
+  if (open && openSession?.ok && openSession.data) {
+    const ids = openSession.data.questionIds;
+    const byId = new Map(cards.map(c => [c.id, c]));
+    const here = ids.map(id => byId.get(id)).filter((c): c is FlashcardView => !!c);
+    const done = new Set(openSession.data.attempts.map(a => a.questionId));
+    const next = ids.findIndex(id => !done.has(id));
+    const titles = [...new Set(here.map(c => c.material.title))];
+    if (here.length) resume = { id: open.id, title: titles.length === 1 ? titles[0] : titles.length > 1 ? `${titles.length} lessons` : "Study session", position: next < 0 ? ids.length : next + 1, total: ids.length };
+  }
+  // ?material=<id>[&section=<id>]: the cards of one lesson (the link Learn gives).
+  const lessonCards = q.material ? cardsOfMaterial(cards, q.material, q.section) : null;
+  const lessonTitle = q.material ? lessonCards?.[0]?.material.title ?? (materials.ok ? materials.data.find(m => m.id === q.material)?.title : null) ?? "this lesson" : "";
   return shell(
     <>
+      {q.material && lessonCards && (
+        <MaterialCards title={lessonTitle} ids={lessonCards.map(c => c.id)} sectionOnly={!!q.section}
+          manageHref={withStudy(flashcardsHref({ view: "manage", create: "notes", material: q.material }), sid)} />
+      )}
+      {resume && <ResumePanel href={withStudy(flashcardsHref({ session: resume.id }), sid)} title={resume.title} position={resume.position} total={resume.total} />}
       <section aria-label={`Deck ${deck.title}`} className="rounded-3xl border border-gray-200 bg-white p-4 md:p-6">
         <DeckHeader title={deck.title} cards={deck.total} lastRevised={deck.lastStudiedAt} glyph={glyphOf(deck.title)} />
         {deck.subtitle && <p className="mt-1 text-[12.5px] text-gray-500">{deck.subtitle}</p>}
         {cards.length === 0 ? (
           <div className="mt-5 rounded-2xl border border-dashed border-gray-300 p-6 text-center">
             <p className="text-[15px] font-semibold text-gray-900">No flashcards yet</p>
-            <p className="mt-1 text-[13.5px] text-gray-600">Make cards from your notes, a competency, a topic or your learning gaps under Create More Flashcards, or write one yourself.</p>
+            <p className="mt-1 text-[13.5px] text-gray-600">Make cards from your notes, a competency, a topic or your learning gaps, or write one yourself, in <Link href={withStudy(flashcardsHref({ view: "manage" }), sid)} className={`font-semibold underline ${focusRing}`}>Create &amp; manage</Link>.</p>
           </div>
         ) : <DeckStart deck={{ key: deck.key, title: deck.title, total: deck.total }} perState={{ due: deck.due, fresh: deck.fresh, needsPractice: deck.needsPractice, remembered: deck.remembered }} />}
-        {liveDecks.length > 1 && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {liveDecks.filter(d => d.kind === "all" || d.kind === "personal" || (d.kind === "bookmarked" && d.total > 0)).slice(0, 8).map(d => (
-              <Link key={d.key} href={flashcardsHref({ deck: d.key })} aria-current={d.key === deck.key ? "true" : undefined}
-                className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${d.key === deck.key ? "border-[var(--cmp-role-indigo-ink)] bg-[var(--cmp-role-indigo-soft)] text-[var(--cmp-role-indigo-ink)]" : "border-gray-200 text-gray-700 hover:bg-gray-50"}`}>{d.title} ({d.total})</Link>
-            ))}
-            <Link href={flashcardsHref({ view: "decks" })} className={`rounded-full px-3 py-1 text-[12.5px] font-semibold underline ${focusRing}`}>All decks</Link>
-          </div>
-        )}
+        {deckChips(key => flashcardsHref({ deck: key }))}
       </section>
+      <p className="text-[13.5px] text-gray-700">Need more cards, or want to change some? <Link href={withStudy(flashcardsHref({ view: "manage", deck: q.deck }), sid)} className={`font-semibold underline ${focusRing}`}>Create &amp; manage cards</Link></p>
       <HowItWorks />
     </>,
-    side(q.create ?? null),
+    null, true, "study",
   );
 }

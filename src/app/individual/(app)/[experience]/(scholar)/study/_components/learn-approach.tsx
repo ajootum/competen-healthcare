@@ -1,15 +1,22 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { ScholarAnswer } from "@/app/individual/_components/scholar-answer/ScholarAnswer";
+import { aiReasonCopy, type AiUnavailableReason } from "@/lib/individual/ai-availability";
+import { STYLE_LABEL, type FollowOn, type MoreItem, type StyleChoice, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
 
-// SCHOLAR-COMPANION-01 P0b: HOW SCHOLAR TEACHES THIS LESSON. Teach me | Ask me | Guide me | Challenge me | Teach back |
-// High-yield (+ Explain my mistake after a partly / not-yet check). Each is shown ONLY when policy offers that action
-// (the `actions` the page was given), and every one is a learner's click -- never a scroll, never automatic. "Just
-// explain it" (the lesson's Teach) is always there. Every request goes through POST learn/act (`run`, which adds the
-// step, depth, mode, session and purpose), so the route's allowance, eligibility, grounding and dedupe all apply.
-// Replies are the markdown subset, shown with ScholarAnswer. An Ask me / Challenge question is answered in the
-// lesson's existing check (clarify), which records the informal verdict -- a learning mark, not an assessment.
+// SCHOLAR-LEARN-STYLE-01 (owner GO, Teaching Style and Practice HFE redesign): HOW SCHOLAR TEACHES THIS LESSON.
+// ONE segmented choice of three styles, shown once per lesson (learn-style.ts decides what is shown and what each runs):
+//   Explain (default)  the lesson itself -- the existing standard teaching, no special action
+//   Guide me           the existing `guide` action: a hint at a time
+//   Challenge me       the existing `challenge` action; "Ask me a question" (`ask_me`) and "Teach it back" (`teach_back`) follow it
+// A discreet More menu holds the other actions (High-yield, Simplify, Summarise ...). Explain my mistake appears on its own
+// only after a partly / not-yet check. Each is a learner's click, never a scroll, never automatic. Every request goes through
+// POST learn/act (`run`, which adds the step, depth, mode, session and purpose), so the route's allowance, eligibility,
+// grounding and dedupe all apply, exactly as they did for the old buttons.
+//
+// Switching style loses nothing: what each approach last showed (and its hint / level) is kept by the page per lesson
+// (`memory`), so choosing a style again shows it with NO new AI call. The lesson, its thread, marks and position are untouched.
 //
 // Server contract (learn-teaching.ts; none are cached; every reply has `answer` (markdown), `cited`, `sources`, `label`):
 //   { action: "ask_me", level? }                        -> checkQuestion, level, informal; answered in the existing clarify
@@ -21,22 +28,20 @@ import { ScholarAnswer } from "@/app/individual/_components/scholar-answer/Schol
 //   { action: "high_yield", depth? }                    -> examEvidence { papers, questions } | null
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
+const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
-export const APPROACHES = ["ask_me", "guide", "challenge", "teach_back", "high_yield", "mistake"] as const;
-export type Approach = (typeof APPROACHES)[number] | "teach";
+export type Approach = "ask_me" | "guide" | "challenge" | "teach_back" | "high_yield" | "mistake";
 export const APPROACH_LABEL: Record<Approach, string> = {
-  teach: "Teach me", ask_me: "Ask me", guide: "Guide me", challenge: "Challenge me", teach_back: "Teach back", high_yield: "High-yield", mistake: "Explain my mistake",
+  ask_me: "Ask me", guide: "Guide me", challenge: "Challenge me", teach_back: "Teach back", high_yield: "High-yield", mistake: "Explain my mistake",
 };
-/** Pure. The approaches policy offers here, in order. Explain my mistake only after a partly / not-yet check with its answer kept. */
-export function offeredApproaches(actions: readonly string[], verdict: string | null, hasLastCheck: boolean): Approach[] {
-  return APPROACHES.filter(a => actions.includes(a) && (a !== "mistake" || ((verdict === "partly" || verdict === "not_yet") && hasLastCheck)));
-}
 
 export type ApproachResult = { ok: boolean; json: Record<string, any> } | null; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Shown = { approach: Approach; text: string; label?: string | null; verdict?: string | null; question?: string | null; evidence?: string | null; explain?: boolean };
 type Ladder = { understood?: number; partly?: number; not_yet?: number };
+/** What one approach last showed in one lesson, kept by the page so switching away and back costs no AI call. */
+export type ApproachMemory = { shown: Shown | null; level: number; hint: number; ladder: { next: Ladder; atChecks: number } | null };
+const FRESH: ApproachMemory = { shown: null, level: 1, hint: 1, ladder: null };
 
 const textOf = (j: Record<string, unknown>) => [j.answer, j.text, j.feedback, j.hint].find(v => typeof v === "string" && v.trim()) as string | undefined;
 const num = (v: unknown) => (Array.isArray(v) ? v.length : typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -47,9 +52,20 @@ function evidenceLine(e: unknown): string | null {
   if (!p && !q) return null;
   return `Drawn from your own exam material: ${p} paper${p === 1 ? "" : "s"}, ${q} question${q === 1 ? "" : "s"}.`;
 }
+const why = (reason: string | null) => (reason ? aiReasonCopy(reason as AiUnavailableReason, "scholar").text : null);
+const Check = () => (
+  <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>
+);
 
-export function ApproachControl({ offered, value, onChange, onTeach, onExplain, run, onQuestion, lastCheck, verdict, checks, depth, disabled, accent }: {
-  offered: Approach[]; value: Approach | null; onChange: (a: Approach | null) => void; onTeach: () => void;
+export function ApproachControl({ step, style, choices, more, mistake, onStyle, onClassic, working, onExplain, run, onQuestion, lastCheck, verdict, checks, depth, disabled, accent, memory, remember }: {
+  /** The lesson this control is for (keys its memory). */
+  step: number;
+  /** The learner's chosen style, and the choices to show (learn-style.ts styleChoices; at most three). */
+  style: TeachingStyle; choices: StyleChoice[]; onStyle: (s: TeachingStyle) => void;
+  /** The More menu (learn-style.ts moreItems), and a classic Learn action asked of the lesson (Simplify, Summarise ...). */
+  more: MoreItem[]; onClassic: (action: string) => void; working: (action: string) => boolean;
+  /** Explain my mistake: offered only after a partly / not-yet check (learn-style.ts mistakeOffer). */
+  mistake: { show: boolean; disabled: boolean; reason: string | null };
   /** guide's explainDirectly: the lesson's existing explain action. */
   onExplain?: () => void;
   /** The lesson's latest informal verdict, and how many checks it has had (a new one after a Challenge picks the next rung). */
@@ -58,68 +74,111 @@ export function ApproachControl({ offered, value, onChange, onTeach, onExplain, 
   /** An Ask me / Challenge question, handed to the lesson's existing check form. */
   onQuestion: (q: string) => void;
   lastCheck: { question: string; answer: string } | null; depth: string; disabled?: boolean; accent: string;
+  memory: Record<string, ApproachMemory>; remember: (key: string, m: ApproachMemory) => void;
 }) {
   const id = useId();
-  const [shown, setShown] = useState<Shown | null>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const [level, setLevel] = useState(1);
-  const [ladder, setLadder] = useState<{ next: Ladder; atChecks: number } | null>(null);
-  const [hint, setHint] = useState(1);
   const [typed, setTyped] = useState("");
-  if (!offered.length) return null; // nothing beyond Teach me is offered: the lesson's own Teach stays the way in
+  /** An approach opened from inside Challenge me, the More menu or Explain my mistake (otherwise the style's own panel is open). */
+  const [over, setOver] = useState<Approach | null>(null);
+  const [menu, setMenu] = useState(false);
+  const menuBtn = useRef<HTMLButtonElement>(null);
+  const radios = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const challenge = choices.find(c => c.style === "challenge") ?? null;
+  const active: Approach | null = over ?? (style === "guide" ? "guide" : style === "challenge" ? "challenge" : null);
+  const key = (a: Approach) => `${step}:${a}`;
+  const mem = (a: Approach): ApproachMemory => memory[key(a)] ?? FRESH;
+  const patch = (a: Approach, p: Partial<ApproachMemory>) => remember(key(a), { ...mem(a), ...p });
+  const here = active ? mem(active) : FRESH;
+  const shown = here.shown;
+  useEffect(() => { if (!menu) return; const on = (e: KeyboardEvent) => { if (e.key === "Escape") { setMenu(false); menuBtn.current?.focus(); } }; document.addEventListener("keydown", on); return () => document.removeEventListener("keydown", on); }, [menu]);
+
   async function send(approach: Approach, body: Record<string, unknown>) {
     setBusy(true); setMsg(null);
     const r = await run(body);
     setBusy(false);
     if (!r) return; // the page shows a clarify question or an error itself
-    if (r.json.withheld) { setShown(null); setMsg(String(r.json.message ?? "Scholar could not answer this from your notes.")); return; }
+    if (r.json.withheld) { patch(approach, { shown: null }); setMsg(String(r.json.message ?? "Scholar could not answer this from your notes.")); return; }
     if (!r.ok) { setMsg(String(r.json.error ?? "Scholar could not answer just now.")); return; }
     const v = r.json.verdict as { label?: string } | string | null | undefined;
     const question = typeof r.json.checkQuestion === "string" && r.json.checkQuestion.trim() ? r.json.checkQuestion : null;
-    setShown({ approach, text: textOf(r.json) ?? question ?? "", label: typeof r.json.label === "string" ? r.json.label : null, verdict: typeof v === "string" ? v : v?.label ?? null, question,
-      evidence: approach === "high_yield" ? evidenceLine(r.json.examEvidence) : null, explain: approach === "guide" && !!r.json.explainDirectly });
-    if ((approach === "ask_me" || approach === "challenge") && Number.isInteger(r.json.level)) setLevel(Number(r.json.level));
-    if (approach === "challenge" && r.json.nextLevel && typeof r.json.nextLevel === "object") setLadder({ next: r.json.nextLevel as Ladder, atChecks: checks });
-    if (approach === "guide" && Number.isInteger(r.json.nextHintLevel)) setHint(Math.max(1, Math.min(3, Number(r.json.nextHintLevel))));
+    const next: ApproachMemory = { ...mem(approach), shown: { approach, text: textOf(r.json) ?? question ?? "", label: typeof r.json.label === "string" ? r.json.label : null, verdict: typeof v === "string" ? v : v?.label ?? null, question,
+      evidence: approach === "high_yield" ? evidenceLine(r.json.examEvidence) : null, explain: approach === "guide" && !!r.json.explainDirectly } };
+    if ((approach === "ask_me" || approach === "challenge") && Number.isInteger(r.json.level)) next.level = Number(r.json.level);
+    if (approach === "challenge" && r.json.nextLevel && typeof r.json.nextLevel === "object") next.ladder = { next: r.json.nextLevel as Ladder, atChecks: checks };
+    if (approach === "guide" && Number.isInteger(r.json.nextHintLevel)) next.hint = Math.max(1, Math.min(3, Number(r.json.nextHintLevel)));
+    remember(key(approach), next);
     if (approach === "teach_back") setTyped("");
   }
   // Challenge: once THIS question has been checked, the next rung is the one the server named for that verdict.
   const challengeLevel = () => {
-    const rung = ladder && checks > ladder.atChecks && verdict ? ladder.next[verdict as keyof Ladder] : undefined;
-    return Number.isInteger(rung) ? Number(rung) : level;
+    const m = mem("challenge");
+    const rung = m.ladder && checks > m.ladder.atChecks && verdict ? m.ladder.next[verdict as keyof Ladder] : undefined;
+    return Number.isInteger(rung) ? Number(rung) : m.level;
   };
-  const pick = (a: Approach) => { setShown(null); setMsg(null); setTyped(""); setHint(1); onChange(value === a ? null : a); };
+  const choose = (s: TeachingStyle) => { setOver(null); setMsg(null); setTyped(""); setMenu(false); onStyle(s); };
+  const open = (a: Approach) => { setMsg(null); setTyped(""); setMenu(false); setOver(o => (o === a ? null : a)); };
+  const onKeys = (e: React.KeyboardEvent, i: number) => {
+    const usable = choices.map((c, k) => (c.disabled ? -1 : k)).filter(k => k >= 0);
+    if (!usable.length) return;
+    const at = usable.indexOf(i);
+    let to: number | null = null;
+    if (e.key === "ArrowRight" || e.key === "ArrowDown") to = usable[(at + 1 + usable.length) % usable.length];
+    else if (e.key === "ArrowLeft" || e.key === "ArrowUp") to = usable[(at - 1 + usable.length) % usable.length];
+    else if (e.key === "Home") to = usable[0];
+    else if (e.key === "End") to = usable[usable.length - 1];
+    if (to === null) return;
+    e.preventDefault(); choose(choices[to].style); radios.current[to]?.focus();
+  };
+
+  const followOns: FollowOn[] = challenge && style === "challenge" && (mem("challenge").shown || over === "ask_me" || over === "teach_back") ? challenge.followOns : [];
+  const approachMore = (a: string): a is Approach => a === "high_yield" || a === "ask_me" || a === "teach_back";
+  const showStyles = choices.length > 1;
+  if (!showStyles && !more.length && !mistake.show) return null; // nothing beyond the lesson itself is offered
+
   return (
     <div className="mt-3 rounded-xl border border-gray-200 px-3 py-3">
-      <p id={`${id}-l`} className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">How should Scholar teach this?</p>
-      <div role="group" aria-labelledby={`${id}-l`} className="mt-2 flex flex-wrap gap-1.5">
-        <button type="button" className={`${ghost} min-h-[40px] px-3 text-[13px]`} onClick={() => { onChange(null); onTeach(); }} disabled={disabled}>Just explain it</button>
-        {offered.map(a => (
-          <button key={a} type="button" aria-pressed={value === a} onClick={() => pick(a)} disabled={disabled}
-            className={`inline-flex min-h-[40px] items-center rounded-xl border px-3 text-[13px] font-semibold disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${value === a ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"} ${focusRing}`}>
-            {APPROACH_LABEL[a]}
-          </button>
-        ))}
-      </div>
+      {showStyles && (
+        <>
+          <p id={`${id}-l`} className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">Teaching style</p>
+          <div role="radiogroup" aria-labelledby={`${id}-l`} className="mt-2 grid grid-cols-1 gap-2 @min-[34rem]:grid-cols-3">
+            {choices.map((c, i) => {
+              const on = c.style === style && !c.disabled;
+              return (
+                <button key={c.style} ref={el => { radios.current[i] = el; }} type="button" role="radio" aria-checked={on} disabled={c.disabled || (!!busy && !on)}
+                  tabIndex={on || (!choices.some(x => x.style === style && !x.disabled) && i === 0) ? 0 : -1}
+                  aria-describedby={`${id}-d${i}`} onClick={() => choose(c.style)} onKeyDown={e => onKeys(e, i)}
+                  className={`flex min-h-[44px] items-start gap-2 rounded-xl border-2 px-3 py-2 text-left disabled:opacity-60 pointer-coarse:min-h-[var(--cmp-touch-min)] ${on ? "border-gray-900 bg-gray-50" : "border-gray-300 bg-white hover:bg-gray-50"} ${focusRing}`}>
+                  <span aria-hidden={!on} className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-900 ${on ? "" : "invisible"}`}>{on && <Check />}</span>
+                  <span className="min-w-0">
+                    <span className="block text-[14px] font-semibold text-gray-900">{c.label}{on && <span className="sr-only"> (selected)</span>}</span>
+                    <span id={`${id}-d${i}`} className="mt-0.5 block text-[12.5px] leading-snug text-gray-700">{c.description}{c.disabled && c.reason ? <span className="mt-1 block text-gray-600">{why(c.reason)}</span> : null}</span>
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
 
-      {value === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", { action: "ask_me", level })} />}
-      {value === "challenge" && <Go label={busy ? "Writing…" : `Challenge me (level ${challengeLevel()})`} disabled={busy || disabled} accent={accent} onGo={() => { const l = challengeLevel(); setLevel(l); void send("challenge", { action: "challenge", level: l }); }} />}
-      {value === "high_yield" && <Go label={busy ? "Working…" : "Show the high-yield points"} disabled={busy || disabled} accent={accent} onGo={() => void send("high_yield", { action: "high_yield", depth })} />}
-      {value === "mistake" && lastCheck && <Go label={busy ? "Working…" : "Explain my mistake"} disabled={busy || disabled} accent={accent} onGo={() => void send("mistake", { action: "mistake", question: lastCheck.question.slice(0, 600), learnerAnswer: lastCheck.answer.slice(0, 1500) })} />}
-      {(value === "guide" || value === "teach_back") && (
-        <form className="mt-3" onSubmit={e => { e.preventDefault(); if (value === "guide") void send("guide", { action: "guide", hintLevel: hint, ...(typed.trim() ? { attempt: typed.trim().slice(0, 1500) } : {}), ...(lastCheck ? { question: lastCheck.question.slice(0, 600) } : {}) }); else if (typed.trim()) void send("teach_back", { action: "teach_back", explanation: typed.trim() }); }}>
-          <label htmlFor={`${id}-t`} className="block text-[13px] font-semibold text-gray-900">{value === "guide" ? "Your attempt so far (optional)" : "Explain this lesson in your own words"}</label>
-          <textarea id={`${id}-t`} rows={3} maxLength={value === "guide" ? 1500 : 3000} value={typed} onChange={e => setTyped(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
-          <button type="submit" className={`${btn} mt-2`} style={{ background: accent }} disabled={busy || disabled || (value === "teach_back" && !typed.trim())}>
-            {busy ? "Working…" : value === "guide" ? `Give me hint ${hint} of 3` : "Check my explanation"}
+      {active === "challenge" && <Go label={busy ? "Writing…" : `Challenge me (level ${challengeLevel()})`} disabled={busy || disabled} accent={accent} onGo={() => { const l = challengeLevel(); patch("challenge", { level: l }); void send("challenge", { action: "challenge", level: l }); }} />}
+      {active === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", { action: "ask_me", level: mem("ask_me").level })} />}
+      {active === "high_yield" && <Go label={busy ? "Working…" : "Show the high-yield points"} disabled={busy || disabled} accent={accent} onGo={() => void send("high_yield", { action: "high_yield", depth })} />}
+      {(active === "guide" || active === "teach_back") && (
+        <form className="mt-3" onSubmit={e => { e.preventDefault(); if (active === "guide") void send("guide", { action: "guide", hintLevel: mem("guide").hint, ...(typed.trim() ? { attempt: typed.trim().slice(0, 1500) } : {}), ...(lastCheck ? { question: lastCheck.question.slice(0, 600) } : {}) }); else if (typed.trim()) void send("teach_back", { action: "teach_back", explanation: typed.trim() }); }}>
+          <label htmlFor={`${id}-t`} className="block text-[13px] font-semibold text-gray-900">{active === "guide" ? "Your attempt so far (optional)" : "Explain this lesson in your own words"}</label>
+          <textarea id={`${id}-t`} rows={3} maxLength={active === "guide" ? 1500 : 3000} value={typed} onChange={e => setTyped(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
+          <button type="submit" className={`${btn} mt-2`} style={{ background: accent }} disabled={busy || disabled || (active === "teach_back" && !typed.trim())}>
+            {busy ? "Working…" : active === "guide" ? `Give me hint ${mem("guide").hint} of 3` : "Check my explanation"}
           </button>
         </form>
       )}
 
       {msg && <p role="status" className="mt-2 text-[13.5px] text-gray-700">{msg}</p>}
       <div aria-live="polite">
-        {shown && shown.text && (
+        {shown && shown.text && active === shown.approach && (
           <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
             <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{APPROACH_LABEL[shown.approach]}{shown.label ? ` · ${shown.label}` : ""}</p>
             {shown.verdict && <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] font-semibold text-violet-950">{shown.verdict}. An informal check for your own learning.</p>}
@@ -131,13 +190,63 @@ export function ApproachControl({ offered, value, onChange, onTeach, onExplain, 
             )}
             {shown.approach === "guide" && (
               <div className="mt-2 flex flex-wrap gap-2">
-                {hint < 3 && <button type="button" className={ghost} onClick={() => setHint(h => Math.min(3, h + 1))}>I need a bigger hint</button>}
-                {shown.explain && onExplain && <button type="button" className={ghost} onClick={() => { onChange(null); onExplain(); }} disabled={disabled}>Just explain it</button>}
+                {here.hint < 3 && <button type="button" className={ghost} onClick={() => patch("guide", { hint: Math.min(3, here.hint + 1) })}>I need a bigger hint</button>}
+                {shown.explain && onExplain && <button type="button" className={ghost} onClick={() => { choose("explain"); onExplain(); }} disabled={disabled}>Just explain it</button>}
               </div>
             )}
           </div>
         )}
       </div>
+
+      {/* Challenge me's follow-on steps, after its content: Ask me a question / Teach it back. */}
+      {followOns.length > 0 && (
+        <div role="group" aria-label="Next steps in Challenge me" className="mt-3 flex flex-wrap items-center gap-2">
+          <span className="text-[12.5px] text-gray-600">Next:</span>
+          {followOns.map(f => (
+            <button key={f.action} type="button" aria-pressed={over === f.action} aria-describedby={f.reason ? `${id}-f${f.action}` : undefined} disabled={f.disabled || busy}
+              onClick={() => open(f.action)} className={`${ghost} min-h-[40px] px-3 text-[13px] ${over === f.action ? "border-gray-900 bg-gray-50" : ""}`}>
+              {over === f.action && <span className="mr-1.5"><Check /></span>}{f.label}
+            </button>
+          ))}
+          {followOns.filter(f => f.reason).map(f => <span key={f.action} id={`${id}-f${f.action}`} className="w-full text-[12.5px] text-gray-600">{f.label}: {why(f.reason)}</span>)}
+        </div>
+      )}
+
+      {/* Explain my mistake: only after a partly / not-yet check, where it is relevant. */}
+      {mistake.show && (
+        <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2">
+          <p className="min-w-0 flex-1 basis-[200px] text-[13px] text-violet-950">{verdict === "not_yet" ? "That check was not quite there yet." : "That check was partly right."} Want to see what went wrong?</p>
+          <button type="button" aria-describedby={mistake.reason ? `${id}-m` : undefined} disabled={mistake.disabled || busy || disabled}
+            onClick={() => { if (!lastCheck) return; setOver("mistake"); setMenu(false); void send("mistake", { action: "mistake", question: lastCheck.question.slice(0, 600), learnerAnswer: lastCheck.answer.slice(0, 1500) }); }} className={`${ghost} min-h-[40px] px-3 text-[13px]`}>Explain my mistake</button>
+          {mistake.reason && <p id={`${id}-m`} className="w-full text-[12.5px] text-gray-700">{why(mistake.reason)}</p>}
+        </div>
+      )}
+
+      {/* More: the other actions, tucked away until wanted. */}
+      {more.length > 0 && (
+        <div className="relative mt-3">
+          <button ref={menuBtn} type="button" aria-expanded={menu} aria-controls={`${id}-more`} onClick={() => setMenu(m => !m)}
+            className={`inline-flex min-h-[40px] items-center gap-1.5 rounded-xl px-2 text-[13px] font-semibold text-gray-800 underline-offset-2 hover:underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+            More<span aria-hidden="true" className={`text-[10px] text-gray-500 transition-transform ${menu ? "rotate-90" : ""}`}>▶</span>
+          </button>
+          {menu && (
+            <div id={`${id}-more`} role="group" aria-label="More ways to learn this" className="mt-1 flex flex-wrap gap-2">
+              {more.map(m => (
+                <span key={m.key} className="contents">
+                  <button type="button" disabled={m.disabled || busy || !!disabled} aria-describedby={m.reason ? `${id}-r${m.key}` : undefined}
+                    onClick={() => { if (m.kind === "classic") { setMenu(false); onClassic(m.action); } else if (approachMore(m.action)) open(m.action); }}
+                    className={`${ghost} min-h-[40px] px-3 text-[13px]`}>
+                    {working(m.action) ? "Working…" : m.label}
+                  </button>
+                  {m.reason && <span id={`${id}-r${m.key}`} className="sr-only">{why(m.reason)}</span>}
+                </span>
+              ))}
+              {more.some(m => m.disabled && m.reason) && <p className="w-full text-[12.5px] text-gray-600">{why(more.find(m => m.disabled && m.reason)!.reason)}</p>}
+            </div>
+          )}
+        </div>
+      )}
+      {style === "explain" && showStyles && !over && <p className="mt-2 text-[12.5px] text-gray-600">{STYLE_LABEL.explain} is the lesson above. Choose another style to be guided or challenged instead.</p>}
     </div>
   );
 }

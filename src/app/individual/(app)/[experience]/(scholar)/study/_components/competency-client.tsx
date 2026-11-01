@@ -239,7 +239,10 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
       <p className="mt-1 text-[13.5px] text-gray-700">
         {slides > 0
           ? `Scholar can ask AI to read the text in the pictures on ${slides === 1 ? `the ${U}` : `the ${U}s`} that held no text. What it reads is labelled on each section, for you to check against the original. You can keep studying while it reads.`
-          : `Scholar could not read any text from ${count === 1 ? `this ${U}` : `these ${U}s`}, so it cannot teach from ${count === 1 ? "it" : "them"}.`}
+          : count > 0
+            ? `Scholar could not read any text from ${count === 1 ? `this ${U}` : `these ${U}s`}, so it cannot teach from ${count === 1 ? "it" : "them"}.`
+            // Nothing is left unread: the run just finished, so the card reports what was read, never "could not read".
+            : `Every ${U} with pictures only has now been read. What AI read is labelled on each section, for you to check against the original.`}
         {beyondCap > 0 ? ` At most 10 ${U}s of one material are read this way, so ${beyondCap} will stay unread.` : ""}
       </p>
       {!policyOn ? (
