@@ -16,6 +16,7 @@ import { logAccess } from "@/lib/practice/privacy";
 import { formatDate } from "@/lib/datetime";
 import JourneyView from "./JourneyView";
 import StartEncounterAction from "../../StartEncounterAction";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 // /practice/encounters/record/{patientId} -- CPR-ENC-003, the longitudinal patient record.
 //
@@ -147,7 +148,9 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
         )}
       </div>
 
-      <div className="mt-4 grid gap-4 xl:grid-cols-[250px_1fr_280px]">
+      <PaneGrid bp="xl" gap="gap-4" className="mt-4"
+        start={{ storageKey: "practice.record.snapshot.w", defaultPx: 250, label: "Resize the patient snapshot panel" }}
+        end={{ storageKey: "practice.record.engines.w", defaultPx: 280, label: "Resize the longitudinal engines panel" }}>
         {/* ══ LEFT: SNAPSHOT ═══════════════════════════════════════════════════════════════════ */}
         <div className="flex flex-col gap-3">
           <section className={CARD}>
@@ -266,6 +269,8 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
           </section>
         </div>
 
+        {/* The middle column is ONE child of the grid: the place cards above the journey used to be grid items of their own. */}
+        <div className="flex min-w-0 flex-col gap-4">
         {/* ══ MIDDLE, ABOVE THE JOURNEY: SEEN AT MORE THAN ONE PLACE (CPR-OPT-001 D17) ══════════
             ⚠ IT SITS ABOVE THE TIMELINE BECAUSE IT FRAMES IT. The journey below now carries a place
             chip on every consultation; this says how many places there are before a reader starts
@@ -355,6 +360,8 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
             canRecordMilestone={hasCapability(shell.ctx, "patient.edit")}
             today={clock.today}
           />
+        </div>
+
         </div>
 
         {/* ══ RIGHT: THE LONGITUDINAL ENGINES (CPR-ENC-003 s5) ═════════════════════════════════ */}
@@ -518,7 +525,7 @@ export default async function PatientRecordPage({ params }: { params: Promise<{ 
               )}
           </section>
         </div>
-      </div>
+      </PaneGrid>
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadMessagingHub, CONTEXT_META } from "@/lib/messaging-hub";
 import Composer from "@/components/messaging/Composer";
+import { PaneGrid, ResizableList } from "@/components/ui/pane-grid";
 
 // PW-005 Messaging & Communications Hub — user-scoped view over the real op_messages store. Conversation list +
 // thread + functional composer + KPI ribbon + communication summary. Channel selection via ?c=. Renders REAL
@@ -59,12 +60,13 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
         <Kpi label="Starred" value={d.kpis.starred} icon="⭐" tone="text-gray-400" />
       </div>
 
-      <div className="grid lg:grid-cols-[280px_minmax(0,1fr)_260px] gap-5 items-start">
-        {/* Conversation list */}
+      <PaneGrid bp="lg" className="items-start"
+        start={{ storageKey: "dashboard.messages.left.w", defaultPx: 280, label: "Resize the conversation list", node: (
+
         <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
           <div className="px-3 py-2.5 border-b border-gray-100"><h2 className="text-sm font-semibold text-gray-900">Conversations</h2></div>
           {d.channels.length > 0 ? (
-            <div className="divide-y divide-gray-50 max-h-[560px] overflow-y-auto">
+            <ResizableList storageKey="dashboard.messages.list.h" defaultPx={560} label="Resize the conversation list height" className="divide-y divide-gray-50 max-h-[560px] overflow-y-auto">
               {d.channels.map((ch: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                 const meta = CONTEXT_META[ch.context_type] ?? { color: "#94a3b8", icon: "💬" };
                 const active = ch.name === d.selected;
@@ -79,36 +81,12 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
                   </Link>
                 );
               })}
-            </div>
+            </ResizableList>
           ) : <p className="px-4 py-16 text-center text-sm text-gray-400">No conversations yet. Start one below.</p>}
         </div>
+        ) }}
+        end={{ storageKey: "dashboard.messages.right.w", defaultPx: 260, label: "Resize the side panel", node: (
 
-        {/* Thread */}
-        <div className="bg-white rounded-xl border border-gray-200 flex flex-col min-h-[500px]">
-          {d.selected ? <>
-            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2.5">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style={{ background: (CONTEXT_META[selCh?.context_type] ?? { color: "#94a3b8" }).color }}>{(CONTEXT_META[selCh?.context_type] ?? { icon: "💬" }).icon}</div>
-              <div><h2 className="text-sm font-semibold text-gray-900">{d.selected}</h2><p className="text-[11px] text-gray-400">{(CONTEXT_META[selCh?.context_type] ?? { label: "Channel" }).label} · {selCh?.count ?? 0} message{selCh?.count === 1 ? "" : "s"}</p></div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[440px]">
-              {d.thread.map((m: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
-                <div key={m.id} className={`flex gap-2.5 ${m.mine ? "flex-row-reverse" : ""}`}>
-                  <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 text-[11px] font-bold flex items-center justify-center shrink-0">{initials(m.author_name)}</div>
-                  <div className={`max-w-[75%] ${m.mine ? "items-end" : ""} flex flex-col`}>
-                    <div className="flex items-center gap-2"><span className="text-[11px] font-semibold text-gray-700">{m.mine ? "You" : m.author_name ?? "Unknown"}</span><span className="text-[10px] text-gray-400">{fmtTime(m.created_at)}</span></div>
-                    <div className={`mt-0.5 px-3 py-2 rounded-2xl text-[13px] leading-snug ${m.mine ? "bg-[var(--cmp-color-information)] text-white rounded-tr-sm" : "bg-gray-100 text-gray-800 rounded-tl-sm"}`}>{m.body}</div>
-                  </div>
-                </div>
-              ))}
-              {d.thread.length === 0 && <p className="text-center text-sm text-gray-400 py-10">No messages in this conversation yet.</p>}
-            </div>
-            <Composer channel={d.selected} contextType={selCh?.context_type} />
-          </> : (
-            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Select a conversation to view messages.</div>
-          )}
-        </div>
-
-        {/* Right rail */}
         <div className="space-y-5">
           <div className="bg-white rounded-xl border border-gray-200 p-4">
             <h3 className="text-sm font-semibold text-gray-900 mb-3">Quick Actions</h3>
@@ -151,7 +129,35 @@ export default async function MessagingHubPage({ searchParams }: { searchParams:
             ) : <p className="text-xs text-gray-400 py-4 text-center">No messages yet.</p>}
           </div>
         </div>
-      </div>
+        ) }}>
+
+        {/* Thread */}
+        <div className="bg-white rounded-xl border border-gray-200 flex flex-col min-h-[500px]">
+          {d.selected ? <>
+            <div className="px-4 py-2.5 border-b border-gray-100 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white text-sm" style={{ background: (CONTEXT_META[selCh?.context_type] ?? { color: "#94a3b8" }).color }}>{(CONTEXT_META[selCh?.context_type] ?? { icon: "💬" }).icon}</div>
+              <div><h2 className="text-sm font-semibold text-gray-900">{d.selected}</h2><p className="text-[11px] text-gray-400">{(CONTEXT_META[selCh?.context_type] ?? { label: "Channel" }).label} · {selCh?.count ?? 0} message{selCh?.count === 1 ? "" : "s"}</p></div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 max-h-[440px]">
+              {d.thread.map((m: any) => ( // eslint-disable-line @typescript-eslint/no-explicit-any
+                <div key={m.id} className={`flex gap-2.5 ${m.mine ? "flex-row-reverse" : ""}`}>
+                  <div className="w-8 h-8 rounded-full bg-gray-200 text-gray-600 text-[11px] font-bold flex items-center justify-center shrink-0">{initials(m.author_name)}</div>
+                  <div className={`max-w-[75%] ${m.mine ? "items-end" : ""} flex flex-col`}>
+                    <div className="flex items-center gap-2"><span className="text-[11px] font-semibold text-gray-700">{m.mine ? "You" : m.author_name ?? "Unknown"}</span><span className="text-[10px] text-gray-400">{fmtTime(m.created_at)}</span></div>
+                    <div className={`mt-0.5 px-3 py-2 rounded-2xl text-[13px] leading-snug ${m.mine ? "bg-[var(--cmp-color-information)] text-white rounded-tr-sm" : "bg-gray-100 text-gray-800 rounded-tl-sm"}`}>{m.body}</div>
+                  </div>
+                </div>
+              ))}
+              {d.thread.length === 0 && <p className="text-center text-sm text-gray-400 py-10">No messages in this conversation yet.</p>}
+            </div>
+            <Composer channel={d.selected} contextType={selCh?.context_type} />
+          </> : (
+            <div className="flex-1 flex items-center justify-center text-sm text-gray-400">Select a conversation to view messages.</div>
+          )}
+        </div>
+
+        {/* Right rail */}
+      </PaneGrid>
       <p className="text-[11px] text-gray-400">Channels + messages are your hospital&apos;s real op_messages; sending is live. Read receipts, reactions, threads, starred, pinned and scheduled messages aren&apos;t backed by the store yet (Recent = last 24h, Starred = next-phase).</p>
     </div>
   );

@@ -7,6 +7,7 @@ import { publishReadiness } from "@/lib/practice/patient-access";
 import { bookingLinkSummary } from "@/lib/practice/identity-service";
 import { messagingStatus, channelSettings } from "@/lib/practice/messaging";
 import { MODULE_STATE_CHIP, READINESS_SWATCH, SETUP_HOME_SWATCH, SETUP_READINESS_BADGE } from "@/lib/practice/practice-session-constants";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import type { Metadata } from "next";
 
 /** The tab name, so a practitioner with several open can tell which is which. */
@@ -266,7 +267,8 @@ export default async function PracticeSetupHome() {
           </ul>
         </section>
 
-        <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_310px]">
+        <PaneGrid bp="xl" gap="gap-4" className="items-start"
+          end={{ storageKey: "practice.setup.rail.w", defaultPx: 310, label: "Resize the setup progress panel" }}>
           <div className="flex flex-col gap-5">
 
             {/* ══ PRACTICE ══════════════════════════════════════════════════════════════════════ */}
@@ -528,7 +530,7 @@ export default async function PracticeSetupHome() {
               )}
             </section>
           </div>
-        </div>
+        </PaneGrid>
 
         <p className="text-[11px] text-gray-500">
           Changes made here affect how your practice works across the whole product, and every one is

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clampSize, keyboardSize, maxBesideSibling, parseStoredSize } from "./resizable-math";
+import { clampSize, dragSize, keyboardSize, maxBesideSibling, parseStoredSize } from "./resizable-math";
 
 describe("clampSize", () => {
   it("clamps both ways, rounds, tolerates NaN", () => {
@@ -41,5 +41,32 @@ describe("keyboardSize", () => {
     expect(keyboardSize("Home", false, "x", 300, 240, 600)).toBe(240);
     expect(keyboardSize("End", false, "x", 300, 240, 600)).toBe(600);
     expect(keyboardSize("a", false, "x", 300, 240, 600)).toBeNull();
+  });
+});
+
+describe("end-side panes (the pane sits after its handle)", () => {
+  it("dragSize: dragging toward the end shrinks an end pane, grows a start pane", () => {
+    expect(dragSize(300, 40, 200, 600, "end")).toBe(260);
+    expect(dragSize(300, -40, 200, 600, "end")).toBe(340);
+    expect(dragSize(300, 40, 200, 600)).toBe(340);
+    expect(dragSize(300, 40, 200, 600, "start")).toBe(340);
+  });
+  it("dragSize: stays within min and max whichever side", () => {
+    expect(dragSize(300, 500, 200, 600, "end")).toBe(200);
+    expect(dragSize(300, -900, 200, 600, "end")).toBe(600);
+    expect(dragSize(300, -900, 200, 600, "start")).toBe(200);
+  });
+  it("keyboardSize: ArrowLeft grows, ArrowRight shrinks an end pane; the result is always the pane's own (positive) size", () => {
+    expect(keyboardSize("ArrowLeft", false, "x", 300, 200, 600, "end")).toBe(316);
+    expect(keyboardSize("ArrowRight", true, "x", 300, 200, 600, "end")).toBe(236);
+    expect(keyboardSize("ArrowUp", false, "y", 300, 160, 600, "end")).toBe(316);
+    expect(keyboardSize("ArrowDown", false, "y", 300, 160, 600, "end")).toBe(284);
+  });
+  it("keyboardSize: Home = min and End = max for the pane, and limits hold", () => {
+    expect(keyboardSize("Home", false, "x", 300, 200, 600, "end")).toBe(200);
+    expect(keyboardSize("End", false, "x", 300, 200, 600, "end")).toBe(600);
+    expect(keyboardSize("ArrowLeft", true, "x", 590, 200, 600, "end")).toBe(600);
+    expect(keyboardSize("ArrowRight", false, "x", 205, 200, 600, "end")).toBe(200);
+    for (const k of ["ArrowLeft", "ArrowRight", "Home", "End"]) expect(keyboardSize(k, true, "x", 300, 200, 600, "end")).toBeGreaterThan(0);
   });
 });

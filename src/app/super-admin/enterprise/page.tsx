@@ -1,6 +1,7 @@
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { loadEnterpriseAdmin } from "@/lib/enterprise/enterprise-admin";
 import StructureExplorer from "./_ea/StructureExplorer";
 import { requireHqCapability } from "@/lib/hq/context";
@@ -211,11 +212,12 @@ export default async function EnterpriseAdministration() {
 
       {/* About / setup flow */}
       <div className={`${card} p-5`}>
-        <div className="flex flex-col lg:flex-row gap-5 lg:items-center">
-          <div className="lg:w-72 shrink-0">
+        <PaneGrid bp="lg" className="lg:items-center" start={{ storageKey: "enterprise.home.about.w", defaultPx: 288, label: "Resize the about panel", node: (
+          <div>
             <h3 className="font-semibold text-gray-900">About Enterprise Administration</h3>
             <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">Build and manage the complete organisational structure across the platform. Every other Competen module inherits its organisational context from here.</p>
           </div>
+        ) }}>
           <div className="flex-1 flex items-center justify-between gap-1 overflow-x-auto">
             {[
               { n: 1, l: "Organisations", s: "Create & manage", icon: "🏛️" },
@@ -235,7 +237,7 @@ export default async function EnterpriseAdministration() {
               </div>
             ))}
           </div>
-        </div>
+        </PaneGrid>
       </div>
     </div>
   );

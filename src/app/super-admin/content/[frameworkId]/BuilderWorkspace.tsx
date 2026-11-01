@@ -5,6 +5,7 @@ import { useDismiss } from "@/components/ui/use-dismiss";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import FrameworkActions from "../FrameworkActions";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 export type Dimension = { key: string; present: boolean; detail: string };
 export type SkillNode = { id: string; name: string; active: boolean; reusable: boolean };
@@ -257,7 +258,22 @@ export default function BuilderWorkspace({
   const hdrBtn = "text-xs font-semibold text-gray-600 border border-gray-200 hover:bg-gray-50 px-3 py-1.5 rounded-lg";
 
   return (
-    <div className="grid grid-cols-1 xl:grid-cols-[1fr_300px] 2xl:grid-cols-[1fr_340px] gap-5">
+    <PaneGrid bp="xl" end={{ storageKey: "content.builder.context.w", defaultPx: () => (window.innerWidth >= 1536 ? 340 : 300), label: "Resize the context panel", node: (
+      /* Context panel */
+      <div className="hidden xl:block">
+        <div className="sticky top-6">
+          {selected
+            ? <ContextPanel c={selected} frameworkId={frameworkId} onClose={() => setSelected(null)} />
+            : (
+              <div className="bg-white rounded-xl border border-gray-100 p-6 text-center">
+                <p className="text-3xl mb-2">🗂️</p>
+                <p className="text-sm font-semibold text-gray-700">Select a competency</p>
+                <p className="text-xs text-gray-400 mt-1">Its completeness breakdown, content, owner and actions appear here.</p>
+              </div>
+            )}
+        </div>
+      </div>
+    ) }}>
       <div className="min-w-0">
         {/* Header */}
         <div className="flex flex-wrap items-center gap-2 mb-5">
@@ -564,22 +580,7 @@ export default function BuilderWorkspace({
           ))}
         </div>
       </div>
-
-      {/* Context panel */}
-      <div className="hidden xl:block">
-        <div className="sticky top-6">
-          {selected
-            ? <ContextPanel c={selected} frameworkId={frameworkId} onClose={() => setSelected(null)} />
-            : (
-              <div className="bg-white rounded-xl border border-gray-100 p-6 text-center">
-                <p className="text-3xl mb-2">🗂️</p>
-                <p className="text-sm font-semibold text-gray-700">Select a competency</p>
-                <p className="text-xs text-gray-400 mt-1">Its completeness breakdown, content, owner and actions appear here.</p>
-              </div>
-            )}
-        </div>
-      </div>
-    </div>
+    </PaneGrid>
   );
 }
 

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PaneGrid, ResizableList } from "@/components/ui/pane-grid";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { StatTiles, Card } from "@/app/assessor/reports/ui";
 import { EduHeader } from "../../ui";
@@ -141,10 +142,11 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
         { label: "Coverage Score", value: `${covScore}%`, sub: "5-dim mean" },
       ]} />
 
-      <div className="grid xl:grid-cols-[260px_minmax(0,1fr)_300px] gap-4 mb-4">
-        {/* Framework Explorer */}
+      <PaneGrid bp="xl" className="mb-4"
+        start={{ storageKey: "educator.curriculum.explorer.w", defaultPx: 260, label: "Resize the framework explorer", node: (
+
         <Card title="Framework Explorer">
-          <div className="space-y-1 max-h-[420px] overflow-y-auto">
+          <ResizableList storageKey="educator.curriculum.explorer.h" defaultPx={420} label="Resize the framework list height" className="space-y-1 max-h-[420px] overflow-y-auto">
             {fwList.map(f => (
               <Link key={f.id} href={`/educator/studio/curriculum?fw=${f.id}`}
                 className={`block rounded-lg px-2.5 py-1.5 text-[11px] ${selected?.id === f.id ? "bg-purple-50 border border-purple-200" : "hover:bg-gray-50"}`}>
@@ -152,8 +154,40 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
                 <span className="block text-[9px] text-gray-400 capitalize">{f.library} · v{f.version_num ?? 0} · {f.framework_domains.length} domains</span>
               </Link>
             ))}
+          </ResizableList>
+        </Card>
+        ) }}
+        end={{ storageKey: "educator.curriculum.intelligence.w", defaultPx: 300, label: "Resize the intelligence panel", node: (
+
+        <Card title="AI Curriculum Intelligence" sub="rule-derived from live records">
+          {intel.length ? (
+            <div className="space-y-1.5 mb-3">
+              {intel.map((x, i) => (
+                <Link key={i} href="/educator/studio/gaps" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
+                  <span>{x.icon}</span><span className="flex-1">{x.label}</span>
+                  <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{x.n}</span>
+                </Link>
+              ))}
+            </div>
+          ) : <p className="text-xs text-gray-400 mb-3">No curriculum issues detected. ✅</p>}
+          <GenerateRecs />
+          <div className="mt-3 pt-3 border-t border-gray-100">
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Framework Health</p>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold text-gray-900">{covScore}%</span>
+              <div className="flex-1 space-y-1">
+                {[["Content", comps.length ? Math.round(comps.filter(c => hasResource.has(c.id)).length / comps.length * 100) : 0], ["Assessment", comps.length ? Math.round(comps.filter(c => hasAssessed.has(c.id)).length / comps.length * 100) : 0], ["Passport", comps.length ? Math.round(comps.filter(c => hasPassport.has(c.id)).length / comps.length * 100) : 0]].map(([l, v]) => (
+                  <div key={l as string} className="flex items-center gap-1.5 text-[9px]">
+                    <span className="text-gray-500 w-16">{l}</span>
+                    <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-purple-400 rounded-full" style={{ width: `${v}%` }} /></div>
+                    <span className="text-gray-700 font-bold">{v}%</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </Card>
+        ) }}>
 
         {/* Relationship map (structural) */}
         <Card title="Framework Structure Map" sub={selected ? `${selected.name} — click a competency's builder to edit` : undefined}>
@@ -185,35 +219,7 @@ export default async function CurriculumEnginePage({ searchParams }: { searchPar
         </Card>
 
         {/* AI Curriculum Intelligence */}
-        <Card title="AI Curriculum Intelligence" sub="rule-derived from live records">
-          {intel.length ? (
-            <div className="space-y-1.5 mb-3">
-              {intel.map((x, i) => (
-                <Link key={i} href="/educator/studio/gaps" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
-                  <span>{x.icon}</span><span className="flex-1">{x.label}</span>
-                  <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{x.n}</span>
-                </Link>
-              ))}
-            </div>
-          ) : <p className="text-xs text-gray-400 mb-3">No curriculum issues detected. ✅</p>}
-          <GenerateRecs />
-          <div className="mt-3 pt-3 border-t border-gray-100">
-            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1.5">Framework Health</p>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold text-gray-900">{covScore}%</span>
-              <div className="flex-1 space-y-1">
-                {[["Content", comps.length ? Math.round(comps.filter(c => hasResource.has(c.id)).length / comps.length * 100) : 0], ["Assessment", comps.length ? Math.round(comps.filter(c => hasAssessed.has(c.id)).length / comps.length * 100) : 0], ["Passport", comps.length ? Math.round(comps.filter(c => hasPassport.has(c.id)).length / comps.length * 100) : 0]].map(([l, v]) => (
-                  <div key={l as string} className="flex items-center gap-1.5 text-[9px]">
-                    <span className="text-gray-500 w-16">{l}</span>
-                    <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden"><div className="h-full bg-purple-400 rounded-full" style={{ width: `${v}%` }} /></div>
-                    <span className="text-gray-700 font-bold">{v}%</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </Card>
-      </div>
+      </PaneGrid>
 
       {/* Coverage matrix */}
       <Card title="Competency Coverage Matrix" sub={selected ? `${selected.name} — by domain` : undefined}>

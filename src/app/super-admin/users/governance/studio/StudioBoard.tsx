@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import OrgChart, { type ChartSelection } from "../_components/OrgChart";
 import {
   CONSTITUTION_STATUSES, DOCUMENT_STATUSES, POSITION_KINDS, POSITION_KIND_LABEL, UNIT_KINDS, UNIT_KIND_LABEL, VERSION_STATUS_LABEL,
@@ -123,7 +124,17 @@ export default function StudioBoard({ load, isOwner }: Props) {
       )}
 
       {sel && shown && (
-        <div className="grid gap-6 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] items-start">
+        <PaneGrid bp="lg" className="items-start" end={{ storageKey: "governance.studio.editor.w", defaultPx: c => Math.round((c - 24) * 0.4), minPx: 280, label: "Resize the editor panel", node: (
+          <aside className="space-y-3">
+            {pub && sel.id !== pub.id && <Preview pub={pub.definition} draft={sel.definition} load={load} />}
+            {editable && view === "version" && (
+              <Editor def={sel.definition} selection={selection} load={load}
+                apply={(op: StudioOp, ok: string) => post({ action: "edit", version: sel.id, revision: sel.revision, op }, `op-${op.op}`, ok)} busy={busy} />
+            )}
+            {!editable && <p className="text-[12px] text-gray-500">This version is {VERSION_STATUS_LABEL[sel.status]?.toLowerCase() ?? sel.status} and cannot be edited. {sel.status === "published" ? "Start a draft to change the structure." : ""}</p>}
+            <RelationTypes load={load} post={post} busy={busy} />
+          </aside>
+        ) }}>
           <section className="space-y-3" aria-label="Organisation chart">
             {pub && sel.id !== pub.id && (
               <div role="tablist" className="inline-flex rounded-lg border border-gray-200 bg-white p-0.5 text-[12px]">
@@ -136,16 +147,7 @@ export default function StudioBoard({ load, isOwner }: Props) {
               selection={selection} onSelect={setSelection}
               onMovePosition={editable && view === "version" ? (code, unit) => post({ action: "edit", version: sel.id, revision: sel.revision, op: { op: "position_move", code, unit } }, `mv-${code}`, "Position moved in the draft.") : undefined} />
           </section>
-          <aside className="space-y-3">
-            {pub && sel.id !== pub.id && <Preview pub={pub.definition} draft={sel.definition} load={load} />}
-            {editable && view === "version" && (
-              <Editor def={sel.definition} selection={selection} load={load}
-                apply={(op: StudioOp, ok: string) => post({ action: "edit", version: sel.id, revision: sel.revision, op }, `op-${op.op}`, ok)} busy={busy} />
-            )}
-            {!editable && <p className="text-[12px] text-gray-500">This version is {VERSION_STATUS_LABEL[sel.status]?.toLowerCase() ?? sel.status} and cannot be edited. {sel.status === "published" ? "Start a draft to change the structure." : ""}</p>}
-            <RelationTypes load={load} post={post} busy={busy} />
-          </aside>
-        </div>
+        </PaneGrid>
       )}
     </div>
   );

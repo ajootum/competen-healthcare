@@ -1,13 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { clampSize, keyboardSize, maxBesideSibling, parseStoredSize } from "./resizable-math";
+import { clampSize, dragSize, keyboardSize, maxBesideSibling, parseStoredSize, type ResizeSide } from "./resizable-math";
 
 // Drag-to-resize panes, for any screen (owner request 1 Nov 2026). Three exports:
 //
-//   useResizable({ storageKey, axis, defaultPx?, minPx, maxPx, container? })
+//   useResizable({ storageKey, axis, side?, defaultPx?, minPx, maxPx, container? })
 //       -> { size, min, max, handleProps, reset, bindTarget }   (bindTarget is a callback ref)
-//     One size in px along `axis` ("x" = a width, "y" = a height). With `defaultPx` null/omitted `size` is null until
+//     One size in px along `axis` ("x" = a width, "y" = a height). `side` says where the pane sits relative to its handle:
+//     "start" (default) = BEFORE it (dragging right/down grows it), "end" = AFTER it (a right rail: dragging right
+//     shrinks it, ArrowLeft grows it). Either way `size` and the handle's aria-valuenow/min/max are the PANE's real px. With `defaultPx` null/omitted `size` is null until
 //     the user (or localStorage) sets one: let CSS size the pane and attach `bindTarget` to it so the handle starts
 //     from its real size. `defaultPx` and `maxPx` may be numbers or functions of the container size in px (the
 //     `container` element, else the window; get the element with a callback ref held in state). The size persists per browser under `storageKey` (try/catch, read
@@ -15,7 +17,7 @@ import { clampSize, keyboardSize, maxBesideSibling, parseStoredSize } from "./re
 //
 //   <ResizeHandle {...handleProps} label="Resize the ..." className="hidden md:block" />
 //     A WAI-ARIA separator (role="separator", aria-valuemin/max/now in px, tabIndex 0). Pointer drag (pointer capture),
-//     arrow keys +-16px (Shift +-64; x: Left/Right, y: Up/Down), Home/End = min/max, double-click = reset.
+//     arrow keys +-16px (Shift +-64; x: Left/Right, y: Up/Down; reversed for side "end"), Home/End = min/max, double-click = reset.
 //     Hit area grows to var(--cmp-touch-min) on pointer-coarse. Place it at the END edge of the pane it sizes.
 //
 //   <ResizableColumns storageKey left right defaultLeft? minLeft? maxLeft? minRight? label? className? />
@@ -31,10 +33,11 @@ const HANDLE_GUTTER_PX = 44;   // the widest the divider column gets (pointer-co
 export type ResizeAxis = "x" | "y";
 type Px = number | ((containerPx: number) => number);
 
-export type ResizeHandleProps = { axis: ResizeAxis; value: number; min: number; max: number; onChange: (px: number, commit: boolean) => void; onReset: () => void };
+export type { ResizeSide };
+export type ResizeHandleProps = { axis: ResizeAxis; side: ResizeSide; value: number; min: number; max: number; onChange: (px: number, commit: boolean) => void; onReset: () => void };
 
-export function useResizable<T extends HTMLElement = HTMLElement>({ storageKey, axis, defaultPx = null, minPx, maxPx, container }: {
-  storageKey: string; axis: ResizeAxis; defaultPx?: Px | null; minPx: number; maxPx: Px; container?: HTMLElement | null;
+export function useResizable<T extends HTMLElement = HTMLElement>({ storageKey, axis, side = "start", defaultPx = null, minPx, maxPx, container }: {
+  storageKey: string; axis: ResizeAxis; side?: ResizeSide; defaultPx?: Px | null; minPx: number; maxPx: Px; container?: HTMLElement | null;
 }) {
   const dim = axis === "x" ? "width" : "height";
   const [chosen, setChosen] = useState<number | null>(null);        // set by the user or read from storage
@@ -81,11 +84,11 @@ export function useResizable<T extends HTMLElement = HTMLElement>({ storageKey, 
     try { window.localStorage.removeItem(storageKey); } catch { /* ignore */ }
   }, [storageKey]);
 
-  const handleProps: ResizeHandleProps = { axis, value, min: minPx, max, onChange, onReset: reset };
+  const handleProps: ResizeHandleProps = { axis, side, value, min: minPx, max, onChange, onReset: reset };
   return { size, min: minPx, max, handleProps, reset, bindTarget };
 }
 
-export function ResizeHandle({ axis, value, min, max, onChange, onReset, label, className = "" }: ResizeHandleProps & { label: string; className?: string }) {
+export function ResizeHandle({ axis, side = "start", value, min, max, onChange, onReset, label, className = "" }: Omit<ResizeHandleProps, "side"> & { side?: ResizeSide; label: string; className?: string }) {
   const drag = useRef<{ start: number; from: number; last: number } | null>(null);
   const [active, setActive] = useState(false);
   const x = axis === "x";
@@ -106,12 +109,12 @@ export function ResizeHandle({ axis, value, min, max, onChange, onReset, label, 
       }}
       onPointerMove={e => {
         const d = drag.current; if (!d) return;
-        d.last = clampSize(d.from + (pos(e) - d.start), min, max);
+        d.last = dragSize(d.from, pos(e) - d.start, min, max, side);
         onChange(d.last, false);
       }}
       onPointerUp={finish} onPointerCancel={finish}
       onKeyDown={e => {
-        const next = keyboardSize(e.key, e.shiftKey, axis, value, min, max);
+        const next = keyboardSize(e.key, e.shiftKey, axis, value, min, max, side);
         if (next == null) return;
         e.preventDefault(); onChange(next, true);
       }}

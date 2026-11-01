@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 
@@ -145,7 +146,77 @@ export default function PassportCentre({ rows, kpis, selectedId, timeline, cpus 
         ))}
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_300px] gap-5 items-start">
+      <PaneGrid bp="xl" className="items-start" end={{ storageKey: "assessor.passports.rail.w", defaultPx: 300, label: "Resize the side rail", node: (
+        /* Right rail */
+        <div className="flex flex-col gap-4">
+          {/* Insights — rule-derived */}
+          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
+            <h2 className="text-xs font-bold text-violet-900 mb-0.5">✨ Passport Insights</h2>
+            <p className="text-[9px] text-violet-900/50 mb-2">Rule-derived from live passports</p>
+            <div className="flex flex-col gap-1.5 mb-2.5">
+              {insights.length === 0
+                ? <p className="text-[10px] text-violet-900/60">All passports healthy — nothing to flag.</p>
+                : insights.map(t => <p key={t} className="text-[10px] text-violet-900/80 leading-snug">• {t}</p>)}
+            </div>
+            <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(copilotPrompt)}`}
+              className="block text-center text-xs font-semibold text-violet-700 border border-violet-200 bg-white hover:bg-violet-100 py-2 rounded-lg transition-colors">
+              View all AI insights →
+            </Link>
+          </div>
+
+          {/* Quick actions — real destinations */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <h2 className="text-xs font-bold text-gray-800 mb-2.5">Quick Actions</h2>
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { icon: "🖊️", label: "Validate Evidence", href: "/assessor/logbook" },
+                { icon: "📅", label: "Schedule Reassessment", href: "/assessor/calendar" },
+                { icon: "🎯", label: "Assign Learning", href: "/assessor/remediation" },
+                { icon: "📝", label: "Conduct Assessment", href: "/assessor/assess" },
+              ].map(a => (
+                <Link key={a.href} href={a.href}
+                  className="border border-gray-100 hover:border-indigo-300 rounded-xl p-2.5 text-center transition-colors group">
+                  <p className="text-base">{a.icon}</p>
+                  <p className="text-[9px] font-semibold text-gray-700 group-hover:text-indigo-700 leading-tight mt-0.5">{a.label}</p>
+                </Link>
+              ))}
+            </div>
+          </div>
+
+          {/* Workload donut */}
+          <div className="bg-white border border-gray-100 rounded-2xl p-4">
+            <h2 className="text-xs font-bold text-gray-800 mb-3">My Workload</h2>
+            {donutTotal === 0 ? (
+              <p className="text-[10px] text-gray-400">Nothing outstanding across passports.</p>
+            ) : (
+              <>
+                <div className="relative w-24 mx-auto">
+                  <svg viewBox="0 0 100 100" className="w-full -rotate-90">
+                    <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="14" />
+                    {arcs.map(a => (
+                      <circle key={a.label} cx="50" cy="50" r="40" fill="none" stroke={a.color} strokeWidth="14"
+                        strokeDasharray={`${(a.pct / 100) * C} ${C}`} strokeDashoffset={-(a.offset / 100) * C} />
+                    ))}
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <p className="text-lg font-extrabold text-gray-900 leading-none">{donutTotal}</p>
+                    <p className="text-[8px] text-gray-400">items</p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-col gap-1">
+                  {arcs.map(d => (
+                    <div key={d.label} className="flex items-center gap-2 text-[10px]">
+                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                      <span className="text-gray-500 flex-1">{d.label}</span>
+                      <span className="font-semibold text-gray-700">{d.n}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      ) }}>
         <div className="min-w-0 flex flex-col gap-5">
           {/* Validation queue */}
           <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
@@ -316,77 +387,7 @@ export default function PassportCentre({ rows, kpis, selectedId, timeline, cpus 
             assessments are validated. Bulk approve/reject and clinical-privilege registers aren&apos;t available yet.
           </p>
         </div>
-
-        {/* Right rail */}
-        <div className="flex flex-col gap-4">
-          {/* Insights — rule-derived */}
-          <div className="bg-violet-50 border border-violet-100 rounded-2xl p-4">
-            <h2 className="text-xs font-bold text-violet-900 mb-0.5">✨ Passport Insights</h2>
-            <p className="text-[9px] text-violet-900/50 mb-2">Rule-derived from live passports</p>
-            <div className="flex flex-col gap-1.5 mb-2.5">
-              {insights.length === 0
-                ? <p className="text-[10px] text-violet-900/60">All passports healthy — nothing to flag.</p>
-                : insights.map(t => <p key={t} className="text-[10px] text-violet-900/80 leading-snug">• {t}</p>)}
-            </div>
-            <Link href={`/dashboard/copilot?scenario=${encodeURIComponent(copilotPrompt)}`}
-              className="block text-center text-xs font-semibold text-violet-700 border border-violet-200 bg-white hover:bg-violet-100 py-2 rounded-lg transition-colors">
-              View all AI insights →
-            </Link>
-          </div>
-
-          {/* Quick actions — real destinations */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-4">
-            <h2 className="text-xs font-bold text-gray-800 mb-2.5">Quick Actions</h2>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { icon: "🖊️", label: "Validate Evidence", href: "/assessor/logbook" },
-                { icon: "📅", label: "Schedule Reassessment", href: "/assessor/calendar" },
-                { icon: "🎯", label: "Assign Learning", href: "/assessor/remediation" },
-                { icon: "📝", label: "Conduct Assessment", href: "/assessor/assess" },
-              ].map(a => (
-                <Link key={a.href} href={a.href}
-                  className="border border-gray-100 hover:border-indigo-300 rounded-xl p-2.5 text-center transition-colors group">
-                  <p className="text-base">{a.icon}</p>
-                  <p className="text-[9px] font-semibold text-gray-700 group-hover:text-indigo-700 leading-tight mt-0.5">{a.label}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Workload donut */}
-          <div className="bg-white border border-gray-100 rounded-2xl p-4">
-            <h2 className="text-xs font-bold text-gray-800 mb-3">My Workload</h2>
-            {donutTotal === 0 ? (
-              <p className="text-[10px] text-gray-400">Nothing outstanding across passports.</p>
-            ) : (
-              <>
-                <div className="relative w-24 mx-auto">
-                  <svg viewBox="0 0 100 100" className="w-full -rotate-90">
-                    <circle cx="50" cy="50" r="40" fill="none" stroke="#f3f4f6" strokeWidth="14" />
-                    {arcs.map(a => (
-                      <circle key={a.label} cx="50" cy="50" r="40" fill="none" stroke={a.color} strokeWidth="14"
-                        strokeDasharray={`${(a.pct / 100) * C} ${C}`} strokeDashoffset={-(a.offset / 100) * C} />
-                    ))}
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <p className="text-lg font-extrabold text-gray-900 leading-none">{donutTotal}</p>
-                    <p className="text-[8px] text-gray-400">items</p>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-col gap-1">
-                  {arcs.map(d => (
-                    <div key={d.label} className="flex items-center gap-2 text-[10px]">
-                      <span className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                      <span className="text-gray-500 flex-1">{d.label}</span>
-                      <span className="font-semibold text-gray-700">{d.n}</span>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
+      </PaneGrid>
     </div>
   );
 }

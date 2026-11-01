@@ -5,6 +5,8 @@ import Link from "next/link";
 import type { PathwayWorkspace as WorkspaceView, PatientPathwayView } from "@/lib/practice/pathways";
 import { AT_RISK_REFUSAL, PATHWAY_TRIGGERS } from "@/lib/practice/pathways-constants";
 import { PATHWAY_CARD_SWATCH, CARD_SWATCH_UNKEYED, CARE_CARD_UNSUPPLIED, BUTTON } from "@/lib/practice/palette";
+import { ResizeHandle } from "@/components/ui/resizable";
+import { usePaneGrid } from "@/components/ui/pane-grid";
 import StageTrack from "./StageTrack";
 import PatientPathwayPanel, { ProgressChip } from "./PatientPathwayPanel";
 import AssignPathway from "./AssignPathway";
@@ -50,6 +52,7 @@ export default function PathwaysWorkspace({
   initialSearch: string;
   initialOpen: string | null;
 }) {
+  const [bindGrid, rz] = usePaneGrid({ end: { storageKey: "practice.pathways.detail.w", defaultPx: 380 } });
   const [tab, setTab] = useState(initialTab);
   const [cardFilter, setCardFilter] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(initialOpen);
@@ -151,7 +154,7 @@ export default function PathwaysWorkspace({
         <p className="mt-1 max-w-3xl text-[11px] leading-relaxed text-gray-500">{AT_RISK_REFUSAL}</p>
       </details>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+      <div ref={bindGrid} style={rz.style} className="grid gap-4 xl:gap-x-0 xl:grid-cols-[minmax(0,1fr)_auto_var(--rz-e)]">
         {/* min-w-0: a grid item defaults to min-width:auto, so without this the 820px table inside
             TABLE_SCROLL sets the column's floor, the overflow-x-auto never engages and the PAGE
             scrolls sideways instead of the table. Same shape as the EncounterConsole fix. */}
@@ -332,6 +335,7 @@ export default function PathwaysWorkspace({
           </div>
         </section>
 
+        <ResizeHandle {...rz.end.handleProps} label="Resize the pathway detail panel" className="hidden xl:block xl:self-stretch" />
         <aside className="flex flex-col gap-4">
           {open && openPatientPathways ? (
             <PatientPathwayPanel

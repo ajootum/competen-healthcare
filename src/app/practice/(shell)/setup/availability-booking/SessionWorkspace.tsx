@@ -21,6 +21,7 @@ import { retimingClause } from "@/lib/practice/generation-report-text";
 // the control's own `pattern` attribute is compiled from -- imported, never re-typed.
 import { TimeInput } from "@/components/ui/wall-clock";
 import { HHMM_RE } from "@/lib/practice/practice-time";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -758,7 +759,8 @@ export default function SessionWorkspace({
             <legend className="px-1 text-[10px] font-bold uppercase tracking-wide text-gray-500">
               Who may book into it
             </legend>
-            <div className="grid gap-3 lg:grid-cols-[240px_minmax(0,1fr)]">
+            <PaneGrid bp="lg" gap="gap-3"
+              start={{ storageKey: "practice.availability-booking.modes.w", defaultPx: 240, label: "Resize the booking modes panel" }}>
               <div>
                 <div className="space-y-1.5">
                   {BOOKING_MODES.map(m => {
@@ -832,7 +834,7 @@ export default function SessionWorkspace({
                     : `Offering ${draft.appointmentTypes.map(appointmentTypeLabel).join(", ")}.`}
                 </p>
               </div>
-            </div>
+            </PaneGrid>
           </fieldset>
 
           {/* ── s7.4 capacity, with the derivation shown ────────────────────────────────────────── */}

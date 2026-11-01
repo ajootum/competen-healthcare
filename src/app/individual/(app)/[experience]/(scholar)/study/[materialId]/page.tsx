@@ -15,6 +15,7 @@ import { MAX_AI_SLIDES_PER_MATERIAL, planPictureSlides } from "@/lib/individual/
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
+import { PaneGrid } from "@/components/ui/pane-grid";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { getExamPaper } from "@/lib/individual/scholar/exam-store";
@@ -184,11 +185,13 @@ export default async function MaterialPage({ params, searchParams }: { params: P
 
       {/* Owner review P1.6: on a wide screen the sections read on the left while the question box stays in
           view on the right. One column below lg, in the same order. */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:items-start lg:gap-6">
-      <div className="lg:order-2 lg:sticky lg:top-20">
+      <PaneGrid bp="lg" display="bp" endFirst gap="" className="lg:items-start"
+        end={{ storageKey: "scholar.material.ask.w", defaultPx: 340, label: "Resize the Ask about this material panel", node: (
+      <div className="lg:col-start-3 lg:row-start-1 lg:sticky lg:top-20">
         <ExplainPanel materialId={m.id} consent={consentOn} offMessage={offMessage ?? undefined} title="Ask about this material" />
       </div>
-      <div className="lg:order-1">
+        ) }}>
+      <div className="lg:col-start-1 lg:row-start-1">
 
       {competenciesOn && analysis.ok && (
         <FoundInMaterial topics={foundTopics} competencies={foundCompetencies} analysed={analysis.data.analysed} sections={analysis.data.sections}
@@ -259,7 +262,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         )}
       </section>
       </div>
-      </div>
+      </PaneGrid>
     </>
   );
 }

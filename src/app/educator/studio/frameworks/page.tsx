@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PaneGrid, ResizableList } from "@/components/ui/pane-grid";
 import { requireEducatorAccess } from "@/lib/educator-access";
 import { RISK_CONFIG, type RiskCategory } from "@/lib/ckcm";
 import { Card } from "@/app/assessor/reports/ui";
@@ -147,10 +148,11 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
         ))}
       </div>
 
-      <div className="grid xl:grid-cols-[240px_minmax(0,1fr)_290px] gap-4">
-        {/* Explorer */}
+      <PaneGrid bp="xl"
+        start={{ storageKey: "educator.frameworks.explorer.w", defaultPx: 240, label: "Resize the framework explorer", node: (
+
         <Card title="Framework Explorer">
-          <div className="space-y-1 max-h-[560px] overflow-y-auto">
+          <ResizableList storageKey="educator.frameworks.explorer.h" defaultPx={560} label="Resize the framework list height" className="space-y-1 max-h-[560px] overflow-y-auto">
             {fwList.map(f => (
               <div key={f.id}>
                 <Link href={`/educator/studio/frameworks?fw=${f.id}`}
@@ -166,8 +168,52 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
                 ))}
               </div>
             ))}
-          </div>
+          </ResizableList>
         </Card>
+        ) }}
+        end={{ storageKey: "educator.frameworks.rail.w", defaultPx: 290, label: "Resize the properties panel", node: (
+
+        <div className="space-y-3">
+          <Card title="AI Curriculum Assistant" sub="rule-derived signals">
+            {intel.length ? (
+              <div className="space-y-1.5 mb-3">
+                {intel.map((x, i) => (
+                  <Link key={i} href="/educator/studio/gaps" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
+                    <span>{x.icon}</span><span className="flex-1">{x.label}</span>
+                    <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{x.n}</span>
+                  </Link>
+                ))}
+              </div>
+            ) : <p className="text-xs text-gray-400 mb-3">No issues detected in this framework. ✅</p>}
+            <GenerateRecs />
+          </Card>
+
+          <Card title="Properties" sub={selDomain ? `Domain: ${selDomain.name}` : "Framework"}>
+            {selected && (
+              <div className="text-[11px] text-gray-600 space-y-1">
+                <p><span className="text-gray-400">Framework:</span> {selected.name}</p>
+                <p><span className="text-gray-400">Library:</span> <span className="capitalize">{selected.library}</span></p>
+                <p><span className="text-gray-400">Version:</span> v{selected.version_num ?? 0}</p>
+                <p><span className="text-gray-400">Status:</span> <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${PUB_CLS[selected.pub_status ?? "draft"] ?? "bg-gray-100"}`}>{(selected.pub_status ?? "draft").replace("_", " ")}</span></p>
+                {selected.review_date && <p><span className="text-gray-400">Review due:</span> {selected.review_date}</p>}
+                <p className="pt-1 border-t border-gray-50"><span className="text-gray-400">Domains:</span> {domains.length} · <span className="text-gray-400">Competencies:</span> {compList.length} · <span className="text-gray-400">CPUs:</span> {cpuIds.length}</p>
+              </div>
+            )}
+          </Card>
+
+          <Card title="Version History">
+            <ul className="space-y-1">
+              {fwList.slice(0, 5).map(f => (
+                <li key={f.id} className="flex items-center gap-2 text-[11px]">
+                  <span className="font-mono font-bold text-gray-700">v{f.version_num ?? 0}</span>
+                  <span className="text-gray-700 flex-1 truncate">{f.name}</span>
+                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${PUB_CLS[f.pub_status ?? "draft"] ?? "bg-gray-100"}`}>{(f.pub_status ?? "draft").replace("_", " ")}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        </div>
+        ) }}>
 
         {/* Builder canvas */}
         <div className="space-y-3 min-w-0">
@@ -245,47 +291,7 @@ export default async function FrameworkBuilderPage({ searchParams }: { searchPar
         </div>
 
         {/* Right rail */}
-        <div className="space-y-3">
-          <Card title="AI Curriculum Assistant" sub="rule-derived signals">
-            {intel.length ? (
-              <div className="space-y-1.5 mb-3">
-                {intel.map((x, i) => (
-                  <Link key={i} href="/educator/studio/gaps" className="flex items-center gap-2 text-[11px] text-gray-700 hover:text-purple-700">
-                    <span>{x.icon}</span><span className="flex-1">{x.label}</span>
-                    <span className="text-[10px] font-bold bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)] rounded-full px-1.5 py-0.5">{x.n}</span>
-                  </Link>
-                ))}
-              </div>
-            ) : <p className="text-xs text-gray-400 mb-3">No issues detected in this framework. ✅</p>}
-            <GenerateRecs />
-          </Card>
-
-          <Card title="Properties" sub={selDomain ? `Domain: ${selDomain.name}` : "Framework"}>
-            {selected && (
-              <div className="text-[11px] text-gray-600 space-y-1">
-                <p><span className="text-gray-400">Framework:</span> {selected.name}</p>
-                <p><span className="text-gray-400">Library:</span> <span className="capitalize">{selected.library}</span></p>
-                <p><span className="text-gray-400">Version:</span> v{selected.version_num ?? 0}</p>
-                <p><span className="text-gray-400">Status:</span> <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded uppercase ${PUB_CLS[selected.pub_status ?? "draft"] ?? "bg-gray-100"}`}>{(selected.pub_status ?? "draft").replace("_", " ")}</span></p>
-                {selected.review_date && <p><span className="text-gray-400">Review due:</span> {selected.review_date}</p>}
-                <p className="pt-1 border-t border-gray-50"><span className="text-gray-400">Domains:</span> {domains.length} · <span className="text-gray-400">Competencies:</span> {compList.length} · <span className="text-gray-400">CPUs:</span> {cpuIds.length}</p>
-              </div>
-            )}
-          </Card>
-
-          <Card title="Version History">
-            <ul className="space-y-1">
-              {fwList.slice(0, 5).map(f => (
-                <li key={f.id} className="flex items-center gap-2 text-[11px]">
-                  <span className="font-mono font-bold text-gray-700">v{f.version_num ?? 0}</span>
-                  <span className="text-gray-700 flex-1 truncate">{f.name}</span>
-                  <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase ${PUB_CLS[f.pub_status ?? "draft"] ?? "bg-gray-100"}`}>{(f.pub_status ?? "draft").replace("_", " ")}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        </div>
-      </div>
+      </PaneGrid>
 
       {/* Health + lifecycle */}
       <div className="grid md:grid-cols-2 gap-4 mt-4">

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { PaneGrid } from "@/components/ui/pane-grid";
 
 // Evidence Validation Centre v2 (spec + mockup): left filter panel, smart
 // queue, and a split review panel with tabs (Evidence / Checklist / History),
@@ -223,8 +224,8 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
           </Link>
         </div>
       ) : (
-        <div className={`grid grid-cols-1 lg:grid-cols-[200px_minmax(0,1fr)] ${open ? "xl:grid-cols-[200px_minmax(0,1fr)_340px]" : ""} gap-4 items-start`}>
-          {/* Left filter panel */}
+        <PaneGrid bp="lg" endBp="xl" className="items-start"
+          start={{ storageKey: "assessor.logbook.filters.w", defaultPx: 200, minPx: 160, label: "Resize the filter panel", node: (
           <div className="bg-white border border-gray-100 rounded-2xl p-4 lg:sticky lg:top-4">
             <div className="flex items-center justify-between mb-3">
               <h2 className="text-xs font-bold text-gray-800">Filters</h2>
@@ -274,87 +275,8 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
               Video evidence and AI confidence scoring aren&apos;t supported yet.
             </p>
           </div>
-
-          {/* Queue */}
-          <div className="min-w-0 flex flex-col gap-3">
-            <input value={q} onChange={e => setQ(e.target.value)}
-              placeholder="Search evidence, learner or competency…"
-              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100" />
-
-            {selected.size > 0 && (
-              <div className="bg-gray-900 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-3">
-                <p className="text-xs font-semibold flex-1">{selected.size} selected</p>
-                <button onClick={() => decide([...selected], "verified")} disabled={busy}
-                  className="text-xs font-semibold bg-[var(--cmp-color-success)] hover:bg-[var(--cmp-color-success)] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors">
-                  ✓ Verify selected
-                </button>
-                <button onClick={() => setSelected(new Set())} className="text-xs text-gray-300 hover:text-white">Clear</button>
-              </div>
-            )}
-
-            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
-              <div className="px-4 py-3 border-b border-gray-100">
-                <h2 className="text-sm font-bold text-gray-900">Evidence Queue ({filtered.length})</h2>
-              </div>
-              {filtered.length === 0 ? (
-                <p className="px-5 py-10 text-center text-xs text-gray-400">Nothing matches these filters.</p>
-              ) : (
-                <div className="divide-y divide-gray-50">
-                  {filtered.map(e => {
-                    const prio = PRIO_UI[prioOf(e)];
-                    const photos = e.evidence.filter(v => v.mime_type.startsWith("image/")).length;
-                    const docs = e.evidence.filter(v => v.mime_type === "application/pdf").length;
-                    return (
-                      <div key={e.id}
-                        className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${openId === e.id ? "bg-indigo-50/50" : "hover:bg-gray-50/60"}`}
-                        onClick={() => openEntry(openId === e.id ? null : e.id)}>
-                        <input type="checkbox" checked={selected.has(e.id)}
-                          onChange={() => { const n = new Set(selected); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); setSelected(n); }}
-                          onClick={ev => ev.stopPropagation()} className="accent-indigo-600 shrink-0" aria-label={`Select ${e.nurseName}`} />
-                        {e.avatarUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element -- avatar from storage
-                          <img src={e.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                        ) : (
-                          <span className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center shrink-0">
-                            {initials(e.nurseName)}
-                          </span>
-                        )}
-                        <div className="min-w-0 w-36 shrink-0">
-                          <p className="text-sm font-semibold text-gray-900 truncate">{e.nurseName}</p>
-                          <p className="text-[10px] text-gray-400 truncate">RN · {e.department}</p>
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm text-gray-800 truncate">{e.skillName}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{e.competency ?? "Free-text skill"}{e.domain ? ` · ${e.domain}` : ""}</p>
-                        </div>
-                        <div className="hidden sm:block w-20 shrink-0">
-                          {e.evidence.length ? (
-                            <p className="text-[10px] text-gray-600">{photos > 0 && `📷 ${photos} `}{docs > 0 && `📄 ${docs}`}</p>
-                          ) : <p className="text-[10px] text-gray-300">no files</p>}
-                          <p className="text-[9px] text-gray-400" suppressHydrationWarning>
-                            {new Date(e.submittedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
-                          </p>
-                        </div>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${prio.cls}`}>{prio.label}</span>
-                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
-                          e.status === "changes_requested" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
-                          : e.status === "escalated" ? "bg-purple-50 text-purple-700"
-                          : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"
-                        }`}>{e.status === "changes_requested" ? "Returned" : e.status === "escalated" ? "⬆ Escalated" : "Awaiting"}</span>
-                        <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${
-                          openId === e.id ? "bg-indigo-600 text-white" : "text-indigo-700 border border-indigo-200"
-                        }`}>Review</span>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-            <p className="text-[10px] text-gray-300">Priority is age-derived (3+ days = high). Quality scores are rule-based, not AI.</p>
-          </div>
-
-          {/* Review panel */}
-          {open && (
+          ) }}
+          end={open ? { storageKey: "assessor.logbook.review.w", defaultPx: 340, label: "Resize the review panel", node: (
             <div className="bg-white border border-gray-100 rounded-2xl p-4 xl:sticky xl:top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
               <div className="flex items-start justify-between mb-3">
                 <h2 className="text-sm font-bold text-gray-900">Evidence Details</h2>
@@ -564,8 +486,85 @@ export default function EvidenceCentre({ entries, kpis, isSenior }: { entries: E
                 </div>
               </div>
             </div>
-          )}
-        </div>
+          ) } : undefined}>
+          {/* Queue */}
+          <div className="min-w-0 flex flex-col gap-3">
+            <input value={q} onChange={e => setQ(e.target.value)}
+              placeholder="Search evidence, learner or competency…"
+              className="w-full border border-gray-200 bg-white rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-100" />
+
+            {selected.size > 0 && (
+              <div className="bg-gray-900 text-white rounded-xl px-4 py-2.5 flex flex-wrap items-center gap-3">
+                <p className="text-xs font-semibold flex-1">{selected.size} selected</p>
+                <button onClick={() => decide([...selected], "verified")} disabled={busy}
+                  className="text-xs font-semibold bg-[var(--cmp-color-success)] hover:bg-[var(--cmp-color-success)] disabled:opacity-50 text-white px-3 py-1.5 rounded-lg transition-colors">
+                  ✓ Verify selected
+                </button>
+                <button onClick={() => setSelected(new Set())} className="text-xs text-gray-300 hover:text-white">Clear</button>
+              </div>
+            )}
+
+            <div className="bg-white border border-gray-100 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-gray-100">
+                <h2 className="text-sm font-bold text-gray-900">Evidence Queue ({filtered.length})</h2>
+              </div>
+              {filtered.length === 0 ? (
+                <p className="px-5 py-10 text-center text-xs text-gray-400">Nothing matches these filters.</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {filtered.map(e => {
+                    const prio = PRIO_UI[prioOf(e)];
+                    const photos = e.evidence.filter(v => v.mime_type.startsWith("image/")).length;
+                    const docs = e.evidence.filter(v => v.mime_type === "application/pdf").length;
+                    return (
+                      <div key={e.id}
+                        className={`px-4 py-3 flex items-center gap-3 cursor-pointer transition-colors ${openId === e.id ? "bg-indigo-50/50" : "hover:bg-gray-50/60"}`}
+                        onClick={() => openEntry(openId === e.id ? null : e.id)}>
+                        <input type="checkbox" checked={selected.has(e.id)}
+                          onChange={() => { const n = new Set(selected); if (n.has(e.id)) n.delete(e.id); else n.add(e.id); setSelected(n); }}
+                          onClick={ev => ev.stopPropagation()} className="accent-indigo-600 shrink-0" aria-label={`Select ${e.nurseName}`} />
+                        {e.avatarUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element -- avatar from storage
+                          <img src={e.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                        ) : (
+                          <span className="w-9 h-9 rounded-full bg-indigo-100 text-indigo-700 text-[10px] font-bold flex items-center justify-center shrink-0">
+                            {initials(e.nurseName)}
+                          </span>
+                        )}
+                        <div className="min-w-0 w-36 shrink-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{e.nurseName}</p>
+                          <p className="text-[10px] text-gray-400 truncate">RN · {e.department}</p>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-gray-800 truncate">{e.skillName}</p>
+                          <p className="text-[10px] text-gray-400 truncate">{e.competency ?? "Free-text skill"}{e.domain ? ` · ${e.domain}` : ""}</p>
+                        </div>
+                        <div className="hidden sm:block w-20 shrink-0">
+                          {e.evidence.length ? (
+                            <p className="text-[10px] text-gray-600">{photos > 0 && `📷 ${photos} `}{docs > 0 && `📄 ${docs}`}</p>
+                          ) : <p className="text-[10px] text-gray-300">no files</p>}
+                          <p className="text-[9px] text-gray-400" suppressHydrationWarning>
+                            {new Date(e.submittedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+                          </p>
+                        </div>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${prio.cls}`}>{prio.label}</span>
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded shrink-0 ${
+                          e.status === "changes_requested" ? "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]"
+                          : e.status === "escalated" ? "bg-purple-50 text-purple-700"
+                          : "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]"
+                        }`}>{e.status === "changes_requested" ? "Returned" : e.status === "escalated" ? "⬆ Escalated" : "Awaiting"}</span>
+                        <span className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg shrink-0 ${
+                          openId === e.id ? "bg-indigo-600 text-white" : "text-indigo-700 border border-indigo-200"
+                        }`}>Review</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <p className="text-[10px] text-gray-300">Priority is age-derived (3+ days = high). Quality scores are rule-based, not AI.</p>
+          </div>
+        </PaneGrid>
       )}
     </div>
   );

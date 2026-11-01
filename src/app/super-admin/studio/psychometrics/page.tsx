@@ -3,6 +3,7 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { loadPsychometricsOverview, loadBankPsychometrics, MIN_ATTEMPTS } from "@/lib/studio/psychometrics";
 import { requireHqCapability } from "@/lib/hq/context";
+import { PaneGrid, ResizableList } from "@/components/ui/pane-grid";
 
 // CST-045 — Quality & Psychometric Analysis Studio. Real item statistics computed from knowledge_attempts
 // (difficulty, point-biserial discrimination, distractor effectiveness, KR-20, SEM). Pick a question bank;
@@ -55,11 +56,11 @@ export default async function PsychometricsPage({ searchParams }: { searchParams
             )}
           </div>
 
-          <div className="grid lg:grid-cols-[260px_1fr] gap-5">
-            {/* Bank list */}
+          <PaneGrid bp="lg" start={{ storageKey: "studio.psychometrics.banks.w", defaultPx: 260, label: "Resize the question bank list", node: (
+            /* Bank list */
             <div className="bg-white rounded-xl border border-gray-100 p-3 h-fit">
               <p className="text-[10px] font-bold text-gray-500 uppercase tracking-widest px-1 mb-2">Question banks</p>
-              <div className="flex flex-col gap-0.5 max-h-[560px] overflow-y-auto">
+              <ResizableList storageKey="studio.psychometrics.banks.h" defaultPx={560} label="Resize the question bank list height" className="flex flex-col gap-0.5 max-h-[560px] overflow-y-auto">
                 {overview.banks.map(b => (
                   <Link key={b.id} href={`/super-admin/studio/psychometrics?bank=${b.id}`}
                     className={`px-2.5 py-2 rounded-lg text-xs ${b.id === bankId ? "bg-teal-50 border border-teal-100" : "hover:bg-gray-50 border border-transparent"}`}>
@@ -67,9 +68,9 @@ export default async function PsychometricsPage({ searchParams }: { searchParams
                     <p className="text-[10px] text-gray-500">{b.attempts} attempt{b.attempts === 1 ? "" : "s"}{b.attempts >= MIN_ATTEMPTS ? ` · ${b.meanScore}% mean · ${b.passRate}% pass` : ""}</p>
                   </Link>
                 ))}
-              </div>
+              </ResizableList>
             </div>
-
+          ) }}>
             {/* Detail */}
             <div className="min-w-0">
               {!detail?.found ? (
@@ -138,7 +139,7 @@ export default async function PsychometricsPage({ searchParams }: { searchParams
                 </>
               )}
             </div>
-          </div>
+          </PaneGrid>
         </>
       )}
     </div>

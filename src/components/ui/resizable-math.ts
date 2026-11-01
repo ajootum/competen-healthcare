@@ -26,15 +26,28 @@ export function parseStoredSize(raw: string | null | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? Math.round(n) : null;
 }
 
+export type ResizeSide = "start" | "end";
+
+/**
+ * A pane's size after the pointer moved `delta` px from where the drag began. A "start" pane sits BEFORE its handle
+ * (dragging toward the end grows it); an "end" pane sits AFTER its handle, so the same movement shrinks it.
+ */
+export function dragSize(from: number, delta: number, min: number, max: number, side: ResizeSide = "start"): number {
+  return clampSize(from + (side === "end" ? -delta : delta), min, max);
+}
+
 /**
  * The next size for a key pressed on a separator, or null when the key is not one it handles.
- * axis "x": ArrowRight grows, ArrowLeft shrinks. axis "y": ArrowDown grows, ArrowUp shrinks.
- * Shift = a bigger step. Home = min, End = max.
+ * axis "x", side "start": ArrowRight grows, ArrowLeft shrinks; side "end" (the pane is after the handle): the other way round.
+ * axis "y": ArrowDown grows, ArrowUp shrinks (side "end": reversed). Shift = a bigger step. Home = min, End = max (always
+ * the PANE's size, whichever side it is on).
  */
-export function keyboardSize(key: string, shift: boolean, axis: "x" | "y", now: number, min: number, max: number): number | null {
+export function keyboardSize(key: string, shift: boolean, axis: "x" | "y", now: number, min: number, max: number, side: ResizeSide = "start"): number | null {
   const step = shift ? RESIZE_STEP_SHIFT : RESIZE_STEP;
-  const grow = axis === "x" ? "ArrowRight" : "ArrowDown";
-  const shrink = axis === "x" ? "ArrowLeft" : "ArrowUp";
+  const forward = axis === "x" ? "ArrowRight" : "ArrowDown";
+  const back = axis === "x" ? "ArrowLeft" : "ArrowUp";
+  const grow = side === "end" ? back : forward;
+  const shrink = side === "end" ? forward : back;
   if (key === grow) return clampSize(now + step, min, max);
   if (key === shrink) return clampSize(now - step, min, max);
   if (key === "Home") return clampSize(min, min, max);
