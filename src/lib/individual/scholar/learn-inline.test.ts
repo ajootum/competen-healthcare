@@ -46,9 +46,21 @@ describe("the application check and the Apply rule", () => {
 });
 
 describe("recallContent: from the saved lesson only", () => {
-  it("uses the check question, key points as the answer, and strips citation tags", () => {
-    const c = recallContent({ title: "Sepsis", question: "What starts the sepsis bundle? [S1]", points: ["Give fluids [S1]", "Take cultures"], overview: "Why it matters [S2]", objective: null });
-    expect(c).toEqual({ front: "What starts the sepsis bundle?", back: "- Give fluids\n- Take cultures", why: "Why it matters" });
+  it("answers the check question with the key points that match it, strips citation tags, keeps the rest under Why", () => {
+    const c = recallContent({ title: "Sepsis", question: "What starts the sepsis bundle? [S1]", points: ["The sepsis bundle starts with cultures [S1]", "Lactate is measured early", "Escalate to a senior"], overview: "Why it matters [S2]", objective: null });
+    expect(c).toEqual({ front: "What starts the sepsis bundle?", back: "- The sepsis bundle starts with cultures",
+      why: "Why it matters\n\nAll key points:\n- The sepsis bundle starts with cultures\n- Lactate is measured early\n- Escalate to a senior" });
+  });
+  it("never answers a question with the whole list: only the best-matching point(s), at most two, in lesson order", () => {
+    const c = recallContent({ title: "PDSA", question: "How does the Study phase go beyond checking predictions?", points: ["Plan sets predictions", "Do runs the test", "Study compares results with predictions and asks why", "Act decides what next"], overview: null, objective: null });
+    expect(c?.back).toBe("- Study compares results with predictions and asks why");
+    const tie = recallContent({ title: "PDSA", question: "What do Plan and Study set?", points: ["Plan sets the aim", "Study sets the learning", "Act"], overview: null, objective: null });
+    expect(tie?.back).toBe("- Plan sets the aim\n- Study sets the learning");
+  });
+  it("a question no key point answers becomes the key-points question (at most three points)", () => {
+    const c = recallContent({ title: "Sepsis", question: "Why does it matter?", points: ["Give fluids", "Take cultures", "Measure lactate", "Escalate"], overview: null, objective: null });
+    expect(c?.front).toBe("What are the key points of Sepsis?");
+    expect(c?.back).toBe("- Give fluids\n- Take cultures\n- Measure lactate");
   });
   it("falls back to a key-points question, and renders nothing when the lesson holds nothing to ask", () => {
     expect(recallContent({ title: "Sepsis", question: null, points: ["a"], overview: null, objective: null })?.front).toBe("What are the key points of Sepsis?");

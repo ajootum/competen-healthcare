@@ -125,11 +125,24 @@ export function recallContent(x: {
   const points = x.points.map(p => clean(p, 300)).filter(Boolean);
   const question = x.question ? clean(x.question, 300) : "";
   if (!question && !points.length) return null;
-  const front = question || `What are the key points of ${clean(x.title, 120) || "this lesson"}?`;
-  const back = points.length ? points.map(p => `- ${p}`).join("\n").slice(0, 600) : clean(x.objective ?? "", 600);
+  const keyPointsQ = `What are the key points of ${clean(x.title, 120) || "this lesson"}?`;
+  const list = (ps: readonly string[]) => ps.map(p => `- ${p}`).join("\n").slice(0, 600);
+  const overview = clean(x.overview ?? "", 800);
+  // Concise: a check question is answered by the one or two key points that share the most content words with it, never by the
+  // whole list. The rest stay one click away under Why / source. A question no key point answers falls back to the key-points question.
+  const q = contentWords(question);
+  const ranked = question ? points.map((p, i) => ({ i, n: contentWords(p).filter(w => q.includes(w)).length })).filter(r => r.n > 0)
+    .sort((a, b) => b.n - a.n || a.i - b.i).filter((r, _, all) => r.n === all[0].n).slice(0, 2).sort((a, b) => a.i - b.i) : [];
+  const front = ranked.length ? question : keyPointsQ;
+  const back = ranked.length ? list(ranked.map(r => points[r.i])) : points.length ? list(points.slice(0, 3)) : question ? "" : clean(x.objective ?? "", 600);
   if (!back) return null;
-  return { front, back, why: clean(x.overview ?? "", 800) };
+  const rest = points.length > (ranked.length || 3) ? `All key points:\n${list(points)}` : "";
+  return { front, back, why: [overview, rest].filter(Boolean).join("\n\n").slice(0, 1400) };
 }
+
+const RECALL_STOP = new Set(["about", "after", "also", "because", "before", "being", "between", "does", "each", "every", "from", "have", "into", "more", "most", "only", "other", "should", "simply", "such", "than", "that", "their", "them", "then", "there", "these", "they", "this", "those", "through", "under", "very", "what", "when", "where", "which", "while", "with", "would", "your", "will", "whether", "beyond"]);
+/** Content words: four letters or more, not a small framing word, crudely stemmed (a trailing s, ing or ed off). */
+const contentWords = (s: string) => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []).filter(w => !RECALL_STOP.has(w)).map(w => w.replace(/(ing|ed|es|s)$/, ""));
 
 // ── THE MARKS (small, per lesson step) ──
 
