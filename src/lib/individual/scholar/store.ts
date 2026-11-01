@@ -27,6 +27,7 @@ import type { CardRowExtras, PersonalDeck } from "./flashcards";
 import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type StudyLinkKind, type StudySpace } from "./study-session";
 import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
 import { newestSavedLesson, type LessonRecord } from "./learn-journey";
+import { baseKey, keysetFilter, orderVersions, pageOf, supersededKey, type Cursor, type NoteInput, type NoteKind, type NoteTarget } from "./saved-library";
 import { correctionFromRow, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -310,8 +311,10 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const { error: osErr } = await admin.from("individual_scholar_osce_station").delete().eq("user_id", userId);
   // SCHOLAR-FLASHCARDS-01 (730): the flashcard decks go too. Their cards and card marks went with the questions. Absent table: nothing to do.
   const { error: fdErr } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId);
+  // SCHOLAR-LIBRARY-01 (820): the learner's notes, bookmarks and highlights go too (each also cascades with what it is on). Absent table: nothing to do.
+  const { error: ntErr } = await admin.from("individual_scholar_note").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr), erased: rows.length };
+  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -2270,50 +2273,104 @@ export type ArtefactRow = {
   id: string; materialId: string; action: string; depth: string; content: string; background: string | null;
   flags: { text: string; cited: number[] }[]; refs: any[]; model: string; promptVersion: string; reviewStatus: "private_formative"; createdAt: string;
   sources: string[];
+  /** SCHOLAR-LIBRARY-01 (820): the lesson it was saved for (new saves only), and when a refresh replaced it. Absent without 820. */
+  sessionId?: string | null; step?: number | null; supersededAt?: string | null; dedupeKey?: string;
 };
 const ARTEFACT_COLS = "id, material_id, action, depth, content, background, flags, refs, model, prompt_version, review_status, created_at";
+const ARTEFACT_COLS_820 = `${ARTEFACT_COLS}, session_id, step, superseded_at, dedupe_key`;
 const toArtefact = (r: any, sources: string[]): ArtefactRow => ({
   id: r.id, materialId: r.material_id, action: r.action, depth: r.depth, content: r.content, background: r.background ?? null,
   flags: Array.isArray(r.flags) ? r.flags : [], refs: Array.isArray(r.refs) ? r.refs : [], model: r.model, promptVersion: r.prompt_version,
   reviewStatus: "private_formative", createdAt: r.created_at, sources,
+  ...("superseded_at" in r ? { sessionId: r.session_id ?? null, step: Number.isInteger(r.step) ? r.step : null, supersededAt: r.superseded_at ?? null, dedupeKey: r.dedupe_key } : {}),
 });
+
+// ── MIGRATION 820 (SCHOLAR-LIBRARY-01) ── detected once, and the library keeps working without it ─────────────────
+//
+// 820 adds learner notes, artefact full text, the lesson link, kept versions and the library search. Detected by one
+// read of a note row and one of an 820 artefact column, keyed on the caller. Absent: notes are not offered, a refresh
+// replaces as before, the library lists and filters, and search is the basic match (saved-library.ts basicMatches).
+let library820: boolean | null = null;
+/** Whether migration 820 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function librarySchema(admin: Admin, userId: string): Promise<boolean> {
+  if (library820 !== null) return library820;
+  const [n, a] = await Promise.all([
+    admin.from("individual_scholar_note").select("id").eq("user_id", userId).limit(1),
+    admin.from("individual_scholar_artefact").select("superseded_at").eq("user_id", userId).limit(1),
+  ]);
+  if (!n.error && !a.error) return (library820 = true);
+  if (isNotProvisioned(n.error) || isNotProvisioned(a.error) || isMissingColumn(a.error)) return (library820 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetLibrarySchema = () => { library820 = null; };
 
 async function artefactSources(admin: Admin, userId: string, ids: string[]): Promise<Map<string, string[]>> {
   if (!ids.length) return new Map();
-  const { data } = await admin.from("individual_scholar_artefact_source").select("artefact_id, ordinal, chunk_id").eq("user_id", userId).in("artefact_id", ids).order("ordinal").limit(5000);
   const out = new Map<string, string[]>();
-  for (const r of (data ?? []) as any[]) out.set(r.artefact_id, [...(out.get(r.artefact_id) ?? []), r.chunk_id]);
+  // In batches, so a long page of ids never makes one oversized request.
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data } = await admin.from("individual_scholar_artefact_source").select("artefact_id, ordinal, chunk_id").eq("user_id", userId).in("artefact_id", ids.slice(i, i + 200)).order("ordinal").limit(2000);
+    for (const r of (data ?? []) as any[]) out.set(r.artefact_id, [...(out.get(r.artefact_id) ?? []), r.chunk_id]);
+  }
   return out;
 }
 
-/** The person's saved artefact for this request, or null (none, or 415 absent). */
+/** The person's saved artefact for this request, or null (none, or 415 absent). A superseded version has another key. */
 export async function findArtefact(admin: Admin, userId: string, dedupeKey: string): Promise<ArtefactRow | null> {
   const { data, error } = await admin.from("individual_scholar_artefact").select(ARTEFACT_COLS).eq("user_id", userId).eq("dedupe_key", dedupeKey).maybeSingle();
   if (error || !data) return null;
   return toArtefact(data, (await artefactSources(admin, userId, [data.id])).get(data.id) ?? []);
 }
 
-/** Save (or replace, for the same key) one artefact. "not_provisioned" where 415 is absent. */
+/**
+ * Save one artefact. "not_provisioned" where 415 is absent.
+ * SCHOLAR-LIBRARY-01 (820): a refresh KEEPS the earlier version -- the row with the same key is marked superseded (its key
+ * becomes key:superseded:id, saved-library.ts supersededKey) and the new one is inserted, with the lesson it was saved
+ * for. If the insert then fails the earlier version is restored as current. Without 820 it replaces, as before.
+ */
 export async function saveArtefact(admin: Admin, userId: string, a: {
   materialId: string; action: string; depth: string; content: string; background: string | null; flags: unknown[]; refs: unknown[];
-  dedupeKey: string; model: string; promptVersion: string; chunkIds: readonly string[];
+  dedupeKey: string; model: string; promptVersion: string; chunkIds: readonly string[]; lesson?: { sessionId: string; step: number } | null;
 }): Promise<"ok" | "not_provisioned" | "failed"> {
-  const del = await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("dedupe_key", a.dedupeKey);
-  if (del.error) return isNotProvisioned(del.error) ? "not_provisioned" : "failed";
+  const keep = await librarySchema(admin, userId);
+  let previous: string | null = null;
+  if (keep) {
+    const { data: cur, error: cErr } = await admin.from("individual_scholar_artefact").select("id").eq("user_id", userId).eq("dedupe_key", a.dedupeKey).maybeSingle();
+    if (cErr) return isNotProvisioned(cErr) ? "not_provisioned" : "failed";
+    if (cur) {
+      const { error: uErr } = await admin.from("individual_scholar_artefact").update({ superseded_at: new Date().toISOString(), dedupe_key: supersededKey(a.dedupeKey, cur.id) })
+        .eq("user_id", userId).eq("id", cur.id);
+      if (uErr) return "failed";
+      previous = cur.id;
+    }
+  } else {
+    const del = await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("dedupe_key", a.dedupeKey);
+    if (del.error) return isNotProvisioned(del.error) ? "not_provisioned" : "failed";
+  }
+  const restore = async () => {
+    if (previous) await admin.from("individual_scholar_artefact").update({ superseded_at: null, dedupe_key: a.dedupeKey }).eq("user_id", userId).eq("id", previous);
+  };
+  const lesson = keep && a.lesson && isUuid(a.lesson.sessionId) && Number.isInteger(a.lesson.step) && a.lesson.step >= 0 && a.lesson.step < 200 ? a.lesson : null;
   const { data, error } = await admin.from("individual_scholar_artefact").insert({
     user_id: userId, material_id: a.materialId, action: a.action, depth: a.depth, content: a.content.slice(0, 20000),
     background: a.background ? a.background.slice(0, 2000) : null, flags: a.flags, refs: a.refs, dedupe_key: a.dedupeKey,
     model: a.model.slice(0, 200), prompt_version: a.promptVersion.slice(0, 200), review_status: "private_formative",
+    ...(lesson ? { session_id: lesson.sessionId, step: lesson.step } : {}),
   }).select("id").single();
-  if (error) return isNotProvisioned(error) ? "not_provisioned" : "failed";
+  if (error) { await restore(); return isNotProvisioned(error) ? "not_provisioned" : "failed"; }
   const rows = a.chunkIds.slice(0, 10).map((chunk_id, i) => ({ artefact_id: data.id, user_id: userId, ordinal: i + 1, chunk_id }));
   const { error: sErr } = rows.length ? await admin.from("individual_scholar_artefact_source").insert(rows.map(r => ({ ...r, user_id: userId }))) : { error: null };
-  if (sErr) { await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("id", data.id); return "failed"; }
+  if (sErr) { await admin.from("individual_scholar_artefact").delete().eq("user_id", userId).eq("id", data.id); await restore(); return "failed"; }
   return "ok";
 }
 
-/** The person's saved artefacts (all, or one material's, or those built on some sections), newest first. */
-export async function listArtefacts(admin: Admin, userId: string, opts: { materialId?: string; chunkIds?: readonly string[] } = {}): Promise<Read<ArtefactRow[]>> {
+/**
+ * The person's CURRENT saved artefacts (all, or one material's, or those built on some sections), newest first, at most
+ * `limit` (500 by default -- Learn's own reads). The library reads pages instead (libraryArtefactPage). 820: superseded
+ * versions are left out.
+ */
+export async function listArtefacts(admin: Admin, userId: string, opts: { materialId?: string; chunkIds?: readonly string[]; limit?: number } = {}): Promise<Read<ArtefactRow[]>> {
   let ids: string[] | null = null;
   if (opts.chunkIds?.length) {
     const { data, error } = await admin.from("individual_scholar_artefact_source").select("artefact_id").eq("user_id", userId).in("chunk_id", [...opts.chunkIds]).limit(2000);
@@ -2321,10 +2378,12 @@ export async function listArtefacts(admin: Admin, userId: string, opts: { materi
     ids = [...new Set(((data ?? []) as any[]).map(r => r.artefact_id))];
     if (!ids.length) return { ok: true, data: [] };
   }
-  let q = admin.from("individual_scholar_artefact").select(ARTEFACT_COLS).eq("user_id", userId);
+  const v820 = await librarySchema(admin, userId);
+  let q = admin.from("individual_scholar_artefact").select(v820 ? ARTEFACT_COLS_820 : ARTEFACT_COLS).eq("user_id", userId);
+  if (v820) q = q.is("superseded_at", null);
   if (opts.materialId) q = q.eq("material_id", opts.materialId);
   if (ids) q = q.in("id", ids);
-  const { data, error } = await q.order("created_at", { ascending: false }).limit(500);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(Math.min(Math.max(opts.limit ?? 500, 1), 1000));
   if (error) return fail(error);
   const src = await artefactSources(admin, userId, ((data ?? []) as any[]).map(r => r.id));
   return { ok: true, data: ((data ?? []) as any[]).map(r => toArtefact(r, src.get(r.id) ?? [])) };
@@ -2360,7 +2419,7 @@ export async function learnLessonRecords(admin: Admin, userId: string, steps: re
   const list = (r: { data?: unknown; error?: unknown } | null): any[] => (r && !r.error && Array.isArray(r.data) ? r.data : []);
   const ids: string[] = [...new Set(list(src).map(r => String(r.artefact_id)))];
   const [arts, sources, att] = await Promise.all([
-    ids.length ? admin.from("individual_scholar_artefact").select("id, material_id, action, depth, prompt_version, created_at").eq("user_id", userId).eq("action", action).in("id", ids).limit(500) : null,
+    ids.length ? (async () => { const q = admin.from("individual_scholar_artefact").select("id, material_id, action, depth, prompt_version, created_at").eq("user_id", userId).eq("action", action).in("id", ids); return (await librarySchema(admin, userId) ? q.is("superseded_at", null) : q).limit(500); })() : null,
     artefactSources(admin, userId, ids),
     list(qs).length ? admin.from("individual_scholar_attempt").select("question_id").eq("user_id", userId).in("question_id", list(qs).map(q => q.id)).limit(5000) : null,
   ]);
@@ -2373,6 +2432,293 @@ export async function learnLessonRecords(admin: Admin, userId: string, steps: re
     const best = newestSavedLesson(rows, { action, materialId: s.sections[0]?.materialId ?? null, chunkIds });
     return { step: s.step, saved: best ? { at: best.createdAt, promptVersion: best.promptVersion, depth: best.depth } : null, attempts: chunkIds.reduce((n, c) => n + (perChunk.get(c) ?? 0), 0) };
   });
+}
+
+// ── SCHOLAR-LIBRARY-01: THE PERSONAL LIBRARY (migration 820, saved-library.ts says the rules) ────────────────────────────
+//
+// Reads for the Saved learning page, the notes route and the export, every statement keyed on the caller's own user_id.
+// Pages are keyset (created_at or last_active_at, then id), so a library of any size is read 25 at a time, never capped
+// at 500. Learner notes are written only here. Search is one RPC (individual_scholar_library_search, SECURITY INVOKER,
+// service role only) called with the caller's id: supabase-js cannot express websearch_to_tsquery with ts_headline and
+// ts_rank, and the function keys every branch on p_user_id. No AI anywhere.
+
+/** One page of the caller's saved teaching, newest (or oldest) first, after `cursor`. `ids` narrows to some artefacts. */
+export async function libraryArtefactPage(admin: Admin, userId: string, o: {
+  materialId?: string | null; ids?: readonly string[] | null; fromIso?: string | null; toIso?: string | null;
+  versions: "current" | "earlier"; sort: "newest" | "oldest"; cursor: Cursor | null; limit: number;
+}): Promise<Read<{ rows: ArtefactRow[]; next: Cursor | null }>> {
+  const v820 = await librarySchema(admin, userId);
+  if (o.versions === "earlier" && !v820) return { ok: true, data: { rows: [], next: null } };
+  if (o.ids && !o.ids.length) return { ok: true, data: { rows: [], next: null } };
+  let q = admin.from("individual_scholar_artefact").select(v820 ? ARTEFACT_COLS_820 : ARTEFACT_COLS).eq("user_id", userId);
+  if (v820) q = o.versions === "earlier" ? q.not("superseded_at", "is", null) : q.is("superseded_at", null);
+  if (o.materialId && isUuid(o.materialId)) q = q.eq("material_id", o.materialId);
+  if (o.ids) q = q.in("id", o.ids.filter(isUuid).slice(0, 300));
+  if (o.fromIso) q = q.gte("created_at", o.fromIso);
+  if (o.toIso) q = q.lt("created_at", o.toIso);
+  if (o.cursor) q = q.or(keysetFilter(o.cursor, o.sort));
+  const asc = o.sort === "oldest";
+  const { data, error } = await q.order("created_at", { ascending: asc }).order("id", { ascending: asc }).limit(o.limit + 1);
+  if (error) return fail(error);
+  const rows = (data ?? []) as any[];
+  const page = pageOf(rows, o.limit, r => r.created_at);
+  const src = await artefactSources(admin, userId, page.items.map(r => r.id));
+  return { ok: true, data: { rows: page.items.map(r => toArtefact(r, src.get(r.id) ?? [])), next: page.next } };
+}
+
+/** The caller's artefacts built on any of these sections (current and earlier), at most `max`. null when unreadable. */
+export async function artefactIdsForChunks(admin: Admin, userId: string, chunkIds: readonly string[], max = 2000): Promise<string[] | null> {
+  const ids = [...new Set(chunkIds.filter(isUuid))];
+  const out = new Set<string>();
+  for (let i = 0; i < ids.length && out.size < max; i += 200) {
+    const { data, error } = await admin.from("individual_scholar_artefact_source").select("artefact_id").eq("user_id", userId).in("chunk_id", ids.slice(i, i + 200)).limit(max);
+    if (error) return null;
+    for (const r of (data ?? []) as any[]) out.add(r.artefact_id);
+  }
+  return [...out].slice(0, max);
+}
+
+/** The caller's sections mapped to one competency (proposed or accepted, never rejected), at most 2000. */
+export async function chunksForCompetency(admin: Admin, userId: string, competencyId: string): Promise<string[]> {
+  if (!isUuid(competencyId)) return [];
+  const { data, error } = await admin.from("individual_scholar_competency_map").select("id, chunk_id").eq("user_id", userId).eq("competency_id", competencyId).limit(2000);
+  if (error || !data?.length) return [];
+  const { data: d } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at").eq("user_id", userId).in("map_id", (data as any[]).map(r => r.id).slice(0, 500)).limit(5000);
+  const states = mappingStates(((d ?? []) as any[]).map(x => ({ mappingId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
+  return [...new Set((data as any[]).filter(r => states.get(r.id)?.state !== "rejected").map(r => r.chunk_id as string))];
+}
+
+/** One of the caller's saved teachings by id, current or earlier, with its sources. null: not theirs, or none. */
+export async function getArtefact(admin: Admin, userId: string, id: string): Promise<ArtefactRow | null> {
+  if (!isUuid(id)) return null;
+  const v820 = await librarySchema(admin, userId);
+  const { data, error } = await admin.from("individual_scholar_artefact").select(v820 ? ARTEFACT_COLS_820 : ARTEFACT_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  return toArtefact(data, (await artefactSources(admin, userId, [data.id])).get(data.id) ?? []);
+}
+
+/** Some of the caller's saved teachings by id (any version, or current only), with their sources. A foreign id is not found. */
+export async function artefactsByIds(admin: Admin, userId: string, ids: readonly string[], o: { currentOnly?: boolean } = {}): Promise<Read<ArtefactRow[]>> {
+  const keep = [...new Set(ids.filter(isUuid))];
+  if (!keep.length) return { ok: true, data: [] };
+  const v820 = await librarySchema(admin, userId);
+  const out: any[] = [];
+  for (let i = 0; i < keep.length; i += 200) {
+    let q = admin.from("individual_scholar_artefact").select(v820 ? ARTEFACT_COLS_820 : ARTEFACT_COLS).eq("user_id", userId).in("id", keep.slice(i, i + 200));
+    if (v820 && o.currentOnly) q = q.is("superseded_at", null);
+    const { data, error } = await q.limit(200);
+    if (error) return fail(error);
+    out.push(...((data ?? []) as any[]));
+  }
+  const src = await artefactSources(admin, userId, out.map(r => r.id));
+  return { ok: true, data: out.map(r => toArtefact(r, src.get(r.id) ?? [])).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) };
+}
+
+/** Every version of the caller's saved teaching `id` belongs to (the same key), current first, then newest. [] without 820. */
+export async function artefactVersions(admin: Admin, userId: string, id: string): Promise<ArtefactRow[]> {
+  const one = await getArtefact(admin, userId, id);
+  if (!one?.dedupeKey) return one ? [one] : [];
+  const key = baseKey(one.dedupeKey);
+  if (!/^[0-9a-f]{64}$/.test(key)) return [one];
+  const { data, error } = await admin.from("individual_scholar_artefact").select(ARTEFACT_COLS_820).eq("user_id", userId)
+    .or(`dedupe_key.eq.${key},dedupe_key.like.${key}:superseded:*`).order("created_at", { ascending: false }).limit(100);
+  if (error) return [one];
+  const src = await artefactSources(admin, userId, ((data ?? []) as any[]).map(r => r.id));
+  return orderVersions(((data ?? []) as any[]).map(r => toArtefact(r, src.get(r.id) ?? [])));
+}
+
+/** How many earlier versions each of these current teachings keeps (820), by artefact id. */
+export async function earlierVersionCounts(admin: Admin, userId: string, rows: readonly ArtefactRow[]): Promise<Map<string, number>> {
+  const out = new Map<string, number>();
+  const keyed = rows.filter(r => r.dedupeKey && !r.supersededAt);
+  if (!keyed.length) return out;
+  const byKey = new Map(keyed.map(r => [r.dedupeKey!, r.id]));
+  const ors = keyed.map(r => `dedupe_key.like.${r.dedupeKey}:superseded:*`).join(",");
+  const { data, error } = await admin.from("individual_scholar_artefact").select("dedupe_key").eq("user_id", userId).or(ors).limit(2000);
+  if (error) return out;
+  for (const r of (data ?? []) as any[]) { const id = byKey.get(baseKey(r.dedupe_key)); if (id) out.set(id, (out.get(id) ?? 0) + 1); }
+  return out;
+}
+
+/** The lessons (session, step and the step's whole chunk set) of the caller's sessions that use any of these sections. */
+export async function lessonsForChunks(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<{ sessionId: string; step: number; chunkIds: string[] }[]> {
+  const ids = [...new Set(chunkIds.filter(isUuid))].slice(0, 300);
+  if (!ids.length) return [];
+  const { data, error } = await admin.from("individual_scholar_learning_step").select("session_id").eq("user_id", userId).in("chunk_id", ids).limit(2000);
+  if (error || !data?.length) return [];
+  const sessions = [...new Set((data as any[]).map(r => r.session_id as string))].slice(0, 200);
+  const { data: all, error: aErr } = await admin.from("individual_scholar_learning_step").select("session_id, step, chunk_id").eq("user_id", userId).in("session_id", sessions).limit(10000);
+  if (aErr) return [];
+  const by = new Map<string, { sessionId: string; step: number; chunkIds: string[] }>();
+  for (const r of (all ?? []) as any[]) {
+    const k = `${r.session_id}:${r.step}`;
+    const l: { sessionId: string; step: number; chunkIds: string[] } = by.get(k) ?? { sessionId: r.session_id, step: r.step, chunkIds: [] };
+    l.chunkIds.push(r.chunk_id); by.set(k, l);
+  }
+  return [...by.values()];
+}
+
+/** Some of the caller's sessions by id (a foreign id simply is not found). */
+export async function sessionsByIds(admin: Admin, userId: string, ids: readonly string[]): Promise<LearningSessionRow[]> {
+  const keep = [...new Set(ids.filter(isUuid))].slice(0, 200);
+  if (!keep.length) return [];
+  const { data, error } = await admin.from("individual_scholar_learning_session").select(SESSION_COLS).eq("user_id", userId).in("id", keep).limit(keep.length);
+  return error ? [] : ((data ?? []) as any[]).map(toSession);
+}
+
+/** One page of the caller's sessions of one status, most recently active first (or oldest), after `cursor`. */
+export async function librarySessionPage(admin: Admin, userId: string, o: { status: "active" | "completed"; sort: "newest" | "oldest"; cursor: Cursor | null; limit: number; fromIso?: string | null; toIso?: string | null }): Promise<Read<{ rows: LearningSessionRow[]; next: Cursor | null }>> {
+  let q = admin.from("individual_scholar_learning_session").select(SESSION_COLS).eq("user_id", userId).eq("status", o.status);
+  if (o.fromIso) q = q.gte("last_active_at", o.fromIso);
+  if (o.toIso) q = q.lt("last_active_at", o.toIso);
+  if (o.cursor) q = q.or(keysetFilter(o.cursor, o.sort, "last_active_at"));
+  const asc = o.sort === "oldest";
+  const { data, error } = await q.order("last_active_at", { ascending: asc }).order("id", { ascending: asc }).limit(o.limit + 1);
+  if (error) return fail(error);
+  const page = pageOf((data ?? []) as any[], o.limit, r => r.last_active_at);
+  return { ok: true, data: { rows: page.items.map(toSession), next: page.next } };
+}
+
+/** The furthest lesson reached in each of these sessions (790), where a position is kept. Empty where 790 is absent. */
+export async function sessionFurthest(admin: Admin, userId: string, sessionIds: readonly string[]): Promise<Map<string, number>> {
+  const keep = sessionIds.filter(isUuid).slice(0, 200);
+  if (!keep.length || position790 === false) return new Map();
+  const { data, error } = await admin.from("individual_scholar_learning_position").select("session_id, furthest_step").eq("user_id", userId).in("session_id", keep).limit(keep.length);
+  if (error) { if (isNotProvisioned(error)) position790 = false; return new Map(); }
+  return new Map(((data ?? []) as any[]).map(r => [r.session_id as string, Number(r.furthest_step)]));
+}
+
+/** Per section: the caller's flashcards, other practice questions, and attempts on questions from it. */
+export async function practiceCounts(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<Map<string, { cards: number; questions: number; attempts: number }>> {
+  const ids = [...new Set(chunkIds.filter(isUuid))].slice(0, 400);
+  const out = new Map<string, { cards: number; questions: number; attempts: number }>();
+  if (!ids.length) return out;
+  const { data: qs, error } = await admin.from("individual_scholar_question").select("id, chunk_id, kind").eq("user_id", userId).in("chunk_id", ids).limit(5000);
+  if (error) return out;
+  const chunkOf = new Map<string, string>();
+  for (const q of (qs ?? []) as any[]) {
+    const c = out.get(q.chunk_id) ?? { cards: 0, questions: 0, attempts: 0 };
+    if (q.kind === "flashcard") c.cards++; else c.questions++;
+    out.set(q.chunk_id, c); chunkOf.set(q.id, q.chunk_id);
+  }
+  const qids = [...chunkOf.keys()];
+  for (let i = 0; i < qids.length; i += 300) {
+    const { data: at } = await admin.from("individual_scholar_attempt").select("question_id").eq("user_id", userId).in("question_id", qids.slice(i, i + 300)).limit(10000);
+    for (const a of (at ?? []) as any[]) { const c = chunkOf.get(a.question_id); if (c) out.get(c)!.attempts++; }
+  }
+  return out;
+}
+
+/** The caller's materials with a finished OSCE attempt on a station built from them (720). Empty where 720 is absent. */
+export async function osceAttemptMaterials(admin: Admin, userId: string): Promise<Set<string>> {
+  const { data: at, error } = await admin.from("individual_scholar_osce_attempt").select("station_id").eq("user_id", userId).not("finished_at", "is", null).limit(1000);
+  if (error || !at?.length) return new Set();
+  const { data: st } = await admin.from("individual_scholar_osce_station").select("material_id").eq("user_id", userId).in("id", [...new Set((at as any[]).map(r => r.station_id))].slice(0, 300)).limit(300);
+  return new Set(((st ?? []) as any[]).map(r => r.material_id).filter(isUuid));
+}
+
+// ── LEARNER NOTES, BOOKMARKS AND HIGHLIGHTS (820) ──
+
+export type NoteRow = {
+  id: string; targetKind: NoteTarget["targetKind"]; kind: NoteKind; artefactId: string | null; materialId: string | null; chunkId: string | null;
+  sessionId: string | null; step: number | null; body: string | null; quote: string | null; createdAt: string; updatedAt: string;
+};
+const NOTE_COLS = "id, target_kind, kind, artefact_id, material_id, chunk_id, session_id, step, body, quote, created_at, updated_at";
+const toNote = (r: any): NoteRow => ({
+  id: r.id, targetKind: r.target_kind, kind: r.kind, artefactId: r.artefact_id ?? null, materialId: r.material_id ?? null, chunkId: r.chunk_id ?? null,
+  sessionId: r.session_id ?? null, step: Number.isInteger(r.step) ? r.step : null, body: r.body ?? null, quote: r.quote ?? null, createdAt: r.created_at, updatedAt: r.updated_at,
+});
+/** At most this many notes, bookmarks and highlights per learner. */
+export const NOTE_MAX_PER_LEARNER = 5000;
+
+/** The caller's notes on some artefacts, lessons (session ids) or materials, or their bookmarks, newest first. */
+export async function listNotes(admin: Admin, userId: string, o: {
+  artefactIds?: readonly string[]; sessionIds?: readonly string[]; materialIds?: readonly string[]; kinds?: readonly NoteKind[];
+  cursor?: Cursor | null; limit?: number;
+}): Promise<Read<{ rows: NoteRow[]; next: Cursor | null }>> {
+  if (!(await librarySchema(admin, userId))) return { ok: false, notProvisioned: true };
+  let q = admin.from("individual_scholar_note").select(NOTE_COLS).eq("user_id", userId);
+  const ors = [
+    ...(o.artefactIds?.length ? [`artefact_id.in.(${o.artefactIds.filter(isUuid).slice(0, 300).join(",")})`] : []),
+    ...(o.sessionIds?.length ? [`session_id.in.(${o.sessionIds.filter(isUuid).slice(0, 200).join(",")})`] : []),
+    ...(o.materialIds?.length ? [`material_id.in.(${o.materialIds.filter(isUuid).slice(0, 200).join(",")})`] : []),
+  ].filter(f => !f.includes("in.()"));
+  if (o.artefactIds || o.sessionIds || o.materialIds) { if (!ors.length) return { ok: true, data: { rows: [], next: null } }; q = q.or(ors.join(",")); }
+  if (o.kinds?.length) q = q.in("kind", [...o.kinds]);
+  const limit = Math.min(Math.max(o.limit ?? 500, 1), 1000);
+  const { data, error } = await (o.cursor ? q.lt("created_at", o.cursor.at) : q).order("created_at", { ascending: false }).order("id", { ascending: false }).limit(limit + 1);
+  if (error) return fail(error);
+  const page = pageOf((data ?? []) as any[], limit, r => r.created_at);
+  return { ok: true, data: { rows: page.items.map(toNote), next: page.next } };
+}
+
+/**
+ * Add one of the caller's notes. Every target is the caller's own: the composite foreign keys refuse anything else
+ * (not_found), and a section's chunk is checked here (820 keeps chunk_id as a hint, without a foreign key). A second
+ * bookmark on the same target returns the first (existing). The text was screened by the route.
+ */
+export async function addNote(admin: Admin, userId: string, n: NoteInput): Promise<{ ok: true; id: string; existing: boolean } | { ok: false; error: "not_provisioned" | "not_found" | "limit" | "failed" }> {
+  if (!(await librarySchema(admin, userId))) return { ok: false, error: "not_provisioned" };
+  const chunkId = "chunkId" in n ? n.chunkId ?? null : null, materialId = "materialId" in n ? n.materialId ?? null : null;
+  if (chunkId) {
+    const { data, error } = await admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("id", chunkId).eq("material_id", materialId ?? "").maybeSingle();
+    if (error) return { ok: false, error: "failed" };
+    if (!data) return { ok: false, error: "not_found" };
+  }
+  const { count, error: cErr } = await admin.from("individual_scholar_note").select("id", { count: "exact", head: true }).eq("user_id", userId);
+  if (cErr) return { ok: false, error: "failed" };
+  if ((count ?? 0) >= NOTE_MAX_PER_LEARNER) return { ok: false, error: "limit" };
+  const row = {
+    user_id: userId, target_kind: n.targetKind, kind: n.kind, body: n.body, quote: n.quote,
+    artefact_id: n.targetKind === "artefact" ? n.artefactId : null, material_id: materialId, chunk_id: chunkId,
+    session_id: "sessionId" in n ? n.sessionId ?? null : null, step: "step" in n && Number.isInteger(n.step) ? n.step : null,
+  };
+  const { data, error } = await admin.from("individual_scholar_note").insert({ ...row, user_id: userId }).select("id").single();
+  if (!error) return { ok: true, id: data.id, existing: false };
+  const code = String(error.code ?? "");
+  if (code === "23505" && n.kind === "bookmark") {
+    let q = admin.from("individual_scholar_note").select("id").eq("user_id", userId).eq("kind", "bookmark").eq("target_kind", n.targetKind);
+    for (const [col, v] of [["artefact_id", row.artefact_id], ["material_id", row.material_id], ["chunk_id", row.chunk_id], ["session_id", row.session_id], ["step", row.step]] as const)
+      q = v === null ? q.is(col, null) : q.eq(col, v);
+    const { data: had } = await q.maybeSingle();
+    return had ? { ok: true, id: had.id, existing: true } : { ok: false, error: "failed" };
+  }
+  if (isNotProvisioned(error)) { library820 = false; return { ok: false, error: "not_provisioned" }; }
+  return { ok: false, error: code === "23503" ? "not_found" : "failed" };
+}
+
+/** Change the text of one of the caller's notes or highlights (a bookmark has none). */
+export async function updateNote(admin: Admin, userId: string, id: string, patch: { body: string | null }): Promise<"ok" | "not_found" | "invalid" | "failed"> {
+  if (!isUuid(id) || !(await librarySchema(admin, userId))) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_note").update({ body: patch.body }).eq("user_id", userId).eq("id", id).neq("kind", "bookmark").select("id");
+  if (error) return String(error.code ?? "") === "23514" ? "invalid" : "failed";
+  return (data ?? []).length ? "ok" : "not_found";
+}
+
+/** Remove one of the caller's notes, bookmarks or highlights. Only theirs: another id simply is not found. */
+export async function deleteNote(admin: Admin, userId: string, id: string): Promise<"ok" | "not_found" | "failed"> {
+  if (!isUuid(id) || !(await librarySchema(admin, userId))) return "not_found";
+  const { data, error } = await admin.from("individual_scholar_note").delete().eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return (data ?? []).length ? "ok" : "not_found";
+}
+
+// ── SEARCH (820) ──
+
+export type LibraryHit = {
+  kind: "artefact" | "note" | "lesson" | "flashcard" | "card_note"; id: string; materialId: string | null; sessionId: string | null; step: number | null;
+  artefactId: string | null; chunkId: string | null; label: string; headline: string; rank: number; createdAt: string;
+};
+/** One page of the caller's own deterministic full-text search, and the exact total. notProvisioned where 820 is absent. */
+export async function librarySearch(admin: Admin, userId: string, query: string, limit: number, offset: number): Promise<Read<{ rows: LibraryHit[]; total: number }>> {
+  if (!(await librarySchema(admin, userId))) return { ok: false, notProvisioned: true };
+  const { data, error } = await admin.rpc("individual_scholar_library_search", { p_user_id: userId, p_query: query.slice(0, 200), p_limit: limit, p_offset: offset });
+  if (error) { if (isMissingRpc(error)) library820 = false; return fail(error); }
+  const rows = ((data ?? []) as any[]).map(r => ({
+    kind: r.kind, id: r.id, materialId: r.material_id ?? null, sessionId: r.session_id ?? null, step: Number.isInteger(r.step) ? r.step : null,
+    artefactId: r.artefact_id ?? null, chunkId: r.chunk_id ?? null, label: String(r.label ?? ""), headline: String(r.headline ?? ""), rank: Number(r.rank ?? 0), createdAt: r.created_at,
+  })) as LibraryHit[];
+  return { ok: true, data: { rows, total: Number((data ?? [])[0]?.total ?? 0) } };
 }
 
 /**
@@ -3434,17 +3780,44 @@ export async function flashcardRows(admin: Admin, userId: string): Promise<Read<
   return { ok: true, data: { questions, extras, decks, schema730 } };
 }
 
-/** The learner's own decks (730), most recently changed first, each with its cards in order. [] where 730 is absent or unreadable. */
+/**
+ * Deck archive (820, SCHOLAR-LEARNING-LIBRARY-01): archived_at on the deck table. Detected like 730: one read of the column
+ * keyed on the caller. Absent (42703 or PGRST204 column, 42P01 or PGRST205 table): archive controls are not offered, nothing
+ * errors, and every deck reads as not archived. Present is remembered; absent is asked again after half a minute, so
+ * applying 820 does not need a restart.
+ */
+let deckArchive820: { on: boolean; at: number } | null = null;
+export async function deckArchiveSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (deckArchive820?.on || (deckArchive820 && Date.now() - deckArchive820.at < 30000)) return deckArchive820.on;
+  const { error } = await admin.from("individual_scholar_flashcard_deck").select("id, archived_at").eq("user_id", userId).limit(1);
+  if (!error) { deckArchive820 = { on: true, at: Date.now() }; return true; }
+  if (isNotProvisioned(error) || ["PGRST204", "42703"].includes(String((error as any)?.code ?? ""))) { deckArchive820 = { on: false, at: Date.now() }; return false; }
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetDeckArchiveSchema = () => { deckArchive820 = null; };
+
+/** The learner's own decks (730), most recently changed first, each with its cards in order. [] where 730 is absent or unreadable. archivedAt where 820 is present. */
 export async function flashcardDecks(admin: Admin, userId: string): Promise<PersonalDeck[]> {
-  const { data, error } = await admin.from("individual_scholar_flashcard_deck").select("id, title, organise_by, organise_ref, created_at, updated_at, last_studied_at").eq("user_id", userId).order("updated_at", { ascending: false }).limit(200);
+  const arch = await deckArchiveSchema(admin, userId);
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").select(`id, title, organise_by, organise_ref, created_at, updated_at, last_studied_at${arch ? ", archived_at" : ""}`).eq("user_id", userId).order("updated_at", { ascending: false }).limit(200);
   if (error || !data?.length) return [];
   const items = await admin.from("individual_scholar_flashcard_deck_card").select("deck_id, question_id, position, added_at").eq("user_id", userId).in("deck_id", (data as any[]).map(d => d.id)).order("position").order("added_at").limit(10000);
   const by = new Map<string, string[]>();
   for (const i of (items.error ? [] : items.data ?? []) as any[]) by.set(i.deck_id, [...(by.get(i.deck_id) ?? []), i.question_id]);
   return (data as any[]).map(d => ({
     id: d.id, title: d.title, organiseBy: d.organise_by, organiseRef: d.organise_ref ?? null, createdAt: d.created_at, updatedAt: d.updated_at,
-    lastStudiedAt: d.last_studied_at ?? null, cardIds: by.get(d.id) ?? [],
+    lastStudiedAt: d.last_studied_at ?? null, cardIds: by.get(d.id) ?? [], archivedAt: d.archived_at ?? null,
   }));
+}
+
+/** Archive or unarchive a deck (820). Only archived_at changes: the deck, its cards, schedules and history all stay. "unavailable" where 820 is absent. */
+export async function setDeckArchived(admin: Admin, userId: string, id: string, archived: boolean): Promise<"ok" | "not_found" | "unavailable" | "failed"> {
+  if (!isUuid(id)) return "not_found";
+  if (!(await deckArchiveSchema(admin, userId))) return "unavailable";
+  const { data, error } = await admin.from("individual_scholar_flashcard_deck").update({ archived_at: archived ? new Date().toISOString() : null }).eq("user_id", userId).eq("id", id).select("id");
+  if (error) { if (isNotProvisioned(error) || ["PGRST204", "42703"].includes(String((error as any)?.code ?? ""))) { resetDeckArchiveSchema(); return "unavailable"; } return "failed"; }
+  return data?.length ? "ok" : "not_found";
 }
 
 /** stemKey of each of the learner's flashcard fronts, by card: duplicate detection for a card they write or edit. */
@@ -3562,6 +3935,52 @@ export async function removeDeckCards(admin: Admin, userId: string, deckId: stri
 export async function touchFlashcardDeck(admin: Admin, userId: string, id: string): Promise<void> {
   if (!isUuid(id)) return;
   await admin.from("individual_scholar_flashcard_deck").update({ last_studied_at: new Date().toISOString() }).eq("user_id", userId).eq("id", id).then((r: unknown) => r, () => {});
+}
+
+/**
+ * The saved Learn lessons these sections belong to, exactly: one entry per (session, step) whose step holds one of the
+ * sections, with its session's title and last use. The caller's own sessions only. [] where unreadable.
+ */
+export async function learningStepsOfSections(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<{ sessionId: string; title: string; step: number; lastActiveAt: string; chunkIds: string[] }[]> {
+  const ids = [...new Set(chunkIds.filter(isUuid))];
+  if (!ids.length) return [];
+  try {
+    const { data, error } = await admin.from("individual_scholar_learning_step").select("session_id, step, chunk_id").eq("user_id", userId).in("chunk_id", ids).limit(3000);
+    if (error || !data?.length) return [];
+    const sessionIds = [...new Set((data as any[]).map(r => r.session_id as string))];
+    const { data: ss, error: sErr } = await admin.from("individual_scholar_learning_session").select("id, title, last_active_at").eq("user_id", userId).in("id", sessionIds);
+    if (sErr) return [];
+    const meta = new Map(((ss ?? []) as any[]).map(r => [r.id as string, r]));
+    const by = new Map<string, { sessionId: string; title: string; step: number; lastActiveAt: string; chunkIds: string[] }>();
+    for (const r of data as any[]) {
+      const m = meta.get(r.session_id);
+      if (!m) continue;
+      const k = `${r.session_id}:${r.step}`;
+      const e = by.get(k) ?? { sessionId: r.session_id as string, title: m.title as string, step: r.step as number, lastActiveAt: m.last_active_at as string, chunkIds: [] as string[] };
+      if (!e.chunkIds.includes(r.chunk_id)) e.chunkIds.push(r.chunk_id);
+      by.set(k, e);
+    }
+    return [...by.values()];
+  } catch { return []; }
+}
+
+/**
+ * The study session each of these decks is linked to (740 study link of kind flashcard_deck), with its title: the newest
+ * link wins. The caller's own connected sessions only. Empty where 740 is absent or anything fails.
+ */
+export async function studySessionsOfDecks(admin: Admin, userId: string, deckIds: readonly string[]): Promise<Map<string, { sessionId: string; title: string }>> {
+  const out = new Map<string, { sessionId: string; title: string }>();
+  const ids = [...new Set(deckIds.filter(isUuid))];
+  if (!ids.length || !(await studySessionSchema(admin, userId))) return out;
+  try {
+    const { data, error } = await admin.from("individual_scholar_study_link").select("session_id, ref_id, created_at").eq("user_id", userId).eq("kind", "flashcard_deck").in("ref_id", ids).order("created_at", { ascending: false }).limit(1000);
+    if (error || !data?.length) return out;
+    const { data: ss, error: sErr } = await admin.from("individual_scholar_learning_session").select("id, title").eq("user_id", userId).eq("connected", true).in("id", [...new Set((data as any[]).map(r => r.session_id as string))]);
+    if (sErr) return out;
+    const title = new Map(((ss ?? []) as any[]).map(r => [r.id as string, r.title as string]));
+    for (const r of data as any[]) if (title.has(r.session_id) && !out.has(r.ref_id)) out.set(r.ref_id, { sessionId: r.session_id, title: title.get(r.session_id)! });
+  } catch { /* a link is a convenience */ }
+  return out;
 }
 
 /** A card mark: bookmark, private note, or an issue code (with its time). Only what is given is changed. */

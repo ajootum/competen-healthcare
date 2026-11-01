@@ -237,8 +237,12 @@ const SHARING = /contribut|shared[_ -]?library|learning[_ -]?library|submit\w*(l
 // offer, both held by Holdings (src/lib/cases/candidates.ts). These two routes may name it, and only by calling
 // candidates.ts (S1b below). Training stays absent everywhere.
 const CANDIDACY_ROUTES = [`${API}/clinical/cases/[id]/offer/route.ts`, `${API}/clinical/candidacy/route.ts`];
+// SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026): the learner's OWN private library is named by the owner -- the page
+// title "My learning library" and the policy scholar_learning_library (scholarLearningLibrary). Exactly those names are
+// removed before the check; any other "learning library" (a shared one) still fails, and P14b proves it.
+const OWN_LIBRARY = /My learning library|scholarLearningLibrary|scholar_learning_library/g;
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
-  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s))).map(([f]) => f);
+  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s.replace(OWN_LIBRARY, "")))).map(([f]) => f);
 /** S1b: the candidacy routes go through candidates.ts only, never the tables, and the offer is one case at a time. */
 const candidacyGoverned = (src: Src) => {
   const offer = src.get(CANDIDACY_ROUTES[0]) ?? "", cand = src.get(CANDIDACY_ROUTES[1]) ?? "";
@@ -1234,6 +1238,9 @@ function main() {
     !qualityWired(plant(GEN, "const outcome = applyVerification(check.kept, v.text);", "const outcome = { kept: check.kept, rejected: [] };")));
   ok("P14. ⚠ S1 goes red when a route starts submitting material to a shared library",
     sharingPaths(plant(STORE, "export function isUuid", "export async function submitToSharedLibrary() { return null; }\nexport function isUuid")).length > 0);
+  ok("P14b. ⚠ S1 still goes red on a shared learning library beside the learner's own library name",
+    sharingPaths(plant(STORE, "export function isUuid", "const t =\"My learning library, now a shared learning library\";\nexport function isUuid")).length > 0
+    && sharingPaths(plant(STORE, "export function isUuid", "export const learningLibraryShare = 1;\nexport function isUuid")).length > 0);
   ok("P15. ⚠ S5 goes red when the consent route saves a grant without checking the documents are published",
     !legalGateHeld(plant(`${API}/consent/route.ts`, "if (body.grant && !consentDocuments().published)", "if (false)")));
   ok("P16. ⚠ S6 goes red when a page treats the stored grant as 'on' again",

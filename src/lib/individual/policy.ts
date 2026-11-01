@@ -117,7 +117,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_question_offering" | "scholar_question_offer_days";
+  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1082,6 +1082,15 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Decks, hand-written cards, bookmarks and notes need migration 730. Without it, flashcards from notes and the library still work. Default: offered.",
   },
+  // SCHOLAR-LIBRARY-01 (owner, 1 Nov 2026): the personal library on Saved learning. Stored records only, no AI, no cost.
+  {
+    key: "scholar_learning_library", kind: "choice", product: "Scholar",
+    label: "Personal learning library",
+    help: "Whether Saved learning offers the student's own library: views (recently studied, continue, completed, saved for revision), filters, deterministic search over their saved teaching, notes, sessions and flashcards, earlier versions kept on refresh, their own notes, bookmarks and highlights, and PDF export of what they choose. Reads stored records only: no AI. Private to the student, never shared.",
+    options: [{ value: "on", label: "Offer the library" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Search, notes, kept versions and lesson links need migration 820. Without it, the library still lists and filters saved teaching, and search is a basic match over the newest 500. Default: offered.",
+  },
   // SCHOLAR-COMPANION-01 P1: the mistake notebook reads the learner's own wrong attempts back. Data only, no AI, no cost.
   {
     key: "scholar_mistake_notebook", kind: "choice", product: "Scholar",
@@ -1871,6 +1880,8 @@ export type IndividualPolicy = {
   scholarFlashcards: "on" | "off";
   /** SCHOLAR-COMPANION-01 P1. */
   scholarMistakeNotebook: "on" | "off";
+  /** SCHOLAR-LIBRARY-01. */
+  scholarLearningLibrary: "on" | "off";
   scholarFlashcardsPerGeneration: number;
   scholarFlashcardDeckMax: number;
   /** Always includes notes. */
@@ -2037,6 +2048,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarAdaptiveFormats: clampSet(policyDef("scholar_adaptive_formats") as SetPolicy, published.get(policyPath("scholar_adaptive_formats"))) as AdaptiveFormat[],
     scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
     scholarMistakeNotebook: clampChoice(policyDef("scholar_mistake_notebook") as ChoicePolicy, published.get(policyPath("scholar_mistake_notebook"))) as "on" | "off",
+    scholarLearningLibrary: clampChoice(policyDef("scholar_learning_library") as ChoicePolicy, published.get(policyPath("scholar_learning_library"))) as "on" | "off",
     scholarFlashcardsPerGeneration: int("scholar_flashcards_per_generation"),
     scholarFlashcardDeckMax: int("scholar_flashcard_deck_max"),
     scholarFlashcardSourceModes: (() => { const m = clampSet(policyDef("scholar_flashcard_source_modes") as SetPolicy, published.get(policyPath("scholar_flashcard_source_modes"))) as ("notes" | "notes_and_references")[]; return m.includes("notes") ? m : ["notes" as const, ...m]; })(),

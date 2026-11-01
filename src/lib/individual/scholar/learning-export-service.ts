@@ -4,9 +4,10 @@ import { displayTitle, displaySessionTitle } from "./learn-search";
 import { lessonOutline, sectionProfiles, sessionTopics } from "./learn";
 import { loadCardSelection } from "./flashcard-service";
 import {
-  chunksByIds, getConnectedSession, getLearningSession, isUuid, listArtefacts, listLearningSessions, listMaterials, sectionRefs,
-  type ArtefactRow, type LearningStep, type SectionRef,
+  artefactIdsForChunks, artefactsByIds, chunksByIds, getConnectedSession, getLearningSession, isUuid, libraryArtefactPage, listLearningSessions, listMaterials, listNotes,
+  sectionRefs, sectionTopicRows, type ArtefactRow, type LearningStep, type NoteRow, type SectionRef,
 } from "./store";
+import { rangeBounds, type Cursor, type ExportScopeRequest } from "./saved-library";
 import type {
   ExportCitation, ExportExternal, ExportGoverned, ExportLesson, ExportNote, ExportTeaching, LearningExportInput,
 } from "./learning-export";
@@ -21,10 +22,8 @@ import type {
 
 type Ctx = { admin: any; userId: string; profile?: { fullName?: string | null } | null }; // eslint-disable-line @typescript-eslint/no-explicit-any
 
-export type ExportRequest =
-  | { kind: "lesson"; session: string; step: number }
-  | { kind: "material"; material: string }
-  | { kind: "study"; study: string };
+/** SCHOLAR-LIBRARY-01: also selected (at most 100 saved teachings), topic and a date range (saved-library parseExportScope). */
+export type ExportRequest = ExportScopeRequest;
 
 export type ExportLoad =
   | { ok: true; input: LearningExportInput; counts: { lessons: number; teachings: number; notes: number } }
@@ -55,13 +54,37 @@ function teachingOf(a: ArtefactRow, cites: ReadonlyMap<string, SectionRef>): Exp
 }
 
 /** Everything the lessons need, read once: the saved teachings, their section citations, the materials and the learner's own cards. */
-async function gather(ctx: Ctx, chunkIds: readonly string[], opts: { materialId?: string } = {}) {
+/** At most this many saved teachings in one file (a material, a topic or a date range, read a page at a time). */
+const MAX_TEACHINGS = 1000;
+/** Every current saved teaching of one material or date range, page by page (SCHOLAR-LIBRARY-01: no 500-row cap). */
+async function allArtefacts(ctx: Ctx, o: { materialId?: string; fromIso?: string | null; toIso?: string | null }): Promise<ArtefactRow[]> {
+  const out: ArtefactRow[] = [];
+  let cursor: Cursor | null = null;
+  do {
+    const r = await libraryArtefactPage(ctx.admin, ctx.userId, { materialId: o.materialId ?? null, fromIso: o.fromIso ?? null, toIso: o.toIso ?? null, versions: "current", sort: "newest", cursor, limit: 200 });
+    if (!r.ok) break;
+    out.push(...r.data.rows);
+    cursor = r.data.next;
+  } while (cursor && out.length < MAX_TEACHINGS);
+  return out.slice(0, MAX_TEACHINGS);
+}
+/** The current saved teaching built on these sections. */
+async function artefactsOn(ctx: Ctx, chunkIds: readonly string[]): Promise<ArtefactRow[]> {
+  const ids = await artefactIdsForChunks(ctx.admin, ctx.userId, chunkIds);
+  if (!ids?.length) return [];
+  const r = await artefactsByIds(ctx.admin, ctx.userId, ids, { currentOnly: true });
+  return r.ok ? r.data : [];
+}
+
+async function gather(ctx: Ctx, chunkIds: readonly string[], opts: { materialId?: string; artefacts?: ArtefactRow[]; sessionIds?: string[] } = {}) {
   const [arts, mats, cards] = await Promise.all([
-    listArtefacts(ctx.admin, ctx.userId, opts.materialId ? { materialId: opts.materialId } : { chunkIds }),
+    opts.artefacts ? Promise.resolve(opts.artefacts) : opts.materialId ? allArtefacts(ctx, { materialId: opts.materialId }) : artefactsOn(ctx, chunkIds),
     listMaterials(ctx.admin, ctx.userId),
     loadCardSelection(ctx, {}).catch(() => null),
   ]);
-  const artefacts = arts.ok ? arts.data.filter(a => a.sources.length) : [];
+  const artefacts = arts.filter(a => a.sources.length);
+  // SCHOLAR-LIBRARY-01 (820): the learner's own notes and highlights on these teachings, their materials and lessons.
+  const own = await listNotes(ctx.admin, ctx.userId, { artefactIds: artefacts.map(a => a.id), materialIds: [...new Set(artefacts.map(a => a.materialId))], sessionIds: opts.sessionIds ?? [], limit: 1000 });
   const ids = [...new Set([...chunkIds, ...artefacts.flatMap(a => a.sources)])];
   const read = ids.length ? await chunksByIds(ctx.admin, ctx.userId, ids, false) : null;
   const refs = read?.ok ? await sectionRefs(ctx.admin, ctx.userId, read.data) : [];
@@ -69,13 +92,21 @@ async function gather(ctx: Ctx, chunkIds: readonly string[], opts: { materialId?
     artefacts, cites: new Map(refs.map(r => [r.chunkId, r])),
     materials: new Map((mats.ok ? mats.data : []).map(m => [m.id, { title: displayTitle(m.title), uploadedAt: m.createdAt }])),
     cards: cards && cards.ok ? cards.cards : [],
+    own: own.ok ? own.data.rows.filter(n => n.kind !== "bookmark") : ([] as NoteRow[]),
   };
 }
 type Gathered = Awaited<ReturnType<typeof gather>>;
 
 /** The learner's own words on these sections: the cards they wrote, and the notes they added to any card. */
-function notesFor(g: Gathered, chunkIds: ReadonlySet<string>): ExportNote[] {
+function notesFor(g: Gathered, chunkIds: ReadonlySet<string>, artefactIds: ReadonlySet<string> = new Set(), lesson: { sessionId: string; step: number } | null = null): ExportNote[] {
   const out: ExportNote[] = [];
+  // SCHOLAR-LIBRARY-01 (820): what the learner wrote in Learn and the library, on these teachings, this lesson or sections.
+  for (const n of g.own) {
+    const mine = (n.artefactId && artefactIds.has(n.artefactId)) || (lesson && n.sessionId === lesson.sessionId && n.step === lesson.step) || (n.targetKind === "section" && n.chunkId && chunkIds.has(n.chunkId));
+    if (!mine) continue;
+    if (n.kind === "highlight") out.push({ kind: "highlight", text: n.quote ?? "", savedAt: n.updatedAt ?? n.createdAt, detail: n.body ? `Your comment: ${n.body}` : null });
+    else out.push({ kind: "note", text: n.body ?? "", savedAt: n.updatedAt ?? n.createdAt, detail: null });
+  }
   for (const c of g.cards) {
     if (!chunkIds.has(c.chunkId) && !c.sources.some(s => s.chunkId && chunkIds.has(s.chunkId))) continue;
     if (c.origin === "learner") out.push({ kind: "flashcard", text: `${c.front} — ${c.back}`, savedAt: c.createdAt, detail: c.explanation });
@@ -84,7 +115,7 @@ function notesFor(g: Gathered, chunkIds: ReadonlySet<string>): ExportNote[] {
   return out;
 }
 
-function lessonOf(step: LearningStep, outline: { title: string; objective: string }, sessionTitle: string | null, g: Gathered, used: Set<string>, onlyWithTeaching = false): ExportLesson | null {
+function lessonOf(step: LearningStep, outline: { title: string; objective: string }, sessionTitle: string | null, g: Gathered, used: Set<string>, onlyWithTeaching = false, sessionId: string | null = null): ExportLesson | null {
   const chunkIds = new Set(step.sections.map(s => s.chunkId));
   const mine = g.artefacts.filter(a => !used.has(a.id) && a.sources.length > 0 && a.sources.every(id => chunkIds.has(id)));
   if (onlyWithTeaching && !mine.length) return null;
@@ -96,7 +127,7 @@ function lessonOf(step: LearningStep, outline: { title: string; objective: strin
     material: matIds.map(id => g.materials.get(id) ?? { title: displayTitle(step.sections.find(s => s.materialId === id)?.materialTitle ?? ""), uploadedAt: null }),
     sections: sections.length > MAX_SECTIONS_LISTED ? [...sections.slice(0, MAX_SECTIONS_LISTED), `and ${sections.length - MAX_SECTIONS_LISTED} more`] : sections,
     teachings: mine.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(a => teachingOf(a, g.cites)),
-    notes: notesFor(g, chunkIds),
+    notes: notesFor(g, chunkIds, new Set(mine.map(a => a.id)), sessionId ? { sessionId, step: step.step } : null),
   };
 }
 
@@ -115,6 +146,7 @@ async function outlines(ctx: Ctx, steps: readonly LearningStep[]) {
 /** The caller's own saved lessons the request names. 404 (non-disclosing) for anything that is not the caller's. */
 export async function loadLearningExport(ctx: Ctx, req: ExportRequest): Promise<ExportLoad> {
   const notFound: ExportLoad = { ok: false, status: 404, error: "Nothing to export was found." };
+  if (req.kind === "selected" || req.kind === "topic" || req.kind === "range") return loadChosen(ctx, req);
 
   if (req.kind === "lesson" || req.kind === "study") {
     const id = req.kind === "lesson" ? req.session : req.study;
@@ -126,10 +158,10 @@ export async function loadLearningExport(ctx: Ctx, req: ExportRequest): Promise<
     if (!r.data) return notFound;
     const steps = req.kind === "lesson" ? r.data.steps.filter(s => s.step === req.step) : r.data.steps;
     if (!steps.length) return notFound;
-    const [g, outline] = await Promise.all([gather(ctx, steps.flatMap(s => s.sections.map(x => x.chunkId))), outlines(ctx, steps)]);
+    const [g, outline] = await Promise.all([gather(ctx, steps.flatMap(s => s.sections.map(x => x.chunkId)), { sessionIds: [id] }), outlines(ctx, steps)]);
     const sessionTitle = displaySessionTitle(r.data.session.title);
     const used = new Set<string>();
-    const lessons = steps.map(s => lessonOf(s, outline.get(s)!, sessionTitle, g, used)!).filter(Boolean);
+    const lessons = steps.map(s => lessonOf(s, outline.get(s)!, sessionTitle, g, used, false, id)!).filter(Boolean);
     return wrap(ctx, req.kind, req.kind === "lesson" ? `Saved lesson: ${lessons[0]?.title ?? sessionTitle}` : `Study session: ${sessionTitle}`, lessons,
       { objective: study ? (study.objectiveText ?? null) : null });
   }
@@ -149,7 +181,7 @@ export async function loadLearningExport(ctx: Ctx, req: ExportRequest): Promise<
     const steps = r.data.steps.filter(st => st.sections.some(x => x.materialId === req.material));
     if (!steps.length) continue;
     const outline = await outlines(ctx, steps);
-    for (const st of steps) { const l = lessonOf(st, outline.get(st)!, displaySessionTitle(s.title), g, used, true); if (l) lessons.push(l); }
+    for (const st of steps) { const l = lessonOf(st, outline.get(st)!, displaySessionTitle(s.title), g, used, true, s.id); if (l) lessons.push(l); }
   }
   // Teaching whose lesson is no longer in a session: kept, under the sections it was built on.
   const orphans = g.artefacts.filter(a => !used.has(a.id));
@@ -159,8 +191,45 @@ export async function loadLearningExport(ctx: Ctx, req: ExportRequest): Promise<
       title: "Other saved teaching", objective: null, step: null, sessionTitle: null, material: [mat],
       sections: sections.length > MAX_SECTIONS_LISTED ? [...sections.slice(0, MAX_SECTIONS_LISTED), `and ${sections.length - MAX_SECTIONS_LISTED} more`] : sections,
       teachings: orphans.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(a => teachingOf(a, g.cites)),
-      notes: notesFor(g, new Set(orphans.flatMap(a => a.sources))),
+      notes: notesFor(g, new Set(orphans.flatMap(a => a.sources)), new Set(orphans.map(a => a.id))),
     });
   }
   return wrap(ctx, "material", `Saved lessons: ${mat.title}`, lessons);
+}
+
+/**
+ * SCHOLAR-LIBRARY-01: chosen saved teachings (selected, any version), a topic's or a date range's (current versions),
+ * arranged one lesson per material, oldest first, each with the learner's own notes on them. Stored words only.
+ */
+async function loadChosen(ctx: Ctx, req: Extract<ExportRequest, { kind: "selected" | "topic" | "range" }>): Promise<ExportLoad> {
+  let arts: ArtefactRow[] = [];
+  let title: string;
+  if (req.kind === "selected") {
+    const r = await artefactsByIds(ctx.admin, ctx.userId, req.ids);
+    if (!r.ok) return { ok: false, status: r.notProvisioned ? 409 : 503, error: "Your saved learning could not be read just now." };
+    arts = r.data; title = `Selected saved lessons (${arts.length})`;
+  } else if (req.kind === "topic") {
+    const rows = await sectionTopicRows(ctx.admin, ctx.userId);
+    const want = req.topic.toLowerCase();
+    const chunks = rows.ok ? rows.data.filter(r => r.topics.some(t => t.toLowerCase() === want)).map(r => r.chunkId) : [];
+    arts = (await artefactsOn(ctx, chunks)).slice(0, MAX_TEACHINGS); title = `Saved lessons on ${req.topic}`;
+  } else {
+    const b = rangeBounds(req.from, req.to);
+    arts = await allArtefacts(ctx, { fromIso: b.fromIso, toIso: b.toIso }); title = `Saved lessons, ${req.from} to ${req.to}`;
+  }
+  if (!arts.length) return { ok: false, status: 404, error: "Nothing to export was found." };
+  const g = await gather(ctx, [], { artefacts: arts });
+  const byMat = new Map<string, ArtefactRow[]>();
+  for (const a of g.artefacts) byMat.set(a.materialId, [...(byMat.get(a.materialId) ?? []), a]);
+  const lessons: ExportLesson[] = [...byMat].map(([materialId, list]) => {
+    const sections = [...new Set(list.flatMap(a => a.sources).map(id => g.cites.get(id)).filter((x): x is SectionRef => !!x).map(citationOf))];
+    const mat = g.materials.get(materialId) ?? { title: "Your material", uploadedAt: null };
+    return {
+      title: mat.title, objective: null, step: null, sessionTitle: null, material: [mat],
+      sections: sections.length > MAX_SECTIONS_LISTED ? [...sections.slice(0, MAX_SECTIONS_LISTED), `and ${sections.length - MAX_SECTIONS_LISTED} more`] : sections,
+      teachings: list.sort((a, b) => a.createdAt.localeCompare(b.createdAt)).map(a => teachingOf(a, g.cites)),
+      notes: notesFor(g, new Set(list.flatMap(a => a.sources)), new Set(list.map(a => a.id))),
+    };
+  });
+  return wrap(ctx, req.kind, title, lessons);
 }

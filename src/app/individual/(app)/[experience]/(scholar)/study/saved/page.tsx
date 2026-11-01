@@ -16,6 +16,8 @@ import { effectiveKind } from "@/lib/individual/scholar/revision";
 import { LIBRARY_FORMAT_LABEL, type LibraryFormat } from "@/lib/individual/scholar/library-format";
 import { QUESTION_OFFER_ATTESTATION, QUESTION_OFFER_ATTESTATION_VERSION, myQuestionOffers, questionOfferingOn, questionOfferingStatus } from "@/lib/question-offers/offers";
 import { QuestionOfferPanel } from "../_components/question-offer-client";
+import { SavedLibrary } from "../_components/saved-library-view";
+import { librarySchema } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -27,21 +29,29 @@ export const dynamic = "force-dynamic";
 // summaries the Learn actions saved (migration 415), and -- already stored by Scholar -- their practice questions and
 // cases (marked by their own answer keys, no AI), their revision cards, and their learning plans (sessions, 414).
 // Every AI artefact says what it is: private, formative, AI-generated from their notes, not clinically reviewed.
+//
+// SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026, policy scholar_learning_library, default on): the explanations become
+// the learner's personal library (_components/saved-library-view.tsx): views, filters, deterministic search, kept versions,
+// their own notes, bookmarks and highlights (820), paginated 25 at a time with no 500-row cap, and PDF export of what they
+// choose. With the policy off, this page is exactly as it was. Never shown to Professional or to any employer.
 
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Saved learning" });
 }
 
-export default async function SavedPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string | string[] }> }) {
+export default async function SavedPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
   // SCHOLAR-SESSION-AI-02: with a valid ?study= the session bar is shown (database reads only; not a stage, so last_space is untouched).
-  const study = await loadStudy(ctx.admin, ctx.userId, (await searchParams).study, null);
+  const search = await searchParams;
+  const study = await loadStudy(ctx.admin, ctx.userId, search.study, null);
   const policy = await loadIndividualPolicy(ctx.admin);
+  const library = policy.scholarLearningLibrary === "on";
   const [artefacts, materials, questions, due, sessions, toFix] = await Promise.all([
-    listArtefacts(ctx.admin, ctx.userId), listMaterials(ctx.admin, ctx.userId), listQuestions(ctx.admin, ctx.userId),
+    // With the library on, saved teaching is read a page at a time by the library itself, never 500 at once here.
+    library ? Promise.resolve({ ok: true as const, data: [] as ArtefactRow[] }) : listArtefacts(ctx.admin, ctx.userId), listMaterials(ctx.admin, ctx.userId), listQuestions(ctx.admin, ctx.userId),
     countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 10),
     // SCHOLAR-COMPANION-01 P1: the mistake notebook's entry (database reads only; absent when the policy is off or unreadable).
     policy.scholarMistakeNotebook === "on" ? mistakeToFixCount(ctx.admin, ctx.userId) : Promise.resolve(null),
@@ -64,10 +74,13 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
     return { id: q.id, stem: q.stem, formatLabel: LIBRARY_FORMAT_LABEL[f] ?? "Practice question", hasQuote: !!q.sourceQuote?.trim() };
   });
 
+  const competencies = library ? (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies : null;
+  const notesOn = library && (await librarySchema(ctx.admin, ctx.userId));
+
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="Kept for you" title="Saved learning"
-        intro="Everything your study has produced, kept for you. Opening it never uses AI, so it is always available." />
+      <PageHeader accent={x.accent} eyebrow="Kept for you" title={library ? "My learning library" : "Saved learning"}
+        intro={library ? "Everything you have studied, kept for you: search it, pick up where you stopped, add your own notes and download what you choose. Opening it never uses AI." : "Everything your study has produced, kept for you. Opening it never uses AI, so it is always available."} />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
 
       <section aria-labelledby="kept-h" className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
@@ -99,6 +112,11 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
           questions={offerable} offers={(myOffers ?? []).map(o => ({ id: o.id, questionId: o.questionId, status: o.status, formatLabel: o.formatLabel }))} />
       )}
 
+      {library ? (
+        <SavedLibrary admin={ctx.admin} userId={ctx.userId} params={search} policy={policy}
+          materials={(materials.ok ? materials.data : []).map(m => ({ id: m.id, title: m.title }))}
+          competencies={competencies ? competencies.map(c => ({ id: c.id, title: c.title })) : null} notesOn={notesOn} />
+      ) : (
       <section aria-labelledby="explanations-h">
         <h2 id="explanations-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Saved explanations and summaries</h2>
         <p className="mt-1 text-[13px] text-gray-600">{AI_LABEL}. Private to you and for your own study: never an assessment, never evidence of competence.</p>
@@ -153,6 +171,7 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
               </div>
             )}
       </section>
+      )}
     </>
   );
 }

@@ -35,6 +35,7 @@ import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi } from "
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
 import { usePaneGrid } from "@/components/ui/pane-grid";
+import { LibraryNotes } from "./library-notes-client";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
@@ -208,6 +209,8 @@ export function LearnWorkspace(props: {
   prepareNext?: boolean;
   /** SCHOLAR-PAI-EXPERIENCE-01: flashcards are offered, so a Personal AI practice card may be edited and saved as the learner's own. */
   ownCards?: boolean;
+  /** SCHOLAR-LIBRARY-01 (820, policy scholar_learning_library): the learner's own notes, bookmark and highlights on each lesson. */
+  notesOn?: boolean;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<SessionView | null>(props.initial);
@@ -982,6 +985,11 @@ export function LearnWorkspace(props: {
 
         <ActivityRow id={lessonAnchorId(st.step, "act")} label={`Activities for lesson ${i + 1}`} items={items} />
         {session.id && savedHere && <p className="mt-1"><DownloadLink href={lessonExportHref(session.id, st.step)}>Download this lesson (PDF)</DownloadLink></p>}
+        {/* SCHOLAR-LIBRARY-01: Add a note, Bookmark lesson, select text then Highlight -- the learner's own words (820), never AI. */}
+        {props.notesOn && session.recorded && session.id && (
+          <LibraryNotes target={{ targetKind: "lesson", sessionId: session.id, step: st.step, materialId: first?.materialId ?? null, chunkId: first?.chunkId ?? null }}
+            containerId={lessonDomId(st.step)} label="Your notes on this lesson" />
+        )}
 
         {/* SCHOLAR-PERSISTENT-LEARNING-01: the teaching approaches and the other ways to explain, as ONE optional, collapsed
             "Teaching style" control. Every choice inside is the learner's click (an explicit request); Ask Scholar stays in view. */}

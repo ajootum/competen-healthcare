@@ -4,7 +4,7 @@ import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy, shownLearnModes } from "@/lib/individual/policy";
 import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
-import { countDue, getLearningPosition, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learnLessonRecords, learningEvents, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
+import { countDue, getLearningPosition, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learnLessonRecords, learningEvents, librarySchema, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
 import type { LessonRecord } from "@/lib/individual/scholar/learn-journey";
 import { sectionProfiles, sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
@@ -139,7 +139,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           actions={offered.actions} startAction={startAction} labels={LEARN_ACTION_LABEL}
           consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? null : "Your AI help setting could not be read just now."}
           checks={policy.scholarCheckBehaviour} depth={pref?.depth ?? policy.scholarExplanationDepth} maxTurns={policy.scholarTutorTurns}
-          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} objectiveText={studyOn && one(q.study) === "new" && start && start.kind !== "competency" ? cleanObjectiveText(one(q.obj)) ?? undefined : undefined} openAsk={q.panel === "ask"} prepareNext={policy.scholarLearnPrepareNext} ownCards={policy.scholarFlashcards === "on"} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
+          materials={materials} standingMessage={standingMessage} connect={studyOn && one(q.study) === "new" && !!start} objectiveText={studyOn && one(q.study) === "new" && start && start.kind !== "competency" ? cleanObjectiveText(one(q.obj)) ?? undefined : undefined} openAsk={q.panel === "ask"} prepareNext={policy.scholarLearnPrepareNext} ownCards={policy.scholarFlashcards === "on"} notesOn={policy.scholarLearningLibrary === "on" && await librarySchema(ctx.admin, ctx.userId)} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}
     </>
