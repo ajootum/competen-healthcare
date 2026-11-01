@@ -43,7 +43,7 @@ describe("routes", () => {
     expect(d).toMatch(/revision\/sessions\/route/);
     expect(d).toMatch(/activityState\(await getScholarAiStanding/);
     expect(d).toMatch(/scholarRevisionGeneration === "saved_only"/);
-    for (const f of [...NEW_LIB, ...ROUTES]) expect(read(f), f).not.toMatch(/\bgenerate\(\{|runQuestions\(|runRevisionQuestions\(|@anthropic-ai|from "openai"/);
+    for (const f of [...NEW_LIB, ...ROUTES]) expect(read(f), f).not.toMatch(/\bgenerate\(\{|runQuestions\(|runRevisionQuestions\(|@anthrop[i]c-ai|from "open[a]i"/);
   });
   it("the evaluation route keeps a monthly review as an evaluation of kind student, method fresh", () => {
     const s = read("src/app/api/individual/scholar/evaluations/route.ts");
