@@ -32,9 +32,9 @@ export function FlashcardModeNav({ current, deck = null, studyId = null }: { cur
         {MODES.map(m => {
           const on = m.key === current;
           return (
-            <li key={m.key}>
+            <li key={m.key} className="flex">
               <Link href={href(m.key)} aria-current={on ? "page" : undefined}
-                className={`flex min-h-[48px] w-full flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1.5 text-center text-[13px] font-semibold leading-tight pointer-coarse:min-h-[var(--cmp-touch-min)] md:flex-row md:gap-2 md:text-[14px] ${focusRing} ${on ? "bg-white text-[var(--cmp-role-indigo-ink)] shadow-sm ring-2 ring-[var(--cmp-role-indigo-ink)]" : "text-gray-700 hover:bg-white"}`}>
+                className={`flex min-h-[48px] w-full flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1.5 py-1.5 text-center text-[13px] font-semibold leading-tight pointer-coarse:min-h-[var(--cmp-touch-min)] md:flex-row md:gap-2 md:text-[14px] ${focusRing} ${on ? "bg-white text-[var(--cmp-role-indigo-ink)] shadow-sm ring-2 ring-[var(--cmp-role-indigo-ink)]" : "text-gray-700 hover:bg-white"}`}>
                 <Icon d={m.icon} size={18} />{m.label}
               </Link>
             </li>
