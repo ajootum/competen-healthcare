@@ -563,7 +563,7 @@ const markingHonest = (src: Src) => {
     && /review_status: "private_formative"/.test(store) && /evaluator_model: a\.evaluator\?\.model \?\? null/.test(store)
     && /const marking = evaluator \? "ai_evaluation" as const : mark\.marking;/.test(ans)
     // SCHOLAR-SQIE-02: a withhold is typed and keeps the student's answer -- still the student's own judgement, never marked wrong.
-    && /if \(!evaluator\) return NextResponse\.json\(\{ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL\.self_graded(?:, \.\.\.\(extSpec \? \{ extended: \{[^}]*\} \} : \{\}\))?(?:, \.\.\.\(withheld \? \{ withheld, questionId: q\.id, attempt: r\.text \} : \{\}\))? \}\);/.test(ans)
+    && /if \(!evaluator\) return NextResponse\.json\(\{ needsSelfGrade: true, accepted, reason: why, label: MARKING_LABEL\.self_graded(?:, \.\.\.\(extSpec \? \{ extended: \{[^}]*\} \} : \{\}\))?(?:, \.\.\.\(withheld \? \{ withheld, questionId: q\.id, attempt: r\.text \} : \{\}\))?, \.\.\.understood \}\);/.test(ans)
     && /markingLabel: MARKING_LABEL\[m\.marking\]/.test(view);
 };
 /**

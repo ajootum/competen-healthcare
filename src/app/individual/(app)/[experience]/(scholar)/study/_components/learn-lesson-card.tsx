@@ -47,10 +47,10 @@ export function LessonPlaceholder({ label, onTeach, disabled, describedBy, note 
 
 export type Activity = { key: string; label: string; onClick?: () => void; href?: string; disabled?: boolean; pressed?: boolean; done?: boolean; describedBy?: string };
 /** The compact row under a lesson: Understand · Mechanisms · Examples · Check · Practise · Apply · Evaluate, each on demand. */
-export function ActivityRow({ items, label }: { items: Activity[]; label: string }) {
+export function ActivityRow({ items, label, id }: { items: Activity[]; label: string; id?: string }) {
   if (!items.length) return null;
   return (
-    <div role="group" aria-label={label} className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+    <div id={id} role="group" aria-label={label} className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
       {items.map(a => {
         const text = <>{a.label}{a.done && <span className="sr-only"> (done)</span>}{a.done && <span aria-hidden="true" className="ml-1 text-gray-500">✓</span>}</>;
         const cls = `${chip} ${a.pressed ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`;
@@ -61,6 +61,19 @@ export function ActivityRow({ items, label }: { items: Activity[]; label: string
     </div>
   );
 }
+
+/**
+ * SCHOLAR-LEARN-GAPS-02 item 1: a plain link to the PDF of SAVED learning (learn/export). No AI and no allowance: every word is
+ * already stored. `download` makes it a file, not a page, so the learner stays in the lesson.
+ */
+export function DownloadLink({ href, children, className = "" }: { href: string; children: ReactNode; className?: string }) {
+  return (
+    <a href={href} download className={`inline-flex min-h-[36px] items-center text-[13px] font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${className}`}>{children}</a>
+  );
+}
+/** The export URL of one saved lesson, or of all of one material's saved lessons. */
+export const lessonExportHref = (sessionId: string, step: number) => `/api/individual/scholar/learn/export?session=${encodeURIComponent(sessionId)}&step=${step}`;
+export const materialExportHref = (materialId: string) => `/api/individual/scholar/learn/export?material=${encodeURIComponent(materialId)}`;
 
 /** One lesson that is not the active one: its number, title, state in words with an icon, and its one primary way in. */
 export type LessonRow = { index: number; title: string; status: LessonStatus; action: string };

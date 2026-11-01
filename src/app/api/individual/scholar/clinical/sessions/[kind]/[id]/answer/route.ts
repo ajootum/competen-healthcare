@@ -14,6 +14,8 @@ import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
 import { answerPlay, finishPlay, isPlayKind } from "@/lib/individual/scholar/clinical-routes";
 import type { ReasoningJudge } from "@/lib/individual/scholar/clinical-play";
+import { answerSpelling, vocabularyOf } from "@/lib/individual/scholar/spelling";
+import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -44,6 +46,9 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
   const reason = typeof body?.reason === "string" ? body.reason.trim().slice(0, REASONING_CAPS.reason) : null;
   if (reason && findPatientIdentifiers(reason).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   const policy = await loadIndividualPolicy(ctx.admin);
+  // SCHOLAR-LEARN-GAPS-02 item 3: how the written answer was read (display only, spelling.ts, no AI). What is marked and recorded is
+  // `text` exactly as typed; the risk classification reads the typed and the corrected reading (the more cautious).
+  const understood = text ? answerSpelling(text, { variant: parseSpellingVariant(body?.spellingVariant), vocabulary: vocabularyOf([reason]) }) : {};
 
   // AI reasoning feedback on a written answer, for a private case: or the student's own review.
   const judge: ReasoningJudge = async d => {
@@ -54,6 +59,8 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     const passages = c ? (await Promise.all(c.chunkIds.map(cid => getPassage(ctx.admin, ctx.userId, cid)))).filter((p): p is NonNullable<typeof p> => !!p) : [];
     if (!passages.length) return { kind: "self" };
     const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${d.prompt}\n${d.answer}`, passages, competencyIds: c?.competencyIds }));
+    // Owner item 5: where it was answered (the case and its decision), so a study answer is read as study; framing only.
+    Object.assign(ai.risk, { intentContext: { surface: "apply" as const, lessonTitle: c?.title ?? null, objective: d.prompt.slice(0, 300), materialTopics: ai.risk.topicTerms ?? [] } });
     const e = await runCaseReasoning(ctx.userId, { ...d, passages }, ai.run);
     const refused = ai.refusal();
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, {
@@ -73,7 +80,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
     const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback` });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
-    if (f.ok) return NextResponse.json({ ...r, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
+    if (f.ok) return NextResponse.json({ ...r, ...understood, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
   }
-  return NextResponse.json({ ...r, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play) });
+  return NextResponse.json({ ...r, ...understood, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play) });
 }

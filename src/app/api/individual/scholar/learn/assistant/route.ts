@@ -18,6 +18,7 @@ import { personalAiFlight, personalAiResponse } from "@/lib/individual/personal-
 import { citedSources, dropUnknownTags, numberPassages } from "@/lib/individual/personal-ai-sources";
 import { splitNotCovered } from "@/lib/individual/scholar/answer-format";
 import { normaliseLearnerText, spellingNotice, vocabularyOf } from "@/lib/individual/scholar/spelling";
+import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
 import type { IntentContext } from "@/lib/ai/request-intent";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -92,7 +93,7 @@ export async function POST(req: Request) {
   // (display only: the question is sent and stored as typed; the classification reads both readings, the more cautious).
   const intentContext: IntentContext = { surface: "learn", ...lesson,
     materialTopics: [...new Set([...(study.topicTerms ?? []), ...passages.map(p => p.materialTitle)])].slice(0, 60) };
-  const understood = spellingNotice(normaliseLearnerText(question, { vocabulary: vocabularyOf([study.text, intentContext.lessonTitle, intentContext.objective, ...intentContext.materialTopics!]) }));
+  const understood = spellingNotice(normaliseLearnerText(question, { variant: parseSpellingVariant(body?.spellingVariant), vocabulary: vocabularyOf([study.text, intentContext.lessonTitle, intentContext.objective, ...intentContext.materialTopics!]) }));
   // The material the model reads, numbered. `text` (the risk's plain material) is still what is screened and classified.
   const numbered = numberPassages(passages);
   Object.assign(study, { numbered: numbered.text, sources: numbered.sources });

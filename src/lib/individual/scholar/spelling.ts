@@ -220,3 +220,17 @@ export function classificationReadings(text: string, opts: SpellingOptions = {})
 export type SpellingNotice = { spelling?: { display: string; corrections: SpellingCorrection[]; needsClarification: SpellingClarification[] } };
 export const spellingNotice = (n: NormalisedText): SpellingNotice =>
   n.corrections.length || n.needsClarification.length ? { spelling: { display: n.display, corrections: n.corrections, needsClarification: n.needsClarification } } : {};
+
+/**
+ * SCHOLAR-LEARN-GAPS-02 item 3: what an answer route tells the page about how a learner's free-text ANSWER was read:
+ * { spelling: { display, original, corrections, needsClarification } }, or nothing when it was read exactly as typed.
+ * Display only. The answer that is marked and stored is `original`, exactly as typed; the classification of the request
+ * reads the typed and the corrected readings and takes the more cautious (request-intent.ts cautiousIntentFeatures).
+ */
+export type AnswerSpelling = { display: string; original: string; corrections: { from: string; to: string }[]; needsClarification: SpellingClarification[] };
+export function answerSpelling(text: string, opts: SpellingOptions = {}): { spelling?: AnswerSpelling } {
+  const n = normaliseLearnerText(text, opts);
+  return n.corrections.length || n.needsClarification.length
+    ? { spelling: { display: n.display, original: n.original, corrections: n.corrections.map(c => ({ from: c.from, to: c.to })), needsClarification: n.needsClarification } }
+    : {};
+}

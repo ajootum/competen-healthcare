@@ -6,6 +6,9 @@ import { useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import { carry, studyField } from "./study-active";
+import { SpellingNote } from "./spelling-note";
+import type { AnswerSpelling } from "@/lib/individual/scholar/spelling";
+import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spelling-variant";
 import type { CaseFrom } from "@/lib/individual/scholar/study-carry";
 import { CASE_CONTEXT_LABEL, CASE_DIMENSION_LABEL, CASE_ENTRY_LABEL, MARKING_LABEL, type CaseContext, type CaseEntry } from "@/lib/individual/scholar/config";
 import type { LearnerView } from "@/lib/cases/blueprint";
@@ -217,6 +220,8 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   const [fresh, setFresh] = useState<Record<string, Feedback>>({});
   const [choice, setChoice] = useState<Record<string, string[]>>({});
   const [text, setText] = useState<Record<string, string>>({});
+  // SCHOLAR-LEARN-GAPS-02 item 3: how a written decision was read (display only; it is marked and kept as typed).
+  const [spelt, setSpelt] = useState<Record<string, AnswerSpelling>>({});
   // "Explain your choice": typed here and sent with the answer, which keeps it on the server. Where it cannot be kept, this page still holds it for the debrief.
   const [reason, setReason] = useState<Record<string, string>>(initial.reasons ?? {});
   const [busy, setBusy] = useState("");
@@ -233,11 +238,12 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   async function answer(decisionToken: string, kind: string) {
     setBusy(decisionToken); setError("");
     const why = (reason[decisionToken] ?? "").trim();
-    const r = await call(`${base}/answer`, kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints }
+    const r = await call(`${base}/answer`, kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints, ...spellingField(readSpellingChoice()) }
       : { decisionToken, optionTokens: choice[decisionToken] ?? [], hints, ...(why ? { reason: why } : {}) });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "Your answer could not be recorded."); return; }
     setFresh(f => ({ ...f, [decisionToken]: r.json.feedback }));
+    if (r.json.spelling) setSpelt(s => ({ ...s, [decisionToken]: r.json.spelling }));
     setPlay(p => ({ ...p, ...r.json.play }));
   }
   const v = play.view;
@@ -308,6 +314,12 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                     <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
                       {busy === d.token ? "Recording…" : "Decide"}
                     </button>
+                  )}
+                  {done && spelt[d.token] && (
+                    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800">
+                      <p className="whitespace-pre-wrap"><span className="font-semibold">Your reasoning:</span> {text[d.token]}</p>
+                      <SpellingNote spelling={spelt[d.token]} what="reasoning" />
+                    </div>
                   )}
                   {done && d.askReason && reason[d.token]?.trim() && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800"><span className="font-semibold">Your reason:</span> {reason[d.token]}</p>}
                   {done && <DecisionFeedback d={d} fb={fb} materialId={play.materialId} />}
