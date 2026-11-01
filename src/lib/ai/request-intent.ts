@@ -16,6 +16,11 @@
 // lowers a configured high-risk rule other than one the published policy itself names as ambiguous (clinical-risk.ts
 // ambiguousRules, which may never name a real-patient, emergency, identifiable or personal-safety rule).
 
+// Item 8 (1 Nov 2026): the features are read over the corrected reading of the request as well as what was typed
+// (cautiousIntentFeatures), so "shuld i giv" is a giving decision and "expalin" is a study verb. The normaliser is pure and
+// dependency-free (src/lib/individual/scholar/spelling.ts); it never changes what is stored or marked.
+import { classificationReadings, type NormalisedText } from "../individual/scholar/spelling";
+
 /** Why a request is category 4, in the learner's terms (operating-mode.ts REFUSAL words). */
 export type RefusalKind = "personal_safety" | "emergency" | "identifiable" | "administration" | "real_patient" | "clinical_high" | "unrecognised";
 export const REFUSAL_KINDS: readonly RefusalKind[] = ["personal_safety", "emergency", "identifiable", "administration", "real_patient", "clinical_high", "unrecognised"];
@@ -39,6 +44,8 @@ export type IntentFeatures = {
   questionFraming: boolean;
   /** A simulated person: case study, scenario, OSCE, hypothetical, "in a patient with", "a 70-year-old". */
   caseFraming: boolean;
+  /** Item 5: asked inside a lesson or material whose words it shares (contextOverlap). False without a context. */
+  contextFraming: boolean;
 };
 
 const norm = (s: string) => ` ${s.toLowerCase().replace(/[‘’ʼ]/g, "'").replace(/[“”]/g, "\"").replace(/\s+/g, " ")} `;
@@ -111,8 +118,45 @@ const CASE_FRAMING = [
 ];
 const QUESTION_FRAMING = /\b(what|how|why|when|which|where|who|is|are|does|do|can|could|tell me|teach me|give me)\b/;
 
-/** Pure: the intent features of a learner's own request words. */
-export function intentFeatures(requestText: string): IntentFeatures {
+// ── Context (owner instruction 1 Nov 2026 item 5, educational intent recognition, P0) ─────────────────────────
+//
+// Where the learner is when they ask. A request INSIDE an active lesson or material whose content words overlap that
+// lesson's own words (its title, objective, topics, activity) is a study request even without a study verb ("what about
+// the outcome bit?" in a Donabedian lesson). ⚠ It is a framing signal ONLY: it never touches real-patient evidence
+// (my patient, bed 3, right now, identifiers, personal safety), and operating-mode.ts decideIntent uses it only for a
+// request no rule recognised -- never to turn a giving decision or a named person into study.
+
+export type IntentSurface = "learn" | "personal_ai" | "revise" | "apply" | "evaluate";
+export const INTENT_SURFACES: readonly IntentSurface[] = ["learn", "personal_ai", "revise", "apply", "evaluate"];
+export type IntentContext = {
+  surface: IntentSurface;
+  lessonTitle?: string | null;
+  objective?: string | null;
+  materialTopics?: readonly string[] | null;
+  activity?: string | null;
+};
+/** Words that say nothing about WHAT is being studied: never an overlap on their own. Includes the person and action
+ *  words of a clinical request, so "the patient" or "give" in a lesson never counts as study framing. */
+const NOT_CONTENT = new Set(`a about above after again all also am an and any are as at be been before being between both but by can could did do does
+doing done each for from had has have he her here him his how i if in into is it its just me more most my no nor not now of off on once only or other
+our out over own same she should so some such than that the their them then there these they this those through to too under until up very was we were
+what when where which while who whom why will with would you your bit bits part parts thing things one ones lot again please thanks ok okay yes
+explain describe tell show teach help understand mean means meant say said know about like also really just more less
+patient patients person people man woman child baby resident client give given giving dose doses dosing now today tonight urgent help bed bay ward
+nurse doctor care caring should need needs needed do does what happen happens happened`.split(/\s+/));
+const contentWords = (s: string | null | undefined): string[] =>
+  (s ?? "").toLowerCase().replace(/[‘’ʼ]/g, "'").match(/[a-z][a-z'-]{2,}/g)?.map(w => w.replace(/'s$/, "").replace(/(ss|x|z|ch|sh)es$/, "$1").replace(/ies$/, "y").replace(/([^s])s$/, "$1")).filter(w => w.length >= 3 && !NOT_CONTENT.has(w)) ?? [];
+/** Pure: whether the request's content words overlap the lesson or material it was asked in. */
+export function contextOverlap(requestText: string, ctx: IntentContext | null | undefined): boolean {
+  if (!ctx || !(INTENT_SURFACES as readonly string[]).includes(ctx.surface)) return false;
+  const lesson = new Set([ctx.lessonTitle, ctx.objective, ctx.activity, ...(ctx.materialTopics ?? []).slice(0, 100)].flatMap(contentWords));
+  if (!lesson.size) return false;
+  return contentWords(requestText).some(w => lesson.has(w));
+}
+
+/** Pure: the intent features of a learner's own request words. With `context`, `contextFraming` says whether the
+ *  request is about the lesson or material it was asked in. */
+export function intentFeatures(requestText: string, context?: IntentContext | null): IntentFeatures {
   const t = norm(requestText ?? "");
   const studyFraming = any(t, STUDY_FRAMING);
   const caseFraming = any(t, CASE_FRAMING);
@@ -149,5 +193,23 @@ export function intentFeatures(requestText: string): IntentFeatures {
   return {
     realPatient: firstKind(kinds), administration, firstPersonAdministration, namedPerson,
     studyFraming, caseFraming, questionFraming: studyFraming || caseFraming || QUESTION_FRAMING.test(t),
+    contextFraming: contextOverlap(requestText ?? "", context),
+  };
+}
+
+/**
+ * Pure: intent features over every READING of the request (spelling.ts classificationReadings: as typed, as corrected,
+ * and with asked-about words beside their candidates), taking the MORE CAUTIOUS result: the most serious real-patient
+ * reason any reading shows, and any reading's giving decision or named person. Framing is any reading's, which only
+ * decides between asking and answering a request with NO real-patient evidence in any reading.
+ */
+export function cautiousIntentFeatures(requestText: string, opts: { context?: IntentContext | null; vocabulary?: readonly string[] } = {}): IntentFeatures & { normalised: NormalisedText } {
+  const { readings, normalised } = classificationReadings(requestText ?? "", { vocabulary: opts.vocabulary });
+  const fs = readings.map(r => intentFeatures(r, opts.context));
+  const or = (k: keyof Omit<IntentFeatures, "realPatient">) => fs.some(f => f[k]);
+  return {
+    realPatient: firstKind(fs.map(f => f.realPatient)), administration: or("administration"), firstPersonAdministration: or("firstPersonAdministration"),
+    namedPerson: or("namedPerson"), studyFraming: or("studyFraming"), questionFraming: or("questionFraming"), caseFraming: or("caseFraming"),
+    contextFraming: or("contextFraming"), normalised,
   };
 }

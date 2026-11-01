@@ -17,6 +17,8 @@ import { parseDepth, parseFollowUp } from "@/lib/individual/personal-ai-options"
 import { personalAiFlight, personalAiResponse } from "@/lib/individual/personal-ai-stream";
 import { citedSources, dropUnknownTags, numberPassages } from "@/lib/individual/personal-ai-sources";
 import { splitNotCovered } from "@/lib/individual/scholar/answer-format";
+import { normaliseLearnerText, spellingNotice, vocabularyOf } from "@/lib/individual/scholar/spelling";
+import type { IntentContext } from "@/lib/ai/request-intent";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -63,10 +65,15 @@ export async function POST(req: Request) {
 
   // ── the step's own sections, by the caller's id ──
   let ids: string[] = [];
+  // Owner item 5 (1 Nov 2026): the lesson the question is asked in -- its session's title and topic, else what the page
+  // sent (lessonTitle, objective: framing words only, which can never lower real-patient evidence).
+  const said = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null);
+  let lesson: { lessonTitle: string | null; objective: string | null } = { lessonTitle: said(body?.lessonTitle), objective: said(body?.objective) };
   if (isUuid(body?.sessionId)) {
     const s = await getLearningSession(ctx.admin, ctx.userId, body.sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your session could not be read just now." }, { status: 503 });
     if (!s.data) return NextResponse.json({ error: "Not found" }, { status: 404 });
+    lesson = { lessonTitle: s.data.session.title || lesson.lessonTitle, objective: s.data.session.topic ?? lesson.objective };
     const here = s.data.steps.find(x => x.step === Number(body?.step)) ?? s.data.steps[0];
     ids = here ? here.sections.map(x => x.chunkId) : [];
   } else if (Array.isArray(body?.chunkIds)) ids = [...new Set((body.chunkIds as unknown[]).filter(isUuid))].slice(0, STEP_MAX_SECTIONS) as string[];
@@ -81,6 +88,11 @@ export async function POST(req: Request) {
 
   // The study context: the sections (screened at upload), their live competency links and topic terms.
   const study = await scholarRisk(ctx.admin, ctx.userId, { passages });
+  // Owner items 5 and 8: where it was asked (the lesson, its sections' topics and titles), and how the question was read
+  // (display only: the question is sent and stored as typed; the classification reads both readings, the more cautious).
+  const intentContext: IntentContext = { surface: "learn", ...lesson,
+    materialTopics: [...new Set([...(study.topicTerms ?? []), ...passages.map(p => p.materialTitle)])].slice(0, 60) };
+  const understood = spellingNotice(normaliseLearnerText(question, { vocabulary: vocabularyOf([study.text, intentContext.lessonTitle, intentContext.objective, ...intentContext.materialTopics!]) }));
   // The material the model reads, numbered. `text` (the risk's plain material) is still what is screened and classified.
   const numbered = numberPassages(passages);
   Object.assign(study, { numbered: numbered.text, sources: numbered.sources });
@@ -110,7 +122,7 @@ export async function POST(req: Request) {
     const out = await runIndividualAssistant(ctx.admin, {
       userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience: "scholar", mode, question,
       requestId: scholarRequestId(ctx, req), study, purpose,
-      studySession, depth, followUp, hooks: flight.hooks,
+      studySession, depth, followUp, hooks: flight.hooks, intentContext,
     });
     return out;
   }, {
@@ -123,11 +135,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: declined(out) }, { status });
       }
       const a = shape(out.answer);
-      return NextResponse.json({ answer: a.text, mode: out.mode, model: out.model, ...shown, sources: a.sources, notCovered: a.notCovered });
+      return NextResponse.json({ answer: a.text, mode: out.mode, model: out.model, ...shown, sources: a.sources, notCovered: a.notCovered, ...understood });
     },
     // Text was already sent: the answer ended, or failed after it began (the browser discards the partial text).
     finish: async out => {
-      if (out.ok) { await record(out); const a = shape(out.answer); return { type: "done", mode: out.mode, ...shown, timing: flight.timing(), sources: a.sources, notCovered: a.notCovered }; }
+      if (out.ok) { await record(out); const a = shape(out.answer); return { type: "done", mode: out.mode, ...shown, timing: flight.timing(), sources: a.sources, notCovered: a.notCovered, ...understood }; }
       if (out.kind === "generation") { await record(out); return { type: "error", code: out.result.error, message: declined(out) }; }
       return { type: "error", code: "failed", message: "The assistant could not answer just now. Try again shortly." };
     },

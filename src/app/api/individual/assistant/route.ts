@@ -17,6 +17,7 @@ import { cleanQuestion, QUESTION_MAX } from "@/lib/individual/assistant";
 import { pilotQuotaRefusal, purposeFrom } from "@/lib/individual/pilot-ai";
 import { parseDepth, parseFollowUp } from "@/lib/individual/personal-ai-options";
 import { personalAiFlight, personalAiResponse } from "@/lib/individual/personal-ai-stream";
+import { normaliseLearnerText, spellingNotice } from "@/lib/individual/scholar/spelling";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -88,6 +89,9 @@ export async function POST(req: Request) {
   }
   if (!aiStatus().configured) return NextResponse.json({ error: "Personal AI is not available yet." }, { status: 503 });
 
+  // Owner item 8 (1 Nov 2026), Scholar: how the question was read (display only). The question is sent and stored as typed;
+  // the risk classification reads both readings itself (operating-mode.ts) and takes the more cautious.
+  const understood = scholar ? spellingNotice(normaliseLearnerText(question)) : {};
   const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
   type Out = Awaited<ReturnType<typeof runIndividualAssistant>>;
   const failure = (out: Extract<Out, { ok: false; kind: "generation" }>) => ({
@@ -107,17 +111,19 @@ export async function POST(req: Request) {
     userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience,
     mode: typeof body?.mode === "string" ? body.mode as AssistantMode : null, question,
     requestId, purpose, depth, followUp, hooks: flight.hooks,
+    // Owner item 5 (1 Nov 2026): asked from the Personal AI page, with no lesson (so no lesson framing).
+    ...(scholar ? { intentContext: { surface: "personal_ai" as const } } : {}),
   }), {
     json: async out => {
       if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
       if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
       if (!out.ok) { const f = failure(out); return NextResponse.json({ error: f.error }, { status: f.status }); }
       await recordAnswer(out);
-      return NextResponse.json({ answer: out.answer, mode: out.mode });
+      return NextResponse.json({ answer: out.answer, mode: out.mode, ...understood });
     },
     // Text was already sent: the answer ended (audited as before), or failed after it began (the browser discards it).
     finish: async out => {
-      if (out.ok) { await recordAnswer(out); return { type: "done", mode: out.mode, timing: flight.timing() }; }
+      if (out.ok) { await recordAnswer(out); return { type: "done", mode: out.mode, timing: flight.timing(), ...understood }; }
       if (out.kind === "generation") return { type: "error", code: out.result.error, message: failure(out).error };
       return { type: "error", code: "failed", message: "The assistant could not answer just now. Try again shortly." };
     },

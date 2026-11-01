@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import type { IntentContext } from "@/lib/ai/request-intent";
 import { MODE_ACTIVITY, runPersonalAssistant, type AssistantMode, type AssistantOutcome, type DataScope } from "@/lib/ai/personal-assistant";
 import type { ExperienceKey } from "./experiences";
 import { systemPrompt, recordContext, scholarPersonalAiPrompt } from "./assistant";
@@ -102,6 +103,8 @@ export async function runIndividualAssistant(admin: any, r: {
   studySession?: (() => Promise<string | null>) | null;
   /** The learner's answer to a clarify question (purposeFrom): "education" runs the request as a study question. */
   purpose?: "education" | null;
+  /** Owner item 5 (1 Nov 2026): where the request was asked (request-intent.ts IntentContext), for the intent layer only. */
+  intentContext?: IntentContext | null;
   /** SCHOLAR-PAI-EXPERIENCE-01 (Scholar only; ignored elsewhere): the answer's depth, and a follow-up on an earlier answer.
    *  With a follow-up, `question` IS its previousQuestion: the risk is classified on it exactly as on a fresh question. */
   depth?: PersonalAiDepth | null;
@@ -125,7 +128,7 @@ export async function runIndividualAssistant(admin: any, r: {
       // SQIE D-1: the person's own words (question, activity) apart from the study material, for request-scoped rules.
       const request = [mode === "cpd_plan" ? "CPD plan" : "", r.question ?? "", r.activity?.title ?? "", r.activity?.notes ?? ""].join("\n");
       return { text: [request, study?.text ?? ""].join("\n"), requestText: request, topicTerms: study?.topicTerms, competencyIds: study?.competencyIds,
-        actorId: r.userId, purpose: r.purpose ?? null };
+        actorId: r.userId, purpose: r.purpose ?? null, ...(r.intentContext ? { intentContext: r.intentContext } : {}) };
     },
     compose: async (mode, scopes) => {
       if ((mode === "teach" || mode === "ask" || mode === "development") && !r.question) return { error: "Ask a question.", status: 400 };
