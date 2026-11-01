@@ -147,7 +147,7 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   const additions: NewChunk[] = [];
   let model = "";
   if (pdf) {
-    const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }));
+    const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, Object.assign(await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }), { intentContext: { surface: "material" as const, activity: "transcribe" } }));
     const r = await runTranscription(ai.run, ctx.userId, { pdfBase64: pdf.base64, pages: pdf.pages.map((_, i) => i + 1) });
     const refused = meteredRefusal(ai.refusal());
     if (refused) return json(refused.status, await refused.json());

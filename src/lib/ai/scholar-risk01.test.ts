@@ -186,6 +186,16 @@ describe("context and spelling (items 5 and 8)", () => {
     expect(isSupportiveRefusal(REFUSAL_LEARN_UNRECOGNISED)).toBe(true);
     expect(refusalFor(decide(before, "asdf qwerty").risk)).toBe(REFUSAL.unrecognised);
   });
+  it("reading the learner's own uploaded material (no request words) is clinical educational, not an unrecognised question", () => {
+    const material: IntentContext = { surface: "material", activity: "transcribe" };
+    const v = decideRisk(after, { text: "", requestText: "", competencyRisks: [], frameworkCodes: [], intentContext: material } as ResolvedRiskSubject, "standard_educational", STRICT, null);
+    expect(cat(v)).toBe(2);
+    expect(v.risk.rule).toBe("intent:own_material");
+    // Without that context, empty words stay unrecognised (unchanged).
+    expect(answered(decideRisk(after, { text: "", requestText: "", competencyRisks: [], frameworkCodes: [] }, "standard_educational", STRICT, null))).toBe(false);
+    // Learner words with the material surface are classified as words, as before (real-patient still restricted).
+    expect(cat(decideRisk(after, { ...S("my patient in bed 3 is bleeding what do I do now"), intentContext: material }, "standard_educational", STRICT, null))).toBe(4);
+  });
 });
 
 // The gate end to end, metering off, strict production, with the production eligibility rows (31 Oct 2026, trimmed).

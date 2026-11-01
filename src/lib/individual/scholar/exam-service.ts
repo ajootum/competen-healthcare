@@ -74,7 +74,7 @@ async function transcribeEmptyPages(ctx: IndividualContext, req: Request, materi
   const wanted = pages.slice(0, TRANSCRIBE_MAX_PAGES);
   const pdf = await pdfBase64(ctx.admin, ctx.userId, materialId);
   if (!pdf) return { lines: [], done: [], refused: null };
-  const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }));
+  const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, Object.assign(await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }), { intentContext: { surface: "material" as const, activity: "transcribe" } }));
   const lines: PaperLine[] = [];
   const done: number[] = [];
   for (let i = 0; i < wanted.length; i += TRANSCRIBE_BATCH) {
@@ -436,7 +436,7 @@ export async function transcribeScannedUpload(ctx: IndividualContext, req: Reque
   const pre = await aiPreflight(ctx);
   if (pre) return json(pre.status, await pre.json());
   const pdf = Buffer.from(bytes).toString("base64");
-  const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }));
+  const ai = scholarAiRunner(ctx, req, EXAM_ACTIVITY.transcribe, Object.assign(await scholarRisk(ctx.admin, ctx.userId, { text: null, passages: [] }), { intentContext: { surface: "material" as const, activity: "transcribe" } }));
   const pages: { page: number; text: string }[] = [];
   let model = "";
   for (let start = 1; start <= TRANSCRIBE_MAX_PAGES; start += TRANSCRIBE_BATCH) {
