@@ -75,7 +75,8 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
   | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
-  | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days";
+  | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
+  | "scholar_monthly_review_max_new";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -741,6 +742,13 @@ const SCHOLAR_MONTHLY_POLICIES: readonly PolicyDef[] = [
     help: "The length of a review is the number of sections the student worked on in the month times this, held between the fewest and the most questions.",
     fallback: 2, min: 1, max: 5,
     limitReason: "One to five. Default: two.",
+  },
+  {
+    key: "scholar_monthly_review_max_new", kind: "int", product: "Scholar", unit: "questions",
+    label: "Monthly review: most new questions written when it starts",
+    help: "Where the student has too few stored questions, at most this many new ones are written (through the existing revision route, its consent, allowance and checks) when a review starts. The rest of the review is shorter, and it says so. Keeps the start quick and the AI cost bounded.",
+    fallback: 10, min: 0, max: 30,
+    limitReason: "Zero (stored questions only) to thirty. Default: ten.",
   },
   {
     key: "scholar_monthly_review_mix", kind: "choice", product: "Scholar",
@@ -2156,6 +2164,8 @@ export type IndividualPolicy = {
   scholarMonthlyReviewMinQuestions: number;
   scholarMonthlyReviewMaxQuestions: number;
   scholarMonthlyReviewPerSection: number;
+  /** The most new questions written when a review starts (0 = stored only). */
+  scholarMonthlyReviewMaxNew: number;
   /** "core_application_gaps" shares, for example "60_25_15". */
   scholarMonthlyReviewMix: "60_25_15" | "50_30_20" | "70_20_10" | "40_30_30";
   scholarMonthlyReviewRecommendDays: number;
@@ -2328,6 +2338,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarMonthlyReviewMinQuestions: Math.min(int("scholar_monthly_review_min_questions"), int("scholar_monthly_review_max_questions")),
     scholarMonthlyReviewMaxQuestions: int("scholar_monthly_review_max_questions"),
     scholarMonthlyReviewPerSection: int("scholar_monthly_review_per_section"),
+    scholarMonthlyReviewMaxNew: int("scholar_monthly_review_max_new"),
     scholarMonthlyReviewMix: clampChoice(policyDef("scholar_monthly_review_mix") as ChoicePolicy, published.get(policyPath("scholar_monthly_review_mix"))) as "60_25_15" | "50_30_20" | "70_20_10" | "40_30_30",
     scholarMonthlyReviewRecommendDays: int("scholar_monthly_review_recommend_days"),
     scholarMonthlyReviewReminders: clampChoice(policyDef("scholar_monthly_review_reminders") as ChoicePolicy, published.get(policyPath("scholar_monthly_review_reminders"))) as "on" | "off",

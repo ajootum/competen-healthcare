@@ -199,7 +199,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
         presentation: "detailed", validity: "show", exportOn: "on", ai: "on",
       },
       // SCHOLAR-MONTHLY-REVIEW-01: offered, 10 to 30 questions, two a section, core 60 / application 25 / gaps 15, five days before month end.
-      scholarMonthlyReview: "on", scholarMonthlyReviewMinQuestions: 10, scholarMonthlyReviewMaxQuestions: 30, scholarMonthlyReviewPerSection: 2,
+      scholarMonthlyReview: "on", scholarMonthlyReviewMinQuestions: 10, scholarMonthlyReviewMaxQuestions: 30, scholarMonthlyReviewPerSection: 2, scholarMonthlyReviewMaxNew: 10,
       scholarMonthlyReviewMix: "60_25_15", scholarMonthlyReviewRecommendDays: 5, scholarMonthlyReviewReminders: "on", scholarMonthlyReviewOptout: "allowed",
       scholarStudyCalendar: "on",
     });

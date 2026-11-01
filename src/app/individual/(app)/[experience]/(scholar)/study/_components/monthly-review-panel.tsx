@@ -50,6 +50,7 @@ function StartReview({ month, retakeOf, label, primary, accent }: { month: strin
   return (
     <div>
       <button type="button" className={primary ? btn : ghost} style={primary ? { background: accent } : undefined} disabled={busy} onClick={start}>{busy ? "Preparing…" : label}</button>
+      {busy && <p role="status" className="mt-2 text-[13px] text-gray-600">Preparing your review. Where new questions are needed this can take a minute or two; you can keep this page open.</p>}
       {error && <p role="alert" className="mt-2 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {ready && (
         <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">

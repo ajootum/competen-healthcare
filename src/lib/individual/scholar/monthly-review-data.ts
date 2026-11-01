@@ -215,7 +215,11 @@ export async function startMonthlyReview(ctx: IndividualContext, req: Request, p
   let written = 0;
 
   // ── the shortfall: written only through the existing path, and only where it is allowed ──
-  if (sel.shortfallTotal > 0) {
+  // At most scholar_monthly_review_max_new are written when a review starts: the start stays quick and the AI cost bounded.
+  const toWrite = Math.min(sel.shortfallTotal, Math.max(0, policy.scholarMonthlyReviewMaxNew));
+  if (sel.shortfallTotal > 0 && toWrite === 0) notes.push("New questions are not written when a review starts here, so this review uses your saved questions only.");
+  if (toWrite > 0) {
+    if (toWrite < sel.shortfallTotal) notes.push(`At most ${toWrite} new question${toWrite === 1 ? " is" : "s are"} written when a review starts, so this review is shorter than planned.`);
     if (policy.scholarRevisionGeneration === "saved_only") notes.push("New questions are not written here, so this review uses your saved questions only.");
     else {
       const standing = activityState(await getScholarAiStanding(admin, userId), "questions");
@@ -229,7 +233,7 @@ export async function startMonthlyReview(ctx: IndividualContext, req: Request, p
         headers.delete("content-length"); headers.set("content-type", "application/json");
         const res = await startRevision(new Request(req.url, {
           method: "POST", headers,
-          body: JSON.stringify({ mode: "mock", scope: { kind: "sources", chunkIds: shortSections.slice(0, MAX_REVIEW_SECTIONS) }, quantity: Math.min(REVISION_QUANTITY_MAX, storedHere + sel.shortfallTotal), formats }),
+          body: JSON.stringify({ mode: "mock", scope: { kind: "sources", chunkIds: shortSections.slice(0, MAX_REVIEW_SECTIONS) }, quantity: Math.min(REVISION_QUANTITY_MAX, storedHere + toWrite), formats }),
         }));
         const body = (await res.json().catch(() => ({}))) as { session?: { id?: string } | null; note?: string | null; error?: string };
         // That sitting only existed to have the questions written: the review makes its own from the blueprint.
@@ -239,7 +243,7 @@ export async function startMonthlyReview(ctx: IndividualContext, req: Request, p
         const after = await poolFor(admin, userId, shortSections, formats);
         const fresh = (after ?? []).filter(q => !before.has(q.id) && !q.application);
         const want = new Map(sel.shortfall.map(s => [s.chunkId, s.count]));
-        let left = sel.shortfallTotal;
+        let left = toWrite;
         for (const q of fresh) {
           if (left <= 0) break;
           const w = want.get(q.chunkId) ?? 0;
