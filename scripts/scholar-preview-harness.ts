@@ -276,6 +276,17 @@ async function main() {
     ok("P4. a real learner's material is 404 in the preview (page and API) and none of its text is in the preview library",
       !!priv && priv.status === 404 && !!privApi && privApi.status === 404 && !lib.includes("Harness private notes"), `${priv?.status} ${privApi?.status}`);
 
+    // ── P4b: a real learner's own session riding on a preview cookie is NOT admitted (the proxy's learner_id check, live) ──
+    if (realJar && realMaterial) {
+      const tk = await open(holderJar); const tid = /t=([0-9a-f-]{36})$/.exec(tk.location)?.[1] ?? "";
+      const own: Jar = new Map(); await req(PREVIEW_HOST, "GET", `/preview/enter?t=${tid}`, own);
+      const realOwn = (await mintJar(FIX.real)) ?? realJar; // its own jar: the mismatch path signs that session out, and later groups still need realJar
+      const mixed: Jar = new Map([...realOwn].filter(([k]) => k.startsWith("sb-"))); const pc = own.get("cmp_scholar_preview"); if (pc) mixed.set("cmp_scholar_preview", pc);
+      const adm = await req(PREVIEW_HOST, "GET", `/individual/scholar/study/${realMaterial}`, mixed);
+      ok("P4b. a preview cookie carried with a REAL learner's own session is refused (303 to /preview/ended), never served that learner's material",
+        !!pc && adm.status === 303 && /\/preview\/ended/.test(adm.location) && !adm.text.includes("Harness private notes"), `${adm.status} ${adm.location}`);
+    }
+
     // ── P5 ──
     const learnerId = readOnly.user_id as string;
     const watch = ["individual_scholar_material", "individual_scholar_study_plan", "individual_scholar_attempt", "individual_scholar_consent", "individual_scholar_flashcard_deck"];
