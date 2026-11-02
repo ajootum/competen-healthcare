@@ -4,15 +4,11 @@
  *
  *   npx tsx scripts/assessment-core-harness.ts            static sections only (no database)
  *   npx tsx scripts/assessment-core-harness.ts db         S1a database proofs on STAGING (rolls back, keeps nothing)
-<<<<<<< HEAD
  *   npx tsx scripts/assessment-core-harness.ts scholar    S3a database proofs of migration 893 (Scholar adapter) on STAGING
- *   npx tsx scripts/assessment-core-harness.ts all        static, db and scholar
-=======
- *   npx tsx scripts/assessment-core-harness.ts all        both, then the catalogue and its acceptance
+ *   npx tsx scripts/assessment-core-harness.ts all        static, db, scholar, then the catalogue and its acceptance
  *   npx tsx scripts/assessment-core-harness.ts catalogue  catalogue (894) static checks, DB proofs with planted reds, acceptance
  *   npx tsx scripts/assessment-core-harness.ts catalogue-static   the catalogue static checks only (no database)
  *   npx tsx scripts/assessment-core-harness.ts acceptance the three example instruments on STAGING (rolled back)
->>>>>>> origin/asmt/catalogue-01
  *
  * SECTION S1a -- DATABASE (migrations 890, 891, 892)
  *   S1a.static  the literal ban. The core DDL knows no profession, framework or proficiency model. Comments are
@@ -175,13 +171,8 @@ function stagingUrl(): string {
   return conn;
 }
 
-<<<<<<< HEAD
 async function runProofs(client: any, plantSql: string, file = PROOF_FILE, label = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
   const base = readFileSync(file, "utf8");
-=======
-async function runProofs(client: any, plantSql: string, proofFile: string = PROOF_FILE, resultTag: string = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
-  const base = readFileSync(proofFile, "utf8");
->>>>>>> origin/asmt/catalogue-01
   if (!base.includes("-- @@PLANT@@")) throw new Error("the proof file lost its plant marker");
   const sql = base.replace("-- @@PLANT@@", plantSql);
   await client.query("begin");
@@ -190,11 +181,7 @@ async function runProofs(client: any, plantSql: string, proofFile: string = PROO
     return { pass: 0, fail: 0, failed: [], raw: "the proof block did not raise its RESULT" };
   } catch (e: any) {
     const msg = String(e.message ?? e);
-<<<<<<< HEAD
     const m = msg.match(new RegExp(`RESULT ${label} pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$`));
-=======
-    const m = msg.match(new RegExp("RESULT " + resultTag + " pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$"));
->>>>>>> origin/asmt/catalogue-01
     if (!m) return { pass: 0, fail: -1, failed: [], raw: msg };
     return { pass: +m[1], fail: +m[2], failed: m[3].trim() ? m[3].trim().split(/\s+/) : [], raw: msg };
   } finally {
@@ -223,7 +210,6 @@ async function dbSection() {
   }
 }
 
-<<<<<<< HEAD
 // ---- S3a.scholar ------------------------------------------------------------------------------------------------
 // Migration 893 (the Scholar competency adapter). scripts/sql/asmt-scholar-proofs.sql reads the real staging DACUM 0-6 scale
 // with its published mapping, the real NUR-CCF Respiratory Assessment criteria and the real assessment components, and plants
@@ -256,7 +242,24 @@ execute 'create trigger zz_plant_sat before insert on asmt_response_scale_level 
 
 async function scholarSection() {
   console.log("\nS3a.scholar  migration 893 database proofs on STAGING (each run rolls back and keeps nothing)\n");
-=======
+  const require = createRequire(resolve(process.cwd(), "package.json"));
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const base = await runProofs(client, "", SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
+    ok("S3a.scholar.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 600) : `failed: ${base.failed.join(" ")}`);
+    for (const p of SCHOLAR_PLANTS) {
+      const r = await runProofs(client, p.sql, SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
+      const missing = p.expect.filter(id => !r.failed.includes(id));
+      ok(`S3a.scholar.red`, `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
+        r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 // ---- catalogue (migration 894) ----------------------------------------------------------------------------------
 
 const CAT_PROOF = resolve(__dirname, "sql/asmt-catalogue-proofs.sql");
@@ -346,20 +349,11 @@ export const CATALOGUE_PLANTS: Plant[] = [
 
 async function catalogueDb() {
   console.log("\ncatalogue.db  database proofs on STAGING (each run rolls back and keeps nothing)\n");
->>>>>>> origin/asmt/catalogue-01
   const require = createRequire(resolve(process.cwd(), "package.json"));
   const { Client } = require("pg");
   const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
-<<<<<<< HEAD
-    const base = await runProofs(client, "", SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
-    ok("S3a.scholar.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 600) : `failed: ${base.failed.join(" ")}`);
-    for (const p of SCHOLAR_PLANTS) {
-      const r = await runProofs(client, p.sql, SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
-      const missing = p.expect.filter(id => !r.failed.includes(id));
-      ok(`S3a.scholar.red`, `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
-=======
     const base = await runProofs(client, "", CAT_PROOF, "ASMT CATALOGUE PROOFS");
     ok("CAT.db.base", `all catalogue proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw : `failed: ${base.failed.join(" ")}`);
     if (base.fail !== 0) console.log(`      ${base.raw.slice(0, 600)}`);
@@ -367,7 +361,6 @@ async function catalogueDb() {
       const r = await runProofs(client, p.sql, CAT_PROOF, "ASMT CATALOGUE PROOFS");
       const missing = p.expect.filter(id => !r.failed.includes(id));
       ok("CAT.db.red", `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
->>>>>>> origin/asmt/catalogue-01
         r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
     }
   } finally {
@@ -375,8 +368,6 @@ async function catalogueDb() {
   }
 }
 
-<<<<<<< HEAD
-=======
 async function catalogueAcceptance() {
   console.log("\ncatalogue.acceptance  the three owner example instruments on STAGING (rolled back, keeps nothing)\n");
   const require = createRequire(resolve(process.cwd(), "package.json"));
@@ -392,18 +383,14 @@ async function catalogueAcceptance() {
   }
 }
 
->>>>>>> origin/asmt/catalogue-01
 async function main() {
   const arg = process.argv[2] ?? "static";
   if (arg === "static" || arg === "all") staticSection();
   if (arg === "db" || arg === "all") await dbSection();
-<<<<<<< HEAD
   if (arg === "scholar" || arg === "all") await scholarSection();
-=======
   if (arg === "catalogue" || arg === "all") { catalogueStatic(); await catalogueDb(); }
   if (arg === "catalogue-static") catalogueStatic();
   if (arg === "acceptance" || arg === "catalogue" || arg === "all") await catalogueAcceptance();
->>>>>>> origin/asmt/catalogue-01
   console.log(bad === 0 ? "\n  ALL PASS\n" : `\n  ${bad} FAILURE(S)\n`);
   process.exitCode = bad === 0 ? 0 : 1;
 }
