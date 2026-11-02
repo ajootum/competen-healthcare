@@ -195,6 +195,7 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
     case "mrq": { const c = nums(r.indexes); return c && c.length <= n && c.every(i => i >= 0 && i < n) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
     case "scenario": return null; // answered stage by stage (api/.../revision/scenario), never as one response
     case "short": case "cloze": case "true_false": case "extended": {
+      if (isScenarioQuestion(q)) return null; // stored as `short`, but a scenario is never one short answer
       if (typeof r.text !== "string" || !r.text.trim()) return null;
       if (isTrueFalseQuestion(q)) { const t = truthOf(r.text); return t ? { kind: "text", text: t } : null; }
       return r.text.length <= (isExtendedQuestion(q) ? EXTENDED_RESPONSE_MAX : 1000) ? { kind: "text", text: r.text.trim() } : null;

@@ -17,6 +17,7 @@
 
 import { rubricHash, rubricSnapshotOf, type RubricSnapshot } from "./rubric-snapshot";
 import { keyOf, learnerItem } from "./revision";
+import { scenarioSpecOf } from "./scenario";
 import type { QuestionRow } from "./store";
 
 export const SNAPSHOT_TOTAL_MAX_BYTES = 16384;
@@ -65,6 +66,9 @@ export function presentedOf(q: QuestionRow): Presented {
     out.choices = item.choices.slice(0, 12).map(text => { const i = keyed.findIndex((m, j) => m === text && !used.has(j)); used.add(i); return { i, text: cut(text, 300) }; });
   }
   if (item.parts?.length) out.parts = item.parts.slice(0, 6).map(p => cut(p.prompt, 500));
+  // CE-05: a scenario was presented stage by stage: keep each stage's new information and question, in order.
+  const sc = scenarioSpecOf(q.answer);
+  if (sc) out.parts = sc.stages.map(st => cut(st.reveal ? `${st.reveal} -- ${st.prompt}` : st.prompt, 500));
   return out;
 }
 
@@ -90,6 +94,9 @@ export function buildAttemptSnapshot(q: QuestionRow, a: {
     ...(k ? (k.kind === "choice" ? { kind: "choice", original: k.index, presented: presentedPos(presented, k.index) } : k) : { kind: "none" }),
     rationale: cut(q.rationale, 2000),
   };
+  // CE-05: a scenario's key is its stages (each with its own kind, key, weight and key point), as they stood when it was answered.
+  const scenario = scenarioSpecOf(q.answer);
+  if (scenario) answerKey.stages = scenario.stages;
   const rubric = rubricSnapshotOf(q);
   const row: AttemptSnapshotRow = {
     attemptId: a.attemptId, questionId: q.id,
@@ -131,9 +138,12 @@ export const questionChanged = (q: Parameters<typeof contentHashOf>[0], s: Pick<
 export function applyAssessedSnapshot<T extends QuestionRow>(q: T, s: AttemptSnapshotRow | null): T {
   if (!s || !questionChanged(q, s)) return q;
   const opts = [...s.presented.options].sort((x, y) => x.i - y.i).map(o => o.text);
-  const key = s.answerKey as { kind?: string; original?: unknown; rationale?: unknown };
+  const key = s.answerKey as { kind?: string; original?: unknown; rationale?: unknown; stages?: unknown };
+  // CE-05: a scenario read as it was answered: its stages come back from the snapshot (only where they are a sound scenario).
+  const stages = Array.isArray(key.stages) && scenarioSpecOf({ format: "scenario", stages: key.stages }) ? key.stages : null;
+  const answer = stages && q.answer && typeof q.answer === "object" ? { ...(q.answer as Record<string, unknown>), stages } : q.answer;
   return {
-    ...q, stem: s.presented.stem || q.stem, options: opts.length ? opts : q.options,
+    ...q, answer, stem: s.presented.stem || q.stem, options: opts.length ? opts : q.options,
     correctIndex: key.kind === "choice" && Number.isInteger(key.original) ? key.original as number : q.correctIndex,
     rationale: typeof key.rationale === "string" ? key.rationale : q.rationale,
   };
