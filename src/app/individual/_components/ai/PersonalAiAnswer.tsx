@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useId, useRef, useState } from "react";
 import { ScholarAnswer } from "../scholar-answer/ScholarAnswer";
+import { ReadAloudButton } from "../speech/speech-buttons";
 import {
   DEPTHS, DEPTH_LABEL, FOLLOW_UPS, FOLLOW_UP_LABEL, readPersonalAi,
   type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef, type ReadOutcome,
@@ -85,6 +86,8 @@ export function PersonalAiAnswer({ text, streaming, label, save, sources, resear
   ) : undefined;
   return (
     <div className="min-w-0">
+      {/* CE-06: read the answer aloud (the browser's own voice) once it has finished writing. */}
+      {!streaming && text.trim() && <ReadAloudButton text={text} about="this answer" className="mb-2" />}
       <ScholarAnswer text={text} streaming={streaming} label={label} sources={sources} notCoveredAction={explore}
         onSaveFlashcard={canSave ? async card => { setDraft(card); setN(x => x + 1); return "Check the card below, then save it as your own."; } : undefined} />
       {canSave && draft && <OwnCardEditor key={n} card={draft} target={save!} onClose={() => setDraft(null)} />}
