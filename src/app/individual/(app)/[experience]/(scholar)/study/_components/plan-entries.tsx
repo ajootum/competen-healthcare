@@ -7,6 +7,7 @@ import {
   ENTRY_TYPE_OPTIONS, WEEKDAY_NAMES, buildEntryBody, emptyEntryForm, entryDateBounds, timeChoices,
   type EntryForm, type LinkOption,
 } from "@/lib/individual/scholar/plan-view";
+import { longDayLabel } from "@/lib/individual/scholar/plan-workspace";
 import { fieldCls, hintCls, labelCls, menuItemCls, pillOutline, primaryBtn, secondaryBtn, summaryCls } from "./plan-style";
 import { ErrorLine, PlanDialog, RowMenu, callJson, errorOf } from "./plan-ui";
 
@@ -298,7 +299,7 @@ export function EntryActions({ occ, today, links, accent, part = "all" }: {
 
       {step === "delete-confirm" && (
         <PlanDialog title="Delete this entry?" onClose={close}>
-          <p className="text-[14px] text-gray-800">&quot;{occ.title}&quot; on {occ.date} will be removed from your calendar. Your study plan is not changed.</p>
+          <p className="text-[14px] text-gray-800">&quot;{occ.title}&quot; on {longDayLabel(occ.date)} will be removed from your calendar. Your study plan is not changed.</p>
           <div className="mt-3"><ErrorLine text={error} /></div>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={primaryBtn} style={{ background: accent }} disabled={busy} onClick={() => void run(callJson(`${API}/${occ.entryId}`, "DELETE"))}>{busy ? "Deleting…" : "Delete"}</button>
