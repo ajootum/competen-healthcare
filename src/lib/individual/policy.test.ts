@@ -107,6 +107,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
       // SCHOLAR-LEARN-STYLE-01: Guide me, Challenge me and the More menu offered (Explain is always on).
       scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
+      scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
+      scholarVisualClassify: "on", scholarVisualTextWords: 40,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -406,4 +408,21 @@ it("SCHOLAR-LEARN-STYLE-01: the teaching-style and More-menu keys default on and
   expect(p("scholar_learn_more_menu", "off").scholarLearnMoreMenu).toBe("off");
   expect(p("scholar_learn_style_guide", "maybe").scholarLearnStyleGuide).toBe("on");
   expect(p("scholar_learn_more_menu", 3).scholarLearnMoreMenu).toBe("on");
+});
+
+it("SCHOLAR-LESSON-VISUALS-01: lesson pictures default on (3 per section, 120 px) and clamp", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({ scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120 });
+  expect(p("scholar_lesson_visuals", "off").scholarLessonVisuals).toBe("off");
+  expect(p("scholar_lesson_visuals", "maybe").scholarLessonVisuals).toBe("on");
+  expect(p("scholar_lesson_visuals_max_per_section", 99).scholarLessonVisualsMaxPerSection).toBe(6);
+  expect(p("scholar_lesson_visuals_max_per_section", 0).scholarLessonVisualsMaxPerSection).toBe(1);
+  expect(p("scholar_lesson_visuals_min_px", 5).scholarLessonVisualsMinPx).toBe(40);
+  expect(p("scholar_lesson_visuals_min_px", 9999).scholarLessonVisualsMinPx).toBe(600);
+  expect(validateDraft("scholar_lesson_visuals_min_px", 601).ok).toBe(false);
+  expect(validateDraft("scholar_lesson_visuals", "off")).toMatchObject({ ok: true });
+  expect(DEFAULT_POLICY).toMatchObject({ scholarVisualClassify: "on", scholarVisualTextWords: 40 });
+  expect(p("scholar_visual_classify", "off").scholarVisualClassify).toBe("off");
+  expect(p("scholar_visual_text_words", 5).scholarVisualTextWords).toBe(10);
+  expect(p("scholar_visual_text_words", 500).scholarVisualTextWords).toBe(200);
 });

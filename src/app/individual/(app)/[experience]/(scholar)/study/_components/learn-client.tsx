@@ -36,6 +36,7 @@ import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
 import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
+import { LearnVisuals } from "./learn-visuals";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
@@ -220,6 +221,8 @@ export function LearnWorkspace(props: {
   applyChunkIds?: string[];
   /** SCHOLAR-LEARN-STYLE-01: scholar_learn_style_guide / _challenge / scholar_learn_more_menu (absent: all on). Explain is always on. */
   styleOn?: StylePolicy;
+  /** SCHOLAR-LESSON-VISUALS-01: policy scholar_lesson_visuals and scholar_lesson_visuals_max_per_section -- the learner's own slide / page pictures under a lesson. */
+  visuals?: { on: boolean; max: number };
 }) {
   const router = useRouter();
   const [session, setSession] = useState<SessionView | null>(props.initial);
@@ -1067,6 +1070,13 @@ export function LearnWorkspace(props: {
         {offerCheck && offReason("check") && <p id={`learn-check-why-${st.step}`} className="mt-2 text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
         {settingsChanged && group.primary && props.consent && (
           <button type="button" className={`${ghost} mt-3`} disabled={busyHere || !!offReason(group.primary)} onClick={() => void teachLesson(st.step, { mode, depth })}>Teach this lesson again with these settings</button>
+        )}
+
+        {/* SCHOLAR-LESSON-VISUALS-01: the original pictures of the slides / pages this lesson cites (no AI), after its teaching and before its
+            actions. Hidden while the learner recalls the lesson, so a picture cannot give the answer away. */}
+        {props.visuals?.on && hasLesson && !recalling[st.step] && (
+          <LearnVisuals enabled max={props.visuals.max}
+            sections={st.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: x.materialTitle, unit: x.unit, pageFrom: x.pageFrom, pageTo: x.pageTo }))} />
         )}
 
         {/* SCHOLAR-INLINE-CHECKS-01: short checks inside the lesson, after its teaching and before its actions. Additive; every one is optional

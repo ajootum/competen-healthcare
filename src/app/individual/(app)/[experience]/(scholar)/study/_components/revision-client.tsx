@@ -22,6 +22,7 @@ import { SpellingNote } from "./spelling-note";
 import type { AnswerSpelling } from "@/lib/individual/scholar/spelling";
 import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spelling-variant";
 import { CLOZE_LABEL } from "@/lib/individual/scholar/cloze";
+import { SourcePictureButton } from "./learn-visuals";
 import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
@@ -740,6 +741,8 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
       <div className="mt-3 flex flex-wrap gap-2 text-[13px]">
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId, "explain")} className={ghost}>Explain the answer</Link>}
         <Link href={sourceHref(f.source.materialId, f.source.chunkId)} className={ghost}>{f.library ? "Show my notes on this" : "Show the source"}</Link>
+        {/* SCHOLAR-LESSON-VISUALS-01: the original picture of the cited slide / page (asked for on the click; no AI). */}
+        {!f.library && <SourcePictureButton materialId={f.source.materialId} citation={f.source.citation} className={ghost} />}
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId)} className={ghost}>Teach me this</Link>}
         {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>

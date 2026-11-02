@@ -163,3 +163,15 @@ export function planChunkInsertion(existing: readonly ExistingChunk[], additions
   }
   return { moves: moves.reverse(), inserts };
 }
+
+/**
+ * Pure. SCHOLAR-VISUAL-CLASSIFY-01: the pages the learner ticked, intersected with the server's OWN plan. A number the plan does
+ * not hold (not unreadable, already tried, over the cap, invented) is dropped; the plan's order is kept and nothing repeats.
+ * `requested` undefined = no picker was used: the whole plan (the earlier behaviour).
+ */
+export function pickPictureSlides(plan: readonly number[], requested: unknown): number[] {
+  if (requested === undefined) return [...plan];
+  if (!Array.isArray(requested)) return [];
+  const want = new Set(requested.filter((n): n is number => Number.isInteger(n)));
+  return plan.filter(n => want.has(n));
+}

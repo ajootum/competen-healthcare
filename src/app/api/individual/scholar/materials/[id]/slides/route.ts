@@ -19,7 +19,10 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
   const { id } = await ctx2.params;
-  const out = await readPictureSlides(ctx, req, id);
+  // SCHOLAR-VISUAL-CLASSIFY-01: { pages: number[] } = the pages the learner ticked; the plan decides which of them may be read.
+  const body = await req.json().catch(() => ({}));
+  if (body && typeof body === "object" && "pages" in body && !Array.isArray((body as { pages: unknown }).pages)) return NextResponse.json({ error: "Name the pages as a list." }, { status: 400 });
+  const out = await readPictureSlides(ctx, req, id, body && typeof body === "object" ? (body as { pages?: unknown }).pages : undefined);
   return NextResponse.json(out.body, { status: out.status });
 }
 
