@@ -378,6 +378,8 @@ export async function POST(req: Request) {
             });
             aiCalls += calls;
             made += ids.length;
+            // CE-05: a scenario was written for and none survived the checks (the audit outcome above says which rule dropped each): say the scenario-specific thing.
+            if (call.kind === "scenario" && !ids.length && outcome.startsWith("kept:0")) scenarioSkipped = true;
           }
           generated += made;
           if (!made) break;

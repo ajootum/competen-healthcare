@@ -23,7 +23,7 @@ import { isClozeQuestion, markCloze } from "./cloze";
 import {
   extendedSpecOf, isExtendedQuestion, isScenarioQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
 } from "./formats";
-import { citationFlaw, learnerView as scenarioLearnerView, parseScenarioRaw, scenarioAnswer, scenarioFlaw, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
+import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenarioAnswer, scenarioFlaw, scenarioGroundingFlaw, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
@@ -296,6 +296,9 @@ export type DraftReason =
   | "copied" | "multi_concept"
   // SCHOLAR-CE-2026 CE-05: a scenario that talks about notes or a student revising, or gives a stage's answer away in the opening or an earlier stage.
   | "not_a_scenario" | "answer_leaked" | "repeated_stage" | "uncited_stage"
+  // ... and where the clinical content is not on the cited sentences, or the scenario is not well formed (codes counted in the audit).
+  | "ungrounded_number" | "ungrounded_opening" | "ungrounded_reveal" | "ungrounded_rationale"
+  | "scenario_opening" | "scenario_stage_count" | "scenario_stage_shape" | "scenario_prompt" | "scenario_options" | "scenario_no_reveal" | "scenario_duplicate_stage"
   // SCHOLAR-FLASHCARDS-QA-01: a back that repeats the note sentence, or adds a second unrelated fact.
   | "back_copied" | "second_fact";
 
@@ -382,14 +385,22 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     }
   } else if (kind === "scenario") {
     // SCHOLAR-CE-2026 CE-05: a situation that unfolds over 2 to 4 stages, each one question of an existing kind with its own key.
-    const sc = parseScenarioRaw(r);
+    const parsed = parseScenario(r);
+    const sc = parsed.sc ?? null;
+    if (parsed.why) return { ok: false, reason: parsed.why };
     // It must be a situation in practice (no talk of notes or a student revising) and give no answer away earlier than its stage.
     const flaw = sc ? scenarioFlaw(sc) : null;
     if (flaw) return { ok: false, reason: flaw };
     // Every stage is cited: a sentence of the section (or an approved reference given), and its key and key point rest on it. Nothing is invented to finish a scenario.
     if (sc) {
+      // The identifier screen runs on every word of a scenario first: the story is not held to the notes, but it is never allowed to name a person.
+      if (findPatientIdentifiers([sc.situation, ...scenarioTexts(sc.stages)].join("\n")).length) return { ok: false, reason: "identifier" };
       const refs = new Map((checks.references ?? []).map(x => [x.tag.toUpperCase(), referenceGrounding([x]).join(" ")] as const));
       if (citationFlaw(sc.stages, passage.content, refs, unsupportedTerms)) return { ok: false, reason: "uncited_stage" };
+      // Then the CLINICAL content rests on the cited sentences (a figure, a finding, a result, a drug or a procedure the section does not hold is refused).
+      // The story around it is not held to the notes: the every-word screen below is not run on a scenario.
+      const grounded = scenarioGroundingFlaw(sc, text(r.rationale, 1200) ?? "", passage.content, refs);
+      if (grounded) return { ok: false, reason: grounded };
     }
     const rationale = text(r.rationale, 1200);
     if (sc && rationale && quote) {
@@ -442,7 +453,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   const all = [d.stem, ...d.options, ...Object.values(answerBody).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, ...extendedPoints, ...scenarioWords, d.rationale].join("\n");
   if (findPatientIdentifiers(all).length) return { ok: false, reason: "identifier" };
   const grounding = [passage.content, ...referenceGrounding(checks.references ?? [])];
-  if (groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
+  if (kind !== "scenario" && groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
 
   // ── SCHOLAR-QUESTION-INTELLIGENCE-01: the item asks, is new, has real distractors, agrees with itself ──
   // A structured lead-in may set the scene: it is its PARTS that must each ask.

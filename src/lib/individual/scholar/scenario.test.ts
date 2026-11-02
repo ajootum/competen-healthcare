@@ -83,7 +83,7 @@ describe("the stored scenario", () => {
   });
   it("is grounded like every revision item: a stage with a term the notes lack is refused", () => {
     const bad = JSON.parse(JSON.stringify(RAW)); bad.stages[2].options[0] = "Amoxicillin 500 mg";
-    expect(checkRevisionDraft("scenario", bad, passage)).toEqual({ ok: false, reason: "ungrounded" });
+    expect(checkRevisionDraft("scenario", bad, passage)).toEqual({ ok: false, reason: "ungrounded_number" });
     const ident = JSON.parse(JSON.stringify(RAW)); ident.situation = "Pyelonephritis spreads from the bladder. NHS number 943 476 5919.";
     expect(checkRevisionDraft("scenario", ident, passage).ok).toBe(false);
   });

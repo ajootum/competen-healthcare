@@ -24,6 +24,7 @@ import { markShortAnswer } from "./revision";
 import { rubricHash } from "./rubric-snapshot";
 import { asksQuestion } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
+import { textGroundingViolations } from "@/lib/ai/grounding";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
@@ -232,6 +233,8 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
 // ── NEW SCENARIOS FROM A PASSAGE ──
 
 export type ScenarioRaw = { situation: string; stages: ScenarioStage[] };
+/** Why a generated scenario was not well formed (codes only: they are counted in the audit). */
+export type ScenarioParseWhy = "scenario_opening" | "scenario_stage_count" | "scenario_stage_shape" | "scenario_prompt" | "scenario_options" | "scenario_no_reveal" | "scenario_duplicate_stage";
 
 /** Pure. A deterministic shuffle by seed (mcq/mrq options are stored shuffled so the key is not always first). */
 function order(n: number, seed: string): number[] {
@@ -246,38 +249,42 @@ function order(n: number, seed: string): number[] {
  * kind with its own key, every stage after the first revealing something, no two stages asking the same thing. An mcq or mrq stage
  * is stored in a seeded shuffle with the key remapped; a cloze stage's prompt must hold the blank.
  */
-export function parseScenarioRaw(r: Record<string, unknown>): ScenarioRaw | null {
+export function parseScenario(r: Record<string, unknown>): { sc: ScenarioRaw; why?: undefined } | { sc?: undefined; why: ScenarioParseWhy } {
   const situation = text(r.situation ?? r.stem, 800);
   const raw = Array.isArray(r.stages) ? r.stages : null;
-  if (!situation || !raw || raw.length < SCENARIO_STAGES_MIN || raw.length > SCENARIO_STAGES_MAX) return null;
+  if (!situation) return { why: "scenario_opening" };
+  if (!raw || raw.length < SCENARIO_STAGES_MIN || raw.length > SCENARIO_STAGES_MAX) return { why: "scenario_stage_count" };
   const stages: ScenarioStage[] = [];
   for (let i = 0; i < raw.length; i++) {
     const x = (raw[i] ?? {}) as Record<string, unknown>;
     const weight = x.weight === undefined ? 1 : x.weight;
     const prompt = text(x.prompt, 400);
     const correctRaw = Number.isInteger(x.correct) ? [x.correct as number] : x.correct;
-    if (!prompt) return null;
+    if (!prompt) return { why: "scenario_stage_shape" };
     const s = stageOf({
       reveal: typeof x.reveal === "string" ? x.reveal : "", prompt, kind: x.kind, options: strs(x.options)?.map(o => o.trim()), correct: correctRaw, accepted: strs(x.accepted)?.map(a => a.trim()).filter(Boolean), weight, keyPoint: x.keyPoint,
       source: x.source, refs: strs(x.references)?.map(t => t.replace(/[[\]\s]/g, "").toUpperCase()),
     });
-    if (!s) return null;
-    if (s.kind === "cloze" ? !s.prompt.includes(CLOZE_BLANK) : !asksQuestion(s.prompt)) return null;
-    if (s.options.length && new Set(s.options.map(norm)).size !== s.options.length) return null;
+    if (!s) return { why: "scenario_stage_shape" };
+    if (s.kind === "cloze" ? !s.prompt.includes(CLOZE_BLANK) : !asksQuestion(s.prompt)) return { why: "scenario_prompt" };
+    if (s.options.length && new Set(s.options.map(norm)).size !== s.options.length) return { why: "scenario_options" };
     if (s.kind === "mcq" || s.kind === "mrq") {
       const shown = order(s.options.length, `${situation}:${i}:${s.options.join("|")}`);
       s.options = shown.map(k => s.options[k]);
       // correct (old indexes) -> where each now sits
       const old = (x.options as string[]).map(o => o.trim());
       s.correct = (correctRaw as number[]).map(k => s.options.indexOf(old[k])).sort((a, b) => a - b);
-      if (s.correct.some(k => k < 0)) return null;
+      if (s.correct.some(k => k < 0)) return { why: "scenario_stage_shape" };
     }
     stages.push(s);
   }
-  if (stages.some((s, i) => i > 0 && !s.reveal)) return null;
-  if (new Set(stages.map(s => norm(s.prompt))).size !== stages.length) return null;
-  return { situation, stages };
+  if (stages.some((s, i) => i > 0 && !s.reveal)) return { why: "scenario_no_reveal" };
+  if (new Set(stages.map(s => norm(s.prompt))).size !== stages.length) return { why: "scenario_duplicate_stage" };
+  return { sc: { situation, stages } };
 }
+
+/** Pure. The fields of a generated scenario, or null where it is not well formed (parseScenario says why). */
+export const parseScenarioRaw = (r: Record<string, unknown>): ScenarioRaw | null => parseScenario(r).sc ?? null;
 
 // ── THE DRAFT'S TWO CONTENT RULES: it is a clinical scenario, and nothing gives a stage's answer away earlier ──
 
@@ -349,6 +356,63 @@ export function storedScenarioProblem(q: { stem: string; answer: unknown; prompt
   if (flaw) return flaw;
   const quoting = spec.stages.filter(s => !s.refs.length);
   return citationFlaw(quoting, passageText, new Map(), unsupportedTerms);
+}
+
+// ── GROUNDING THE CLINICAL CONTENT, NOT THE STORY ── a scenario needs a person, a setting and a passing of time that the notes do not contain ──
+
+/**
+ * Words that carry the story (a person, a setting, time passing, connectors, plain verbs), not clinical content. The notes do not have them
+ * and a scenario cannot be told without them, so they are never held to the notes. Clinical terms (an observation, a finding, a result, a
+ * drug, a procedure) are not here and must be supported.
+ */
+const NARRATIVE = new Set((
+  "person people patient patients man woman adult adults someone anyone ward hospital clinic clinics home department community team teams staff colleague colleagues " +
+  "doctor doctors clinician clinicians member family relative relatives carer carers visitor visitors setting bed room medical surgical routine later shortly afterwards soon time times " +
+  "morning afternoon evening night day days hour hours minute minutes today yesterday still already next earlier previous previously result results arrives arrive arrived " +
+  "arriving come comes came coming back asked ask asks says say said tells told reports reported report notice notices noticed noticing seems seem seemed appears appear " +
+  "appeared looks look looked feels feel felt becomes become became becoming remains remain remained stays stay stayed continues continue continued start starts started " +
+  "begins begin began change changes changed changing recovering recovered admitted admission resting rest quiet awake comfortable settled unwell well worse better getting " +
+  "gets get got goes went taken take takes took checked check checks done carried review reviewed called call calls informed also just only again another further " +
+  "additional new news information details detail situation mentioned noted noting shows show showed shown worked work works working now present currently " +
+  "observation observations notes describe describes described score scores give given gives giving needs need needed " +
+  "visit visits visited visiting out nearby around beside near sitting sits sat lying lies lay standing walking walks walked talking talks talked speaking speaks spoke " +
+  "arrival leaves left stay waiting waits waited called asks asked answers answered responds responded mention mentions").split(" "));
+/** A word reduced to a root for the story-word test, so visits / visited / visiting are one. */
+const rootOf = (w: string) => (w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "") : w);
+const NARRATIVE_ROOTS = new Set([...NARRATIVE].map(rootOf));
+const isNarrative = (w: string) => NARRATIVE.has(w) || NARRATIVE_ROOTS.has(rootOf(w));
+
+const NUMBERISH = /^(?:\d|zero$|one$|two$|three$|four$|five$|six$|seven$|eight$|nine$|ten$|eleven$|twelve$|thirteen$|fourteen$|fifteen$|sixteen$|seventeen$|eighteen$|nineteen$|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|half$|double$|triple$)/i;
+
+/** Pure. The words of `text` the source never uses, leaving out the story words (NARRATIVE). */
+const clinicalGaps = (text: string, source: string): string[] => unsupportedTerms(text, source).filter(w => !isNarrative(w));
+
+/**
+ * Pure. Whether the CLINICAL content of a scenario rests on the cited sentences, or the first thing that does not:
+ *   "ungrounded_number"   a figure, in digits or words, that the section and the cited references do not hold (a value, a dose, a count);
+ *   "ungrounded_opening"  the opening names a finding the section does not hold (an asserted-finding word, or more than two clinical terms unsupported);
+ *   "ungrounded_reveal"   a stage's new information names an observation, finding, result, drug or procedure that its cited sentence (or an earlier
+ *                         stage's, or the opening it develops) does not support. The story words around it (a person, "some time later", the team) are not held.
+ *   "ungrounded_rationale" the explanation shown with the feedback leans on more than four clinical terms the section does not hold.
+ * The identifier screen is separate and stays on every word. A key and a key point are held by citationFlaw.
+ */
+export function scenarioGroundingFlaw(sc: ScenarioRaw, rationale: string, passageText: string, references: ReadonlyMap<string, string>): "ungrounded_number" | "ungrounded_opening" | "ungrounded_reveal" | "ungrounded_rationale" | null {
+  const refAll = [...references.values()];
+  const corpus = [passageText, ...refAll];
+  const all = [sc.situation, rationale, ...sc.stages.flatMap(s => [s.reveal, s.prompt, ...s.options, ...s.accepted, s.keyPoint])].filter(Boolean).join("\n");
+  if (textGroundingViolations(all, corpus).some(v => v.kind === "ungrounded_number" && NUMBERISH.test(v.token))) return "ungrounded_number";
+  // The existing screen sees digits and some spelled counts; a spelled figure of the story ("Thirty minutes later") is also a figure the section does not hold.
+  const held = new Set(words(corpus.join(" ")));
+  if (words(all).some(w => w !== "one" && NUMBERISH.test(w) && !held.has(w))) return "ungrounded_number";
+  if (textGroundingViolations(sc.situation, corpus).some(v => v.kind === "asserted_finding") || clinicalGaps(sc.situation, corpus.join(" ")).length > 2) return "ungrounded_opening";
+  let known = sc.situation;
+  for (const st of sc.stages) {
+    const cited = [st.source, ...st.refs.map(t => references.get(t) ?? "")].filter(Boolean).join(" ");
+    known = `${known} ${cited}`;
+    if (st.reveal && (clinicalGaps(st.reveal, known).length || textGroundingViolations(st.reveal, [known]).some(v => v.kind === "asserted_finding"))) return "ungrounded_reveal";
+  }
+  if (clinicalGaps(rationale, corpus.join(" ")).length > 4) return "ungrounded_rationale";
+  return null;
 }
 
 /** Pure. The stored answer of a checked scenario (the 416 `short` shape: accepted holds the key points). */

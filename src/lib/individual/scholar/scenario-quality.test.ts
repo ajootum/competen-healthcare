@@ -113,3 +113,44 @@ describe("when the notes cannot carry a scenario, the existing source-sufficienc
     expect(SCENARIO_INSUFFICIENT_NOTE).toBe("Your notes don't have enough clinical detail for an evolving scenario on this topic.");
   });
 });
+
+describe("the clinical content is held to the cited sentences, not the story around it", () => {
+  const sc = (mut: (r: any) => void) => { const r = JSON.parse(JSON.stringify(GOOD)); mut(r); return r; };
+  it("narrative scaffolding -- a person, a setting, time passing, the team -- never causes a rejection", () => {
+    expect(verdict(sc(r => { r.stages[1].reveal = "Some time later, the team notices the person is quiet and awake, and the result arrives. The oxygen saturation falls."; }))).toBe("accepted");
+    expect(verdict(sc(r => { r.stages[1].reveal = "Shortly afterwards, while the family visits, the oxygen saturation falls."; }))).toBe("accepted");
+    expect(verdict(sc(r => { r.situation = "A person who was admitted to a medical ward yesterday is resting in bed, and the team has just taken their observations and worked out the early warning score."; }))).toBe("accepted");
+  });
+  it("a reveal that introduces a finding the cited sentence does not hold is refused, even though its citation is real", () => {
+    expect(verdict(sc(r => { r.stages[1].reveal = "Some time later the person reports chest pain and the oxygen saturation falls."; }))).toBe("ungrounded_reveal");
+    expect(verdict(sc(r => { r.stages[2].reveal = "The person is now also drowsy and has a fever and a fast heart rate."; }))).toBe("ungrounded_reveal");
+  });
+  it("a figure the section does not hold is refused, in digits or in words", () => {
+    expect(verdict(sc(r => { r.stages[2].reveal = "The lactate is 4 and the person has a fever and a fast heart rate."; }))).toBe("ungrounded_number");
+    expect(verdict(sc(r => { r.stages[1].reveal = "Thirty minutes later the oxygen saturation falls."; }))).toBe("ungrounded_number");
+    expect(verdict(sc(r => { r.stages[1].reveal = "Some time later the oxygen saturation falls to 88."; }))).toBe("ungrounded_number");
+  });
+  it("an invented finding under an UNCITED source is refused as uncited, before it is read for its content", () => {
+    expect(verdict(sc(r => { r.stages[1].reveal = "The person reports chest pain."; r.stages[1].source = "Chest pain needs an urgent electrocardiogram."; }))).toBe("uncited_stage");
+  });
+  it("an opening that names a finding the section does not hold is refused", () => {
+    expect(verdict(sc(r => { r.situation = "A person on a medical ward is vomiting, drowsy and jaundiced, and the early warning score has been worked out."; }))).toBe("ungrounded_opening");
+  });
+  it("the identifier screen still runs on every word", () => {
+    expect(verdict(sc(r => { r.stages[1].reveal = "Some time later the oxygen saturation falls. NHS number 943 476 5919."; }))).toBe("identifier");
+  });
+  it("why a draft was dropped is the rule's own name, so the audit's counts say it (dropped:2(ungrounded_reveal:2))", async () => {
+    const bad = sc(r => { r.stages[1].reveal = "Some time later the person reports chest pain and the oxygen saturation falls."; });
+    const run = async () => ({ ok: true as const, text: JSON.stringify([bad]), model: "fake", provider: "fake" }) as never;
+    const r = await runRevisionQuestions("u1", "scenario", passage, 3, run as any, {});
+    expect(r.ok && r.kept).toHaveLength(0);
+    expect(r.ok && r.dropped).toEqual(["ungrounded_reveal", "ungrounded_reveal"]);
+  });
+  it("a draft that is not well formed says how, by code", () => {
+    expect(verdict(sc(r => { r.stages = r.stages.slice(0, 1); }))).toBe("scenario_stage_count");
+    expect(verdict(sc(r => { r.stages[1].reveal = ""; }))).toBe("scenario_no_reveal");
+    expect(verdict(sc(r => { r.stages[0].options = ["a", "a", "b", "c"]; }))).toBe("scenario_options");
+    expect(verdict(sc(r => { r.stages[1].prompt = "Tell me about the oxygen"; }))).toBe("scenario_prompt");
+    expect(verdict(sc(r => { r.situation = ""; }))).toBe("scenario_opening");
+  });
+});
