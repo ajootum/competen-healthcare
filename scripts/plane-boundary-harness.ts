@@ -479,6 +479,41 @@ const pOwner = analyzeModule(
 ok("C15", pOwner.sites.length === 2 && pOwner.sites.find(s => s.table === "practice_patient")?.owner === "unused",
   "⚠ each read is tagged with the declaration that owns it — the tag symbol-level reachability turns on");
 
+// ── §AC — THE ASSESSMENT CATALOGUE (migration 894). It reads definitions and classification, never an assessment record. ──
+// Every control is paired with its opposite and exercised from REAL catalogue source, so §AC is not a suite of assertions
+// about a data structure nothing writes. The planted reads below are the proof that the control can go red.
+console.log("\n── §AC assessment catalogue controls ────────────────────────────────────────");
+const CAT_DIR = "src/lib/assessment/catalogue/";
+const catSrc = (f: string) => readFileSync(join(ROOT, CAT_DIR, f), "utf8");
+const realTax = extractReads(catSrc("classify.ts"), CAT_DIR + "classify.ts");
+ok("AC1", realTax.length >= 3 && realTax.every(x => judge(x).ok),
+  `the catalogue's real reads (${realTax.length} in classify.ts) are all inside the allowlist -- the control reads real source`);
+const planted1 = extractReads(catSrc("classify.ts") + "\nexport const planted = (a: any) => a.from(\"asmt_instance\").select(\"id\");\n", CAT_DIR + "classify.ts");
+const p1 = planted1.find(x => x.table === "asmt_instance");
+ok("AC2", !!p1 && judge(p1).code === "TABLE_NOT_ALLOWED",
+  "⚠ PLANTED: a read of asmt_instance appended to a real catalogue file goes RED (TABLE_NOT_ALLOWED) -- the catalogue cannot read an instance");
+for (const t of ["asmt_response", "asmt_evidence", "asmt_outcome", "asmt_comment", "asmt_respondent_grant", "asmt_instance_layout", "asmt_progression_decision"]) {
+  const x = extractReads(`export const f = (a: any) => a.from("${t}").select("id");`, CAT_DIR + "probe.ts")[0];
+  ok(`AC3.${t}`, !!x && judge(x).code === "TABLE_NOT_ALLOWED", `${t} is refused from the catalogue directory (capture and progression tables have no grant)`);
+}
+const wide = extractReads(`export const f = (a: any) => a.from("asmt_catalogue_term").select("id, label, created_at");`, CAT_DIR + "probe.ts")[0];
+ok("AC4", !!wide && judge(wide).code === "COLUMN_NOT_ALLOWED", "a widened column list on a catalogue table is refused");
+const wrongFile = extractReads(`export const f = (a: any) => a.from("asmt_catalogue_term").select("id, label");`, "src/app/super-admin/somewhere/page.tsx")[0];
+ok("AC5", !!wrongFile && judge(wrongFile).code === "TABLE_NOT_ALLOWED" && /only from/.test(judge(wrongFile).detail),
+  "the right table with the right columns is refused from any file outside src/lib/assessment/catalogue/** (the grant names WHO may read)");
+const rightFile = extractReads(`export const f = (a: any) => a.from("asmt_catalogue_term").select("id, label");`, CAT_DIR + "probe.ts")[0];
+ok("AC6", !!rightFile && judge(rightFile).ok, "...and the same read from the catalogue directory passes (the opposite control)");
+const org = extractReads(`export const f = (a: any) => a.from("asmt_instrument_org_scope").select("instrument_id");`, CAT_DIR + "probe.ts")[0];
+ok("AC7", !!org && judge(org).code === "TABLE_NOT_ALLOWED", "asmt_instrument_org_scope has no screen in Phase 1, so no grant: refused");
+const defs = extractReads(`export const f = (a: any) => a.from("asmt_instrument").select("*");`, CAT_DIR + "probe.ts");
+ok("AC8", defs.length === 0, "the Studio's definition tables (asmt_instrument and its versions) are NOT governed here: a separate decision, not widened by this one");
+const acSites = judged.filter(x => x.table && policyFor(x.table)?.onlyFrom);
+const acOutside = acSites.filter(x => !x.file.startsWith(CAT_DIR));
+ok("AC9", acSites.length >= 8 && acOutside.length === 0,
+  `every reachable read of a catalogue table (${acSites.length} sites) is inside src/lib/assessment/catalogue/**${acOutside.length ? ` -- outside: ${acOutside.map(x => x.file).join(", ")}` : ""}`);
+const acCapture = judged.filter(x => x.table && /^asmt_(instance|instance_layout|response|evidence|comment|outcome|respondent_grant|progression_decision)$/.test(x.table));
+ok("AC10", acCapture.length === 0, `no file the landlord plane can reach reads a capture or progression table (${acCapture.length} found)`);
+
 // ── The allowlist, printed, because a policy nobody reads is a policy nobody keeps. ──────────────────
 console.log("\n── The allowlist ────────────────────────────────────────────────────────────");
 for (const d of describeAllowlist()) console.log(`  ${d.table.padEnd(34)} ${d.columns}`);

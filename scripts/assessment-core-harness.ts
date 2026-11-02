@@ -4,8 +4,15 @@
  *
  *   npx tsx scripts/assessment-core-harness.ts            static sections only (no database)
  *   npx tsx scripts/assessment-core-harness.ts db         S1a database proofs on STAGING (rolls back, keeps nothing)
+<<<<<<< HEAD
  *   npx tsx scripts/assessment-core-harness.ts scholar    S3a database proofs of migration 893 (Scholar adapter) on STAGING
  *   npx tsx scripts/assessment-core-harness.ts all        static, db and scholar
+=======
+ *   npx tsx scripts/assessment-core-harness.ts all        both, then the catalogue and its acceptance
+ *   npx tsx scripts/assessment-core-harness.ts catalogue  catalogue (894) static checks, DB proofs with planted reds, acceptance
+ *   npx tsx scripts/assessment-core-harness.ts catalogue-static   the catalogue static checks only (no database)
+ *   npx tsx scripts/assessment-core-harness.ts acceptance the three example instruments on STAGING (rolled back)
+>>>>>>> origin/asmt/catalogue-01
  *
  * SECTION S1a -- DATABASE (migrations 890, 891, 892)
  *   S1a.static  the literal ban. The core DDL knows no profession, framework or proficiency model. Comments are
@@ -20,7 +27,7 @@
  *
  * It refuses production in every way the staging runner does and never reads or prints a credential.
  */
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
 
@@ -168,8 +175,13 @@ function stagingUrl(): string {
   return conn;
 }
 
+<<<<<<< HEAD
 async function runProofs(client: any, plantSql: string, file = PROOF_FILE, label = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
   const base = readFileSync(file, "utf8");
+=======
+async function runProofs(client: any, plantSql: string, proofFile: string = PROOF_FILE, resultTag: string = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
+  const base = readFileSync(proofFile, "utf8");
+>>>>>>> origin/asmt/catalogue-01
   if (!base.includes("-- @@PLANT@@")) throw new Error("the proof file lost its plant marker");
   const sql = base.replace("-- @@PLANT@@", plantSql);
   await client.query("begin");
@@ -178,7 +190,11 @@ async function runProofs(client: any, plantSql: string, file = PROOF_FILE, label
     return { pass: 0, fail: 0, failed: [], raw: "the proof block did not raise its RESULT" };
   } catch (e: any) {
     const msg = String(e.message ?? e);
+<<<<<<< HEAD
     const m = msg.match(new RegExp(`RESULT ${label} pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$`));
+=======
+    const m = msg.match(new RegExp("RESULT " + resultTag + " pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$"));
+>>>>>>> origin/asmt/catalogue-01
     if (!m) return { pass: 0, fail: -1, failed: [], raw: msg };
     return { pass: +m[1], fail: +m[2], failed: m[3].trim() ? m[3].trim().split(/\s+/) : [], raw: msg };
   } finally {
@@ -207,6 +223,7 @@ async function dbSection() {
   }
 }
 
+<<<<<<< HEAD
 // ---- S3a.scholar ------------------------------------------------------------------------------------------------
 // Migration 893 (the Scholar competency adapter). scripts/sql/asmt-scholar-proofs.sql reads the real staging DACUM 0-6 scale
 // with its published mapping, the real NUR-CCF Respiratory Assessment criteria and the real assessment components, and plants
@@ -239,17 +256,118 @@ execute 'create trigger zz_plant_sat before insert on asmt_response_scale_level 
 
 async function scholarSection() {
   console.log("\nS3a.scholar  migration 893 database proofs on STAGING (each run rolls back and keeps nothing)\n");
+=======
+// ---- catalogue (migration 894) ----------------------------------------------------------------------------------
+
+const CAT_PROOF = resolve(__dirname, "sql/asmt-catalogue-proofs.sql");
+const CAT_ACCEPT = resolve(__dirname, "sql/asmt-catalogue-acceptance.sql");
+const CAT_DIR = resolve(__dirname, "../src/lib/assessment/catalogue");
+const CAT_MIGRATION = resolve(__dirname, "../supabase/migrations/894-asmt-catalogue.sql");
+/** Tables the catalogue must never read: instances, responses, evidence, outcomes, progression and grants. */
+export const CAT_FORBIDDEN_TABLES = ["asmt_instance", "asmt_instance_layout", "asmt_response", "asmt_evidence", "asmt_comment", "asmt_outcome",
+  "asmt_respondent_grant", "asmt_progression_decision"];
+
+/** Every .ts and .tsx file below a directory (tests included). */
+function filesBelow(dir: string): string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const e of readdirSync(dir)) {
+    const p = resolve(dir, e);
+    if (statSync(p).isDirectory()) out.push(...filesBelow(p));
+    else if (/\.tsx?$/.test(e)) out.push(p);
+  }
+  return out;
+}
+export const stripTsComments = (src: string) => src.replace(/\/\*[\s\S]*?\*\//g, "").replace(/^\s*\/\/.*$/gm, "");
+const CAT_BANNED = /nurs|competenc|criteri|learner|scholar|benner|dacum|clinical/i;
+export function catalogueSourceHits(src: string): string[] {
+  const hits: string[] = [];
+  stripTsComments(src).split("\n").forEach((l, i) => { const m = CAT_BANNED.exec(l); if (m) hits.push(`line ${i + 1}: ${m[0]}: ${l.trim().slice(0, 80)}`); });
+  return hits;
+}
+/** Tables named in .from("...") in a source file, comments stripped. */
+export function tablesNamed(src: string): string[] {
+  return [...stripTsComments(src).matchAll(/\.from\(\s*["'`]([a-z_0-9]+)["'`]/g)].map(m => m[1]);
+}
+/** Function bodies of a migration, the text between dollar quotes, comments stripped. */
+export function sqlFunctionBodies(sql: string): string {
+  const code = stripSqlComments(sql);
+  return [...code.matchAll(/\$\$([\s\S]*?)\$\$/g)].map(m => m[1]).join("\n");
+}
+
+function catalogueStatic() {
+  console.log("\ncatalogue.static  no domain literal in the catalogue code, no read of the capture tables, universal function bodies\n");
+  const files = filesBelow(CAT_DIR);
+  ok("CAT.s0", "the catalogue code directory exists and has files (a walker that finds none proves nothing)", files.length >= 8, `${files.length} files`);
+  let lit = 0, forb = 0;
+  const named = new Set<string>();
+  for (const f of files) {
+    const src = readFileSync(f, "utf8");
+    lit += catalogueSourceHits(src).length;
+    for (const t of tablesNamed(src)) { named.add(t); if (CAT_FORBIDDEN_TABLES.includes(t)) forb++; }
+  }
+  ok("CAT.s1", "no nursing, competency, learner or framework literal outside comments in src/lib/assessment/catalogue/**", lit === 0, `${lit} hit(s)`);
+  ok("CAT.s2", "no catalogue file reads an instance, response, evidence, outcome, grant or progression table", forb === 0, `${forb} read(s)`);
+  ok("CAT.s2b", "the walker really sees tables (the catalogue names asmt_instrument and asmt_catalogue_term)", named.has("asmt_instrument") && named.has("asmt_catalogue_term"), [...named].join(","));
+  ok("CAT.s3", "a planted word in catalogue source is caught", catalogueSourceHits("export const x = 'nursing';").length === 1 && catalogueSourceHits("// nursing in a comment\nexport const y = 1;").length === 0);
+  ok("CAT.s4", "a planted read of asmt_instance is caught by the table scan", tablesNamed('a.from("asmt_instance").select("id")').some(t => CAT_FORBIDDEN_TABLES.includes(t)));
+  const sql = readFileSync(CAT_MIGRATION, "utf8");
+  const bodies = sqlFunctionBodies(sql);
+  ok("CAT.m0", "894: the function bodies were extracted (control)", bodies.length > 2000 && /insert into asmt_instrument/.test(bodies), `${bodies.length} chars`);
+  const mHits = bodies.split("\n").filter(l => CAT_BANNED.test(l));
+  ok("CAT.m1", "894: no profession, framework or proficiency word in any function body (the seed labels are data)", mHits.length === 0, mHits.slice(0, 2).join(" | "));
+  ok("CAT.m2", "894: a planted word in a function body is caught", sqlFunctionBodies("create function f() returns int as $$ select 'nursing' $$;").split("\n").some(l => CAT_BANNED.test(l)));
+  const code = stripSqlComments(sql);
+  ok("CAT.m3", "894: no partial unique index", !/create\s+unique\s+index[^;]*\bwhere\b/i.test(code));
+  ok("CAT.m4", "894: RLS is enabled on every created table and no policy is created",
+    (code.match(/create table if not exists asmt_/g) ?? []).length === (code.match(/alter table asmt_[a-z_]+ enable row level security/g) ?? []).length && !/create policy/i.test(code));
+}
+
+export const CATALOGUE_PLANTS: Plant[] = [
+  { name: "one-primary trigger removed", control: "asmt_instrument_term_guard", sql: dis("asmt_instrument_term", "asmt_instrument_term_guard"), expect: ["L2", "L4", "L5"] },
+  { name: "term hierarchy guard removed", control: "asmt_catalogue_term_guard", sql: dis("asmt_catalogue_term", "asmt_catalogue_term_guard"), expect: ["M1", "M3", "M4"] },
+  { name: "availability mode check dropped", control: "asmt_instrument_availability_mode_check", sql: drop("asmt_instrument_availability", "asmt_instrument_availability_mode_check"), expect: ["N2"] },
+  { name: "relation self-link check dropped", control: "asmt_instrument_relation_self_check", sql: drop("asmt_instrument_relation", "asmt_instrument_relation_self_check"), expect: ["O2b"] },
+  { name: "definition guard removed", control: "asmt_definition_guard (code, family, kind permanent)", sql: dis("asmt_instrument", "asmt_instrument_definition_guard"), expect: ["K4", "K4b", "K5b"] },
+  { name: "code assignment broken", control: "asmt_assign_catalogue_code per-family counter",
+    sql: "execute $plant$ create or replace function public.asmt_assign_catalogue_code(p_family text) returns text language sql as $f$ select p_family || '-' || lpad((floor(random() * 900000) + 1)::text, 6, '0') $f$ $plant$;",
+    expect: ["K1", "K2"] },
+  { name: "search words ignored", control: "asmt_catalogue_tsv (title and description search)",
+    sql: "execute $plant$ create or replace function public.asmt_catalogue_tsv(p_name text, p_description text, p_code text) returns tsvector language sql immutable as $f$ select ''::tsvector $f$ $plant$;",
+    expect: ["R1", "R1b", "R3"] },
+  { name: "duplicate warning removed", control: "asmt_catalogue_similar",
+    sql: "execute $plant$ create or replace function public.asmt_catalogue_similar(p_title text, p_family text default null) returns table (id uuid, code text, name text, family_code text, family_label text, score numeric, same_family boolean) language sql stable as $f$ select null::uuid, null::text, null::text, null::text, null::text, null::numeric, null::boolean where false $f$ $plant$;",
+    expect: ["S1", "S2"] },
+  { name: "audit event helper removed", control: "asmt_catalogue_event",
+    sql: "execute $plant$ create or replace function public.asmt_catalogue_event(p_instrument uuid, p_event text, p_actor uuid, p_detail jsonb) returns void language sql as $f$ select $f$ $plant$;",
+    expect: ["T1", "T2", "T3", "T4", "T5"] },
+  { name: "row level security off", control: "RLS on the catalogue tables", sql: "execute 'alter table asmt_collection disable row level security';", expect: ["U2"] },
+];
+
+async function catalogueDb() {
+  console.log("\ncatalogue.db  database proofs on STAGING (each run rolls back and keeps nothing)\n");
+>>>>>>> origin/asmt/catalogue-01
   const require = createRequire(resolve(process.cwd(), "package.json"));
   const { Client } = require("pg");
   const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
   await client.connect();
   try {
+<<<<<<< HEAD
     const base = await runProofs(client, "", SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
     ok("S3a.scholar.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 600) : `failed: ${base.failed.join(" ")}`);
     for (const p of SCHOLAR_PLANTS) {
       const r = await runProofs(client, p.sql, SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
       const missing = p.expect.filter(id => !r.failed.includes(id));
       ok(`S3a.scholar.red`, `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
+=======
+    const base = await runProofs(client, "", CAT_PROOF, "ASMT CATALOGUE PROOFS");
+    ok("CAT.db.base", `all catalogue proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw : `failed: ${base.failed.join(" ")}`);
+    if (base.fail !== 0) console.log(`      ${base.raw.slice(0, 600)}`);
+    for (const p of CATALOGUE_PLANTS) {
+      const r = await runProofs(client, p.sql, CAT_PROOF, "ASMT CATALOGUE PROOFS");
+      const missing = p.expect.filter(id => !r.failed.includes(id));
+      ok("CAT.db.red", `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
+>>>>>>> origin/asmt/catalogue-01
         r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
     }
   } finally {
@@ -257,11 +375,35 @@ async function scholarSection() {
   }
 }
 
+<<<<<<< HEAD
+=======
+async function catalogueAcceptance() {
+  console.log("\ncatalogue.acceptance  the three owner example instruments on STAGING (rolled back, keeps nothing)\n");
+  const require = createRequire(resolve(process.cwd(), "package.json"));
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
+  client.on("notice", (m: any) => { if (String(m.message).startsWith("ACCEPT")) console.log("   " + m.message); });
+  await client.connect();
+  try {
+    const r = await runProofs(client, "", CAT_ACCEPT, "ASMT CATALOGUE ACCEPTANCE");
+    ok("CAT.acceptance", `acceptance passes (pass=${r.pass} fail=${r.fail})`, r.fail === 0 && r.pass > 0, r.fail < 0 ? r.raw.slice(0, 400) : `failed: ${r.failed.join(" ")}`);
+  } finally {
+    await client.end();
+  }
+}
+
+>>>>>>> origin/asmt/catalogue-01
 async function main() {
   const arg = process.argv[2] ?? "static";
   if (arg === "static" || arg === "all") staticSection();
   if (arg === "db" || arg === "all") await dbSection();
+<<<<<<< HEAD
   if (arg === "scholar" || arg === "all") await scholarSection();
+=======
+  if (arg === "catalogue" || arg === "all") { catalogueStatic(); await catalogueDb(); }
+  if (arg === "catalogue-static") catalogueStatic();
+  if (arg === "acceptance" || arg === "catalogue" || arg === "all") await catalogueAcceptance();
+>>>>>>> origin/asmt/catalogue-01
   console.log(bad === 0 ? "\n  ALL PASS\n" : `\n  ${bad} FAILURE(S)\n`);
   process.exitCode = bad === 0 ? 0 : 1;
 }
