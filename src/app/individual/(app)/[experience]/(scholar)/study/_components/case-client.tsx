@@ -16,7 +16,7 @@ import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
-import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
+import { DictateButton, ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -257,6 +257,11 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       {v.intro && <p className="mt-1 text-[14.5px] leading-relaxed text-gray-800">{v.intro}</p>}
       {v.patient && <p className="mt-1 text-[13px] text-gray-600">{[v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(" · ")}</p>}
 
+      {/* CE-06: the case so far (title, introduction, patient, findings), read by the browser's own voice. Never an answer: only what the learner can already see. */}
+      <ReadAloudButton className="mt-2" label="Listen to the case" about="the case so far"
+        text={[v.title, v.intro, v.patient ? [v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(". ") : null,
+          v.facts.length ? "Findings so far. " + v.facts.map(f => `${f.label}: ${f.value}${f.unit ? ` ${f.unit}` : ""}.`).join(" ") : null].filter(Boolean).join("\n\n")} />
+
       <section aria-labelledby="findings-h" className="mt-4 rounded-xl bg-gray-50 p-4">
         <h3 id="findings-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Findings so far</h3>
         {v.facts.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">None yet. Ask for what you need to know.</p> : (
@@ -271,6 +276,8 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
           <li key={st.token} className="rounded-xl border border-gray-200 p-4">
             <p className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: accent }}>Stage {si + 1}{st.categoryLabel ? ` · ${st.categoryLabel}` : ""}</p>
             <h3 className="text-[15px] font-bold text-gray-900">{st.title}</h3>
+            <ReadAloudButton className="mt-1" label="Listen to this stage" about={`stage ${si + 1}`}
+              text={[st.title, ...st.decisionPoints.filter(d => !play.answered.includes(d.token)).map(d => d.prompt)].join("\n\n")} />
             {st.guidance && <StageGuidanceBox g={st.guidance} />}
             {st.decisionPoints.map(d => {
               const fb = feedbackFor(d.token);
