@@ -16,6 +16,7 @@ import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
+import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -286,9 +287,12 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                   )}
                   {!done ? (
                     d.kind === "free_text" ? (
+                      <>
                       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reasoning
-                        <textarea rows={3} maxLength={4000} value={text[d.token] ?? ""} onChange={e => setText(t => ({ ...t, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                        <textarea id={`case-text-${d.token}`} rows={3} maxLength={4000} value={text[d.token] ?? ""} onChange={e => setText(t => ({ ...t, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
                       </label>
+                      <DictateButton fieldId={`case-text-${d.token}`} onValue={v => setText(t => ({ ...t, [d.token]: v }))} disabled={!!busy} className="mt-1" />
+                      </>
                     ) : (
                       <fieldset className="mt-2"><legend className="sr-only">{d.kind === "multiple" ? "Choose all that apply" : "Choose one"}</legend>
                         {d.kind === "multiple" && <p className="mb-1 text-[12.5px] text-gray-600">Choose all that apply.</p>}
@@ -308,9 +312,12 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                     )
                   ) : null}
                   {!done && d.askReason && d.kind !== "free_text" && (
+                    <>
                     <label className="mt-2 block text-[13px] font-semibold text-gray-800">Explain your choice <span className="font-normal text-gray-600">(optional: it does not change how the choice is marked)</span>
-                      <textarea rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                      <textarea id={`case-reason-${d.token}`} rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
                     </label>
+                    <DictateButton fieldId={`case-reason-${d.token}`} onValue={v => setReason(r => ({ ...r, [d.token]: v }))} disabled={!!busy} className="mt-1" />
+                    </>
                   )}
                   {!done && play.status === "active" && (
                     <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
@@ -511,8 +518,9 @@ function ReflectionCard({ prompt, revisit, materialId }: { prompt: string | null
       {prompt && <p className="mt-2 text-[14px] text-gray-900">{prompt}</p>}
       <ul className="mt-2 list-disc pl-5 text-[13.5px] text-gray-800">{REFLECTION_PROMPTS.map(p => <li key={p}>{p}</li>)}</ul>
       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reflection
-        <textarea rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
+        <textarea id="case-reflection" rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
       </label>
+      <DictateButton fieldId="case-reflection" onValue={setNote} className="mt-1" />
       {links.length > 0 && materialId && (
         <div className="mt-3 flex flex-wrap gap-2">{links.map(r => <Link key={r.decisionPointId} href={`${studyHref("learn")}?section=${r.chunkIds[0]}`} className={ghost}>Teach me what I missed</Link>)}</div>
       )}
