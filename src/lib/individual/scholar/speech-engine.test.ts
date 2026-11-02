@@ -16,14 +16,17 @@ function mockSynth(voices: any[] = [{ name: "gb", lang: "en-GB", voiceURI: "gb" 
 
 describe("ReadAloudEngine", () => {
   const long = "First sentence here. Second sentence follows.\n\nThird paragraph begins. And ends.";
-  it("speaks chunk by chunk and ends idle", () => {
+  it("speaks sentence by sentence and ends idle", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
     e.play(long);
-    expect(e.getState()).toEqual({ status: "speaking", index: 0, total: 2 });
+    expect(e.getState()).toEqual({ status: "speaking", index: 0, total: 4 });
     expect(m.spoken).toHaveLength(1);
+    expect(m.last().text).toBe("First sentence here.");
     m.last().onend();
     expect(e.getState()).toMatchObject({ status: "speaking", index: 1 });
-    expect(m.spoken).toHaveLength(2);
+    expect(m.last().text).toBe("Second sentence follows.");
+    m.last().onend(); m.last().onend();
+    expect(e.getState()).toMatchObject({ status: "speaking", index: 3 });
     m.last().onend();
     expect(e.getState().status).toBe("idle");
   });
@@ -34,7 +37,7 @@ describe("ReadAloudEngine", () => {
     expect(m.last().voice.voiceURI).toBe("gb");
     expect(m.last().lang).toBe("en-GB");
   });
-  it("pause cancels and resume restarts the same chunk", () => {
+  it("pause with no word boundary reported restarts only the current sentence", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
     e.play(long); m.last().onend();
     e.pause();
@@ -46,6 +49,46 @@ describe("ReadAloudEngine", () => {
     stale.onend(); // the cancelled utterance's late event must change nothing
     expect(e.getState()).toMatchObject({ status: "speaking", index: 1 });
   });
+  it("pause after a word boundary resumes from that word, not the sentence start", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play("The patient was given fluids and antibiotics. Then she slept.");
+    const first = m.last();
+    first.onboundary({ name: "word", charIndex: 0 });
+    first.onboundary({ name: "word", charIndex: 12 }); // "was"
+    first.onboundary({ name: "sentence", charIndex: 40 }); // not a word boundary: ignored
+    e.pause();
+    expect(e.getState()).toMatchObject({ status: "paused", index: 0 });
+    e.resume();
+    expect(m.last().text).toBe("was given fluids and antibiotics.");
+    // A second pause counts boundaries relative to the shortened utterance.
+    m.last().onboundary({ name: "word", charIndex: 4 });
+    e.pause(); e.resume();
+    expect(m.last().text).toBe("given fluids and antibiotics.");
+    m.last().onend(); // finishing the remainder moves to the next sentence
+    expect(e.getState()).toMatchObject({ status: "speaking", index: 1 });
+    expect(m.last().text).toBe("Then she slept.");
+  });
+  it("ignores boundary events from a cancelled utterance", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play("Alpha beta gamma delta.");
+    const old = m.last();
+    old.onboundary({ name: "word", charIndex: 6 });
+    e.pause(); e.resume();
+    expect(m.last().text).toBe("beta gamma delta.");
+    old.onboundary({ name: "word", charIndex: 17 }); // a late event from the cancelled utterance
+    old.onend();
+    e.pause(); e.resume();
+    expect(m.last().text).toBe("beta gamma delta.");
+    expect(e.getState()).toMatchObject({ status: "speaking", index: 0 });
+  });
+  it("a rate change continues from the last spoken word", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play("Alpha beta gamma delta.");
+    m.last().onboundary({ name: "word", charIndex: 11 });
+    e.configure({ rate: 1.5 });
+    expect(m.last().text).toBe("gamma delta.");
+    expect(m.last().rate).toBe(1.5);
+  });
   it("stop returns to idle and cancels", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
     e.play(long); const before = m.cancels();
@@ -55,7 +98,7 @@ describe("ReadAloudEngine", () => {
     m.spoken[0].onend();
     expect(e.getState().status).toBe("idle");
   });
-  it("a new rate or voice restarts the current chunk while speaking", () => {
+  it("a new rate or voice restarts the current sentence while speaking", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
     e.play(long);
     e.configure({ rate: 1.5, voiceURI: "us" });

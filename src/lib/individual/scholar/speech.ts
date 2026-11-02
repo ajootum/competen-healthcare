@@ -7,6 +7,9 @@
 //
 // The words below deliberately name no product or vendor in identifiers ("your browser's speech service").
 
+import { parseDiagram, type DiagramBlock, type FlowKind } from "./answer-format";
+import { flowOutline, mapOutline } from "./diagram-layout";
+
 /* ------------------------------------------------------------------ support detection */
 
 export type SpeechSupport = { synthesis: boolean; recognition: boolean };
@@ -33,16 +36,53 @@ export function recognitionCtor(win: unknown): (new () => unknown) | null {
   } catch { return null; }
 }
 
+/* ------------------------------------------------------------------ diagrams, spoken */
+
+// The fence the answer parser recognises: ```flow / ```map / ```timeline on a line of its own, closed by a bare ``` line.
+const DIAGRAM_FENCE_RE = /^[ \t]*```[ \t]*(flow|map|timeline)[ \t]*\n([\s\S]*?)\n[ \t]*```[ \t]*$/gim;
+
+const KIND_WORD: Record<FlowKind, string> = { start: "Start", step: "Step", decision: "Decision", end: "End" };
+const asSentence = (s: string, mark = ".") => { const t = s.trim(); return /[.!?…]["')\]]*$/.test(t) ? t : t + mark; };
+// "Yes" -> "yes", but an acronym ("ICU admitted") keeps its capitals.
+const lowerFirst = (s: string) => (/^[A-Z]{2}/.test(s) ? s : s.charAt(0).toLowerCase() + s.slice(1));
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * Pure. A diagram as plain sentences, built from flowOutline / mapOutline (the same text alternative the Diagram gives a screen
+ * reader): "Flowchart: Title. Step 1, Start: ... Step 2, Decision: ...? If yes, go to step 3; if no, go to step 5." No symbols.
+ */
+export function spokenDiagram(d: DiagramBlock): string {
+  if (d.type === "flow") {
+    const steps = flowOutline(d).map(s => {
+      const head = `Step ${s.n}, ${KIND_WORD[s.kind]}: ${asSentence(s.label, s.kind === "decision" ? "?" : ".")}`;
+      const goes = s.goes.map(g => `${g.label ? `${s.kind === "decision" ? "if " : ""}${lowerFirst(g.label)}, ` : ""}${g.loop ? "go back to" : "go to"} step ${g.to}`);
+      return goes.length ? `${head} ${upperFirst(goes.join("; "))}.` : head;
+    });
+    return [`Flowchart: ${asSentence(d.title)}`, ...steps].join(" ");
+  }
+  if (d.type === "map") {
+    const o = mapOutline(d);
+    const rel = o.relations.map(r => asSentence(`${r.from} ${r.label ? lowerFirst(r.label) : "is linked to"} ${r.to}`));
+    return [`Concept map: ${asSentence(d.title)}`, `Centre: ${asSentence(o.center)}`, ...rel, ...(o.alone.length ? [`Not linked: ${asSentence(o.alone.join("; "))}`] : [])].join(" ");
+  }
+  return [`Timeline: ${asSentence(d.title)}`, ...d.events.map(e => `${e.at}: ${asSentence(e.label)}`)].join(" ");
+}
+
 /* ------------------------------------------------------------------ cleaning text for the voice */
 
 /**
  * Pure. Plain, speakable text from lesson or answer text: citation markers ([S1], [S1, S2], [R2], [E3], [1]), markdown
  * (headings, bold, italics, code, links, images, lists, quotes, tables, rules), callout tags and fenced blocks are removed or
- * reduced to their words. Paragraph breaks are kept as blank lines so the chunker can pause at them.
+ * reduced to their words. Paragraph breaks are kept as blank lines so the chunker can pause at them. A valid flow, map or
+ * timeline fence is not dropped: it is spoken as the same outline the Diagram gives a screen reader (see spokenDiagram).
  */
 export function stripForSpeech(input: string): string {
   let t = String(input ?? "").replace(/\r\n?/g, "\n");
-  t = t.replace(/```[\s\S]*?(```|$)/g, "\n");                       // fenced blocks (code, the practice JSON): not spoken
+  t = t.replace(DIAGRAM_FENCE_RE, (whole: string, kind: string, body: string) => {  // a valid diagram fence: spoken as its outline
+    const d = parseDiagram(kind.toLowerCase() as "flow" | "map" | "timeline", body);
+    return d ? `\n\n${spokenDiagram(d)}\n\n` : whole;                       // an invalid one is left for the fence rule below
+  });
+  t = t.replace(/```[\s\S]*?(```|$)/g, "\n");                       // other fenced blocks (code, the practice JSON, an invalid diagram): not spoken
   t = t.replace(/<[^>]{1,200}>/g, " ");                               // stray tags
   t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");                      // images: the alt text only
   t = t.replace(/\[([^\]]+)\]\((?:[^)]*)\)/g, "$1");                   // links: the words only
@@ -113,9 +153,9 @@ function cutLong(s: string, max: number): string[] {
 }
 
 /**
- * Pure. Speakable chunks of a text: cleaned (stripForSpeech), split at paragraphs and sentences, and packed so that no chunk
- * is longer than `max` characters. A paragraph never shares a chunk with the next, so a pause falls there. Many short
- * sentences are packed together (fewer, smoother utterances); a long one is cut at a clause mark.
+ * Pure. Speakable chunks of a text: cleaned (stripForSpeech), split at paragraphs and sentences, ONE SENTENCE PER CHUNK, so that
+ * pausing and resuming repeats at most one sentence. A sentence longer than `max` characters is cut at a clause mark, else at a
+ * space. A paragraph never shares a chunk with the next, so a pause falls there.
  */
 export function chunkForSpeech(input: string, max: number = CHUNK_MAX): string[] {
   const cleaned = stripForSpeech(input);
@@ -125,13 +165,7 @@ export function chunkForSpeech(input: string, max: number = CHUNK_MAX): string[]
   for (const para of cleaned.split(/\n{2,}/)) {
     const flat = para.replace(/\n/g, " ").replace(/\s+/g, " ").trim();
     if (!flat) continue;
-    let cur = "";
-    for (const piece of sentencesOf(flat).flatMap(s => cutLong(s, limit))) {
-      if (!cur) cur = piece;
-      else if ((cur + " " + piece).length <= limit) cur += " " + piece;
-      else { chunks.push(cur); cur = piece; }
-    }
-    if (cur) chunks.push(cur);
+    for (const piece of sentencesOf(flat).flatMap(x => cutLong(x, limit))) chunks.push(piece);
   }
   return chunks;
 }
