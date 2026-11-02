@@ -209,7 +209,7 @@ export class DictationEngine {
   dispose() {
     this.clearTimer();
     const rec = this.rec; this.rec = null;
-    if (rec) { try { rec.abort ? rec.abort() : rec.stop(); } catch { /* already stopped */ } }
+    if (rec) { try { if (rec.abort) rec.abort(); else rec.stop(); } catch { /* already stopped */ } }
     this.listeners.clear();
   }
 

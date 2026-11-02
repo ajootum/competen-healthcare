@@ -258,4 +258,4 @@ export const SPEECH_VOICE_KEY = "scholar.speech.voice";
 export const parseSpeechEnabled = (raw: unknown): boolean => raw !== "off";
 
 export const SPEECH_PRIVACY_NOTE =
-  "Dictation uses your browser's speech service. Some browsers send audio to their provider. Competen does not receive or keep the audio.";
+  "Dictation uses your browser's speech service. Some browsers send audio to their provider (for example Google in Chrome). Competen does not receive or keep the audio.";
