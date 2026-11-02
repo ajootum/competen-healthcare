@@ -54,13 +54,15 @@ export default function UserDetailWorkspace({
   // Read the profile when it opens, and again whenever `nonce` moves (after a save, or Try again). The parent keys this
   // component by person, so a new person starts from empty state.
   const [nonce, setNonce] = useState(0);
+  // Counts completed reads: the audit list is keyed by it, so it remounts with the rows of the read that just arrived.
+  const [loaded, setLoaded] = useState(0);
   useEffect(() => {
     const ctl = new AbortController();
     fetch(`/api/super-admin/users/${user.id}`, { signal: ctl.signal, cache: "no-store" })
       .then(async res => {
         const j = (await res.json().catch(() => ({}))) as { detail?: UserDetail; error?: string };
         if (!res.ok || !j.detail) { setLoadError(j.error ?? "The profile could not be loaded."); return; }
-        setDetail(j.detail); setLoadError(null);
+        setDetail(j.detail); setLoadError(null); setLoaded(n => n + 1);
       })
       .catch(e => {
         if ((e as Error).name !== "AbortError") setLoadError("The profile could not be loaded. Check your connection and try again.");
@@ -70,12 +72,9 @@ export default function UserDetailWorkspace({
 
   const reload = () => setNonce(n => n + 1);
   // After a save: show the saved values at once (the route returns them), then read the detail again so the full name
-  // and the audit trail catch up, and refresh the directory row. `auditKey` remounts the audit list, which keeps its
-  // own rows once mounted.
-  const [auditKey, setAuditKey] = useState(0);
+  // and the audit trail catch up (the audit list remounts when that read arrives), and refresh the directory row.
   const afterSave = (saved?: Record<string, string | null>) => {
     if (saved) setDetail(d => (d && d.personal.state === "ok" ? { ...d, personal: { state: "ok", value: mergeSaved(d.personal.value, saved) } } : d));
-    setAuditKey(k => k + 1);
     reload(); onChanged();
   };
 
@@ -138,7 +137,7 @@ export default function UserDetailWorkspace({
                 hospitals={hospitals} organisations={organisations} departments={departments} onClose={onClose} onChanged={onChanged} />
               <AccountSection user={user} detail={detail} canManage={canManage} canReset={canReset} currentUserId={currentUserId}
                 classificationAvailable={classificationAvailable} onChanged={onChanged} onDelete={onDelete} />
-              <AuditSection key={auditKey} userId={user.id} initial={detail.audit} />
+              <AuditSection key={loaded} userId={user.id} initial={detail.audit} />
               <CompetencySection user={user} />
             </>
           )}
