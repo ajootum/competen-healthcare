@@ -2,7 +2,10 @@
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
-import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
+import { answerOutcome, noCalls, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
+import { caseReadiness } from "@/lib/individual/scholar/sufficiency";
+import { SCENARIO_INSUFFICIENT_NOTE } from "@/lib/individual/scholar/scenario";
+import { randomUUID } from "node:crypto";
 import { outcomeOf } from "@/lib/ai/outcomes";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -32,7 +35,7 @@ import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flas
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
 import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
-  MOCK_LABEL, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
+  MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 
@@ -276,7 +279,7 @@ export async function POST(req: Request) {
   }
 
   // ── the shortfall: written new only where the mode, the policy and the student's AI allow ──
-  let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false;
+  let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false, scenarioSkipped = false;
   const stems = new Set(pool.questions.map(q => stemKey(q.stem)));
   if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && scopeSections.length && body?.generate !== false) {
     if (policy.scholarRevisionGeneration === "saved_only") note = "New questions are not written here: this session uses your saved questions only.";
@@ -300,6 +303,18 @@ export async function POST(req: Request) {
             i++;
             const passage = await getPassage(ctx.admin, ctx.userId, call.chunkId);
             if (!passage) continue;
+            // SCHOLAR-CE-2026 CE-05: an evolving scenario needs a patient who presents, what it means and what is done. The EXISTING source-sufficiency check
+            // (sufficiency.ts caseReadiness, no AI) decides before anything is spent; where the notes cannot carry one, no scenario is forced and the session says so.
+            if (call.kind === "scenario") {
+              const ready = caseReadiness([passage.content], "case_blueprint");
+              if (ready.outcome === "insufficient" || ready.outcome === "simpler") {
+                scenarioSkipped = true;
+                await recordScholarOutcome(ctx.admin, noCalls(randomUUID()), {
+                  operation: "individual_scholar_revision_scenario", outputKind: "question", outcome: "redirected", reasons: ["insufficient_clinical_detail"], sufficiency: ready.outcome, promptVersion: PROMPT_VERSIONS.scenario,
+                });
+                continue;
+              }
+            }
             const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
             // SCHOLAR-QUESTION-INTELLIGENCE-01: the section's guidance, the difficulty, and (revision kinds only: an mcq
@@ -371,7 +386,7 @@ export async function POST(req: Request) {
     // Continuity with nothing stored: there is no session to "use your saved questions", so say what is true instead.
     const nothingSaved = note ? `${note.replace(/ This session uses your saved questions( only)?\.$/, "").replace(/: this session uses your saved questions only\.$/, ".")} You have no saved questions for this yet, so there is nothing to revise here until new ones can be written. Your cards, saved sets and history are unaffected.` : null;
     return NextResponse.json({
-      error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? "There are no questions for this yet.",
+      error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? (scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE : "There are no questions for this yet."),
       continuity: !!nothingSaved, ...(withheld ? { withheld } : {}),
     }, { status: 404 });
   }
@@ -400,7 +415,7 @@ export async function POST(req: Request) {
     session: made.ok ? { id: made.id, mode, feedback, total: ordered.length, position: 0 } : null,
     items: ordered.map(revisionItemView), generated, reused, library: fromLibrary,
     label: mode === "mock" ? MOCK_LABEL : null, difficulty, source: sourceMode, aiCalls, ...(withheld ? { withheld } : {}),
-    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote, deckNote].filter(Boolean).join(" ") || null,
+    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote, deckNote, scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE : null].filter(Boolean).join(" ") || null,
   });
 }
 

@@ -28,9 +28,9 @@ const passage: Passage = { chunkId: "c1", materialId: "m1", materialTitle: "Rena
 const RAW = {
   situation: "Pyelonephritis spreads from the bladder to one or both kidneys. Symptoms include fever, loin pain and dysuria.",
   stages: [
-    { reveal: "", prompt: "What is the commonest cause?", kind: "mcq", options: ["Escherichia coli", "Fever", "Dysuria", "Antibiotics"], correct: [0], weight: 1, keyPoint: "Escherichia coli is the commonest cause." },
-    { reveal: "Urine stays in the bladder.", prompt: "What does urinary retention raise?", kind: "short", accepted: ["the risk"], weight: 2, keyPoint: "Urinary retention raises the risk because urine stays in the bladder." },
-    { reveal: "Treatment is needed.", prompt: "Which treatment is given?", kind: "mrq", options: ["Antibiotics", "Fluids", "Dysuria", "Fever"], correct: [0, 1], weight: 2, keyPoint: "Treatment is with antibiotics and fluids." },
+    { reveal: "", prompt: "What is the commonest cause?", kind: "mcq", options: ["Escherichia coli", "Fever", "Dysuria", "Antibiotics"], correct: [0], weight: 1, keyPoint: "Escherichia coli is the commonest cause.", source: "Escherichia coli is the commonest cause." },
+    { reveal: "Urine stays in the bladder.", prompt: "What does urinary retention raise?", kind: "short", accepted: ["the risk"], weight: 2, keyPoint: "Urinary retention raises the risk because urine stays in the bladder.", source: "Urinary retention raises the risk because urine stays in the bladder." },
+    { reveal: "Treatment is needed.", prompt: "Which treatment is given?", kind: "mrq", options: ["Antibiotics", "Fluids", "Dysuria", "Fever"], correct: [0, 1], weight: 2, keyPoint: "Treatment is with antibiotics and fluids.", source: "Treatment is with antibiotics and fluids." },
   ],
   rationale: "The notes describe the infection, its cause and its treatment.", sourceQuote: "Escherichia coli is the commonest cause.", difficulty: 2, level: "application",
   objective: "Follow pyelonephritis as it develops.", keyPoints: ["Escherichia coli is the commonest cause"], misconceptions: [],
@@ -90,9 +90,9 @@ describe("the stored scenario", () => {
   it("carries the rubric and the prompt version of its own", () => {
     const d = drafted();
     expect((d.answer as any).rubric.keyPoints.length).toBeGreaterThan(0);
-    expect(revisionPromptVersion("scenario")).toBe("scholar-scenario-v1");
-    expect(formatPromptVersion("scenario")).toBe("scholar-scenario-v1");
-    expect(REVISION_SYSTEM.scenario).toMatch(/every later stage MUST reveal new information/);
+    expect(revisionPromptVersion("scenario")).toBe("scholar-scenario-v2");
+    expect(formatPromptVersion("scenario")).toBe("scholar-scenario-v2");
+    expect(REVISION_SYSTEM.scenario).toMatch(/MUST reveal NEW clinical information/);
   });
   it("is generated through the same runner as the other formats: one call, one item, the scenario prompt", async () => {
     const systems: string[] = [], tokens: number[] = [];

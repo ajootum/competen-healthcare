@@ -41,6 +41,10 @@ export type ScenarioStage = {
   weight: number;
   /** What this stage teaches, from the notes: shown with the final feedback. */
   keyPoint: string;
+  /** The citation: ONE sentence of the cited section (verbatim) that supports this stage's finding and answer. "" on a scenario written before citations. */
+  source: string;
+  /** The tags of approved references this stage also draws on (mode: your notes + approved references). */
+  refs: string[];
 };
 export type ScenarioSpec = { stages: ScenarioStage[]; totalWeight: number };
 
@@ -58,7 +62,9 @@ function stageOf(raw: unknown): ScenarioStage | null {
   if (!prompt || !keyPoint || reveal.length > 600 || !Number.isInteger(weight) || (weight as number) < 1 || (weight as number) > SCENARIO_WEIGHT_MAX) return null;
   const options = strs(x.options) ?? [], accepted = strs(x.accepted) ?? [];
   const correct = Array.isArray(x.correct) && x.correct.every(i => Number.isInteger(i)) ? (x.correct as number[]) : [];
-  const base = { reveal, prompt, kind, weight: weight as number, keyPoint };
+  const source = typeof x.source === "string" ? x.source.trim().slice(0, 500) : "";
+  const refs = (strs(x.refs) ?? []).map(t => t.trim()).filter(Boolean).slice(0, 4);
+  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs };
   if (kind === "mcq") return options.length === 4 && correct.length === 1 && correct[0] >= 0 && correct[0] < 4 ? { ...base, options, correct, accepted: [] } : null;
   if (kind === "mrq") {
     const set = [...new Set(correct)].sort();
@@ -252,6 +258,7 @@ export function parseScenarioRaw(r: Record<string, unknown>): ScenarioRaw | null
     if (!prompt) return null;
     const s = stageOf({
       reveal: typeof x.reveal === "string" ? x.reveal : "", prompt, kind: x.kind, options: strs(x.options)?.map(o => o.trim()), correct: correctRaw, accepted: strs(x.accepted)?.map(a => a.trim()).filter(Boolean), weight, keyPoint: x.keyPoint,
+      source: x.source, refs: strs(x.references)?.map(t => t.replace(/[[\]\s]/g, "").toUpperCase()),
     });
     if (!s) return null;
     if (s.kind === "cloze" ? !s.prompt.includes(CLOZE_BLANK) : !asksQuestion(s.prompt)) return null;
@@ -271,13 +278,87 @@ export function parseScenarioRaw(r: Record<string, unknown>): ScenarioRaw | null
   return { situation, stages };
 }
 
+// ── THE DRAFT'S TWO CONTENT RULES: it is a clinical scenario, and nothing gives a stage's answer away earlier ──
+
+const STOP = new Set(["a", "an", "the", "of", "to", "in", "on", "at", "is", "are", "was", "were", "and", "or", "for", "with", "by", "as", "it", "its", "this", "that", "be", "from", "than", "then"]);
+/** Pure. Lower case, letters and digits only, one space between words. */
+const words = (t: string): string[] => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim().split(" ").filter(Boolean);
+/** Pure. The content words of an answer (articles and the like dropped). Synonyms are NOT considered: only the words themselves. */
+const contentWords = (t: string): string[] => words(t).filter(w => !STOP.has(w));
+
+/** Pure. Whether the words of `answer` appear, in order and all together, in `text`. */
+function containsAnswer(text: string, answer: string): boolean {
+  const need = contentWords(answer);
+  if (need.length < 2) return false; // a single word is not held to this rule
+  const have = contentWords(text);
+  for (let i = 0; i + need.length <= have.length; i++) if (need.every((w, k) => have[i + k] === w)) return true;
+  return false;
+}
+
+/** Pure. The answers a stage is marked against, as text: the correct option(s) of a choice, or the accepted answers. */
+export const stageAnswers = (st: ScenarioStage): string[] => (st.kind === "mcq" || st.kind === "mrq" ? st.correct.map(i => st.options[i]) : st.accepted);
+
+/** Words that make a stem talk about the notes or a student revising rather than present a situation in practice. */
+const META = /\b(?:the|your|their|these|my) notes\b|\b(?:student|learner)s?\b[^.?!]{0,40}\brevis(?:e|es|ing)\b|\baccording to (?:the|your) (?:notes|passage|text)\b|\bthe passage\b/i;
+
+/**
+ * Pure. What is wrong with a well-formed scenario, or null (the same screen as the opening line of the draft check; see also citationFlaw):
+ *   "not_a_scenario"  its situation, a reveal or a question talks about "the notes", "your notes" or a student revising: it must present a
+ *                     person or a situation in practice;
+ *   "answer_leaked"   a stage's answer (the correct option, or an accepted answer of two or more content words, normalised, no synonyms)
+ *                     already appears in the opening or in an EARLIER stage's new information or question.
+ */
+export function scenarioFlaw(sc: ScenarioRaw): "not_a_scenario" | "answer_leaked" | "repeated_stage" | null {
+  if ([sc.situation, ...sc.stages.flatMap(s => [s.reveal, s.prompt])].some(t => META.test(t))) return "not_a_scenario";
+  for (let i = 0; i < sc.stages.length; i++) {
+    const before = [sc.situation, ...sc.stages.slice(0, i).flatMap(s => [s.reveal, s.prompt])].join(" ");
+    if (stageAnswers(sc.stages[i]).some(a => containsAnswer(before, a))) return "answer_leaked";
+  }
+  // A later stage asks about the NEW information, never what an earlier stage already asked: two stages with the same answer repeat each other.
+  const keys = sc.stages.map(s => stageAnswers(s).map(a => contentWords(a).sort().join(" ")).filter(Boolean).sort().join("|"));
+  if (new Set(keys).size !== keys.length) return "repeated_stage";
+  return null;
+}
+
 /** Pure. The stored answer of a checked scenario (the 416 `short` shape: accepted holds the key points). */
 export const scenarioAnswer = (stages: readonly ScenarioStage[]): Record<string, unknown> => ({
   format: "scenario", accepted: [...new Set(stages.map(s => s.keyPoint))].slice(0, 8), stages: stages.map(s => ({
-    reveal: s.reveal, prompt: s.prompt, kind: s.kind, weight: s.weight, keyPoint: s.keyPoint,
+    reveal: s.reveal, prompt: s.prompt, kind: s.kind, weight: s.weight, keyPoint: s.keyPoint, source: s.source, ...(s.refs.length ? { refs: s.refs } : {}),
     ...(s.options.length ? { options: s.options, correct: s.correct } : { accepted: s.accepted }),
   })),
 });
 
 /** Pure. Every word of a scenario's stages, for the identifier and grounding screens. */
 export const scenarioTexts = (stages: readonly ScenarioStage[]): string[] => stages.flatMap(s => [s.reveal, s.prompt, ...s.options, ...s.accepted, s.keyPoint].filter(Boolean));
+
+// ── THE CITATION RULE: no finding and no expected action without a cited section ──
+
+/** What a learner is told when their notes cannot carry a scenario (the existing source-sufficiency path decides: sufficiency.ts caseReadiness). */
+export const SCENARIO_INSUFFICIENT_NOTE = "Your notes don't have enough clinical detail for an evolving scenario on this topic.";
+
+/** What the generator is told about the learner's scope when the study record gives no level: a neutral pre-registration scope. */
+export const SCENARIO_SCOPE_LINE = "SCOPE. Each decision is one that someone at MY LEVEL would properly make at that point: notice, interpret, monitor, escalate, report or carry out what the passage says. Do not ask for a decision beyond that scope. If no level is given, assume a pre-registration healthcare student.";
+
+/**
+ * Pure. Whether every stage is CITED, or the first thing that is not: "uncited_stage".
+ *   - each stage carries a `source`: one sentence found in the cited section (`passageText`), or a tag of an approved reference that was
+ *     provided (`references`: tag -> its text); a source quoted from nowhere, or a tag never given, is no citation;
+ *   - the stage's KEY (its correct option or accepted answers) and its KEY POINT are supported by that source: all but at most two of their
+ *     content words appear in it (the existing term-support rule, question-quality.ts unsupportedTerms, passed in as `unsupported`).
+ * The stage's new information is held to the whole cited section by the grounding screen every revision item already passes.
+ */
+export function citationFlaw(
+  stages: readonly ScenarioStage[], passageText: string, references: ReadonlyMap<string, string>, unsupported: (text: string, source: string) => string[],
+): "uncited_stage" | null {
+  const flat = (t: string) => words(t).join(" ");
+  const have = flat(passageText);
+  for (const st of stages) {
+    const quoted = st.source && have.includes(flat(st.source)) ? st.source : "";
+    const refTexts = st.refs.map(t => references.get(t)).filter((t): t is string => !!t);
+    if (st.refs.length && refTexts.length !== st.refs.length) return "uncited_stage";
+    if (!quoted && !refTexts.length) return "uncited_stage";
+    const cited = [quoted, ...refTexts].filter(Boolean).join(" ");
+    if (unsupported([...stageAnswers(st), st.keyPoint].join(" "), cited).length > 2) return "uncited_stage";
+  }
+  return null;
+}

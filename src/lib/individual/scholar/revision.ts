@@ -23,7 +23,7 @@ import { isClozeQuestion, markCloze } from "./cloze";
 import {
   extendedSpecOf, isExtendedQuestion, isScenarioQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
 } from "./formats";
-import { learnerView as scenarioLearnerView, parseScenarioRaw, scenarioAnswer, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
+import { citationFlaw, learnerView as scenarioLearnerView, parseScenarioRaw, scenarioAnswer, scenarioFlaw, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
@@ -294,6 +294,8 @@ export type DraftReason =
   | "not_a_question" | "repeat" | "weak_distractors" | "inconsistent" | "off_difficulty"
   // SCHOLAR-FLASHCARDS-01: a card front copied from the notes rather than a recall prompt, or a back of more than one concept.
   | "copied" | "multi_concept"
+  // SCHOLAR-CE-2026 CE-05: a scenario that talks about notes or a student revising, or gives a stage's answer away in the opening or an earlier stage.
+  | "not_a_scenario" | "answer_leaked" | "repeated_stage" | "uncited_stage"
   // SCHOLAR-FLASHCARDS-QA-01: a back that repeats the note sentence, or adds a second unrelated fact.
   | "back_copied" | "second_fact";
 
@@ -381,6 +383,14 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   } else if (kind === "scenario") {
     // SCHOLAR-CE-2026 CE-05: a situation that unfolds over 2 to 4 stages, each one question of an existing kind with its own key.
     const sc = parseScenarioRaw(r);
+    // It must be a situation in practice (no talk of notes or a student revising) and give no answer away earlier than its stage.
+    const flaw = sc ? scenarioFlaw(sc) : null;
+    if (flaw) return { ok: false, reason: flaw };
+    // Every stage is cited: a sentence of the section (or an approved reference given), and its key and key point rest on it. Nothing is invented to finish a scenario.
+    if (sc) {
+      const refs = new Map((checks.references ?? []).map(x => [x.tag.toUpperCase(), referenceGrounding([x]).join(" ")] as const));
+      if (citationFlaw(sc.stages, passage.content, refs, unsupportedTerms)) return { ok: false, reason: "uncited_stage" };
+    }
     const rationale = text(r.rationale, 1200);
     if (sc && rationale && quote) {
       d = { stem: sc.situation, options: [], answer: scenarioAnswer(sc.stages), rationale, sourceQuote: quote, difficulty };

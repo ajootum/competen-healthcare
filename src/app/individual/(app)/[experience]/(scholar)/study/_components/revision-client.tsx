@@ -803,6 +803,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
               {st.yourAnswer !== null && <p className="mt-0.5"><span className="font-semibold">Your answer:</span> {st.yourAnswer}{st.by ? <span className="text-gray-600"> ({st.by === "code" ? "marked by code" : st.by === "ai" ? "judged by AI" : "marked by you"})</span> : null}</p>}
               <p className="mt-0.5"><span className="font-semibold">{f.library ? "The library answer" : "Your notes"}:</span> {st.key}</p>
               <p className="mt-0.5"><span className="font-semibold">Key point:</span> {st.keyPoint}</p>
+              {st.source && <p className="mt-0.5 text-[12.5px] italic text-gray-700">Source: “{st.source}”</p>}
               {st.evaluation && (
                 <div className="mt-1 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
                   <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{st.evaluation.label}</p>

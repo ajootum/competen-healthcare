@@ -53,7 +53,7 @@ export type StructuredPartFeedback = {
 /** CE-05: one stage of a scenario after marking. `score` is null for an attempt that kept no per-stage record. */
 export type ScenarioStageFeedback = {
   index: number; reveal: string; prompt: string; weight: number; score: number | null; awarded: number | null; by: StageResult["by"] | null;
-  yourAnswer: string | null; key: string; keyPoint: string; evaluation: { feedback: string; label: string; formative: string } | null;
+  yourAnswer: string | null; key: string; keyPoint: string; source: string; evaluation: { feedback: string; label: string; formative: string } | null;
 };
 
 export type RevisionFeedback = {
@@ -192,7 +192,7 @@ export function feedbackView(row: QuestionRow, m: {
         const r = res?.[i] ?? null;
         return {
           index: i, reveal: st.reveal, prompt: st.prompt, weight: st.weight, score: r ? r.score : null, awarded: r ? Math.round(st.weight * r.score * 100) / 100 : null, by: r ? r.by : null,
-          yourAnswer: r ? r.answer : null, key: stageKeyText(st), keyPoint: st.keyPoint,
+          yourAnswer: r ? r.answer : null, key: stageKeyText(st), keyPoint: st.keyPoint, source: st.source,
           evaluation: r?.by === "ai" && r.feedback ? { feedback: r.feedback, label: MARKING_LABEL.ai_evaluation, formative: FORMATIVE_FEEDBACK_LABEL } : null,
         };
       }),
