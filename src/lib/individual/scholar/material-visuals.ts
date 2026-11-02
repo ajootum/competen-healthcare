@@ -1,20 +1,23 @@
 import { mediaPart, parseRels, slidePictures, type ImageKind } from "./slide-images";
 
-// ── THE STUDENT'S OWN PICTURES, BESIDE THE LESSON THAT CITES THEM ── SCHOLAR-LESSON-VISUALS-01 ─────────────────────────
+// ── THE STUDENT'S OWN PICTURES, BESIDE THE LESSON THAT CITES THEM ── SCHOLAR-LESSON-VISUALS-01 / VISUAL-CLASSIFY-01 ──────
 //
 // Pure. A lesson taught from a PowerPoint slide or a PDF page can show what that slide or page shows. This file decides,
-// without I/O and without AI, WHICH of the file's pictures count as content:
+// without I/O and without AI, WHICH of the file's pictures count as content and WHAT KIND of page each is:
 //
 //   * PowerPoint: every picture a slide embeds (slide-images.slidePictures, through the slide's own .rels), minus the
 //     decorative ones -- icons and bullets (too small), thin banners and rules (extreme aspect), logos and backgrounds (the
 //     same picture on three or more slides AND on at least 40% of them), and pictures that cannot be shown in a browser
 //     (EMF, WMF, SVG, linked: counted as `notShown`, never guessed at). At most `maxPerSlide` per slide, largest first.
-//   * PDF: nothing is extracted. A page recorded as image-only (no text, or text read by AI from the page picture) is itself
-//     the visual. A PDF's text pages carry no extracted pictures: that is a limit, said in the interface, not invented.
+//   * PDF: the image XObjects of each page (material-visuals-pdf.ts measures them), with the same filter. An image the browser
+//     cannot be handed as it is (JPX, CMYK, a mask...) is stood for by its single page. A page with no text layer that yields
+//     no picture is itself a visual.
+//   * Classification (classifyPage): from the page's own text layer or the EXISTING AI reading of it -- a picture of prose,
+//     a chart/table with figures, or a title-only page with a picture. It never reads the picture and never explains it.
 //
-// The picture is always the ORIGINAL bytes of the learner's file (the image route never resizes, crops or redraws it).
-// `key` carries the first 16 hex characters of the picture's SHA-256, so a key names exactly one picture and its URL can be
-// cached for good. The sizes and digests are measured by material-visuals-io.ts (sharp / crypto); this file only judges them.
+// The picture is always the ORIGINAL bytes of the learner's file (the image route never resizes, crops or redraws it; a
+// lossless PNG is made only where a browser cannot show the stored form). `key` carries the first 16 hex characters of the
+// picture's SHA-256, so a key names exactly one picture and its URL can be cached for good.
 
 /** Policy defaults (scholar_lesson_visuals_min_px, scholar_lesson_visuals_max_per_section). */
 export const VISUAL_DEFAULTS = { minPx: 120, maxPerSlide: 3 } as const;
@@ -29,27 +32,54 @@ export const REPEAT_MIN_SHARE = 0.4;
 const MAX_SPAN = 60;
 
 export type VisualKind = ImageKind | "pdf_page";
+/** What the page or slide is, judged from its own text layer and any existing AI reading of it (never from the picture). */
+export type VisualCategory = "text_picture" | "mixed" | "visual";
+/** What the lesson does with it: show the picture, let the section text teach, or both. */
+export type VisualBehaviour = "image" | "text" | "both";
+export const LABEL_SCORING = "Observation chart or scoring tool";
+export const LABEL_TABLE = "Table";
+export const LABEL_CHART = "Chart or graph";
+export const LABEL_CLINICAL = "Clinical image";
+export const LABEL_DIAGRAM = "Diagram or picture";
+
 export type Visual = {
   key: string;
   unit: "slide" | "page";
   /** The slide or page number (1-based), the same numbering as a section's pageFrom. */
   n: number;
-  /** The picture's part inside the file (ppt/media/...); null for a PDF page. */
+  /** The picture's part inside the file (ppt/media/... or a PDF image object "x12"); null for a whole PDF page. */
   media: string | null;
   kind: VisualKind;
   width: number | null;
   height: number | null;
   bytes: number;
-  /** First 16 hex characters of the SHA-256 of the picture's bytes ("" for a PDF page). */
+  /** First 16 hex characters of the SHA-256 of the picture's bytes ("" for a whole PDF page). */
   sha: string;
   decorative: false;
   /** The slide's / page's text was read from its picture by AI (extraction_quality.ai_read_units). */
   aiRead: boolean;
+  /** SCHOLAR-VISUAL-CLASSIFY-01: deterministic, from the page's text layer and any existing reading (classifyPage). */
+  category: VisualCategory;
+  behaviour: VisualBehaviour;
+  /** A fixed label from keywords in the page's own title; never a description of the picture. */
+  label: string;
+  /** The page's own title, or null. */
+  title: string | null;
+  /** The caption: "<the page's own title> · page 23", else "Page 23 · original page". */
+  caption: string;
+  /** Readable text exists for this page (a text layer of 150 characters or more, or an AI reading). */
+  hasText: boolean;
+  /** The AI-read text of a chart or table page, shown only behind a warning (never for scores or thresholds). */
+  safeText: string | null;
 };
 
-/** One picture on one slide, as measured: `kind` is null when its bytes are not an image a browser can show. */
-export type PictureFact = { n: number; media: string; kind: ImageKind | null; width: number | null; height: number | null; bytes: number; sha: string };
-/** What a presentation holds: its slide count, its measured pictures, and the pictures that cannot be shown. */
+/** One picture on one slide / page, as measured: `kind` is null when its bytes are not an image a browser can show. */
+export type PictureFact = {
+  n: number; media: string; kind: ImageKind | null; width: number | null; height: number | null; bytes: number; sha: string;
+  /** PDF only: "page" = an image the browser cannot be handed as it is (JPX, CMYK, mask...): the single page stands for it. */
+  via?: "direct" | "converted" | "page";
+};
+/** What a presentation / PDF holds: its slide / page count, its measured pictures, and the pictures that cannot be shown. */
 export type DeckScan = {
   slides: number;
   pictures: PictureFact[];
@@ -106,22 +136,125 @@ export function decorativeReason(p: PictureFact, minPx: number): "tiny" | "small
   return null;
 }
 
+// ── CLASSIFICATION ── SCHOLAR-VISUAL-CLASSIFY-01 ─────────────────────────────────────────────────────────────────────────
+//
+// Pure and deterministic; it reads the page's text (its own text layer, or the existing AI reading of it -- never a new one)
+// and never the picture. A page with no text layer whose existing reading is prose is a picture OF TEXT (a screenshot of a
+// paper): the section text teaches it. A reading that is numbers, short lines or a table is not prose: the picture comes
+// first and the text only beside it. A title-only page with a big picture IS the picture. Nothing here describes, scores
+// or interprets a picture; a label is a fixed phrase chosen by keywords in the page's own title.
+
+/** Page text of this many characters or more (with a meaningful picture) makes a page "mixed". */
+export const TITLE_ONLY_CHARS = 150;
+export const DEFAULT_TEXT_WORDS = 40;
+const MAX_TITLE_CHARS = 80;
+const MAX_SAFE_TEXT = 2000;
+
+/** What the index knows about one page's text: whether it has a text layer, whether AI read it, and the text itself. */
+export type PageInfo = { text: string; textLayer: boolean; aiRead: boolean };
+
+/** Pure. Pages' info from the stored sections (each inside one page) and the quality record's empty / AI-read units. */
+export function pageInfoOf(chunks: readonly { pageFrom: number | null; content: string }[], emptyUnits: readonly number[], aiReadUnits: readonly number[]): Map<number, PageInfo> {
+  const out = new Map<number, PageInfo>();
+  const ai = new Set(aiReadUnits), empty = new Set(emptyUnits);
+  for (const c of chunks) {
+    if (c.pageFrom === null) continue;
+    const have = out.get(c.pageFrom);
+    out.set(c.pageFrom, { text: have ? `${have.text}\n${c.content}` : c.content, textLayer: !ai.has(c.pageFrom) && !empty.has(c.pageFrom), aiRead: ai.has(c.pageFrom) });
+  }
+  for (const n of empty) if (!out.has(n)) out.set(n, { text: "", textLayer: false, aiRead: ai.has(n) });
+  return out;
+}
+
+const MARKERS = /\[(?:FIGURE:[^\]]*|UNREADABLE)\]|^\s*PAGE\s+\d+\s*$/gim;
+const cleanText = (t: string) => t.replace(MARKERS, " ").replace(/[ \t]+/g, " ").replace(/\n\s*\n+/g, "\n").trim();
+/** The first line of text, without a leading bullet or dash. */
+const firstLine = (t: string) => cleanText(t).split(/\n/).map(l => l.replace(/^[\s•●▪·*–-]+/, "").trim()).find(Boolean) ?? "";
+
+/** Pure. Prose: at least `minWords` words, under 15% digits, and two or more sentences. */
+export function isProse(text: string, minWords: number): boolean {
+  const t = cleanText(text);
+  const words = t.split(/\s+/).filter(Boolean).length;
+  if (words < minWords) return false;
+  const chars = t.replace(/\s/g, "");
+  const digits = (chars.match(/\d/g) ?? []).length;
+  if (chars.length === 0 || digits / chars.length >= 0.15) return false;
+  return (t.match(/[.!?](?:\s|$)/g) ?? []).length >= 2;
+}
+
+/** Pure. The fixed label for a page, from keywords in its own title / first line. */
+export function labelOf(heading: string): string {
+  if (/\b(NEWS2?|PEWS|ADDS|MEWS|EWS|early warning|track and trigger|observation chart|scor(?:e|ing))\b/i.test(heading)) return LABEL_SCORING;
+  if (/\btable\b/i.test(heading)) return LABEL_TABLE;
+  if (/\b(survival|graph|trend|rate)\b|%/i.test(heading)) return LABEL_CHART;
+  if (/\b(ECG|x-?ray|radiograph|CT|MRI|ultrasound|wound|rash|photo)\b/i.test(heading)) return LABEL_CLINICAL;
+  return LABEL_DIAGRAM;
+}
+
+export type PageClass = { category: VisualCategory; behaviour: VisualBehaviour; label: string; title: string | null; hasText: boolean };
+
+/** Pure. One page's class. `info` undefined: nothing is known of its text (no text layer, not read): a picture. */
+export function classifyPage(info: PageInfo | undefined, textWords: number = DEFAULT_TEXT_WORDS): PageClass {
+  const text = info?.text ?? "";
+  const line = firstLine(text);
+  const title = line && line.length <= MAX_TITLE_CHARS ? line : null;
+  const label = labelOf(line);
+  const clean = cleanText(text);
+  if (!info || !info.textLayer) {
+    if (!info?.aiRead || !clean) return { category: "visual", behaviour: "image", label, title, hasText: false };
+    return isProse(text, textWords)
+      ? { category: "text_picture", behaviour: "text", label, title, hasText: true }
+      : { category: "mixed", behaviour: "both", label, title, hasText: true };
+  }
+  return clean.length >= TITLE_ONLY_CHARS
+    ? { category: "mixed", behaviour: "both", label, title, hasText: true }
+    : { category: "visual", behaviour: "image", label, title, hasText: false };
+}
+
+export type BuildOptions = {
+  unit?: "slide" | "page"; minPx?: number; maxPerSlide?: number; aiRead?: ReadonlySet<number>;
+  /** Pages' text info (pageInfoOf). Absent: no page is known to have text. */
+  pages?: ReadonlyMap<number, PageInfo>;
+  /** scholar_visual_classify: false = every picture is simply shown (category visual, behaviour image). */
+  classify?: boolean; textWords?: number;
+  /** A PDF: pages with no text layer; a page of them that yields no picture is itself the visual. */
+  emptyUnits?: readonly number[];
+};
+
+type Bare = Omit<Visual, "category" | "behaviour" | "label" | "title" | "caption" | "hasText" | "safeText">;
+function decorate(v: Bare, o: BuildOptions): Visual {
+  const info = o.pages?.get(v.n);
+  const cls: PageClass = o.classify === false
+    ? { category: "visual", behaviour: "image", label: LABEL_DIAGRAM, title: classifyPage(info).title, hasText: false }
+    : classifyPage(info, o.textWords);
+  const word = v.unit === "slide" ? "slide" : "page";
+  const caption = cls.title ? `${cls.title} · ${word} ${v.n}`
+    : v.kind === "pdf_page" ? `Page ${v.n} · original page`
+    : `${word === "slide" ? "Slide" : "Page"} ${v.n} · original picture from your ${word === "slide" ? "presentation" : "pages"}`;
+  const chart = cls.label === LABEL_SCORING || cls.label === LABEL_TABLE;
+  const safeText = o.classify !== false && v.aiRead && cls.behaviour === "both" && chart && info ? cleanText(info.text).slice(0, MAX_SAFE_TEXT) || null : null;
+  return { ...v, category: cls.category, behaviour: cls.behaviour, label: cls.label, title: cls.title, caption, hasText: cls.hasText, safeText };
+}
+
 /**
- * Pure. The presentation's content pictures, slide by slide (largest first within a slide, at most `maxPerSlide`), and how
- * many pictures it holds that cannot be shown. Deterministic: the same file and settings always give the same list.
+ * Pure. The content pictures, slide / page by slide / page (largest first within one, at most `maxPerSlide`), each classified,
+ * and how many pictures cannot be shown. Deterministic: the same file and settings always give the same list.
+ * A PDF (`unit: "page"`): a page with no text layer (emptyUnits, or read by AI) whose pictures all fell away is itself a visual.
  */
-export function deckVisuals(scan: DeckScan, opts: { minPx?: number; maxPerSlide?: number; aiRead?: ReadonlySet<number> } = {}): { visuals: Visual[]; notShown: number } {
+export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { visuals: Visual[]; notShown: number } {
+  const unit = opts.unit ?? "slide";
   const minPx = opts.minPx ?? VISUAL_DEFAULTS.minPx;
   const maxPerSlide = Math.max(1, opts.maxPerSlide ?? VISUAL_DEFAULTS.maxPerSlide);
-  const perMedia = slidesPerMedia(scan);
-  const repeated = (media: string | null) => !!media && isRepeated(perMedia.get(media)?.size ?? 0, scan.slides);
+  const aiRead = opts.aiRead ?? new Set<number>();
+  const perMedia = scan ? slidesPerMedia(scan) : new Map<string, Set<number>>();
+  const repeated = (media: string | null) => !!media && !!scan && isRepeated(perMedia.get(media)?.size ?? 0, scan.slides);
 
   let notShown = 0;
-  for (const u of scan.undisplayable) if (!repeated(u.media)) notShown += 1;
+  for (const u of scan?.undisplayable ?? []) if (!repeated(u.media)) notShown += 1;
   const bySlide = new Map<number, PictureFact[]>();
-  for (const p of scan.pictures) {
+  for (const p of scan?.pictures ?? []) {
     if (repeated(p.media)) continue;
-    if (p.kind === null) { notShown += 1; continue; }
+    if (p.kind === null && p.via !== "page") { notShown += 1; continue; }
     if (decorativeReason(p, minPx)) continue;
     bySlide.set(p.n, [...(bySlide.get(p.n) ?? []), p]);
   }
@@ -130,23 +263,39 @@ export function deckVisuals(scan: DeckScan, opts: { minPx?: number; maxPerSlide?
     const seen = new Set<string>();
     const ranked = (bySlide.get(n) as PictureFact[])
       .sort((a, b) => area(b) - area(a) || b.bytes - a.bytes || (a.media < b.media ? -1 : a.media > b.media ? 1 : 0))
-      .filter(p => { const k = `${n}-${p.sha}`; if (seen.has(k)) return false; seen.add(k); return true; })
+      .map(p => ({ p, key: p.via === "page" ? `p${n}` : unit === "page" ? `p${n}-${p.sha}` : `${n}-${p.sha}` }))
+      .filter(x => { if (seen.has(x.key)) return false; seen.add(x.key); return true; })
       .slice(0, maxPerSlide);
-    for (const p of ranked) {
-      visuals.push({ key: `${n}-${p.sha}`, unit: "slide", n, media: p.media, kind: p.kind as ImageKind, width: p.width, height: p.height, bytes: p.bytes, sha: p.sha, decorative: false, aiRead: !!opts.aiRead?.has(n) });
+    for (const { p, key } of ranked) {
+      const whole = p.via === "page";
+      visuals.push(decorate({
+        key, unit, n, media: whole ? null : p.media, kind: whole ? "pdf_page" : (p.kind as ImageKind), width: p.width, height: p.height,
+        bytes: whole ? 0 : p.bytes, sha: whole ? "" : p.sha, decorative: false, aiRead: aiRead.has(n),
+      }, opts));
     }
+  }
+  if (unit === "page") {
+    const have = new Set(visuals.map(v => v.n));
+    const textless = [...new Set([...(opts.emptyUnits ?? []), ...aiRead])].filter(n => Number.isInteger(n) && n > 0 && !have.has(n));
+    for (const n of textless) {
+      visuals.push(decorate({ key: `p${n}`, unit: "page", n, media: null, kind: "pdf_page", width: null, height: null, bytes: 0, sha: "", decorative: false, aiRead: aiRead.has(n) }, opts));
+    }
+    visuals.sort((a, b) => a.n - b.n);
   }
   return { visuals, notShown };
 }
 
+/** Pure. A presentation's content pictures (see buildVisuals). */
+export function deckVisuals(scan: DeckScan, opts: BuildOptions = {}): { visuals: Visual[]; notShown: number } {
+  return buildVisuals(scan, { ...opts, unit: opts.unit ?? "slide" });
+}
+
 /**
- * Pure. A PDF's visuals: its image-only pages -- recorded as holding no readable text (emptyUnits) or read by AI from the
- * page picture (aiReadUnits). One page card each; the page is shown by the browser's own PDF viewer, never rasterised here.
+ * Pure. A PDF's whole-page visuals alone: its image-only pages -- recorded as holding no readable text (emptyUnits) or read by
+ * AI from the page picture (aiReadUnits). The page is shown by the browser's own PDF viewer, never rasterised here.
  */
-export function pdfVisuals(input: { emptyUnits?: readonly number[]; aiReadUnits?: readonly number[] }): Visual[] {
-  const ai = new Set(input.aiReadUnits ?? []);
-  const pages = [...new Set([...(input.emptyUnits ?? []), ...ai])].filter(n => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
-  return pages.map(n => ({ key: `p${n}`, unit: "page" as const, n, media: null, kind: "pdf_page" as const, width: null, height: null, bytes: 0, sha: "", decorative: false as const, aiRead: ai.has(n) }));
+export function pdfVisuals(input: { emptyUnits?: readonly number[]; aiReadUnits?: readonly number[] } & Pick<BuildOptions, "pages" | "classify" | "textWords">): Visual[] {
+  return buildVisuals(null, { unit: "page", emptyUnits: input.emptyUnits, aiRead: new Set(input.aiReadUnits ?? []), pages: input.pages, classify: input.classify, textWords: input.textWords }).visuals;
 }
 
 /** Pure. The visuals of a lesson section's slide / page range, in slide order (largest first within a slide). */
@@ -159,11 +308,11 @@ export function visualsForPages(visuals: readonly Visual[], from: number | null 
 }
 
 /** Pure. A visual key as the URL carries it, or null when it is not one (nothing else is ever looked up). */
-export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number } | null {
+export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | null {
   const slide = /^([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
   if (slide) return { kind: "slide", n: Number(slide[1]), sha: slide[2] };
-  const page = /^p([1-9]\d{0,4})$/.exec(key);
-  return page ? { kind: "page", n: Number(page[1]) } : null;
+  const page = /^p([1-9]\d{0,4})(?:-([0-9a-f]{16}))?$/.exec(key);
+  return page ? { kind: "page", n: Number(page[1]), sha: page[2] ?? null } : null;
 }
 
 /** The kinds the browser shows as they are; the rest are converted to PNG without any resizing. */
@@ -195,10 +344,44 @@ export function pagesOfCitation(citation: string): { unit: "slide" | "page"; fro
   return { unit: m[1].toLowerCase() === "slide" ? "slide" : "page", from, to: Math.max(from, to) };
 }
 
-/** Pure. Up to `max` of these visuals for a lesson's sections (each a slide / page range), in order, without repeats. */
+/** Pure. The visuals for a lesson's sections (each a slide / page range), in order, without repeats. */
 export function visualsForSections(visuals: readonly Visual[], ranges: readonly { pageFrom: number | null; pageTo: number | null }[]): Visual[] {
   const seen = new Set<string>();
   const out: Visual[] = [];
   for (const r of ranges) for (const v of visualsForPages(visuals, r.pageFrom, r.pageTo)) if (!seen.has(v.key)) { seen.add(v.key); out.push(v); }
   return out;
+}
+
+/** The learner's override on a strip: show the pictures, let the text teach, or both. `null` = each picture's own behaviour. */
+export type VisualMode = VisualBehaviour;
+/** Pure. A picture's behaviour under the learner's override (null: its own). */
+export const effectiveBehaviour = (v: Pick<Visual, "behaviour">, mode: VisualMode | null): VisualBehaviour => mode ?? v.behaviour;
+
+/**
+ * Pure. What a lesson strip shows: the pictures to show (behaviour image or both, in page order, at most `max`) and those the text
+ * teaches (kept as a collapsed link to the original, not counted in `max`).
+ */
+export function arrangeStrip(visuals: readonly Visual[], mode: VisualMode | null, max: number): { shown: Visual[]; more: number; textOnly: Visual[] } {
+  const showing = visuals.filter(v => effectiveBehaviour(v, mode) !== "text");
+  const textOnly = visuals.filter(v => effectiveBehaviour(v, mode) === "text");
+  return { shown: showing.slice(0, max), more: Math.max(0, showing.length - max), textOnly };
+}
+
+/** What the recovery card's page picker shows for one planned page. */
+export type PlannedPage = { n: number; label: string; caption: string; keep: boolean };
+/** Why a chart or table page is not ticked by default. */
+export const KEEP_PICTURE_NOTE = "Kept as the original picture: scores and thresholds are not read from charts.";
+
+/**
+ * Pure. The recovery card's checklist: each page the plan would read, its label from the index ("Page 26 · Diagram or picture"),
+ * and whether it is ticked by default -- a page labelled an observation chart / scoring tool, or a table, is NOT (its numbers are
+ * never read by AI). The label comes from the page's own text, which a page with no text layer lacks: such a page is a "Diagram
+ * or picture" until something says otherwise.
+ */
+export function plannedPages(plan: readonly number[], pages: ReadonlyMap<number, PageInfo>, unit: "slide" | "page"): PlannedPage[] {
+  const word = unit === "slide" ? "Slide" : "Page";
+  return plan.map(n => {
+    const c = classifyPage(pages.get(n));
+    return { n, label: c.label, caption: `${word} ${n} · ${c.label}`, keep: c.label === LABEL_SCORING || c.label === LABEL_TABLE };
+  });
 }

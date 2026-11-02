@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { AI_LABEL, MAPPING_LABEL, PERSONAL_CASE_LABEL } from "@/lib/individual/scholar/config";
+import { KEEP_PICTURE_NOTE, type PlannedPage } from "@/lib/individual/scholar/material-visuals";
 import { AiBadge, ContentStatusTag, QuestionCard, type QuestionView } from "./client";
 import { TopicEditor } from "./library-client";
 
@@ -201,24 +202,34 @@ const SKIP_TEXT: Record<string, string> = {
   no_text: "no text could be read from its picture",
 };
 
-export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true }: {
+export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true, planned, batch = 2 }: {
   materialId: string; unit?: "slide" | "page"; slides: number; beyondCap: number; consent: boolean;
   /** Units with no readable text (including ones the cap or an earlier attempt leaves out). */
   unreadable?: number; policyOn?: boolean;
+  /** SCHOLAR-VISUAL-CLASSIFY-01: the pages the plan would read, with their labels (absent: no picker, every page is read as before). */
+  planned?: PlannedPage[];
+  /** Pages per AI request (the transcription runner's batch), for the estimate. */
+  batch?: number;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [read, setRead] = useState<number[]>([]);
   const [skipped, setSkipped] = useState<{ slide: number; reason: string }[]>([]);
   const [error, setError] = useState("");
+  // The picker: every page ticked except charts, tables and scoring tools (their numbers are never read by AI).
+  const [unticked, setUnticked] = useState<Set<number>>(() => new Set((planned ?? []).filter(p => p.keep).map(p => p.n)));
+  const [sent, setSent] = useState(0);
+  const ticked = (planned ?? []).filter(p => !unticked.has(p.n)).map(p => p.n);
+  const toRead = planned ? ticked.length : slides;
   const U = unit === "page" ? "page" : "slide";
   const Us = (n: number) => `${U}${n === 1 ? "" : "s"}`;
   async function run() {
     if (busy) return;
     setBusy(true); setError("");
     const r1: number[] = [], s1: { slide: number; reason: string }[] = [];
+    setSent(toRead);
     for (;;) {
-      const r = await send(`/api/individual/scholar/materials/${materialId}/slides`, {});
+      const r = await send(`/api/individual/scholar/materials/${materialId}/slides`, planned ? { pages: ticked } : {});
       if (!r.ok) { setError(r.json.error ?? "Reading stopped."); break; }
       r1.push(...(r.json.read ?? [])); s1.push(...(r.json.skipped ?? []));
       setRead([...r1]); setSkipped([...s1]);
@@ -249,14 +260,35 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
         <p className="mt-2 text-[13px] text-gray-600">Reading pictures with AI is not turned on for Scholar, so {count === 1 ? "it stays" : "they stay"} unread. The rest of the material can be studied as normal.</p>
       ) : consent ? (
         slides > 0 && (
-          <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={run}>
-            {busy ? `Reading… ${done} of ${slides}` : "Read the pictures"}
-          </button>
+          <>
+            {planned && planned.length > 0 && !busy && (
+              <fieldset className="mt-3 rounded-xl border border-gray-200 p-3">
+                <legend className="px-1 text-[13px] font-semibold text-gray-900">Pages to read</legend>
+                <ul className="space-y-1">
+                  {planned.map(p => (
+                    <li key={p.n}>
+                      <label className="flex min-h-[44px] items-start gap-2 text-[13.5px] text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                        <input type="checkbox" className="mt-1 h-4 w-4" checked={!unticked.has(p.n)}
+                          onChange={e => setUnticked(prev => { const next = new Set(prev); if (e.target.checked) next.delete(p.n); else next.add(p.n); return next; })} />
+                        <span>{p.caption}{p.keep && <span className="block text-[12.5px] text-gray-700">{KEEP_PICTURE_NOTE}</span>}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-[12.5px] text-gray-700" aria-live="polite">
+                  {toRead === 0 ? "No page is ticked, so nothing will be read." : `${toRead} ${Us(toRead)} ticked: about ${Math.ceil(toRead / Math.max(1, batch))} AI request${Math.ceil(toRead / Math.max(1, batch)) === 1 ? "" : "s"} (${batch} ${U}s each). Pages left unticked stay as the original picture and can be read later.`}
+                </p>
+              </fieldset>
+            )}
+            <button type="button" className={`${ghost} mt-3`} disabled={busy || toRead === 0} onClick={run}>
+              {busy ? `Reading… ${done} of ${sent || slides}` : planned ? `Read ${toRead} ticked ${Us(toRead)}` : "Read the pictures"}
+            </button>
+          </>
         )
       ) : <p className="mt-2 text-[13px] text-gray-600">Reading pictures needs AI help to be on. Turn it on in My Learning, then come back here.</p>}
       {busy && (
-        <div className="mt-2" role="progressbar" aria-valuemin={0} aria-valuemax={slides} aria-valuenow={done} aria-label={`${done} of ${slides} ${U}s read`}>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-gray-700 transition-all" style={{ width: `${slides ? Math.min(100, Math.round((done / slides) * 100)) : 0}%` }} /></div>
+        <div className="mt-2" role="progressbar" aria-valuemin={0} aria-valuemax={sent || slides} aria-valuenow={done} aria-label={`${done} of ${sent || slides} ${U}s read`}>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-gray-200"><div className="h-full rounded-full bg-gray-700 transition-all" style={{ width: `${(sent || slides) ? Math.min(100, Math.round((done / (sent || slides)) * 100)) : 0}%` }} /></div>
         </div>
       )}
       <div aria-live="polite">

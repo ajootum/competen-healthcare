@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { sourceHref } from "./question-view";
-import { pagesOfCitation, visualUrl, visualsForPages, visualsForSections, visualsListUrl, type Visual } from "@/lib/individual/scholar/material-visuals";
+import { arrangeStrip, pagesOfCitation, visualUrl, visualsForPages, visualsForSections, visualsListUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
 
 // SCHOLAR-LESSON-VISUALS-01 (owner GO "Visual Learning From Uploaded Presentations"): THE STUDENT'S OWN PICTURES BESIDE THE LESSON.
 //
@@ -19,6 +19,7 @@ const touch = "pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const ghostBtn = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${touch} ${focusRing}`;
 const ORIGINAL = "Original image — not AI-generated";
 const AI_NOTE = "Its text was read by AI: check it against the picture.";
+const SAFE_TEXT_LABEL = "Text read by AI from this chart — do not use it for scores or thresholds; check the original";
 const NOTE = "The slide’s own layout is not reproduced here; the pictures are shown exactly as in your file.";
 
 export type VisualsReply = { unit?: string; visuals: Visual[]; notShown?: number; off?: boolean };
@@ -97,7 +98,9 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
           )}
         </div>
         <div className="space-y-3 border-t border-gray-200 p-4 text-[13px] text-gray-800">
+          <p className="text-gray-700"><span className="mr-1 inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11.5px] font-semibold text-gray-800">{current.label}</span>{current.caption}</p>
           {current.aiRead && <p role="note" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-semibold">{AI_NOTE}</p>}
+          {current.safeText && <SafeText text={current.safeText} />}
           <section aria-label={`View original ${noun(current)} ${current.n}`}>
             <h3 className="text-[13.5px] font-bold text-gray-900">View original {noun(current)} {current.n}</h3>
             {same.length > 1 ? (
@@ -138,23 +141,75 @@ export function LearnVisuals({ sections, max, enabled }: { sections: readonly Le
   );
 }
 
+// ── THE LEARNER'S OWN CHOICE, per material, on this device only (a convenience: never required, never sent anywhere) ──
+const MODE_PREFIX = "scholar.visuals.mode.";
+const MODES: { value: VisualMode; label: string }[] = [
+  { value: "image", label: "Show original image" },
+  { value: "text", label: "Use text explanation" },
+  { value: "both", label: "Show both" },
+];
+const noSubscribe = () => () => {};
+function readMode(materialId: string): VisualMode | null {
+  try {
+    const v = window.localStorage.getItem(MODE_PREFIX + materialId);
+    return v === "image" || v === "text" || v === "both" ? v : null;
+  } catch { return null; }
+}
+function writeMode(materialId: string, mode: VisualMode | null) {
+  try { if (mode) window.localStorage.setItem(MODE_PREFIX + materialId, mode); else window.localStorage.removeItem(MODE_PREFIX + materialId); } catch { /* not remembered */ }
+}
+
 function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId: string; materialTitle: string; ranges: readonly LessonSection[]; max: number }) {
   const reply = useVisuals(materialId, true);
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  // The stored choice is read after hydration (the server renders the pictures' own behaviour), then kept in state.
+  const stored = useSyncExternalStore(noSubscribe, () => readMode(materialId), () => null);
+  const [chosen, setChosen] = useState<{ value: VisualMode | null } | null>(null);
+  const mode = chosen ? chosen.value : stored;
+  const pick = (value: VisualMode | null) => { setChosen({ value }); writeMode(materialId, value); };
   const found = reply?.visuals?.length ? visualsForSections(reply.visuals, ranges) : [];
   if (!reply || reply.off || !found.length) return null;
-  const shown = all ? found : found.slice(0, max);
-  const pages = found[0].kind === "pdf_page";
+  const arranged = arrangeStrip(found, mode, all ? found.length : max);
+  const pages = found[0].unit === "page";
+  const own = new Set(found.map(v => v.behaviour));
+  const selected = mode ?? (own.size === 1 ? [...own][0] : null);
+  const heading = pages ? "From your pages" : "From your slides";
   return (
-    <section aria-label={pages ? "From your pages" : "From your slides"} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
-      <h3 className="text-[13.5px] font-bold text-gray-900">{pages ? "From your pages" : "From your slides"}</h3>
-      <ul className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {shown.map(v => <li key={v.key} className="min-w-0"><VisualCard v={v} materialId={materialId} materialTitle={materialTitle} onOpen={() => setOpen(v.key)}
-          textHref={v.aiRead ? textHrefOf(v, materialId, ranges) : null} /></li>)}
-      </ul>
-      {found.length > shown.length && (
-        <button type="button" onClick={() => setAll(true)} className={`${ghostBtn} mt-2`}>Show all {found.length} pictures</button>
+    <section aria-label={heading} className="rounded-2xl border border-gray-200 bg-gray-50 p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[13.5px] font-bold text-gray-900">{heading}</h3>
+        <div role="radiogroup" aria-label="How to use these pictures" className="inline-flex flex-wrap overflow-hidden rounded-xl border border-gray-300 bg-white">
+          {MODES.map(m => (
+            <button key={m.value} type="button" role="radio" aria-checked={selected === m.value} onClick={() => pick(m.value)}
+              className={`min-h-[40px] px-3 py-1.5 text-[12.5px] font-semibold ${touch} ${focusRing} ${selected === m.value ? "bg-gray-900 text-white" : "bg-white text-gray-800 hover:bg-gray-50"}`}>{m.label}</button>
+          ))}
+        </div>
+      </div>
+      {mode && <p className="mt-1 text-[12px] text-gray-700">Your choice, kept on this device. <button type="button" onClick={() => pick(null)} className={`font-semibold underline ${touch} ${focusRing}`}>Go back to automatic</button></p>}
+      {arranged.shown.length > 0 && (
+        <ul className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {arranged.shown.map(v => (
+            <li key={v.key} className="min-w-0">
+              <VisualCard v={v} materialId={materialId} materialTitle={materialTitle} onOpen={() => setOpen(v.key)}
+                textHref={v.aiRead ? textHrefOf(v, materialId, ranges) : null} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {arranged.more > 0 && <button type="button" onClick={() => setAll(true)} className={`${ghostBtn} mt-2`}>Show all {arranged.shown.length + arranged.more} pictures</button>}
+      {arranged.textOnly.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {arranged.textOnly.map(v => (
+            <li key={v.key}>
+              <details className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-800">
+                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: original {noun(v)} (the lesson text covers it)</summary>
+                <p className="mt-1 text-gray-700">{v.hasText ? `The text of this ${noun(v)} teaches it; the original is kept here.` : "No text was read from this picture."}</p>
+                <button type="button" onClick={() => setOpen(v.key)} className={`${ghostBtn} mt-2`}>Open the original {noun(v)}</button>
+              </details>
+            </li>
+          ))}
+        </ul>
       )}
       {open && <VisualDialog materialId={materialId} materialTitle={materialTitle} visuals={reply.visuals} startKey={open} onClose={() => setOpen(null)} />}
     </section>
@@ -167,31 +222,42 @@ function textHrefOf(v: Visual, materialId: string, ranges: readonly LessonSectio
   return s?.chunkId ? sourceHref(materialId, s.chunkId) : null;
 }
 
+/** The AI-read text of a chart or table page: never open by default, never to be used for scores or thresholds. */
+function SafeText({ text }: { text: string }) {
+  return (
+    <details className="mt-1 rounded-lg border border-gray-300 bg-gray-50 px-2 py-1 text-[12.5px] text-gray-800">
+      <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{SAFE_TEXT_LABEL}</summary>
+      <p className="mt-1 whitespace-pre-line break-words">{text}</p>
+    </details>
+  );
+}
+
 function VisualCard({ v, materialId, materialTitle, onOpen, textHref }: { v: Visual; materialId: string; materialTitle: string; onOpen: () => void; textHref: string | null }) {
   const page = v.kind === "pdf_page";
   return (
     <figure className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
       {page ? (
         <div className="flex flex-1 flex-col items-start gap-2 p-3">
-          <p className="text-[13px] font-semibold text-gray-900">Page {v.n} · original page</p>
+          <p className="text-[13px] font-semibold text-gray-900">{v.caption}</p>
           <button type="button" onClick={onOpen} className={ghostBtn}>Open the original page</button>
         </div>
       ) : (
-        <button type="button" onClick={onOpen} aria-label={`Enlarge the original picture from slide ${v.n}`}
+        <button type="button" onClick={onOpen} aria-label={`Enlarge the original picture from ${noun(v)} ${v.n}`}
           className={`flex w-full items-center justify-center bg-white p-1 ${touch} ${focusRing}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- the learner's own file, shown as it is: never resized, cropped or stretched */}
-          <img src={visualUrl(materialId, v.key)} loading="lazy" decoding="async" alt={`Original picture from slide ${v.n} of ${materialTitle}`}
+          <img src={visualUrl(materialId, v.key)} loading="lazy" decoding="async" alt={`Original picture from ${noun(v)} ${v.n} of ${materialTitle}`}
             className="h-auto max-h-[220px] w-auto max-w-full bg-white object-contain md:max-h-[280px]" />
         </button>
       )}
       <figcaption className="border-t border-gray-200 px-3 py-2 text-[12.5px] text-gray-700">
-        {!page && <span className="block font-semibold text-gray-900">Slide {v.n} · original picture from your presentation</span>}
-        <span className="block">{ORIGINAL}</span>
+        {!page && <span className="block font-semibold text-gray-900">{v.caption}</span>}
+        <span className="block"><span className="mr-1 inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11.5px] font-semibold text-gray-800">{v.label}</span>{ORIGINAL}</span>
         {v.aiRead && (
           <span className="mt-0.5 block font-semibold text-gray-900">{AI_NOTE}
             {textHref && <> <Link href={textHref} className={`underline ${focusRing}`}>See that section&apos;s text</Link></>}
           </span>
         )}
+        {v.safeText && <SafeText text={v.safeText} />}
       </figcaption>
     </figure>
   );

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  KEEP_PICTURE_NOTE, LABEL_CHART, LABEL_CLINICAL, LABEL_DIAGRAM, LABEL_SCORING, LABEL_TABLE, arrangeStrip, buildVisuals, classifyPage, effectiveBehaviour, isProse, labelOf, pageInfoOf, plannedPages,
   MIN_VISUAL_BYTES, canServeVisual, deckVisuals, decorativeReason, pagesOfCitation, parseVisualKey, pdfVisuals, slideMedia,
   visualUrl, visualsForPages, visualsForSections, type DeckScan, type PictureFact,
 } from "./material-visuals";
@@ -99,7 +100,8 @@ describe("visualsForPages and visualsForSections", () => {
 describe("keys, URLs and citations", () => {
   it("only well-formed keys are looked up", () => {
     expect(parseVisualKey("3-0123456789abcdef")).toEqual({ kind: "slide", n: 3, sha: "0123456789abcdef" });
-    expect(parseVisualKey("p12")).toEqual({ kind: "page", n: 12 });
+    expect(parseVisualKey("p12")).toEqual({ kind: "page", n: 12, sha: null });
+    expect(parseVisualKey("p12-0123456789abcdef")).toEqual({ kind: "page", n: 12, sha: "0123456789abcdef" });
     for (const bad of ["", "../x", "3-xyz", "3-0123456789ABCDEF", "p0", "0-0123456789abcdef", "p1/../2", "3-0123456789abcdef0"]) expect(parseVisualKey(bad)).toBeNull();
     expect(visualUrl("m1", "p3")).toBe("/api/individual/scholar/materials/m1/visuals/p3");
   });
@@ -118,5 +120,107 @@ describe("who may be served", () => {
     expect(canServeVisual({ userId: "u1", mimeType: PPTX }, "u1")).toBe("ok");
     expect(canServeVisual({ mimeType: "application/pdf" }, "u1")).toBe("ok");
     expect(canServeVisual({ userId: "u1", mimeType: "text/plain" }, "u1")).toBe("not_supported");
+  });
+});
+
+// ── SCHOLAR-VISUAL-CLASSIFY-01 ───────────────────────────────────────────────────────────────────────────────────────
+
+const PROSE = "Early warning scores are used to detect deterioration in adult patients. Each observation is given a score, and the scores are added together. A higher total means a greater risk and a faster response is needed. Staff should escalate according to their local policy and record the outcome.";
+const TABLE = ["NEWS2 scoring table", "Respiration rate 12-20 : 0", "SpO2 96+ : 0", "Systolic BP 111-219 : 0", "Pulse 51-90 : 0", "Temp 36.1-38.0 : 0"].join("\n");
+
+describe("classifying a page from its own text", () => {
+  it("labels from keywords in the page's own title: NEWS, PEWS and ADDS stay distinct by their own titles", () => {
+    expect(labelOf("NEWS Observation Chart")).toBe(LABEL_SCORING);
+    expect(labelOf("Pediatric Early Warning Score (PEWS)")).toBe(LABEL_SCORING);
+    expect(labelOf("ADDS")).toBe(LABEL_SCORING);
+    expect(labelOf("Summary table of drugs")).toBe(LABEL_TABLE);
+    expect(labelOf("Survival From Cardiac Arrest")).toBe(LABEL_CHART);
+    expect(labelOf("Chest x-ray findings")).toBe(LABEL_CLINICAL);
+    expect(labelOf("The nursing process")).toBe(LABEL_DIAGRAM);
+  });
+  it("a title-only page with a picture is a visual shown as an image, captioned with its own title", () => {
+    const info = pageInfoOf([{ pageFrom: 23, content: "NEWS Observation Chart" }], [], []);
+    expect(classifyPage(info.get(23))).toMatchObject({ category: "visual", behaviour: "image", label: LABEL_SCORING, title: "NEWS Observation Chart", hasText: false });
+    const r = buildVisuals({ slides: 40, pictures: [fact(23, "x1", { sha: "aaaaaaaaaaaaaaaa" })], undisplayable: [] }, { unit: "page", pages: info });
+    expect(r.visuals[0]).toMatchObject({ key: "p23-aaaaaaaaaaaaaaaa", caption: "NEWS Observation Chart · page 23", behaviour: "image", safeText: null });
+  });
+  it("strips a bullet from the title", () => {
+    expect(classifyPage({ text: "• Respiratory Rate", textLayer: true, aiRead: false }).title).toBe("Respiratory Rate");
+  });
+  it("a textless page whose existing reading is prose is a picture of text: the section text teaches", () => {
+    const info = pageInfoOf([{ pageFrom: 5, content: PROSE }], [], [5]);
+    expect(isProse(PROSE, 40)).toBe(true);
+    expect(classifyPage(info.get(5), 40)).toMatchObject({ category: "text_picture", behaviour: "text", hasText: true });
+  });
+  it("prose needs enough words, few digits and two sentences", () => {
+    expect(isProse("Too short. Really.", 40)).toBe(false);
+    expect(isProse(PROSE, 200)).toBe(false);
+    expect(isProse(`${"12 34 56 78 ".repeat(20)}. And. Again.`, 10)).toBe(false);
+    expect(isProse(PROSE.replace(/\. /g, ", ").replace(/\.$/, ""), 20)).toBe(false); // one sentence
+  });
+  it("a textless page whose reading is a table of numbers is mixed: the picture first, the text behind a warning", () => {
+    const info = pageInfoOf([{ pageFrom: 9, content: TABLE }], [9], [9]);
+    expect(classifyPage(info.get(9))).toMatchObject({ category: "mixed", behaviour: "both", label: LABEL_SCORING });
+    const r = buildVisuals({ slides: 20, pictures: [fact(9, "x9", { sha: "bbbbbbbbbbbbbbbb" })], undisplayable: [] }, { unit: "page", pages: info, aiRead: new Set([9]), emptyUnits: [9] });
+    expect(r.visuals[0].aiRead).toBe(true);
+    expect(r.visuals[0].safeText).toContain("Respiration rate");
+  });
+  it("the AI-read text of an ordinary diagram page is not set aside as chart text", () => {
+    const info = pageInfoOf([{ pageFrom: 9, content: ["Airway", "Breathing 12 20 25", "Circulation 90 100"].join("\n") }], [9], [9]);
+    const r = buildVisuals({ slides: 20, pictures: [fact(9, "x9")], undisplayable: [] }, { unit: "page", pages: info, aiRead: new Set([9]), emptyUnits: [9] });
+    expect(r.visuals[0]).toMatchObject({ category: "mixed", behaviour: "both", safeText: null });
+  });
+  it("a page with a text layer of 150 characters or more and a picture is mixed", () => {
+    const info = pageInfoOf([{ pageFrom: 3, content: "Oxygen therapy".padEnd(200, "x") }], [], []);
+    expect(classifyPage(info.get(3))).toMatchObject({ category: "mixed", behaviour: "both", hasText: true });
+  });
+  it("a textless page not yet read is a visual with no text", () => {
+    expect(classifyPage(pageInfoOf([], [26], []).get(26))).toMatchObject({ category: "visual", behaviour: "image", hasText: false });
+    expect(classifyPage(undefined)).toMatchObject({ category: "visual", behaviour: "image" });
+  });
+  it("a 898x89 banner is decorative, and a textless page that yields no picture is itself the visual", () => {
+    const banner = fact(24, "x76", { width: 898, height: 89 });
+    const r = buildVisuals({ slides: 40, pictures: [banner], undisplayable: [] }, { unit: "page", emptyUnits: [24] });
+    expect(r.visuals.map(v => [v.key, v.kind])).toEqual([["p24", "pdf_page"]]);
+    expect(buildVisuals({ slides: 40, pictures: [banner], undisplayable: [] }, { unit: "page" }).visuals).toEqual([]);
+  });
+  it("an image the browser cannot be handed is stood for by its page, once", () => {
+    const jpx = (m: string) => fact(7, m, { kind: null, via: "page", sha: m.padEnd(16, "0").slice(0, 16) });
+    const r = buildVisuals({ slides: 40, pictures: [jpx("x1"), jpx("x2")], undisplayable: [] }, { unit: "page" });
+    expect(r.visuals.map(v => v.key)).toEqual(["p7"]);
+    expect(r.notShown).toBe(0);
+  });
+  it("classification off: every picture simply shown", () => {
+    const info = pageInfoOf([{ pageFrom: 5, content: PROSE }], [], [5]);
+    const r = buildVisuals({ slides: 6, pictures: [fact(5, "x5")], undisplayable: [] }, { unit: "page", pages: info, aiRead: new Set([5]), classify: false });
+    expect(r.visuals[0]).toMatchObject({ category: "visual", behaviour: "image", label: LABEL_DIAGRAM, safeText: null });
+  });
+});
+
+describe("the learner's override and the lesson strip", () => {
+  const v = (n: number, behaviour: "image" | "text" | "both") => ({ n, behaviour, key: `p${n}` }) as never;
+  it("an override replaces each picture's own behaviour; null keeps it", () => {
+    expect(effectiveBehaviour({ behaviour: "text" }, null)).toBe("text");
+    expect(effectiveBehaviour({ behaviour: "text" }, "both")).toBe("both");
+  });
+  it("shows image and both pictures in page order up to the maximum; text ones are kept apart as links", () => {
+    const list = [v(1, "text"), v(2, "image"), v(3, "both"), v(4, "image"), v(5, "image")];
+    const r = arrangeStrip(list, null, 3);
+    expect(r.shown.map(x => x.n)).toEqual([2, 3, 4]);
+    expect(r.more).toBe(1);
+    expect(r.textOnly.map(x => x.n)).toEqual([1]);
+    expect(arrangeStrip(list, "text", 3)).toMatchObject({ shown: [], more: 0 });
+    expect(arrangeStrip(list, "image", 10).textOnly).toEqual([]);
+  });
+});
+
+describe("the recovery card's page list", () => {
+  it("labels each planned page from the index; a chart or table page is unticked by default", () => {
+    const info = pageInfoOf([{ pageFrom: 9, content: "NEWS2 scoring table" }, { pageFrom: 12, content: "Summary table" }], [26], []);
+    const list = plannedPages([9, 12, 26], info, "page");
+    expect(list.map(p => [p.n, p.label, p.keep])).toEqual([[9, LABEL_SCORING, true], [12, LABEL_TABLE, true], [26, LABEL_DIAGRAM, false]]);
+    expect(list[2].caption).toBe("Page 26 · Diagram or picture");
+    expect(plannedPages([3], new Map(), "slide")[0].caption).toBe("Slide 3 · Diagram or picture");
+    expect(KEEP_PICTURE_NOTE).toContain("scores and thresholds are not read from charts");
   });
 });

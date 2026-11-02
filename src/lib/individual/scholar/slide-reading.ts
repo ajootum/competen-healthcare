@@ -7,7 +7,7 @@ import { addPictureSlideSections, getMaterial, listChunks, materialBytes, materi
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
 import { TRANSCRIBE_PROMPT_VERSION, runTranscription } from "./exam-answer";
 import { EXAM_ACTIVITY, TRANSCRIBE_BATCH } from "./exam-service";
-import { MAX_AI_SLIDES_PER_MATERIAL, SLIDE_IMAGE_LIMITS, hasReadableText, isConvertibleKind, planPictureSlides, type NewChunk } from "./slide-images";
+import { MAX_AI_SLIDES_PER_MATERIAL, SLIDE_IMAGE_LIMITS, hasReadableText, isConvertibleKind, pickPictureSlides, planPictureSlides, type NewChunk } from "./slide-images";
 import { convertToPng } from "./slide-convert";
 
 // ── READING PICTURE-ONLY SLIDES WITH AI ── SCHOLAR-UPLOAD-FIX ──────────────────────────────────────────────────────
@@ -109,7 +109,7 @@ async function slidesPdf(slides: SlideImages[]): Promise<{ base64: string; pages
  * Read the next picture-only slides of the caller's own PowerPoint. Answers what was read, what was skipped and why,
  * and how many remain for the next request.
  */
-export async function readPictureSlides(ctx: IndividualContext, req: Request, materialId: string): Promise<Out> {
+export async function readPictureSlides(ctx: IndividualContext, req: Request, materialId: string, requested?: unknown): Promise<Out> {
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarMaterialImageSlides !== "ai_transcription") return json(403, { error: "Reading picture-only slides with AI is not turned on." });
   const material = await getMaterial(ctx.admin, ctx.userId, materialId);
@@ -119,14 +119,17 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   if (material.data.mimeType !== PPTX_MIME && !isPdf) return json(409, { error: "Only the picture-only slides of a PowerPoint, or the image-only pages of a PDF, can be read this way." });
   const plan = await pictureSlidePlan(ctx.admin, ctx.userId, materialId);
   if (!plan) return json(503, { error: "Which slides held no text could not be read just now." });
-  if (!plan.slides.length) return json(200, { read: [], skipped: [], remaining: 0, beyondCap: plan.beyondCap });
+  // SCHOLAR-VISUAL-CLASSIFY-01: the pages the learner ticked, intersected with the server's own plan (never other numbers).
+  // Unticked pages are neither read nor recorded as tried. No `pages` in the request: the whole plan, as before.
+  const wanted = pickPictureSlides(plan.slides, requested);
+  if (!wanted.length) return json(200, { read: [], skipped: [], remaining: 0, beyondCap: plan.beyondCap });
 
   const pre = await aiPreflight(ctx);
   if (pre) return json(pre.status, await pre.json());
   const bytes = await materialBytes(ctx.admin, ctx.userId, materialId);
   if (!bytes) return json(503, { error: "Your original file could not be read just now. Try again shortly." });
 
-  const batch = plan.slides.slice(0, TRANSCRIBE_BATCH);
+  const batch = wanted.slice(0, TRANSCRIBE_BATCH);
   const skipped: SlideSkip[] = [];
   let pdf: { base64: string; pages: number[] } | null;
   if (isPdf) {
@@ -182,7 +185,7 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
     saved: saved.ok ? saved.added : `error:${saved.error}`, recorded: saved.ok ? saved.recorded : false,
   });
   if (!saved.ok) return json(500, { error: "The slides were read but could not be saved. Nothing was added. Try again shortly." });
-  return json(200, { read, skipped: skipped.sort((a, b) => a.slide - b.slide), remaining: Math.max(0, plan.slides.length - batch.length), beyondCap: plan.beyondCap });
+  return json(200, { read, skipped: skipped.sort((a, b) => a.slide - b.slide), remaining: Math.max(0, wanted.length - batch.length), beyondCap: plan.beyondCap });
 }
 
 /**

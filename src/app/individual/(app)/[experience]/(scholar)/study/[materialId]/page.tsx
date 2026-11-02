@@ -12,6 +12,7 @@ import { AnalysePanel, PictureSlides, SectionTopics, type CompetencyOption, type
 import { OrganiseMaterial } from "../_components/library-client";
 import { aiReadLabel, aiReadSlides, aiReadingOf, citeChunk, qualitySummary } from "@/lib/individual/scholar/extract";
 import { MAX_AI_SLIDES_PER_MATERIAL, planPictureSlides } from "@/lib/individual/scholar/slide-images";
+import { pageInfoOf, plannedPages } from "@/lib/individual/scholar/material-visuals";
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
@@ -19,7 +20,7 @@ import { PaneGrid } from "@/components/ui/pane-grid";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { getExamPaper } from "@/lib/individual/scholar/exam-store";
-import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
+import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE, TRANSCRIBE_BATCH } from "@/lib/individual/scholar/exam-service";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
 import { StudyAsPaper } from "../_components/paper-client";
@@ -127,6 +128,10 @@ export default async function MaterialPage({ params, searchParams }: { params: P
     ? planPictureSlides({ emptyUnits: rawQuality.emptyUnits, triedUnits: rawQuality.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
     : null;
   const unreadableUnits = recoverable && rawQuality ? rawQuality.emptyUnits.length : 0;
+  // SCHOLAR-VISUAL-CLASSIFY-01: the page picker -- each page the plan would read, with its index label; charts and tables unticked.
+  const planned = pictures && rawQuality && chunks.ok && policyOn
+    ? plannedPages(pictures.slides, pageInfoOf(chunks.data, rawQuality.emptyUnits, rawQuality.aiReadUnits ?? []), rawQuality.unit === "page" ? "page" : "slide")
+    : undefined;
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -150,7 +155,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       )}
       {pictures && (
         <PictureSlides materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
-          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} />
+          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} planned={planned} batch={TRANSCRIBE_BATCH} />
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">

@@ -77,7 +77,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
-  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px";
+  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -125,7 +125,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
-  | "scholar_lesson_visuals";
+  | "scholar_lesson_visuals" | "scholar_visual_classify";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1881,6 +1881,22 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 120, min: 40, max: 600,
     limitReason: "Forty to six hundred pixels. Default: 120.",
   },
+  // SCHOLAR-VISUAL-CLASSIFY-01 (owner GO "Intelligent Visual Content Classification"): what each picture is, from the page's own text.
+  {
+    key: "scholar_visual_classify", kind: "choice", product: "Scholar",
+    label: "Lesson pictures: tell pictures of text from charts and diagrams",
+    help: "Whether each page or slide is classified from its own text layer, or the AI reading already made of it: a picture of ordinary text (the section text teaches it), a chart, table or scoring tool (the picture first, the text only beside it, with a warning), or a title-only page with a picture. Nothing new is read, nothing is described and no score or threshold is ever generated. Off: every picture is simply shown.",
+    options: [{ value: "on", label: "Classify" }, { value: "off", label: "Show every picture" }],
+    fallback: "on",
+    limitReason: "Fixed rules and keywords: no AI and no migration. Default: on.",
+  },
+  {
+    key: "scholar_visual_text_words", kind: "int", product: "Scholar", unit: "words",
+    label: "Lesson pictures: words that make a picture of text",
+    help: "A page with no text layer whose existing AI reading holds at least this many words of ordinary sentences (under 15% digits, two or more sentences) is treated as a picture of text, not a diagram.",
+    fallback: 40, min: 10, max: 200,
+    limitReason: "Ten to two hundred words. Default: forty.",
+  },
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -2206,6 +2222,9 @@ export type IndividualPolicy = {
   scholarLessonVisuals: "on" | "off";
   scholarLessonVisualsMaxPerSection: number;
   scholarLessonVisualsMinPx: number;
+  /** SCHOLAR-VISUAL-CLASSIFY-01. */
+  scholarVisualClassify: "on" | "off";
+  scholarVisualTextWords: number;
 };
 
 /** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
@@ -2381,6 +2400,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLessonVisuals: clampChoice(policyDef("scholar_lesson_visuals") as ChoicePolicy, published.get(policyPath("scholar_lesson_visuals"))) as "on" | "off",
     scholarLessonVisualsMaxPerSection: int("scholar_lesson_visuals_max_per_section"),
     scholarLessonVisualsMinPx: int("scholar_lesson_visuals_min_px"),
+    scholarVisualClassify: clampChoice(policyDef("scholar_visual_classify") as ChoicePolicy, published.get(policyPath("scholar_visual_classify"))) as "on" | "off",
+    scholarVisualTextWords: int("scholar_visual_text_words"),
   };
 }
 

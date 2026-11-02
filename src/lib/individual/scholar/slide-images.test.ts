@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import JSZip from "jszip";
 import sharp from "sharp";
-import { MAX_AI_SLIDES_PER_MATERIAL, hasReadableText, imageKind, mediaPart, parseRels, planChunkInsertion, planPictureSlides, slidePictures } from "./slide-images";
+import { MAX_AI_SLIDES_PER_MATERIAL, hasReadableText, imageKind, mediaPart, parseRels, pickPictureSlides, planChunkInsertion, planPictureSlides, slidePictures } from "./slide-images";
 import { AI_READ_LABEL, aiReadLabel, aiReadSlides, aiReadingOf, pictureSlideImages, qualitySummary, slidePartNames } from "./extract";
 import { slideSkipReason } from "./slide-reading";
 import { CONVERT_MAX_DIMENSION, MAX_CONVERT_INPUT_BYTES, convertToPng } from "./slide-convert";
@@ -191,5 +191,18 @@ describe("from a real .pptx archive", () => {
       { slide: 3, kinds: [], unsupported: ["png"] },
       { slide: 7, kinds: [], unsupported: [] },
     ]);
+  });
+});
+
+describe("the page picker: ticked pages are intersected with the server's own plan", () => {
+  const plan = [7, 8, 11, 26, 36];
+  it("no pages in the request is the whole plan, as before", () => {
+    expect(pickPictureSlides(plan, undefined)).toEqual(plan);
+  });
+  it("keeps only planned pages, in plan order, without repeats; invented, already-tried or non-integer numbers are dropped", () => {
+    expect(pickPictureSlides(plan, [36, 8, 8, 99, 3, 11.5, "7", null])).toEqual([8, 36]);
+    expect(pickPictureSlides(plan, [])).toEqual([]);
+    expect(pickPictureSlides(plan, "7")).toEqual([]);
+    expect(pickPictureSlides([], [1, 2])).toEqual([]);
   });
 });

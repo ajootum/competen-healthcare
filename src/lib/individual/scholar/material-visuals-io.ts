@@ -3,11 +3,12 @@ import type { IndividualContext } from "../guard";
 import { loadIndividualPolicy } from "../policy";
 import { PDF_MIME } from "./config";
 import { openOfficeZip, slidePartNames } from "./extract";
-import { getMaterial, materialBytes, materialExtras, type MaterialRow } from "./store";
+import { getMaterial, listChunks, materialBytes, materialExtras, type MaterialRow } from "./store";
 import { MAX_CONVERT_INPUT_BYTES, imageKind } from "./slide-images";
 import { pdfPagesPdf } from "./slide-reading";
+import { pdfImageFile, scanPdfImages } from "./material-visuals-pdf";
 import {
-  BROWSER_KINDS, CONTENT_TYPE, canServeVisual, deckVisuals, parseVisualKey, pdfVisuals, slideMedia,
+  BROWSER_KINDS, CONTENT_TYPE, DEFAULT_TEXT_WORDS, buildVisuals, canServeVisual, pageInfoOf, parseVisualKey, slideMedia,
   type DeckScan, type PictureFact, type Visual,
 } from "./material-visuals";
 
@@ -91,25 +92,41 @@ export async function scanDeck(bytes: Uint8Array): Promise<DeckScan | null> {
 type Index = { unit: "slide" | "page"; visuals: Visual[]; notShown: number };
 type Indexed = { ok: true; index: Index } | { ok: false; out: Out };
 
+type Settings = { minPx: number; maxPerSlide: number; classify: boolean; textWords: number };
+
 /** The visuals of one of the caller's own materials, under the current policy. */
-async function indexOf(ctx: IndividualContext, material: MaterialRow, policy: { minPx: number; maxPerSlide: number }): Promise<Indexed> {
-  const extras = await materialExtras(ctx.admin, ctx.userId, [material.id]);
+async function indexOf(ctx: IndividualContext, material: MaterialRow, policy: Settings): Promise<Indexed> {
+  const pdf = material.mimeType === PDF_MIME;
+  const [extras, chunks] = await Promise.all([
+    materialExtras(ctx.admin, ctx.userId, [material.id]),
+    // The sections already stored (a page's own text layer, or its existing AI reading): read, never written or re-transcribed.
+    policy.classify ? listChunks(ctx.admin, ctx.userId, material.id) : Promise.resolve(null),
+  ]);
   const quality = extras.byId.get(material.id)?.quality ?? null;
-  if (material.mimeType === PDF_MIME) {
-    return { ok: true, index: { unit: "page", visuals: quality ? pdfVisuals({ emptyUnits: quality.emptyUnits, aiReadUnits: quality.aiReadUnits }) : [], notShown: 0 } };
-  }
-  let scan = cacheGet(cacheKey(material));
+  const empty = quality?.emptyUnits ?? [], aiRead = quality?.aiReadUnits ?? [];
+  const pages = pageInfoOf(chunks?.ok ? chunks.data : [], empty, aiRead);
+
+  let scan = cacheGet(cacheKey(material)) ?? null;
   if (!scan) {
     const bytes = await materialBytes(ctx.admin, ctx.userId, material.id);
     if (!bytes) return { ok: false, out: json(503, { error: "Your original file could not be read just now. Try again shortly." }) };
-    const fresh = await scanDeck(bytes);
-    if (!fresh) return { ok: false, out: json(422, { error: "The pictures in your file could not be read." }) };
-    cachePut(cacheKey(material), fresh);
+    const fresh = pdf ? await scanPdfImages(bytes) : await scanDeck(bytes);
+    // A PDF that cannot be opened for its pictures still has its image-only pages; a presentation that cannot be opened has nothing.
+    if (!fresh && !pdf) return { ok: false, out: json(422, { error: "The pictures in your file could not be read." }) };
+    if (fresh) cachePut(cacheKey(material), fresh);
     scan = fresh;
   }
-  const { visuals, notShown } = deckVisuals(scan, { ...policy, aiRead: new Set(quality?.aiReadUnits ?? []) });
-  return { ok: true, index: { unit: "slide", visuals, notShown } };
+  const { visuals, notShown } = buildVisuals(scan, {
+    unit: pdf ? "page" : "slide", minPx: policy.minPx, maxPerSlide: policy.maxPerSlide, aiRead: new Set(aiRead), emptyUnits: empty,
+    pages, classify: policy.classify, textWords: policy.textWords,
+  });
+  return { ok: true, index: { unit: pdf ? "page" : "slide", visuals, notShown } };
 }
+
+const settingsOf = (policy: { scholarLessonVisualsMinPx: number; scholarLessonVisualsMaxPerSection: number; scholarVisualClassify?: string; scholarVisualTextWords?: number }): Settings => ({
+  minPx: policy.scholarLessonVisualsMinPx, maxPerSlide: policy.scholarLessonVisualsMaxPerSection,
+  classify: policy.scholarVisualClassify !== "off", textWords: policy.scholarVisualTextWords ?? DEFAULT_TEXT_WORDS,
+});
 
 async function openMaterial(ctx: IndividualContext, materialId: string): Promise<{ ok: true; material: MaterialRow; supported: boolean } | { ok: false; out: Out }> {
   const r = await getMaterial(ctx.admin, ctx.userId, materialId);
@@ -126,7 +143,7 @@ export async function materialVisuals(ctx: IndividualContext, materialId: string
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarLessonVisuals !== "on") return json(200, { visuals: [], off: true });
   if (!opened.supported) return json(200, { unit: "section", visuals: [], notShown: 0 });
-  const idx = await indexOf(ctx, opened.material, { minPx: policy.scholarLessonVisualsMinPx, maxPerSlide: policy.scholarLessonVisualsMaxPerSection });
+  const idx = await indexOf(ctx, opened.material, settingsOf(policy));
   if (!idx.ok) return idx.out;
   return json(200, { unit: idx.index.unit, visuals: idx.index.visuals, notShown: idx.index.notShown });
 }
@@ -142,7 +159,7 @@ export async function materialVisualFile(ctx: IndividualContext, materialId: str
   if (!opened.supported) return { status: 404, error: "Not found" };
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarLessonVisuals !== "on") return { status: 404, error: "Not found" };
-  const idx = await indexOf(ctx, opened.material, { minPx: policy.scholarLessonVisualsMinPx, maxPerSlide: policy.scholarLessonVisualsMaxPerSection });
+  const idx = await indexOf(ctx, opened.material, settingsOf(policy));
   if (!idx.ok) return { status: idx.out.status, error: String(idx.out.body.error ?? "") };
   const visual = idx.index.visuals.find(v => v.key === key);
   if (!visual) return { status: 404, error: "Not found" };
@@ -156,6 +173,17 @@ export async function materialVisualFile(ctx: IndividualContext, materialId: str
     return { status: 200, bytes: new Uint8Array(Buffer.from(pdf.base64, "base64")), type: "application/pdf", maxAge: "short" };
   }
 
+  if (visual.unit === "page") {
+    // A picture inside the PDF: its original form (a JPEG as it is, a Flate image as a lossless PNG), else its page.
+    const num = Number(/^x(\d+)$/.exec(visual.media ?? "")?.[1]);
+    const img = Number.isInteger(num) ? await pdfImageFile(bytes, num, visual.sha) : null;
+    if (img === null) return { status: 404, error: "Not found" };
+    if (img === "page") {
+      const one = await pdfPagesPdf(bytes, [visual.n]);
+      return one ? { status: 200, bytes: new Uint8Array(Buffer.from(one.base64, "base64")), type: "application/pdf", maxAge: "short" } : { status: 404, error: "That page could not be shown." };
+    }
+    return { status: 200, bytes: img.bytes, type: img.type, maxAge: "immutable" };
+  }
   const z = await openOfficeZip(bytes);
   if (!z.ok || !visual.media) return { status: 422, error: "The pictures in your file could not be read." };
   const data = await z.zip.file(visual.media)?.async("uint8array");
