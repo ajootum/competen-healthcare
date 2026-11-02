@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.2.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.3.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -209,6 +209,11 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     ]},
     // Migration 510 (COMPETENCY-01 C5): Holdings competency verification. Two separate authorities, two doors --
     // the Studio administrator (verification.manage) and the assessor queue (verification.assess).
+    // Migration 894: the Holdings registry of assessments and checklists (identity, classification, availability). It sits
+    // here because the HQ has no Holdings shared-infrastructure group yet. Checklist Studio (authoring) joins this group.
+    { key: "frameworks.assessments", group: "Assessments & Checklists", items: [
+      { key: "frameworks.assessments.catalogue", label: "Assessment & Checklist Catalogue", href: "/super-admin/assessment-catalogue", icon: "🗃️", keywords: ["assessment catalogue", "checklist catalogue", "instrument registry", "audit checklists"] },
+    ]},
     { key: "frameworks.verification", group: "Competency Verification", items: [
       { key: "frameworks.verification.studio", label: "Verification Studio", href: "/super-admin/verification-studio", icon: "🧭" },
       { key: "frameworks.verification.assessment", label: "Competency Assessment", href: "/super-admin/competency-assessment", icon: "📝" },
@@ -318,6 +323,10 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
         { key: "frameworks.cgr.administration", label: "CGR Administration & Configuration", href: "/super-admin/cgr/administration", icon: "·" },
       ]},
     ]},
+  ], deep: [
+    // Migration 894: the catalogue's configuration pages are reached from the catalogue (manage right).
+    { key: "frameworks.assessments.families", label: "Catalogue Families", href: "/super-admin/assessment-catalogue/families", via: "/super-admin/assessment-catalogue", keywords: ["instrument families", "CA CPA DA"] },
+    { key: "frameworks.assessments.terms", label: "Catalogue Classification Terms", href: "/super-admin/assessment-catalogue/terms", via: "/super-admin/assessment-catalogue", keywords: ["dimensions", "methods", "domains", "populations"] },
   ]},
 
   { key: "ai", label: "AI & Intelligence", icon: "🧠", sections: [

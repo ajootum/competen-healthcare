@@ -189,6 +189,11 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.competency.verification.assess", space: "quality"  },
   // Migration 690: a Competency Programme Lead asks for assessments for the people on their programme. Never decides one.
   { code: "hq.competency.verification.request", space: "quality"  },
+  // Migration 894 (Assessment & Checklist Catalogue). View searches the Holdings registry and reads an instrument's
+  // classification, availability and versions. Manage registers identities, classifies, sets product availability,
+  // relates, references and keeps collections and terms. Neither edits checklist content (Checklist Studio does).
+  { code: "hq.assessment.catalogue.view",     space: "quality"  },
+  { code: "hq.assessment.catalogue.manage",   space: "quality"  },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -276,6 +281,10 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // Migrations 460-464 (COMPETEN-LEARNING-01). The narrower authorities first: the first matching prefix wins, and none
   // of them may inherit author. The Learning review page is the clinical reviewer's, as /super-admin/clinical-review is.
   // Migration 510 (COMPETENCY-01 C5). Two separate doors: the assessor queue must not inherit the Studio, nor the reverse.
+  // Migration 894. The configuration pages (families, terms) are the manager's. The registry itself is the view right.
+  { prefix: "/super-admin/assessment-catalogue/families", capability: "hq.assessment.catalogue.manage" },
+  { prefix: "/super-admin/assessment-catalogue/terms",    capability: "hq.assessment.catalogue.manage" },
+  { prefix: "/super-admin/assessment-catalogue",          capability: "hq.assessment.catalogue.view" },
   { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
   { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
   // Migration 690: the programme lead door, separate from both.

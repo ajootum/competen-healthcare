@@ -103,6 +103,16 @@ export const PLANE_TABLE_PREFIXES = [
   "=hq_account_participation",
   // the NEIGHBOURS of two exact entries, governed with NO allowlist entry so any read of them is refused outright
   "individual_scholar_learner_",
+  // ASSESSMENT & CHECKLIST CATALOGUE (migration 894). The catalogue tables are named EXACTLY, never as an `asmt_` family prefix:
+  // a whole-family prefix would also judge the Checklist Studio's definition tables, which are a separate decision. The
+  // catalogue tables have allowlist entries restricted to src/lib/assessment/catalogue/**. The capture and progression
+  // tables (instances, responses, evidence, comments, outcomes, respondent grants, progression decisions) are governed with
+  // NO allowlist entry, so any read of them from the landlord plane is refused. The organisation scope table is governed
+  // with no entry because Phase 1 has no screen for it.
+  "=asmt_catalogue_dimension", "=asmt_catalogue_term", "=asmt_instrument_term", "=asmt_instrument_relation", "=asmt_instrument_reference",
+  "=asmt_instrument_availability", "=asmt_instrument_org_scope", "=asmt_collection", "=asmt_collection_member",
+  "=asmt_respondent_grant", "=asmt_instance", "=asmt_instance_layout", "=asmt_response", "=asmt_evidence", "=asmt_comment", "=asmt_outcome",
+  "=asmt_progression_decision",
 ] as const;
 
 /** A prefix entry, or an exact table name when it starts with `=`. */
