@@ -36,25 +36,46 @@ export default function ModuleAccessEditor({ policyKey, label, mode: initialMode
     return { ok: res.ok, json: await res.json().catch(() => ({})) };
   }
 
+  // Looks the typed email up and returns the list with that account on it, or null (with the reason shown) when it cannot be added.
+  async function withTyped(list: Account[]): Promise<Account[] | null> {
+    const r = await post({ action: "module_access_lookup", email });
+    if (!r.ok) { setMsg({ ok: false, text: r.json?.error ?? "That account could not be looked up. Nothing was added." }); return null; }
+    const a = r.json.account as Account;
+    if (list.some(x => x.id === a.id)) return list;
+    if (list.length >= maxUsers) { setMsg({ ok: false, text: `At most ${maxUsers} accounts. That limit is fixed.` }); return null; }
+    return [...list, a];
+  }
+
+  // Saves the draft with this list. Adding and removing an account save at once, so the list on screen is always the draft.
+  async function store(list: Account[], done: string) {
+    const r = await post({ action: "set", key: policyKey, value: { mode, users: list.map(a => a.id), groups } });
+    if (!r.ok) { setMsg({ ok: false, text: r.json?.error ?? "That could not be saved. Nothing has changed." }); return false; }
+    setAccounts(list); setMsg({ ok: true, text: done }); router.refresh();
+    return true;
+  }
+
   async function add() {
     setBusy(true); setMsg(null);
     try {
-      const r = await post({ action: "module_access_lookup", email });
-      if (!r.ok) { setMsg({ ok: false, text: r.json?.error ?? "That account could not be looked up. Nothing was added." }); return; }
-      const a = r.json.account as Account;
-      if (accounts.some(x => x.id === a.id)) { setMsg({ ok: false, text: "That account is already on the list." }); return; }
-      if (accounts.length >= maxUsers) { setMsg({ ok: false, text: `At most ${maxUsers} accounts. That limit is fixed.` }); return; }
-      setAccounts(list => [...list, a]); setEmail("");
-      setMsg({ ok: true, text: `${a.name ?? a.email ?? "The account"} is on the draft list. Save the draft to keep it.` });
-    } catch { setMsg({ ok: false, text: "That account could not be looked up. Check your connection." }); } finally { setBusy(false); }
+      const list = await withTyped(accounts);
+      if (!list) return;
+      if (await store(list, `${list[list.length - 1]?.name ?? "The account"} is on the draft and saved. Publish below to make it effective.`)) setEmail("");
+    } catch { setMsg({ ok: false, text: "That account could not be added. Check your connection." }); } finally { setBusy(false); }
   }
 
+  async function remove(id: string) {
+    setBusy(true); setMsg(null);
+    try { await store(accounts.filter(x => x.id !== id), "Removed from the draft and saved. Publish below to make it effective."); }
+    catch { setMsg({ ok: false, text: "That could not be saved. Check your connection." }); } finally { setBusy(false); }
+  }
+
+  // Save draft also takes an email still sitting in the box, so a typed account is never silently left out.
   async function save() {
     setBusy(true); setMsg(null);
     try {
-      const r = await post({ action: "set", key: policyKey, value: { mode, users: accounts.map(a => a.id), groups } });
-      if (!r.ok) { setMsg({ ok: false, text: r.json?.error ?? "That could not be saved. Nothing has changed." }); return; }
-      setMsg({ ok: true, text: "Draft saved. Publish below to make it effective." }); router.refresh();
+      const list = email.trim() ? await withTyped(accounts) : accounts;
+      if (!list) return;
+      if (await store(list, "Draft saved. Publish below to make it effective.")) setEmail("");
     } catch { setMsg({ ok: false, text: "That could not be saved. Check your connection." }); } finally { setBusy(false); }
   }
 
@@ -91,7 +112,7 @@ export default function ModuleAccessEditor({ policyKey, label, mode: initialMode
                   <span className="font-semibold text-gray-900">{a.name ?? (a.email ? "No name on record" : "An account that no longer exists")}</span>
                   {a.email && <span className="text-gray-600"> · {a.email}</span>}
                 </span>
-                <button type="button" className={ghost} disabled={busy} onClick={() => { setAccounts(list => list.filter(x => x.id !== a.id)); setMsg(null); }}>
+                <button type="button" className={ghost} disabled={busy} onClick={() => void remove(a.id)}>
                   Remove<span className="sr-only"> {a.email ?? a.name ?? "this account"}</span>
                 </button>
               </li>
