@@ -22,14 +22,6 @@ import { join, relative } from "node:path";
 
 export const BANNED = /nurs|competenc|criteri|learner|scholar|benner|dacum|clinical/i;
 export const CORE_DIR = "src/lib/assessment/core";
-/**
- * EXACT tokens the approved design (asmt-design s6, owner template library) fixes in the layout vocabulary. They are
- * presentation names, not engine knowledge, and are removed before the ban is applied. Anything else containing a banned
- * word is still a violation (a planted control proves it). To be decided by the coordinator: rename to generic names.
- *   competency_matrix        asmt_layout_template_version.presentation value (owner: Competency Matrix template)
- *   CriterionRow|Card|Focus  item components of the asmt.layout/1 grammar
- */
-export const DESIGN_FIXED = /competency_matrix|Criterion(?:Row|Card|Focus)(?![A-Za-z])/g;
 
 /** Remove // and block comments, keeping string, template and regex-free code intact. Line breaks are kept. */
 export function stripComments(src: string): string {
@@ -65,7 +57,7 @@ export interface Violation { file: string; line: number; word: string; text: str
 
 export function scanSource(file: string, src: string): Violation[] {
   const out: Violation[] = [];
-  stripComments(src).replace(DESIGN_FIXED, "").split("\n").forEach((text, idx) => {
+  stripComments(src).split("\n").forEach((text, idx) => {
     const m = BANNED.exec(text);
     if (m) out.push({ file, line: idx + 1, word: m[0], text: text.trim().slice(0, 120) });
   });
@@ -101,8 +93,6 @@ export function selfTest(): string[] {
   t("a word only in a line comment is not a violation", scanSource("x.ts", "// the core is not clinical\nexport const a = 1;").length === 0);
   t("a word only in a block comment is not a violation", scanSource("x.ts", "/* dacum\n benner */ export const a = 1;").length === 0);
   t("a comment marker inside a string does not hide what follows", scanSource("x.ts", 'const u = "http://x"; const competency = 1;').length === 1);
-  t("the design-fixed layout names are allowed", scanSource("x.ts", 'const a = ["CriterionRow", "competency_matrix"];').length === 0);
-  t("but a near miss is not", scanSource("x.ts", 'const a = "CriterionList"; const b = "competency_map";').length === 1);
   t("line numbers survive the strip", scanSource("x.ts", "/* a\n b */\nconst benner = 1;")[0]?.line === 3);
   return fails;
 }

@@ -73,7 +73,7 @@ describe("(planted) a layout can never select, hide or reorder items", () => {
 
 describe("presentation availability", () => {
   it("accepted by the schema but not publishable yet", () => {
-    const l = { ...clone(STANDARD_CHECKLIST_LAYOUT), presentation: "competency_matrix" } as LayoutDoc;
+    const l = { ...clone(STANDARD_CHECKLIST_LAYOUT), presentation: "matrix" } as LayoutDoc;
     expect(validateLayout(l).errors).toEqual([]);
     expect(validateLayout(l).warnings.map((w) => w.code)).toContain("presentation_not_available");
     const pub = validateLayout(l, undefined, { forPublication: true });
@@ -179,8 +179,8 @@ describe("multi-field items, context, metadata, tabs, outcome preview", () => {
     expect(it.fields.map((f) => [f.field_key, f.required])).toEqual([["staff_role", true], ["observation_note", false]]);
   });
   it("mobile switches the item component", () => {
-    expect(resolveView(RESP_ASSESS, STANDARD_CHECKLIST_LAYOUT, {}, null, { breakpoint: "mobile" }).items[0].component).toBe("CriterionCard");
-    expect(resolveView(RESP_ASSESS, STANDARD_CHECKLIST_LAYOUT, {}, null, { breakpoint: "desktop" }).items[0].component).toBe("CriterionRow");
+    expect(resolveView(RESP_ASSESS, STANDARD_CHECKLIST_LAYOUT, {}, null, { breakpoint: "mobile" }).items[0].component).toBe("ItemCard");
+    expect(resolveView(RESP_ASSESS, STANDARD_CHECKLIST_LAYOUT, {}, null, { breakpoint: "desktop" }).items[0].component).toBe("ItemRow");
   });
   it("context and metadata values are supplied, labels come from the layout, absent for an audit", () => {
     const v = resolveView(RESP_ASSESS, rich(), {}, null, { context: "Framework 1 > Duty 2 > Task 3", metadata: { subject: "Person A", unit: undefined } });

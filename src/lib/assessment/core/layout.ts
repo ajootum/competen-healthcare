@@ -25,12 +25,12 @@ export const STANDARD_CHECKLIST_LAYOUT: LayoutDoc = {
   navigation: { mode: "scroll", unit: "section", progress: "bar", allowJump: true, prevNext: false },
   header: ["TitleBlock", "SubjectBlock", "ProgressBlock"],
   section: { component: "SectionCard", collapsible: true, groupBadges: true },
-  item: { component: "CriterionRow", slots: { ...baseSlots } },
+  item: { component: "ItemRow", slots: { ...baseSlots } },
   controls: {},
   grouping: "section",
   indicators: { completed: true, unassessed: true, critical: true, missingEvidence: true },
   outcomePreview: { enabled: true, label: "Preview outcome" },
-  breakpoints: { mobile: { item: { component: "CriterionCard" }, slots: { response: "below", fields: "stack" } } },
+  breakpoints: { mobile: { item: { component: "ItemCard" }, slots: { response: "below", fields: "stack" } } },
   print: { guidance: true, responses: true, evidenceList: true, pageBreak: "section", signature: true, orientation: "portrait" },
 };
 
@@ -40,7 +40,7 @@ export const GUIDED_ASSESSMENT_LAYOUT: LayoutDoc = {
   navigation: { mode: "stepper", unit: "item", progress: "count", allowJump: true, prevNext: true },
   header: ["TitleBlock", "ProgressBlock"],
   section: { component: "SectionCard", collapsible: false, groupBadges: true },
-  item: { component: "CriterionFocus", slots: { ...baseSlots, guidance: "inline", response: "below", evidence: "inline", comment: "inline" } },
+  item: { component: "ItemFocus", slots: { ...baseSlots, guidance: "inline", response: "below", evidence: "inline", comment: "inline" } },
   controls: {},
   grouping: "section",
   indicators: { completed: true, unassessed: true, critical: true, missingEvidence: true },

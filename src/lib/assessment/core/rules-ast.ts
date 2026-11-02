@@ -133,7 +133,7 @@ export const WHERE_KEYS = ["attestation", "method", "outcomeClass", "minLevelSta
 
 // ── asmt.layout/1 ────────────────────────────────────────────────────────────────────────────────────────────
 export const LAYOUT_SCHEMA = "asmt.layout/1" as const;
-export const PRESENTATIONS = ["standard_checklist", "guided_assessment", "audit_inspection", "assessment_form", "competency_matrix"] as const;
+export const PRESENTATIONS = ["standard_checklist", "guided_assessment", "audit_inspection", "assessment_form", "matrix"] as const;
 export type Presentation = (typeof PRESENTATIONS)[number];
 /** Phase 1 can publish only these. */
 export const AVAILABLE_PRESENTATIONS: Presentation[] = ["standard_checklist", "guided_assessment"];
@@ -144,7 +144,7 @@ export const NAV_PROGRESS = ["bar", "count"] as const;
 export const HEADER_BLOCKS = ["TitleBlock", "InstructionsBlock", "SubjectBlock", "ProgressBlock", "ContextBlock", "MetadataBlock"] as const;
 export type HeaderBlock = (typeof HEADER_BLOCKS)[number];
 export const SECTION_COMPONENTS = ["SectionCard", "SectionAccordion"] as const;
-export const ITEM_COMPONENTS = ["CriterionRow", "CriterionCard", "CriterionFocus"] as const;
+export const ITEM_COMPONENTS = ["ItemRow", "ItemCard", "ItemFocus"] as const;
 export const BADGES = ["critical", "mandatory", "method", "group"] as const;
 export type Badge = (typeof BADGES)[number];
 export const GROUPINGS = ["section", "group", "section_then_group"] as const;
@@ -199,7 +199,7 @@ export interface LayoutDoc {
   /** fields shown by MetadataBlock; the values are supplied by the adapter, never by the layout */
   metadata?: { fields: { key: string; label: string }[] };
   section: { component: "SectionCard" | "SectionAccordion"; collapsible: boolean; groupBadges: boolean };
-  item: { component: "CriterionRow" | "CriterionCard" | "CriterionFocus"; slots: LayoutSlots };
+  item: { component: "ItemRow" | "ItemCard" | "ItemFocus"; slots: LayoutSlots };
   controls: Partial<Record<ResponseType, string>>;
   grouping: "section" | "group" | "section_then_group";
   indicators: { completed: boolean; unassessed: boolean; critical: boolean; missingEvidence: boolean };
