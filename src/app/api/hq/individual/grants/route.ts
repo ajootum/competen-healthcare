@@ -11,9 +11,11 @@ export const dynamic = "force-dynamic";
 
 // POST /api/hq/individual/grants -- COMPETEN-IND-003 owner rulings D8 and D9.
 //
-// Grants Competen Individual pilot access: the gate-3 membership if the person has none, and one live
+// Grants Competen Individual access to an existing account: the gate-3 membership if the person has none, and one live
 // entitlement per requested experience. Body: { targetUserId, experiences: ("scholar"|"professional")[],
-// adultConfirmed: boolean, note? }.
+// adultConfirmed: boolean, note?, basis?: "pilot" | "complimentary", endsOn? }. Basis "pilot" (the default) records
+// source pilot with an optional end date. "complimentary" records source hq_grant and REQUIRES an end date, at most 366
+// days ahead -- the same rule as an ordinary invitation. The audit log records the basis.
 //
 // ⚠ D9: GATED BY THE EXISTING HQ CAPABILITY MACHINERY, hqApiGate(["hq.individual.pilot.grant"]) -- the
 // right the Individual Product Administrator appointment holds. No new authority, no landlord bypass
@@ -73,6 +75,7 @@ export async function POST(req: Request) {
       target_user_id: parsed.targetUserId, requested: parsed.experiences, granted: outcome.granted,
       already_live: outcome.alreadyLive, membership: outcome.membership,
       adult_confirmed: parsed.experiences.includes("scholar") ? parsed.adultConfirmed : null,
+      basis: parsed.basis ?? "pilot", source: parsed.source ?? "pilot",
       ends_at: parsed.endsAt ?? null, note: parsed.note ?? null,
     },
   }).then((r: unknown) => r, () => {});

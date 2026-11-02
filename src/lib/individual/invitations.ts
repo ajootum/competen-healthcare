@@ -2,7 +2,7 @@
 import { judgeTarget } from "../../../scripts/production-guard";
 import { isExperienceKey, type ExperienceKey } from "./experiences";
 import { isNotProvisioned } from "./access";
-import { grantIndividualAccess, parseEndDate, normaliseLookupEmail, type GrantOutcome } from "./grants";
+import { grantIndividualAccess, parseEndDate, normaliseLookupEmail, ordinaryEndDateRefusal, ORDINARY_MAX_ACCESS_DAYS as ORDINARY_MAX, type GrantOutcome } from "./grants";
 import { INDIVIDUAL_HOME } from "./entry";
 import { individualIdentityProfile } from "../platform-membership";
 import { identityHoldsNoStanding } from "../identity/standing";
@@ -38,7 +38,7 @@ import {
 export const INVITE_DEFAULT_DAYS = 14;
 export const INVITE_MAX_DAYS = 30;
 /** An ordinary invitation's access must end within this many days (owner GO 2 Nov 2026: no open-ended access). */
-export const ORDINARY_MAX_ACCESS_DAYS = 366;
+export const ORDINARY_MAX_ACCESS_DAYS = ORDINARY_MAX;
 
 /**
  * "ordinary": an HQ Add User invitation. Complimentary access with a REQUIRED end date, source hq_grant.
@@ -68,9 +68,6 @@ export type InvitationRequest = {
 export type Refusal = { ok: false; status: number; code: string; message: string; personId?: string };
 export const isRefusal = (x: unknown): x is Refusal => !!x && typeof x === "object" && (x as any).ok === false;
 
-/** The UTC calendar date `days` from `now`, as YYYY-MM-DD. */
-const utcDatePlus = (now: Date, days: number) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
-
 /** Pure: validate an invitation request body. `basis` defaults to "pilot", so the HQ access board is unchanged. */
 export function validateInvitation(body: any, basis: InviteBasis = "pilot", now: Date = new Date()): InvitationRequest | Refusal {
   const email = normaliseLookupEmail(body?.email);
@@ -85,12 +82,9 @@ export function validateInvitation(body: any, basis: InviteBasis = "pilot", now:
   const endsAt = parseEndDate(body?.endsOn);
   if (endsAt === false) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be a date (YYYY-MM-DD)." };
   if (basis === "ordinary") {
-    // No open-ended access through an ordinary invite. The range is checked on calendar dates (UTC), the same
-    // basis parseEndDate stores. Whether the end is in the future is still the schema's to decide.
-    if (endsAt === null) return { ok: false, status: 400, code: "END_DATE_REQUIRED", message: "Choose when this person's access ends." };
-    const ends = String(body.endsOn);
-    if (ends < utcDatePlus(now, 0)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be today or later." };
-    if (ends > utcDatePlus(now, ORDINARY_MAX_ACCESS_DAYS)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `Access can be given for at most ${ORDINARY_MAX_ACCESS_DAYS} days.` };
+    // No open-ended access through an ordinary invite (the rule is shared with the complimentary grant, grants.ts).
+    const refusal = ordinaryEndDateRefusal(body?.endsOn, endsAt, now);
+    if (refusal) return refusal;
   }
   const days = body?.expiresInDays === undefined || body?.expiresInDays === null || body?.expiresInDays === "" ? INVITE_DEFAULT_DAYS : Number(body.expiresInDays);
   if (!Number.isInteger(days) || days < 1 || days > INVITE_MAX_DAYS)

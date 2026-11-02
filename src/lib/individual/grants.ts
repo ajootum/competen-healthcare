@@ -43,14 +43,42 @@ export type GrantRequest = {
    * hq_pilot_grant and hq_grant. The compensating delete below matches the same source.
    */
   source?: "pilot" | "hq_grant";
+  /** How an HQ grant was made (validateGrant): recorded in the audit log. The stored source is `source`. */
+  basis?: "complimentary" | "pilot";
 };
+
+/** Complimentary access (an ordinary invitation, or a complimentary grant) must end within this many days (owner GO 2 Nov 2026: no open-ended access). */
+export const ORDINARY_MAX_ACCESS_DAYS = 366;
+
+/** The UTC calendar date `days` from `now`, as YYYY-MM-DD. */
+const utcDatePlus = (now: Date, days: number) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+
+/**
+ * Pure: the end-date rule for complimentary access, shared by the ordinary invitation and the complimentary grant.
+ * `endsOn` is the raw YYYY-MM-DD and `endsAt` what parseEndDate made of it (already known to be valid or null).
+ * Required, not before today, at most ORDINARY_MAX_ACCESS_DAYS ahead (calendar dates, UTC -- the basis parseEndDate
+ * stores). Whether the end is in the future is still the schema's to decide. Null = the end date is acceptable.
+ */
+export function ordinaryEndDateRefusal(endsOn: unknown, endsAt: string | null, now: Date = new Date()): { ok: false; status: number; code: string; message: string } | null {
+  if (endsAt === null) return { ok: false, status: 400, code: "END_DATE_REQUIRED", message: "Choose when this person's access ends." };
+  const ends = String(endsOn);
+  if (ends < utcDatePlus(now, 0)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be today or later." };
+  if (ends > utcDatePlus(now, ORDINARY_MAX_ACCESS_DAYS)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `Access can be given for at most ${ORDINARY_MAX_ACCESS_DAYS} days.` };
+  return null;
+}
+
+/**
+ * The basis of an HQ grant to an existing account. "pilot" (the default, so every existing caller is unchanged):
+ * source pilot, end date optional. "complimentary": source hq_grant, end date required.
+ */
+export type GrantBasis = "complimentary" | "pilot";
 
 export type GrantOutcome =
   | { ok: true; membership: "created" | "existing"; granted: ExperienceKey[]; alreadyLive: ExperienceKey[] }
   | { ok: false; status: number; code: string; message: string };
 
 /** Pure: validate a request body. Returns the request or a refusal. */
-export function validateGrant(body: any): GrantRequest | { ok: false; status: number; code: string; message: string } {
+export function validateGrant(body: any, now: Date = new Date()): GrantRequest | { ok: false; status: number; code: string; message: string } {
   const targetUserId = typeof body?.targetUserId === "string" ? body.targetUserId.trim() : "";
   if (!/^[0-9a-f-]{36}$/i.test(targetUserId)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "targetUserId must be a user id" };
   const raw: unknown[] = Array.isArray(body?.experiences) ? body.experiences : [];
@@ -63,7 +91,14 @@ export function validateGrant(body: any): GrantRequest | { ok: false; status: nu
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) || null : null;
   const endsAt = parseEndDate(body?.endsOn);
   if (endsAt === false) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be a date (YYYY-MM-DD)." };
-  return { targetUserId, experiences, adultConfirmed, note, endsAt };
+  const basis: GrantBasis = body?.basis === "complimentary" ? "complimentary" : "pilot";
+  if (body?.basis !== undefined && body?.basis !== null && body?.basis !== "complimentary" && body?.basis !== "pilot")
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "Choose complimentary or pilot access." };
+  if (basis === "complimentary") {
+    const refusal = ordinaryEndDateRefusal(body?.endsOn, endsAt, now);
+    if (refusal) return refusal;
+  }
+  return { targetUserId, experiences, adultConfirmed, note, endsAt, basis, source: basis === "complimentary" ? "hq_grant" : "pilot" };
 }
 
 /** "YYYY-MM-DD" -> the end of that day in UTC; absent or empty -> null (open-ended); anything else -> false. */
