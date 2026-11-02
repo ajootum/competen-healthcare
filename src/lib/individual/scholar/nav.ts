@@ -93,17 +93,20 @@ export type NavActive = { leaf: NavLeaf; module: NavModuleKey | null };
  */
 export function activeOf(path: string): NavActive | null {
   const p = cleanPath(path);
-  let best: { leaf: NavLeaf; module: NavModuleKey | null; len: number } | null = null;
-  const consider = (leaf: NavLeaf, module: NavModuleKey | null) => {
-    for (const seg of [leaf.segment, ...(leaf.also ?? [])]) {
+  const candidates: NavActive[] = [
+    { leaf: SCHOLAR_NAV.home, module: null },
+    ...SCHOLAR_NAV.modules.flatMap(m => m.items.map(leaf => ({ leaf, module: m.key }))),
+    ...SCHOLAR_NAV.shared.map(leaf => ({ leaf, module: null })),
+  ];
+  let best: NavActive | null = null;
+  let bestLen = -1;
+  for (const c of candidates) {
+    for (const seg of [c.leaf.segment, ...(c.leaf.also ?? [])]) {
       if (seg === "" ? p !== "" : !under(p, seg)) continue;
-      if (!best || seg.length > best.len) best = { leaf, module, len: seg.length };
+      if (seg.length > bestLen) { best = c; bestLen = seg.length; }
     }
-  };
-  consider(SCHOLAR_NAV.home, null);
-  for (const m of SCHOLAR_NAV.modules) for (const l of m.items) consider(l, m.key);
-  for (const l of SCHOLAR_NAV.shared) consider(l, null);
-  return best ? { leaf: best.leaf, module: best.module } : null;
+  }
+  return best;
 }
 
 export const NAV_STORAGE_KEY = "cmp:scholar:nav:v1";
