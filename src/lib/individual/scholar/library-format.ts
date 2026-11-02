@@ -38,13 +38,11 @@
 // Pure: no I/O, no clock, no model. Nothing here is an assessment, a grade or competence.
 
 import { COGNITIVE_LEVELS } from "./question-intel";
+import { FORMAT_ROW, LIBRARY_COPY_KIND, LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL, LIBRARY_FORMAT_MARKING, type LibraryFormat } from "./question-formats";
 
-export const LIBRARY_FORMATS = ["mcq", "mrq", "short", "cloze", "true_false", "extended", "flashcard", "match", "sequence", "structured"] as const;
-export type LibraryFormat = (typeof LIBRARY_FORMATS)[number];
-export const LIBRARY_FORMAT_LABEL: Record<LibraryFormat, string> = {
-  mcq: "Single best answer", mrq: "Multiple response", short: "Short answer", cloze: "Fill the blank", true_false: "True or false",
-  extended: "Extended response", flashcard: "Flashcard", match: "Matching", sequence: "Sequence", structured: "Structured (parts)",
-};
+// SCHOLAR-CE-2026 CE-05: the library's format list, labels, marking rules and stored kinds come from the registry (question-formats.ts).
+export { LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL } from "./question-formats";
+export type { LibraryFormat } from "./question-formats";
 export const MARKING_RULES = ["deterministic", "self", "rubric_ai_formative"] as const;
 export type MarkingRule = (typeof MARKING_RULES)[number];
 export const MARKING_LABEL: Record<MarkingRule, string> = {
@@ -53,14 +51,11 @@ export const MARKING_LABEL: Record<MarkingRule, string> = {
   rubric_ai_formative: "Formative AI feedback against the rubric key points, then the learner's own judgement",
 };
 /** The marking rules each format may carry. The first is the default. AI only for an extended response. */
-export const FORMAT_MARKING: Record<LibraryFormat, readonly MarkingRule[]> = {
-  mcq: ["deterministic"], mrq: ["deterministic"], cloze: ["deterministic"], true_false: ["deterministic"], match: ["deterministic"], sequence: ["deterministic"],
-  short: ["deterministic", "self"], structured: ["deterministic", "self"], flashcard: ["self"], extended: ["rubric_ai_formative", "self"],
-};
+export const FORMAT_MARKING: Record<LibraryFormat, readonly MarkingRule[]> = LIBRARY_FORMAT_MARKING;
 /** The learner kind each format is stored as (migrations 416/710). cloze, true_false and extended are `short`. */
-export const COPY_KIND: Record<LibraryFormat, "mcq" | "mrq" | "short" | "flashcard" | "match" | "sequence" | "structured"> = {
-  mcq: "mcq", mrq: "mrq", short: "short", cloze: "short", true_false: "short", extended: "short", flashcard: "flashcard", match: "match", sequence: "sequence", structured: "structured",
-};
+export const COPY_KIND: Record<LibraryFormat, "mcq" | "mrq" | "short" | "flashcard" | "match" | "sequence" | "structured"> = LIBRARY_COPY_KIND;
+/** The library formats a learner `short` item can be (told apart by answer.format): cloze, true/false, extended. A scenario is not one. */
+const LIBRARY_SHORT_FORMATS: readonly string[] = LIBRARY_FORMATS.map((f): string | null => FORMAT_ROW[f].answerFormat).filter((x): x is string => !!x);
 export const CLOZE_MARK = "_____";
 
 export type LibraryRubric = {
@@ -279,7 +274,9 @@ export function libraryKeyText(content: unknown): string {
 export function libraryContentOfLearnerQuestion(q: { kind: string; stem: string; options: readonly string[]; correctIndex: number | null; answer: unknown; rationale: string }): Check {
   if (q.kind === "case") return { ok: false, error: "A case step cannot be offered as a library question." };
   const a = (q.answer && typeof q.answer === "object" && !Array.isArray(q.answer) ? q.answer : {}) as Record<string, unknown>;
-  const format = (q.kind === "short" && typeof a.format === "string" && ["cloze", "true_false", "extended"].includes(a.format) ? a.format : q.kind) as LibraryFormat;
+  // CE-05: a short item whose format the registry knows but the library does not hold (a multi-stage scenario) is not a short answer.
+  if (q.kind === "short" && typeof a.format === "string" && a.format in FORMAT_ROW && FORMAT_ROW[a.format as keyof typeof FORMAT_ROW].library === null) return { ok: false, error: "This kind of question cannot be offered." };
+  const format = (q.kind === "short" && typeof a.format === "string" && LIBRARY_SHORT_FORMATS.includes(a.format) ? a.format : q.kind) as LibraryFormat;
   if (!(LIBRARY_FORMATS as readonly string[]).includes(format)) return { ok: false, error: "This kind of question cannot be offered." };
   const rub = checkRubric(a.rubric, format === "extended" ? { keyPoints: [3, 8] } : {});
   const rubric = rub.ok && rub.rubric ? { rubric: rub.rubric } : {};

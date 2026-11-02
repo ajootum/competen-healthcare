@@ -19,10 +19,12 @@
 // their notes do not say.
 
 import { stemKey } from "./question-intel";
+import { BLIND_FORMATS, type BlindFormat } from "./question-formats";
 import { seededOrder, type RevisionDraft } from "./revision";
 
-export type BlindFormat = "true_false" | "match" | "sequence" | "flashcard" | "structured" | "extended";
-export const BLIND_FORMATS: readonly BlindFormat[] = ["true_false", "match", "sequence", "flashcard", "structured", "extended"];
+// SCHOLAR-CE-2026 CE-05: which formats have a second reader is a row of the registry (question-formats.ts blindRank).
+export { BLIND_FORMATS } from "./question-formats";
+export type { BlindFormat } from "./question-formats";
 export const isBlindFormat = (k: string): k is BlindFormat => (BLIND_FORMATS as readonly string[]).includes(k);
 
 const LETTERS = "ABCDEF";

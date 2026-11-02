@@ -8,10 +8,11 @@ import { useCallback, useMemo, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import {
-  EXTENDED_LABEL, EXTENDED_RESPONSE_MAX, MARKED_AGAINST_NOTES, MOCK_LABEL, TRUE_FALSE_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
+  EXTENDED_LABEL, EXTENDED_RESPONSE_MAX, MARKED_AGAINST_NOTES, MOCK_LABEL, SCENARIO_LABEL, TRUE_FALSE_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
   type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 import type { RevisionFeedback, RevisionItemView } from "@/lib/individual/scholar/revision-view";
+import type { ScenarioStageView } from "@/lib/individual/scholar/scenario";
 import { MakeEvaluation } from "./evaluation-client";
 import { RecoveryFlow, type ExplainOutcome } from "./evidence-recovery";
 import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
@@ -161,6 +162,10 @@ export function RevisionStart(props: {
             <div className="mt-1 flex flex-wrap gap-3 text-[13.5px]">
               {props.formats.map(f => <label key={f} className="inline-flex items-center gap-1.5"><input type="checkbox" checked={formats.includes(f)} onChange={() => setFormats(x => toggle(x, f))} />{REVISION_FORMAT_LABEL[f]}</label>)}
             </div>
+            {/* CE-05: structured and scenario questions are answered in steps, so they need feedback after each answer. */}
+            {feedback === "end" && formats.some(f => f === "structured" || f === "scenario") && (
+              <p className="mt-1 text-[12px] text-gray-600">Structured and scenario questions need feedback after each answer, so they are left out when feedback is at the end.</p>
+            )}
           </fieldset>
           <div className="flex flex-wrap gap-4">
             <label className="text-[13px] font-semibold text-gray-800">How many
@@ -363,6 +368,30 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   // SCHOLAR-SQIE-02: a withheld AI evaluation opens evidence recovery beneath the student's answer, which is kept as typed.
   const [recovery, setRecovery] = useState<{ key: number; withheldReason: string | null } | null>(null);
   const [recovered, setRecovered] = useState(false);
+  // CE-05: an evolving scenario. The server sends one stage at a time: this holds the stage on screen, the stages already answered (the
+  // learner's own words, nothing of the key) and the token the next reply needs. The key and later stages never reach the browser early.
+  type ScenarioRun = { token: string | null; stage: ScenarioStageView | null; done: { reveal: string; prompt: string; answer: string }[]; needSelf: { accepted: string[]; reason: string; label: string } | null };
+  const [sc, setSc] = useState<ScenarioRun>(() => ({ token: null, stage: item.scenario?.stage ?? null, done: [], needSelf: null }));
+
+  async function sendStage(selfGrade?: boolean) {
+    const st = sc.stage;
+    if (!st) return;
+    const response = st.kind === "mcq" ? { index: choice } : st.kind === "mrq" ? { indexes: set } : { text };
+    setBusy(true); setError("");
+    const r = await call("/api/individual/scholar/revision/scenario", { questionId: item.id, sessionId, token: sc.token, response, ...(selfGrade === undefined ? {} : { selfGrade }) });
+    setBusy(false);
+    if (r.json.needsSelfGrade) { setSc(s => ({ ...s, needSelf: { accepted: r.json.accepted ?? [], reason: r.json.reason ?? "", label: r.json.label ?? "" } })); return; }
+    if (r.json.restart) {
+      setSc({ token: null, stage: item.scenario?.stage ?? null, done: [], needSelf: null }); setChoice(null); setSet([]); setText("");
+      setError(r.json.error ?? "This scenario timed out. Start again from the first stage."); return;
+    }
+    if (!r.ok) { setError(r.json.error ?? "Your answer could not be saved."); return; }
+    if (r.json.feedback) { onAnswered({ questionId: item.id, feedback: r.json.feedback }); return; }
+    const said = st.kind === "mcq" ? st.options[choice ?? 0] : st.kind === "mrq" ? set.map(i => st.options[i]).join("; ") : text;
+    setSc(s => ({ token: r.json.token ?? null, stage: r.json.next ?? null, done: [...s.done, { reveal: st.reveal, prompt: st.prompt, answer: said }], needSelf: null }));
+    setChoice(null); setSet([]); setText("");
+  }
+  const stageReady = !sc.stage ? false : sc.stage.kind === "mcq" ? choice !== null : sc.stage.kind === "mrq" ? set.length > 0 : text.trim().length > 0;
 
   async function send(response: unknown, extra: Record<string, unknown> = {}) {
     setBusy(true); setError("");
@@ -420,6 +449,76 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
       <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
       {answered ? (
         fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} stem={item.stem} /></> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
+      ) : item.kind === "scenario" ? (
+        !sc.stage ? <p className="mt-3 text-[13.5px] text-gray-700">This scenario cannot be shown just now.</p> : (
+          <div className="mt-3">
+            {sc.done.length > 0 && (
+              <ol className="mb-3 space-y-2" aria-label="Stages you have answered">
+                {sc.done.map((d, i) => (
+                  <li key={i} className="rounded-lg bg-gray-50 px-3 py-2 text-[13px] text-gray-800">
+                    {d.reveal && <p>{d.reveal}</p>}
+                    <p className="font-semibold">Stage {i + 1}: {d.prompt}</p>
+                    <p className="text-gray-600">Your answer: {d.answer}</p>
+                  </li>
+                ))}
+              </ol>
+            )}
+            {sc.needSelf ? (
+              <div className="rounded-xl border border-gray-200 p-4">
+                <p className="text-[13.5px] text-gray-800">{sc.needSelf.reason}</p>
+                <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
+                <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{sc.needSelf.accepted.map(a => <li key={a}>{a}</li>)}</ul>
+                <p className="mt-2 whitespace-pre-wrap text-[13px] text-gray-700">Your answer: <span className="font-semibold">{text}</span></p>
+                <p className="mt-1 text-[12px] text-gray-500">{sc.needSelf.label}</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button type="button" className={ghost} disabled={busy} onClick={() => void sendStage(true)}>It says the same</button>
+                  <button type="button" className={ghost} disabled={busy} onClick={() => void sendStage(false)}>It does not</button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={e => { e.preventDefault(); if (stageReady) void sendStage(); }}>
+                <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+                  Stage {sc.stage.index + 1} of {item.scenario?.count ?? "?"} · {sc.stage.weight} mark{sc.stage.weight === 1 ? "" : "s"}
+                </p>
+                {sc.stage.reveal && (
+                  <p className="mt-1 rounded-lg border-l-4 bg-gray-50 px-3 py-2 text-[14px] text-gray-900" style={{ borderColor: accent }}><span className="font-semibold">New information:</span> {sc.stage.reveal}</p>
+                )}
+                <p className="mt-2 text-[15px] font-semibold text-gray-900">{sc.stage.prompt}</p>
+                {(sc.stage.kind === "mcq" || sc.stage.kind === "mrq") && (
+                  <fieldset className="mt-2">
+                    <legend className="sr-only">{sc.stage.kind === "mrq" ? "Choose all that apply" : "Choose one"}</legend>
+                    {sc.stage.kind === "mrq" && <p className="mb-2 text-[12.5px] text-gray-600">Choose all that apply.</p>}
+                    <div className="grid gap-2 lg:grid-cols-2">
+                      {sc.stage.options.map((o, i) => (
+                        <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${(sc.stage!.kind === "mrq" ? set.includes(i) : choice === i) ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
+                          {sc.stage!.kind === "mrq"
+                            ? <input type="checkbox" checked={set.includes(i)} onChange={() => setSet(s => (s.includes(i) ? s.filter(x => x !== i) : [...s, i]))} className="mt-1 h-4 w-4 shrink-0" />
+                            : <input type="radio" name={`sc-${item.id}-${sc.stage!.index}`} checked={choice === i} onChange={() => setChoice(i)} className="mt-1 h-4 w-4 shrink-0" />}
+                          <span><span className="font-semibold">{letter(i)}.</span> {o}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </fieldset>
+                )}
+                {sc.stage.kind === "cloze" && (
+                  <label className="mt-2 block text-[13px] font-semibold text-gray-800">The missing word or term (the blank is _____)
+                    <input type="text" value={text} onChange={e => setText(e.target.value)} maxLength={200} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false} enterKeyHint="done" className={`${field} mt-1 block w-full`} />
+                  </label>
+                )}
+                {sc.stage.kind === "short" && (
+                  <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your answer
+                    <textarea rows={2} maxLength={1000} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full font-normal`} />
+                  </label>
+                )}
+                <div className="mt-3">
+                  <button type="submit" className={btn} style={{ background: accent }} disabled={!stageReady || busy}>
+                    {busy ? "Checking…" : sc.stage.index + 1 === (item.scenario?.count ?? 0) ? "Check answer and finish" : "Check answer and see what happens next"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        )
       ) : item.kind === "flashcard" ? (
         !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
@@ -592,7 +691,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
       )}
       {error && <p role="alert" className="mt-2 text-[13px] font-semibold text-red-800">{error}</p>}
       {answered && <button type="button" className={`${ghost} mt-3`} onClick={onNext}>{fb && !fb.correct ? "Try another question" : "Next question"}</button>}
-      <p className="mt-3 text-[11.5px] text-gray-500">{item.kind === "cloze" ? CLOZE_LABEL : item.kind === "true_false" ? TRUE_FALSE_LABEL : item.label} · {item.citation}</p>
+      <p className="mt-3 text-[11.5px] text-gray-500">{item.kind === "cloze" ? CLOZE_LABEL : item.kind === "true_false" ? TRUE_FALSE_LABEL : item.kind === "scenario" ? SCENARIO_LABEL : item.label} · {item.citation}</p>
     </article>
   );
 }
@@ -677,16 +776,20 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
       <p className={`text-[14.5px] font-bold ${f.correct ? "text-emerald-900" : "text-red-900"}`}>
-        {f.structured ? `${f.structured.practiceMarks.awarded} of ${f.structured.practiceMarks.total} practice marks`
+        {f.scenario ? `${f.scenario.practiceMarks.awarded} of ${f.scenario.practiceMarks.total} practice marks`
+          : f.structured ? `${f.structured.practiceMarks.awarded} of ${f.structured.practiceMarks.total} practice marks`
           : f.extended ? `${f.extended.marks.awarded} of ${f.extended.marks.total} practice marks`
           : f.correct ? `That matches ${basis}.` : f.score !== null && f.score > 0 ? `Partly: ${Math.round(f.score * 100)}% matched ${basis}.` : `That does not match ${basis}.`}
       </p>
+      {f.scenario && <p className="text-[12px] text-gray-700">{f.scenario.practiceMarks.label}</p>}
       {f.structured && <p className="text-[12px] text-gray-700">{f.structured.practiceMarks.label}</p>}
       {f.extended && <p className="text-[12px] text-gray-700">{f.extended.marks.label}</p>}
       {f.rubricNote && <p className="mt-1 text-[12px] text-gray-700">{f.rubricNote}</p>}
       <AttemptRecordNotes f={f} />
       {f.library &&<p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{f.markingLabel}.</span> {f.marking === "deterministic" ? MARKED_AGAINST_NOTES : ""}</p>
+      {/* SCHOLAR-CE-2026 CE-05: one honest line, on every format, saying what this was marked against. */}
+      {f.markedAgainst && <p data-testid="marked-against" className="text-[12px] text-gray-700">{f.markedAgainst}</p>}
       {f.evaluation && (
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{f.evaluation.label}</p>
@@ -695,7 +798,27 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
           {f.evaluation.formative && <p className="mt-0.5 text-[12px] text-amber-900">{f.evaluation.formative}</p>}
         </div>
       )}
-      {f.structured ? (
+      {f.scenario ? (
+        <ol className="mt-2 space-y-2">
+          {f.scenario.stages.map(st => (
+            <li key={st.index} className="rounded-lg bg-white/70 p-2.5 text-[13.5px] text-gray-900">
+              {st.reveal && <p className="text-gray-700">{st.reveal}</p>}
+              <p className="font-semibold">Stage {st.index + 1}: {st.prompt} <span className="font-normal text-gray-700">· {st.awarded === null ? "—" : st.awarded} of {st.weight} mark{st.weight === 1 ? "" : "s"}</span></p>
+              {st.yourAnswer !== null && <p className="mt-0.5"><span className="font-semibold">Your answer:</span> {st.yourAnswer}{st.by ? <span className="text-gray-600"> ({st.by === "code" ? "marked by code" : st.by === "ai" ? "judged by AI" : "marked by you"})</span> : null}</p>}
+              <p className="mt-0.5"><span className="font-semibold">{f.library ? "The library answer" : "Your notes"}:</span> {st.key}</p>
+              <p className="mt-0.5"><span className="font-semibold">Key point:</span> {st.keyPoint}</p>
+              {st.source && <p className="mt-0.5 text-[12.5px] italic text-gray-700">Source: “{st.source}”</p>}
+              {st.evaluation && (
+                <div className="mt-1 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{st.evaluation.label}</p>
+                  <p className="mt-1 text-[13.5px] text-amber-950">{st.evaluation.feedback}</p>
+                  <p className="mt-0.5 text-[12px] text-amber-900">{st.evaluation.formative}</p>
+                </div>
+              )}
+            </li>
+          ))}
+        </ol>
+      ) : f.structured ? (
         <ol className="mt-2 space-y-2">
           {f.structured.parts.map((pt, i) => (
             <li key={i} className="rounded-lg bg-white/70 p-2.5 text-[13.5px] text-gray-900">

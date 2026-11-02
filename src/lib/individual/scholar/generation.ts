@@ -2,6 +2,8 @@ import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/clien
 import { SAFETY_CONTEXT, parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
+import { VERIFY_FORMATS_DEFAULT } from "./question-formats";
+import { SCENARIO_SCOPE_LINE } from "./scenario";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
 import type { CognitiveLevel } from "./question-intel";
@@ -286,7 +288,7 @@ export type GenerationOptions = {
   existingObjectives?: ReadonlySet<string>;
 };
 /** SCHOLAR-SQIE-LEARNER-01: the formats that were always blind-checked: what an absent policy means. */
-export const VERIFY_DEFAULT: readonly string[] = ["mcq", "case", "mrq", "short"];
+export const VERIFY_DEFAULT: readonly string[] = VERIFY_FORMATS_DEFAULT;
 
 export function questionUserPrompt(passage: Passage): string {
   return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
@@ -847,7 +849,7 @@ const REVISION_COMMON = [
   RUBRIC_RULE,
   "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
-export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured" | "true_false" | "extended", string> = {
+export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured" | "true_false" | "extended" | "scenario", string> = {
   mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   // SCHOLAR-FLASHCARDS-QA-01 (flashcard v2, PROMPT_VERSIONS.flashcardMix): a concise one-concept back (never the
@@ -875,6 +877,20 @@ export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "
     `Each item: {"stem": "a question ending with ? that needs a short paragraph to answer", "modelAnswer": "a complete answer of two to four sentences, in the passage's own words", "keyPoints": [${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} short points a full answer makes, each a DIFFERENT idea the passage states], "marks": 4, "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "misconceptions": [], "references": []}.`,
     `For an extended response, "keyPoints" has ${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} points (not one to four): the answer is marked by how many it makes. marks is a whole number from 1 to 10. Write at most one item.`,
   ].join("\n"),
+  // SCHOLAR-CE-2026 CE-05 (scenario v3): a CLINICAL situation that develops over time, and a DECISION at every stage. Stage 1 is a plausible person in practice
+  // with a decision; stage 2 a meaningful CHANGE (a new finding, result or event) needing reassessment or a new decision; stage 3 further clinical judgement.
+  // Every question is a decision in the situation as it stands, never plain recall. Every finding and every expected action is supported by a cited sentence of
+  // the section. Checked in code (revision.ts checkRevisionDraft -> scenario.ts parseScenario, shapeScenario, scenarioFlaw, citationFlaw, scenarioGroundingFlaw):
+  // well formed, a situation in practice, no answer given away earlier, no stage repeating another, every stage cited, every question situational.
+  scenario: [...REVISION_COMMON,
+    `Each item: {"situation": "a person in practice at the start: what is seen and what is happening, two or three sentences", "stages": [{"reveal": "", "prompt": "a decision about THIS person now, ending with ?", "kind": "mcq", "options": [exactly 4 short options built only from the passage words], "correct": [the index of the ONE right option], "weight": 1, "keyPoint": "the point from the passage this stage teaches", "source": "ONE sentence, or two consecutive sentences, copied EXACTLY from the passage that state this stage", "references": []}, {"reveal": "a NEW finding, result or event", "prompt": "a decision after this change, ending with ?", "kind": "short", "accepted": [1 to 4 short answers the passage supports], "weight": 2, "keyPoint": "...", "source": "ONE sentence copied EXACTLY from the passage", "references": []}], "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "application", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}.`,
+    "THIS IS A PATIENT-CENTRED CLINICAL SCENARIO, NOT A QUIZ ABOUT NOTES. The situation describes a fictional person (or a clinical situation) in practice as it is at the start: what is seen, measured or reported, and what is happening. It has no name, age, date, number or identifier, and it refers to staff only as the team, a colleague, a clinician or a member of staff. NEVER mention notes, a passage, a student, a learner or revising anywhere in it, and never write phrases such as According to the notes or The notes also say.",
+    "THREE STAGES WHEN THE MATERIAL SUPPORTS THEM, two when it is thin. Stage 1: the person as they are at the start, and a decision about what to notice, prioritise or do first. Stage 2: a meaningful CHANGE (the first stage has an empty reveal; this one MUST reveal NEW clinical information: a changed observation, a finding, an investigation result or an event), and a decision that needs reassessment of the person or a new priority. Stage 3: a further development or finding, and a decision that needs clinical judgement (what the change suggests, how urgent it is, who to involve, what to do next). Introduce each reveal with a time-neutral phrase such as Some time later, Shortly afterwards or When the result arrives. A reveal states what is NOW seen, measured, reported or found; never what someone decides, plans, prepares or intends to do (that is the question). Do not state how many minutes or hours pass, or any number, that the passage does not contain.",
+    "EVERY QUESTION IS A DECISION IN THE SITUATION AS IT STANDS and refers to the person or to what has just been found, for example: What should the team do first now? / Which finding here most needs acting on? / What does this change suggest, and what is the next step? / What is the priority for this person now? NEVER a generic recall question such as Which X is often..., What is the ..., What does X stand for, Which observations does X combine, or anything that starts According to. A question asks for application, prioritisation or reasoning about THIS person, answerable from the passage ALONE.",
+    "NO LEAKAGE. Never put a stage's answer, or the facts only a later stage needs, in the situation or in any earlier stage. If a stage asks for the first sign, the situation must not name it. Clinical clues that lead the learner towards the answer are right; stating the answer is not. A later stage never repeats a question an earlier stage already asked.",
+    "NOTHING INVENTED. Every finding you show, every expected action and every key point must be supported by the sentence you cite for that stage. Never add a finding, a result, a value or a management step to complete the story. Each stage carries a source: ONE sentence (or two consecutive sentences) copied EXACTLY from the passage that STATES the stage answer and its key point, so the answer and key point use only what that source says; every stage cites DIFFERENT sentences. Where an approved reference is given and a stage draws on it, list its tag in that stage's references. If the passage does not describe what a person presents with, what it means and what is done, reply [].",
+    'The decision must be one that someone at MY LEVEL would properly make (see SCOPE below). "kind" is one of mcq (exactly 4 options and one right index), mrq (4 to 6 options and every right index; AT LEAST ONE option must be wrong; if every option would be right, do NOT use mrq: use short with the items as accepted answers, or an mcq) or short (accepted answers). Do not use cloze. weight is a whole number from 1 to 5: more for a stage that needs more of the passage. Write at most one item.',
+  ].join("\n"),
 };
 
 /** The revision kinds the blind check fits (question-quality.ts REVISION_VERIFY_SYSTEM). */
@@ -887,6 +903,7 @@ export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM, verifi
   const check = verified === "default" ? (REVISION_VERIFIED_KINDS.includes(kind) ? "revision" : "none") : verified;
   const suffix = check === "revision" ? `+${PROMPT_VERSIONS.verifyRevision}` : check === "blind" ? `+${PROMPT_VERSIONS.verifyBlind}` : "";
   return kind === "structured" ? `${PROMPT_VERSIONS.structured}${suffix}`
+    : kind === "scenario" ? `${PROMPT_VERSIONS.scenario}${suffix}`
     : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}${suffix}`
       : `${PROMPT_VERSIONS.revision}:${kind}${suffix}`;
 };
@@ -896,7 +913,7 @@ export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM, verifi
  * (the cards already there are kept, and a repeat of one is still refused by its stem).
  */
 export const formatPromptVersion = (kind: string): string =>
-  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured
+  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured : kind === "scenario" ? PROMPT_VERSIONS.scenario
     : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}` : `${PROMPT_VERSIONS.revision}:${kind}`;
 
 /**
@@ -912,7 +929,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   const context = opts.context;
   const refs = context?.mode === "notes_and_references" ? context.references : [];
   const verifyPassage = [passage.content, ...referenceGrounding(refs)].join("\n");
-  const asked = kind === "structured" || kind === "extended" ? 1 : Math.min(3, Math.max(1, limit));
+  const asked = kind === "structured" || kind === "extended" || kind === "scenario" ? 1 : Math.min(3, Math.max(1, limit));
   // SCHOLAR-SQIE-LEARNER-01: which formats a blind check runs on (policy scholar_verify_formats), and the objectives already tested.
   const verifyOn = (opts.verifyFormats ?? VERIFY_DEFAULT).includes(kind);
   const seenObjectives = new Set(opts.existingObjectives ?? []);
@@ -922,7 +939,9 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   // back to recall and understanding, and why is returned for the audit row): one more line of the guidance block.
   const levelPlan: LevelPlan | null = kind === "flashcard" && opts.levelMix ? planCardLevels(opts.levelMix, asked, { difficulty: context?.difficulty ?? null, passage: passage.content }) : null;
   const mixLine = levelPlan ? levelMixLine(levelPlan) : "";
-  const guidance = generationContextBlock(context ?? NO_CONTEXT, asked);
+  const guidance0 = generationContextBlock(context ?? NO_CONTEXT, asked);
+  // CE-05: a scenario asks decisions fit for the learner's level (the guidance already carries MY LEVEL where the study record has one).
+  const guidance = kind === "scenario" ? (guidance0 ? `${guidance0}\n${SCENARIO_SCOPE_LINE}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${SCENARIO_SCOPE_LINE}`) : guidance0;
   const guidanceWithMix = !mixLine ? guidance : guidance ? `${guidance}\n${mixLine}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${mixLine}`;
   let relabelled = 0;
   for (let attempt = 1; attempt <= 2 && !kept.length; attempt++) {
@@ -931,7 +950,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
       system: REVISION_SYSTEM[kind],
       user: `${questionUserPrompt(passage)}${guidanceWithMix}`,
       tier: "reasoning",
-      maxTokens: 1800,
+      maxTokens: kind === "scenario" ? 2800 : 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
     }, attempt === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false as const, error: r.error };
@@ -941,7 +960,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     const replyObjectives = new Set(seenObjectives);
     let batch: RevisionDraft[] = [];
     // A structured question is one substantial item a call (its prompt asks for at most one).
-    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" || kind === "extended" ? 1 : limit)) {
+    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" || kind === "extended" || kind === "scenario" ? 1 : limit)) {
       const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs, existingObjectives: replyObjectives });
       if (c.ok) {
         const objective = objectiveOf(c.draft);

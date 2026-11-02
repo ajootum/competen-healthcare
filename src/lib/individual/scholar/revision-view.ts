@@ -7,11 +7,13 @@
 // question's feedback is part by part, with its practice marks (formative).
 
 import { citeChunk } from "./extract";
-import { EXTENDED_LABEL, FORMATIVE_FEEDBACK_LABEL, LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
-import { answerText, keyOf, learnerItem, practiceMarks, structuredParts, type LearnerItem, type PartResult } from "./revision";
+import { EXTENDED_LABEL, FORMATIVE_FEEDBACK_LABEL, SCENARIO_LABEL, LEARNER_CARD, LEARNER_CARD_LABEL, LIBRARY_QUESTION_LABEL, LIBRARY_REVISION_LABEL, MARKING_LABEL, NOT_COMPETENCE_LABEL, PRACTICE_MARKS_LABEL, REVISION_LABEL, type Marking } from "./config";
+import { answerText, effectiveKind, keyOf, learnerItem, practiceMarks, structuredParts, type LearnerItem, type PartResult } from "./revision";
+import { markedAgainstLine } from "./marked-against";
+import { scenarioMarks, scenarioSpecOf, stageKeyText, storedStageResults, type StageResult } from "./scenario";
 import type { LibraryProvenance, QuestionRow } from "./store";
 import { extendedMarks, extendedSpecOf, isExtendedQuestion, storedMatched } from "./formats";
-import { applySnapshot, rubricChanged, snapshotOf, type RubricSnapshot } from "./rubric-snapshot";
+import { applySnapshot, rubricChanged, rubricHash, snapshotOf, type RubricSnapshot } from "./rubric-snapshot";
 import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, effectiveResult, outcomeOf, questionChanged, type AttemptIntegrity, type Outcome } from "./attempt-snapshot";
 import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
@@ -48,6 +50,12 @@ export type StructuredPartFeedback = {
   evaluation: { feedback: string; label: string; parts: FeedbackParts | null; formative?: string } | null;
 };
 
+/** CE-05: one stage of a scenario after marking. `score` is null for an attempt that kept no per-stage record. */
+export type ScenarioStageFeedback = {
+  index: number; reveal: string; prompt: string; weight: number; score: number | null; awarded: number | null; by: StageResult["by"] | null;
+  yourAnswer: string | null; key: string; keyPoint: string; source: string; evaluation: { feedback: string; label: string; formative: string } | null;
+};
+
 export type RevisionFeedback = {
   questionId: string; correct: boolean; score: number | null; marking: Marking; markingLabel: string;
   answer: string; rationale: string; source: { quote: string; citation: string; materialId: string; chunkId: string };
@@ -69,6 +77,13 @@ export type RevisionFeedback = {
    * (marked by the student, or an older attempt): the marks are then the stored share of the total, and no point is ticked.
    */
   extended?: { marks: { awarded: number; total: number; label: string }; modelAnswer: string; points: { text: string; matched: boolean | null }[]; label: string };
+  /**
+   * SCHOLAR-CE-2026 CE-05: what this answer was marked against, in one short honest line, for every format (marked-against.ts). Says only
+   * what the attempt kept: where it kept no snapshot the line is the plain statement and carries no count or version.
+   */
+  markedAgainst: string;
+  /** CE-05: an evolving scenario, stage by stage: the new information, the question, how each stage was marked, its key and its key point. */
+  scenario?: { stages: ScenarioStageFeedback[]; practiceMarks: { awarded: number; total: number; label: string }; label: string };
   /** SCHOLAR-SQIE-LEARNER-01: the attempt was marked against a guide the question no longer has; what is shown is the guide at the time. */
   rubricNote?: string;
   /** SCHOLAR-SQIE-CLOSE-01: a structured question, part by part, and its practice marks (formative). */
@@ -99,6 +114,14 @@ function keptView(q: QuestionRow, a: { response?: Record<string, unknown> | null
   const snapshot = snapshotOf(a.response);
   const parts = structuredParts(applySnapshot(q, snapshot));
   if (parts.length) { const structured = storedPartResults(a.response, a.marking, parts.length); return { snapshot, ...(structured ? { structured } : {}) }; }
+  // CE-05: a scenario keeps its per-stage record (what was answered and scored at each stage) on the attempt's response.
+  const sc = scenarioSpecOf(q.answer);
+  if (sc) {
+    const stages = storedStageResults(a.response, sc.stages.length);
+    const fb = formativeOf(a.response, a.marking);
+    const withFeedback = stages?.map((r, i) => { const it = fb?.items.find(x => x.part === i + 1); return it ? { ...r, feedback: formativeText(it) } : r; }) ?? null;
+    return { snapshot, ...(withFeedback ? { scenario: withFeedback } : {}) };
+  }
   const spec = isExtendedQuestion(q) ? extendedSpecOf(applySnapshot(q, snapshot).answer) : null;
   const whole = formativeOf(a.response, a.marking)?.items.find(i => i.part === null);
   return { snapshot, extendedMatched: spec ? storedMatched(a.response, a.marking, spec.keyPoints.length) : null, ...(whole ? { evaluation: formativeText(whole), evaluationParts: whole.parts } : {}) };
@@ -110,6 +133,10 @@ export function feedbackView(row: QuestionRow, m: {
   link?: { competency: string; outcome: string | null } | null; structured?: readonly PartResult[] | null;
   /** SCHOLAR-SQIE-LEARNER-01: the rubric snapshot kept on the attempt (rubric-snapshot.ts), and the key points an extended answer made. */
   snapshot?: RubricSnapshot | null; extendedMatched?: readonly number[] | null;
+  /** CE-05: a scenario's stage results (read from the attempt, or just marked). */
+  scenario?: readonly StageResult[] | null;
+  /** CE-05: the answer was marked just now, against the question as it stands: its guide is this guide (the provenance line names it). */
+  justMarked?: boolean;
   /** SCHOLAR-CONTINUITY-01 (791): what the attempt was assessed against (its snapshot) and any corrections of its result. */
   assessed?: AttemptIntegrity | null;
 }): RevisionFeedback {
@@ -154,7 +181,41 @@ export function feedbackView(row: QuestionRow, m: {
       points: spec.keyPoints.map((text, i) => ({ text, matched: made ? made.matched.includes(i) : null })),
     };
   }
+  // CE-05: a scenario after marking, stage by stage. The practice marks are the weighted sum of the stage scores.
+  let scenario: RevisionFeedback["scenario"];
+  const sc = scenarioSpecOf(q.answer);
+  if (sc) {
+    const res = m.scenario ?? null;
+    const marks = res && res.length === sc.stages.length ? scenarioMarks(sc, res) : null;
+    scenario = {
+      stages: sc.stages.map((st, i) => {
+        const r = res?.[i] ?? null;
+        return {
+          index: i, reveal: st.reveal, prompt: st.prompt, weight: st.weight, score: r ? r.score : null, awarded: r ? Math.round(st.weight * r.score * 100) / 100 : null, by: r ? r.by : null,
+          yourAnswer: r ? r.answer : null, key: stageKeyText(st), keyPoint: st.keyPoint, source: st.source,
+          evaluation: r?.by === "ai" && r.feedback ? { feedback: r.feedback, label: MARKING_LABEL.ai_evaluation, formative: FORMATIVE_FEEDBACK_LABEL } : null,
+        };
+      }),
+      // Resumed later without a per-stage record, only the share is stored with the attempt: the marks are that share of the total.
+      practiceMarks: { awarded: marks ? marks.awarded : Math.round((m.score ?? 0) * sc.totalWeight * 100) / 100, total: sc.totalWeight, label: PRACTICE_MARKS_LABEL },
+      label: SCENARIO_LABEL,
+    };
+  }
+  // CE-05: the provenance line. Counts and the guide's fingerprint come only from what the attempt kept (its rubric snapshot, else its 791 snapshot).
+  const kept = m.snapshot ?? null, rec = m.assessed?.snapshot ?? null;
+  const recKey = (rec?.answerKey ?? {}) as { parts?: unknown[]; stages?: { weight?: number }[] };
+  const recRubric = rec?.rubric ?? null;
+  const markedAgainst = markedAgainstLine({
+    format: effectiveKind(q), marking: m.marking, libraryVersion: q.library?.versionNo ?? null,
+    guide: kept?.hash ?? rec?.rubricHash ?? rec?.contentHash ?? (m.justMarked && q.answer ? rubricHash(q.answer) : null),
+    // Marked just now, the guide is the question as it stands; shown later, only what the attempt kept is named.
+    keyPoints: kept?.keyPoints?.length ?? recRubric?.keyPoints?.length ?? (m.justMarked ? rubric?.keyPoints.length ?? 0 : 0),
+    parts: kept?.parts?.length ?? (Array.isArray(recKey.parts) ? recKey.parts.length : m.justMarked ? parts.length : 0),
+    weights: sc ? (kept?.parts?.map(p => p.marks) ?? recKey.stages?.map(x => Number(x.weight)).filter(n => Number.isFinite(n)) ?? (m.justMarked ? sc.stages.map(st => st.weight) : undefined)) : undefined,
+  });
   return {
+    markedAgainst,
+    ...(scenario ? { scenario } : {}),
     rubric: rubric ? { objective: rubric.objective, level: LEVEL_LABEL[rubric.level], keyPoints: rubric.keyPoints, grounding: q.library ? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL[rubric.source] } : null,
     nextDifficulty: STEPS[Math.max(0, Math.min(2, (q.difficulty ?? 2) - 1 + (m.correct ? 1 : -1)))],
     questionId: q.id, correct: m.correct, score: m.score, marking: m.marking, markingLabel: MARKING_LABEL[m.marking],

@@ -4,6 +4,7 @@ import { useState } from "react";
 import { input, primary } from "@/app/super-admin/ai/fair-use/_components/FairUseControls";
 import { Msg, useResearchSend } from "./ResearchControls";
 import Link from "next/link";
+import { LIBRARY_FORM_OPTIONS } from "@/lib/individual/scholar/question-formats";
 import { SOURCE_KIND_LABEL, SOURCE_KINDS, normaliseSource, type SourceKind } from "@/lib/knowledge/question-source";
 import { OsceStationFields, checkStationForm, stationFieldsFromForm, stationFormOf, type StationForm } from "./OsceStationEditor";
 
@@ -20,14 +21,9 @@ type Fields = { body?: string; links?: string; station?: StationForm; q?: QForm 
 // ── SQIE-LIBRARY-EXPANSION-01 (owner GO 31 Oct 2026, item F): a revision question in any format ──
 // The form sends plain fields. The server builds the content (question-format.ts) and checks it with the SAME validator
 // Scholar reads it with (library-format.ts validateLibraryQuestion), and 442 (widened by 800) checks it in the database.
-// The labels below are this form's own (a client bundle does not import the Scholar module).
-const FORMATS: { value: string; label: string; marking: string[] }[] = [
-  { value: "mcq", label: "Single best answer", marking: ["deterministic"] }, { value: "mrq", label: "Multiple response", marking: ["deterministic"] },
-  { value: "short", label: "Short answer", marking: ["deterministic", "self"] }, { value: "cloze", label: "Fill the blank", marking: ["deterministic"] },
-  { value: "true_false", label: "True or false", marking: ["deterministic"] }, { value: "extended", label: "Extended response", marking: ["rubric_ai_formative", "self"] },
-  { value: "flashcard", label: "Flashcard", marking: ["self"] }, { value: "match", label: "Matching", marking: ["deterministic"] },
-  { value: "sequence", label: "Sequence", marking: ["deterministic"] }, { value: "structured", label: "Structured (parts)", marking: ["deterministic", "self"] },
-];
+// The format options are the registry's (question-formats.ts, which a client bundle may import); the marking words below are this form's own.
+// CE-05: the options come from the format registry (a pure module: no server code, so a client bundle may import it).
+const FORMATS: { value: string; label: string; marking: string[] }[] = LIBRARY_FORM_OPTIONS;
 const MARKING: Record<string, string> = {
   deterministic: "Marked by code against the key (the learner judges an answer code cannot)", self: "The learner marks it against the key",
   rubric_ai_formative: "Formative AI feedback against the key points, then the learner's own judgement",

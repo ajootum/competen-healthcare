@@ -19,6 +19,7 @@
 import { createHash } from "node:crypto";
 import { EXTENDED_MARKS_MAX } from "./config";
 import { extendedSpecOf, isExtendedQuestion } from "./formats";
+import { scenarioSpecOf, stageKeyText } from "./scenario";
 import { RESPONSE_BUDGET } from "./written-feedback";
 
 export const SNAPSHOT_VERSION = 1 as const;
@@ -69,6 +70,12 @@ export function rubricSnapshotOf(q: { kind: string; answer: unknown }): RubricSn
     if (parts.length && parts.every(p => p.accepted.length)) {
       snap.parts = parts; snap.marks = parts.reduce((n, p) => n + p.marks, 0);
     }
+  }
+  // CE-05: a scenario's guide is its stages: each stage's weight (as marks) and the key it was marked against (as accepted).
+  const scenario = scenarioSpecOf(q.answer);
+  if (scenario) {
+    snap.parts = scenario.stages.map(st => ({ marks: st.weight, accepted: [stageKeyText(st).slice(0, 120)] }));
+    snap.marks = scenario.totalWeight;
   }
   // Cut back, longest optional field first, until it fits. { v, hash } always fits.
   for (const drop of ["keyPoints", "accepted", "parts"] as const) {

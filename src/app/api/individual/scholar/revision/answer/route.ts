@@ -19,7 +19,7 @@ import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/indivi
 import { ORIGIN_LABEL, originOf, recallCardOf } from "@/lib/individual/scholar/flashcards";
 import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
 import { CLOZE_REVEALED_TEXT, isClozeQuestion } from "@/lib/individual/scholar/cloze";
-import { extendedMarks, extendedSpecOf, isExtendedQuestion } from "@/lib/individual/scholar/formats";
+import { extendedMarks, extendedSpecOf, isExtendedQuestion, isScenarioQuestion } from "@/lib/individual/scholar/formats";
 import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
 import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 import { aiMarkingAllowed } from "@/lib/individual/scholar/library-format";
@@ -100,6 +100,9 @@ export async function POST(req: Request) {
       card: { origin, originLabel: ORIGIN_LABEL[origin], explanation: q.rationale && q.rationale.trim() !== feedbackView(q, { correct: true, score: null, marking: "self_graded" }).answer.trim() ? q.rationale : null },
     });
   }
+
+  // ── SCHOLAR-CE-2026 CE-05: a scenario is answered stage by stage (its own route), never as one short answer ──
+  if (isScenarioQuestion(q)) return NextResponse.json({ error: "This scenario is answered one stage at a time.", scenario: true }, { status: 409 });
 
   // ── SCHOLAR-SQIE-CLOSE-01: a structured question, part by part ──
   if (q.kind === "structured") {
@@ -217,7 +220,7 @@ export async function POST(req: Request) {
   if (feedbackMode === "end" && !finished) return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
     recorded: true, ...understood,
-    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, evaluation, evaluationParts, extendedMatched, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, justMarked: true, evaluation, evaluationParts, extendedMatched, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
     ...(recovered?.ok && evaluator ? { recovered: recoveredReply(recovered, true) } : {}),
   });
 }
@@ -306,6 +309,6 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
   return NextResponse.json({
     recorded: true,
-    feedback: feedbackView(q, { correct: m.correct, score: m.score, marking, structured: final, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    feedback: feedbackView(q, { correct: m.correct, score: m.score, marking, justMarked: true, structured: final, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
   });
 }

@@ -2,7 +2,11 @@
 export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
-import { answerOutcome, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
+import { answerOutcome, noCalls, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
+import { offerable } from "@/lib/individual/scholar/scenario-service";
+import { caseReadiness } from "@/lib/individual/scholar/sufficiency";
+import { SCENARIO_INSUFFICIENT_NOTE, scenarioStageCounts } from "@/lib/individual/scholar/scenario";
+import { randomUUID } from "node:crypto";
 import { outcomeOf } from "@/lib/ai/outcomes";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -12,6 +16,7 @@ import {
   revisionPool, sectionLinks, sqieSchema, topicsOfSections, touchRevisionSet, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
+import { needsImmediateFeedback } from "@/lib/individual/scholar/question-formats";
 import { LIBRARY_FORMATS } from "@/lib/individual/scholar/library-format";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
@@ -31,7 +36,7 @@ import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flas
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
 import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
-  MOCK_LABEL, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
+  MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
   type RevisionDifficulty, type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 
@@ -126,7 +131,9 @@ export async function POST(req: Request) {
     const pool = await revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] });
     if (!pool.ok) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
     const have = new Map(pool.data.questions.map(q => [q.id, q]));
-    const ordered = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate"));
+    const orderedAll = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate") && (!needsImmediateFeedback(effectiveKind(q)) || set.feedback === "immediate"));
+    // CE-05: replaying a saved set is a NEW attempt: a scenario written under an earlier prompt, or failing today's checks, is not offered again (it is kept, with its history).
+    const ordered = (await offerable(ctx.admin, ctx.userId, orderedAll)).questions;
     if (!ordered.length) return NextResponse.json({ error: "The questions in this set are no longer stored (their materials were removed)." }, { status: 404 });
     const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback: set.feedback, setId: set.id, questionIds: ordered.map(q => q.id) });
     await touchRevisionSet(ctx.admin, ctx.userId, set.id);
@@ -171,7 +178,7 @@ export async function POST(req: Request) {
 
   // SCHOLAR-SQIE-CLOSE-01: structured only where 710 stores it, and only with feedback after each answer.
   const sqie = await sqieSchema(ctx.admin, ctx.userId);
-  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats).filter(f => f !== "structured" || (sqie && feedback === "immediate"));
+  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats).filter(f => f !== "structured" || (sqie && feedback === "immediate")).filter(f => !needsImmediateFeedback(f) || feedback === "immediate");
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
   const quantity = Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity;
   const asked: RevisionDifficulty | null = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
@@ -197,11 +204,16 @@ export async function POST(req: Request) {
   const genCap = mode === "flashcards" ? policy.scholarFlashcardsPerGeneration : Number.POSITIVE_INFINITY;
   // Library copies this session reuses: read with the pool wherever they were first filed.
   let libraryIds: string[] = [];
+  // CE-05: stored scenarios not offered this time (an earlier prompt version, or failing today's checks), counted in the audit.
+  let staleScenario = 0;
   const poolOf = async () => {
     // Flashcards: cards, and governed library questions that stand alone as a recall prompt (recallCardOf).
     const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds: mode === "flashcards" ? ["flashcard", "mcq"] : kinds, extraIds: libraryIds });
     if (!p.ok) return null;
     let qs = mode === "flashcards" ? p.data.questions.map(recallCardOf).filter((q): q is QuestionRow => !!q) : p.data.questions;
+    // CE-05: a STORED scenario is served only if it passes today's rules and was written at the current prompt version; a new one is written in its place.
+    const off = await offerable(ctx.admin, ctx.userId, qs);
+    qs = off.questions; staleScenario = off.stale.size;
     if (cardIds) {
       // A library copy made during this request is not in cardIds yet, but is a card all the same if it stands alone as a recall prompt.
       const keep = new Set(withoutFlashcards(qs.map(q => q.id), cardIds));
@@ -275,7 +287,7 @@ export async function POST(req: Request) {
   }
 
   // ── the shortfall: written new only where the mode, the policy and the student's AI allow ──
-  let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false;
+  let generated = 0, note: string | null = null, aiCalls = 0, referencesUsed = false, scenarioSkipped = false;
   const stems = new Set(pool.questions.map(q => stemKey(q.stem)));
   if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && scopeSections.length && body?.generate !== false) {
     if (policy.scholarRevisionGeneration === "saved_only") note = "New questions are not written here: this session uses your saved questions only.";
@@ -299,6 +311,18 @@ export async function POST(req: Request) {
             i++;
             const passage = await getPassage(ctx.admin, ctx.userId, call.chunkId);
             if (!passage) continue;
+            // SCHOLAR-CE-2026 CE-05: an evolving scenario needs a patient who presents, what it means and what is done. The EXISTING source-sufficiency check
+            // (sufficiency.ts caseReadiness, no AI) decides before anything is spent; where the notes cannot carry one, no scenario is forced and the session says so.
+            if (call.kind === "scenario") {
+              const ready = caseReadiness([passage.content], "case_blueprint");
+              if (ready.outcome === "insufficient" || ready.outcome === "simpler") {
+                scenarioSkipped = true;
+                await recordScholarOutcome(ctx.admin, noCalls(randomUUID()), {
+                  operation: "individual_scholar_revision_scenario", outputKind: "question", outcome: "redirected", reasons: ["insufficient_clinical_detail"], sufficiency: ready.outcome, promptVersion: PROMPT_VERSIONS.scenario,
+                });
+                continue;
+              }
+            }
             const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
             // SCHOLAR-QUESTION-INTELLIGENCE-01: the section's guidance, the difficulty, and (revision kinds only: an mcq
@@ -310,6 +334,8 @@ export async function POST(req: Request) {
             if (context.mode === "notes_and_references") referencesUsed = true;
             let ids: string[] = [], outcome = "", calls = 0;
             let mixPlan: { levels: Record<string, number>; fallback: string[]; relabelled: number } | null = null;
+            // CE-05: how many stages each kept scenario has (a thin passage supports two, a richer one three or four): counts only, in the audit.
+            let scenarioStages: number[] | null = null;
             let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
@@ -328,6 +354,7 @@ export async function POST(req: Request) {
               const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
               const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
               if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
+              if (r.ok && call.kind === "scenario") scenarioStages = scenarioStageCounts(r.kept);
               if (r.ok) {
                 calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
@@ -351,9 +378,12 @@ export async function POST(req: Request) {
               ai_calls: calls, difficulty: context.difficulty, source: context.mode, references: context.references.length,
               // The level mix asked for, the levels the passage could not support (why), and cards relabelled: codes and counts.
               ...(mixPlan ? { level_mix: mixPlan.levels, level_fallback: mixPlan.fallback, level_relabelled: mixPlan.relabelled } : {}),
+              ...(scenarioStages ? { scenario_stages: scenarioStages } : {}),
             });
             aiCalls += calls;
             made += ids.length;
+            // CE-05: a scenario was written for and none survived the checks (the audit outcome above says which rule dropped each): say the scenario-specific thing.
+            if (call.kind === "scenario" && !ids.length && outcome.startsWith("kept:0")) scenarioSkipped = true;
           }
           generated += made;
           if (!made) break;
@@ -370,7 +400,7 @@ export async function POST(req: Request) {
     // Continuity with nothing stored: there is no session to "use your saved questions", so say what is true instead.
     const nothingSaved = note ? `${note.replace(/ This session uses your saved questions( only)?\.$/, "").replace(/: this session uses your saved questions only\.$/, ".")} You have no saved questions for this yet, so there is nothing to revise here until new ones can be written. Your cards, saved sets and history are unaffected.` : null;
     return NextResponse.json({
-      error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? "There are no questions for this yet.",
+      error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? (scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE : "There are no questions for this yet."),
       continuity: !!nothingSaved, ...(withheld ? { withheld } : {}),
     }, { status: 404 });
   }
@@ -391,7 +421,7 @@ export async function POST(req: Request) {
   const fromLibrary = ordered.filter(q => q.library && libraryIds.includes(q.id)).length;
   const reused = Math.max(0, ordered.length - Math.min(generated, ordered.length) - fromLibrary);
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.ok ? made.id : null,
-    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, cloze_written: clozeWritten, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
+    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, cloze_written: clozeWritten, stale_scenario: staleScenario, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
   // Mode notes_and_references with no approved reference linked to these notes: said, never implied.
   const sourceNote = sourceMode === "notes_and_references" && generated > 0 && !referencesUsed
     ? "No clinically approved reference is linked to these notes yet, so the new questions are from your notes only." : null;
@@ -399,7 +429,7 @@ export async function POST(req: Request) {
     session: made.ok ? { id: made.id, mode, feedback, total: ordered.length, position: 0 } : null,
     items: ordered.map(revisionItemView), generated, reused, library: fromLibrary,
     label: mode === "mock" ? MOCK_LABEL : null, difficulty, source: sourceMode, aiCalls, ...(withheld ? { withheld } : {}),
-    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote, deckNote].filter(Boolean).join(" ") || null,
+    note: [note ?? (made.ok ? null : "Revision sessions are not kept on this environment, so this one cannot be resumed later."), sourceNote, deckNote, scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE : null].filter(Boolean).join(" ") || null,
   });
 }
 
