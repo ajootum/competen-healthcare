@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
 import { ShellAction } from "./Dialog";
+import { ScholarLogo } from "@/components/brand/ScholarLogo";
 
 // The Individual application's shared visual pieces. The shapes are the public site's (COMPETEN-WEB-IND-001,
 // src/components/marketing/IndividualFamily.tsx on web-ind-001): the competen + sub-brand mark, rounded-xl
@@ -21,6 +22,12 @@ export const secondaryBtn =
 /** `iconOnly` (HFE-01 F8): just the C mark, for a phone header that already names the experience in its switcher. */
 export function ExperienceMark({ wordmark, accent, size = "md", iconOnly = false }: { wordmark: string; accent: string; size?: "sm" | "md"; iconOnly?: boolean }) {
   const sm = size === "sm";
+  // SCHOLAR-BRAND-LOGO-01: Competen Scholar wears the owner's logo; every other experience keeps the C mark.
+  if (wordmark === "scholar") {
+    return iconOnly
+      ? <ScholarLogo variant="emblem" height={32} />
+      : <ScholarLogo variant="wordmark" height={sm ? 32 : 44} eager />;
+  }
   return (
     <span className="inline-flex items-center gap-2">
       <span aria-hidden className={`${sm ? "w-7 h-7 text-[13px]" : "w-9 h-9 text-base"} shrink-0 rounded-full flex items-center justify-center text-white font-bold`}

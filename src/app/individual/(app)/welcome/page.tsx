@@ -4,6 +4,7 @@ import { effectivePrimary } from "@/lib/individual/access";
 import { individualShell, gatedMetadata } from "../../_components/shell-context";
 import type { Metadata } from "next";
 import { IndividualMark, ExperienceMark } from "../../_components/chrome";
+import { ScholarLogoFluid } from "@/components/brand/ScholarLogo";
 import PrimaryChoice from "../../_components/PrimaryChoice";
 import { requestedExperience } from "@/lib/individual/entry";
 
@@ -47,7 +48,8 @@ export default async function Welcome({ searchParams }: {
   return (
     <main className="min-h-screen bg-[var(--cmp-app-bg)] px-4 py-10 sm:py-16">
       <div className="mx-auto max-w-2xl">
-        <div className="mb-8"><IndividualMark /></div>
+        {/* SCHOLAR-BRAND-LOGO-01: a welcome that continues into Competen Scholar opens with Scholar's logo; any other welcome keeps the Individual mark. */}
+        <div className="mb-8">{toScholar ? <ScholarLogoFluid variant="lockup-tagline" maxWidth={260} eager /> : <IndividualMark />}</div>
         <h1 className="text-[1.75rem] sm:text-[2rem] font-bold tracking-tight text-gray-900 text-balance">
           {firstName ? `Welcome, ${firstName}.` : "Welcome."}
         </h1>

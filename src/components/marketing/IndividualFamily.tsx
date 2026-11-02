@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PatternField } from "@/components/marketing/Pattern";
+import { ScholarLogo } from "@/components/brand/ScholarLogo";
 import {
   EXPERIENCES, INDIVIDUAL, LIFECYCLE, experienceSignIn, PASSPORT, siblingOf,
   type DemoExperience, type Experience, type ExperienceKey,
@@ -28,6 +29,8 @@ const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-
 /** competen + SUB-BRAND, the shape /practice and the coming-soon screens already use. */
 export function ExperienceMark({ wordmark, accent, size = "md" }: { wordmark: string; accent: string; size?: "sm" | "md" }) {
   const sm = size === "sm";
+  // SCHOLAR-BRAND-LOGO-01: Competen Scholar wears the owner's logo; Professional keeps the C mark.
+  if (wordmark === "scholar") return <ScholarLogo variant="wordmark" height={sm ? 32 : 44} />;
   return (
     <span className="inline-flex items-center gap-2">
       <span aria-hidden className={`${sm ? "w-7 h-7 text-[13px]" : "w-9 h-9 text-base"} shrink-0 rounded-full flex items-center justify-center text-white font-bold`}

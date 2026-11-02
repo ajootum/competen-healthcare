@@ -829,3 +829,13 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
 /* Scholar HFE: a panel opened in a dialog sits flat in it, not as a card inside a card. Unlayered on purpose,
    so it wins over the panel's own border and padding utilities. */
 .cmp-dialog :is(#upload, section[aria-labelledby="consent-h"]) { border-width: 0; padding: 0; }
+
+/* SCHOLAR-BRAND-LOGO-01: the Competen Scholar logo is a cut-out for light surfaces. In a dark colour scheme it sits on a
+   white rounded tile (a ring, so the layout does not move) rather than a bad cut-out on dark. */
+@media (prefers-color-scheme: dark) {
+  .cmp-scholar-logo {
+    background: var(--cmp-neutral-0);
+    border-radius: var(--cmp-radius-md);
+    box-shadow: 0 0 0 var(--cmp-space-4) var(--cmp-neutral-0);
+  }
+}

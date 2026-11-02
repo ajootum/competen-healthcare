@@ -9,6 +9,7 @@ import {
   INDIVIDUAL, PROFESSIONAL, SCHOLAR, enquiryHref, experienceSignIn, scholarGetStarted, type ScholarIcon,
 } from "@/lib/marketing/individual-family";
 import { productTheme } from "@/lib/design/tokens";
+import { ScholarLogoFluid } from "@/components/brand/ScholarLogo";
 
 // THE COMPETEN SCHOLAR LANDING PAGE -- SCHOLAR-WEB-REDESIGN-01 (owner, 29 Oct 2026), replacing the
 // step-by-step ExperiencePage template for /scholar. Five sections: hero, benefits, learning that grows with
@@ -58,8 +59,8 @@ export default function ScholarLanding({ joinOpen }: { joinOpen: boolean }) {
 
           <div className={`relative ${container} grid gap-10 py-10 md:grid-cols-[1fr_1.05fr] md:items-center md:py-14`}>
             <div>
-              {/* Phone only: from sm up the product bar above already carries the wordmark. */}
-              <div className="mb-6 sm:hidden"><ExperienceMark wordmark={S.wordmark} accent={S.accent} /></div>
+              {/* SCHOLAR-BRAND-LOGO-01: the full lockup with its tagline, at every width (the product bar above carries the compact wordmark). */}
+              <div className="mb-6"><ScholarLogoFluid variant="lockup-tagline" maxWidth={280} eager /></div>
               <p className="text-[12px] font-bold uppercase tracking-[0.16em]" style={{ color: S.accent }}>{S.eyebrow}</p>
               <h1 id="overview-title" className="mt-3 text-[2.2rem] lg:text-[3.2rem] font-bold tracking-tight text-gray-900 leading-[1.06] text-balance">
                 {S.headline.map(line => <span key={line} className="block">{line}</span>)}

@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { EXPERIENCES, experienceHref, isExperienceKey } from "@/lib/individual/experiences";
 import { individualShell, gatedMetadata } from "../../_components/shell-context";
+import { SCHOLAR_ICONS } from "@/lib/individual/scholar/brand";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
 import { SidebarNav, BottomNav, AccountMenu, SignOutButton } from "../../_components/ShellNav";
 // HFE-01 D1: AccountMenu is the one account menu on phone and desktop (every destination the bottom bar cannot hold).
@@ -40,7 +41,10 @@ export async function generateMetadata({ params }: { params: Promise<{ experienc
   const { experience } = await params;
   if (!isExperienceKey(experience)) return {};
   const name = EXPERIENCES[experience].name;
-  return gatedMetadata({ title: { default: name, template: `%s · ${name}` } });
+  // SCHOLAR-BRAND-LOGO-01: only Competen Scholar's routes carry its emblem as the tab and home-screen icon; the global
+  // favicon and every other product keep theirs.
+  const icons = experience === "scholar" ? SCHOLAR_ICONS : undefined;
+  return gatedMetadata({ title: { default: name, template: `%s · ${name}` }, ...(icons ? { icons } : {}) });
 }
 
 export default async function ExperienceLayout({ children, params }: {
@@ -166,13 +170,14 @@ export default async function ExperienceLayout({ children, params }: {
   const myPlanOn = scholar ? await (async () => { try { return isMyPlanOn(await loadIndividualPolicy(shell.ctx.admin), await studyPlanSchema(shell.ctx.admin, shell.ctx.userId)); } catch { return false; } })() : false;
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
+  // SCHOLAR-BRAND-LOGO-01: Scholar's logo is the same size on phone and desktop in the header, so both marks are ONE image request.
   // HFE-COLOR-02: one neutral canvas (#F7F8FA) for every product, white header and sidebar, subtle borders.
   return (
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
       <header className="sticky top-0 z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
-            <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size="sm" iconOnly={live.length > 1} /></span>
+            <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
           </Link>
           <div className="ml-auto md:ml-0"><ExperienceSwitcher current={experience} live={live} /></div>
