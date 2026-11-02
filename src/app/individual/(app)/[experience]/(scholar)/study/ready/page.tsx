@@ -17,9 +17,9 @@ import StudyNav from "../_components/StudyNav";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { AiBadge, ContentStatusTag, ExplainPanel } from "../_components/client";
 import { AnalysePanel, LayerTag, PictureSlides } from "../_components/competency-client";
-import { plannedPages } from "@/lib/individual/scholar/material-visuals";
+import { pageInfoOf, plannedPages } from "@/lib/individual/scholar/material-visuals";
 import { OrganiseMaterial } from "../_components/library-client";
-import { countDue } from "@/lib/individual/scholar/store";
+import { countDue, listChunks } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -83,7 +83,10 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
   const plans = new Map(await Promise.all(materials.map(async m => {
     const qm = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
     const fits = recoveryOn && qm && qm.emptyUnits.length > 0 && ((m.mimeType === PDF_MIME && qm.unit === "page") || (m.mimeType === PPTX_MIME && qm.unit === "slide"));
-    return [m.id, fits ? await pictureSlidePlan(ctx.admin, ctx.userId, m.id) : null] as const;
+    if (!fits) return [m.id, null] as const;
+    // The page list names each page from its own text, or (no text layer) from its neighbours: the stored sections, no AI.
+    const [plan, chunks] = await Promise.all([pictureSlidePlan(ctx.admin, ctx.userId, m.id), listChunks(ctx.admin, ctx.userId, m.id)]);
+    return [m.id, plan ? { ...plan, pages: pageInfoOf(chunks.ok ? chunks.data : [], qm.emptyUnits, qm.aiReadUnits ?? []) } : null] as const;
   })));
   // P6: with no programme offered at all (production today) the student is not told to choose one.
   const offered = !learner.programme ? await listProgrammes(ctx.admin) : null;
@@ -145,7 +148,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
                   <PictureSlides materialId={m.id} unit={extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide"} slides={plan.slides.length}
                     unreadable={extras.byId.get(m.id)?.quality?.emptyUnits.length ?? plan.slides.length} beyondCap={plan.beyondCap} consent={consentOn} policyOn
                     requests={Math.ceil(plan.slides.length / TRANSCRIBE_BATCH)} batch={TRANSCRIBE_BATCH}
-                    planned={plannedPages(plan.slides, new Map(), extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide")} />
+                    planned={plannedPages(plan.slides, plan.pages, extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide")} />
                 </div>
               )}
 

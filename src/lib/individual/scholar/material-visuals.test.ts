@@ -223,4 +223,17 @@ describe("the recovery card's page list", () => {
     expect(plannedPages([3], new Map(), "slide")[0].caption).toBe("Slide 3 · Diagram or picture");
     expect(KEEP_PICTURE_NOTE).toContain("scores and thresholds are not read from charts");
   });
+  it("Deterioration.pdf layout: a textless page next to chart pages is kept as a picture; research screenshots stay ticked", () => {
+    const sections = [
+      { pageFrom: 6, content: "How Do Patients Deteriorate • Patients admitted to hospital" }, { pageFrom: 9, content: "Vital Signs • Vital signs monitoring" },
+      { pageFrom: 10, content: "• Respiratory Rate • Heart rate • Age" }, { pageFrom: 12, content: "Recognizing patient deterioration" },
+      { pageFrom: 25, content: "NEWS Observation Chart" }, { pageFrom: 27, content: "Clinical Response to NEWS Triggers" },
+      { pageFrom: 35, content: "Pediatric Early Warning Score (PEWS)" }, { pageFrom: 37, content: "ADDS" },
+    ];
+    const list = plannedPages([7, 8, 11, 26, 36], pageInfoOf(sections, [7, 8, 11, 26, 36], []), "page");
+    expect(list.map(p => [p.n, p.keep])).toEqual([[7, false], [8, false], [11, false], [26, true], [36, true]]);
+    expect(list[3].caption).toBe("Page 26 · Likely an observation chart, scoring tool or table (next to page 25)");
+    expect(list[4].caption).toBe("Page 36 · Likely an observation chart, scoring tool or table (next to page 35)");
+    expect(list.map(p => p.caption).join(" ")).not.toMatch(/\bNEWS|PEWS|ADDS\b/);
+  });
 });

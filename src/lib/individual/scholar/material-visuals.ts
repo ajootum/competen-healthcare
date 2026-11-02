@@ -380,8 +380,18 @@ export const KEEP_PICTURE_NOTE = "Kept as the original picture: scores and thres
  */
 export function plannedPages(plan: readonly number[], pages: ReadonlyMap<number, PageInfo>, unit: "slide" | "page"): PlannedPage[] {
   const word = unit === "slide" ? "Slide" : "Page";
+  const chartLike = (l: string) => l === LABEL_SCORING || l === LABEL_TABLE;
   return plan.map(n => {
     const c = classifyPage(pages.get(n));
-    return { n, label: c.label, caption: `${word} ${n} · ${c.label}`, keep: c.label === LABEL_SCORING || c.label === LABEL_TABLE };
+    if (chartLike(c.label)) return { n, label: c.label, caption: `${word} ${n} · ${c.label}`, keep: true };
+    // A page with no text layer cannot name itself. Next to a chart or scoring-tool page (a deck saved as PDF keeps a chart's
+    // continuation pages together), it is LIKELY one too: said as "likely", never named as a specific tool, and kept as the
+    // original picture by default -- the learner can still tick it.
+    const near = [n - 1, n + 1].find(m => pages.has(m) && chartLike(classifyPage(pages.get(m)).label));
+    if (near !== undefined && !pages.get(n)?.textLayer) {
+      const label = "Likely an observation chart, scoring tool or table";
+      return { n, label, caption: `${word} ${n} · ${label} (next to ${word.toLowerCase()} ${near})`, keep: true };
+    }
+    return { n, label: c.label, caption: `${word} ${n} · ${c.label}`, keep: false };
   });
 }
