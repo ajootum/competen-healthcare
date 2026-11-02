@@ -15,17 +15,18 @@
 // never Passport evidence (810 holds standing = formative only). Nothing here writes anywhere else.
 // ⚠ FAIL CLOSED. Where 810 is absent nothing is kept and nothing is said to the learner: the case plays as before.
 
-import type { Blueprint } from "@/lib/cases/blueprint";
+import { isWritten, type Blueprint } from "@/lib/cases/blueprint";
 import { sessionAttemptSource } from "@/lib/cases/library";
-import { brokenSafety, caseDebrief, markDecision, type Debrief } from "./clinical";
+import { brokenSafety, caseDebrief, markDecision, markHandoverAnswer, type Debrief } from "./clinical";
 import {
-  getCaseAttemptSnapshot, getPrivateCase, getPrivateCaseSession, insertCaseAttemptCorrection, insertCaseAttemptSnapshot,
-  type CaseAttemptCorrectionRow, type CaseAttemptSnapshotRow,
+  getCaseAttemptSnapshot, getPrivateCase, getPrivateCaseSession, insertCaseAttemptCorrection, insertCaseAttemptSnapshot, listCaseConversation,
+  type CaseAttemptCorrectionRow, type CaseAttemptSnapshotRow, type ConversationEntry,
 } from "./store";
 
 export const CASE_ATTEMPT_RECORD_VERSION = 1;
 export const CASE_ATTEMPT_FORMATIVE_LABEL = "Formative practice record: not an assessment, and not evidence of clinical competence.";
 export const CASE_AI_FEEDBACK_LABEL = "AI evaluation (formative)";
+export const CASE_CONVERSATION_LABEL = "Simulated conversation: an AI voiced the person from the case. Practice, not a real patient.";
 /** What the database will hold (810 CHECK is 200000 bytes for record + rubric). The builder stays well inside it. */
 export const CASE_ATTEMPT_MAX_BYTES = 180000;
 
@@ -38,6 +39,8 @@ export type AttemptInput = {
   kind: "private" | "library"; blueprint: Blueprint; mode: string | null; variation: Record<string, string>;
   reached: string[]; revealed: string[]; answers: AttemptAnswer[];
   aiDebrief: { text: string; model: string | null } | null;
+  /** CE-04 (880): the Talk to the patient turns, in order. Simulated speech, kept for the debrief. Absent where there was none or 880 is absent. */
+  conversation?: { stageId: string; question: string; reply: string }[];
 };
 export type AttemptDecision = {
   id: string; stageId: string; kind: string; dimension: string | null; prompt: string;
@@ -51,6 +54,8 @@ export type AttemptRecord = {
   factsShown: string[]; factsRequested: string[];
   decisions: AttemptDecision[];
   debrief: Omit<Debrief, "objectives">;
+  /** CE-04: what was said to the simulated patient and what the AI voiced in reply. Simulated and formative. */
+  conversation?: { label: string; turns: { stageId: string; stageTitle: string; question: string; reply: string }[] };
   aiDebrief: { label: string; text: string; model: string | null } | null;
   completion: { state: "completed"; answered: number; of: number };
   label: string;
@@ -93,21 +98,22 @@ export function buildCaseAttemptRecord(x: AttemptInput): { record: AttemptRecord
     safetyCriteria: b.safetyCriteria.filter(c => by.has(c.decisionPointId)).map(c => ({ id: c.id, decisionPointId: c.decisionPointId, text: c.text })),
     assessment: b.assessment?.rubric?.length ? b.assessment.rubric.map(c => ({ criterion: c.criterion, weight: c.weight, dimension: c.dimension ?? null })) : null,
   };
-  const make = (limits: { ai: number; text: number; reason: number }): AttemptRecord => ({
+  const make = (limits: { ai: number; text: number; reason: number }, turns = 60): AttemptRecord => ({
     v: CASE_ATTEMPT_RECORD_VERSION, kind: x.kind, title: b.title, mode: x.mode, variation: x.variation,
     stagesReached: x.reached.map(id => { const s = b.stages.find(st => st.id === id); return { id, title: s?.title ?? id, category: s?.category ?? null }; }),
     factsShown: b.facts.filter(f => visible.has(f.id)).map(f => f.id), factsRequested: [...x.revealed],
     decisions: decisions(limits), debrief,
+    ...(x.conversation?.length ? { conversation: { label: CASE_CONVERSATION_LABEL, turns: x.conversation.slice(0, turns).map(t => ({ stageId: t.stageId, stageTitle: b.stages.find(s => s.id === t.stageId)?.title ?? t.stageId, question: cut(t.question, 400) ?? "", reply: cut(t.reply, 600) ?? "" })) } } : {}),
     aiDebrief: x.aiDebrief ? { label: CASE_AI_FEEDBACK_LABEL, text: cut(x.aiDebrief.text, limits.ai) ?? "", model: x.aiDebrief.model } : null,
     completion: { state: "completed", answered: x.answers.length, of: b.decisionPoints.length },
     label: CASE_ATTEMPT_FORMATIVE_LABEL,
   });
   const size = (r: AttemptRecord) => Buffer.byteLength(JSON.stringify(r)) + Buffer.byteLength(JSON.stringify(rubric));
-  for (const limits of [{ ai: 8000, text: 4000, reason: 1500 }, { ai: 1500, text: 4000, reason: 1500 }, { ai: 600, text: 1500, reason: 1500 }, { ai: 300, text: 600, reason: 400 }]) {
-    const r = make(limits);
+  for (const [limits, turns] of [[{ ai: 8000, text: 4000, reason: 1500 }, 60], [{ ai: 1500, text: 4000, reason: 1500 }, 40], [{ ai: 600, text: 1500, reason: 1500 }, 20], [{ ai: 300, text: 600, reason: 400 }, 10]] as const) {
+    const r = make(limits, turns);
     if (size(r) <= CASE_ATTEMPT_MAX_BYTES) return { record: r, rubric };
   }
-  return { record: make({ ai: 120, text: 200, reason: 200 }), rubric };
+  return { record: make({ ai: 120, text: 200, reason: 200 }, 5), rubric };
 }
 
 /** Pure: a decision result as an outcome, the way the 810 correction guard reads it. */
@@ -154,6 +160,11 @@ export function attemptView(s: Pick<CaseAttemptSnapshotRow, "contentHash" | "rec
 /** Everything a snapshot needs about one of the caller's own completed sessions, from the database. null: not theirs, not completed. */
 async function attemptSource(admin: any, userId: string, kind: "private" | "library", sessionId: string)
   : Promise<{ input: AttemptInput; caseRef: string; contentHash: string; current: boolean; completed: boolean } | null> {
+  // CE-04 (880): the conversation and the handover notes, when 880 is there and there are any. Never an error.
+  let entries: ConversationEntry[] = [];
+  try { const said = await listCaseConversation(admin, userId, kind, sessionId); if (said.ok) entries = said.data; } catch { /* the conversation is optional: the attempt is kept without it */ }
+  const conversation = entries.filter(e => e.kind === "turn" && e.stageId).map(e => ({ stageId: e.stageId!, question: e.question ?? "", reply: e.reply }));
+  const handoverNote = (dpId: string) => { const n = entries.find(e => e.kind === "handover_note" && e.decisionPointId === dpId); return n ? { text: n.reply, model: n.model } : null; };
   if (kind === "private") {
     const s = await getPrivateCaseSession(admin, userId, sessionId);
     const c = s ? await getPrivateCase(admin, userId, s.session.caseId) : null;
@@ -164,9 +175,9 @@ async function attemptSource(admin: any, userId: string, kind: "private" | "libr
         kind, blueprint: c.blueprint as Blueprint, mode: s.session.mode, variation: {}, reached: s.session.reachedStageIds, revealed: s.session.revealedFactIds,
         answers: s.answers.map(a => ({
           decisionPointId: a.decisionPointId, chosen: a.chosen, text: a.reasoning, reason: a.reason ?? null, marking: a.marking, correct: a.correct, score: a.score,
-          safety: a.safety, aiFeedback: a.aiFeedback ? { text: a.aiFeedback, model: a.evaluatorModel } : null, at: a.createdAt,
+          safety: a.safety, aiFeedback: a.aiFeedback ? { text: a.aiFeedback, model: a.evaluatorModel } : handoverNote(a.decisionPointId), at: a.createdAt,
         })),
-        aiDebrief: null,
+        aiDebrief: null, conversation,
       },
     };
   }
@@ -183,15 +194,17 @@ async function attemptSource(admin: any, userId: string, kind: "private" | "libr
       answers: l.answers.map(a => {
         const d = b.decisionPoints.find(p => p.id === a.decisionPointId);
         const free = d?.kind === "free_text";
+        const written = isWritten(d);
         const fb = l.feedback.find(f => f.decisionPointId === a.decisionPointId) ?? null;
-        const m = free ? { correct: null, score: null } : markDecision(b, a.decisionPointId, a.chosen ?? []);
+        // CE-04: a handover is marked by code from its kept text, as part marks. Its AI comment (880) is beside the marks, never in them.
+        const m = d?.kind === "handover" ? markHandoverAnswer(b, a.decisionPointId, typeof a.text === "string" ? a.text : null) : written ? { correct: null, score: null } : markDecision(b, a.decisionPointId, a.chosen ?? []);
         return {
-          decisionPointId: a.decisionPointId, chosen: free ? [] : (a.chosen ?? []), text: typeof a.text === "string" ? a.text : null, reason: typeof a.reason === "string" ? a.reason : null,
+          decisionPointId: a.decisionPointId, chosen: written ? [] : (a.chosen ?? []), text: typeof a.text === "string" ? a.text : null, reason: typeof a.reason === "string" ? a.reason : null,
           marking: free ? (fb ? "ai_evaluation" : "self_graded") : "deterministic", correct: m.correct, score: m.score,
-          safety: free ? [] : brokenSafety(b, a.decisionPointId, a.chosen ?? []), aiFeedback: fb ? { text: fb.text, model: fb.model } : null, at: a.at ?? null,
+          safety: written ? [] : brokenSafety(b, a.decisionPointId, a.chosen ?? []), aiFeedback: fb ? { text: fb.text, model: fb.model } : handoverNote(a.decisionPointId), at: a.at ?? null,
         };
       }),
-      aiDebrief: l.debrief ? { text: l.debrief.text, model: l.debrief.model } : null,
+      aiDebrief: l.debrief ? { text: l.debrief.text, model: l.debrief.model } : null, conversation,
     },
   };
 }
