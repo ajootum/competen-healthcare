@@ -19,7 +19,7 @@ import { ScholarEduNotice } from "./(scholar)/study/_components/edu-notice";
 import { getAiStanding } from "@/lib/ai/allowance";
 import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityContext";
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
-import { isMyPlanOn, loadIndividualPolicy } from "@/lib/individual/policy";
+import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -153,7 +153,8 @@ export default async function ExperienceLayout({ children, params }: {
   // HFE-01 F8: with the experience switcher showing, the phone header keeps only the C mark, so the row fits 375px.
   const initials = (profile.fullName ?? profile.email ?? "?").split(/\s+/).map(s => s.charAt(0)).join("").slice(0, 2).toUpperCase();
   // COMPETEN-LEARNING-01: one link to the member-only Learning area, only while learning_app is on (ADR-017).
-  const learning = await learningEnabled(shell.ctx.admin);
+  // MY PLAN PERF: the three shell reads below are independent of each other, so they are made together (they were three steps in a row).
+  const learningP = learningEnabled(shell.ctx.admin);
 
   // Scholar HFE redesign (2026-10-26): the Scholar shell carries the agreed prototype's palette (.cmp-scholar,
   // globals.css), its AI help switch at the right of every page heading, and its footer. The structure --
@@ -161,9 +162,10 @@ export default async function ExperienceLayout({ children, params }: {
   const scholar = experience === "scholar";
   const action = scholar ? <AiHelpSwitch admin={shell.ctx.admin} userId={shell.ctx.userId} /> : null;
   // HFE-01 Wave 1: the product's AI standing once per page, so AI actions show their availability before a click.
-  const ai = await getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
+  const aiP = getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
   // PLP-01..04: the My Plan tab shows only where HQ has My Plan on AND migration 780 is present (unreadable: off, so it fails closed).
-  const myPlanOn = scholar ? await (async () => { try { return isMyPlanOn(await loadIndividualPolicy(shell.ctx.admin), await studyPlanSchema(shell.ctx.admin, shell.ctx.userId)); } catch { return false; } })() : false;
+  const myPlanP = scholar ? (async () => { try { const [policy, provisioned] = await Promise.all([loadIndividualPolicyOnce(shell.ctx.admin), studyPlanSchema(shell.ctx.admin, shell.ctx.userId)]); return isMyPlanOn(policy, provisioned); } catch { return false; } })() : false;
+  const [learning, ai, myPlanOn] = await Promise.all([learningP, aiP, myPlanP]);
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
   // HFE-COLOR-02: one neutral canvas (#F7F8FA) for every product, white header and sidebar, subtle borders.

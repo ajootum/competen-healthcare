@@ -9,6 +9,7 @@ import {
 } from "@/lib/individual/scholar/plan-workspace";
 import { EntryEditor } from "./plan-entries";
 import { AgendaRows, Notes } from "./plan-agenda-rows";
+import { usePatchedDays } from "./plan-optimistic";
 import { pillOutline, pillPrimary, squareBtn } from "./plan-style";
 import { CalendarIcon, ChevronIcon } from "./plan-ui";
 
@@ -52,8 +53,9 @@ export function PlanWorkspace(p: WorkspaceProps) {
   // A new address (another month, "Plan today", back from Today) selects the day it names.
   if (seen !== p.date) { setSeen(p.date); setSelected(p.date); }
 
-  const byDate = new Map(p.days.map(d => [d.date, d]));
-  const weeks = p.span === "month" ? monthGridDates(p.month) : [p.days.map(d => d.date)];
+  const days = usePatchedDays(p.days);
+  const byDate = new Map(days.map(d => [d.date, d]));
+  const weeks = p.span === "month" ? monthGridDates(p.month) : [days.map(d => d.date)];
   const inMonth = (d: string) => p.span === "week" || d.slice(0, 7) === p.month;
   const hrefAt = (span: PlanSpan, date: string, more: Record<string, string | null> = {}) => calendarHref(p.base, { span, date, today: p.today, extra: { ...p.extra, ...more } });
   const keepUrl = (date: string, more: Record<string, string | null> = {}) => { try { window.history.replaceState(null, "", hrefAt(p.span, date, more)); } catch { /* the address stays as it was */ } };
@@ -62,10 +64,10 @@ export function PlanWorkspace(p: WorkspaceProps) {
   useEffect(() => { try { window.sessionStorage.setItem(PLAN_CALENDAR_STORE, JSON.stringify({ date: selected, span: p.span })); } catch { /* not remembered */ } }, [selected, p.span]);
   function closeEditor() { setEditor(null); keepUrl(selected); }
 
-  const first = p.days[0]?.date ?? p.today, last = p.days[p.days.length - 1]?.date ?? p.today;
+  const first = days[0]?.date ?? p.today, last = days[days.length - 1]?.date ?? p.today;
   const heading = p.span === "month" ? spanMonthLabel(p.month) : rangeLabel(first, last);
   const unit = p.span === "month" ? "month" : "week";
-  const items = itemsOfDay(p.days, selected);
+  const items = itemsOfDay(days, selected);
   const chip = dayChip(items);
   const actions = emptyDayActions({ date: selected, today: p.today, canAdd: p.canAdd });
   const isFreed = freed.includes(selected);
@@ -162,7 +164,7 @@ export function PlanWorkspace(p: WorkspaceProps) {
                 ) : (
                   <div className="mt-2 flex flex-wrap gap-2">
                     {actions.includes("add") && <button type="button" className={pillOutline} onClick={() => setEditor({})}>Add activity</button>}
-                    {actions.includes("plan") && <button type="button" className={pillPrimary} style={{ background: p.accent }} onClick={() => setEditor({ prefill: planStudyPrefill(p.days, p.links, p.today) })}>Plan study</button>}
+                    {actions.includes("plan") && <button type="button" className={pillPrimary} style={{ background: p.accent }} onClick={() => setEditor({ prefill: planStudyPrefill(days, p.links, p.today) })}>Plan study</button>}
                     {actions.includes("free") && <button type="button" className={pillOutline} onClick={() => setFreed(f => [...f, selected])}>Leave free</button>}
                   </div>
                 )}

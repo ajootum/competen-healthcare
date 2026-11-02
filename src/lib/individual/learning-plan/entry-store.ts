@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from "react";
 import { isNotProvisioned } from "../access";
 import type { EntryInput, OccurrenceInput } from "./calendar-entries";
 import type { PlanRead } from "./event-store";
@@ -16,7 +17,7 @@ import type { CalendarEntry, EntryException, EntryStatus, ExceptionAction, PlanE
 
 let schemaCal: boolean | null = null;
 /** Whether the calendar tables are present (migration 840). A transient read error is "no" for now, and asked again. */
-export async function learnerCalendarSchema(admin: any, userId?: string): Promise<boolean> {
+async function learnerCalendarSchemaRead(admin: any, userId?: string): Promise<boolean> {
   if (schemaCal !== null) return schemaCal;
   try {
     let e = admin.from("individual_learning_calendar_entry").select("id");
@@ -29,6 +30,8 @@ export async function learnerCalendarSchema(admin: any, userId?: string): Promis
   } catch { return false; }
 }
 /** Tests only: forget what was detected. */
+/** Once per request (React cache(); a call-through outside a render). */
+export const learnerCalendarSchema = cache(learnerCalendarSchemaRead);
 export const resetLearnerCalendarSchema = (value: boolean | null = null) => { schemaCal = value; };
 
 const ENTRY_COLS = "id, experience, entry_type, title, description, entry_date, start_time, end_time, duration_minutes, link, recurrence, status, completed_at, created_at, updated_at";
@@ -47,7 +50,7 @@ export const toException = (r: any): EntryException => ({
 const failure = (error: unknown) => { if (isNotProvisioned(error)) schemaCal = false; return { ok: false as const, notProvisioned: isNotProvisioned(error) }; };
 
 /** The caller's entries for one experience whose series could reach [from, to]: those starting on or before `to`, newest first. */
-export async function listEntries(admin: any, userId: string, experience: PlanExperience, to: string): Promise<PlanRead<{ entries: CalendarEntry[]; exceptions: EntryException[] }>> {
+async function listEntriesRead(admin: any, userId: string, experience: PlanExperience, to: string): Promise<PlanRead<{ entries: CalendarEntry[]; exceptions: EntryException[] }>> {
   if (schemaCal === false) return { ok: false, notProvisioned: true };
   try {
     const e = await admin.from("individual_learning_calendar_entry").select(ENTRY_COLS).eq("user_id", userId).eq("experience", experience).lte("entry_date", to).order("entry_date", { ascending: false }).limit(1000);
@@ -166,3 +169,6 @@ export async function removeException(admin: any, userId: string, experience: Pl
     return "ok";
   } catch { return "failed"; }
 }
+
+/** MY PLAN PERF: the entries up to a date, once per request (React cache(); a call-through outside a render, so a write is always followed by a fresh read). */
+export const listEntries = cache(listEntriesRead);
