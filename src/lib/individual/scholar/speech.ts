@@ -248,6 +248,33 @@ export function insertAtCursor(value: string, start: number, end: number, text: 
   return { value: before + ins + after, caret: before.length + ins.length };
 }
 
+/* ------------------------------------------------------------------ merging a session's final results */
+
+const collapse = (t: string) => String(t ?? "").replace(/\s+/g, " ").trim();
+
+/**
+ * Pure. The intended text of ALL the final transcripts one dictation session has produced, in order. Some engines (Android Chrome)
+ * report each growing hypothesis as its own "final" result -- "teach", "teach me", "teach me about" -- or repeat one; appending
+ * every final would repeat the words. So: a final that extends (or equals) the last segment REPLACES it; a final that is a shorter
+ * repeat of the last segment is ignored; anything else is a new segment (desktop Chrome's distinct sentences simply append).
+ * Prefix tests are case-insensitive; the text kept is the latest, longest form. Segments are joined by single spaces.
+ */
+export function mergeFinalSegments(finals: readonly string[]): string {
+  const segs: string[] = [];
+  for (const raw of finals) {
+    const t = collapse(raw);
+    if (!t) continue;
+    const last = segs[segs.length - 1];
+    if (last !== undefined) {
+      const lo = last.toLowerCase(), tl = t.toLowerCase();
+      if (tl.startsWith(lo)) { segs[segs.length - 1] = t; continue; }
+      if (lo.startsWith(tl)) continue;
+    }
+    segs.push(t);
+  }
+  return segs.join(" ");
+}
+
 /* ------------------------------------------------------------------ preference ("Read-aloud and dictation") */
 
 export const SPEECH_ENABLED_KEY = "scholar.speech.enabled";

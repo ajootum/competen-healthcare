@@ -182,3 +182,16 @@ describe("insertAtCursor", () => {
     expect(insertAtCursor("12345", 5, 5, "abc", 5).value).toBe("12345");
   });
 });
+
+import { mergeFinalSegments } from "./speech";
+describe("mergeFinalSegments", () => {
+  it("collapses cumulative and repeated finals, case-insensitively, keeping the latest form", () => {
+    expect(mergeFinalSegments(["teach", "teach me", "teach me about", "teach me about", "teach me about pdsa", "teach me about pdsa Cycles"])).toBe("teach me about pdsa Cycles");
+    expect(mergeFinalSegments(["Hello there", "hello"])).toBe("Hello there");
+    expect(mergeFinalSegments(["hello", "Hello there"])).toBe("Hello there");
+  });
+  it("appends distinct finals with single spaces and ignores blanks", () => {
+    expect(mergeFinalSegments(["first sentence.", "  second   sentence. ", ""])).toBe("first sentence. second sentence.");
+    expect(mergeFinalSegments([])).toBe("");
+  });
+});

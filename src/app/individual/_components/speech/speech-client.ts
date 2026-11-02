@@ -12,10 +12,10 @@
 
 import { useCallback, useEffect, useId, useRef, useSyncExternalStore } from "react";
 import {
-  SPEECH_ENABLED_KEY, SPEECH_RATE_KEY, SPEECH_VOICE_KEY, detectSpeechSupport, insertAtCursor, parseRate, parseSpeechEnabled,
+  SPEECH_ENABLED_KEY, SPEECH_RATE_KEY, SPEECH_VOICE_KEY, detectSpeechSupport, parseRate, parseSpeechEnabled,
   recognitionCtor, type ReadRate, type SpeechSupport, type VoiceLike, type DictationError,
 } from "@/lib/individual/scholar/speech";
-import { DictationEngine, READ_IDLE, ReadAloudEngine, type ReadState, type RecognitionEnv } from "@/lib/individual/scholar/speech-engine";
+import { DictationEngine, DictationFieldWriter, READ_IDLE, ReadAloudEngine, type ReadState, type RecognitionEnv } from "@/lib/individual/scholar/speech-engine";
 import { DICTATION_IDLE, type DictationState } from "@/lib/individual/scholar/speech";
 
 /* ------------------------------------------------------------------ device settings */
@@ -167,16 +167,10 @@ export function useDictation(getField: () => TextField | null, onValue: (next: s
       setTimer: (fn, ms) => window.setTimeout(fn, ms),
       clearTimer: id => window.clearTimeout(id as number),
     });
-    e.onFinal = text => {
-      const el = latest.current.getField();
-      if (!el) return;
-      const max = el.maxLength > 0 ? el.maxLength : undefined;
-      const r = insertAtCursor(el.value, el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length, text, max);
-      if (r.value === el.value) return;
-      latest.current.onValue(r.value);
-      // The caret follows the inserted words once React has written the value back.
-      requestAnimationFrame(() => { try { el.setSelectionRange(r.caret, r.caret); } catch { /* not a text field */ } });
-    };
+    const writer = new DictationFieldWriter(() => latest.current.getField(), v => latest.current.onValue(v));
+    e.onSessionStart = () => writer.reset();
+    e.onFinal = text => writer.append(text);
+    e.onRevise = (previous, next) => writer.revise(previous, next);
     engineRef.current = e;
     return e;
   }, []);
