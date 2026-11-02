@@ -25,9 +25,13 @@ type Props = {
   afterSave?: () => Promise<unknown> | void;
   /** The first plan: shows the learner a way to go on without one. */
   startHref?: string;
+  /** `initial` is the implicit starting plan, not a saved one: the form personalises it, and Save is what stores a plan. */
+  starting?: boolean;
+  /** Inside a dialog that already frames it: no border or padding of its own. */
+  bare?: boolean;
 };
 
-export function PlanSetup({ accent, today, initial, extras, onDone, afterSave, startHref }: Props) {
+export function PlanSetup({ accent, today, initial, extras, onDone, afterSave, startHref, starting = false, bare = false }: Props) {
   const router = useRouter();
   const uid = useId();
   const [form, setForm] = useState<SetupForm>(() => setupFormFrom(initial));
@@ -56,10 +60,10 @@ export function PlanSetup({ accent, today, initial, extras, onDone, afterSave, s
   }
 
   return (
-    <section aria-labelledby={`${uid}-h`} className={cardCls} data-testid="plan-setup">
-      <h2 id={`${uid}-h`} className="text-[17px] font-bold text-gray-900">{initial ? "Adjust your plan" : "Set up My Plan"}</h2>
+    <section aria-labelledby={`${uid}-h`} className={bare ? "" : cardCls} data-testid="plan-setup">
+      <h2 id={`${uid}-h`} className="text-[17px] font-bold text-gray-900">{starting ? "Personalise your plan" : initial ? "Adjust your plan" : "Set up My Plan"}</h2>
       <p className="mt-0.5 text-[13.5px] text-gray-700">
-        {initial ? "Change what the plan is built from. Nothing changes until you save." : "Three quick answers. Scholar plans your study from your own practice, by fixed rules, with no AI. You can change it any time."}
+        {starting ? "Three quick answers replace the starting plan. Nothing is saved until you save." : initial ? "Change what the plan is built from. Nothing changes until you save." : "Three quick answers. Scholar plans your study from your own practice, by fixed rules, with no AI. You can change it any time."}
       </p>
       <form className="mt-4 space-y-5" onSubmit={e => { e.preventDefault(); void save(false); }} aria-describedby={error ? `${uid}-err` : undefined}>
         {extras && (
@@ -134,7 +138,7 @@ export function PlanSetup({ accent, today, initial, extras, onDone, afterSave, s
         )}
         <div id={`${uid}-err`}><ErrorLine text={error} /></div>
         <div className="flex flex-wrap items-center gap-2">
-          <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : initial ? "Save changes" : "Make my plan"}</button>
+          <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : starting ? "Save my plan" : initial ? "Save changes" : "Make my plan"}</button>
           {onDone && <button type="button" className={secondaryBtn} disabled={busy} onClick={onDone}>Cancel</button>}
           {!initial && startHref && <Link href={startHref} className={`inline-flex min-h-[44px] items-center text-[14px] font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Start learning without a plan</Link>}
         </div>

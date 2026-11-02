@@ -27,12 +27,12 @@ export function whenLine(o: Pick<Occurrence, "allDay" | "startTime" | "endTime" 
 
 // ── the editor ──
 type EditorMode =
-  | { kind: "create"; date: string }
+  | { kind: "create"; date: string; /** Fields filled in beforehand (an adjustment added to the plan). The learner still saves it. */ prefill?: Partial<EntryForm> }
   | { kind: "series"; occ: Occurrence }
   | { kind: "occurrence"; occ: Occurrence };
 
 function formFrom(mode: EditorMode, links: readonly LinkOption[]): EntryForm {
-  if (mode.kind === "create") return emptyEntryForm(mode.date);
+  if (mode.kind === "create") return { ...emptyEntryForm(mode.date), ...mode.prefill };
   const o = mode.occ;
   const linkValue = o.link ? `${o.link.kind}:${o.link.id}` : "";
   return {
@@ -203,7 +203,9 @@ export function AddActivity({ accent, today, links, date }: { accent: string; to
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button type="button" className={primaryBtn} style={{ background: accent }} onClick={() => setOpen(true)}>Add activity</button>
+      <button type="button" className={`${primaryBtn} rounded-full`} style={{ background: accent }} onClick={() => setOpen(true)}>
+        <svg aria-hidden width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>Add activity
+      </button>
       {open && <EntryEditor mode={{ kind: "create", date: date ?? today }} today={today} links={links} accent={accent} onClose={() => setOpen(false)} />}
     </>
   );

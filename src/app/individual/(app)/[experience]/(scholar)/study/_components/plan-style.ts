@@ -10,3 +10,7 @@ export const hintCls = "mt-0.5 text-[12.5px] text-gray-600";
 export const cardCls = "rounded-2xl border border-gray-200 bg-white p-4 sm:p-5";
 export const errorCls = "text-[13.5px] font-semibold text-red-800";
 export const summaryCls = `inline-flex min-h-[44px] cursor-pointer items-center text-[13.5px] font-semibold text-gray-800 ${touch} ${focusRing}`;
+/** A smaller secondary control (still the touch minimum high): the options beside a main action. */
+export const quietBtn = `inline-flex min-h-[44px] items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${touch} ${focusRing}`;
+/** The small word on a card ("Suggested"). */
+export const tagCls = "inline-flex items-center rounded-full bg-gray-100 px-2.5 py-0.5 text-[12.5px] font-semibold text-gray-700";

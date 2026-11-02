@@ -7,7 +7,23 @@ const h = vi.hoisted(() => ({
   A: "aaaaaaaa-0000-4000-8000-00000000000a", MAT: "aaaaaaaa-0000-4000-8000-0000000000a1", MAT2: "aaaaaaaa-0000-4000-8000-0000000000a2",
   plan: null as Record<string, unknown> | null, topics: [] as unknown[], due: 0,
   sections: [] as { chunkId: string; materialId: string; ordinal: number }[], topicOf: new Map<string, string[]>(),
+  moves: [] as { kind: "plan_activity" | "monthly_review" | "preference"; ref: string; originalDate: string | null; scheduledDate: string | null }[],
+  completed: [] as { at: string; kind: "lesson" | "revision" | "case" | "evaluation" | "cards"; title: string; detail?: string | null; href: string }[],
+  dueByDate: {} as Record<string, number>,
 }));
+// The month calendar over the real pure builder, so Today and the Calendar are read from the same days (a move shows in both).
+vi.mock("./study-calendar-data", async () => {
+  const { buildCalendar } = await import("./study-calendar");
+  return {
+    loadStudyCalendar: async (o: { month: string; today: string; plan: unknown }) => ({
+      view: buildCalendar({
+        month: o.month, today: o.today, plan: o.plan as never, personal: [], dueByDate: h.dueByDate, completed: h.completed, entries: h.moves, canMove: true, flashcardsHref: "/flashcards",
+        review: { recommendDays: 5, reminders: false, optedOut: false, hasActivity: false, taken: null, startHref: "/evaluate" },
+      }),
+      moveOn: true, optOut: { available: false, optedOut: false },
+    }),
+  };
+});
 vi.mock("./store", () => ({
   studyPlanSchema: async () => true, calendarSchema: async () => false,
   getStudyPlan: async () => ({ ok: true, data: h.plan }),
@@ -48,7 +64,7 @@ beforeEach(() => {
   admin = fakeAdmin({}, { individual_learning_calendar_entry: { status: "planned" } });
   resetLearningPlanSchema(); resetLearnerCalendarSchema();
   h.plan = { examDate: null, examLabel: null, weeklyMinutes: 150, daysPerWeek: 7, goal: null, priorities: [], goalType: "learn", sessionMinutes: 30 };
-  h.topics = [entry("Renal", "needs_work")]; h.due = 0; h.sections = []; h.topicOf = new Map();
+  h.topics = [entry("Renal", "needs_work")]; h.due = 0; h.sections = []; h.topicOf = new Map(); h.moves = []; h.completed = []; h.dueByDate = {};
 });
 
 describe("loadToday", () => {
@@ -122,13 +138,51 @@ describe("loadToday", () => {
     expect([fourth.next, ...fourth.alternatives].some(r => r?.title.includes("Renal"))).toBe(false);
     expect(fourth.week?.thisWeek.flatMap(d => d.activities).some(a => /Renal/.test(a.title))).toBe(false);
   });
-  it("with no saved plan it still answers (hasPlan false) from the learner's own evidence", async () => {
+  it("with no saved plan it works from the implicit starting plan (30 minutes, 5 days, learn) and writes nothing", async () => {
     h.plan = null; h.due = 2;
     const v = await loadToday(ctx(), policy, O);
     if (!v.ok) throw new Error("setup");
     expect(v.hasPlan).toBe(false);
-    expect(v.week).toBeNull();
+    expect(v.starting).toBe(true);
+    expect(v.settings).toMatchObject({ goalType: "learn", sessionMinutes: 30, daysPerWeek: 5, weeklyMinutes: 150 });
+    expect(v.week?.studyDays).toBe(5);
+    expect(v.week?.thisWeek.flatMap(d => d.activities).length).toBeGreaterThan(0);
     expect(v.next?.rule).toBe("due_revision");
+    expect(admin.tables.individual_learning_plan_event ?? []).toHaveLength(0);      // no carry-over event for a plan nobody saved
+    // the calendar shows the same Scholar activities from the first visit
+    expect(v.comingUp.some(i => i.source === "scholar")).toBe(true);
+  });
+  it("a saved plan replaces the starting plan", async () => {
+    const v = await loadToday(ctx(), policy, O);
+    expect(v.ok && v.hasPlan && !v.starting).toBe(true);
+    expect(v.ok && v.settings.daysPerWeek).toBe(7);
+  });
+  it("moving an activity off today in the Calendar takes it off Today and shows it on its new day", async () => {
+    const before = await loadToday(ctx(), policy, O);
+    if (!before.ok) throw new Error("setup");
+    expect(before.next?.ref).toBe(`learn:${refKey("renal")}`);
+    h.moves = [{ kind: "plan_activity", ref: `learn:${refKey("renal")}|0`, originalDate: "2026-11-02", scheduledDate: "2026-11-05" }];
+    const after = await loadToday(ctx(), policy, O);
+    if (!after.ok) throw new Error("setup");
+    expect([after.next, ...after.alternatives].some(r => r?.ref === `learn:${refKey("renal")}`)).toBe(false);
+    expect(after.comingUp.some(i => i.date === "2026-11-05" && /Renal/.test(i.title))).toBe(true);
+  });
+  it("postponing a topic takes it off today in the Calendar too (one postponed set feeds both)", async () => {
+    await appendPlanEvent(admin, A, "scholar", { kind: "topic_postponed", ref: "renal", status: "deferred", value: { until: "2026-11-05", label: "Renal" } });
+    const v = await loadToday(ctx(), policy, O);
+    if (!v.ok) throw new Error("setup");
+    expect(v.comingUp.some(i => /Renal/.test(i.title) && i.date < "2026-11-05")).toBe(false);
+  });
+  it("lists what was done today from the qualifying records, and the cards due beside it", async () => {
+    h.completed = [{ at: "2026-11-02T08:00:00Z", kind: "lesson", title: "Renal lesson", href: "/lesson/1" }];
+    const v = await loadToday(ctx(), policy, O);
+    if (!v.ok) throw new Error("setup");
+    expect(v.doneToday).toEqual([{ key: expect.any(String), title: "Renal lesson", detail: null, href: "/lesson/1", basis: "recorded" }]);
+  });
+  it("says what the next activity is about", async () => {
+    h.topics = [entry("Renal", "needs_work", { materialId: MAT })];
+    const v = await loadToday(ctx(), policy, O);
+    expect(v.ok && v.nextAbout).toBe("Renal \u00b7 from Renal notes");
   });
   it("an all-day busy day in the learner's calendar says nothing is planned today; a deadline becomes a candidate", async () => {
     await createEntry(admin, A, "scholar", { entryType: "busy", title: "Away", description: null, entryDate: "2026-11-02", startTime: null, endTime: null, durationMinutes: null, link: null, recurrence: null });
@@ -177,6 +231,39 @@ describe("loadProposal", () => {
     resetLearningPlanSchema(false);
     const v = await loadProposal(ctx(), policy, MAT, O);
     expect(v.ok && v.recordable).toBe(false);
+  });
+});
+
+describe("loadInsights: the tiles and the adjustments", () => {
+  it("counts the four tiles over the window: study days, cards due, answers, planned versus completed", async () => {
+    h.due = 3;
+    await createEntry(admin, A, "scholar", { entryType: "study_session", title: "Plan A", description: null, entryDate: "2026-11-01", startTime: "09:00", endTime: null, durationMinutes: 30, link: null, recurrence: null });
+    await createEntry(admin, A, "scholar", { entryType: "study_session", title: "Plan B", description: null, entryDate: "2026-10-20", startTime: null, endTime: null, durationMinutes: 30, link: null, recurrence: null });
+    const v = await loadInsights(ctx(), policy, O);
+    if (!v.ok) throw new Error("setup");
+    expect(v.tiles).toMatchObject({ studyDays: 1, flashcardsDue: 3, practiceAnswered: 1 });
+    // two planned sessions in the window; the one on 1 November has a recorded answer that day, the other has none
+    expect(v.tiles.plan).toMatchObject({ planned: 2, completed: 1, recorded: 1, selfReported: 0, percent: 50 });
+  });
+  it("offers the due flashcards first, with Do it now and Add to plan, and a Not now holds until the cards due change", async () => {
+    h.due = 3;
+    const first = await loadInsights(ctx(), policy, O);
+    if (!first.ok) throw new Error("setup");
+    expect(first.adjustments[0]).toMatchObject({ id: "flashcards_due", doNow: { href: expect.stringContaining("flashcards") }, addToPlan: { kind: "entry", date: "2026-11-02" } });
+    await appendPlanEvent(admin, A, "scholar", { kind: "recommendation_declined", ref: "insight:flashcards_due", status: "declined", value: { fingerprint: first.adjustments[0].fingerprint } });
+    const hidden = await loadInsights(ctx(), policy, O);
+    expect(hidden.ok && hidden.adjustments.some(a => a.id === "flashcards_due")).toBe(false);
+    h.due = 4;
+    const back = await loadInsights(ctx(), policy, O);
+    expect(back.ok && back.adjustments[0].id).toBe("flashcards_due");
+  });
+  it("cannot remember a Not now without 840, so none is offered", async () => {
+    resetLearningPlanSchema(false);
+    h.due = 2;
+    const v = await loadInsights(ctx(), policy, O);
+    if (!v.ok) throw new Error("setup");
+    expect(v.features.decisions).toBe(false);
+    expect(v.adjustments[0].id).toBe("flashcards_due");
   });
 });
 

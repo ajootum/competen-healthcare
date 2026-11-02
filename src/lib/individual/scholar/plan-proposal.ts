@@ -14,7 +14,8 @@ import type { UnstartedSection } from "./study-plan";
 //
 // ⚠ A proposal is a suggestion about TIME. It says nothing about how well the learner knows the material.
 
-export const DEFAULT_SESSION = { sessionMinutes: 30, daysPerWeek: 3 } as const;
+/** The starting guess when nothing is saved: the same 30 minutes, 5 days a week as My Plan's starting plan (plan-settings.ts STARTING_PLAN). */
+export const DEFAULT_SESSION = { sessionMinutes: 30, daysPerWeek: 5 } as const;
 export const REVISION_OFFSETS = [1, 3, 7] as const;
 export type ProposalDecision = "accepted" | "declined" | "deferred";
 export const isProposalDecision = (x: unknown): x is ProposalDecision => x === "accepted" || x === "declined" || x === "deferred";
