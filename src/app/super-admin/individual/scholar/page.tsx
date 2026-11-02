@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { requireHqCapability } from "@/lib/hq/context";
 import { individualAppEnabled } from "@/lib/individual/gate";
-import { readIndividualAccess } from "@/lib/individual/access";
 import Link from "next/link";
 import PreviewLauncher from "./_components/PreviewLauncher";
 
@@ -49,12 +48,15 @@ export default async function ViewScholarPage() {
   const ids = learners.map(l => l.user_id);
   const people = ids.length ? await admin.from("profiles").select("id, full_name, email").in("id", ids) : { data: [] };
   const nameOf = new Map<string, string>(((people.data ?? []) as any[]).map(p => [p.id, p.full_name ?? p.email ?? "Unnamed"]));
-  const access = new Map<string, Awaited<ReturnType<typeof readIndividualAccess>>>();
-  for (const l of learners) access.set(l.user_id, await readIndividualAccess(admin, l.user_id));
-  const scholarLive = (id: string) => { const a = access.get(id); return a?.state === "member" && a.live.includes("scholar"); };
+  // Live Scholar access, read narrowly (user and experience only: the columns the plane boundary allows), for the designated
+  // learners and for the HQ user's own account. Not the full Individual access record: HQ needs only whether Scholar is live.
+  const liveRead = await admin.from("individual_live_entitlement").select("user_id, experience_code")
+    .in("user_id", [...ids, ctx.userId]).eq("experience_code", "scholar");
+  const liveScholar = new Set<string>(((liveRead.data ?? []) as { user_id: string }[]).map(r => r.user_id));
+  const scholarLive = (id: string) => liveScholar.has(id);
 
-  const mine = await readIndividualAccess(admin, ctx.userId);
-  const myScholarLive = mine.state === "member" && mine.live.includes("scholar");
+  const mine = { state: liveRead.error ? "unavailable" as const : "read" as const };
+  const myScholarLive = !liveRead.error && liveScholar.has(ctx.userId);
 
   const sessionsRead = await admin.from("individual_scholar_preview_session")
     .select("mode, created_at, consumed_at, ended_at, end_reason, expires_at, ticket_expires_at")
