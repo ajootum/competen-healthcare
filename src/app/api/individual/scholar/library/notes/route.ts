@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal, type IndividualContext } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { addNote, deleteNote, isUuid, librarySchema, listNotes, updateNote } from "@/lib/individual/scholar/store";
+import { addNote, deleteNote, isUuid, librarySchema, listNotes, sectionsOf, topicsOfSections, updateNote } from "@/lib/individual/scholar/store";
+import { locationLabel } from "@/lib/individual/scholar/library-organise";
 import { NOTE_BODY_MAX, NOTE_PROBLEM, validateNote } from "@/lib/individual/scholar/saved-library";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
@@ -13,6 +14,7 @@ export const dynamic = "force-dynamic";
 //
 // The learner's OWN notes, bookmarks and highlights on their saved teaching, lessons, materials and sections.
 //   GET    ?artefact=<id> | ?session=<id>   their notes on one saved teaching or one session's lessons
+//   GET    ?sections=<materialId>           CE-02: the sections of one of their materials, to choose one to write a note on ({ id, label })
 //   POST   { kind, targetKind, artefactId? | sessionId+step | materialId (+chunkId), body?, quote? }   (saved-library validateNote)
 //   PATCH  { id, body }                      change a note's or a highlight's text
 //   DELETE ?id=<id>                          remove one
@@ -37,6 +39,16 @@ export async function GET(req: Request) {
   const refused = await gate(ctx);
   if (refused) return refused;
   const u = new URL(req.url).searchParams;
+  const sectionsOfMaterial = u.get("sections");
+  if (sectionsOfMaterial) {
+    if (!isUuid(sectionsOfMaterial)) return NextResponse.json({ error: "That material could not be found." }, { status: 404 });
+    // Keyed on the caller: a material that is not theirs has no sections to list (an empty list, the same as none).
+    const secs = await sectionsOf(ctx.admin, ctx.userId, [sectionsOfMaterial]);
+    if (!secs.ok) return NextResponse.json({ error: "Its sections could not be read just now." }, { status: 503 });
+    const kept = secs.data.slice(0, 400);
+    const topics = await topicsOfSections(ctx.admin, ctx.userId, kept.map(c => c.chunkId));
+    return NextResponse.json({ sections: kept.map(c => ({ id: c.chunkId, label: `${locationLabel({ ordinal: c.ordinal, pageFrom: c.pageFrom, pageTo: c.pageTo }, c.unit)}${topics.get(c.chunkId)?.[0] ? ` · ${topics.get(c.chunkId)![0]}` : ""}`.slice(0, 120) })) });
+  }
   const artefact = u.get("artefact"), session = u.get("session");
   if ((artefact ? 1 : 0) + (session ? 1 : 0) !== 1 || ![artefact, session].filter(Boolean).every(isUuid)) return NextResponse.json({ error: "Choose one saved lesson or one session." }, { status: 400 });
   const r = await listNotes(ctx.admin, ctx.userId, artefact ? { artefactIds: [artefact] } : { sessionIds: [session!] });

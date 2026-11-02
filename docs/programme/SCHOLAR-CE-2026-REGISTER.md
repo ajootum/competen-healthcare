@@ -7,7 +7,7 @@ Waves: 1 = CE-01, CE-02, CE-03 · 2 = CE-04, CE-05 · 3 = CE-06 · 4 = CE-07 acc
 | ID | Workstream | Status | Last update |
 |---|---|---|---|
 | CE-01 | Seamless, context-aware Personal AI | Implementing | 2 Nov 2026 |
-| CE-02 | AI Notebook and Personal Learning Library | Gap confirmed | 2 Nov 2026 |
+| CE-02 | AI Notebook and Personal Learning Library | Implementing | 2 Nov 2026 |
 | CE-03 | Unified My Plan | Deployed | 2 Nov 2026 |
 | CE-04 | Conversational clinical simulation | Gap confirmed | 2 Nov 2026 |
 | CE-05 | Richer assessment formats | Gap confirmed | 2 Nov 2026 |
@@ -46,11 +46,21 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 
 ---
 
-## CE-02 — AI Notebook and Personal Learning Library — Gap confirmed
+## CE-02 — AI Notebook and Personal Learning Library — Implementing
 
 **Exists and works** (PR #218, migration 820, live): My learning library (saved lessons with versions, keyset pages, full-text search over saved teaching, notes, bookmarks, highlights, selected/topic/date-range PDF export), notes API, flashcard deck search, lesson links (`?version=`, "Review saved lesson"), visuals (#224) linked from flashcards/revise.
 
 **Gaps (to confirm in Wave 1 build)**: one search across uploaded material sections + saved lessons + questions + notes; organisation by material / topic / session / competency; actions from a saved item to revise / practise / ask; standalone (not attached) notes; mobile check of the library.
+
+**Implementing (branch `programme/scholar-ce-2026-wave1`, 2 Nov 2026)** — not yet merged, deployed or accepted. No migration, no AI call anywhere in this workstream.
+- **One search** (`study/saved?q=`): the 820 search (saved lessons, notes, flashcards/questions, sessions) is now shown in groups, then **From your materials**: the learner's own uploaded sections found by the same words (`searchSectionRows` + `rankChunks`, no AI). Each hit: material title, page/slide/section, a marked excerpt, **Open in Learn** (`study/learn?section=`), **View original slide/page** (PowerPoint slide picture or PDF at that page, the routes the material page already uses), **Open source**, **Revise**, **Ask about this** (the CE-01 `AskAbout` panel with that section). First 10, then **More from your materials** (10 more per click, `?msec=`, from the best 200 candidates).
+- **Organisation**: filters Material, Topic, Study session (sessions that hold saved items), Competency (accepted mappings only) on every view and on search, URL-driven (`?material=&topic=&session=&competency=`), shown as removable chips. A filter id that is not the learner's is dropped (`ownedQuery`). With a filter on, search reads the best 200 library matches, filters and pages them (said on the page).
+- **Actions from a saved item**: saved lessons, notes, bookmarks and search hits carry Revise (Flashcards `?material=&section=`), Practise (the section in Learn, which has its own quiz; the material's questions in Revise when only a material is known), Open source and Ask about this (where a section is known).
+- **Notes**: new **Your notes** view (notes and highlights; bookmarks stay in Saved for revision). Notes are now **editable in place** (the PATCH route existed, the UI did not), removable (asks once), and show provenance: what each is attached to, written and edited dates. **Write a new note** on a material and optionally one of its sections from the library page (existing 820 material/section targets; sections read by `GET /api/individual/scholar/library/notes?sections=<material>`).
+- **Mobile/tablet**: filters sit behind a **Filter** disclosure below `md` (open from `md`), selects/inputs/actions meet `--cmp-touch-min` on touch, the download tick box has a 44px target, text wraps (no horizontal scroll).
+- **Decisions / deviations**: (1) The Competency filter now means accepted mappings only (was proposed or accepted). (2) A note on a *topic* is not a separate target (820 has none and no schema change was allowed): notes attach to a material and optionally a section; section choices show the section's first topic. (3) Study-session filter on saved lessons = lessons recorded against the session (820) plus older lessons wholly inside the session's own steps; the session list holds sessions with a saved lesson or a note against them. (4) Your notes and Saved for revision read the newest 1000 and page in memory (page numbers instead of keyset), saying so past 1000. (5) The "Continue/Completed" session views keep date and sort only.
+- **Files**: `library-organise.ts` (pure), `library-scope.ts`, `saved-library.ts` (`session`, `msec`, `notes` view), `store.ts` (`sessionsWithSavedItems`, `artefactIdsForSession`, `chunksForCompetency acceptedOnly`), `saved-library-view.tsx`, `library-notes-client.tsx` (`NoteEntry`, `StandaloneNote`, `NewNoteForm`), `saved/page.tsx`, notes route (`?sections=`); tests `library-organise.test.ts`, `library-scope.test.ts`.
+- **Acceptance still to do**: staging/browser walk of search, filters, notes (create/edit/remove) on desktop and phone; production acceptance after deployment.
 
 ---
 

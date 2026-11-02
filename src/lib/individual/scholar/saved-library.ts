@@ -5,7 +5,7 @@
 // saved-library.test.ts:
 //
 //   VIEWS        recent (newest saved teaching) · continue (active sessions) · completed (finished sessions) · revision
-//                (what the learner bookmarked). One view at a time, 25 a page, keyset paginated on (created_at, id).
+//                (what the learner bookmarked) · notes (CE-02: their own notes and highlights). One view at a time, 25 a page, keyset paginated on (created_at, id).
 //   FILTERS      material, topic, competency, a date range, a status (any / has your notes / bookmarked / earlier
 //                versions), and the sort (newest / oldest). Unknown values are dropped, never guessed.
 //   SEARCH       deterministic full text (migration 820 individual_scholar_library_search, websearch syntax), snippets
@@ -33,10 +33,10 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 // ── VIEWS AND FILTERS ──
 
-export const LIBRARY_VIEWS = ["recent", "continue", "completed", "revision"] as const;
+export const LIBRARY_VIEWS = ["recent", "continue", "completed", "revision", "notes"] as const;
 export type LibraryView = (typeof LIBRARY_VIEWS)[number];
 export const VIEW_LABEL: Record<LibraryView, string> = {
-  recent: "Recently studied", continue: "Continue learning", completed: "Completed learning", revision: "Saved for revision",
+  recent: "Recently studied", continue: "Continue learning", completed: "Completed learning", revision: "Saved for revision", notes: "Your notes",
 };
 export const LIBRARY_STATUSES = ["any", "noted", "bookmarked", "earlier"] as const;
 export type LibraryStatus = (typeof LIBRARY_STATUSES)[number];
@@ -45,6 +45,10 @@ export const STATUS_LABEL: Record<LibraryStatus, string> = { any: "Any", noted: 
 export type Cursor = { at: string; id: string };
 export type LibraryQuery = {
   view: LibraryView; material: string | null; topic: string | null; competency: string | null;
+  /** CE-02: a study session that has saved items. */
+  session: string | null;
+  /** CE-02: how many pages of "From your materials" the search shows (10 on the first, 10 more on each). */
+  msec: number;
   from: string | null; to: string | null; status: LibraryStatus; sort: "newest" | "oldest";
   cursor: Cursor | null; q: string; page: number;
 };
@@ -58,8 +62,10 @@ export function parseLibraryQuery(p: Params): LibraryQuery {
   const status = (LIBRARY_STATUSES as readonly string[]).includes(one(p.status)) ? one(p.status) as LibraryStatus : "any";
   const topic = one(p.topic).replace(/\s+/g, " ").trim().slice(0, 120);
   const from = DAY.test(one(p.from)) ? one(p.from) : null, to = DAY.test(one(p.to)) ? one(p.to) : null;
-  const page = Number(one(p.page));
+  const page = Number(one(p.page)), msec = Number(one(p.msec));
   return {
+    session: isId(one(p.session)) ? one(p.session).toLowerCase() : null,
+    msec: Number.isInteger(msec) && msec >= 1 && msec <= 20 ? msec : 1,
     view, status, sort: one(p.sort) === "oldest" ? "oldest" : "newest",
     material: isId(one(p.material)) ? one(p.material) : null, competency: isId(one(p.competency)) ? one(p.competency) : null,
     topic: topic.length >= 2 ? topic : null,
