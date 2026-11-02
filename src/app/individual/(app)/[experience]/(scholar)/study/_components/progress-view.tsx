@@ -104,7 +104,7 @@ export function ProgressWorkspace({ v, sections, period }: { v: Extract<Progress
         )}
         {show("engagement") && (
           <Card id="pg-eng" title="Learning engagement" what={`What you did in the last ${v.engagement.windowDays} days. Activity, not understanding.`}>
-            <p className="text-[13.5px] text-gray-900"><span className="font-semibold tabular-nums">{v.engagement.studyDays}</span> study days · {v.engagement.answers} answers · {v.engagement.reviews} reviews · {v.engagement.decisions} case decisions · {v.engagement.checks} Teach Me checks</p>
+            <p className="text-[13.5px] text-gray-900"><span className="font-semibold tabular-nums">{v.engagement.studyDays}</span> study {v.engagement.studyDays === 1 ? "day" : "days"} · {v.engagement.answers} answers · {v.engagement.reviews} reviews · {v.engagement.decisions} case decisions · {v.engagement.checks} Teach Me checks</p>
           </Card>
         )}
         {show("confidence") && (

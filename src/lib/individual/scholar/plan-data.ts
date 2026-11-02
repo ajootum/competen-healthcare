@@ -19,7 +19,7 @@ import { settingsFromRow, sessionMinutesOf } from "./plan-settings";
 import { buildStudyPlan, unstartedMappedSections, type PlanCalendar, type StudyPlanInput, type StudyPlanResult, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
 import {
   calendarSchema, caseDecisionTimes, competencyProgressRows, countDue, evaluationEvidence, getEvaluation, getStudyPlan, learningEventTimes, listLearningSessions, listMaterials,
-  listRevisionSessions, sectionsOf, studyPlanSchema, topicsOfSections, type Admin,
+  listChunks, listRevisionSessions, sectionsOf, studyPlanSchema, topicsOfSections, type Admin,
 } from "./store";
 import { experienceHref } from "../experiences";
 import { loadStudyCalendar, type CalendarLoad } from "./study-calendar-data";
@@ -108,12 +108,25 @@ export async function materialsIn(admin: Admin, userId: string, ids: readonly st
   const secs = await sectionsOf(admin, userId, ids);
   if (!secs.ok) return [];
   const topics = await topicsOfSections(admin, userId, secs.data.map(s => s.chunkId));
+  // A section with no topic found yet is named by its own first line (a slide or page heading), never "Section n" when the text says more.
+  const untitled = ids.filter(id => secs.data.some(s => s.materialId === id && !(topics.get(s.chunkId) ?? []).length));
+  const headings = new Map<string, string>();
+  for (const id of untitled.slice(0, 5)) {
+    const c = await listChunks(admin, userId, id);
+    if (c.ok) for (const r of c.data) { const h = headingOf(r.content); if (h) headings.set(r.id, h); }
+  }
   const answered = new Set((rows?.attempts ?? []).map(a => a.questionId));
   const started = new Set((rows?.questions ?? []).filter(q => answered.has(q.id)).map(q => q.chunkId));
   return ids.map(id => ({
     materialId: id, title: mats.find(m => m.id === id)?.title ?? "Your notes",
-    sections: secs.data.filter(s => s.materialId === id).map(s => ({ chunkId: s.chunkId, ordinal: s.ordinal, topics: topics.get(s.chunkId) ?? [], started: started.has(s.chunkId) })),
+    sections: secs.data.filter(s => s.materialId === id).map(s => ({ chunkId: s.chunkId, ordinal: s.ordinal, topics: topics.get(s.chunkId) ?? [], started: started.has(s.chunkId), heading: headings.get(s.chunkId) ?? null })),
   }));
+}
+
+/** Pure. A section's first line, cleaned of markdown and bullets, up to 80 characters (null when there is none worth showing). */
+export function headingOf(content: string): string | null {
+  const line = content.split(/\n/).map(l => l.replace(/^[\s#*•●▪·–-]+/, "").replace(/\*\*/g, "").trim()).find(l => l.length >= 3) ?? "";
+  return line ? (line.length > 80 ? `${line.slice(0, 77).trimEnd()}…` : line) : null;
 }
 
 /** The inputs of buildStudyPlan for a day, from the context. */

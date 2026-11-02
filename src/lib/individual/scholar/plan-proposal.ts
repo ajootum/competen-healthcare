@@ -22,12 +22,12 @@ export const isProposalDecision = (x: unknown): x is ProposalDecision => x === "
 /** The topic key: case, accents and punctuation do not make a different topic. */
 export const topicKey = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
-export type SectionIn = { chunkId: string; ordinal: number; /** Topics found in the section (the learner's corrections included). */ topics: readonly string[]; started?: boolean };
+export type SectionIn = { chunkId: string; ordinal: number; /** Topics found in the section (the learner's corrections included). */ topics: readonly string[]; started?: boolean; /** The section's own first line (a slide or page heading), used when no topic has been found yet. */ heading?: string | null };
 export type MaterialIn = { materialId: string; title: string; sections: readonly SectionIn[] };
 export type TopicRef = { key: string; label: string; materialIds: string[]; sections: number };
 
 /** The label a section is planned under: its first topic, else "Section n" (n = its place in its material). */
-export const sectionLabel = (s: SectionIn, index: number) => s.topics.map(t => t.trim()).find(Boolean) ?? `Section ${index + 1}`;
+export const sectionLabel = (s: SectionIn, index: number) => s.topics.map(t => t.trim()).find(Boolean) ?? (s.heading?.trim() || `Section ${index + 1}`);
 
 /**
  * Pure. The distinct topics across materials, in the order first met, each with EVERY material that names it and how many
@@ -97,7 +97,7 @@ export function buildProposal(o: {
   const { sessionMinutes, daysPerWeek } = o.settings ?? DEFAULT_SESSION;
   const sessionsNeeded = workloadMinutes > 0 ? Math.ceil(workloadMinutes / Math.max(1, sessionMinutes)) : 0;
   const weeksNeeded = sessionsNeeded > 0 ? Math.ceil(sessionsNeeded / Math.max(1, daysPerWeek)) : 0;
-  const revisionPoints = REVISION_OFFSETS.map(d => ({ afterDays: d, label: `Revise ${d === 1 ? "the next day" : `${d} days after`} first studying a topic` }));
+  const revisionPoints = REVISION_OFFSETS.map(d => ({ afterDays: d, label: d === 1 ? "Revise the day after you first study a topic" : `Revise ${d} days after you first study a topic` }));
   const topics = dedupeTopics([...o.earlier, o.material]).filter(t => t.materialIds.includes(o.material.materialId));
   const summary = o.material.sections.length === 0
     ? "These notes have no sections to plan yet."

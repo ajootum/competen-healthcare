@@ -12,6 +12,9 @@ import type { StudyPlanResult } from "./study-plan";
 // "Unfinished" here means: planned for yesterday, and the same activity is still in today's plan (the records still call for it).
 // Due-card review, mixed practice and the practice evaluation come back every day by design and are never carry-overs.
 
+/** 2026-11-01 as "Sunday 1 November" (the date as written, UTC so it never shifts). */
+const dayName = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
+
 const NEVER = new Set(["revise:due", "revise:mixed", "evaluate:eval"]);
 export const carryKey = (ref: string, from: string) => `${ref}@${from}`;
 
@@ -44,7 +47,7 @@ export function detectCarryOvers(o: { past: StudyPlanResult | null; current: Stu
     } else {
       carried.push({
         key, ref: a.ref, title: a.title, from: o.yesterday, to: to.day, recorded: status === "applied",
-        reason: `You did not finish "${a.title}" on ${o.yesterday}, so it is in your plan for ${to.day}.`,
+        reason: `You did not finish ${a.title} on ${dayName(o.yesterday)}, so it is in your plan for ${dayName(to.day)}.`,
       });
     }
   }
