@@ -64,6 +64,7 @@ const NOT_A_BOUNDARY: Record<string, string> = {
   requireWritableStore: "an offline-store writability check on the device, not authorization",
   requireEdit: "a UI affordance check, not a request boundary",
   requireHqCapabilityOrNull: "a non-throwing variant used for rendering decisions, not entry",
+  requireScholarModule: "a narrowing applied AFTER the Individual entitlement gate (experienceModulePage) on Scholar pages: module-level private/pilot/public access from Individual Policy; used by no API route (src/lib/individual/scholar/module-access.ts)",
 };
 
 type Cat = "guarded" | "public" | "system" | "inline" | "unclassified";
