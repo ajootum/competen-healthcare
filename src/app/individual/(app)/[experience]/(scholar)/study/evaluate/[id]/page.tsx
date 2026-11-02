@@ -63,7 +63,7 @@ export default async function EvaluationRecordPage({ params, searchParams }: { p
       retakes: standing.retakes.map(x => ({ id: x.id, createdAt: x.createdAt })),
       blueprint: mr.blueprint ? { sections: mr.blueprint.sections.length, core: mr.blueprint.totals.core, application: mr.blueprint.totals.application, gaps: mr.blueprint.totals.gaps, omitted: mr.blueprint.omittedSections } : null,
       canRetake: monthlyReviewOn(policy), weak,
-      plan: plan?.ok ? { priorities: plan.data?.priorities ?? [], settings: plan.data ? { examDate: plan.data.examDate ?? "", examLabel: plan.data.examLabel ?? "", weeklyMinutes: plan.data.weeklyMinutes, daysPerWeek: plan.data.daysPerWeek, goal: plan.data.goal ?? "" } : null } : null,
+      plan: plan?.ok ? { priorities: plan.data?.priorities ?? [], settings: plan.data ? { examDate: plan.data.examDate ?? "", examLabel: plan.data.examLabel ?? "", weeklyMinutes: plan.data.weeklyMinutes, daysPerWeek: plan.data.daysPerWeek, goal: plan.data.goal ?? "", ...(plan.data.goalType && plan.data.sessionMinutes ? { goalType: plan.data.goalType, sessionMinutes: plan.data.sessionMinutes } : {}) } : null } : null,
       progressHref: studyHref("progress"),
     };
   }

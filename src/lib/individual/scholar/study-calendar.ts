@@ -1,7 +1,8 @@
 import type { MasteryEntry } from "./mastery";
+import { ENTRY_TYPE_LABEL, type Occurrence } from "../learning-plan/types";
 import { addDays, dayNum, daysInMonth, isDay, monthEnd, monthLabel, monthOf, monthStart, nextMonth, prevMonth, recommendedDate } from "./monthly-review";
 import { CALENDAR_KIND, CALENDAR_REACH_DAYS, type CalendarKind } from "./study-calendar-kinds";
-import { buildStudyPlan, type PlanSpace, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
+import { buildStudyPlan, type PlanCalendar, type PlanSpace, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
 
 // ── THE STUDY CALENDAR ── SCHOLAR-MONTHLY-REVIEW-01 (owner GO, 1 Nov 2026), extending the study plan ───────────────
 //
@@ -15,6 +16,16 @@ import { buildStudyPlan, type PlanSpace, type StudyPlanSettings, type UnstartedS
 //   completed        what the learner did, on the date they did it: lessons, revision and case sessions, evaluations, the
 //                    cards they reviewed. Each links to the lesson, session or result.
 //   monthly_review   the review of the month: its recommended date (policy N days before month end), or when it was taken.
+//
+//   personal         the learner's OWN calendar entries (individual_learning_calendar_entry): study sessions, exams, deadlines,
+//                    placements, busy times. They are shown, and the plan reads them, but the plan never changes them. A personal study
+//                    session is PLANNED time: only the learner marking it completed makes it "self-reported".
+//
+// PLAN-ACTIVITY KEYS (PLP-01..04). A planned activity is identified by its stable ref and which of that ref in the 60-day run:
+// `${ref}|${nth}` (ref = `${space}:${topic key | chunk id | due | mixed}`). A move stored in the OLD title format (`space|slug|nth`,
+// no colon) is matched to a current activity ONLY when exactly one activity of the run has the same space and slug(title) at the same
+// nth AND the same original date. Otherwise it is listed in `unattached` and applied to nothing. Never guessed. New writes use the new ref only.
+// The two key spaces cannot collide with an entry occurrence key (`${entryId}@${date}`, a uuid): keys here start `plan:`, `due:`, `done:`, `review:`, `entry:`.
 //
 // ⚠ RESCHEDULING MOVES THE PLAN ONLY. A planned activity and the monthly review can be moved (migration 830 keeps the move).
 //   A card's spaced-repetition date is NEVER touched: moving "Review your due cards" moves that planned activity, not any card.
@@ -41,6 +52,8 @@ export type CalendarItem = {
   movedFrom: string | null;
   /** What a move is saved against. */
   entry: { kind: "plan_activity" | "monthly_review"; ref: string; originalDate: string } | null;
+  /** For a personal entry: the occurrence (so the editor can change it). Absent on every other kind. */
+  occurrence?: Occurrence | null;
 };
 export type CalendarDay = { date: string; inMonth: boolean; today: boolean; past: boolean; items: CalendarItem[] };
 export type CalendarView = {
@@ -51,13 +64,17 @@ export type CalendarView = {
   counts: Record<CalendarKind, number>;
   notes: string[];
   canMove: boolean;
+  /** Moves saved in the old title format that match no current activity (or more than one): applied to nothing, offered for removal. */
+  unattached: { ref: string; originalDate: string | null; scheduledDate: string | null }[];
 };
 
 export type CalendarInput = {
   month: string;
   today: string;
   /** The saved plan settings and the evidence the planner reads, or null: no plan, so nothing is planned. */
-  plan: { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; studyId?: string | null } | null;
+  plan: { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; studyId?: string | null; postponed?: ReadonlySet<string>; calendar?: PlanCalendar | null } | null;
+  /** The learner's own calendar occurrences (any dates; those in the month are shown). */
+  personal?: readonly Occurrence[];
   /** Cards by the day their review is due (YYYY-MM-DD -> count). Overdue days are folded onto today here. */
   dueByDate: Readonly<Record<string, number>>;
   completed: readonly CompletedRecord[];
@@ -80,7 +97,11 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 /** Monday = 0. */
 const weekday = (iso: string) => ((dayNum(iso) % 7) + 3 + 7) % 7;
 
-/** A planned activity's key: stable from one day to the next while the plan holds (its space, title and which of that title in the window). */
+/** A stored plan-activity key: `${ref}|${nth}`, ref = `${space}:${topic key | chunk id | due | mixed}`. */
+export const PLAN_ACTIVITY_REF = /^(learn|revise|apply|evaluate):[a-z0-9-]{1,80}\|[0-9]{1,3}$/;
+/** The OLD title-derived form (`space|slug|nth`): read to match or remove an earlier move, never written. */
+export const LEGACY_PLAN_ACTIVITY_REF = /^(learn|revise|apply|evaluate)\|[a-z0-9-]{0,60}\|[0-9]{1,3}$/;
+/** LEGACY key (before PLP-01..04): space, title and which of that title in the window. Kept to read old moves; never written. */
 export const planKey = (space: string, title: string, nth: number) => `${space}|${slug(title)}|${nth}`;
 
 /** Pure. A move is allowed only to a real date within 60 days of today, either way, and never before today. A message is the reason it is refused. */
@@ -98,37 +119,54 @@ export function buildCalendar(input: CalendarInput): CalendarView {
   const notes: string[] = [];
   const byDate = new Map<string, CalendarItem[]>();
   const put = (date: string, item: CalendarItem) => { const list = byDate.get(date) ?? []; list.push(item); byDate.set(date, list); };
-  const moves = new Map(input.entries.filter(e => e.kind === "plan_activity").map(e => [e.ref, e]));
+  const moves = new Map(input.entries.filter(e => e.kind === "plan_activity" && e.ref.includes(":")).map(e => [e.ref, e]));
+  const unattached: CalendarView["unattached"] = [];
 
   // ── planned: the planner, week by week from today, for the dates that fall in this month ──
-  if (input.plan && last >= today) {
+  if (input.plan) {
     const horizon = addDays(today, CALENDAR_REACH_DAYS);
     const dueIn = (from: string, to: string) => Object.entries(input.dueByDate).reduce((n, [d, c]) => (d >= from && d <= to ? n + c : n), 0);
-    const seen = new Map<string, number>();
+    const seen = new Map<string, number>(), legacySeen = new Map<string, number>();
+    const run: { a: ReturnType<typeof buildStudyPlan>["thisWeek"][number]["activities"][number]; day: string; ref: string; legacy: string }[] = [];
     for (let ws = today; ws <= horizon; ws = addDays(ws, 7)) {
       const dueCards = ws === today ? dueIn("0000-01-01", today) : dueIn(ws, addDays(ws, 6));
-      const plan = buildStudyPlan({ plan: input.plan.settings, entries: input.plan.entries, dueCards, unstarted: input.plan.unstarted, today: ws, studyId: input.plan.studyId });
+      const plan = buildStudyPlan({ plan: input.plan.settings, entries: input.plan.entries, dueCards, unstarted: input.plan.unstarted, today: ws, studyId: input.plan.studyId, postponed: input.plan.postponed, calendar: input.plan.calendar });
       for (const d of plan.thisWeek) {
         for (const a of d.activities) {
-          const base = `${a.space}|${slug(a.title)}`;
-          const nth = seen.get(base) ?? 0;
-          seen.set(base, nth + 1);
-          const ref = planKey(a.space, a.title, nth);
-          const move = moves.get(ref);
-          const moved = move?.scheduledDate && isDay(move.scheduledDate) && move.scheduledDate >= today && move.scheduledDate <= horizon ? move.scheduledDate : null;
-          const date = moved ?? d.day;
-          if (date < first || date > last || date < today) continue;
-          put(date, {
-            kind: "planned", key: `plan:${ref}`, title: a.title, detail: a.reason, href: a.href, minutes: a.minutes, count: null, space: a.space,
-            movable: input.canMove, movedFrom: moved && moved !== d.day ? d.day : null, entry: { kind: "plan_activity", ref, originalDate: d.day },
-          });
+          const nth = seen.get(a.ref) ?? 0;
+          seen.set(a.ref, nth + 1);
+          const lbase = `${a.space}|${slug(a.title)}`;
+          const lnth = legacySeen.get(lbase) ?? 0;
+          legacySeen.set(lbase, lnth + 1);
+          run.push({ a, day: d.day, ref: `${a.ref}|${nth}`, legacy: planKey(a.space, a.title, lnth) });
         }
       }
+    }
+    // Old title-keyed moves: re-keyed ONLY when exactly one activity of the run has that legacy key on that original date.
+    for (const e of input.entries) {
+      if (e.kind !== "plan_activity" || e.ref.includes(":")) continue;
+      const hits = run.filter(x => x.legacy === e.ref && x.day === e.originalDate);
+      if (hits.length === 1 && !moves.has(hits[0].ref)) moves.set(hits[0].ref, e);
+      else unattached.push({ ref: e.ref, originalDate: e.originalDate, scheduledDate: e.scheduledDate });
+    }
+    for (const { a, day, ref } of run) {
+      const move = moves.get(ref);
+      const moved = move?.scheduledDate && isDay(move.scheduledDate) && move.scheduledDate >= today && move.scheduledDate <= horizon ? move.scheduledDate : null;
+      const date = moved ?? day;
+      if (date < first || date > last || date < today) continue;
+      put(date, {
+        kind: "planned", key: `plan:${ref}`, title: a.title, detail: a.note ? `${a.reason} (${a.note})` : a.reason, href: a.href, minutes: a.minutes, count: null, space: a.space,
+        movable: input.canMove, movedFrom: moved && moved !== day ? day : null, entry: { kind: "plan_activity", ref, originalDate: day },
+      });
     }
     if (month > monthOf(today) && dayNum(first) > dayNum(horizon)) notes.push(`The plan is laid out for the next ${CALENDAR_REACH_DAYS} days, so nothing is planned yet this far ahead.`);
   } else if (!input.plan && last >= today) {
     notes.push("Set up your study plan to see planned study on the calendar.");
   }
+  if (!input.plan) {
+    for (const e of input.entries) if (e.kind === "plan_activity" && !e.ref.includes(":") && !unattached.some(u => u.ref === e.ref)) unattached.push({ ref: e.ref, originalDate: e.originalDate, scheduledDate: e.scheduledDate });
+  }
+  if (unattached.length) notes.push("An earlier move could not be matched to a current activity. It is not applied to anything. You can remove it.");
 
   // ── due_revision: cards by the day their review is due. Overdue cards are counted today. ──
   if (last >= today) {
@@ -184,11 +222,22 @@ export function buildCalendar(input: CalendarInput): CalendarView {
     }
   }
 
+  // ── personal: the learner's own entries, on the date each is on now ──
+  for (const o of input.personal ?? []) {
+    if (o.status === "cancelled" || o.date < first || o.date > last) continue;
+    const when = o.allDay ? "All day" : `${o.startTime}${o.endTime ? `\u2013${o.endTime}` : ""}`;
+    const state = o.entryType === "study_session" ? (o.selfReported ? "Marked completed by you (self-reported)" : "Planned by you") : null;
+    put(o.date, {
+      kind: "personal", key: `entry:${o.key}`, title: o.title, detail: [ENTRY_TYPE_LABEL[o.entryType], when, state].filter(Boolean).join(" \u00b7 "), href: null,
+      minutes: o.durationMinutes, count: null, space: null, movable: false, movedFrom: o.moved ? o.occurrenceDate : null, entry: null, occurrence: o,
+    });
+  }
+
   // ── the grid: Monday first, whole weeks ──
   const from = addDays(first, -weekday(first));
   const to = addDays(last, 6 - weekday(last));
   const weeks: CalendarDay[][] = [];
-  const kindRank: Record<CalendarKind, number> = { monthly_review: 0, due_revision: 1, planned: 2, completed: 3 };
+  const kindRank: Record<CalendarKind, number> = { monthly_review: 0, due_revision: 1, planned: 2, personal: 3, completed: 4 };
   for (let d = from; d <= to; d = addDays(d, 1)) {
     if (weekday(d) === 0) weeks.push([]);
     const inMonth = d >= first && d <= last;
@@ -196,8 +245,8 @@ export function buildCalendar(input: CalendarInput): CalendarView {
     weeks[weeks.length - 1].push({ date: d, inMonth, today: d === today, past: d < today, items });
   }
   const days = weeks.flat().filter(d => d.inMonth);
-  const counts: Record<CalendarKind, number> = { planned: 0, due_revision: 0, completed: 0, monthly_review: 0 };
+  const counts: Record<CalendarKind, number> = { planned: 0, due_revision: 0, completed: 0, monthly_review: 0, personal: 0 };
   for (const d of days) for (const i of d.items) counts[i.kind]++;
   if (days.length !== daysInMonth(month)) notes.push("The calendar could not lay out this month.");
-  return { month, label: monthLabel(month), prev: prevMonth(month), next: nextMonth(month), today, weeks, days, counts, notes, canMove: input.canMove };
+  return { month, label: monthLabel(month), prev: prevMonth(month), next: nextMonth(month), today, weeks, days, counts, notes, canMove: input.canMove, unattached };
 }

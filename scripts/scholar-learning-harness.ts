@@ -241,8 +241,10 @@ const CANDIDACY_ROUTES = [`${API}/clinical/cases/[id]/offer/route.ts`, `${API}/c
 // title "My learning library" and the policy scholar_learning_library (scholarLearningLibrary). Exactly those names are
 // removed before the check; any other "learning library" (a shared one) still fails, and P14b proves it.
 const OWN_LIBRARY = /My learning library|scholarLearningLibrary|scholar_learning_library/g;
+/** My Plan's calendar entry type "Placement or training" (a clinical placement, not model training) is the one benign use of the word. */
+const PLACEMENT_LABEL = /Placement or training/g;
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
-  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s.replace(OWN_LIBRARY, "")))).map(([f]) => f);
+  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s.replace(OWN_LIBRARY, "").replace(PLACEMENT_LABEL, "")))).map(([f]) => f);
 /** S1b: the candidacy routes go through candidates.ts only, never the tables, and the offer is one case at a time. */
 const candidacyGoverned = (src: Src) => {
   const offer = src.get(CANDIDACY_ROUTES[0]) ?? "", cand = src.get(CANDIDACY_ROUTES[1]) ?? "";

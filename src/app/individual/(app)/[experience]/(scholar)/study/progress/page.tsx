@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -212,12 +214,15 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const { ctx } = page;
   const x = SCHOLAR;
   const [rows, reviews] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId)]);
-  const today = new Date().toISOString().slice(0, 10);
+  // PLP-01..04: today is the learner's own local day (x-vercel-ip-timezone, UTC when absent), the same one My Plan uses.
+  const hdrs = await headers();
+  const tz = learnerTimeZone(hdrs);
+  const today = learnerToday(hdrs);
   const policy = await loadIndividualPolicy(ctx.admin);
   // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs (Progress is not a stage of it).
   const study = await loadStudy(ctx.admin, ctx.userId, sp.study, null, policy);
   // COMPETEN-SCHOLAR-01 S5: the four measures, from the rows already read (nothing is read twice).
-  const li = rows.ok ? await loadLearningIntelligence(ctx.admin, ctx.userId, policy, today, { pre: { rows, reviews } }) : null;
+  const li = rows.ok ? await loadLearningIntelligence(ctx.admin, ctx.userId, policy, today, { pre: { rows, reviews }, tz }) : null;
   const reviewRefs = reviews.ok && reviews.data ? reviews.data : [];
   const p = rows.ok ? buildProgress({ ...rows.data, today }) : null;
   const choices = rows.ok ? await listPassportChoices(ctx.admin, ctx.userId) : null;
@@ -248,7 +253,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const activity = cp ? await learningActivityByCompetency(ctx.admin, ctx.userId) : null;
   // PROGRESS-01 (Stage 8): one read of the evidence for the workspace. No AI.
   const period: PeriodKind = sp.period === "week" || sp.period === "month" || sp.period === "programme" ? sp.period : policy.scholarProgressPeriod;
-  const pv = rows.ok && p && p.materials.length > 0 ? await loadProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), { period }) : null;
+  const pv = rows.ok && p && p.materials.length > 0 ? await loadProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), { period, tz }) : null;
   // SCHOLAR-COMPANION-01 P1: "Study next" and learning progress by topic, from the same rows plus one bounded evidence read.
   // No AI. Gated by an option of scholar_progress_sections (topicProgressEnabled). Merged with Learning Intelligence's recommendations:
   // the ones the card already says (same place, or covered) are dropped from its own list below.
@@ -256,7 +261,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   // SCHOLAR-COMPANION-01 (780): the study plan. On only where HQ switched it on AND 780 is present (fails closed). It reads the same topic evidence.
   const planOn = policy.scholarStudyPlan && isStudyPlanOn(policy, await studyPlanSchema(ctx.admin, ctx.userId));
   const planRead = planOn ? await getStudyPlan(ctx.admin, ctx.userId) : null;
-  const tp = (showTopicProgress || planRead?.ok === true) && rows.ok && p && p.materials.length > 0
+  // PLP-01..04: where My Plan is on, the plan card and the calendar live in My Plan (this page links there); where it is off, Progress is unchanged.
+  const myPlan = planOn && policy.scholarMyPlan === "on";
+  const tp = (showTopicProgress || (planRead?.ok === true && !myPlan)) && rows.ok && p && p.materials.length > 0
     ? await loadTopicProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), {
       materials: rows.data.materials,
       linked: allRows?.ok ? { mappings: allRows.data.mappings, concepts: allRows.data.concepts } : null,
@@ -266,7 +273,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
     : null;
   // SCHOLAR-MONTHLY-REVIEW-01: the study calendar (one calendar, extending the plan) and the monthly review's banner and last-result card.
   // The calendar reads the plan the card above is built from; both fail closed, and an unreadable one is said, never drawn empty.
-  const calendarOn = policy.scholarStudyCalendar === "on";
+  const calendarOn = policy.scholarStudyCalendar === "on" && !myPlan;
   const calMonth = monthFromQuery(sp.month, today);
   const calPlan = planRead?.ok && planRead.data && tp?.ok
     ? {
@@ -312,6 +319,13 @@ export default async function ProgressPage({ params, searchParams }: { params: P
         ) : p && (
           <>
             {/* PROGRESS-01 (Stage 8 of 8): the learning command centre, above the detail by material. */}
+            {myPlan ? (
+              <Link href={experienceHref("scholar", "study/plan")} data-testid="plan-moved"
+                className={`mb-6 flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+                <span className="text-[14.5px] font-semibold text-gray-900">Your plan and calendar are in My Plan</span>
+                <span className="text-[13px] font-semibold underline underline-offset-2" style={{ color: x.accent }}>Open My Plan</span>
+              </Link>
+            ) : (<>
             {planRead?.ok ? (tp?.ok
               ? <StudyPlanCard
                 accent={x.accent} today={today} topics={tp.data.topics.map(t => ({ label: t.label }))}
@@ -325,6 +339,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 }) : null} />
               : <div className="mb-6"><Unreadable what="your study plan" /></div>)
               : planRead ? (planRead.notProvisioned ? null : <div className="mb-6"><Unreadable what="your study plan" /></div>) : null}
+            </>)}
             {monthlyOverview && monthlyOverview.nudges.length > 0 && !monthlyOverview.optedOut && (
               <MonthlyBanner nudges={monthlyOverview.nudges.map(n => ({ month: n.month, recommended: n.recommended, late: n.late }))} evaluateHref={experienceHref("scholar", "study/evaluate")} />
             )}

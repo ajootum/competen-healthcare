@@ -23,7 +23,10 @@ const CHIP: Record<CalendarKind, string> = {
   due_revision: "border-green-300 bg-green-50 text-green-900",
   completed: "border-gray-300 bg-gray-50 text-gray-800",
   monthly_review: "border-amber-300 bg-amber-50 text-amber-900",
+  personal: "border-purple-300 bg-purple-50 text-purple-900",
 };
+/** What a caller adds to an item row (My Plan: the actions of the learner's own entries). */
+export type EntryActionsFor = (item: CalendarItem) => React.ReactNode;
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const longDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
 const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
@@ -46,7 +49,7 @@ async function post(body: unknown): Promise<{ ok: boolean; error?: string }> {
 }
 
 /** One item of a day: what it is, why, a link, and (where it can be moved) Move and Put back. */
-function ItemRow({ item, date, today, accent }: { item: CalendarItem; date: string; today: string; accent: string }) {
+function ItemRow({ item, date, today, accent, extra }: { item: CalendarItem; date: string; today: string; accent: string; extra?: React.ReactNode }) {
   const router = useRouter();
   const uid = useId();
   const [moving, setMoving] = useState(false);
@@ -77,6 +80,7 @@ function ItemRow({ item, date, today, accent }: { item: CalendarItem; date: stri
           {item.href && <Link href={item.href} className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[13.5px] font-semibold text-white hover:opacity-90 pointer-coarse:min-h-[48px] ${focusRing}`} style={{ background: accent }}>Open<span className="sr-only">: {item.title}</span></Link>}
           {item.movable && item.entry && <button type="button" className={secondary} disabled={busy} onClick={() => setMoving(m => !m)} aria-expanded={moving}>Move<span className="sr-only"> {item.title}</span></button>}
           {item.movable && item.entry && item.movedFrom && <button type="button" className={secondary} disabled={busy} onClick={() => run({ action: "restore", kind: item.entry!.kind, ref: item.entry!.ref })}>Put back<span className="sr-only"> {item.title}</span></button>}
+          {extra}
         </div>
       </div>
       {moving && item.entry && (
@@ -95,14 +99,16 @@ function ItemRow({ item, date, today, accent }: { item: CalendarItem; date: stri
   );
 }
 
-function DayItems({ day, today, accent }: { day: CalendarDay; today: string; accent: string }) {
+function DayItems({ day, today, accent, entryActions }: { day: CalendarDay; today: string; accent: string; entryActions?: EntryActionsFor }) {
   return day.items.length === 0
     ? <p className="text-[13.5px] text-gray-700">{day.date > today ? "Nothing is planned or due on this day." : "Nothing was recorded on this day."}</p>
-    : <ul className="divide-y divide-gray-100">{day.items.map(i => <ItemRow key={i.key} item={i} date={day.date} today={today} accent={accent} />)}</ul>;
+    : <ul className="divide-y divide-gray-100">{day.items.map(i => <ItemRow key={i.key} item={i} date={day.date} today={today} accent={accent} extra={entryActions?.(i)} />)}</ul>;
 }
 
-export function StudyCalendar({ view, accent, prevHref, nextHref, todayHref }: {
+export function StudyCalendar({ view, accent, prevHref, nextHref, todayHref, entryActions, title = "Study calendar" }: {
   view: CalendarView; accent: string;
+  /** My Plan: extra actions for an item (the learner's own entries: edit, move, mark done, delete). Progress passes none. */
+  entryActions?: EntryActionsFor; title?: string;
   /** The Progress addresses of the neighbouring months and of this month, keeping the other parts of the query. */
   prevHref: string; nextHref: string; todayHref: string;
 }) {
@@ -114,7 +120,7 @@ export function StudyCalendar({ view, accent, prevHref, nextHref, todayHref }: {
   return (
     <section aria-labelledby="cal-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="cal-h" className="text-[15px] font-bold text-gray-900">Study calendar</h2>
+        <h2 id="cal-h" className="text-[15px] font-bold text-gray-900">{title}</h2>
         <span className="rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-800">A view of your study — not an assessment</span>
       </div>
 
@@ -156,7 +162,7 @@ export function StudyCalendar({ view, accent, prevHref, nextHref, todayHref }: {
         {day && (
           <div className="mt-3 rounded-xl border border-gray-200 p-3" aria-live="polite">
             <h3 className="text-[14px] font-bold text-gray-900">{longDay(day.date)}{day.today ? " (today)" : ""}</h3>
-            <div className="mt-2"><DayItems day={day} today={view.today} accent={accent} /></div>
+            <div className="mt-2"><DayItems day={day} today={view.today} accent={accent} entryActions={entryActions} /></div>
           </div>
         )}
       </div>
@@ -168,7 +174,7 @@ export function StudyCalendar({ view, accent, prevHref, nextHref, todayHref }: {
             {agenda.map(d => (
               <li key={d.date} className="rounded-xl border border-gray-200 p-3">
                 <h3 className="text-[14px] font-bold text-gray-900">{longDay(d.date)}{d.today ? " (today)" : ""}</h3>
-                <div className="mt-2"><DayItems day={d} today={view.today} accent={accent} /></div>
+                <div className="mt-2"><DayItems day={d} today={view.today} accent={accent} entryActions={entryActions} /></div>
               </li>
             ))}
           </ol>

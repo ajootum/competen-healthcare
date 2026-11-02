@@ -8,11 +8,17 @@ import type { IndividualPolicy } from "../policy";
 import { experienceHref } from "../experiences";
 import type { MasteryEntry } from "./mastery";
 import type { Admin } from "./store";
-import type { StudyPlanSettings, UnstartedSection } from "./study-plan";
+import type { PlanCalendar, StudyPlanSettings, UnstartedSection } from "./study-plan";
 import { buildCalendar, type CalendarView } from "./study-calendar";
 import { calendarSchema, listCalendarEntries } from "./store";
 import { listMonthlyReviews, loadDueByDate, loadMonthRaw, monthlyReviewOn } from "./monthly-review-data";
-import { isMonth, monthActivity, monthOf, monthStanding, nextMonth, optedOutOf, prevMonth } from "./monthly-review";
+import { isMonth, monthActivity, monthEnd, monthOf, monthStanding, monthStart, nextMonth, optedOutOf, prevMonth } from "./monthly-review";
+import { learningPlanSchema, listPlanEvents } from "../learning-plan/event-store";
+import { learnerCalendarSchema, listEntries } from "../learning-plan/entry-store";
+import { expandEntries, plusDays } from "../learning-plan/recurrence";
+import { planCalendarFrom } from "./plan-calendar";
+import { postponedTopics } from "./plan-proposal";
+import { CALENDAR_REACH_DAYS } from "./study-calendar-kinds";
 
 const studyHref = (seg: string) => experienceHref("scholar", `study/${seg}`);
 
@@ -30,7 +36,7 @@ export type CalendarLoad = { view: CalendarView; moveOn: boolean; optOut: { avai
 
 export async function loadStudyCalendar(o: {
   admin: Admin; userId: string; policy: IndividualPolicy; month: string; today: string;
-  plan: { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; studyId?: string | null } | null;
+  plan: { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; studyId?: string | null; postponed?: ReadonlySet<string>; calendar?: PlanCalendar | null } | null;
 }): Promise<CalendarLoad | null> {
   const { admin, userId, policy, month, today } = o;
   const [raw, due, reviews, store] = await Promise.all([
@@ -38,12 +44,21 @@ export async function loadStudyCalendar(o: {
   ]);
   if (!raw || !due || !reviews) return null;
   const entries = store ? await listCalendarEntries(admin, userId) : null;
+  // PLP: the learner's own calendar entries (840) are shown, and the plan reads them. Absent 840: none, and the plan is as before.
+  let personal: import("../learning-plan/types").Occurrence[] = [];
+  if (await learnerCalendarSchema(admin, userId)) {
+    const hi = [monthEnd(month), plusDays(today, CALENDAR_REACH_DAYS)].sort().pop()!;
+    const le = await listEntries(admin, userId, "scholar", hi);
+    if (le.ok) personal = expandEntries(le.data.entries, le.data.exceptions, [monthStart(month), today].sort()[0], hi);
+  }
+  const events = (await learningPlanSchema(admin, userId)) ? await listPlanEvents(admin, userId, "scholar", ["topic_postponed"]) : null;
+  const postponed = events?.ok ? postponedTopics(events.data, today) : new Set<string>();
   const stored = entries?.ok ? entries.data : [];
   const optedOut = policy.scholarMonthlyReviewOptout === "allowed" && optedOutOf(stored);
   const original = monthStanding(reviews, month).original;
   const reviewOn = monthlyReviewOn(policy);
   const view = buildCalendar({
-    month, today, plan: o.plan, dueByDate: due, completed: raw.completed, entries: stored, canMove: store,
+    month, today, plan: o.plan ? { ...o.plan, postponed: o.plan.postponed ?? postponed, calendar: o.plan.calendar ?? planCalendarFrom(personal) } : null, personal, dueByDate: due, completed: raw.completed, entries: stored, canMove: store,
     flashcardsHref: `${studyHref("revise/flashcards")}?view=history`,
     review: {
       recommendDays: policy.scholarMonthlyReviewRecommendDays, reminders: reviewOn && policy.scholarMonthlyReviewReminders === "on", optedOut,

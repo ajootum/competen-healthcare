@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import { EXPERIENCES, SCHOLAR, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
 import { countDue, listLearningSessions, listMaterials } from "@/lib/individual/scholar/store";
 import type { IndividualContext } from "@/lib/individual/guard";
@@ -9,6 +10,9 @@ import { LibraryRows } from "./library-list";
 import { libraryRow } from "./library-rows";
 import { continueStudy } from "@/lib/individual/scholar/study-context";
 import { stageHref } from "@/lib/individual/scholar/study-carry";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadToday } from "@/lib/individual/scholar/plan-data";
+import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 
 // THE SCHOLAR HOME -- the study space (Scholar HFE redesign, 2026-10-26; COMPETEN-IND-003 s2(1) and s3).
 //
@@ -28,6 +32,13 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
   const [materials, due, sessions, study] = await Promise.all([
     listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1), continueStudy(ctx.admin, ctx.userId),
   ]);
+  // PLP-01..04: "Continue My Plan" only where My Plan is on and it has a next step (anything else: nothing new on the home). Never an error.
+  const hdrs = await headers();
+  const policy = await loadIndividualPolicy(ctx.admin);
+  const todayPlan = policy.scholarMyPlan === "on"
+    ? await loadToday(ctx, policy, { now: new Date(), tz: learnerTimeZone(hdrs), today: learnerToday(hdrs) }).catch(() => null)
+    : null;
+  const nextStep = todayPlan?.ok ? todayPlan.next : null;
   const none = materials.ok && materials.data.length === 0;
   const resume = sessions.ok ? sessions.data.find(s => s.status === "active") ?? null : null;
   const recent = materials.ok ? materials.data.slice(0, 3).map(m => libraryRow(m)) : [];
@@ -58,6 +69,19 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
           </div>
         </div>
       </section>
+
+      {nextStep && (
+        <section aria-labelledby="myplan-h" data-testid="continue-my-plan" className="mb-5 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <h2 id="myplan-h" className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-gray-500">Continue My Plan</h2>
+            <p className="mt-1 break-words text-[18px] font-bold text-gray-900">{nextStep.title}{nextStep.minutes !== null ? <span className="ml-2 text-[14px] font-semibold tabular-nums text-gray-700">{nextStep.minutes} min</span> : null}</p>
+          </div>
+          <div className="flex flex-wrap gap-2.5">
+            {nextStep.href && <Link href={nextStep.href} className={primary} style={{ background: x.accent }}>Start studying<span className="sr-only">: {nextStep.title}</span></Link>}
+            <Link href={experienceHref("scholar", "study/plan")} className={secondary}>Open My Plan</Link>
+          </div>
+        </section>
+      )}
 
       <div className="mb-5 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-3">
         <section className={card}>

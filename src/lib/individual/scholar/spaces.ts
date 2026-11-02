@@ -1,6 +1,6 @@
 // ── THE SCHOLAR LEARNING SPACES AND THE EIGHT-STAGE JOURNEY ── Scholar HFE redesign, 2026-10-26 ────────
 //
-// The words and the order of My Learning's spaces (Library, Learn, Revise, Apply, Evaluate, Progress) and of
+// The words and the order of My Learning's spaces (My Plan, Library, Learn, Revise, Apply, Evaluate, Progress) and of
 // the eight-stage journey (docs/COMPETEN-SCHOLAR-PRODUCT-ARCHITECTURE.md), read by the tab bar, every
 // space's header and the journey dialog -- so they cannot disagree. Copy is the agreed prototype's.
 //
@@ -9,7 +9,7 @@
 // ⚠ THE STAGES ARE A GUIDE, NOT A ROUTE. Nothing here gates a page: every space is reachable at any time,
 // and a suggestion never locks the next step.
 
-export type ScholarSpaceKey = "library" | "learn" | "revise" | "apply" | "evaluate" | "progress";
+export type ScholarSpaceKey = "plan" | "library" | "learn" | "revise" | "apply" | "evaluate" | "progress";
 
 export type ScholarSpace = {
   key: ScholarSpaceKey;
@@ -25,6 +25,9 @@ export type ScholarSpace = {
 };
 
 export const SCHOLAR_SPACES: readonly ScholarSpace[] = [
+  // PLP-01..04: My Plan is the first tab. It is not a stage of the journey and not a sidebar module; the tab is hidden while HQ has it off.
+  { key: "plan", segment: "study/plan", tab: "My Plan", eyebrow: "My Learning", title: "My Plan",
+    intro: "One next step, a calendar you control, and a plain view of how you are studying." },
   { key: "library", segment: "study", tab: "Library", eyebrow: "Your library", title: "My Learning",
     intro: "Your materials, connected to what you want to learn." },
   { key: "learn", segment: "study/learn", tab: "Learn", eyebrow: "Source-grounded study", title: "Learn",

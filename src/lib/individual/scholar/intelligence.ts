@@ -1,4 +1,5 @@
 import type { CompetencyRef, QuestionCompetency } from "./competency-sources";
+import { activeWeeksIn, lastStudyDay, localDay, studyActivityDays, studyDaysInWindow, type StudyStamp } from "./learning-definitions";
 import { buildCompetencyCoverage, type CompetencyCoverage, type CompetencyEvidence, type Insufficient, type NotMeasured } from "@/lib/competency/progress-model";
 
 // ── LEARNING INTELLIGENCE ── COMPETEN-SCHOLAR-01 S5 ─────────────────────────────────────────────────────
@@ -122,36 +123,40 @@ export function buildCoverage(
 export function buildEngagement(input: {
   materials: readonly IMaterial[]; attempts: readonly IAttempt[]; reviews: readonly IReview[] | null;
   cards: readonly ICard[]; today: string; windowDays: number; weeks?: number;
+  /** PLP-01..04: the learner's time zone (UTC when not given), so a day is their local day. */
+  tz?: string;
+  /** Other recorded learning (lesson events, case decisions, checks) so a study day is the shared definition. Uploads never count. */
+  activity?: readonly StudyStamp[];
 }): Engagement {
   const { materials, attempts, reviews, cards, today, windowDays } = input;
+  const tz = input.tz ?? "UTC";
   if (materials.length === 0) return { state: "not_measured", reason: "You have not added any study material yet." };
   const weeks = input.weeks ?? 8;
   const from = dayOf(new Date(Date.parse(`${today}T00:00:00Z`) - (windowDays - 1) * DAY).toISOString());
-  const inWindow = (iso: string) => dayOf(iso) >= from && dayOf(iso) <= today;
-  const days = new Set<string>();
+  const inWindow = (iso: string) => localDay(iso, tz) >= from && localDay(iso, tz) <= today;
   let answered = 0;
-  for (const a of attempts) if (inWindow(a.answeredAt)) { days.add(dayOf(a.answeredAt)); answered++; }
+  for (const a of attempts) if (inWindow(a.answeredAt)) answered++;
   let reviewCount: number | null = null;
   let reviewsSince: string | null = null;
   if (reviews) {
     reviewCount = 0;
     for (const r of reviews) {
       if (!reviewsSince || r.reviewedAt < reviewsSince) reviewsSince = r.reviewedAt;
-      if (inWindow(r.reviewedAt)) { days.add(dayOf(r.reviewedAt)); reviewCount++; }
+      if (inWindow(r.reviewedAt)) reviewCount++;
     }
     reviewsSince = reviewsSince ? dayOf(reviewsSince) : null;
   }
-  const all = [...attempts.map(a => a.answeredAt), ...(reviews ?? []).map(r => r.reviewedAt)];
-  const lastStudied = all.length ? dayOf(all.reduce((m, x) => (x > m ? x : m))) : null;
-  // Weeks (of the last `weeks`, ending this week) with any practice or revision.
-  const weekOf = (d: string) => Math.floor(daysBetween(d, today) / 7);
-  const activeWeekSet = new Set(all.map(x => weekOf(dayOf(x))).filter(w => w >= 0 && w < weeks));
+  // PLP-01..04: one definition of a study day (learning-definitions.ts), the learner's local day.
+  const studyDays = studyActivityDays([
+    ...attempts.map(a => ({ kind: "answer" as const, at: a.answeredAt })), ...(reviews ?? []).map(r => ({ kind: "review" as const, at: r.reviewedAt })), ...(input.activity ?? []),
+  ], tz);
+  const lastStudied = lastStudyDay(studyDays, today) ?? (studyDays.length ? studyDays[studyDays.length - 1] : null);
   return {
-    state: "measured", windowDays, studyDays: days.size, answered,
+    state: "measured", windowDays, studyDays: studyDaysInWindow(studyDays, today, windowDays), answered,
     reviews: reviewCount, reviewsSince,
     lastStudied, daysSinceStudy: lastStudied ? daysBetween(lastStudied, today) : null,
     cardsDue: cards.filter(c => c.status === "active" && c.nextReviewAt <= today).length,
-    activeWeeks: activeWeekSet.size, weeks,
+    activeWeeks: activeWeeksIn(studyDays, today, weeks), weeks,
   };
 }
 
@@ -219,12 +224,13 @@ export function buildIntelligence(input: {
   /** A competency source read that did not complete. Coverage says so, never computes from it. */
   competencyUnreadable?: boolean;
   today: string; t: Thresholds;
+  tz?: string; activity?: readonly StudyStamp[];
 }): LearningIntelligence {
   const { materials, questions, attempts, cards, reviews, today, t } = input;
   const known = new Set(questions.map(q => q.id));
   const idx = attemptIndex(attempts.filter(a => known.has(a.questionId)));
   const coverage = buildCoverage(questions, idx, input.catalogue, input.mappings, input.competencyUnreadable);
-  const engagement = buildEngagement({ materials, attempts, reviews, cards, today, windowDays: t.windowDays });
+  const engagement = buildEngagement({ materials, attempts, reviews, cards, today, windowDays: t.windowDays, tz: input.tz, activity: input.activity });
   const knowledge = buildKnowledge({ materials, questions, idx, cards, reviews, today, t });
   const reasoning = buildReasoning(questions, idx, t);
 

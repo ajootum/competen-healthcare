@@ -53,7 +53,7 @@ describe("monthActivity", () => {
     expect(a.revisionSessions).toBe(1);
     expect(a.caseSessions).toBe(1);
     expect(a.reviews).toBe(1);
-    expect(a.activeDays).toEqual(["2026-10-03", "2026-10-04", "2026-10-05", "2026-10-10", "2026-10-11", "2026-10-12", "2026-10-20", "2026-10-31"]);
+    expect(a.activeDays).toEqual(["2026-10-03", "2026-10-04", "2026-10-05", "2026-10-10", "2026-10-11", "2026-10-12", "2026-10-20"]);   // PLP-01..04: the upload day (31 October) is no longer a study day
   });
   it("names the sections, materials, subjects and competencies from existing mappings", () => {
     expect(a.sections.map(s => s.chunkId).sort()).toEqual([id(1), id(2), id(3)]);   // section 4 had only a September lesson
