@@ -40,6 +40,9 @@ import {
   deprecatedHostTarget,
   gatewayOrigin,
   normaliseHost,
+  SCHOLAR_PREVIEW_HOST,
+  SCHOLAR_PREVIEW_DEV_HOST,
+  isPreviewHost,
 } from "../src/lib/identity/domains";
 import { STAFF_HOSTS, STAFF_DOOR_PATH, isStaffHost, staffEntryRewrite } from "../src/lib/identity/staff-host";
 import { gatewayEntryRewrite, NO_REWRITE as NO_REWRITE_KEYS } from "../src/lib/identity/gateway-entry";
@@ -375,6 +378,17 @@ ok("8e. ⚠ ...and a commented-out literal does not trip it either",
     stripComments(`// see https://practice.${COMPETEN_DOMAIN} for the gateway\r\nconst y = 1;`)
       .matchAll(HOSTNAME_LITERAL),
   ).length === 0);
+
+// ── 8P. HQ-SCHOLAR-PREVIEW-01: the Scholar preview host is a host, not a gateway ────────────────
+ok("8P-a. the preview host is exact-match: production, dev, with a port, upper case",
+  isPreviewHost(SCHOLAR_PREVIEW_HOST) && isPreviewHost(SCHOLAR_PREVIEW_DEV_HOST)
+  && isPreviewHost("preview.localhost:3100") && isPreviewHost(`PREVIEW.${COMPETEN_DOMAIN}`));
+ok("8P-b. lookalikes are NOT the preview host (suffix, prefix, subdomain, gateway hosts, null)",
+  !isPreviewHost(`notpreview.${COMPETEN_DOMAIN}`) && !isPreviewHost(`preview.${COMPETEN_DOMAIN}.evil.test`)
+  && !isPreviewHost(`x.preview.${COMPETEN_DOMAIN}`) && !isPreviewHost("preview.localhost.evil.test")
+  && !isPreviewHost("localhost") && !isPreviewHost(GATEWAYS.staff.host) && !isPreviewHost(null) && !isPreviewHost(""));
+ok("8P-c. the preview host is NOT a gateway: GATEWAYS stays at seven and gatewayForHost is null for it",
+  GATEWAY_KEYS.length === 7 && gatewayForHost(SCHOLAR_PREVIEW_HOST) === null && gatewayForHost(SCHOLAR_PREVIEW_DEV_HOST) === null);
 
 // ── 9. s9 is NOT claimed here, and the file says so out loud ─────────────────────────────────────
 const selfSrc = readFileSync(join(ROOT, "scripts/domain-registry-harness.ts"), "utf8");

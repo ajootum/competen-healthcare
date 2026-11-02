@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
 import {
-  answeredView, blueprintCompetencies, caseClosing, endsOnReaching, learnerView, nextStage, professionsOf, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
+  answeredView, blueprintCompetencies, caseClosing, endsOnReaching, isWritten, learnerView, nextStage, professionsOf, resolveOptions, resolveToken, safetyEvents, variationWithinBounds, viewToken, visibleFacts,
   type Blueprint, type CaseClosing, type LearnerView,
 } from "./blueprint";
 import { REASONING_CAPS } from "./categories";
@@ -180,7 +180,7 @@ function viewOf(x: { s: SessionRow; c: LoadedCase; b: Blueprint }, hints: boolea
     feedback: (x.s.feedback ?? []).map(f => ({ ...shown(f), decisionToken: viewToken(x.s.view_salt, "decision", f.decisionPointId) })),
     debrief: x.s.debrief ? shown(x.s.debrief) : null,
     reasons: Object.fromEntries(x.s.answers.filter(a => typeof a.reason === "string" && a.reason).map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), a.reason as string])),
-    answeredViews: Object.fromEntries(x.s.answers.map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), answeredView(x.b, a.decisionPointId, a.chosen ?? [], x.s.view_salt)])),
+    answeredViews: Object.fromEntries(x.s.answers.map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), answeredView(x.b, a.decisionPointId, a.chosen ?? [], x.s.view_salt, typeof a.text === "string" ? a.text : null)])),
     closing: x.s.status === "completed" ? caseClosing(x.b) : null };
 }
 
@@ -194,6 +194,11 @@ export type SessionAttemptSource = {
   reached: string[]; revealed: string[]; answers: SessionRow["answers"]; feedback: { decisionPointId: string; text: string; model: string; provider: string; at: string }[];
   debrief: { text: string; model: string; provider: string; at: string } | null;
 };
+/** CE-04: the caller's own library session's view salt (it never leaves the server), for turning a decision id into the token the browser holds. */
+export async function sessionViewSalt(admin: any, userId: string, sessionId: string): Promise<string | null> {
+  const x = await sessionFor(admin, userId, sessionId);
+  return x ? x.s.view_salt : null;
+}
 export async function sessionAttemptSource(admin: any, userId: string, sessionId: string): Promise<SessionAttemptSource | null> {
   const x = await sessionFor(admin, userId, sessionId);
   if (!x) return null;
@@ -334,11 +339,11 @@ export function applyAnswer(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids
   if (s.answers.some(a => a.decisionPointId === dpId)) return { error: "That decision is already answered." };
   if (d.kind === "single" && chosen.length !== 1) return { error: "Choose one option." };
   if (d.kind === "multiple" && chosen.length < 1) return { error: "Choose at least one option." };
-  if (d.kind === "free_text" && !(text ?? "").trim()) return { error: "Write your answer." };
-  const events = d.kind === "free_text" ? [] : safetyEvents(b, d.id, chosen);
+  if (isWritten(d) && !(text ?? "").trim()) return { error: "Write your answer." };
+  const events = isWritten(d) ? [] : safetyEvents(b, d.id, chosen);
   // "Explain your choice": kept beside the choice when the decision asks for it. It never changes the marking.
-  const why = d.kind !== "free_text" && d.askReason === true && (reason ?? "").trim() ? (reason ?? "").trim().slice(0, REASONING_CAPS.reason) : null;
-  const answers = [...s.answers, { decisionPointId: d.id, chosen: d.kind === "free_text" ? [] : chosen, ...(d.kind === "free_text" ? { text: (text ?? "").slice(0, 4000) } : {}), ...(why ? { reason: why } : {}), at, safety: events.length }];
+  const why = !isWritten(d) && d.askReason === true && (reason ?? "").trim() ? (reason ?? "").trim().slice(0, REASONING_CAPS.reason) : null;
+  const answers = [...s.answers, { decisionPointId: d.id, chosen: isWritten(d) ? [] : chosen, ...(isWritten(d) ? { text: (text ?? "").slice(0, 4000) } : {}), ...(why ? { reason: why } : {}), at, safety: events.length }];
   const stageDps = b.decisionPoints.filter(x => x.stageId === stage);
   let reached = [...s.reached_stage_ids], revealed = [...s.revealed_fact_ids], completed = false;
   if (stageDps.every(x => answers.some(a => a.decisionPointId === x.id))) {
@@ -360,7 +365,7 @@ export async function answerInSession(admin: any, userId: string, sessionId: str
   const dpId = resolveToken(x.b, x.s.view_salt, "decision", args.decisionToken);
   if (!dpId) return { error: "No such decision." };
   const d = x.b.decisionPoints.find(p => p.id === dpId)!;
-  const chosen = d.kind === "free_text" ? [] : resolveOptions(x.b, x.s.view_salt, dpId, args.optionTokens ?? []);
+  const chosen = isWritten(d) ? [] : resolveOptions(x.b, x.s.view_salt, dpId, args.optionTokens ?? []);
   if (chosen === null) return { error: "Choose from this decision's options." };
   const r = applyAnswer(x.b, x.s, dpId, chosen, args.text ?? null, new Date().toISOString(), args.reason ?? null);
   if ("error" in r) return r;
@@ -369,5 +374,5 @@ export async function answerInSession(admin: any, userId: string, sessionId: str
     ...(r.completed ? { status: "completed" } : {}),
   }).eq("id", x.s.id).eq("status", "in_progress").select("*").single();
   if (error || !s) return { error: "Your answer could not be recorded just now." };
-  return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt), session: viewOf({ ...x, s }, false) };
+  return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt, args.text ?? null), session: viewOf({ ...x, s }, false) };
 }

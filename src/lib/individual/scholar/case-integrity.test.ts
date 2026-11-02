@@ -263,3 +263,29 @@ describe("corrections: the effective result, the original beside it", () => {
     expect(done.attempt?.corrected).toEqual([expect.objectContaining({ id: "d2", original: "incorrect", effective: "correct" })]);
   });
 });
+
+// SCHOLAR-CE-2026 CE-04: the kept attempt carries the simulated conversation and a handover's code marks.
+describe("the attempt record carries the conversation and a handover", () => {
+  it("keeps the conversation (labelled, bounded) and the handover note beside the decision", async () => {
+    const { CE04_DEMO } = await import("@/lib/cases/fixtures");
+    const { composeHandover } = await import("@/lib/cases/handover");
+    const text = composeHandover({ situation: "More breathless now.", background: "Admitted two days ago.", assessment: "Rate 34 and drowsy.", recommendation: "Review urgently please." });
+    const turns = Array.from({ length: 80 }, (_, i) => ({ stageId: "s1", question: `Question ${i} ${"q".repeat(600)}`, reply: `Reply ${i} ${"r".repeat(900)}` }));
+    const { record, rubric } = buildCaseAttemptRecord({
+      kind: "private", blueprint: CE04_DEMO, mode: "guided", variation: {}, reached: ["s1", "s2"], revealed: [],
+      answers: [{ decisionPointId: "d2", chosen: [], text, reason: null, marking: "deterministic", correct: true, score: 0.9, safety: [], aiFeedback: { text: "Clear and ordered.", model: "m1" }, at: "t" }],
+      aiDebrief: null, conversation: turns,
+    });
+    expect(record.conversation?.label).toMatch(/Simulated conversation/);
+    expect(record.conversation!.turns.length).toBeLessThanOrEqual(60);
+    expect(record.conversation!.turns[0].stageTitle).toBe("First assessment");
+    expect(record.conversation!.turns[0].question.length).toBeLessThanOrEqual(400);
+    expect(record.conversation!.turns[0].reply.length).toBeLessThanOrEqual(600);
+    expect(rubric.decisions[0].handover).toMatchObject({ minWords: 4, passMark: 0.7, elements: expect.arrayContaining([expect.objectContaining({ id: "e_rr", section: "assessment", weight: 1 })]) });
+    expect(record.decisions[0]).toMatchObject({ kind: "handover", marking: "deterministic", correct: true, score: 0.9, aiFeedback: { label: CASE_AI_FEEDBACK_LABEL, text: "Clear and ordered." } });
+    expect(Buffer.byteLength(JSON.stringify(record))).toBeLessThan(CASE_ATTEMPT_MAX_BYTES);
+    // no conversation: the record is exactly as before (no key)
+    const none = buildCaseAttemptRecord({ kind: "private", blueprint: CE04_DEMO, mode: null, variation: {}, reached: ["s1"], revealed: [], answers: [], aiDebrief: null }).record;
+    expect("conversation" in none).toBe(false);
+  });
+});

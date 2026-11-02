@@ -7,12 +7,14 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { getPassage, getPrivateCase, getPrivateCaseSession } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { REASONING_CAPS } from "@/lib/cases/categories";
+import { HANDOVER_SECTIONS, composeHandover } from "@/lib/cases/handover";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { libraryReasoningFeedback } from "@/lib/individual/scholar/clinical-library-feedback";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
 import { answerPlay, finishPlay, isPlayKind } from "@/lib/individual/scholar/clinical-routes";
+import { handoverFeedbackNote } from "@/lib/individual/scholar/case-talk";
 import type { ReasoningJudge } from "@/lib/individual/scholar/clinical-play";
 import { answerSpelling, vocabularyOf } from "@/lib/individual/scholar/spelling";
 import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
@@ -37,7 +39,12 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
   const body = await req.json().catch(() => ({}));
   if (typeof body?.decisionToken !== "string" || body.decisionToken.length > 64) return NextResponse.json({ error: "Answer one of the decisions shown." }, { status: 400 });
   const optionTokens = Array.isArray(body?.optionTokens) ? (body.optionTokens as unknown[]).filter((t): t is string => typeof t === "string" && t.length <= 64).slice(0, 20) : undefined;
-  const text = typeof body?.text === "string" ? body.text.trim().slice(0, 4000) : null;
+  // CE-04: an SBAR handover arrives as four boxes and is kept as ONE composed written answer (marked by code first).
+  const hv = body?.handover && typeof body.handover === "object" ? (body.handover as Record<string, unknown>) : null;
+  const text = hv
+    ? composeHandover(Object.fromEntries(HANDOVER_SECTIONS.map(k => [k, typeof hv[k] === "string" ? (hv[k] as string) : ""])))
+    : typeof body?.text === "string" ? body.text.trim().slice(0, 4000) : null;
+  if (hv && !HANDOVER_SECTIONS.some(k => typeof hv[k] === "string" && (hv[k] as string).trim())) return NextResponse.json({ error: "Write your handover in the four boxes." }, { status: 400 });
   if (text && findPatientIdentifiers(text).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   // "Explain your choice" (decision.askReason): kept beside the choice (screened for patient identifiers like any text) --
   // a LIBRARY play on its answer (423), a PRIVATE play in its own row beside the 435 answer (810: 435 holds a choice or a
@@ -73,6 +80,9 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
 
   const r = await answerPlay(ctx.admin, ctx.userId, kind, id, { decisionToken: body.decisionToken, optionTokens, text, reason }, judge, body?.hints === true);
   if ("error" in r) return NextResponse.json({ error: r.error }, { status: (r as { status?: number }).status ?? 400 });
+  // CE-04: a handover is marked by code (above). Where policy and the student's AI allow, a labelled AI comment is kept beside it
+  // (it never changes the marks), BEFORE the finished play keeps its record so the kept attempt carries it.
+  const handoverNote = hv ? await handoverFeedbackNote(ctx, req, kind, id, body.decisionToken, text) : null;
   // A written decision in a LIBRARY case: live AI feedback on the student's own budget (case.live_with_stored), from the
   // narrow server-side context library.ts gives (never the blueprint), recorded by the shared delivery (424). Where it
   // is not given, the student reviews their answer themselves.
@@ -80,7 +90,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
     const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback` });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
-    if (f.ok) return NextResponse.json({ ...r, ...understood, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
+    if (f.ok) return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
   }
-  return NextResponse.json({ ...r, ...understood, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play) });
+  return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play) });
 }

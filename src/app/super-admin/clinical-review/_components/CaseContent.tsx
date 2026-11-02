@@ -40,7 +40,12 @@ export function CaseContent({ c }: { c: any }) {
           {dps.filter(d => d?.stageId === s.id).map(d => (
             <div key={d.id} className="mt-2">
               <p className="text-gray-900">{d.prompt || none} <span className="text-[12px] text-gray-500">({d.kind}{d.dimension ? `, ${d.dimension}` : ""})</span></p>
-              {d.kind === "free_text" ? <p className="mt-1 text-gray-700">Expected: {txt(d.expectedResponse) ?? none}</p> : (
+              {d.kind === "handover" ? (
+                <div className="mt-1 text-gray-800">
+                  <p className="text-[12.5px] text-gray-600">SBAR handover (marked by code: each box written, then these points mentioned{d.handover?.passMark ? `, pass mark ${Math.round(d.handover.passMark * 100)}%` : ""}):</p>
+                  {d.handover?.elements?.length ? <ul className="mt-1 list-disc pl-5">{d.handover.elements.map((e: any) => <li key={e.id}>{e.label}{e.section ? ` (${e.section})` : ""} <span className="text-gray-600">-- counts: {(e.terms ?? []).join(", ")}</span></li>)}</ul> : <p>{none}</p>}
+                </div>
+              ) : d.kind === "free_text" ? <p className="mt-1 text-gray-700">Expected: {txt(d.expectedResponse) ?? none}</p> : (
                 <ul className="mt-1 space-y-1">{(d.options ?? []).map((o: any) => (
                   <li key={o.id} className={o.correct ? "font-medium text-[var(--cmp-text-success,#166534)]" : "text-gray-800"}>
                     {o.correct ? "Key: " : "Not the key: "}{o.text} <span className="font-normal text-gray-600">-- {txt(o.rationale) ?? txt(d.rationale) ?? "no rationale"}</span>
@@ -66,6 +71,16 @@ export function CaseContent({ c }: { c: any }) {
         <p className="text-gray-800">{txt(c?.feedback?.debrief) ?? none}</p>
         {Array.isArray(c?.references) && c.references.length ? <ul className="list-disc pl-5">{c.references.map((r: any, i: number) => <li key={i}>{r.citation}</li>)}</ul> : <p>{none}</p>}
       </section>
+      {c?.aiBoundary?.patientVoice && c?.voice ? (
+        <section>
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Talk to the {c.voice.speaker === "caregiver" ? "caregiver" : "patient"} (an AI voices this person, from only what is listed)</h3>
+          <p className="text-gray-800">Persona: {txt(c.voice.persona) ?? none}</p>
+          <p className="text-gray-800">Speaks: {txt(c.voice.style) ?? none}</p>
+          <p className="text-gray-800">Can speak to: {(c.voice.knowsFactIds ?? []).map(label).join(", ") || "no recorded findings"}</p>
+          {c.voice.knowsStatements?.length ? <ul className="list-disc pl-5">{c.voice.knowsStatements.map((s: any) => <li key={s.id}>{s.text} <span className="text-gray-600">(from {s.from === "start" ? "the start" : title(s.from)})</span></li>)}</ul> : null}
+          {c.voice.keyQuestions?.length ? <p className="text-gray-700">Key questions: {c.voice.keyQuestions.map((k: any) => k.label).join("; ")}</p> : null}
+        </section>
+      ) : null}
       <section>
         <h3 className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Variation boundaries</h3>
         {c?.variation?.rules?.length ? <ul className="list-disc pl-5">{c.variation.rules.map((r: any, i: number) => <li key={i}>{label(r.factId)}: {r.values?.length ? r.values.join(", ") : `${r.range?.min} to ${r.range?.max}`}</li>)}</ul> : <p className="text-gray-700">No variation: delivered exactly as written.</p>}

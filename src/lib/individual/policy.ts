@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from "react";
 import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
@@ -113,7 +114,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "passport_recipient_label" | "passport_presentation" | "passport_validity_display" | "passport_export" | "passport_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
-  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_evaluation_recommendations"
+  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_case_conversation" | "scholar_case_conversation_turns" | "scholar_evaluation_recommendations"
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
@@ -1680,6 +1681,23 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "self",
     limitReason: "Choices are always marked by their key first. AI feedback is always labelled. Default: the student's own review.",
   },
+  {
+    // SCHOLAR-CE-2026 CE-04 (owner GO 2 Nov 2026). Needs migration 880 to keep the turns. Off until HQ switches it on.
+    key: "scholar_case_conversation", kind: "choice", product: "Scholar",
+    label: "Talk to the patient in a case",
+    help: "Whether a case that defines a patient or caregiver voice offers a Talk to the patient panel, where the student types questions and an AI answers in that person's voice using only what the case says they know at that stage. It uses the student's AI allowance (the same path as case feedback), is labelled as a simulated conversation, and the conversation is kept with the attempt for the debrief. The case works the same when it is off or the AI is unavailable.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Off until HQ switches it on (and migration 880 is applied). Only cases whose version defines a patient voice show the panel.",
+  },
+  {
+    key: "scholar_case_conversation_turns", kind: "choice", product: "Scholar",
+    label: "Questions allowed per case stage in Talk to the patient",
+    help: "The most questions a student may ask the patient at each stage of a case. It bounds the AI cost of one case. Reaching the limit never stops the case.",
+    options: [{ value: "10", label: "10" }, { value: "15", label: "15" }, { value: "20", label: "20 (default)" }, { value: "30", label: "30" }, { value: "40", label: "40" }],
+    fallback: "20",
+    limitReason: "Only 10, 15, 20, 30 or 40. Default 20.",
+  },
   // ── EVALUATION-01 (Stage 6): how an evaluation reads and interprets evidence. A band describes, it never
   // certifies: there is no pass mark, and no setting can make an evaluation verified competence. ──
   {
@@ -2209,6 +2227,9 @@ export type IndividualPolicy = {
   scholarCaseGeneration: "generate" | "stored_only";
   scholarCaseMode: "guided" | "independent";
   scholarCaseReasoningFeedback: "ai_then_self" | "self";
+  /** SCHOLAR-CE-2026 CE-04. Whether a case with a patient voice offers Talk to the patient (needs 880), and the questions allowed per stage. */
+  scholarCaseConversation: "on" | "off";
+  scholarCaseConversationTurns: 10 | 15 | 20 | 30 | 40;
   /** EVALUATION-01 (Stage 6). */
   scholarEvaluationMethods: ("existing" | "fresh" | "combined")[];
   scholarEvaluationEvidence: ("teach_checks" | "revision" | "spaced_review" | "clinical_reasoning")[];
@@ -2409,6 +2430,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarCaseGeneration: clampChoice(policyDef("scholar_case_generation") as ChoicePolicy, published.get(policyPath("scholar_case_generation"))) as "generate" | "stored_only",
     scholarCaseMode: clampChoice(policyDef("scholar_case_mode") as ChoicePolicy, published.get(policyPath("scholar_case_mode"))) as "guided" | "independent",
     scholarCaseReasoningFeedback: clampChoice(policyDef("scholar_case_reasoning_feedback") as ChoicePolicy, published.get(policyPath("scholar_case_reasoning_feedback"))) as "ai_then_self" | "self",
+    scholarCaseConversation: clampChoice(policyDef("scholar_case_conversation") as ChoicePolicy, published.get(policyPath("scholar_case_conversation"))) as "on" | "off",
+    scholarCaseConversationTurns: Number(clampChoice(policyDef("scholar_case_conversation_turns") as ChoicePolicy, published.get(policyPath("scholar_case_conversation_turns")))) as 10 | 15 | 20 | 30 | 40,
     scholarEvaluationMethods: clampSet(policyDef("scholar_evaluation_methods") as SetPolicy, published.get(policyPath("scholar_evaluation_methods"))) as ("existing" | "fresh" | "combined")[],
     scholarEvaluationEvidence: clampSet(policyDef("scholar_evaluation_evidence") as SetPolicy, published.get(policyPath("scholar_evaluation_evidence"))) as ("teach_checks" | "revision" | "spaced_review" | "clinical_reasoning")[],
     scholarEvaluationMinEvidence: int("scholar_evaluation_min_evidence"),
@@ -2629,6 +2652,9 @@ export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy
     return error ? DEFAULT_POLICY : resolvePolicy(data ?? []);
   } catch { return DEFAULT_POLICY; }
 }
+
+/** MY PLAN PERF: the same read, once per server render (React cache(), a plain call outside a render): the shell layout and the page both ask for it. */
+export const loadIndividualPolicyOnce = cache(loadIndividualPolicy);
 
 /**
  * The Individual AI hourly check: the estate quota (src/lib/ai/quota.ts, unchanged) AND the Individual

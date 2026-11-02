@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { individualShell, gatedMetadata } from "../_components/shell-context";
 import { experienceOfPath, forQuery, isIndividualNext } from "@/lib/individual/entry";
+import { readPreviewRender } from "@/lib/individual/preview/headers";
+import ScholarPreviewBanner from "../_components/ScholarPreviewBanner";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -43,5 +45,18 @@ export default async function IndividualAppLayout({ children }: { children: Reac
   // access page works out the person's state itself and never trusts the URL for it.
   if (shell.state !== "READY") redirect(`/individual/access${forQuery(experienceOfPath(asked))}`);
   // COMPETEN-DESIGN-SYSTEM-01: the Individual theme for every page under the gate; an experience layout re-points it.
+  //
+  // HQ-SCHOLAR-PREVIEW-01: on the preview host the proxy has verified a live preview session and injected its mode. The banner
+  // is drawn only from that header (never the URL), and --cmp-preview-h tells the experience shell's sticky header and sidebar
+  // how far down to sit so the banner never covers them. Both are absent on every normal render.
+  const preview = readPreviewRender(await headers());
+  if (preview) {
+    return (
+      <div data-cmp-theme="individual" style={{ "--cmp-preview-h": "44px" } as React.CSSProperties}>
+        <ScholarPreviewBanner mode={preview.mode} secondsLeft={preview.secondsLeft} />
+        {children}
+      </div>
+    );
+  }
   return <div data-cmp-theme="individual">{children}</div>;
 }

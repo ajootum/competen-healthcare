@@ -7,6 +7,7 @@
 // Migration 830 only keeps what the calendar cannot derive (moved dates, a review waiting to resume, the opt-out), and
 // everything here works without it.
 
+import { cache } from "react";
 import { needsImmediateFeedback } from "./question-formats";
 import type { IndividualContext } from "../guard";
 import type { IndividualPolicy } from "../policy";
@@ -46,10 +47,11 @@ export type MonthRaw = { records: ActivityRecords; completed: CompletedRecord[] 
  * The learner's own dated records from the first day of `fromMonth` to the last day of `toMonth`, and the completed-work lines
  * the calendar shows. Only real activity dates. Unreadable is null: the caller says so, never a calm zero.
  */
-export async function loadMonthRaw(admin: Admin, userId: string, fromMonth: string, toMonth: string): Promise<MonthRaw | null> {
-  const learner = await loadLearnerCatalogue(admin, userId);
-  const m = await monthRecords(admin, userId, fromMonth, toMonth, (learner.competencies ?? []).map(c => ({ id: c.id, title: c.title })));
-  if (!m) return null;
+export const loadMonthRaw = cache(async (admin: Admin, userId: string, fromMonth: string, toMonth: string): Promise<MonthRaw | null> => {
+  // MY PLAN PERF: the programme's competencies are only carried into the records, so they are read beside the month, not before it. Once per request (cache()).
+  const [learner, m0] = await Promise.all([loadLearnerCatalogue(admin, userId), monthRecords(admin, userId, fromMonth, toMonth, [])]);
+  if (!m0) return null;
+  const m = { ...m0, records: { ...m0.records, competencies: (learner.competencies ?? []).map(c => ({ id: c.id, title: c.title })) } };
   const { records } = m;
   const completed: CompletedRecord[] = [];
   const seen = new Set<string>();
@@ -70,7 +72,7 @@ export async function loadMonthRaw(admin: Admin, userId: string, fromMonth: stri
     });
   }
   return { records, completed };
-}
+});
 
 /** The cards by their review day, for the calendar. null when unreadable. */
 export const loadDueByDate = cardDueDates;
@@ -113,10 +115,21 @@ export const resumeHrefOf = (sessionId: string, evscope: unknown) => `${studyHre
 /** What the Evaluate panel and the Progress banner need, for the current month and the one before. null when the records cannot be read. */
 export async function loadMonthlyOverview(admin: Admin, userId: string, policy: IndividualPolicy, today: string): Promise<MonthlyOverview | null> {
   const cur = monthOf(today), prev = prevMonth(cur);
-  const [raw, reviews, store] = await Promise.all([loadMonthRaw(admin, userId, prev, cur), listMonthlyReviews(admin, userId), calendarSchema(admin, userId)]);
+  // MY PLAN PERF: the stored entries, and the sittings they point at, are read while the month's records load (they used to follow them). A sitting is only
+  // looked up for an entry that names one with a saved scope, and is only used when that review has not been taken, exactly as before.
+  const storeP = calendarSchema(admin, userId);
+  const storedP = storeP.then(async (s): Promise<StoredCalendarEntry[]> => { const e = s ? await listCalendarEntries(admin, userId) : null; return e?.ok ? e.data : []; });
+  const sittingsP = storedP.then(async stored => {
+    const out = new Map<string, boolean>();
+    await Promise.all([cur, prev].map(async m => {
+      const entry = stored.find(e => e.kind === "monthly_review" && e.ref === m);
+      const sid = typeof entry?.value?.sessionId === "string" ? (entry!.value!.sessionId as string) : null;
+      if (sid && entry?.value?.evscope) { const s = await getRevisionSession(admin, userId, sid); out.set(sid, !!(s.ok && s.data)); }
+    }));
+    return out;
+  });
+  const [raw, reviews, store, stored, sittings] = await Promise.all([loadMonthRaw(admin, userId, prev, cur), listMonthlyReviews(admin, userId), storeP, storedP, sittingsP]);
   if (!raw || !reviews) return null;
-  const entries = store ? await listCalendarEntries(admin, userId) : null;
-  const stored: StoredCalendarEntry[] = entries?.ok ? entries.data : [];
   const optedOut = optedOutOf(stored);
   const rp = reviewPolicyOf(policy);
   const panels: MonthPanel[] = [];
@@ -127,10 +140,7 @@ export async function loadMonthlyOverview(admin: Admin, userId: string, policy: 
     const sid = typeof entry?.value?.sessionId === "string" ? (entry!.value!.sessionId as string) : null;
     const taken = sid ? reviews.some(r => r.freshSessionId === sid) : false;
     let resumeHref: string | null = null;
-    if (sid && !taken && entry?.value?.evscope) {
-      const s = await getRevisionSession(admin, userId, sid);
-      if (s.ok && s.data) resumeHref = resumeHrefOf(sid, entry.value.evscope);
-    }
+    if (sid && !taken && entry?.value?.evscope && sittings.get(sid)) resumeHref = resumeHrefOf(sid, entry.value.evscope);
     const hasActivity = a.sections.length > 0;
     const state: MonthPanel["state"] = standing.original ? "done" : resumeHref ? "in_progress" : hasActivity ? "ready" : "no_activity";
     // The earlier month is only worth showing while it is still open.

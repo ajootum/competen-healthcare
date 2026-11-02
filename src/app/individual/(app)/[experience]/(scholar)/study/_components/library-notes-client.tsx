@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { noteDatesLabel } from "@/lib/individual/scholar/library-organise";
+import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // SCHOLAR-LIBRARY-01 (owner, 1 Nov 2026): the learner's OWN notes, bookmark and highlights on one saved teaching or one
 // lesson. Learner-authored, private, never AI: every write goes to api/individual/scholar/library/notes (820), which keys
@@ -98,6 +99,7 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
             <label className="mt-2 block text-[12.5px] font-semibold text-gray-800" htmlFor={`note-${containerId ?? "x"}`}>Add a note</label>
             <textarea id={`note-${containerId ?? "x"}`} value={draft} maxLength={BODY_MAX} rows={2} onChange={e => setDraft(e.target.value)}
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} placeholder="Your own words: what to remember, a question to ask" />
+            <DictateButton fieldId={`note-${containerId ?? "x"}`} onValue={setDraft} disabled={busy} className="mt-2" />
             <div className="mt-2 flex flex-wrap gap-2">
               <button type="button" className={chip} disabled={busy || !draft.trim()} onClick={() => void add("note", draft.trim(), null).then(ok => ok && setDraft(""))}>Save note</button>
               {allowHighlight && containerId && <button type="button" className={chip} disabled={busy} onClick={() => void highlight()}>Highlight selected text</button>}
@@ -144,6 +146,7 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
           <label className="block text-[12.5px] font-semibold text-gray-800" htmlFor={`edit-${note.id}`}>{note.kind === "highlight" ? "Your comment on the highlight" : "Edit your note"}</label>
           <textarea id={`edit-${note.id}`} value={text} maxLength={BODY_MAX} rows={3} onChange={e => setText(e.target.value)}
             className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} />
+          <DictateButton fieldId={`edit-${note.id}`} onValue={setText} disabled={saving} className="mt-2" />
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="button" className={chip} disabled={saving} onClick={() => void save()}>Save changes</button>
             <button type="button" className={chip} disabled={saving} onClick={() => { setEditing(false); setText(note.body ?? ""); setMsg(null); }}>Cancel</button>
@@ -241,6 +244,7 @@ export function NewNoteForm({ materials, initialMaterial }: { materials: { id: s
         <label className="mt-2 block text-[12.5px] font-semibold text-gray-800" htmlFor="new-library-note">Your note</label>
         <textarea id="new-library-note" value={body} maxLength={BODY_MAX} rows={3} onChange={e => setBody(e.target.value)}
           className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} placeholder="Your own words: what to remember, a question to ask" />
+        <DictateButton fieldId="new-library-note" onValue={setBody} disabled={busy} className="mt-2" />
         <div className="mt-2 flex flex-wrap items-center gap-2">
           <button type="button" className={chip} disabled={busy || !materialId || !body.trim()} onClick={() => void save()}>Save note</button>
           {msg && <span role="status" className="text-[13px] text-gray-800">{msg}</span>}

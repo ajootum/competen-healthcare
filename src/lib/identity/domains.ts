@@ -218,3 +218,30 @@ export function deprecatedHostTarget(rawHost: string | null | undefined): Gatewa
 export function gatewayOrigin(key: GatewayKey): string {
   return `https://${GATEWAYS[key].host}`;
 }
+
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+// HQ-SCHOLAR-PREVIEW-01 -- THE SCHOLAR PREVIEW HOST.
+//
+// A host for staff to open the real Competen Scholar as a designated demonstration learner. It is NOT a
+// gateway: it has no product door, no entry rewrite, and it is deliberately kept OUT of `GATEWAYS`
+// (domain-registry-harness asserts exactly seven gateways, and a preview host is not an eighth product).
+//
+// WHY A SEPARATE HOST AT ALL: session cookies are host-scoped (no Domain attribute is set anywhere), so
+// the demonstration learner's real Supabase session on this host can never replace the HQ user's own
+// session on the main host.
+//
+// EXACT MATCH ONLY, for the reason `gatewayForHost` records: a suffix test would accept a lookalike host.
+// ────────────────────────────────────────────────────────────────────────────────────────────────────
+
+/** The production preview hostname. */
+export const SCHOLAR_PREVIEW_HOST = `preview.${COMPETEN_DOMAIN}`;
+
+/** Development alias. Cannot exist in production, where the platform terminates TLS. */
+export const SCHOLAR_PREVIEW_DEV_HOST = "preview.localhost";
+
+/** Whether a request arrived on the Scholar preview host. Exact match on the normalised host. */
+export function isPreviewHost(rawHost: string | null | undefined): boolean {
+  const host = normaliseHost(rawHost);
+  if (host === null) return false;
+  return host === SCHOLAR_PREVIEW_HOST || host === SCHOLAR_PREVIEW_DEV_HOST;
+}

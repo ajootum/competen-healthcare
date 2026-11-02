@@ -198,7 +198,10 @@ const checkKnownDoors = (routes: string[]): R => {
     && f !== "src/app/api/hq/individual/programmes/route.ts" && f !== FILES.route && f !== FILES.catRoute
     // verification/ (PROF-PROFILE-01 part B, migration 451) is pinned by professional-profile-harness B3: its own
     // capability, hq.individual.professional.verify, on both handlers, and 451's trigger re-checks every write.
-    && f !== "src/app/api/hq/individual/verification/route.ts");
+    && f !== "src/app/api/hq/individual/verification/route.ts"
+    // scholar-preview/ (HQ-SCHOLAR-PREVIEW-01, migration 860) is pinned by scholar-preview-harness S1 and S2: its own capability,
+    // hq.individual.scholar.preview, gate first and a same-origin check before any ticket is minted.
+    && f !== "src/app/api/hq/individual/scholar-preview/route.ts");
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 

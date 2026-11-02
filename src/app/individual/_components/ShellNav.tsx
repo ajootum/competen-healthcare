@@ -86,7 +86,7 @@ export function BottomNav({ experience }: { experience: ExperienceKey }) {
  * md up, where the sidebar shows everything, it holds Profile & history, Settings and Sign out. The bar itself is
  * unchanged (CPR-MOB-001).
  */
-export function AccountMenu({ experience, initials, name }: { experience: ExperienceKey; initials: string; name: string }) {
+export function AccountMenu({ experience, initials, name, preview = false }: { experience: ExperienceKey; initials: string; name: string; preview?: boolean }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
   const [open, setOpen] = useState(false);
@@ -130,7 +130,7 @@ export function AccountMenu({ experience, initials, name }: { experience: Experi
             {overflowNavFor(experience).map(i => item(i, "md:hidden"))}
             {desktop.map(i => item(i, "hidden md:block"))}
           </ul>
-          <div className="mt-2 border-t border-gray-100 px-1 pt-2"><SignOutButton /></div>
+          <div className="mt-2 border-t border-gray-100 px-1 pt-2">{preview ? <EndPreviewButton /> : <SignOutButton />}</div>
         </div>
       )}
     </div>
@@ -144,5 +144,21 @@ export function SignOutButton() {
       className={`rounded-lg border border-gray-200 px-3 py-1.5 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
       Sign out
     </button>
+  );
+}
+
+/**
+ * HQ-SCHOLAR-PREVIEW-01: on the preview host the person is a staff member borrowing the demonstration learner, so the menu
+ * ends the PREVIEW (POST /preview/end: the session, the cookies, then back to HQ) instead of offering a Sign out that would
+ * leave them stranded on a host with no sign-in.
+ */
+export function EndPreviewButton() {
+  return (
+    <form method="post" action="/preview/end">
+      <button type="submit"
+        className={`rounded-lg border border-gray-200 px-3 py-1.5 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+        End preview
+      </button>
+    </form>
   );
 }

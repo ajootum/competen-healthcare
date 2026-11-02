@@ -6,6 +6,7 @@ import { individualShell, gatedMetadata } from "../../_components/shell-context"
 import { SCHOLAR_ICONS } from "@/lib/individual/scholar/brand";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
 import { SidebarNav, BottomNav, AccountMenu, SignOutButton } from "../../_components/ShellNav";
+import { readPreviewRender } from "@/lib/individual/preview/headers";
 // HFE-01 D1: AccountMenu is the one account menu on phone and desktop (every destination the bottom bar cannot hold).
 import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptance";
 import { contextTermsGate } from "@/lib/individual/guard";
@@ -21,7 +22,7 @@ import { ScholarEduNotice } from "./(scholar)/study/_components/edu-notice";
 import { getAiStanding } from "@/lib/ai/allowance";
 import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityContext";
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
-import { isMyPlanOn, loadIndividualPolicy } from "@/lib/individual/policy";
+import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -65,6 +66,8 @@ export default async function ExperienceLayout({ children, params }: {
   if (shell.state !== "READY") redirect(`/individual/access${forQuery(experience)}`);
   const { live, profile } = shell.ctx;
   const x = EXPERIENCES[experience];
+  // HQ-SCHOLAR-PREVIEW-01: true only when the proxy verified a live preview session for this request (headers.ts).
+  const previewing = readPreviewRender(await headers()) !== null;
 
   if (!live.includes(experience)) {
     const other = live[0] ? EXPERIENCES[live[0]] : null;
@@ -158,7 +161,8 @@ export default async function ExperienceLayout({ children, params }: {
   // HFE-01 F8: with the experience switcher showing, the phone header keeps only the C mark, so the row fits 375px.
   const initials = initialsOf(profile);
   // COMPETEN-LEARNING-01: one link to the member-only Learning area, only while learning_app is on (ADR-017).
-  const learning = await learningEnabled(shell.ctx.admin);
+  // MY PLAN PERF: the three shell reads below are independent of each other, so they are made together (they were three steps in a row).
+  const learningP = learningEnabled(shell.ctx.admin);
 
   // Scholar HFE redesign (2026-10-26): the Scholar shell carries the agreed prototype's palette (.cmp-scholar,
   // globals.css), its AI help switch at the right of every page heading, and its footer. The structure --
@@ -166,16 +170,17 @@ export default async function ExperienceLayout({ children, params }: {
   const scholar = experience === "scholar";
   const action = scholar ? <AiHelpSwitch admin={shell.ctx.admin} userId={shell.ctx.userId} /> : null;
   // HFE-01 Wave 1: the product's AI standing once per page, so AI actions show their availability before a click.
-  const ai = await getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
+  const aiP = getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
   // PLP-01..04: the My Plan tab shows only where HQ has My Plan on AND migration 780 is present (unreadable: off, so it fails closed).
-  const myPlanOn = scholar ? await (async () => { try { return isMyPlanOn(await loadIndividualPolicy(shell.ctx.admin), await studyPlanSchema(shell.ctx.admin, shell.ctx.userId)); } catch { return false; } })() : false;
+  const myPlanP = scholar ? (async () => { try { const [policy, provisioned] = await Promise.all([loadIndividualPolicyOnce(shell.ctx.admin), studyPlanSchema(shell.ctx.admin, shell.ctx.userId)]); return isMyPlanOn(policy, provisioned); } catch { return false; } })() : false;
+  const [learning, ai, myPlanOn] = await Promise.all([learningP, aiP, myPlanP]);
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
   // SCHOLAR-BRAND-LOGO-01: Scholar's logo is the same size on phone and desktop in the header, so both marks are ONE image request.
   // HFE-COLOR-02: one neutral canvas (#F7F8FA) for every product, white header and sidebar, subtle borders.
   return (
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
-      <header className="sticky top-0 z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
+      <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
@@ -186,12 +191,12 @@ export default async function ExperienceLayout({ children, params }: {
           <div className="hidden md:flex md:ml-auto items-center gap-2.5 text-[13px]">
             <span className="rounded-full bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-app-text-secondary)] ring-1 ring-[var(--cmp-app-border)]">Individual account</span>
           </div>
-          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} />
+          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} preview={previewing} />
         </div>
       </header>
 
       <div className="flex">
-        <aside className="hidden md:flex sticky top-[76px] h-[calc(100vh-76px)] w-[236px] shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
+        <aside className="hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] w-[236px] shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
           <SidebarNav experience={experience} learning={learning} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>

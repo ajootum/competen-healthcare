@@ -6,6 +6,7 @@ import { ACCOUNT_TYPES, ACCOUNT_TYPE_LABEL, type AccountType } from "@/lib/hq/ac
 import type { ExperienceKey } from "@/lib/individual/experiences";
 import type { PersonLookup } from "@/lib/individual/grants";
 import type { InvitationView } from "@/lib/individual/invitations";
+import { ACCESS_MAX_DAYS, ACCESS_PRESET_DAYS, displayDate, endDateFor } from "@/lib/hq/add-user-form";
 
 /**
  * The Individual pilot access board -- COMPETEN-IND-ACCESS-001 s4.
@@ -24,6 +25,8 @@ type Found = Extract<PersonLookup, { found: true }> & { isSelf: boolean } & Invi
 
 const input = "w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--cmp-color-primary)]/30";
 const btn = "inline-flex min-h-[40px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center justify-center rounded-lg px-4 text-sm font-semibold disabled:opacity-40";
+const radio = "flex min-h-[40px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-900";
+const SOURCE_LABEL: Record<string, string> = { hq_grant: "complimentary", pilot: "pilot" };
 const fmt = (iso: string | null) => (iso ? new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }) : null);
 
 async function call(url: string, init?: RequestInit): Promise<{ ok: boolean; status: number; json: any }> {
@@ -81,7 +84,7 @@ export default function IndividualAccessBoard({ enabled, experiences }: { enable
     <Shell>
       <form onSubmit={find} className="rounded-xl border border-gray-200 bg-white p-4">
         <label htmlFor="ind-email" className="block text-sm font-semibold text-gray-900">Find a Competen account</label>
-        <p className="mt-0.5 text-[12.5px] text-gray-500">By name or by the email address they sign in with. The pilot is by invitation, and access is added to the account the person already has.</p>
+        <p className="mt-0.5 text-[12.5px] text-gray-500">By name or by the email address they sign in with. Access is added to the account the person already has.</p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
           <input id="ind-email" type="search" required minLength={2} maxLength={254} autoComplete="off" value={email} onChange={e => setEmail(e.target.value)}
             placeholder="Name or name@example.com" className={input} />
@@ -155,7 +158,7 @@ function Shell({ children }: { children: React.ReactNode }) {
       <header>
         <h1 className="text-xl font-bold tracking-tight text-gray-900">Individual pilot access</h1>
         <p className="mt-1 text-sm text-gray-600">
-          Grant or end Competen Scholar and Competen Professional for people invited to the Competen Individual pilot.
+          Grant or end Competen Scholar and Competen Professional for people who already have a Competen account.
           Every change is recorded in the audit log under your name.
         </p>
       </header>
@@ -171,8 +174,15 @@ function Person({ p, experiences, nameOf, busy, setBusy, onDone }: {
   const live = new Set(p.entitlements.filter(e => e.live).map(e => e.experience));
   const [chosen, setChosen] = useState<ExperienceKey[]>([]);
   const [adult, setAdult] = useState(false);
-  const [endsOn, setEndsOn] = useState("");
+  // Complimentary when the person came in through an ordinary invitation (membership source hq_grant), else pilot.
+  const [basis, setBasis] = useState<"complimentary" | "pilot">(p.membership?.source === "hq_grant" ? "complimentary" : "pilot");
+  const [ends, setEnds] = useState<"none" | number | "date">("none");
+  const [pickedDate, setPickedDate] = useState("");
   const [note, setNote] = useState("");
+  const complimentary = basis === "complimentary";
+  // Complimentary access always ends, so "no end date" is not offered there and falls back to 90 days.
+  const endsMode = complimentary && ends === "none" ? 90 : ends;
+  const endsOn = endsMode === "none" ? "" : endsMode === "date" ? pickedDate : endDateFor(endsMode);
   const membershipBlocked = p.membership && p.membership.status !== "active";
   const canGrant = !p.isSelf && !membershipBlocked;
   const needsAdult = chosen.includes("scholar");
@@ -183,7 +193,7 @@ function Person({ p, experiences, nameOf, busy, setBusy, onDone }: {
     try {
       const r = await call("/api/hq/individual/grants", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ targetUserId: p.person.id, experiences: chosen, adultConfirmed: adult, endsOn: endsOn || null, note: note || null }),
+        body: JSON.stringify({ targetUserId: p.person.id, experiences: chosen, adultConfirmed: adult, endsOn: endsOn || null, basis, note: note || null }),
       });
       if (!r.ok) { await onDone(messageOf(r), "error"); return; }
       const granted: string[] = r.json.granted ?? [];
@@ -192,7 +202,7 @@ function Person({ p, experiences, nameOf, busy, setBusy, onDone }: {
         granted.length ? `Granted ${granted.map(nameOf).join(" and ")}.` : "",
         already.length ? `${already.map(nameOf).join(" and ")} was already active.` : "",
       ].filter(Boolean);
-      setChosen([]); setAdult(false); setEndsOn(""); setNote("");
+      setChosen([]); setAdult(false); setEnds("none"); setPickedDate(""); setNote("");
       await onDone(parts.join(" ") || "Nothing changed.", "ok");
     } catch {
       await onDone("The grant could not be sent. Check your connection.", "error");
@@ -252,7 +262,7 @@ function Person({ p, experiences, nameOf, busy, setBusy, onDone }: {
                   {e.live ? "Active now" : e.status === "active" ? "Not active now (outside its dates)" : e.status}
                 </span>
                 <span className="text-[12px] text-gray-500">
-                  from {fmt(e.startsAt)}{e.endsAt ? ` to ${fmt(e.endsAt)}` : ", no end date"} · {e.source} · {e.operatingEntity.replace("_", " ")}
+                  from {fmt(e.startsAt)}{e.endsAt ? ` to ${fmt(e.endsAt)}` : ", no end date"} · {SOURCE_LABEL[e.source] ?? e.source} · {e.operatingEntity.replace("_", " ")}
                   {e.experience === "scholar" ? (e.adultConfirmed ? " · 18+ confirmed" : "") : ""}
                 </span>
               </li>
@@ -291,22 +301,51 @@ function Person({ p, experiences, nameOf, busy, setBusy, onDone }: {
           {needsAdult && (
             <label className="mt-3 flex items-start gap-2 rounded-lg bg-gray-50 p-3 text-sm text-gray-800">
               <input type="checkbox" checked={adult} onChange={e => setAdult(e.target.checked)} className="mt-0.5" />
-              <span>I confirm this person is 18 or over. The Competen Scholar pilot is for adults only, and the confirmation is recorded with your name.</span>
+              <span>I confirm this person is 18 or over. Competen Scholar is for adults only, and the confirmation is recorded with your name.</span>
             </label>
           )}
           <div className="mt-3 grid gap-3 sm:grid-cols-2">
-            <div>
-              <label htmlFor="ind-ends" className="block text-[12.5px] font-semibold text-gray-700">Last day of access (optional)</label>
-              <input id="ind-ends" type="date" value={endsOn} onChange={e => setEndsOn(e.target.value)} className={input} />
-              <p className="mt-1 text-[11.5px] text-gray-500">Access ends at the end of this day (UTC). Leave empty for no end date.</p>
-            </div>
+            <fieldset className="sm:col-span-2">
+              <legend className="text-[12.5px] font-semibold text-gray-700">Basis</legend>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {([["complimentary", "Complimentary, granted by Competen"], ["pilot", "Pilot access"]] as const).map(([v, label]) => (
+                  <label key={v} className={radio}>
+                    <input type="radio" name="ind-basis" checked={basis === v} onChange={() => setBasis(v)} />{label}
+                  </label>
+                ))}
+              </div>
+              <p className="mt-1 text-[11.5px] text-gray-500">Pilot participants may be included in supervised pilot features.</p>
+            </fieldset>
+            <fieldset className="sm:col-span-2">
+              <legend className="text-[12.5px] font-semibold text-gray-700">Access ends{complimentary ? " *" : " (optional)"}</legend>
+              <div className="mt-1 flex flex-wrap gap-2">
+                {!complimentary && (
+                  <label className={radio}><input type="radio" name="ind-ends" checked={endsMode === "none"} onChange={() => setEnds("none")} />No end date</label>
+                )}
+                {ACCESS_PRESET_DAYS.map(d => (
+                  <label key={d} className={radio}><input type="radio" name="ind-ends" checked={endsMode === d} onChange={() => setEnds(d)} />{d} days</label>
+                ))}
+                <label className={radio}><input type="radio" name="ind-ends" checked={endsMode === "date"} onChange={() => setEnds("date")} />Pick a date</label>
+              </div>
+              {endsMode === "date" && (
+                <div className="mt-2 max-w-xs">
+                  <label htmlFor="ind-ends-date" className="sr-only">Last day of access</label>
+                  <input id="ind-ends-date" type="date" value={pickedDate} min={endDateFor(0)} max={complimentary ? endDateFor(ACCESS_MAX_DAYS) : undefined}
+                    onChange={e => setPickedDate(e.target.value)} className={input} />
+                </div>
+              )}
+              <p className="mt-1 text-[11.5px] text-gray-500">
+                {endsOn ? `Access ends at the end of ${displayDate(endsOn)} (UTC). ` : "No end date. "}
+                {complimentary ? `Complimentary access always ends, at most ${ACCESS_MAX_DAYS} days ahead.` : "Pilot access may be left without an end date."}
+              </p>
+            </fieldset>
             <div>
               <label htmlFor="ind-note" className="block text-[12.5px] font-semibold text-gray-700">Note (optional)</label>
-              <input id="ind-note" type="text" maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Pilot cohort 1" className={input} />
+              <input id="ind-note" type="text" maxLength={500} value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Added at the owner's request" className={input} />
             </div>
           </div>
           <p className="mt-3 text-[12px] text-gray-500">Competen Scholar is operated by the Scholar operating company; Competen Professional by Competen Holdings. The person accepts each service&apos;s terms on first use.</p>
-          <button type="submit" disabled={busy !== null || chosen.length === 0 || (needsAdult && !adult)} className={`${btn} mt-3 bg-gray-900 text-white`}>
+          <button type="submit" disabled={busy !== null || chosen.length === 0 || (needsAdult && !adult) || (complimentary && !endsOn)} className={`${btn} mt-3 bg-gray-900 text-white`}>
             {busy === "grant" ? "Granting…" : "Grant access"}
           </button>
         </form>

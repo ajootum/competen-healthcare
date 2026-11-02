@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
+import { cache } from "react";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
 import { learningPlanSchema } from "../learning-plan/event-store";
@@ -131,12 +132,13 @@ const toMaterial = (r: any): MaterialRow => ({
   pageCount: r.page_count, chunkCount: r.chunk_count, createdAt: r.created_at,
 });
 
-export async function listMaterials(admin: Admin, userId: string): Promise<Read<MaterialRow[]>> {
+/** MY PLAN PERF: read once per request (React cache(): a no-op outside a render, so routes always read fresh). Callers must not mutate the result. */
+export const listMaterials = cache(async (admin: Admin, userId: string): Promise<Read<MaterialRow[]>> => {
   const { data, error } = await admin.from("individual_scholar_material").select(MATERIAL_COLS)
     .eq("user_id", userId).order("created_at", { ascending: false }).limit(MAX_MATERIALS_PER_PERSON);
   if (error) return fail(error);
   return { ok: true, data: (data ?? []).map(toMaterial) };
-}
+});
 
 export async function getMaterial(admin: Admin, userId: string, id: string): Promise<Read<MaterialRow | null>> {
   if (!isUuid(id)) return { ok: true, data: null };
@@ -316,8 +318,11 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const { error: fdErr } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId);
   // SCHOLAR-LIBRARY-01 (820): the learner's notes, bookmarks and highlights go too (each also cascades with what it is on). Absent table: nothing to do.
   const { error: ntErr } = await admin.from("individual_scholar_note").delete().eq("user_id", userId);
+  // SCHOLAR-CE-2026 CE-04 (880): the simulated-patient conversations go too, library plays included (their sessions are not material, so
+  // no cascade reaches them). Private plays also cascade with their case. The function is the guard's one other way out. Absent: nothing to do.
+  const { error: cvErr } = await admin.rpc("individual_scholar_case_conversation_erase", { p_user: userId });
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
+  return { ok: fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -721,11 +726,11 @@ export async function dueCards(admin: Admin, userId: string): Promise<Read<CardR
 }
 
 /** How many cards are due now. Null when it could not be counted -- never shown as zero. */
-export async function countDue(admin: Admin, userId: string): Promise<number | null> {
+export const countDue = cache(async (admin: Admin, userId: string): Promise<number | null> => {
   const { count, error } = await admin.from("individual_scholar_card").select("id", { count: "exact", head: true })
     .eq("user_id", userId).eq("status", "active").lte("next_review_at", todayIso());
   return error ? null : (count ?? 0);
-}
+});
 
 /**
  * SCHOLAR-CE-2026 CE-01: the learner's own flashcards on some materials that they last rated badly (last_quality below 3, SM-2's own lapse
@@ -1789,19 +1794,21 @@ export async function listMappings(admin: Admin, userId: string, materialId?: st
     .select("id, chunk_id, material_id, competency_id, layer, source, confidence, rationale, model, prompt_version, created_at").eq("user_id", userId);
   let a = admin.from("individual_scholar_chunk_analysis").select("chunk_id, concepts").eq("user_id", userId);
   if (materialId) { m = m.eq("material_id", materialId); a = a.eq("material_id", materialId); }
-  const [maps, analysis] = await Promise.all([m.order("created_at").limit(5000), a.limit(5000)]);
+  // MY PLAN PERF: the corrections do not depend on the mappings, and the decisions and the extras need only their ids, so these are two steps, not four.
+  const [maps, analysis, corrections] = await Promise.all([m.order("created_at").limit(5000), a.limit(5000), topicCorrections(admin, userId, materialId ?? null)]);
   const err = maps.error ?? analysis.error;
   if (err) return fail(err);
   const ids = ((maps.data ?? []) as any[]).map(r => r.id);
+  const [decided, extras] = await Promise.all([
+    ids.length ? admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at").eq("user_id", userId).in("map_id", ids).order("created_at").limit(20000) : Promise.resolve(null),
+    mappingExtras(admin, userId, ids),
+  ]);
   let decisions: MappingDecision[] = [];
-  if (ids.length) {
-    const { data, error } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at")
-      .eq("user_id", userId).in("map_id", ids).order("created_at").limit(20000);
-    if (error) return fail(error);
-    decisions = ((data ?? []) as any[]).map(d => ({ mappingId: d.map_id, decision: d.decision, decidedBy: d.decided_by, createdAt: d.created_at }));
+  if (decided) {
+    if (decided.error) return fail(decided.error);
+    decisions = ((decided.data ?? []) as any[]).map(d => ({ mappingId: d.map_id, decision: d.decision, decidedBy: d.decided_by, createdAt: d.created_at }));
   }
   const states = mappingStates(decisions);
-  const [extras, corrections] = await Promise.all([mappingExtras(admin, userId, ids), topicCorrections(admin, userId, materialId ?? null)]);
   const concepts = new Map<string, string[]>(((analysis.data ?? []) as any[]).map(r => [r.chunk_id, r.concepts ?? []]));
   for (const [chunkId, topics] of corrections.byChunk) concepts.set(chunkId, topics);
   return {
@@ -1845,9 +1852,12 @@ async function topicCorrections(admin: Admin, userId: string, materialId: string
  * where they made one. Feeds "what this material is about" and related materials. Null where unreadable.
  */
 export async function libraryTopics(admin: Admin, userId: string): Promise<Map<string, string[][]> | null> {
-  const { data, error } = await admin.from("individual_scholar_chunk_analysis").select("chunk_id, material_id, concepts").eq("user_id", userId).limit(10000);
+  // MY PLAN PERF: the learner's corrections do not depend on the analysis rows, so both are read together.
+  const [{ data, error }, corrections] = await Promise.all([
+    admin.from("individual_scholar_chunk_analysis").select("chunk_id, material_id, concepts").eq("user_id", userId).limit(10000),
+    topicCorrections(admin, userId, null),
+  ]);
   if (error) return isNotProvisioned(error) ? new Map() : null;
-  const corrections = await topicCorrections(admin, userId, null);
   const out = new Map<string, string[][]>();
   for (const r of (data ?? []) as any[]) {
     const list = out.get(r.material_id) ?? [];
@@ -1870,10 +1880,12 @@ export type SectionRef = { chunkId: string; materialId: string; ordinal: number;
 export async function sectionsOf(admin: Admin, userId: string, materialIds: readonly string[]): Promise<Read<SectionRef[]>> {
   const ids = materialIds.filter(isUuid);
   if (!ids.length) return { ok: true, data: [] };
-  const { data, error } = await admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to")
-    .eq("user_id", userId).in("material_id", ids).order("ordinal").limit(4000);
+  // MY PLAN PERF: the titles do not depend on the sections, so both are read together.
+  const [{ data, error }, names] = await Promise.all([
+    admin.from("individual_scholar_chunk").select("id, material_id, ordinal, page_from, page_to").eq("user_id", userId).in("material_id", ids).order("ordinal").limit(4000),
+    titlesOf(admin, userId, ids),
+  ]);
   if (error) return fail(error);
-  const names = await titlesOf(admin, userId, ids);
   const rank = new Map(ids.map((id, i) => [id, i]));
   return {
     ok: true,
@@ -1882,6 +1894,21 @@ export async function sectionsOf(admin: Admin, userId: string, materialIds: read
       materialTitle: (names.get(r.material_id) ?? UNNAMED).title, unit: (names.get(r.material_id) ?? UNNAMED).unit,
     })),
   };
+}
+
+/**
+ * MY PLAN PERF: the text of exactly these sections (id and content), in parallel batches, for the one line a section is named by when no topic has
+ * been found. Only the sections asked for are read, never a whole material. Unreadable batches are simply absent.
+ */
+export async function chunkContents(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<{ id: string; content: string }[]> {
+  const ids = [...new Set(chunkIds)].filter(isUuid);
+  const batches: string[][] = [];
+  for (let i = 0; i < ids.length; i += 100) batches.push(ids.slice(i, i + 100));
+  const reads = await Promise.all(batches.map(async b => {
+    const { data, error } = await admin.from("individual_scholar_chunk").select("id, content").eq("user_id", userId).in("id", b);
+    return error ? [] : ((data ?? []) as any[]).map(r => ({ id: String(r.id), content: String(r.content ?? "") }));
+  }));
+  return reads.flat();
 }
 
 /** The same shape for sections already chosen (a search, a competency), keeping their order. */
@@ -2935,17 +2962,18 @@ export async function acceptedQuestionCompetencies(admin: Admin, userId: string,
 }
 
 /** The rows competency progress is built from. Ids, competencies and right-or-wrong only. */
-export async function competencyProgressRows(admin: Admin, userId: string): Promise<Read<{
+async function competencyProgressRowsRead(admin: Admin, userId: string): Promise<Read<{
   mappings: MappingRow[]; questions: { id: string; chunkId: string; competencyId: string | null }[]; attempts: ProgressAttempt[];
   /** P6: the topics found in each section (chunk id → concepts), for practice by topic. */
   concepts: Map<string, string[]>;
 }>> {
-  const maps = await listMappings(admin, userId);
-  if (!maps.ok) return maps;
-  const [q, a] = await Promise.all([
+  // MY PLAN PERF: the questions and attempts do not depend on the mappings, so all three are read together.
+  const [maps, q, a] = await Promise.all([
+    listMappings(admin, userId),
     admin.from("individual_scholar_question").select("id, chunk_id, competency_id").eq("user_id", userId).limit(5000),
     admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(10000),
   ]);
+  if (!maps.ok) return maps;
   const err = q.error ?? a.error;
   if (err) return fail(err);
   return {
@@ -2979,19 +3007,27 @@ export type MasteryRaw = {
  * (id, section, material, level, topic only -- never the key or the stem). A source whose migration is absent reads as
  * none; a source that fails to read fails the whole read (unreadable is not empty).
  */
-export async function masteryEvidence(admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<MasteryRaw>> {
+async function masteryEvidenceRead(admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<MasteryRaw>> {
   const soft = async (q: PromiseLike<{ data: unknown; error: any }>) => { const r = await q; return r.error && isNotProvisioned(r.error) ? { data: [], error: null } : r; };
   const base = "id, chunk_id, material_id, kind";
   // 416/388/710 columns may be absent: fall back to the 372 columns, as the other readers here do.
-  let q: { data: any; error: any } = await admin.from("individual_scholar_question")
-    .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic`).eq("user_id", userId).limit(5000);
-  if (q.error) q = await admin.from("individual_scholar_question").select(`${base}, difficulty, competency_id`).eq("user_id", userId).limit(5000);
-  if (q.error) q = await admin.from("individual_scholar_question").select(base).eq("user_id", userId).limit(5000);
-  let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
-    .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
-  if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
-    .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
-  const [rv, cards, osce, stations] = await Promise.all([
+  const readQuestions = async () => {
+    let q: { data: any; error: any } = await admin.from("individual_scholar_question")
+      .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic`).eq("user_id", userId).limit(5000);
+    if (q.error) q = await admin.from("individual_scholar_question").select(`${base}, difficulty, competency_id`).eq("user_id", userId).limit(5000);
+    if (q.error) q = await admin.from("individual_scholar_question").select(base).eq("user_id", userId).limit(5000);
+    return q;
+  };
+  const readAttempts = async () => {
+    let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
+      .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
+    if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
+      .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
+    return a;
+  };
+  // MY PLAN PERF: the six sources are independent, so they are read together (the question and attempt fallbacks stay sequential inside their own read).
+  const [q, a, rv, cards, osce, stations] = await Promise.all([
+    readQuestions(), readAttempts(),
     soft(admin.from("individual_scholar_review").select("card_id, quality, reviewed_at").eq("user_id", userId).gte("reviewed_at", o.sinceIso).order("reviewed_at", { ascending: false }).limit(o.maxRows)),
     admin.from("individual_scholar_card").select("id, question_id, material_id, status, next_review_at").eq("user_id", userId).limit(5000),
     soft(admin.from("individual_scholar_osce_attempt").select("station_id, score, marking, finished_at").eq("user_id", userId).eq("status", "finished")
@@ -4099,7 +4135,7 @@ const toStudyPlan = (r: any): StudyPlanRow => ({
   sessionMinutes: typeof r.session_minutes === "number" ? r.session_minutes : null,
 });
 /** Whether migration 780 is applied on this environment. A transient read error is "no" for now, and asked again. */
-export async function studyPlanSchema(admin: Admin, userId: string): Promise<boolean> {
+async function studyPlanSchemaRead(admin: Admin, userId: string): Promise<boolean> {
   if (plan780 !== null) return plan780;
   try {
     const { error } = await admin.from("individual_scholar_study_plan").select("user_id").eq("user_id", userId).limit(1);
@@ -4112,7 +4148,7 @@ export async function studyPlanSchema(admin: Admin, userId: string): Promise<boo
 export const resetStudyPlanSchema = () => { plan780 = null; };
 
 /** The caller's study plan settings: the row, or null with none. Not provisioned (780 absent) and unreadable are told apart from "none". */
-export async function getStudyPlan(admin: Admin, userId: string): Promise<Read<StudyPlanRow | null>> {
+async function getStudyPlanRead(admin: Admin, userId: string): Promise<Read<StudyPlanRow | null>> {
   if (plan780 === false) return { ok: false, notProvisioned: true };
   try {
     const with840 = await learningPlanSchema(admin, userId);
@@ -4295,7 +4331,7 @@ export async function calendarSchema(admin: Admin, userId: string): Promise<bool
 export const resetCalendarSchema = () => { cal830 = null; };
 
 /** The caller's calendar entries. Not provisioned (830 absent) is told apart from unreadable. */
-export async function listCalendarEntries(admin: Admin, userId: string): Promise<Read<StoredCalendarEntry[]>> {
+async function listCalendarEntriesRead(admin: Admin, userId: string): Promise<Read<StoredCalendarEntry[]>> {
   if (cal830 === false) return { ok: false, notProvisioned: true };
   try {
     const { data, error } = await admin.from("individual_scholar_calendar_entry").select(CAL_COLS).eq("user_id", userId).limit(2000);
@@ -4390,12 +4426,14 @@ export async function monthRecords(admin: Admin, userId: string, fromMonth: stri
     for (const s of steps) chunkMaterial.set(s.chunk_id, s.material_id);
     const loose = caseSrc.map(c => c.chunk_id as string).filter(id => !chunkMaterial.has(id));
     for (const c of await inBatchesOf(admin, "individual_scholar_chunk", "id, material_id", "id", userId, loose)) chunkMaterial.set(c.id, c.material_id);
-    const refs = await sectionsOf(admin, userId, [...new Set(chunkMaterial.values())]);
-    if (!refs.ok) return null;
+    // MY PLAN PERF: the topics and links are read for the sections the records touch while the sections themselves are listed (they used to wait for the list,
+    // and the list is only ever filtered to these same sections), so three steps become one.
     const wanted = new Set(chunkMaterial.keys());
+    const [refs, topicMap, links] = await Promise.all([
+      sectionsOf(admin, userId, [...new Set(chunkMaterial.values())]), topicsOfSections(admin, userId, [...wanted]), sectionLinks(admin, userId, [...wanted]),
+    ]);
+    if (!refs.ok) return null;
     const sections = refs.data.filter(s => wanted.has(s.chunkId)).map(s => ({ chunkId: s.chunkId, materialId: s.materialId, materialTitle: s.materialTitle, label: s.pageFrom !== null ? `${s.unit} ${s.pageFrom}` : `section ${s.ordinal}` }));
-    const chunkIds = sections.map(s => s.chunkId);
-    const [topicMap, links] = await Promise.all([topicsOfSections(admin, userId, chunkIds), sectionLinks(admin, userId, chunkIds)]);
 
     const title = new Map(sessions.map(s => [s.id as string, String(s.title ?? "A lesson")]));
     const stepChunks = new Map<string, string[]>();
@@ -4418,7 +4456,7 @@ export async function monthRecords(admin: Admin, userId: string, fromMonth: stri
 }
 
 /** The caller's active cards by the day their review is due (YYYY-MM-DD -> count). Read only: a card schedule is never written here. null when unreadable. */
-export async function cardDueDates(admin: Admin, userId: string): Promise<Record<string, number> | null> {
+async function cardDueDatesRead(admin: Admin, userId: string): Promise<Record<string, number> | null> {
   const { data, error } = await admin.from("individual_scholar_card").select("next_review_at").eq("user_id", userId).eq("status", "active").limit(5000);
   if (error) return isNotProvisioned(error) ? {} : null;
   const out: Record<string, number> = {};
@@ -4428,7 +4466,7 @@ export async function cardDueDates(admin: Admin, userId: string): Promise<Record
 
 export type MonthlyReviewRecord = { id: string; month: string; createdAt: string; retakeOf: string | null; late: boolean; freshSessionId: string | null; label: string; confidence: string };
 /** The caller's monthly reviews (the evaluations whose scope is a month), newest first. Light: no results are read. null when unreadable. */
-export async function listMonthlyReviewRecords(admin: Admin, userId: string): Promise<MonthlyReviewRecord[] | null> {
+async function listMonthlyReviewRecordsRead(admin: Admin, userId: string): Promise<MonthlyReviewRecord[] | null> {
   const { data, error } = await admin.from("individual_scholar_evaluation").select("id, scope, context, confidence, fresh_session_id, created_at")
     .eq("user_id", userId).filter("scope->>kind", "eq", "month").order("created_at", { ascending: false }).limit(200);
   if (error) return isNotProvisioned(error) ? [] : null;
@@ -4458,3 +4496,55 @@ export async function discardRevisionSession(admin: Admin, userId: string, id: s
   if (!isUuid(id)) return;
   await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId).eq("id", id);
 }
+
+// -- 880: WHAT THE AI SAID AROUND A CASE (SCHOLAR-CE-2026 CE-04) --
+// Talk to the patient turns, the communication note and the handover note, append-only, beside the attempt.
+// Absent 880: nothing is kept and the panel says so (notProvisioned). Formative and simulated: never a fact.
+
+export type ConversationEntryKind = "turn" | "communication_note" | "handover_note";
+export type ConversationEntry = {
+  id: string; kind: ConversationEntryKind; seq: number; stageId: string | null; decisionPointId: string | null;
+  question: string | null; reply: string; screened: boolean; model: string | null; createdAt: string;
+};
+const CONVERSATION_COLS = "id, entry_kind, seq, stage_id, decision_point_id, question, reply, screened, model, created_at";
+const toConversationEntry = (r: any): ConversationEntry => ({
+  id: r.id, kind: r.entry_kind, seq: r.seq, stageId: r.stage_id ?? null, decisionPointId: r.decision_point_id ?? null,
+  question: r.question ?? null, reply: r.reply, screened: r.screened === true, model: r.model ?? null, createdAt: r.created_at,
+});
+
+/** The caller's conversation entries of one session, oldest first. */
+export async function listCaseConversation(admin: Admin, userId: string, kind: "private" | "library", sessionId: string): Promise<Read<ConversationEntry[]>> {
+  if (!isUuid(sessionId)) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_case_conversation").select(CONVERSATION_COLS).eq("user_id", userId)
+    .eq(kind === "private" ? "private_session_id" : "library_session_id", sessionId).order("seq", { ascending: true }).limit(500);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toConversationEntry) };
+}
+
+/** Keep one entry. The database checks the session is the caller's own, the stage reached, and the order (880's guard). */
+export async function insertCaseConversation(admin: Admin, userId: string, input: {
+  kind: "private" | "library"; sessionId: string; entry: ConversationEntryKind; stageId?: string | null; decisionPointId?: string | null;
+  question?: string | null; reply: string; screened?: boolean; model?: string | null; promptVersion?: string | null;
+}): Promise<{ ok: true } | { ok: false; reason: "not_provisioned" | "refused" }> {
+  if (!isUuid(input.sessionId)) return { ok: false, reason: "refused" };
+  const { error } = await admin.from("individual_scholar_case_conversation").insert({
+    user_id: userId, session_kind: input.kind, ...(input.kind === "private" ? { private_session_id: input.sessionId } : { library_session_id: input.sessionId }),
+    entry_kind: input.entry, stage_id: input.stageId ?? null, decision_point_id: input.decisionPointId ?? null, question: input.question ?? null,
+    reply: input.reply, screened: input.screened === true, model: input.model ?? null, prompt_version: input.promptVersion ?? null,
+  });
+  if (!error) return { ok: true };
+  return { ok: false, reason: isNotProvisioned(error) ? "not_provisioned" : "refused" };
+}
+
+// ── MY PLAN PERF (scholar/plan-perf-01) ── request-scoped reads ──────────────────────────────────────────────────────────────
+// React cache() memoises per server render (the same admin client and user): My Plan's loaders, the layout and the page ask for the same rows
+// several times in one request, and now read them once. Outside a render (every route handler, every test) cache() calls straight through, so a
+// write is always followed by a fresh read there. Callers treat these results as read-only.
+export const competencyProgressRows = cache(competencyProgressRowsRead);
+export const studyPlanSchema = cache(studyPlanSchemaRead);
+export const getStudyPlan = cache(getStudyPlanRead);
+export const listCalendarEntries = cache(listCalendarEntriesRead);
+export const cardDueDates = cache(cardDueDatesRead);
+export const listMonthlyReviewRecords = cache(listMonthlyReviewRecordsRead);
+const masteryEvidenceOnce = cache((admin: Admin, userId: string, sinceIso: string, maxRows: number) => masteryEvidenceRead(admin, userId, { sinceIso, maxRows }));
+export const masteryEvidence = (admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<MasteryRaw>> => masteryEvidenceOnce(admin, userId, o.sinceIso, o.maxRows);
