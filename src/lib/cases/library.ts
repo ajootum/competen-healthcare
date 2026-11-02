@@ -194,6 +194,11 @@ export type SessionAttemptSource = {
   reached: string[]; revealed: string[]; answers: SessionRow["answers"]; feedback: { decisionPointId: string; text: string; model: string; provider: string; at: string }[];
   debrief: { text: string; model: string; provider: string; at: string } | null;
 };
+/** CE-04: the caller's own library session's view salt (it never leaves the server), for turning a decision id into the token the browser holds. */
+export async function sessionViewSalt(admin: any, userId: string, sessionId: string): Promise<string | null> {
+  const x = await sessionFor(admin, userId, sessionId);
+  return x ? x.s.view_salt : null;
+}
 export async function sessionAttemptSource(admin: any, userId: string, sessionId: string): Promise<SessionAttemptSource | null> {
   const x = await sessionFor(admin, userId, sessionId);
   if (!x) return null;

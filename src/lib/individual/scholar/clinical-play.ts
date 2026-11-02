@@ -11,6 +11,7 @@
 import { randomBytes } from "node:crypto";
 import { answeredView, caseClosing, isWritten, learnerView, resolveOptions, resolveToken, viewToken, type Blueprint, type CaseClosing, type LearnerView } from "@/lib/cases/blueprint";
 import { applyAnswer } from "@/lib/cases/library";
+import { handoverResultView, type HandoverResultView } from "@/lib/cases/handover";
 import { brokenSafety, caseDebrief, markDecision, markHandoverAnswer, type Debrief } from "./clinical";
 import {
   createPrivateCaseSession, getPrivateCase, getPrivateCaseSession, insertCaseAnswer, insertCaseReason, updatePrivateCaseSession,
@@ -24,6 +25,8 @@ export const newViewSalt = () => randomBytes(24).toString("base64url");
 export type DecisionFeedback = {
   token: string; correct: boolean | null; marking: keyof typeof MARKING_LABEL; markingLabel: string;
   answered: ReturnType<typeof answeredView>;
+  /** CE-04: a handover decision's part marks (which boxes were written, which points found or missed), else null. */
+  handover: HandoverResultView | null;
   /** A written decision: what a good answer contains, shown only after answering. */
   expected: string | null;
   /** AI reasoning feedback, labelled; null when none was given. */
@@ -52,7 +55,9 @@ function feedbackOf(b: Blueprint, s: CaseSessionRow, a: CaseAnswerRow): Decision
   const d = b.decisionPoints.find(x => x.id === a.decisionPointId);
   return {
     token: viewToken(s.viewSalt, "decision", a.decisionPointId), correct: a.correct, marking: a.marking as keyof typeof MARKING_LABEL,
-    markingLabel: MARKING_LABEL[a.marking as keyof typeof MARKING_LABEL] ?? a.marking, answered: answeredView(b, a.decisionPointId, a.chosen, s.viewSalt, a.reasoning),
+    markingLabel: MARKING_LABEL[a.marking as keyof typeof MARKING_LABEL] ?? a.marking, answered: answeredView(b, a.decisionPointId, a.chosen, s.viewSalt),
+    // CE-04: a handover's part marks, recomputed from its kept text (pure), shown after answering only.
+    handover: d?.kind === "handover" ? handoverResultView(d.handover, a.reasoning) : null,
     expected: d?.kind === "free_text" ? d.expectedResponse ?? null : null, aiFeedback: a.aiFeedback,
     safety: a.safety.map(id => b.safetyCriteria.find(c => c.id === id)?.text).filter((x): x is string => !!x),
     chunkIds: d?.sourceRefs ?? [],
@@ -144,8 +149,9 @@ export async function answerPrivate(admin: any, userId: string, sessionId: strin
   const r = applyAnswer(x.b, asState(x.session, x.answers), dpId, chosen, text, new Date().toISOString());
   if ("error" in r) return { error: r.error, status: 400 };
 
+  let mark: { correct: boolean | null; score: number | null } = markDecision(x.b, dpId, chosen);
   // CE-04: a handover is marked by code (the SBAR boxes written, the expected elements mentioned), as part marks.
-  let mark: { correct: boolean | null; score: number | null } = d.kind === "handover" ? markHandoverAnswer(x.b, dpId, text) : markDecision(x.b, dpId, chosen);
+  if (d.kind === "handover") mark = markHandoverAnswer(x.b, dpId, text);
   let marking: "deterministic" | "self_graded" | "ai_evaluation" = "deterministic", aiFeedback: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   if (d.kind === "free_text") {
     const visible = x.b.facts.filter(f => f.revealedAt === "start" || x.session.reachedStageIds.includes(f.revealedAt) || x.session.revealedFactIds.includes(f.id));

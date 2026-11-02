@@ -16,7 +16,7 @@
 // ⚠ NEVER A FACT. A reply is simulated speech: not marked, not kept as a finding, not evidence. Labelled wherever shown.
 
 import { resolveOwner } from "@/lib/ai/consumption";
-import { caseSessionRecord, sessionAttemptSource } from "@/lib/cases/library";
+import { caseSessionRecord, sessionAttemptSource, sessionViewSalt } from "@/lib/cases/library";
 import { conversationEnabled, resolveToken, viewToken, type Blueprint, type LearnerView } from "@/lib/cases/blueprint";
 import {
   COMMUNICATION_NOTE_LABEL, CONVERSATION_LABEL, buildCommunicationNoteRequest, buildVoiceRequest, cleanCommunicationNote, cleanQuestion, reviewQuestions,
@@ -201,8 +201,7 @@ export async function communicationNote(ctx: IndividualContext, req: Request, sr
 /** The session's view salt (it never leaves the server): what turns a decision id into the token the browser holds. */
 async function sessionSalt(admin: any, userId: string, kind: TalkKind, sessionId: string): Promise<string | null> {
   if (kind === "private") return (await getPrivateCaseSession(admin, userId, sessionId))?.session.viewSalt ?? null;
-  const { data } = await admin.from("case_library_session").select("view_salt").eq("id", sessionId).eq("user_id", userId).maybeSingle();
-  return data?.view_salt ?? null;
+  return sessionViewSalt(admin, userId, sessionId);
 }
 
 /**

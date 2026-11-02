@@ -16,6 +16,7 @@
 // ⚠ FAIL CLOSED. Where 810 is absent nothing is kept and nothing is said to the learner: the case plays as before.
 
 import { isWritten, type Blueprint } from "@/lib/cases/blueprint";
+import { HANDOVER_DEFAULTS } from "@/lib/cases/handover";
 import { sessionAttemptSource } from "@/lib/cases/library";
 import { brokenSafety, caseDebrief, markDecision, markHandoverAnswer, type Debrief } from "./clinical";
 import {
@@ -61,7 +62,10 @@ export type AttemptRecord = {
   label: string;
 };
 export type AttemptRubric = {
-  decisions: { id: string; key: string[]; rationale: string | null; expectedResponse: string | null; rubric: { id: string; criterion: string; weight: number; safetyCritical: boolean; dimension: string | null }[] }[];
+  decisions: { id: string; key: string[]; rationale: string | null; expectedResponse: string | null;
+    /** CE-04: for a handover, what it was marked against (the expected points and the pass mark), so the marks can be reconstructed. */
+    handover?: { elements: { id: string; label: string; section: string | null; terms: string[]; weight: number }[]; minWords: number; passMark: number };
+    rubric: { id: string; criterion: string; weight: number; safetyCritical: boolean; dimension: string | null }[] }[];
   safetyCriteria: { id: string; decisionPointId: string; text: string }[];
   assessment: { criterion: string; weight: number; dimension: string | null }[] | null;
 };
@@ -93,6 +97,9 @@ export function buildCaseAttemptRecord(x: AttemptInput): { record: AttemptRecord
   const rubric: AttemptRubric = {
     decisions: b.decisionPoints.filter(d => by.has(d.id)).map(d => ({
       id: d.id, key: d.options.filter(o => o.correct).map(o => o.id), rationale: d.rationale ?? null, expectedResponse: d.expectedResponse ?? null,
+      ...(d.kind === "handover" ? { handover: {
+        elements: (d.handover?.elements ?? []).map(e => ({ id: e.id, label: e.label, section: e.section ?? null, terms: [...e.terms], weight: e.weight && e.weight > 0 ? e.weight : 1 })),
+        minWords: d.handover?.minWords ?? HANDOVER_DEFAULTS.minWords, passMark: d.handover?.passMark ?? HANDOVER_DEFAULTS.passMark } } : {}),
       rubric: (d.rubric ?? []).map(c => ({ id: c.id, criterion: c.criterion, weight: c.weight, safetyCritical: c.safetyCritical, dimension: c.dimension ?? null })),
     })),
     safetyCriteria: b.safetyCriteria.filter(c => by.has(c.decisionPointId)).map(c => ({ id: c.id, decisionPointId: c.decisionPointId, text: c.text })),

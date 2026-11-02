@@ -203,7 +203,7 @@ export function CaseStart(props: {
 type Answered = { token: string; options: { token: string; correct: boolean; chosen: boolean; rationale: string | null }[]; rationale: string | null; safetyEvents: string[];
   /** CE-04: a handover's part marks, after answering. */
   handover?: HandoverResultView | null } | null;
-type Feedback = { token: string; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[] };
+type Feedback = { token: string; handover?: HandoverResultView | null; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[] };
 type Debrief = {
   answered: number; of: number; correct: number; dimensions: { dimension: string; answered: number; correct: number; written: number }[];
   safetyEvents: string[]; missedFindings: { label: string }[]; objectives: { text: string }[]; revisit: { decisionPointId: string; chunkIds: string[] }[]; label: string;
@@ -384,7 +384,7 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
     <div aria-live="polite" className={`mt-2 rounded-xl border p-3 ${fb.correct === true ? "border-emerald-300 bg-emerald-50" : fb.correct === false ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
       {fb.correct !== undefined && fb.correct !== null && <p className={`text-[14px] font-bold ${fb.correct ? "text-emerald-900" : "text-red-900"}`}>{fb.correct ? "That is what the case calls for." : "Not what the case calls for."}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{fb.markingLabel ?? MARKING_LABEL[marking] ?? "Marked against the case"}.</span></p>
-      {d.kind === "handover" && a.handover && <HandoverResult r={a.handover} note={note} />}
+      {d.kind === "handover" && (fb.handover ?? a.handover) && <HandoverResult r={(fb.handover ?? a.handover)!} note={note} />}
       {d.kind !== "free_text" && d.kind !== "handover" && (
         <ul className="mt-2 space-y-1 text-[13.5px]">
           {a.options.map(o => {
