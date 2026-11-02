@@ -64,10 +64,10 @@ export async function resolveIndividualShell(): Promise<IndividualShell> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { state: "AUTH_REQUIRED" };
-  const access = await readIndividualAccess(admin, user.id);
+  // MY PLAN PERF: the profile (display only: name and avatar) is read beside the membership instead of after it; it is only used for a READY shell.
+  const [access, profile] = await Promise.all([readIndividualAccess(admin, user.id), readProfile(admin, user.id, user.email ?? null)]);
   if (access.state === "unavailable") return { state: "UNAVAILABLE" };
   if (access.state === "none") return { state: "NO_ACCESS" };
-  const profile = await readProfile(admin, user.id, user.email ?? null);
   return { state: "READY", ctx: { userId: user.id, admin, membership: access.membership, live: access.live, experienceAcceptance: access.experienceAcceptance, profile } };
 }
 

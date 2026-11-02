@@ -1,6 +1,5 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import type { Occurrence } from "@/lib/individual/learning-plan/types";
 import {
@@ -8,8 +7,11 @@ import {
   type EntryForm, type LinkOption,
 } from "@/lib/individual/scholar/plan-view";
 import { longDayLabel } from "@/lib/individual/scholar/plan-workspace";
+import { pendingOccurrence, type PlanPatch } from "@/lib/individual/scholar/plan-patches";
+import { personalItem } from "@/lib/individual/scholar/study-calendar";
 import { fieldCls, hintCls, labelCls, menuItemCls, pillOutline, primaryBtn, secondaryBtn, summaryCls } from "./plan-style";
-import { ErrorLine, PlanDialog, RowMenu, callJson, errorOf } from "./plan-ui";
+import { ErrorLine, PlanDialog, RowMenu, callJson } from "./plan-ui";
+import { usePlanUpdates } from "./plan-optimistic";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // MY PLAN -> THE LEARNER'S OWN CALENDAR ENTRIES (owner GO "My Plan Calendar Enhancement", 2 Nov 2026).
@@ -44,10 +46,9 @@ function formFrom(mode: EditorMode, links: readonly LinkOption[]): EntryForm {
 }
 
 export function EntryEditor({ mode, today, links, accent, onClose }: { mode: EditorMode; today: string; links: readonly LinkOption[]; accent: string; onClose: () => void }) {
-  const router = useRouter();
+  const updates = usePlanUpdates();
   const uid = useId();
   const [f, setF] = useState<EntryForm>(() => formFrom(mode, links));
-  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const set = <K extends keyof EntryForm>(k: K, v: EntryForm[K]) => setF(cur => ({ ...cur, [k]: v }));
   const { min, max } = entryDateBounds(today);
@@ -57,19 +58,34 @@ export function EntryEditor({ mode, today, links, accent, onClose }: { mode: Edi
   const hasMore = mode.kind !== "create" && !!(f.startTime || f.endTime || f.duration || f.description || f.link);
   const title = mode.kind === "create" ? "Add activity" : occOnly ? "Edit this occurrence" : recurringSeries ? "Edit the whole series" : "Edit activity";
 
-  async function submit(e: React.FormEvent) {
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     const built = buildEntryBody(f, today, { links, schedule: mode.kind === "create" || (mode.kind === "series" && !mode.occ.recurring) });
     if (!built.ok) { setError(built.error); return; }
-    setBusy(true);
-    let r;
-    if (mode.kind === "create") r = await callJson(API, "POST", built.body);
-    else if (mode.kind === "series") r = await callJson(`${API}/${mode.occ.entryId}`, "PATCH", built.body);
-    else r = await callJson(`${API}/${mode.occ.entryId}/occurrence`, "POST", { date: mode.occ.occurrenceDate, action: "edited", title: built.body.title, newStart: f.startTime || null, newEnd: f.endTime || null });
-    setBusy(false);
-    if (!r.ok) { setError(errorOf(r)); return; }
-    onClose(); router.refresh();
+    // The change is shown at once and the dialog closes; the server is asked exactly as before, and a refusal takes the change off again and says why.
+    const body = built.body;
+    const shown = { entryType: f.entryType, title: String(body.title), description: (body.description as string | null) ?? null, startTime: f.startTime || null, endTime: f.endTime || null, durationMinutes: (body.durationMinutes as number | null) ?? null };
+    let patches: PlanPatch[];
+    let request: () => ReturnType<typeof callJson>;
+    let settle: ((r: Awaited<ReturnType<typeof callJson>>) => PlanPatch[]) | undefined;
+    if (mode.kind === "create") {
+      const pending = personalItem(pendingOccurrence(String(Date.now()), { ...shown, date: f.date, recurring: f.repeat !== "none" }));
+      patches = [{ kind: "add", date: f.date, item: pending }];
+      request = () => callJson(API, "POST", body);
+      // once the server has saved it, the real occurrences stand in for the pending row
+      settle = r => (Array.isArray(r.json.occurrences) ? (r.json.occurrences as Occurrence[]).filter(o => o.status !== "cancelled").map(o => ({ kind: "add" as const, date: o.date, item: personalItem(o) })) : []);
+    } else {
+      const occ = mode.occ;
+      const date = mode.kind === "series" && !occ.recurring ? f.date : occ.date;
+      const next = personalItem({ ...occ, ...(mode.kind === "occurrence" ? { title: shown.title, startTime: shown.startTime, endTime: shown.endTime, allDay: !shown.startTime } : { ...shown, allDay: !shown.startTime, date }), edited: true });
+      patches = date === occ.date ? [{ kind: "replace", key: `entry:${occ.key}`, item: next }] : [{ kind: "remove", key: `entry:${occ.key}` }, { kind: "add", date, item: next }];
+      request = mode.kind === "series"
+        ? () => callJson(`${API}/${occ.entryId}`, "PATCH", body)
+        : () => callJson(`${API}/${occ.entryId}/occurrence`, "POST", { date: occ.occurrenceDate, action: "edited", title: body.title, newStart: f.startTime || null, newEnd: f.endTime || null });
+    }
+    onClose();
+    void updates.commit(patches, request, settle);
   }
 
   return (
@@ -124,7 +140,7 @@ export function EntryEditor({ mode, today, links, accent, onClose }: { mode: Edi
                 <div>
                   <label htmlFor={`${uid}-desc`} className={labelCls}>Description</label>
                   <textarea id={`${uid}-desc`} className={`${fieldCls} min-h-[72px]`} rows={2} maxLength={2000} value={f.description} onChange={e => set("description", e.target.value)} />
-                  <DictateButton fieldId={`${uid}-desc`} onValue={v => set("description", v)} disabled={busy} className="mt-1" />
+                  <DictateButton fieldId={`${uid}-desc`} onValue={v => set("description", v)} className="mt-1" />
                 </div>
                 <div>
                   <label htmlFor={`${uid}-link`} className={labelCls}>About a material or topic <span className="font-normal text-gray-600">(optional)</span></label>
@@ -193,8 +209,8 @@ export function EntryEditor({ mode, today, links, accent, onClose }: { mode: Edi
         </details>
         <ErrorLine text={error} />
         <div className="flex flex-wrap gap-2">
-          <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : editing ? "Save changes" : "Add to my calendar"}</button>
-          <button type="button" className={secondaryBtn} disabled={busy} onClick={onClose}>Cancel</button>
+          <button type="submit" className={primaryBtn} style={{ background: accent }} >{editing ? "Save changes" : "Add to my calendar"}</button>
+          <button type="button" className={secondaryBtn} onClick={onClose}>Cancel</button>
         </div>
       </form>
     </PlanDialog>
@@ -238,23 +254,21 @@ export function EntryActions({ occ, today, links, accent, part = "all" }: {
   /** "all": four buttons. "edit": the Edit pill only. "menu": Move, Mark done and Delete in a small menu (the row's three dots). The dialogs are the same. */
   part?: "all" | "edit" | "menu";
 }) {
-  const router = useRouter();
+  const updates = usePlanUpdates();
   const uid = useId();
   const [step, setStep] = useState<Step>(null);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
   const [to, setTo] = useState(occ.date);
   const { min, max } = entryDateBounds(today);
-  const close = () => { setStep(null); setError(""); };
+  const close = () => { setStep(null); };
   const cancelled = occ.status === "cancelled";
 
-  async function run(promise: Promise<Awaited<ReturnType<typeof callJson>>>) {
-    setBusy(true); setError("");
-    const r = await promise;
-    setBusy(false);
-    if (!r.ok) { setError(errorOf(r)); return; }
-    close(); router.refresh();
+  // The change is shown at once and the dialog closes; the server is asked exactly as before, and a refusal takes the change off again and says why.
+  const itemKey = `entry:${occ.key}`;
+  function run(patches: PlanPatch[], request: () => ReturnType<typeof callJson>) {
+    close();
+    void updates.commit(patches, request);
   }
+  const doneItem = personalItem({ ...occ, status: "completed", selfReported: true });
   const occCall = (body: Record<string, unknown>) => callJson(`${API}/${occ.entryId}/occurrence`, "POST", { date: occ.occurrenceDate, ...body });
   const canDone = occ.entryType === "study_session" && occ.status === "planned";
   if (cancelled) return null;
@@ -262,7 +276,7 @@ export function EntryActions({ occ, today, links, accent, part = "all" }: {
   const editBtn = <button type="button" className={part === "all" ? secondaryBtn : pillOutline} onClick={() => setStep(occ.recurring ? "edit-scope" : "edit-series")}>Edit<span className="sr-only">: {occ.title}</span></button>;
   const cls = part === "menu" ? menuItemCls : secondaryBtn;
   const moveBtn = <button type="button" className={cls} onClick={() => { setTo(occ.date); setStep("move"); }}>Move<span className="sr-only">: {occ.title}</span></button>;
-  const doneBtn = canDone ? <button type="button" className={cls} onClick={() => (occ.recurring ? setStep("done-scope") : void run(callJson(`${API}/${occ.entryId}`, "PATCH", { status: "completed" })))} disabled={busy}>Mark done<span className="sr-only">: {occ.title}</span></button> : null;
+  const doneBtn = canDone ? <button type="button" className={cls} onClick={() => (occ.recurring ? setStep("done-scope") : run([{ kind: "replace", key: itemKey, item: doneItem }], () => callJson(`${API}/${occ.entryId}`, "PATCH", { status: "completed" })))}>Mark done<span className="sr-only">: {occ.title}</span></button> : null;
   const deleteBtn = <button type="button" className={cls} onClick={() => setStep(occ.recurring ? "delete-scope" : "delete-confirm")}>Delete<span className="sr-only">: {occ.title}</span></button>;
 
   return (
@@ -270,7 +284,6 @@ export function EntryActions({ occ, today, links, accent, part = "all" }: {
       {part === "all" && <>{editBtn}{moveBtn}{doneBtn}{deleteBtn}</>}
       {part === "edit" && editBtn}
       {part === "menu" && <RowMenu label={`More actions: ${occ.title}`} trigger="dots">{moveBtn}{doneBtn}{deleteBtn}</RowMenu>}
-      {part === "menu" && error && step === null && <ErrorLine text={error} />}
 
       {step === "edit-scope" && <ScopeDialog title="Edit a repeating entry" lead={`"${occ.title}" repeats. What do you want to change?`} thisLabel="This occurrence" seriesLabel="The whole series" busy={false} error=""
         onThis={() => setStep("edit-occ")} onSeries={() => setStep("edit-series")} onClose={close} />}
@@ -279,33 +292,31 @@ export function EntryActions({ occ, today, links, accent, part = "all" }: {
 
       {step === "move" && (
         <PlanDialog title="Move this entry" onClose={close}>
-          <form onSubmit={e => { e.preventDefault(); if (to === occ.date) { close(); return; } void run(occCall({ action: "moved", newDate: to })); }}>
+          <form onSubmit={e => { e.preventDefault(); if (to === occ.date) { close(); return; } run([{ kind: "move", key: itemKey, to }], () => occCall({ action: "moved", newDate: to })); }}>
             <p className="text-[14px] text-gray-800">{occ.title}</p>
             <label htmlFor={`${uid}-mv`} className={`${labelCls} mt-3`}>Move to</label>
             <input id={`${uid}-mv`} type="date" className={`${fieldCls} max-w-xs`} value={to} min={min} max={max} required onChange={e => setTo(e.target.value)} />
             {occ.recurring && <p className={hintCls}>Only this occurrence moves. The rest of the series stays where it is.</p>}
-            <div className="mt-3"><ErrorLine text={error} /></div>
             <div className="mt-3 flex flex-wrap gap-2">
-              <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : "Save the new day"}</button>
-              <button type="button" className={secondaryBtn} disabled={busy} onClick={close}>Cancel</button>
+              <button type="submit" className={primaryBtn} style={{ background: accent }}>Save the new day</button>
+              <button type="button" className={secondaryBtn} onClick={close}>Cancel</button>
             </div>
           </form>
         </PlanDialog>
       )}
 
-      {step === "done-scope" && <ScopeDialog title="Mark done" lead="This is your own word: it is shown as self-reported and is not counted as recorded learning." thisLabel="This occurrence" seriesLabel="The whole series" busy={busy} error={error}
-        onThis={() => void run(occCall({ action: "completed" }))} onSeries={() => void run(callJson(`${API}/${occ.entryId}`, "PATCH", { status: "completed" }))} onClose={close} />}
+      {step === "done-scope" && <ScopeDialog title="Mark done" lead="This is your own word: it is shown as self-reported and is not counted as recorded learning." thisLabel="This occurrence" seriesLabel="The whole series" busy={false} error=""
+        onThis={() => run([{ kind: "replace", key: itemKey, item: doneItem }], () => occCall({ action: "completed" }))} onSeries={() => run([{ kind: "replace", key: itemKey, item: doneItem }], () => callJson(`${API}/${occ.entryId}`, "PATCH", { status: "completed" }))} onClose={close} />}
 
-      {step === "delete-scope" && <ScopeDialog title="Delete a repeating entry" lead={`"${occ.title}" repeats. What do you want to delete?`} thisLabel="This occurrence" seriesLabel="The whole series" busy={busy} error={error}
-        onThis={() => void run(occCall({ action: "cancelled" }))} onSeries={() => void run(callJson(`${API}/${occ.entryId}`, "DELETE"))} onClose={close} />}
+      {step === "delete-scope" && <ScopeDialog title="Delete a repeating entry" lead={`"${occ.title}" repeats. What do you want to delete?`} thisLabel="This occurrence" seriesLabel="The whole series" busy={false} error=""
+        onThis={() => run([{ kind: "remove", key: itemKey }], () => occCall({ action: "cancelled" }))} onSeries={() => run([{ kind: "remove", entryId: occ.entryId }], () => callJson(`${API}/${occ.entryId}`, "DELETE"))} onClose={close} />}
 
       {step === "delete-confirm" && (
         <PlanDialog title="Delete this entry?" onClose={close}>
           <p className="text-[14px] text-gray-800">&quot;{occ.title}&quot; on {longDayLabel(occ.date)} will be removed from your calendar. Your study plan is not changed.</p>
-          <div className="mt-3"><ErrorLine text={error} /></div>
           <div className="mt-3 flex flex-wrap gap-2">
-            <button type="button" className={primaryBtn} style={{ background: accent }} disabled={busy} onClick={() => void run(callJson(`${API}/${occ.entryId}`, "DELETE"))}>{busy ? "Deleting…" : "Delete"}</button>
-            <button type="button" className={secondaryBtn} disabled={busy} onClick={close}>Keep it</button>
+            <button type="button" className={primaryBtn} style={{ background: accent }} onClick={() => run([{ kind: "remove", entryId: occ.entryId }], () => callJson(`${API}/${occ.entryId}`, "DELETE"))}>Delete</button>
+            <button type="button" className={secondaryBtn} onClick={close}>Keep it</button>
           </div>
         </PlanDialog>
       )}

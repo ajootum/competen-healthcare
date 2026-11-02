@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from "react";
 import { isNotProvisioned } from "../access";
 import { PLAN_EVENT_LIMITS, isPlanEventKind, isPlanEventStatus, type NewPlanEvent, type PlanEvent, type PlanEventKind, type PlanExperience } from "./types";
 
@@ -20,7 +21,7 @@ let schema840: boolean | null = null;
  * Whether migration 840 is applied here: the event table AND the two study plan columns. A transient read error is "no" for now,
  * and asked again. Keyed on the caller when a user id is given.
  */
-export async function learningPlanSchema(admin: any, userId?: string): Promise<boolean> {
+async function learningPlanSchemaRead(admin: any, userId?: string): Promise<boolean> {
   if (schema840 !== null) return schema840;
   try {
     let t = admin.from("individual_learning_plan_event").select("id");
@@ -33,6 +34,8 @@ export async function learningPlanSchema(admin: any, userId?: string): Promise<b
   } catch { return false; }
 }
 /** Tests only: forget what was detected. */
+/** Once per request (React cache(); a call-through outside a render). */
+export const learningPlanSchema = cache(learningPlanSchemaRead);
 export const resetLearningPlanSchema = (value: boolean | null = null) => { schema840 = value; };
 
 const EVENT_COLS = "id, experience, kind, ref, status, value, created_at";
@@ -56,7 +59,7 @@ export async function appendPlanEvent(admin: any, userId: string, experience: Pl
 }
 
 /** The caller's events of these kinds for one experience, newest first (at most 2000), optionally since an instant. */
-export async function listPlanEvents(admin: any, userId: string, experience: PlanExperience, kinds: readonly PlanEventKind[], sinceIso?: string | null): Promise<PlanRead<PlanEvent[]>> {
+async function listPlanEventsRead(admin: any, userId: string, experience: PlanExperience, kinds: readonly PlanEventKind[], sinceIso?: string | null): Promise<PlanRead<PlanEvent[]>> {
   if (schema840 === false) return { ok: false, notProvisioned: true };
   try {
     let q = admin.from("individual_learning_plan_event").select(EVENT_COLS).eq("user_id", userId).eq("experience", experience).in("kind", [...kinds]);
@@ -67,3 +70,9 @@ export async function listPlanEvents(admin: any, userId: string, experience: Pla
     return { ok: true, data: ((data ?? []) as any[]).map(toEvent) };
   } catch { return { ok: false, notProvisioned: false }; }
 }
+
+const listPlanEventsOnce = cache((admin: any, userId: string, experience: PlanExperience, kindsKey: string, sinceIso: string) =>
+  listPlanEventsRead(admin, userId, experience, kindsKey.split(",") as PlanEventKind[], sinceIso || null));
+/** MY PLAN PERF: the same events read twice in one render (the plan context and the calendar) are read once; outside a render this is a plain read. */
+export const listPlanEvents = (admin: any, userId: string, experience: PlanExperience, kinds: readonly PlanEventKind[], sinceIso?: string | null): Promise<PlanRead<PlanEvent[]>> =>
+  listPlanEventsOnce(admin, userId, experience, [...kinds].sort().join(","), sinceIso ?? "");

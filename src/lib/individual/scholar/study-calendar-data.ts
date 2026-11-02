@@ -33,26 +33,63 @@ export function monthFromQuery(q: unknown, today: string): string {
 }
 
 export type CalendarLoad = { view: CalendarView; moveOn: boolean; optOut: { available: boolean; optedOut: boolean } };
+type PlanIn = { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; studyId?: string | null; postponed?: ReadonlySet<string>; calendar?: PlanCalendar | null } | null;
+
+/** The last date the learner's own entries are read to for this month (the month's end, or the calendar's reach, whichever is later). */
+export const entriesHorizon = (month: string, today: string): string => [monthEnd(month), plusDays(today, CALENDAR_REACH_DAYS)].sort().pop()!;
+
+/** Everything one month of the calendar reads, none of which depends on the plan: so it can be read while the plan itself is still being read. */
+export type CalendarReads = {
+  month: string;
+  raw: NonNullable<Awaited<ReturnType<typeof loadMonthRaw>>>;
+  due: NonNullable<Awaited<ReturnType<typeof loadDueByDate>>>;
+  reviews: NonNullable<Awaited<ReturnType<typeof listMonthlyReviews>>>;
+  store: boolean;
+  entries: Awaited<ReturnType<typeof listCalendarEntries>> | null;
+  personal: import("../learning-plan/types").Occurrence[];
+  postponed: ReadonlySet<string>;
+};
+
+/**
+ * MY PLAN PERF: the reads of one month, all started together (they used to run in four sequential steps). null when a core source is unreadable.
+ * `needPostponed` is false when the caller hands the plan's own postponed set to buildStudyCalendar.
+ */
+export async function readStudyCalendar(o: { admin: Admin; userId: string; month: string; today: string; needPostponed: boolean }): Promise<CalendarReads | null> {
+  const { admin, userId, month, today } = o;
+  const store = calendarSchema(admin, userId);
+  // PLP: the learner's own calendar entries (840) are shown, and the plan reads them. Absent 840: none, and the plan is as before.
+  const hi = entriesHorizon(month, today);
+  const personalP = learnerCalendarSchema(admin, userId).then(async has => {
+    if (!has) return [] as import("../learning-plan/types").Occurrence[];
+    const le = await listEntries(admin, userId, "scholar", hi);
+    return le.ok ? expandEntries(le.data.entries, le.data.exceptions, [monthStart(month), today].sort()[0], hi) : [];
+  });
+  const postponedP = o.needPostponed
+    ? learningPlanSchema(admin, userId).then(async has => {
+      const events = has ? await listPlanEvents(admin, userId, "scholar", ["topic_postponed"]) : null;
+      return events?.ok ? postponedTopics(events.data, today) : new Set<string>();
+    })
+    : Promise.resolve(new Set<string>());
+  const [raw, due, reviews, hasStore, entries, personal, postponed] = await Promise.all([
+    loadMonthRaw(admin, userId, month, month), loadDueByDate(admin, userId), listMonthlyReviews(admin, userId), store,
+    store.then(s => (s ? listCalendarEntries(admin, userId) : null)), personalP, postponedP,
+  ]);
+  if (!raw || !due || !reviews) return null;
+  return { month, raw, due, reviews, store: hasStore, entries, personal, postponed };
+}
 
 export async function loadStudyCalendar(o: {
   admin: Admin; userId: string; policy: IndividualPolicy; month: string; today: string;
-  plan: { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; studyId?: string | null; postponed?: ReadonlySet<string>; calendar?: PlanCalendar | null } | null;
+  plan: PlanIn;
 }): Promise<CalendarLoad | null> {
-  const { admin, userId, policy, month, today } = o;
-  const [raw, due, reviews, store] = await Promise.all([
-    loadMonthRaw(admin, userId, month, month), loadDueByDate(admin, userId), listMonthlyReviews(admin, userId), calendarSchema(admin, userId),
-  ]);
-  if (!raw || !due || !reviews) return null;
-  const entries = store ? await listCalendarEntries(admin, userId) : null;
-  // PLP: the learner's own calendar entries (840) are shown, and the plan reads them. Absent 840: none, and the plan is as before.
-  let personal: import("../learning-plan/types").Occurrence[] = [];
-  if (await learnerCalendarSchema(admin, userId)) {
-    const hi = [monthEnd(month), plusDays(today, CALENDAR_REACH_DAYS)].sort().pop()!;
-    const le = await listEntries(admin, userId, "scholar", hi);
-    if (le.ok) personal = expandEntries(le.data.entries, le.data.exceptions, [monthStart(month), today].sort()[0], hi);
-  }
-  const events = (await learningPlanSchema(admin, userId)) ? await listPlanEvents(admin, userId, "scholar", ["topic_postponed"]) : null;
-  const postponed = events?.ok ? postponedTopics(events.data, today) : new Set<string>();
+  const reads = await readStudyCalendar({ admin: o.admin, userId: o.userId, month: o.month, today: o.today, needPostponed: !o.plan?.postponed });
+  return reads ? buildStudyCalendar(reads, o) : null;
+}
+
+/** Pure. The month's calendar from what was read and the plan. */
+export function buildStudyCalendar(reads: CalendarReads, o: { policy: IndividualPolicy; month: string; today: string; plan: PlanIn }): CalendarLoad {
+  const { policy, month, today } = o;
+  const { raw, due, reviews, store, entries, personal, postponed } = reads;
   const stored = entries?.ok ? entries.data : [];
   const optedOut = policy.scholarMonthlyReviewOptout === "allowed" && optedOutOf(stored);
   const original = monthStanding(reviews, month).original;

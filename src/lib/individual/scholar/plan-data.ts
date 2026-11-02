@@ -5,7 +5,7 @@ import { latestPerRef, type Occurrence, type PlanEvent, type ScholarPlanSettings
 import { isMyPlanOn, type IndividualPolicy } from "../policy";
 import { loadLearnerCatalogue } from "./competency-view";
 import { studyActivityDays, selfReportedStudy, type StudyStamp } from "./learning-definitions";
-import { loadMastery } from "./mastery-data";
+import { loadMastery, prefetchMastery } from "./mastery-data";
 import type { MasteryResult } from "./mastery";
 import { weakTopics, type MonthlyBreakdown } from "./monthly-review";
 import { listMonthlyReviews, loadMonthlyOverview, monthlyReviewOn } from "./monthly-review-data";
@@ -23,10 +23,10 @@ import { effectiveSettings, settingsFromRow, sessionMinutesOf } from "./plan-set
 import { buildStudyPlan, unstartedMappedSections, type PlanCalendar, type StudyPlanInput, type StudyPlanResult, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
 import {
   calendarSchema, caseDecisionTimes, competencyProgressRows, countDue, evaluationEvidence, getEvaluation, getStudyPlan, learningEventTimes, listLearningSessions, listMaterials,
-  listChunks, listRevisionSessions, sectionsOf, studyPlanSchema, topicsOfSections, type Admin,
+  chunkContents, listRevisionSessions, sectionsOf, studyPlanSchema, topicsOfSections, type Admin, type SectionRef,
 } from "./store";
 import { experienceHref } from "../experiences";
-import { loadStudyCalendar, type CalendarLoad } from "./study-calendar-data";
+import { buildStudyCalendar, entriesHorizon, readStudyCalendar, type CalendarLoad, type CalendarReads } from "./study-calendar-data";
 import type { MasteryEntry } from "./mastery";
 
 // ── MY PLAN: THE READS ── PLP-01..04 (owner GO 2 Nov 2026), My Plan calendar enhancement ─────────────────────────────
@@ -60,46 +60,80 @@ export type PlanContext = {
   materials: { id: string; title: string }[];
 };
 export type NotReady = { ok: false; reason: "off" | "not_provisioned" | "unreadable" };
+/** Why My Plan is not on for this learner (the gate in front of every plan read). */
+const gateReason = (policy: IndividualPolicy, plan780: boolean): NotReady => ({ ok: false, reason: policy.scholarMyPlan === "on" && policy.scholarStudyPlan && !plan780 ? "not_provisioned" : "off" });
+/** An un-awaited read that may be dropped (the gate refused) must not become an unhandled rejection: the real await still sees the error. */
+const guard = <T>(p: Promise<T>): Promise<T> => { p.catch(() => {}); return p; };
 
 const EVENT_KINDS = ["proposal", "topic_postponed", "recommendation_declined", "reflection", "auto_adjust", "settings_change"] as const;
+
+/**
+ * MY PLAN PERF: start the plan's reads before HQ's policy has been read. They are the learner's own rows, keyed on the guard's user id, and every one of them
+ * is read once per request (cache()), so the loader that runs a moment later is answered by these instead of asking again. Nothing here is used by itself
+ * and nothing throws: if My Plan turns out to be off, the answers are simply never read. `months` are the calendar months the page will show (none: skip the calendar).
+ */
+export function warmPlanReads(ctx: PlanCtx, o: { now: Date; today: string; months: readonly string[]; entriesTo?: string }): void {
+  const { admin, userId } = ctx;
+  const quiet = (p: Promise<unknown>) => { p.catch(() => {}); };
+  try {
+    prefetchMastery(admin, userId, o.now.toISOString());
+    quiet(Promise.all([
+      studyPlanSchema(admin, userId), learningPlanSchema(admin, userId), learnerCalendarSchema(admin, userId), calendarSchema(admin, userId), getStudyPlan(admin, userId),
+      listMaterials(admin, userId), competencyProgressRows(admin, userId), loadLearnerCatalogue(admin, userId), countDue(admin, userId),
+      listPlanEvents(admin, userId, "scholar", EVENT_KINDS), listEntries(admin, userId, "scholar", o.entriesTo ?? plusDays(o.today, 60)),
+      ...o.months.map(month => readStudyCalendar({ admin, userId, month, today: o.today, needPostponed: false })),
+    ]));
+  } catch { /* the loaders report anything that is really wrong */ }
+}
 
 /**
  * Everything the plan reads, once. `reason: "off"` when HQ has My Plan (or the study plan) off, "not_provisioned" without 780.
  * The learner calendar occurrences cover 90 days back (for self-reported study) to 60 days ahead.
  */
-export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<PlanContext | NotReady> {
+export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string; /** The last date the learner's own entries are read to (default: 60 days on). A caller that also reads the calendar passes the calendar's own, so the entries are read once. */ entriesTo?: string }): Promise<PlanContext | NotReady> {
   const { admin, userId } = ctx;
   const plan780 = await studyPlanSchema(admin, userId);
-  if (!isMyPlanOn(policy, plan780)) return { ok: false, reason: policy.scholarMyPlan === "on" && policy.scholarStudyPlan && !plan780 ? "not_provisioned" : "off" };
-  const [has840, hasEntries, has830] = await Promise.all([learningPlanSchema(admin, userId), learnerCalendarSchema(admin, userId), calendarSchema(admin, userId)]);
-  const [row, mats, rows] = await Promise.all([getStudyPlan(admin, userId), listMaterials(admin, userId), competencyProgressRows(admin, userId)]);
+  if (!isMyPlanOn(policy, plan780)) return gateReason(policy, plan780);
+  // MY PLAN PERF: every read below that does not depend on another is started at once (it used to be nine steps in a row). The reads are the caller's own,
+  // keyed on the guard's user id as before; only the order and the overlap changed.
+  prefetchMastery(admin, userId, o.now.toISOString());
+  const has840P = learningPlanSchema(admin, userId), hasEntriesP = learnerCalendarSchema(admin, userId), has830P = calendarSchema(admin, userId);
+  const eventsP = has840P.then(has => (has ? listPlanEvents(admin, userId, "scholar", EVENT_KINDS) : null));
+  const entriesP = hasEntriesP.then(async has => {
+    if (!has) return null;
+    const le = await listEntries(admin, userId, "scholar", o.entriesTo ?? plusDays(o.today, 60));
+    return le.ok ? le.data : null;
+  });
+  const matsP = listMaterials(admin, userId), rowsP = competencyProgressRows(admin, userId);
+  // the sections of the accepted materials need only the events and the materials, so they are read while the rest still loads
+  const sectionsP = Promise.all([eventsP, matsP]).then(async ([evs, ms]) => {
+    if (!ms.ok || (evs && !evs.ok)) return null;
+    const ids = acceptedMaterialIds(evs?.ok ? evs.data : []).filter(id => ms.data.some(m => m.id === id));
+    return { ids, read: await readMaterialSections(admin, userId, ids) };
+  }).catch(() => null);
+  const [has840, hasEntries, has830, row, mats, rows, learner, due, evs, entries] = await Promise.all([
+    has840P, hasEntriesP, has830P, getStudyPlan(admin, userId), matsP, rowsP, loadLearnerCatalogue(admin, userId), countDue(admin, userId), eventsP, entriesP,
+  ]);
   if (!row.ok || !mats.ok) return { ok: false, reason: "unreadable" };
-  const learner = await loadLearnerCatalogue(admin, userId);
   const competencies = learner?.provisioned && learner.programme && learner.competencies ? learner.competencies.map(c => ({ id: c.id, title: c.title })) : null;
   const mastery = await loadMastery(admin, userId, policy, o.now.toISOString(), {
     materials: mats.data.map(m => ({ id: m.id, title: m.title })), linked: rows.ok ? { mappings: rows.data.mappings, concepts: rows.data.concepts } : null, competencies,
   });
   if (!mastery.ok) return { ok: false, reason: "unreadable" };
-  const due = await countDue(admin, userId);
   if (due === null) return { ok: false, reason: "unreadable" };
 
-  const evs = has840 ? await listPlanEvents(admin, userId, "scholar", EVENT_KINDS) : null;
   const events = evs?.ok ? evs.data : [];
   if (evs && !evs.ok && !evs.notProvisioned) return { ok: false, reason: "unreadable" };
 
   // accepted materials feed the plan: their unstarted sections, in the order accepted, a topic counted once
-  const acceptedIds = acceptedMaterialIds(events).filter(id => mats.data.some(m => m.id === id));
-  const accepted = await materialsIn(admin, userId, acceptedIds, mats.data, rows.ok ? rows.data : null);
+  const sec = await sectionsP;
+  const accepted = sec?.read ? assembleMaterials(sec.ids, mats.data, sec.read, rows.ok ? rows.data : null) : [];
   const mapped = rows.ok && competencies
     ? unstartedMappedSections({ mappings: rows.data.mappings, concepts: rows.data.concepts, questions: rows.data.questions, attempts: rows.data.attempts, competencies })
     : [];
   const unstarted = acceptedUnstarted(accepted, mapped);
 
-  let occurrences: Occurrence[] = [];
-  if (hasEntries) {
-    const le = await listEntries(admin, userId, "scholar", plusDays(o.today, 60));
-    if (le.ok) occurrences = expandEntries(le.data.entries, le.data.exceptions, plusDays(o.today, -90), plusDays(o.today, 60));
-  }
+  const occurrences: Occurrence[] = entries ? expandEntries(entries.entries, entries.exceptions, plusDays(o.today, -90), plusDays(o.today, 60)) : [];
   const eff = effectiveSettings(row.data ? settingsFromRow(row.data) : null);
   return {
     ok: true, today: o.today, tz: o.tz,
@@ -112,22 +146,37 @@ export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o:
 
 /** The sections of these materials with their topics and whether each has been practised, as the proposal and the plan read them. */
 export async function materialsIn(admin: Admin, userId: string, ids: readonly string[], mats: readonly { id: string; title: string }[], rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null): Promise<MaterialIn[]> {
-  if (!ids.length) return [];
+  const read = await readMaterialSections(admin, userId, ids);
+  return read ? assembleMaterials(ids, mats, read, rows) : [];
+}
+
+type SectionsRead = { secs: readonly SectionRef[]; topics: ReadonlyMap<string, string[]>; headings: ReadonlyMap<string, string> };
+/**
+ * The sections of these materials, their topics and (for a section with no topic) its first line. It does not need the learner's answers, so it can be
+ * read while those load. null when the sections cannot be read.
+ */
+async function readMaterialSections(admin: Admin, userId: string, ids: readonly string[]): Promise<SectionsRead | null> {
+  if (!ids.length) return { secs: [], topics: new Map(), headings: new Map() };
   const secs = await sectionsOf(admin, userId, ids);
-  if (!secs.ok) return [];
+  if (!secs.ok) return null;
   const topics = await topicsOfSections(admin, userId, secs.data.map(s => s.chunkId));
   // A section with no topic found yet is named by its own first line (a slide or page heading), never "Section n" when the text says more.
-  const untitled = ids.filter(id => secs.data.some(s => s.materialId === id && !(topics.get(s.chunkId) ?? []).length));
+  // Only those sections' text is read (one batch read, not every section of each material one material after another); the first five such materials, as before.
+  const bare = (s: SectionRef) => !(topics.get(s.chunkId) ?? []).length;
+  const untitled = ids.filter(id => secs.data.some(s => s.materialId === id && bare(s))).slice(0, 5);
   const headings = new Map<string, string>();
-  for (const id of untitled.slice(0, 5)) {
-    const c = await listChunks(admin, userId, id);
-    if (c.ok) for (const r of c.data) { const h = headingOf(r.content); if (h) headings.set(r.id, h); }
+  if (untitled.length) {
+    const want = secs.data.filter(s => untitled.includes(s.materialId) && bare(s)).map(s => s.chunkId);
+    for (const r of await chunkContents(admin, userId, want)) { const h = headingOf(r.content); if (h) headings.set(r.id, h); }
   }
+  return { secs: secs.data, topics, headings };
+}
+function assembleMaterials(ids: readonly string[], mats: readonly { id: string; title: string }[], read: SectionsRead, rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null): MaterialIn[] {
   const answered = new Set((rows?.attempts ?? []).map(a => a.questionId));
   const started = new Set((rows?.questions ?? []).filter(q => answered.has(q.id)).map(q => q.chunkId));
   return ids.map(id => ({
     materialId: id, title: mats.find(m => m.id === id)?.title ?? "Your notes",
-    sections: secs.data.filter(s => s.materialId === id).map(s => ({ chunkId: s.chunkId, ordinal: s.ordinal, topics: topics.get(s.chunkId) ?? [], started: started.has(s.chunkId), heading: headings.get(s.chunkId) ?? null })),
+    sections: read.secs.filter(s => s.materialId === id).map(s => ({ chunkId: s.chunkId, ordinal: s.ordinal, topics: read.topics.get(s.chunkId) ?? [], started: started.has(s.chunkId), heading: read.headings.get(s.chunkId) ?? null })),
   }));
 }
 
@@ -155,12 +204,28 @@ export function calendarPlanOf(c: PlanContext): { settings: StudyPlanSettings; e
 }
 
 /** The month calendar for My Plan: the study calendar (planned, due, done, monthly review) plus the learner's own entries, from one context. */
-export async function loadPlanCalendar(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string; month: string }): Promise<{ ok: true; calendar: CalendarLoad | null; features: PlanFeatures } | NotReady> {
-  const c = await loadPlanContext(ctx, policy, o);
-  if (!c.ok) return c;
-  if (policy.scholarStudyCalendar !== "on") return { ok: true, calendar: null, features: c.features };
-  const calendar = await loadStudyCalendar({ admin: ctx.admin, userId: ctx.userId, policy, month: o.month, today: o.today, plan: calendarPlanOf(c) });
-  return calendar ? { ok: true, calendar, features: c.features } : { ok: false, reason: "unreadable" };
+export type CalendarOutcome = { ok: true; calendar: CalendarLoad | null; features: PlanFeatures } | NotReady;
+export async function loadPlanCalendar(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string; month: string }): Promise<CalendarOutcome> {
+  return (await loadPlanCalendars(ctx, policy, { now: o.now, tz: o.tz, today: o.today, months: [o.month] }))[0];
+}
+/**
+ * MY PLAN PERF: one or more months from ONE plan context. The context and each month's reads are started together (the calendar's reads do not depend on the
+ * plan; only the pure build does), and the learner's entries are read once. One outcome per month, in order.
+ */
+export async function loadPlanCalendars(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string; months: readonly string[] }): Promise<CalendarOutcome[]> {
+  const { admin, userId } = ctx;
+  const plan780 = await studyPlanSchema(admin, userId);
+  if (!isMyPlanOn(policy, plan780)) { const r = gateReason(policy, plan780); return o.months.map(() => r); }
+  const calOn = policy.scholarStudyCalendar === "on";
+  const readsP = guard(Promise.all(o.months.map(month => (calOn ? readStudyCalendar({ admin, userId, month, today: o.today, needPostponed: false }) : Promise.resolve(null)))));
+  const c = await loadPlanContext(ctx, policy, { ...o, entriesTo: o.months[0] ? entriesHorizon(o.months[0], o.today) : undefined });
+  if (!c.ok) return o.months.map(() => c);
+  if (!calOn) return o.months.map(() => ({ ok: true as const, calendar: null, features: c.features }));
+  const reads = await readsP;
+  return o.months.map((month, i): CalendarOutcome => {
+    const r = reads[i];
+    return r ? { ok: true, calendar: buildStudyCalendar(r, { policy, month, today: o.today, plan: calendarPlanOf(c) }), features: c.features } : { ok: false, reason: "unreadable" };
+  });
 }
 
 /**
@@ -169,7 +234,13 @@ export async function loadPlanCalendar(ctx: PlanCtx, policy: IndividualPolicy, o
  */
 export async function loadAgendaDays(ctx: PlanCtx, policy: IndividualPolicy, c: PlanContext, from: string, today: string, count = 7): Promise<AgendaDay[] | null> {
   if (policy.scholarStudyCalendar !== "on") return null;
-  const views = await Promise.all(monthsOfWeek(from, count).map(month => loadStudyCalendar({ admin: ctx.admin, userId: ctx.userId, policy, month, today, plan: calendarPlanOf(c) })));
+  const reads = await Promise.all(monthsOfWeek(from, count).map(month => readStudyCalendar({ admin: ctx.admin, userId: ctx.userId, month, today, needPostponed: false })));
+  return agendaFrom(reads, policy, c, from, today, count);
+}
+/** Pure. The agenda days from the months' reads and the plan (null when a month could not be read). */
+function agendaFrom(reads: readonly (CalendarReads | null)[], policy: IndividualPolicy, c: PlanContext, from: string, today: string, count: number): AgendaDay[] | null {
+  const months = monthsOfWeek(from, count);
+  const views = months.map((month, i) => (reads[i] ? buildStudyCalendar(reads[i]!, { policy, month, today, plan: calendarPlanOf(c) }) : null));
   if (views.some(v => !v)) return null;
   return mergeDueRevisionDays(weekAgenda(views.flatMap(v => (v ? v.view.days : [])), from, today, count));
 }
@@ -219,9 +290,34 @@ function unfinishedOf(sessions: { id: string; title: string; lastActiveAt: strin
  * idempotent by activity and day) the first time it is shown, and only where 840 is present. Reads only otherwise.
  */
 export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<TodayView | NotReady> {
-  const c = await loadPlanContext(ctx, policy, o);
-  if (!c.ok) return c;
   const { admin, userId } = ctx;
+  const plan780 = await studyPlanSchema(admin, userId);
+  if (!isMyPlanOn(policy, plan780)) return gateReason(policy, plan780);
+  // MY PLAN PERF: what Today shows beside the plan (the seven agenda days' calendars, the unfinished sessions, the monthly review) does not depend on the plan
+  // context, so it is read while the context loads, not after it. The pure builds and the choice of the next activity still run on the context afterwards.
+  const weekMonths = monthsOfWeek(o.today, 7);
+  const calOn = policy.scholarStudyCalendar === "on";
+  const readsP = guard(Promise.all(weekMonths.map(month => (calOn ? readStudyCalendar({ admin, userId, month, today: o.today, needPostponed: false }) : Promise.resolve(null)))));
+  const besideP = guard((async () => {
+    // the monthly review's weak topics, from the most recent original review (read beside the overview: it is the overview's own "latest", from the same list)
+    const weakP = guard((async () => {
+      const reviews = monthlyReviewOn(policy) ? await listMonthlyReviews(admin, userId) : null;
+      const latest = (reviews ?? []).filter(r => r.retakeOf === null).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+      if (!latest) return null;
+      const ev = await getEvaluation(admin, userId, latest.id);
+      const b = ev.ok && ev.data ? (ev.data.results?.monthly as MonthlyBreakdown | undefined) : undefined;
+      const topics = b ? weakTopics(b, 3) : [];
+      return topics.length ? { month: latest.month, topics } : null;
+    })());
+    const [ls, rs, mo] = await Promise.all([
+      listLearningSessions(admin, userId, 10), listRevisionSessions(admin, userId, 10),
+      monthlyReviewOn(policy) ? loadMonthlyOverview(admin, userId, policy, o.today) : Promise.resolve(null),
+    ]);
+    const monthlyWeak: { month: string; topics: string[] } | null = mo ? await weakP : null;
+    return { ls, rs, mo, monthlyWeak };
+  })());
+  const c = await loadPlanContext(ctx, policy, { ...o, entriesTo: entriesHorizon(weekMonths[0], o.today) });
+  if (!c.ok) return c;
   const today = c.today;
   const yesterday = plusDays(today, -1);
   const notes: TodayNote[] = [];
@@ -235,35 +331,21 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
     const r = detectCarryOvers({ past, current: week, yesterday, events: c.events });
     carried = r.carried; missed = r.missed;
     if (r.excludeRefs.length) week = buildStudyPlan({ ...base, excludeRefs: new Set(r.excludeRefs) });
-    for (const n of carried) {
-      if (!n.recorded) await appendPlanEvent(admin, userId, "scholar", { kind: "auto_adjust", ref: n.key, status: "applied", value: { activityRef: n.ref, title: n.title.slice(0, 120), from: n.from, to: n.to, reason: n.reason.slice(0, 300) } });
-      notes.push({ text: n.reason, undo: { kind: "auto_adjust", ref: n.key } });
-    }
+    await Promise.all(carried.filter(n => !n.recorded).map(n => appendPlanEvent(admin, userId, "scholar", { kind: "auto_adjust", ref: n.key, status: "applied", value: { activityRef: n.ref, title: n.title.slice(0, 120), from: n.from, to: n.to, reason: n.reason.slice(0, 300) } })));
+    for (const n of carried) notes.push({ text: n.reason, undo: { kind: "auto_adjust", ref: n.key } });
   }
   for (const m of missed) notes.push({ text: `"${m.title}" from ${m.from} is Missed, not rescheduled. You can reschedule it from the calendar.` });
   if (c.calendar.blockedDays.includes(today)) notes.push({ text: "Nothing is planned today: you marked it as busy." });
   for (const t of c.calendar.timedNotes[today] ?? []) notes.push({ text: `Today's study fits ${t}.` });
   for (const n of week.notes) notes.push({ text: n });
 
-  const [ls, rs, mo, reviews] = await Promise.all([
-    listLearningSessions(admin, userId, 10), listRevisionSessions(admin, userId, 10),
-    monthlyReviewOn(policy) ? loadMonthlyOverview(admin, userId, policy, today) : Promise.resolve(null), monthlyReviewOn(policy) ? listMonthlyReviews(admin, userId) : Promise.resolve(null),
-  ]);
-  // the monthly review's weak topics, from the most recent original review
-  let monthlyWeak: { month: string; topics: string[] } | null = null;
-  const latest = mo?.latest;
-  if (latest) {
-    const ev = await getEvaluation(admin, userId, latest.id);
-    const b = ev.ok && ev.data ? (ev.data.results?.monthly as MonthlyBreakdown | undefined) : undefined;
-    if (b) { const topics = weakTopics(b, 3); if (topics.length) monthlyWeak = { month: latest.month, topics }; }
-  }
-  void reviews;
+  const { ls, rs, mo, monthlyWeak } = await besideP;
   const unfinished = unfinishedOf(
     ls.ok ? ls.data.filter(s => s.status === "active").map(s => ({ id: s.id, title: s.title, lastActiveAt: s.lastActiveAt })) : [],
     rs.ok ? rs.data.filter(r => r.status === "active").map(r => ({ id: r.id, mode: r.mode, lastActiveAt: r.lastActiveAt, position: r.position, total: r.total })) : [], today,
   );
   // The Calendar and Today read one plan: an activity the learner moved off today in the Calendar is not suggested here, and one moved onto today appears below.
-  const agenda = await loadAgendaDays(ctx, policy, c, today, today);
+  const agenda = calOn ? agendaFrom(await readsP, policy, c, today, today, 7) : null;
   const planned = new Set((agenda?.find(d => d.date === today)?.items ?? []).flatMap(i => (i.kind === "planned" ? [planRefOfKey(i.key) ?? ""] : [])));
   // moved off today: an item whose original day was today (from the calendar's own moves), or a plan activity of today the calendar no longer shows (cards due excepted: its count is the calendar's own)
   const movedOffToday = new Set<string>(agenda
@@ -308,10 +390,14 @@ export type InsightsView = {
 } | NotReady;
 /** Study consistency, practice performance and retention evidence for the learner, each "not measured" without evidence, never zero; the four tiles and the adjustments. */
 export async function loadInsights(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<InsightsView> {
+  const { admin, userId } = ctx;
+  const plan780 = await studyPlanSchema(admin, userId);
+  if (!isMyPlanOn(policy, plan780)) return gateReason(policy, plan780);
+  // MY PLAN PERF: the evidence rows do not depend on the plan context, so they are read while it loads.
+  const evidenceP = guard(Promise.all([evaluationEvidence(admin, userId), learningEventTimes(admin, userId), caseDecisionTimes(admin, userId)]));
   const c = await loadPlanContext(ctx, policy, o);
   if (!c.ok) return c;
-  const { admin, userId } = ctx;
-  const [ev, lessons, decisions] = await Promise.all([evaluationEvidence(admin, userId), learningEventTimes(admin, userId), caseDecisionTimes(admin, userId)]);
+  const [ev, lessons, decisions] = await evidenceP;
   if (!ev.ok) return { ok: false, reason: "unreadable" };
   const d = ev.data;
   const stamps: StudyStamp[] = [
