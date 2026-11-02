@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
+import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 import { ResizeHandle } from "@/components/ui/resizable";
 import { usePaneGrid } from "@/components/ui/pane-grid";
 import { sourceHref, studyHref } from "./question-view";
@@ -323,6 +324,11 @@ export function FlashcardStudy(props: {
               <span aria-hidden className="mt-px">⚠</span><span>{card.sensitive.marker}</span>
             </p>
           )}
+          {/* CE-06: the question, and the answer once it has been revealed, read by the browser's own voice (the answer is never read before the reveal). */}
+          <div className="mx-auto mt-3 flex max-w-[52rem] flex-wrap items-center justify-center gap-x-4 gap-y-2">
+            <ReadAloudButton text={card.front} label="Listen to question" about="the question" />
+            {revealed && card.back && <ReadAloudButton text={[card.back.text, card.back.explanation].filter(Boolean).join("\n\n")} label="Listen to answer" about="the answer" />}
+          </div>
           <p id="card-state" className="sr-only">{revealed ? "Answer side." : "Question side."}{needsRevision ? " Needs revision." : ""}{card.bookmarked ? " Bookmarked." : ""}</p>
           <p id="card-help" className="sr-only">{typedMode ? "Type your answer, then choose Check my answer. After the answer shows, press 1 for didn't remember or 2 for remembered. Arrow keys move between cards when you are not typing." : "Space or Enter reveals the answer. Then press 1 for didn't remember or 2 for remembered. Arrow keys move between cards."}</p>
 

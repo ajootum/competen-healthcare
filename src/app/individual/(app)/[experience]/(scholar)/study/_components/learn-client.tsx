@@ -37,6 +37,7 @@ import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav"
 import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
+import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
@@ -1208,6 +1209,7 @@ export function LearnWorkspace(props: {
                 </select>
                 <span className="basis-full text-[12px] text-gray-600">Used to read what you type in Ask Scholar, the assistant, Revise and Apply. Only obvious typing slips are fixed; clinical words, numbers and your notes are never changed, and your answers are marked exactly as you typed them. Saved on this device.</span>
               </div>
+              <SpeechSetting />
               {modes.length > 1 && (
                 <fieldset className="rounded-xl border border-gray-200 px-3 py-2">
                   <legend className="px-1 text-[12px] font-bold text-gray-700">Learn from</legend>
@@ -1396,6 +1398,8 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           )}
           <div className="mt-2"><AiBadge /></div>
           <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
+          {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). */}
+          {r.answer && <ReadAloudButton text={r.answer} about="this lesson" className="mt-2" />}
           {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} />}
           {/* SCHOLAR-GUIDED-LEARNING-01: a salvaged lesson -- shown, and said calmly what was left out (a count, never which). */}
           {r.salvage && (
