@@ -21,8 +21,10 @@ import {
 import { findPatientIdentifiers } from "./extract";
 import { isClozeQuestion, markCloze } from "./cloze";
 import {
-  extendedSpecOf, isExtendedQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
+  extendedSpecOf, isExtendedQuestion, isScenarioQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
 } from "./formats";
+import { learnerView as scenarioLearnerView, parseScenarioRaw, scenarioAnswer, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
+import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
@@ -53,10 +55,10 @@ export type RevisionKind = RevisionFormat | "case";
  * own format to a session (the stored kinds are the 416/710 ones; answer.format tells the rest apart).
  */
 export const effectiveKind = (q: { kind: RevisionKind; answer: unknown }): RevisionKind =>
-  isClozeQuestion(q) ? "cloze" : isTrueFalseQuestion(q) ? "true_false" : isExtendedQuestion(q) ? "extended" : q.kind;
+  isClozeQuestion(q) ? "cloze" : isTrueFalseQuestion(q) ? "true_false" : isExtendedQuestion(q) ? "extended" : isScenarioQuestion(q) ? "scenario" : q.kind;
 
-/** Pure. The kind a format is stored as (migrations 416/710): cloze, true_false and extended are all `short`. */
-export const storedKind = (f: RevisionKind): RevisionKind => (f === "cloze" || f === "true_false" || f === "extended" ? "short" : f);
+/** Pure. The kind a format is stored as (migrations 416/710): cloze, true_false, extended and scenario are all `short` (the registry says so). */
+export const storedKind = (f: RevisionKind): RevisionKind => storedKindOfFormat(f) as RevisionKind;
 
 /** The parts of a stored question the rules need. QuestionRow (store.ts) is one. */
 export type RevisionQuestion = {
@@ -97,9 +99,11 @@ export function keyOf(q: RevisionQuestion): Key | null {
   switch (q.kind) {
     case "mcq": case "case": return q.correctIndex !== null && q.correctIndex >= 0 && q.correctIndex < q.options.length ? { kind: "choice", index: q.correctIndex } : null;
     case "mrq": { const c = nums(a.correct); return c && c.length && c.every(i => i >= 0 && i < q.options.length) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
-    case "short": case "cloze": case "true_false": case "extended": {
+    case "short": case "cloze": case "true_false": case "extended": case "scenario": {
       const c = strs(a.accepted);
       if (!c || !c.length) return null;
+      // A scenario without sound stages is not offered.
+      if (isScenarioQuestion(q) && !scenarioSpecOf(q.answer)) return null;
       // A true/false key is one of the two values, and an extended item without a sound marking key is not offered.
       if (isTrueFalseQuestion(q) && truthOf(c[0]) === null) return null;
       if (isExtendedQuestion(q) && !extendedSpecOf(q.answer)) return null;
@@ -125,6 +129,7 @@ export function answerText(q: RevisionQuestion): string {
     case "accepted":
       if (isTrueFalseQuestion(q)) return truthOf(k.answers[0]) === "true" ? "True" : "False";
       if (isExtendedQuestion(q)) return extendedSpecOf(q.answer)?.modelAnswer ?? k.answers[0];
+      if (isScenarioQuestion(q)) return k.answers.join("; ");
       return isClozeQuestion(q) ? k.answers[0] : k.answers.length > 1 ? `${k.answers[0]} (also accepted: ${k.answers.slice(1).join("; ")})` : k.answers[0];
     case "back": return k.text;
     case "matches": return q.options.map((p, i) => `${p} → ${k.matches[i]}`).join("; ");
@@ -145,6 +150,8 @@ export type LearnerItem = {
   parts?: { prompt: string; marks: number }[];
   /** extended only: the practice marks it carries, how many key points it is marked against (never what they are), and the longest answer. */
   extended?: { marks: number; points: number; maxChars: number };
+  /** scenario only: how many stages, the weights' total, and the FIRST stage (the others are sent as each is answered). */
+  scenario?: ScenarioLearnerView;
 };
 
 /** A deterministic shuffle by seed. Stable for one question, so a resumed session shows the same order. */
@@ -158,7 +165,7 @@ export function seededOrder(n: number, seed: string): number[] {
 
 /** Pure. The only projection of an unanswered question a browser receives: no key, rationale or source quote. */
 export function learnerItem(q: RevisionQuestion): LearnerItem {
-  const base = { id: q.id, kind: q.kind, stem: q.stem, difficulty: q.difficulty, options: ["mcq", "case", "mrq", "match", "sequence"].includes(q.kind) ? [...q.options] : [] };
+  const base = { id: q.id, kind: q.kind, stem: q.stem, difficulty: q.difficulty, options: OPTION_KINDS.includes(q.kind) ? [...q.options] : [] };
   if (q.kind === "match") {
     const k = keyOf(q);
     const m = k?.kind === "matches" ? k.matches : [];
@@ -168,6 +175,7 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
   // SCHOLAR-COMPANION-01: a cloze item is stored as `short` and shown as its own format (a blank to fill, not a free answer).
   // SCHOLAR-SQIE-LEARNER-01: so are true/false (two buttons) and extended response (a long answer, marked against key points).
   if (isExtendedQuestion(q)) { const e = extendedSpecOf(q.answer); return { ...base, kind: "extended", ...(e ? { extended: { marks: e.marks, points: e.keyPoints.length, maxChars: EXTENDED_RESPONSE_MAX } } : {}) }; }
+  if (isScenarioQuestion(q)) { const v = scenarioLearnerView(q.answer); return { ...base, kind: "scenario", ...(v ? { scenario: v } : {}) }; }
   return isClozeQuestion(q) ? { ...base, kind: "cloze" } : isTrueFalseQuestion(q) ? { ...base, kind: "true_false" } : base;
 }
 
@@ -185,6 +193,7 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
   switch (q.kind) {
     case "mcq": case "case": return Number.isInteger(r.index) && (r.index as number) >= 0 && (r.index as number) < n ? { kind: "choice", index: r.index as number } : null;
     case "mrq": { const c = nums(r.indexes); return c && c.length <= n && c.every(i => i >= 0 && i < n) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
+    case "scenario": return null; // answered stage by stage (api/.../revision/scenario), never as one response
     case "short": case "cloze": case "true_false": case "extended": {
       if (typeof r.text !== "string" || !r.text.trim()) return null;
       if (isTrueFalseQuestion(q)) { const t = truthOf(r.text); return t ? { kind: "text", text: t } : null; }
@@ -338,6 +347,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   let structuredRaw: Record<string, unknown>[] = [];
   // SCHOLAR-SQIE-LEARNER-01: the key points an extended item is marked against (grounded with the rest of it).
   let extendedPoints: string[] = [];
+  let scenarioWords: string[] = [];
   if (kind === "mrq") {
     const stem = text(r.stem, 400), options = strs(r.options)?.map(o => o.trim()), correct = nums(r.correct), rationale = text(r.rationale, 1200);
     if (stem && options && options.length >= 4 && options.length <= 6 && options.every(o => o && o.length <= 200) && correct && correct.length >= 1
@@ -366,6 +376,14 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
         answer: { format: "extended", accepted: [e.modelAnswer], modelAnswer: e.modelAnswer, marks: per * e.keyPoints.length, partialCredit: { rule: "per_key_point", marksPerPoint: per } },
       };
       extendedPoints = e.keyPoints;
+    }
+  } else if (kind === "scenario") {
+    // SCHOLAR-CE-2026 CE-05: a situation that unfolds over 2 to 4 stages, each one question of an existing kind with its own key.
+    const sc = parseScenarioRaw(r);
+    const rationale = text(r.rationale, 1200);
+    if (sc && rationale && quote) {
+      d = { stem: sc.situation, options: [], answer: scenarioAnswer(sc.stages), rationale, sourceQuote: quote, difficulty };
+      scenarioWords = scenarioTexts(sc.stages);
     }
   } else if (kind === "flashcard") {
     const front = text(r.front, 300), back = text(r.back, 600);
@@ -408,7 +426,9 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   const { format: _format, ...answerBody } = d.answer as Record<string, unknown>;
   void _format;
   if (kind === "true_false") delete answerBody.accepted;
-  const all = [d.stem, ...d.options, ...Object.values(answerBody).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, ...extendedPoints, d.rationale].join("\n");
+  // A scenario's words are its stages' (the key points in `accepted` are among them).
+  if (kind === "scenario") delete answerBody.accepted;
+  const all = [d.stem, ...d.options, ...Object.values(answerBody).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, ...extendedPoints, ...scenarioWords, d.rationale].join("\n");
   if (findPatientIdentifiers(all).length) return { ok: false, reason: "identifier" };
   const grounding = [passage.content, ...referenceGrounding(checks.references ?? [])];
   if (groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
@@ -416,7 +436,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   // ── SCHOLAR-QUESTION-INTELLIGENCE-01: the item asks, is new, has real distractors, agrees with itself ──
   // A structured lead-in may set the scene: it is its PARTS that must each ask.
   if (kind === "structured" ? !(d.answer.parts as { prompt: string }[]).every(p => asksQuestion(p.prompt))
-    : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && kind !== "true_false" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
+    : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && kind !== "true_false" && kind !== "scenario" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
   if (kind === "flashcard") { const p = flashcardDraftProblem(d.stem, String(d.answer.back ?? ""), passage.content); if (p) return { ok: false, reason: p }; }
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
@@ -427,7 +447,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     if (unsupportedTerms(d.stem, passageText).length) return { ok: false, reason: "ungrounded" };
     // (It may add the topic's own name, at most two terms, from elsewhere in the passage.)
     if ((d.answer.accepted as string[])[0] === "true" && unsupportedTerms(d.stem, d.sourceQuote).length > 2) return { ok: false, reason: "inconsistent" };
-  } else if (kind !== "match" && kind !== "sequence" && kind !== "structured" && kind !== "extended" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
+  } else if (kind !== "match" && kind !== "sequence" && kind !== "structured" && kind !== "extended" && kind !== "scenario" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
   if (!difficultyFits(d.difficulty, checks.difficulty ?? null)) return { ok: false, reason: "off_difficulty" };
   if (kind === "structured") {
     // Each part's rubric is grounded as every revision rubric is: an entry the notes do not hold is left out.
@@ -458,6 +478,7 @@ function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): str
   if (kind === "short") return String((a.accepted as string[])[0] ?? "");
   if (kind === "true_false") return String(a.explanation ?? "");
   if (kind === "extended") return String(a.modelAnswer ?? "");
+  if (kind === "scenario") return ((a.accepted as string[] | undefined) ?? []).join("; ");
   if (kind === "flashcard") return String(a.back ?? "");
   if (kind === "mrq") return (a.correct as number[]).map(i => d.options[i]).join("; ");
   if (kind === "match") return d.options.map((o, i) => `${o}: ${(a.matches as string[])[i]}`).join("; ");

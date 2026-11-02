@@ -9,6 +9,7 @@ import type { AiReading, Chunk, ExtractionQuality } from "./extract";
 import { planChunkInsertion, type NewChunk } from "./slide-images";
 import type { CandidateChunk } from "./retrieval";
 import type { DraftQuestion, Passage, QuestionKind } from "./generation";
+import { SET_CHECK_KINDS } from "./question-formats";
 import { SRS_DEFAULTS, scheduleReview, storedKind, type RevisionDraft, type RevisionKind, type SrsParams } from "./revision";
 import { MISTAKES_ROW_CAP, toFixIds, type AttemptMark, type MistakeAttempt, type MistakeQuestion } from "./mistakes";
 import type { ProgressAttempt, ProgressCard, ProgressMaterial, ProgressQuestion } from "./progress";
@@ -799,7 +800,7 @@ export async function revisionPool(admin: Admin, userId: string, opts: { chunkId
   if (!opts.kinds.length || (opts.chunkIds && !opts.chunkIds.length && !extra.length)) return { ok: true, data: { questions: [], stats: new Map() } };
   // SCHOLAR-COMPANION-01: cloze is a format of the stored `short` kind (cloze.ts), so it is read as short.
   // SCHOLAR-SQIE-LEARNER-01: so are true/false and extended response (formats.ts).
-  const dbKinds = [...new Set(opts.kinds.map(k => (k === "cloze" || k === "true_false" || k === "extended" ? "short" : k)))];
+  const dbKinds = [...new Set(opts.kinds.map(k => storedKind(k)))];
   let q = admin.from("individual_scholar_question").select(QUESTION_COLS).eq("user_id", userId).in("kind", dbKinds);
   // SCHOLAR-SQIE-CLOSE-01: library copies this session reuses, wherever they were first filed, beside the sections.
   if (opts.chunkIds && extra.length) q = q.or(`chunk_id.in.(${[...opts.chunkIds].slice(0, 200).join(",")}),id.in.(${extra.join(",")})`);
@@ -1134,7 +1135,7 @@ export const isAdaptiveScope = (scope: unknown) => !!scope && typeof scope === "
 /** The blueprint's set: no items, mode 'mock' (417 allows it), its blueprint in scope.adaptive. Owner-keyed. */
 export async function createAdaptiveSet(admin: Admin, userId: string, input: { title: string; scope: Record<string, unknown>; formats: readonly string[]; quantity: number; difficulty: string; feedback: "immediate" | "end" }): Promise<{ ok: true; id: string } | { ok: false; notProvisioned: boolean }> {
   // 417's set CHECK names the formats it knew: structured is kept in the blueprint only.
-  const formats = input.formats.filter(f => ["mcq", "case", "mrq", "short", "flashcard", "match", "sequence"].includes(f));
+  const formats = input.formats.filter(f => SET_CHECK_KINDS.includes(f));
   const { data, error } = await admin.from("individual_scholar_revision_set").insert({
     user_id: userId, title: input.title.slice(0, 120) || "Adaptive exam", mode: "mock", scope: input.scope, formats: formats.length ? formats : ["mcq"],
     quantity: Math.max(1, Math.min(50, input.quantity)), difficulty: input.difficulty, feedback: input.feedback,

@@ -22,6 +22,8 @@ const formatOf = (q: { kind: string; answer: unknown }): string | null =>
 export const isTrueFalseQuestion = (q: { kind: string; answer: unknown }): boolean => formatOf(q) === "true_false";
 /** Pure. Whether a stored question is an extended-response item. */
 export const isExtendedQuestion = (q: { kind: string; answer: unknown }): boolean => formatOf(q) === "extended";
+/** Pure. Whether a stored question is an evolving scenario (a short item whose key says so; scenario.ts). */
+export const isScenarioQuestion = (q: { kind: string; answer: unknown }): boolean => formatOf(q) === "scenario";
 
 // ── TRUE / FALSE ──
 

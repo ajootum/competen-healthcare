@@ -95,7 +95,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       passportAchievementKinds: [...STUDY_ACHIEVEMENT_KINDS],
       // S1: no catalogue reaches a person until HQ chooses one.
       scholarCatalogues: [], professionalCatalogues: [], scholarReferenceCollections: [],
-      scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false"], scholarVerifyFormats: ["mcq", "case", "mrq", "short"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
+      scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false", "scenario"], scholarVerifyFormats: ["mcq", "case", "mrq", "short"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
       scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "self",
       scholarRevisionRecommendations: "on",
       // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams on, 15 questions, at most 30, every adaptive format (no flashcards).

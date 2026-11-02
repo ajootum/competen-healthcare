@@ -7,6 +7,7 @@
 // Migration 830 only keeps what the calendar cannot derive (moved dates, a review waiting to resume, the opt-out), and
 // everything here works without it.
 
+import { needsImmediateFeedback } from "./question-formats";
 import type { IndividualContext } from "../guard";
 import type { IndividualPolicy } from "../policy";
 import { experienceHref } from "../experiences";
@@ -34,7 +35,7 @@ export const reviewPolicyOf = (p: IndividualPolicy): ReviewPolicy => ({
 });
 /** The formats a review's questions may take: the revision formats HQ offers, without the ones a held-to-the-end sitting cannot use (multi-part answers, flip cards). */
 export const reviewFormats = (p: IndividualPolicy): RevisionFormat[] => {
-  const f = p.scholarRevisionFormats.filter(x => x !== "structured" && x !== "flashcard" && (REVISION_FORMATS as readonly string[]).includes(x));
+  const f = p.scholarRevisionFormats.filter(x => !needsImmediateFeedback(x) && x !== "flashcard" && (REVISION_FORMATS as readonly string[]).includes(x));
   return f.length ? f : ["mcq"];
 };
 export const monthlyReviewOn = (p: IndividualPolicy) => p.scholarMonthlyReview === "on" && p.scholarEvaluationMethods.includes("fresh") && p.scholarRevisionModes.includes("mock");

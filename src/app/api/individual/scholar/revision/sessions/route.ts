@@ -12,6 +12,7 @@ import {
   revisionPool, sectionLinks, sqieSchema, topicsOfSections, touchRevisionSet, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
+import { needsImmediateFeedback } from "@/lib/individual/scholar/question-formats";
 import { LIBRARY_FORMATS } from "@/lib/individual/scholar/library-format";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
@@ -126,7 +127,7 @@ export async function POST(req: Request) {
     const pool = await revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] });
     if (!pool.ok) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
     const have = new Map(pool.data.questions.map(q => [q.id, q]));
-    const ordered = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate"));
+    const ordered = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate") && (!needsImmediateFeedback(effectiveKind(q)) || set.feedback === "immediate"));
     if (!ordered.length) return NextResponse.json({ error: "The questions in this set are no longer stored (their materials were removed)." }, { status: 404 });
     const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback: set.feedback, setId: set.id, questionIds: ordered.map(q => q.id) });
     await touchRevisionSet(ctx.admin, ctx.userId, set.id);
@@ -171,7 +172,7 @@ export async function POST(req: Request) {
 
   // SCHOLAR-SQIE-CLOSE-01: structured only where 710 stores it, and only with feedback after each answer.
   const sqie = await sqieSchema(ctx.admin, ctx.userId);
-  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats).filter(f => f !== "structured" || (sqie && feedback === "immediate"));
+  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats).filter(f => f !== "structured" || (sqie && feedback === "immediate")).filter(f => !needsImmediateFeedback(f) || feedback === "immediate");
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
   const quantity = Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity;
   const asked: RevisionDifficulty | null = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;

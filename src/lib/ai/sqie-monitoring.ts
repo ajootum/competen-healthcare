@@ -14,7 +14,7 @@ export const SQIE_DAYS = 30;
 
 export const FORMAT_LABEL: Record<string, string> = {
   mcq: "Multiple choice", case: "Case question", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcard", match: "Matching",
-  sequence: "Sequencing", structured: "Structured", case_blueprint: "Case blueprint", case_reasoning: "Case reasoning", case_steps: "Case steps",
+  sequence: "Sequencing", structured: "Structured", scenario: "Evolving scenario", case_blueprint: "Case blueprint", case_reasoning: "Case reasoning", case_steps: "Case steps",
   osce_station: "OSCE station", osce_feedback: "OSCE feedback", evaluate: "Answer evaluation", exam_answer: "Exam answer",
 };
 

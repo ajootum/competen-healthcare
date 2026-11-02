@@ -144,6 +144,9 @@ export const PROMPT_VERSIONS = {
   // SCHOLAR-SQIE-CLOSE-01 (710): a structured question -- a lead-in and two to four parts, each with its marks and its
   // rubric -- on the revision rules (generation.ts REVISION_SYSTEM.structured). Its own version: a new prompt.
   structured: "scholar-structured-v1",
+  // SCHOLAR-CE-2026 CE-05: an evolving scenario -- a situation that unfolds over two to four stages, each stage one question of an
+  // existing kind -- on the revision rules (generation.ts REVISION_SYSTEM.scenario). Its own version: a new prompt.
+  scenario: "scholar-scenario-v1",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
   // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per
@@ -165,26 +168,10 @@ export const PROMPT_VERSIONS = {
 // SCHOLAR-SQIE-LEARNER-01 (owner GO 31 Oct 2026): true_false and extended are formats of the stored `short` kind in the same way
 // (answer.format = 'true_false' | 'extended', formats.ts): no migration. true_false is marked by code, extended by the
 // existing formative evaluator against its stored key points.
-export const REVISION_FORMATS = ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false", "extended"] as const;
-export type RevisionFormat = (typeof REVISION_FORMATS)[number];
-export const REVISION_FORMAT_LABEL: Record<RevisionFormat, string> = {
-  mcq: "Multiple choice", mrq: "Multiple response", short: "Short answer", flashcard: "Flashcards", match: "Matching", sequence: "Sequencing",
-  structured: "Structured (multi-part)", cloze: "Fill in the blank (cloze)", true_false: "True or false", extended: "Extended response (AI feedback)",
-};
-/** Formats whose default is OFF in the policy fallback: extended spends AI marking allowance on every answer, so the owner ticks it. */
-export const REVISION_FORMATS_OFF_BY_DEFAULT: readonly RevisionFormat[] = ["extended"];
-/**
- * SCHOLAR-SQIE-LEARNER-01: the question formats a blind check (a second reader who is not told the key) may be run on
- * before an item is stored (policy scholar_verify_formats). `case` is the multiple-choice case set.
- */
-export const VERIFY_FORMATS = ["mcq", "case", "mrq", "short", "structured", "match", "sequence", "flashcard", "true_false", "extended"] as const;
-export type VerifyFormat = (typeof VERIFY_FORMATS)[number];
-export const VERIFY_FORMAT_LABEL: Record<VerifyFormat, string> = {
-  mcq: "Multiple choice", case: "Case questions", mrq: "Multiple response", short: "Short answer", structured: "Structured (multi-part)", match: "Matching", sequence: "Sequencing",
-  flashcard: "Flashcards", true_false: "True or false", extended: "Extended response",
-};
-/** The checks that ran before this change: multiple choice, case, multiple response and short answer. The policy fallback. */
-export const VERIFY_FORMATS_DEFAULT: readonly VerifyFormat[] = ["mcq", "case", "mrq", "short"];
+// SCHOLAR-CE-2026 CE-05: the format lists, their labels and their defaults are DERIVED from the registry (question-formats.ts), the one
+// place a format is described. They are re-exported here under the names the rest of the code has always imported.
+export { REVISION_FORMATS, REVISION_FORMAT_LABEL, REVISION_FORMATS_OFF_BY_DEFAULT, VERIFY_FORMATS, VERIFY_FORMAT_LABEL, VERIFY_FORMATS_DEFAULT, ADAPTIVE_FORMATS } from "./question-formats";
+export type { RevisionFormat, VerifyFormat, AdaptiveFormat } from "./question-formats";
 /** Extended response: most practice marks one answer may carry, key points an answer is marked against, and the longest answer (characters). */
 export const EXTENDED_MARKS_MAX = 10;
 export const EXTENDED_POINTS_MIN = 3;
@@ -194,6 +181,11 @@ export const EXTENDED_LABEL = "Extended response: marked by AI against the key p
 export const TRUE_FALSE_LABEL = "True or false, written from a sentence in your notes. Marked by code.";
 /** SCHOLAR-GUIDED-LEARNING-01: earlier Teach Me versions whose saved lessons are still opened (same structure and checks). */
 export const LEARN_TEACH_LEGACY: readonly string[] = ["scholar-learn-teach-v1"];
+/** SCHOLAR-CE-2026 CE-05: a scenario has 2 to 4 stages (the same bounds as a structured question's parts), each weighted 1 to 5. */
+export const SCENARIO_STAGES_MIN = 2;
+export const SCENARIO_STAGES_MAX = 4;
+export const SCENARIO_WEIGHT_MAX = 5;
+export const SCENARIO_LABEL = "Evolving scenario, written by AI from your notes. Each stage is marked by code where code can, then by AI or by you. Formative practice marks only.";
 /** SCHOLAR-SQIE-CLOSE-01: a structured question has 2 to 4 parts of 1 to 5 marks each (migration 710 CHECK). */
 export const STRUCTURED_PARTS_MIN = 2;
 export const STRUCTURED_PARTS_MAX = 4;
@@ -224,8 +216,6 @@ export const REVISION_GENERATION_CALLS_MAX = 8;
 // student's own answers. Transparent rule-based adaptation only: no item calibration, no ability estimate, no score
 // on any scale. Never an examination, never verification, never competence.
 /** The formats an adaptive exam may use. Flashcards are self-graded recall, not an exam answer, so they are not offered. */
-export const ADAPTIVE_FORMATS = ["mcq", "mrq", "short", "match", "sequence", "structured"] as const satisfies readonly RevisionFormat[];
-export type AdaptiveFormat = (typeof ADAPTIVE_FORMATS)[number];
 /** Questions in one adaptive exam: at least five (the rule needs answers to act on), at most 417's session cap. */
 export const ADAPTIVE_LENGTH_MIN = 5;
 export const ADAPTIVE_LENGTH_MAX = 50;

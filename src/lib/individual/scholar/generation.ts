@@ -2,6 +2,7 @@ import { generate, type GenerateArgs, type GenerateResult } from "@/lib/ai/clien
 import { SAFETY_CONTEXT, parseJsonArray, textGroundingViolations, type PhrasingViolation } from "@/lib/ai/grounding";
 import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib/competency/mapping";
 import { CONTEXT_PREAMBLE } from "./learner-context";
+import { VERIFY_FORMATS_DEFAULT } from "./question-formats";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
 import type { CognitiveLevel } from "./question-intel";
@@ -286,7 +287,7 @@ export type GenerationOptions = {
   existingObjectives?: ReadonlySet<string>;
 };
 /** SCHOLAR-SQIE-LEARNER-01: the formats that were always blind-checked: what an absent policy means. */
-export const VERIFY_DEFAULT: readonly string[] = ["mcq", "case", "mrq", "short"];
+export const VERIFY_DEFAULT: readonly string[] = VERIFY_FORMATS_DEFAULT;
 
 export function questionUserPrompt(passage: Passage): string {
   return `PASSAGE (${passageCitation(passage)}):\n${passage.content}\n\n`
@@ -847,7 +848,7 @@ const REVISION_COMMON = [
   RUBRIC_RULE,
   "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
-export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured" | "true_false" | "extended", string> = {
+export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured" | "true_false" | "extended" | "scenario", string> = {
   mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   // SCHOLAR-FLASHCARDS-QA-01 (flashcard v2, PROMPT_VERSIONS.flashcardMix): a concise one-concept back (never the
@@ -875,6 +876,12 @@ export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "
     `Each item: {"stem": "a question ending with ? that needs a short paragraph to answer", "modelAnswer": "a complete answer of two to four sentences, in the passage's own words", "keyPoints": [${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} short points a full answer makes, each a DIFFERENT idea the passage states], "marks": 4, "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "misconceptions": [], "references": []}.`,
     `For an extended response, "keyPoints" has ${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} points (not one to four): the answer is marked by how many it makes. marks is a whole number from 1 to 10. Write at most one item.`,
   ].join("\n"),
+  // SCHOLAR-CE-2026 CE-05 (scenario v1): a situation from the passage that unfolds over two to four stages; each stage reveals something new
+  // and asks ONE question of an existing kind. Checked in code (revision.ts checkRevisionDraft, scenario.ts parseScenarioRaw). Stored as `short`.
+  scenario: [...REVISION_COMMON,
+    'Each item: {"situation": "the opening of a situation that the passage describes, two or three sentences (a statement is allowed here)", "stages": [{"reveal": "", "prompt": "question 1 ending with ?", "kind": "mcq", "options": [exactly 4 short options built only from the passage\'s words], "correct": [the index of the ONE right option], "weight": 1, "keyPoint": "the point from the passage this stage teaches"}, {"reveal": "NEW information the passage gives about how the situation develops", "prompt": "question 2 ending with ?", "kind": "short", "accepted": [1 to 4 short answers the passage supports], "weight": 2, "keyPoint": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "application", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}.',
+    'Two to four stages. "kind" is one of mcq (exactly 4 options and one right index), mrq (4 to 6 options and every right index, not all), short (accepted answers) or cloze (the prompt is one sentence holding the blank _____ and accepted holds the missing term). The first stage has an empty "reveal"; every later stage MUST reveal new information that the passage gives and that the earlier stages did not, so the situation unfolds. Each stage asks something DIFFERENT. weight is a whole number from 1 to 5: more for a stage that needs more of the passage. Never put the answer to a later stage in an earlier stage or in the opening. Write at most one item.',
+  ].join("\n"),
 };
 
 /** The revision kinds the blind check fits (question-quality.ts REVISION_VERIFY_SYSTEM). */
@@ -887,6 +894,7 @@ export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM, verifi
   const check = verified === "default" ? (REVISION_VERIFIED_KINDS.includes(kind) ? "revision" : "none") : verified;
   const suffix = check === "revision" ? `+${PROMPT_VERSIONS.verifyRevision}` : check === "blind" ? `+${PROMPT_VERSIONS.verifyBlind}` : "";
   return kind === "structured" ? `${PROMPT_VERSIONS.structured}${suffix}`
+    : kind === "scenario" ? `${PROMPT_VERSIONS.scenario}${suffix}`
     : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}${suffix}`
       : `${PROMPT_VERSIONS.revision}:${kind}${suffix}`;
 };
@@ -896,7 +904,7 @@ export const revisionPromptVersion = (kind: keyof typeof REVISION_SYSTEM, verifi
  * (the cards already there are kept, and a repeat of one is still refused by its stem).
  */
 export const formatPromptVersion = (kind: string): string =>
-  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured
+  kind === "mcq" ? PROMPT_VERSIONS.mcq : kind === "structured" ? PROMPT_VERSIONS.structured : kind === "scenario" ? PROMPT_VERSIONS.scenario
     : kind === "flashcard" ? `${PROMPT_VERSIONS.revision}:flashcard+${PROMPT_VERSIONS.flashcardMix}` : `${PROMPT_VERSIONS.revision}:${kind}`;
 
 /**
@@ -912,7 +920,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   const context = opts.context;
   const refs = context?.mode === "notes_and_references" ? context.references : [];
   const verifyPassage = [passage.content, ...referenceGrounding(refs)].join("\n");
-  const asked = kind === "structured" || kind === "extended" ? 1 : Math.min(3, Math.max(1, limit));
+  const asked = kind === "structured" || kind === "extended" || kind === "scenario" ? 1 : Math.min(3, Math.max(1, limit));
   // SCHOLAR-SQIE-LEARNER-01: which formats a blind check runs on (policy scholar_verify_formats), and the objectives already tested.
   const verifyOn = (opts.verifyFormats ?? VERIFY_DEFAULT).includes(kind);
   const seenObjectives = new Set(opts.existingObjectives ?? []);
@@ -931,7 +939,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
       system: REVISION_SYSTEM[kind],
       user: `${questionUserPrompt(passage)}${guidanceWithMix}`,
       tier: "reasoning",
-      maxTokens: 1800,
+      maxTokens: kind === "scenario" ? 2800 : 1800,
       context: { userId, attribution: { scope: "person" }, operation: `individual_scholar_revision_${kind}` },
     }, attempt === 1 ? "main" : "retry");
     if (!r.ok) return { ok: false as const, error: r.error };
@@ -941,7 +949,7 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
     const replyObjectives = new Set(seenObjectives);
     let batch: RevisionDraft[] = [];
     // A structured question is one substantial item a call (its prompt asks for at most one).
-    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" || kind === "extended" ? 1 : limit)) {
+    for (const raw of (parseJsonArray(r.text) ?? []).slice(0, kind === "structured" || kind === "extended" || kind === "scenario" ? 1 : limit)) {
       const c = checkRevisionDraft(kind, raw, passage, { existing: seen, difficulty: context?.difficulty ?? null, references: refs, existingObjectives: replyObjectives });
       if (c.ok) {
         const objective = objectiveOf(c.draft);
