@@ -48,10 +48,10 @@ describe("the decorative filter", () => {
     expect(deckVisuals(scan(5, [], logo)).notShown).toBe(0);
   });
   it("keys are the slide and the first 16 hex of the digest; the same picture twice on a slide is listed once", () => {
-    const a = fact(3, "ppt/media/a.png", { sha: "0123456789abcdef" }), b = fact(3, "ppt/media/b.png", { sha: "0123456789abcdef" });
+    const a = fact(3, "ppt/media/a.png", { sha: "0123456789abcdef" }), b = fact(3, "ppt/media/b.png", { sha: "0123456789abcdef" }); // gitleaks:allow (test fixture, not a secret)
     const r = deckVisuals(scan(3, [a, b]));
     expect(r.visuals).toHaveLength(1);
-    expect(r.visuals[0]).toMatchObject({ key: "3-0123456789abcdef", unit: "slide", decorative: false, aiRead: false });
+    expect(r.visuals[0]).toMatchObject({ key: "3-0123456789abcdef", unit: "slide", decorative: false, aiRead: false }); // gitleaks:allow (test fixture, not a secret)
   });
   it("marks a slide whose text was read by AI", () => {
     const r = deckVisuals(scan(3, [fact(2, "ppt/media/a.png")]), { aiRead: new Set([2]) });
@@ -99,9 +99,9 @@ describe("visualsForPages and visualsForSections", () => {
 
 describe("keys, URLs and citations", () => {
   it("only well-formed keys are looked up", () => {
-    expect(parseVisualKey("3-0123456789abcdef")).toEqual({ kind: "slide", n: 3, sha: "0123456789abcdef" });
+    expect(parseVisualKey("3-0123456789abcdef")).toEqual({ kind: "slide", n: 3, sha: "0123456789abcdef" }); // gitleaks:allow (test fixture, not a secret)
     expect(parseVisualKey("p12")).toEqual({ kind: "page", n: 12, sha: null });
-    expect(parseVisualKey("p12-0123456789abcdef")).toEqual({ kind: "page", n: 12, sha: "0123456789abcdef" });
+    expect(parseVisualKey("p12-0123456789abcdef")).toEqual({ kind: "page", n: 12, sha: "0123456789abcdef" }); // gitleaks:allow (test fixture, not a secret)
     for (const bad of ["", "../x", "3-xyz", "3-0123456789ABCDEF", "p0", "0-0123456789abcdef", "p1/../2", "3-0123456789abcdef0"]) expect(parseVisualKey(bad)).toBeNull();
     expect(visualUrl("m1", "p3")).toBe("/api/individual/scholar/materials/m1/visuals/p3");
   });
@@ -142,7 +142,7 @@ describe("classifying a page from its own text", () => {
     const info = pageInfoOf([{ pageFrom: 23, content: "NEWS Observation Chart" }], [], []);
     expect(classifyPage(info.get(23))).toMatchObject({ category: "visual", behaviour: "image", label: LABEL_SCORING, title: "NEWS Observation Chart", hasText: false });
     const r = buildVisuals({ slides: 40, pictures: [fact(23, "x1", { sha: "aaaaaaaaaaaaaaaa" })], undisplayable: [] }, { unit: "page", pages: info });
-    expect(r.visuals[0]).toMatchObject({ key: "p23-aaaaaaaaaaaaaaaa", caption: "NEWS Observation Chart · page 23", behaviour: "image", safeText: null });
+    expect(r.visuals[0]).toMatchObject({ key: "p23-aaaaaaaaaaaaaaaa", caption: "NEWS Observation Chart · page 23", behaviour: "image", safeText: null }); // gitleaks:allow (test fixture, not a secret)
   });
   it("strips a bullet from the title", () => {
     expect(classifyPage({ text: "• Respiratory Rate", textLayer: true, aiRead: false }).title).toBe("Respiratory Rate");
