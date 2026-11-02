@@ -268,6 +268,28 @@ export function normaliseLookupEmail(v: unknown): string | null {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(s) && s.length <= 254 ? s : null;
 }
 
+/** Pure. A name to search accounts by: 2 to 80 characters after trimming, never an email address (that is an exact lookup). */
+export function normaliseLookupName(v: unknown): string | null {
+  const s = typeof v === "string" ? v.trim().replace(/\s+/g, " ") : "";
+  return s.length >= 2 && s.length <= 80 && !s.includes("@") ? s : null;
+}
+
+/** The most accounts a name search lists: the operator picks one, which then opens by its exact email. */
+export const NAME_SEARCH_LIMIT = 10;
+
+/**
+ * Accounts whose name contains every word typed (case-insensitive, LIKE wildcards escaped so they match literally),
+ * at most NAME_SEARCH_LIMIT, by name. Only id, name and email: the person's Individual access is read when one is chosen.
+ */
+export async function searchPeopleByName(admin: any, name: string): Promise<{ ok: true; value: { id: string; name: string | null; email: string | null }[]; more: boolean } | { ok: false; message: string }> {
+  let q = admin.from("profiles").select("id, full_name, email");
+  for (const word of name.split(" ").slice(0, 4)) q = q.ilike("full_name", `%${word.replace(/[\\%_]/g, c => "\\" + c)}%`);
+  const { data, error } = await q.order("full_name", { ascending: true }).limit(NAME_SEARCH_LIMIT + 1);
+  if (error) return { ok: false, message: "Accounts could not be searched just now." };
+  const rows = ((data ?? []) as any[]).map(r => ({ id: r.id as string, name: (r.full_name ?? null) as string | null, email: (r.email ?? null) as string | null }));
+  return { ok: true, value: rows.slice(0, NAME_SEARCH_LIMIT), more: rows.length > NAME_SEARCH_LIMIT };
+}
+
 export async function lookupIndividualPerson(admin: any, email: string): Promise<{ ok: true; value: PersonLookup } | { ok: false; message: string }> {
   // ilike with the LIKE wildcards escaped: a case-insensitive EXACT match, never a pattern search.
   const pattern = email.replace(/[\\%_]/g, c => "\\" + c);
