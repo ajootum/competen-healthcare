@@ -3,11 +3,22 @@
 // session the SERVER resolved (study-context.ts loadStudy), never read from the address bar, so with the feature off,
 // or with another person's id in the address, it stays null and nothing is sent. Browser only.
 
+import { useSyncExternalStore } from "react";
 import { isStudyId, withStudy } from "@/lib/individual/scholar/study-carry";
 
 let active: string | null = null;
 export const STUDY_EVENT = "scholar:study";
-export const setActiveStudy = (id: string | null | undefined) => { active = isStudyId(id) ? id : null; };
+// Emitted when the open session changes, for the shell's navigation (useActiveStudyId), which renders outside the pages.
+const ACTIVE_EVENT = "scholar:study-active";
+export const setActiveStudy = (id: string | null | undefined) => {
+  const next = isStudyId(id) ? id : null;
+  if (next === active) return;
+  active = next;
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(ACTIVE_EVENT));
+};
+const subscribe = (cb: () => void) => { window.addEventListener(ACTIVE_EVENT, cb); return () => window.removeEventListener(ACTIVE_EVENT, cb); };
+/** The open study session's id, for rendering (the sidebar's My Learning links carry it). Null on the server and with no session. */
+export const useActiveStudyId = (): string | null => useSyncExternalStore(subscribe, () => active, () => null);
 /** The open study session's id, or null. Read it in an event handler, not while rendering. */
 export const activeStudyId = (): string | null => active;
 /** The request field for a create route: { studySessionId } while a session is open, otherwise nothing. */
