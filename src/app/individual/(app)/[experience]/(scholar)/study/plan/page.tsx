@@ -7,31 +7,33 @@ import { countDue, libraryTopics, listMaterials } from "@/lib/individual/scholar
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import { loadInsights, loadPlanCalendar, loadToday } from "@/lib/individual/scholar/plan-data";
-import { startHref, startLabel } from "@/lib/individual/scholar/plan-today-view";
-import { monthFromQuery } from "@/lib/individual/scholar/study-calendar-data";
-import { nextMonth, prevMonth } from "@/lib/individual/scholar/monthly-review";
+import { startHref, todaySchedule } from "@/lib/individual/scholar/plan-today-view";
 import { materialTopics } from "@/lib/individual/scholar/library";
-import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
-import { addDay, agendaStart, linkOptions, monthsOfWeek, parsePlanView, planViewHref, weekAgenda, type AgendaDay } from "@/lib/individual/scholar/plan-view";
+import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
+import { linkOptions, parsePlanView, planViewHref, resolveView, weekAgenda } from "@/lib/individual/scholar/plan-view";
+import { calendarHref, hasPlansOn, mergeDueRevisionDays, resolveCalendarState } from "@/lib/individual/scholar/plan-workspace";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { BoundaryNotice, PageHeader, StatePanel, Unreadable } from "../../../../../_components/chrome";
+import { ShellAction } from "../../../../../_components/Dialog";
+import { StatePanel, Unreadable } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { PlanViewNav } from "../_components/plan-view-nav";
-import { ComingUp, DoneToday, DueAndReview, ExamOffers, MissedList, NotesList, ReflectionCard, StartingPlanNote, TodayNextCard } from "../_components/plan-today";
-import { PlanAgenda, PlanMonth } from "../_components/plan-calendar-view";
+import { ComingUp, DoneToday, DueAndReview, ExamOffers, MissedList, NotesList, ReflectionCard, StartingPlanNote, TodayEmpty, TodayNextCard, TodaySchedule } from "../_components/plan-today";
+import { PlanWorkspace } from "../_components/plan-workspace";
+import { AgendaRows } from "../_components/plan-agenda-rows";
 import { InsightsView } from "../_components/plan-insights-view";
-import { secondaryBtn } from "../_components/plan-style";
+import { CalendarIcon, LearningOnlyNote } from "../_components/plan-ui";
+import { secondaryBtn, squareBtn } from "../_components/plan-style";
 
 // Request-time only: it reads the release gate, the session and the learner's own records, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
-// MY PLAN -- PLP-01..04 (owner GO "Personal Learning & Development Planning Engine", 2 Nov 2026) and the My Plan calendar enhancement.
+// MY PLAN -- PLP-01..04 (owner GO "Personal Learning & Development Planning Engine", 2 Nov 2026), the My Plan calendar enhancement and CE-03 (mobile-first).
 //
-// The first tab of My Learning. Three views, one at a time (?view=today|calendar|insights): TODAY (one next activity, why, why now, if you
-// postpone it; cards due; what moved by itself, with an undo), CALENDAR (7 days by default, or the month; the learner's own entries beside
-// Scholar's plan) and INSIGHTS (study consistency, practice performance, retention evidence, each "Not measured yet" with its reason, never zero).
-// Everything is computed on the server from the learner's own records by fixed rules: NO AI. Off, not set up (780) or unreadable is said
-// calmly; learning never waits for a plan.
+// The first tab of My Learning. Three views, one at a time (?view=calendar|today|insights; the Calendar is the default, and this device remembers the
+// last one, read in the browser only when the address names none): CALENDAR (a month or week grid with a few dots per day, and the selected day's agenda
+// under it), TODAY (what is planned or due today, ONE next suggestion, what is done) and INSIGHTS (study consistency, practice performance, retention
+// evidence, each "Not measured yet" with its reason, never zero). Everything is computed on the server from the learner's own records by fixed rules: NO AI.
+// Off, not set up (780) or unreadable is said calmly; learning never waits for a plan.
 //
 // ⚠ A PLAN IS A SUGGESTION AND A PERSONAL CHOICE ABOUT TIME. It is not an assessment and nothing here reaches the Passport.
 
@@ -39,7 +41,7 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "My Plan" });
 }
 
-type SP = { view?: string; from?: string; span?: string; month?: string; study?: string };
+type SP = { view?: string; date?: string; from?: string; span?: string; month?: string; study?: string; add?: string };
 
 function NotReady({ reason }: { reason: "off" | "not_provisioned" | "unreadable" | "not_found" }) {
   if (reason === "unreadable") return <Unreadable what="plan" />;
@@ -61,44 +63,82 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
   const o = { now: new Date(), tz: learnerTimeZone(hdrs), today: learnerToday(hdrs) };
   const today = o.today;
   const view = parsePlanView(sp.view);
+  const explicit = resolveView(sp.view, null).remember !== null;
   const base = experienceHref("scholar", "study/plan");
   const [policy, due] = await Promise.all([loadIndividualPolicy(ctx.admin), countDue(ctx.admin, ctx.userId)]);
   const study = await loadStudy(ctx.admin, ctx.userId, sp.study, null, policy);
-  const space = scholarSpace("plan");
+  const studyId = study ? (sp.study as string) : null;
+  const keep: Record<string, string> = studyId ? { study: studyId } : {};
+  const cs = resolveCalendarState(sp, today);
 
-  const q = (extra: Record<string, string | null | undefined> = {}) => (study ? { study: sp.study as string, ...extra } : extra);
-  const head = (
+  const loadLinks = async () => {
+    const [mats, topics] = await Promise.all([listMaterials(ctx.admin, ctx.userId), libraryTopics(ctx.admin, ctx.userId)]);
+    return linkOptions(
+      mats.ok ? mats.data.map(m => ({ id: m.id, title: m.title })) : [],
+      materialTopics([...(topics?.values() ?? [])].flat(), 60).map(t => t.topic),
+    );
+  };
+
+  // One white card holds the title, the one-line boundary, the three view tiles and (on the Calendar) the workspace itself.
+  const frame = (inner?: React.ReactNode) => (
     <>
-      <PageHeader accent={x.accent} eyebrow={space.eyebrow} title={space.title} intro={space.intro} />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
-      {view !== "insights" && <BoundaryNotice notice={FORMATIVE_NOTICE} />}
-      <PlanViewNav base={base} current={view} extra={q()} />
+      <section aria-label="My Plan" className="mb-4 rounded-2xl border border-gray-200 bg-white p-3 sm:p-5">
+        <header className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-[24px] font-bold leading-tight tracking-[-0.02em] text-gray-900 md:text-[28px]">My Plan</h1>
+            <p className="text-[13.5px] text-gray-600">Your learning, your time</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <ShellAction />
+            <Link href={calendarHref(base, { span: cs.span, date: today, today, extra: keep })} className={squareBtn} aria-label="Go to today in the calendar"><CalendarIcon size={18} /></Link>
+          </div>
+        </header>
+        <PlanViewNav base={base} current={view} explicit={explicit} extra={keep} />
+        {inner && <div className="mt-4">{inner}</div>}
+        <div className="mt-4"><LearningOnlyNote notice={FORMATIVE_NOTICE} /></div>
+      </section>
     </>
   );
 
   // ── TODAY ──
   if (view === "today") {
     const t = await loadToday(ctx, policy, o);
-    if (!t.ok) return <>{head}<NotReady reason={t.reason} /></>;
+    if (!t.ok) return <>{frame()}<NotReady reason={t.reason} /></>;
     const flashcards = experienceHref("scholar", "study/revise/flashcards");
-    const calendarHref = planViewHref(base, "calendar", q());
-    const studyId = study ? (sp.study as string) : null;
+    const calHref = calendarHref(base, { span: "month", date: today, today, extra: keep });
+    const scheduled = todaySchedule(t.todayItems ?? [], t.next?.ref ?? null).filter(i => i.kind !== "completed");
+    const planned = hasPlansOn(t.todayItems, t.dueCards, !!t.next);
+    const links = scheduled.some(i => i.kind === "personal") ? await loadLinks() : [];
+    const learn = experienceHref("scholar", "study/learn");
+    const studyNow = (t.next ? startHref(t.next.href, studyId) : null) ?? learn;
     return (
       <>
-        {head}
+        {frame()}
         {t.starting && <div className="mb-4"><StartingPlanNote accent={x.accent} today={today} settings={t.settings} extras={t.features.settingsExtras} /></div>}
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
           <div className="space-y-4">
-            <TodayNextCard accent={x.accent} today={today} next={t.next} alternatives={t.alternatives} canDecide={t.features.decisions}
-              settings={t.settings} extras={t.features.settingsExtras} declinedHidden={t.declinedHidden} about={t.nextAbout}
-              startHref={t.next ? startHref(t.next.href, studyId) : null} resume={t.next ? startLabel(t.next) === "Resume" : false} starting={t.starting} />
-            <ComingUp accent={x.accent} today={today} items={t.comingUp} calendarHref={calendarHref} />
+            {planned ? (
+              <>
+                {scheduled.length > 0 && (
+                  <TodaySchedule>
+                    <AgendaRows items={scheduled} ctx={{ date: today, today, accent: x.accent, links, studyId, canDecide: t.features.decisions, elseHref: planViewHref(base, "today", keep) }} />
+                  </TodaySchedule>
+                )}
+                <TodayNextCard accent={x.accent} today={today} next={t.next} alternatives={t.alternatives} canDecide={t.features.decisions}
+                  settings={t.settings} extras={t.features.settingsExtras} declinedHidden={t.declinedHidden} about={t.nextAbout}
+                  startHref={t.next ? startHref(t.next.href, studyId) : null} resume={t.next ? t.next.rule === "unfinished" : false} starting={t.starting} />
+              </>
+            ) : (
+              <TodayEmpty accent={x.accent} planHref={calendarHref(base, { span: "month", date: today, today, extra: { ...keep, add: "1" } })} studyNowHref={studyNow} calendarHref={calHref} />
+            )}
+            <ComingUp accent={x.accent} today={today} items={t.comingUp} calendarHref={calHref} />
             <NotesList notes={t.notes} />
             <MissedList accent={x.accent} today={today} missed={t.missed} />
           </div>
           <div className="space-y-4">
-            <DueAndReview accent={x.accent} dueCards={t.dueCards} flashcardsHref={flashcards} review={t.upcomingMonthlyReview} />
-            <DoneToday items={t.doneToday} />
+            <DueAndReview accent={x.accent} dueCards={t.dueCards} flashcardsHref={flashcards} review={t.upcomingMonthlyReview} hideCards={t.todayItems !== null} />
+            <DoneToday items={t.doneToday} studyId={studyId} />
             {t.hasPlan && <ExamOffers accent={x.accent} offers={t.examOffers} />}
             {t.hasPlan && t.reflection.enabled && <ReflectionCard accent={x.accent} week={t.reflection.week} answered={t.reflection.answered} offer={t.reflection.offer} settings={t.settings} />}
           </div>
@@ -110,48 +150,27 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
   // ── INSIGHTS ──
   if (view === "insights") {
     const i = await loadInsights(ctx, policy, o);
-    if (!i.ok) return <>{head}<NotReady reason={i.reason} /></>;
-    return <>{head}<InsightsView view={i} progressHref={experienceHref("scholar", "study/progress")} accent={x.accent} /></>;
+    if (!i.ok) return <>{frame()}<NotReady reason={i.reason} /></>;
+    return <>{frame()}<InsightsView view={i} progressHref={experienceHref("scholar", "study/progress")} accent={x.accent} /></>;
   }
 
-  // ── CALENDAR ──
-  const month = sp.span === "month";
-  const [mats, topics] = await Promise.all([listMaterials(ctx.admin, ctx.userId), libraryTopics(ctx.admin, ctx.userId)]);
-  const links = linkOptions(
-    mats.ok ? mats.data.map(m => ({ id: m.id, title: m.title })) : [],
-    materialTopics([...(topics?.values() ?? [])].flat(), 60).map(t => t.topic),
-  );
-
-  if (month) {
-    const m = monthFromQuery(sp.month, today);
-    const c = await loadPlanCalendar(ctx, policy, { ...o, month: m });
-    if (!c.ok) return <>{head}<NotReady reason={c.reason} /></>;
-    if (!c.calendar) return <>{head}<StatePanel title="The study calendar is not offered here"><p>Your plan is still available in Today.</p></StatePanel></>;
-    const mHref = (mm: string | null) => planViewHref(base, "calendar", q({ span: "month", month: mm }));
-    return (
-      <>
-        {head}
-        <PlanMonth view={c.calendar.view} accent={x.accent} prevHref={mHref(prevMonth(m))} nextHref={mHref(nextMonth(m))} todayHref={mHref(null)}
-          weekHref={planViewHref(base, "calendar", q())} canAdd={c.features.learnerCalendar} links={links} />
-      </>
-    );
-  }
-
-  const from = agendaStart(sp.from, today);
-  const loads = await Promise.all(monthsOfWeek(from).map(m => loadPlanCalendar(ctx, policy, { ...o, month: m })));
+  // ── CALENDAR ── the selected month (and the next one only when the week shown crosses a month end)
+  const [links, loads] = await Promise.all([loadLinks(), Promise.all(cs.months.map(m => loadPlanCalendar(ctx, policy, { ...o, month: m })))]);
   const failed = loads.find(l => !l.ok);
-  if (failed && !failed.ok) return <>{head}<NotReady reason={failed.reason} /></>;
+  if (failed && !failed.ok) return <>{frame()}<NotReady reason={failed.reason} /></>;
   const ready = loads.flatMap(l => (l.ok ? [l] : []));
-  if (ready.some(l => !l.calendar)) return <>{head}<StatePanel title="The study calendar is not offered here"><p>Your plan is still available in Today.</p></StatePanel></>;
+  if (ready.some(l => !l.calendar)) return <>{frame()}<StatePanel title="The study calendar is not offered here"><p>Your plan is still available in Today.</p></StatePanel></>;
   const views = ready.flatMap(l => (l.calendar ? [l.calendar.view] : []));
-  const days: AgendaDay[] = weekAgenda(views.flatMap(v => v.days), from, today);
-  const wHref = (f: string | null) => planViewHref(base, "calendar", q({ from: f && f !== today ? f : null }));
+  const days = mergeDueRevisionDays(weekAgenda(views.flatMap(v => v.days), cs.gridDates[0], today, cs.gridDates.length));
+  const notes = [...new Set(views.flatMap(v => v.notes))];
+  const unattached = [...new Map(views.flatMap(v => v.unattached).map(u => [u.ref, u])).values()];
+  const canAdd = ready[0].features.learnerCalendar;
   return (
     <>
-      {head}
-      <PlanAgenda accent={x.accent} today={today} days={days} prevHref={wHref(addDay(from, -7))} nextHref={wHref(addDay(from, 7))}
-        thisWeekHref={from === today ? null : wHref(null)} monthHref={planViewHref(base, "calendar", q({ span: "month", month: from.slice(0, 7) }))}
-        canAdd={ready[0].features.learnerCalendar} links={links} notes={views[0]?.notes ?? []} unattached={views[0]?.unattached ?? []} />
+      {frame(
+        <PlanWorkspace accent={x.accent} today={today} base={base} extra={keep} studyId={studyId} span={cs.span} date={cs.date} month={cs.month}
+          days={days} canAdd={canAdd} canDecide={ready[0].features.decisions} links={links} notes={notes} unattached={unattached} openAdd={sp.add === "1" && canAdd} />,
+      )}
     </>
   );
 }

@@ -12,8 +12,10 @@ import type { ExamOffer } from "@/lib/individual/scholar/plan-calendar";
 import type { ReflectionOffer } from "@/lib/individual/scholar/plan-reflection";
 import { addDay, settingsWithSessionMinutes } from "@/lib/individual/scholar/plan-view";
 import { dayWord, type ComingUpItem, type DoneItem } from "@/lib/individual/scholar/plan-today-view";
-import { cardCls, fieldCls, hintCls, labelCls, linkBtn, primaryBtn, quietBtn, secondaryBtn, summaryCls, tagCls } from "./plan-style";
+import { groupCompleted } from "@/lib/individual/scholar/plan-workspace";
+import { cardCls, fieldCls, hintCls, labelCls, linkBtn, pillOutline, pillPrimary, primaryBtn, quietBtn, secondaryBtn, summaryCls, tagCls } from "./plan-style";
 import { CheckIcon, ErrorLine, PersonIcon, PlanDialog, SparkleIcon, callJson, errorOf } from "./plan-ui";
+import { DoneGroup } from "./plan-agenda-rows";
 import { PlanSetup } from "./plan-setup";
 
 // MY PLAN -> TODAY (PLP-01..04). ONE next activity, with the reason in the learner's own numbers; "why" is visible, "why now" and "if you
@@ -68,12 +70,12 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
   return (
     <section aria-labelledby={`${uid}-h`} className={cardCls} data-testid="plan-next">
       <div className="flex items-start justify-between gap-3">
-        <h2 id={`${uid}-h`} className="text-[17px] font-bold text-gray-900">Your next study session</h2>
-        {next && <span className={tagCls}>Suggested</span>}
+        <h2 id={`${uid}-h`} className="text-[16px] font-bold text-gray-900">Your next study session</h2>
+        {next && <span className={tagCls}>{resume ? "Started" : "Suggested"}</span>}
       </div>
       {next ? (
         <>
-          <p className="mt-3 min-w-0 break-words text-[20px] font-bold leading-snug text-gray-900 sm:text-[22px]">{next.title}</p>
+          <p className="mt-3 min-w-0 break-words text-[18px] font-bold leading-snug text-gray-900 sm:text-[20px]">{next.title}</p>
           <p className="mt-1 text-[14.5px] text-gray-700">{next.why}</p>
           {about && <p className="mt-1 text-[13.5px] text-gray-700"><span className="font-semibold">About: </span>{about}</p>}
           <details className="mt-1">
@@ -88,8 +90,8 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
             {startHref && <Link href={startHref} className={primaryBtn} style={{ background: accent }}>{resume ? "Resume" : "Start"}<span className="sr-only">: {next.title}</span></Link>}
           </div>
           <div className="mt-3 border-t border-gray-100 pt-2">
-            <button type="button" className={`${quietBtn} md:hidden`} aria-expanded={more} aria-controls={`${uid}-more`} onClick={() => setMore(m => !m)}>{more ? "Fewer options" : "More options"}</button>
-            <div id={`${uid}-more`} className={`${more ? "mt-2 flex" : "hidden"} flex-wrap gap-2 md:flex`}>
+            <button type="button" className={quietBtn} aria-expanded={more} aria-controls={`${uid}-more`} onClick={() => setMore(m => !m)}>{more ? "Fewer options" : "More"}</button>
+            <div id={`${uid}-more`} className={`${more ? "mt-2 flex" : "hidden"} flex-wrap gap-2`}>
               {canDecide && <button type="button" className={quietBtn} disabled={busy} onClick={() => void decide("postpone")}>Postpone<span className="sr-only"> to tomorrow</span></button>}
               {alternatives.length > 0 && <button type="button" className={quietBtn} aria-expanded={showAlt} aria-controls={`${uid}-alt`} onClick={() => setShowAlt(s => !s)}>Something else</button>}
               {canDecide && <button type="button" className={quietBtn} disabled={busy} onClick={() => void decide("decline")}>Not this</button>}
@@ -121,9 +123,9 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
         </>
       )}
       {adjusting && (
-        <div className="mt-4 border-t border-gray-100 pt-4">
-          <PlanSetup accent={accent} today={today} initial={settings} starting={starting} extras={extras} onDone={() => setAdjusting(false)} />
-        </div>
+        <PlanDialog title={starting ? "Personalise your plan" : "Adjust your plan"} onClose={() => setAdjusting(false)} wide>
+          <PlanSetup accent={accent} today={today} initial={settings} starting={starting} extras={extras} bare onDone={() => setAdjusting(false)} />
+        </PlanDialog>
       )}
     </section>
   );
@@ -173,21 +175,22 @@ export function ComingUp({ accent, today, items, calendarHref }: { accent: strin
   );
 }
 
-// ── what was done today, so Today visibly updates after the learner studies ──
-export function DoneToday({ items }: { items: DoneItem[] }) {
+// ── what was done today, so Today visibly updates after the learner studies (records of one material fold into one row) ──
+export function DoneToday({ items, studyId = null }: { items: DoneItem[]; studyId?: string | null }) {
+  const rows = groupCompleted(items);
   return (
     <section aria-labelledby="plan-done-h" className={cardCls} data-testid="plan-done-today">
-      <h2 id="plan-done-h" className="text-[16px] font-bold text-gray-900">Done today</h2>
+      <h2 id="plan-done-h" className="text-[16px] font-bold text-gray-900">Completed today</h2>
       {items.length === 0 ? (
         <p className="mt-1 text-[14px] text-gray-700">Nothing recorded yet today. What you study appears here.</p>
       ) : (
-        <ul className="mt-2 divide-y divide-gray-100">
-          {items.map(i => (
-            <li key={i.key} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
+        <ul className="mt-1">
+          {rows.map(r => r.type === "group" ? <DoneGroup key={r.key} row={r} studyId={studyId} /> : (
+            <li key={r.item.key} className="flex items-start gap-3 border-b border-gray-100 py-2.5 last:border-b-0">
               <span className="mt-0.5 text-green-800"><CheckIcon size={18} /></span>
               <div className="min-w-0 flex-1">
-                <p className="break-words text-[14px] font-semibold text-gray-900">{i.href ? <Link href={i.href} className="underline underline-offset-2">{i.title}</Link> : i.title}</p>
-                {i.detail && <p className="text-[12.5px] text-gray-600">{i.detail}{i.basis === "self_reported" ? " (your word, not a record)" : ""}</p>}
+                <p className="break-words text-[14px] font-semibold text-gray-900">{r.item.href ? <Link href={r.item.href} className="underline underline-offset-2">{r.item.title}</Link> : r.item.title}</p>
+                {r.item.detail && <p className="text-[12.5px] text-gray-600">{r.item.detail}{r.item.basis === "self_reported" ? " (your word, not a record)" : ""}</p>}
               </div>
             </li>
           ))}
@@ -198,15 +201,18 @@ export function DoneToday({ items }: { items: DoneItem[] }) {
 }
 
 // ── cards due, and the monthly review that is coming ──
-export function DueAndReview({ accent, dueCards, flashcardsHref, review }: {
+export function DueAndReview({ accent, dueCards, flashcardsHref, review, hideCards = false }: {
   accent: string; dueCards: number; flashcardsHref: string;
+  /** Today's schedule already lists the cards due (one row): not said twice. */
+  hideCards?: boolean;
   review: { month: string; recommendedDate: string; late: boolean; startHref: string } | null;
 }) {
-  if (dueCards <= 0 && !review) return null;
+  const showCards = dueCards > 0 && !hideCards;
+  if (!showCards && !review) return null;
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
   return (
     <section aria-label="Revision and review" className="grid gap-3 sm:grid-cols-2">
-      {dueCards > 0 && (
+      {showCards && (
         <div className={cardCls}>
           <h2 className="text-[15px] font-bold text-gray-900">Revision due</h2>
           <p className="mt-0.5 text-[14px] text-gray-700"><span className="font-semibold tabular-nums">{dueCards}</span> card{dueCards === 1 ? "" : "s"} reached {dueCards === 1 ? "its" : "their"} review date.</p>
@@ -435,6 +441,31 @@ export function ReflectionCard({ accent, week, answered, offer, settings }: {
           <ErrorLine text={error} />
         </div>
       )}
+    </section>
+  );
+}
+
+// ── today's schedule: the same rows as the calendar's selected day ──
+export function TodaySchedule({ children }: { children: React.ReactNode }) {
+  return (
+    <section aria-labelledby="plan-sched-h" className={cardCls} data-testid="plan-schedule">
+      <h2 id="plan-sched-h" className="text-[16px] font-bold text-gray-900">Planned for today</h2>
+      {children}
+    </section>
+  );
+}
+
+// ── nothing is planned today: three ways forward, never the setup form ──
+export function TodayEmpty({ accent, planHref, studyNowHref, calendarHref }: { accent: string; planHref: string; studyNowHref: string; calendarHref: string }) {
+  return (
+    <section aria-labelledby="plan-empty-h" className={cardCls} data-testid="plan-today-empty">
+      <h2 id="plan-empty-h" className="text-[17px] font-bold text-gray-900">Nothing planned for today.</h2>
+      <p className="mt-1 text-[14px] text-gray-700">You can plan a session, study now, or leave the day free.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Link href={planHref} className={pillPrimary} style={{ background: accent }}>Plan today</Link>
+        <Link href={studyNowHref} className={pillOutline}>Study now</Link>
+        <Link href={calendarHref} className={pillOutline}>View calendar</Link>
+      </div>
     </section>
   );
 }

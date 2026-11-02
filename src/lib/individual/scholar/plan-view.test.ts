@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { CalendarDay, CalendarItem } from "./study-calendar";
 import type { Occurrence } from "../learning-plan/types";
 import {
-  addDay, agendaItemOrder, agendaStart, buildEntryBody, buildSettingsBody, emptyEntryForm, linkOptions, minutesWords, monthsOfWeek, parsePlanView, parsePriorities,
+  addDay, agendaItemOrder, agendaStart, buildEntryBody, buildSettingsBody, emptyEntryForm, linkOptions, minutesWords, monthsOfWeek, parsePlanView, PLAN_VIEWS, resolveView, parsePriorities,
   planViewHref, sequencePreview, timeChoices, setupFormFrom, settingsWithSessionMinutes, weekAgenda, weekdayIndex, DEFAULT_SETUP,
 } from "./plan-view";
 
@@ -18,16 +18,36 @@ const occ = (startTime: string | null): Occurrence => ({
 const day = (date: string, items: CalendarItem[]): CalendarDay => ({ date, inMonth: true, today: date === TODAY, past: date < TODAY, items });
 
 describe("My Plan view parsing", () => {
-  it("defaults to Today and accepts only the three views", () => {
-    expect(parsePlanView(undefined)).toBe("today");
-    expect(parsePlanView("calendar")).toBe("calendar");
+  it("defaults to the Calendar and accepts only the three views, in the order Calendar, Today, Insights", () => {
+    expect(PLAN_VIEWS).toEqual(["calendar", "today", "insights"]);
+    expect(parsePlanView(undefined)).toBe("calendar");
+    expect(parsePlanView("today")).toBe("today");
     expect(parsePlanView(["insights", "x"])).toBe("insights");
-    expect(parsePlanView("admin")).toBe("today");
-    expect(parsePlanView("")).toBe("today");
+    expect(parsePlanView("admin")).toBe("calendar");
+    expect(parsePlanView("")).toBe("calendar");
   });
-  it("builds addresses: Today is the bare address, extras only when given", () => {
-    expect(planViewHref("/p", "today")).toBe("/p");
-    expect(planViewHref("/p", "calendar", { from: "2026-11-09", study: null })).toBe("/p?view=calendar&from=2026-11-09");
+  it("builds addresses: the view is always explicit, extras only when given", () => {
+    expect(planViewHref("/p", "calendar")).toBe("/p?view=calendar");
+    expect(planViewHref("/p", "today")).toBe("/p?view=today");
+    expect(planViewHref("/p", "calendar", { date: "2026-11-09", study: null })).toBe("/p?view=calendar&date=2026-11-09");
+  });
+});
+
+describe("the remembered view", () => {
+  it("an explicit ?view= always wins and is what is remembered", () => {
+    expect(resolveView("insights", "today")).toEqual({ view: "insights", redirectTo: null, remember: "insights" });
+    expect(resolveView("calendar", "today")).toEqual({ view: "calendar", redirectTo: null, remember: "calendar" });
+  });
+  it("with no view in the address, the Calendar opens unless this device remembers another one", () => {
+    expect(resolveView(undefined, null)).toEqual({ view: "calendar", redirectTo: null, remember: null });
+    expect(resolveView(undefined, "calendar").redirectTo).toBeNull();
+    expect(resolveView(undefined, "today")).toEqual({ view: "calendar", redirectTo: "today", remember: null });
+    expect(resolveView(undefined, "insights").redirectTo).toBe("insights");
+  });
+  it("ignores a remembered or addressed value that is not a view", () => {
+    expect(resolveView(undefined, "admin").redirectTo).toBeNull();
+    expect(resolveView("admin", "today").redirectTo).toBe("today");
+    expect(resolveView("admin", "today").remember).toBeNull();
   });
 });
 

@@ -14,6 +14,8 @@ import { examOffers, planCalendarFrom, type ExamOffer } from "./plan-calendar";
 import { buildAdjustments, buildInsights, buildTiles, type Adjustment, type InsightTiles, type Insights } from "./plan-insights";
 import { buildComingUp, buildDoneToday, planRefOfKey, relatesTo, type ComingUpItem, type DoneItem } from "./plan-today-view";
 import { monthsOfWeek, weekAgenda, type AgendaDay } from "./plan-view";
+import { mergeDueRevisionDays } from "./plan-workspace";
+import type { CalendarItem } from "./study-calendar";
 import { acceptedMaterialIds, acceptedUnstarted, buildProposal, postponedTopics, proposalDecisions, type MaterialIn, type PlanProposal, type ProposalDecision } from "./plan-proposal";
 import { chooseToday, type PlanRecommendation, type UnfinishedItem } from "./plan-recommend";
 import { isoWeek, reflectionOffer, type ReflectionOffer, type Workload } from "./plan-reflection";
@@ -169,7 +171,7 @@ export async function loadAgendaDays(ctx: PlanCtx, policy: IndividualPolicy, c: 
   if (policy.scholarStudyCalendar !== "on") return null;
   const views = await Promise.all(monthsOfWeek(from, count).map(month => loadStudyCalendar({ admin: ctx.admin, userId: ctx.userId, policy, month, today, plan: calendarPlanOf(c) })));
   if (views.some(v => !v)) return null;
-  return weekAgenda(views.flatMap(v => (v ? v.view.days : [])), from, today, count);
+  return mergeDueRevisionDays(weekAgenda(views.flatMap(v => (v ? v.view.days : [])), from, today, count));
 }
 
 export type TodayView = {
@@ -184,6 +186,8 @@ export type TodayView = {
   nextAbout: string | null;
   /** After the main card: the next few planned and personal items, from the same days the Calendar shows. */
   comingUp: ComingUpItem[];
+  /** Today's items from the same calendar (own entries, the plan, cards due once, what was done), or null when the calendar is off. */
+  todayItems: CalendarItem[] | null;
   /** What was done today, from qualifying records, and the learner's own marks shown apart. */
   doneToday: DoneItem[];
   alternatives: PlanRecommendation[];
@@ -281,7 +285,7 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
   const reflWorkload = refl && typeof refl.value.workload === "string" ? (refl.value.workload as Workload) : null;
   return {
     ok: true, today, tz: c.tz, hasPlan: !c.starting, starting: c.starting, settings: c.settings, next: choice.next, nextAbout, alternatives: choice.alternatives, dueCards: c.dueCards,
-    comingUp: agenda ? buildComingUp(agenda, { today, nextRef: choice.next?.ref ?? null }) : [], doneToday: agenda ? buildDoneToday(agenda, today) : [],
+    comingUp: agenda ? buildComingUp(agenda, { today, nextRef: choice.next?.ref ?? null, fromTomorrow: true }) : [], doneToday: agenda ? buildDoneToday(agenda, today) : [], todayItems: agenda ? agenda.find(d => d.date === today)?.items ?? [] : null,
     upcomingMonthlyReview: nudge ? { month: nudge.month, recommendedDate: nudge.recommended, late: nudge.late, startHref: experienceHref("scholar", "study/evaluate") } : null,
     notes, missed, week, examOffers: examOffers(c.occurrences, c.settings, today), personalWeek: c.occurrences.filter(x => x.status !== "cancelled" && x.date >= today && x.date <= plusDays(today, 6)), declinedHidden: choice.declined, features: c.features,
     reflection: {
