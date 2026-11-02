@@ -69,7 +69,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
     : null;
   const [extras, collections] = await Promise.all([materialExtras(ctx.admin, ctx.userId, [m.id]), listCollections(ctx.admin, ctx.userId)]);
   const unit = UNIT_OF(m.mimeType);
-  const quality = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
+  let quality = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
   const [chunks, questions, consent, due, analysis, mapped, learner] = await Promise.all([
     listChunks(ctx.admin, ctx.userId, m.id),
     listQuestions(ctx.admin, ctx.userId, { materialId: m.id }),
@@ -132,6 +132,8 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   const planned = pictures && rawQuality && chunks.ok && policyOn
     ? plannedPages(pictures.slides, pageInfoOf(chunks.data, rawQuality.emptyUnits, rawQuality.aiReadUnits ?? []), rawQuality.unit === "page" ? "page" : "slide")
     : undefined;
+  // SCHOLAR-IMAGE-RECOVERY: while a reading is on offer, the warning says so instead of "cannot be read".
+  if (policyOn && pictures?.slides.length && rawQuality) quality = qualitySummary(rawQuality, { recoverable: true });
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -155,7 +157,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       )}
       {pictures && (
         <PictureSlides materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
-          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} planned={planned} batch={TRANSCRIBE_BATCH} />
+          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} requests={policyOn ? Math.ceil(pictures.slides.length / TRANSCRIBE_BATCH) : null} planned={planned} batch={TRANSCRIBE_BATCH} />
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">

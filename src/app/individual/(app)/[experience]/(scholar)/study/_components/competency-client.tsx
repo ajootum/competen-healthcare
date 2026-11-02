@@ -202,13 +202,15 @@ const SKIP_TEXT: Record<string, string> = {
   no_text: "no text could be read from its picture",
 };
 
-export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true, planned, batch = 2 }: {
+export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true, requests = null, planned, batch = 2 }: {
   materialId: string; unit?: "slide" | "page"; slides: number; beyondCap: number; consent: boolean;
   /** Units with no readable text (including ones the cap or an earlier attempt leaves out). */
   unreadable?: number; policyOn?: boolean;
+  /** SCHOLAR-IMAGE-RECOVERY: the AI requests the reading will use (TRANSCRIBE_BATCH units each), worked out on the server. */
+  requests?: number | null;
   /** SCHOLAR-VISUAL-CLASSIFY-01: the pages the plan would read, with their labels (absent: no picker, every page is read as before). */
   planned?: PlannedPage[];
-  /** Pages per AI request (the transcription runner's batch), for the estimate. */
+  /** Pages per AI request (the transcription runner's batch), for the estimate beside the picker. */
   batch?: number;
 }) {
   const router = useRouter();
@@ -280,8 +282,11 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
                 </p>
               </fieldset>
             )}
+            {!planned && !busy && !finished && requests !== null && requests > 0 && (
+              <p className="mt-2 text-[13px] text-gray-600">{`Reads ${slides} ${Us(slides)}, using about ${requests} AI request${requests === 1 ? "" : "s"} from your AI allowance. A ${U} read once is kept: it is not read again when you come back.`}</p>
+            )}
             <button type="button" className={`${ghost} mt-3`} disabled={busy || toRead === 0} onClick={run}>
-              {busy ? `Reading… ${done} of ${sent || slides}` : planned ? `Read ${toRead} ticked ${Us(toRead)}` : "Read the pictures"}
+              {busy ? `Reading… ${done} of ${sent || slides}` : planned ? `Read ${toRead} ticked ${Us(toRead)}` : U === "page" ? "Recover unreadable pages" : "Read the pictures"}
             </button>
           </>
         )

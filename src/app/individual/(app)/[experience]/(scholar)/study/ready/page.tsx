@@ -2,7 +2,10 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { AI_LABEL, FORMAT_LABEL, FORMAT_OF, MAPPING_LABEL, UNIT_OF } from "@/lib/individual/scholar/config";
+import { AI_LABEL, FORMAT_LABEL, FORMAT_OF, MAPPING_LABEL, PDF_MIME, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { pictureSlidePlan } from "@/lib/individual/scholar/slide-reading";
+import { TRANSCRIBE_BATCH } from "@/lib/individual/scholar/exam-service";
 import { analysisStatus, getMaterial, isUuid, libraryTopics, listCollections, listMappings, listMaterials, listProgrammes, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { qualitySummary } from "@/lib/individual/scholar/extract";
@@ -13,7 +16,8 @@ import { PageHeader, StatePanel, Unreadable, focusRing, primaryBtn, secondaryBtn
 import StudyNav from "../_components/StudyNav";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { AiBadge, ContentStatusTag, ExplainPanel } from "../_components/client";
-import { AnalysePanel, LayerTag } from "../_components/competency-client";
+import { AnalysePanel, LayerTag, PictureSlides } from "../_components/competency-client";
+import { plannedPages } from "@/lib/individual/scholar/material-visuals";
 import { OrganiseMaterial } from "../_components/library-client";
 import { countDue } from "@/lib/individual/scholar/store";
 
@@ -72,6 +76,15 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
   }
 
   const extras = await materialExtras(ctx.admin, ctx.userId, materials.map(m => m.id));
+  // SCHOLAR-IMAGE-RECOVERY: a partly read PDF or PowerPoint offers its reading here too, where the warning is first seen -- the
+  // same plan, card and route as the material page (slide-reading.ts), nothing new. Database reads only; AI only on the click.
+  const policy = await loadIndividualPolicy(ctx.admin);
+  const recoveryOn = policy.scholarMaterialImageSlides === "ai_transcription";
+  const plans = new Map(await Promise.all(materials.map(async m => {
+    const qm = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
+    const fits = recoveryOn && qm && qm.emptyUnits.length > 0 && ((m.mimeType === PDF_MIME && qm.unit === "page") || (m.mimeType === PPTX_MIME && qm.unit === "slide"));
+    return [m.id, fits ? await pictureSlidePlan(ctx.admin, ctx.userId, m.id) : null] as const;
+  })));
   // P6: with no programme offered at all (production today) the student is not told to choose one.
   const offered = !learner.programme ? await listProgrammes(ctx.admin) : null;
   const absence = competencyAbsence(learner, offered ? (offered.ok ? offered.data.length : null) : null);
@@ -104,7 +117,8 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
       <div className="space-y-6">
         {cards.map(({ m, analysis, mapped, competencies, labels, topics, related }) => {
           const unit = UNIT_OF(m.mimeType);
-          const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
+          const plan = plans.get(m.id) ?? null;
+          const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null, { recoverable: !!plan?.slides.length }) : null;
           const analysed = analysis.ok && analysis.data.analysed >= analysis.data.sections;
           // SCHOLAR-UPLOAD-FIX: "none" only once every section was looked at; while finding, how far it has got.
           const topicsLine = topicsState({ consent: consentOn, analysed: analysis.ok ? analysis.data.analysed : null, sections: analysis.ok ? analysis.data.sections : null, topics: topics.length });
@@ -126,6 +140,14 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
                 <span className="font-semibold">{q === null ? "Reading: " : q.partial ? "Partly read. " : "Read. "}</span>
                 {q === null ? "How completely this file was read is not recorded here." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
               </p>
+              {plan && plan.slides.length > 0 && (
+                <div className="mt-3">
+                  <PictureSlides materialId={m.id} unit={extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide"} slides={plan.slides.length}
+                    unreadable={extras.byId.get(m.id)?.quality?.emptyUnits.length ?? plan.slides.length} beyondCap={plan.beyondCap} consent={consentOn} policyOn
+                    requests={Math.ceil(plan.slides.length / TRANSCRIBE_BATCH)} batch={TRANSCRIBE_BATCH}
+                    planned={plannedPages(plan.slides, new Map(), extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide")} />
+                </div>
+              )}
 
               <div className="mt-4 flex flex-wrap gap-2">
                 {/* LEARN-01 (owner GO 2026-10-24): Start learning opens Teach Me directly, in the Learn workspace. */}
