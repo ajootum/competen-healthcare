@@ -250,15 +250,16 @@ async function seed(l: Learner, id: string, email: string) {
   // Revision: a quick set from the sepsis notes, with the questions answered (the right answer read the way the server holds it, so the answers are real).
   const rv = await send("POST", "/api/individual/scholar/revision/sessions", { mode: "quick", scope: { kind: "documents", materialIds: [sepsis] }, quantity: 4, feedback: "immediate" }, jar, { "x-request-id": `demo-${Date.now()}` });
   const rsid = rv.json?.session?.id as string | undefined;
-  let answered = 0;
+  let answered = 0; const trace: string[] = [];
   for (const it of ((rv.json?.items ?? []) as any[]).slice(0, 3)) {
     const q = (await admin.from("individual_scholar_question").select("kind, correct_index, answer").eq("user_id", id).eq("id", it.id).maybeSingle()).data as any;
-    const response = !q ? null : q.kind === "mcq" || q.kind === "case" ? { index: q.correct_index } : q.kind === "mrq" ? { indexes: q.answer?.correct } : q.kind === "short" ? { text: q.answer?.accepted?.[0] } : q.kind === "match" ? { matches: q.answer?.matches } : q.kind === "sequence" ? { order: q.answer?.order } : null;
-    if (!response) continue;
+    const response = !q ? null : q.kind === "flashcard" ? { quality: 4 } : q.kind === "mcq" || q.kind === "case" ? { index: q.correct_index } : q.kind === "mrq" ? { indexes: q.answer?.correct } : q.kind === "short" ? { text: q.answer?.accepted?.[0] } : q.kind === "match" ? { matches: q.answer?.matches } : q.kind === "sequence" ? { order: q.answer?.order } : null;
+    if (!response) { trace.push(`${q?.kind ?? "no-row"}:no-response`); continue; }
     const r = await send("POST", "/api/individual/scholar/revision/answer", { questionId: it.id, sessionId: rsid, response }, jar);
-    if (r.status === 200) answered++;
+    if (r.status === 200) answered++; else trace.push(`${q?.kind}:${why(r)}`);
   }
-  record(who, "revision session", rv.status === 200 && answered > 0, rv.status === 200 ? `${answered} answered` : why(rv));
+  const nItems = ((rv.json?.items ?? []) as any[]).length;
+  record(who, "revision session", rv.status === 200 && answered > 0, rv.status === 200 ? `${answered} answered of ${nItems} items${trace.length ? ` (${trace.join("; ")})` : ""}${rv.json?.note ? ` note: ${rv.json.note}` : ""}` : why(rv));
 
   // A clinical case from the notes, played to the end (the correct options are read from the stored blueprint, as the journey harness does).
   let made = await send("POST", "/api/individual/scholar/clinical/cases", { entry: "notes", scope: { kind: "document", materialId: sepsis }, context: "medical", mode: "guided", generateAnyway: true }, jar, { "x-request-id": `demo-case-${Date.now()}` });
