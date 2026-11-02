@@ -563,6 +563,35 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     onlyFrom: "src/lib/assessment/catalogue/",
     why: `Assessment & Checklist Catalogue (migration 894), read only from src/lib/assessment/catalogue/**: ${what} Holdings reference data. It contains no learner, patient or assessment record.`,
   })),
+  // >>> ASSESSOR-WORKSPACE (Checklist Studio S4). The captured assessment data, read ONLY by the assessor workspace library
+  // (`onlyFrom`): a read of the same table from the Studio, the catalogue or any other file is refused even with the right columns.
+  // The assessor library filters every read by the actor (respondent_id, or granted_by for the grants I made) and every read of
+  // answers, evidence, comments or outcomes by an instance it has proved is the actor's. asmt_progression_decision has NO entry here.
+  ...([
+    ["asmt_instance", ["id", "instrument_version_id", "subject_kind", "subject_id", "subject_user_id", "respondent_role", "respondent_id", "respondent_snapshot", "grant_id",
+      "owner_scope", "status", "attestation", "amends_instance_id", "started_at", "submitted_at"],
+      "One use of a published checklist on one person by one respondent. The assessor workspace reads an assessor's OWN instances (respondent_id = the signed in assessor, respondent_role = assessor) to list, open, resume and submit them, and the subject's submitted assessor-evaluated instances (subject_user_id, status submitted) in progression.ts only, to compute a stage on the server without returning them. Columns are identifiers, the status and the frozen authority snapshot (position, capability, appointment, date). Owner columns other than the scope are not selected."],
+    ["asmt_instance_layout", ["instance_id", "layout_version_id", "is_primary"],
+      "Which published layout versions were pinned to an assessor's own instance at its start. Two ids and a flag, read after the instance has been proved to be the assessor's own."],
+    ["asmt_response", ["item_id", "field_key", "value", "revision", "satisfactory"],
+      "The assessor's answers on an instance they own, keyed by item and field, with the revision the autosave compares and the satisfactory flag the database computed. Read after own() has proved the instance is the actor's. progression.ts reads the same columns for the subject's submitted instances to take the lowest rating per group, on the server only."],
+    ["asmt_evidence", ["id", "item_id", "kind", "ref_kind", "ref_id", "note", "created_at"],
+      "Evidence an assessor attached to an instance they own: a note or a reference to a record. storage_path and provenance are NOT selected (there is no upload path here). Read after own() has proved the instance is the actor's."],
+    ["asmt_comment", ["id", "item_id", "kind", "body", "author_id", "created_at"],
+      "Comments, safety concerns, strengths and recommendations an assessor wrote on an instance they own. Read after own() has proved the instance is the actor's."],
+    ["asmt_outcome", ["id", "instance_id", "engine_version", "rules_hash", "outcome_code", "outcome_class", "group_outcomes", "aggregates", "trace", "trace_hash", "backstop_applied", "backstop_detail", "created_at"],
+      "The recorded outcome of an instance the assessor submitted, for the report and the submit response. progression.ts also reads outcome id, code, class, trace and backstop detail of the subject's submitted assessor-evaluated instances to build progression evidence on the server, and returns none of it."],
+    ["asmt_respondent_grant", ["id", "instrument_id", "subject_kind", "subject_id", "subject_user_id", "respondent_id", "respondent_role", "appointment_id", "granted_by", "reason", "valid_from",
+      "valid_until", "accepted_at", "ended_at", "end_reason", "created_at"],
+      "The authority to assess one person with one checklist. An assessor reads the grants made TO them (respondent_id = actor) to see what is waiting, ready or ended, and a coordinator reads the grants they MADE (granted_by = actor). accepted_by and ended_by are not selected. The reason is the coordinator's own text about the grant."],
+  ] as const).map(([table, columns, what]) => ({
+    table,
+    columns,
+    count: false,
+    onlyFrom: "src/lib/assessment/assessor/",
+    why: `ASSESSOR-WORKSPACE (migration 891), read only from src/lib/assessment/assessor/**: ${what}`,
+  })),
+  // <<< ASSESSOR-WORKSPACE
 ];
 
 /**

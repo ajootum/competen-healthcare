@@ -213,6 +213,9 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // here because the HQ has no Holdings shared-infrastructure group yet. Checklist Studio (authoring) joins this group.
     { key: "frameworks.assessments", group: "Assessments & Checklists", items: [
       { key: "frameworks.assessments.catalogue", label: "Assessment & Checklist Catalogue", href: "/super-admin/assessment-catalogue", icon: "🗃️", keywords: ["assessment catalogue", "checklist catalogue", "instrument registry", "audit checklists"] },
+      // >>> ASSESSOR-WORKSPACE (Checklist Studio S4): the assessor's own door, a different capability from the catalogue and from verification.
+      { key: "frameworks.assessments.assessor", label: "Assessor workspace", href: "/super-admin/checklist-assessments", icon: "📋", keywords: ["checklist assessments", "assessor-led assessment", "assess a person"] },
+      // <<< ASSESSOR-WORKSPACE
     ]},
     { key: "frameworks.verification", group: "Competency Verification", items: [
       { key: "frameworks.verification.studio", label: "Verification Studio", href: "/super-admin/verification-studio", icon: "🧭" },
@@ -327,6 +330,9 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // Migration 894: the catalogue's configuration pages are reached from the catalogue (manage right).
     { key: "frameworks.assessments.families", label: "Catalogue Families", href: "/super-admin/assessment-catalogue/families", via: "/super-admin/assessment-catalogue", keywords: ["instrument families", "CA CPA DA"] },
     { key: "frameworks.assessments.terms", label: "Catalogue Classification Terms", href: "/super-admin/assessment-catalogue/terms", via: "/super-admin/assessment-catalogue", keywords: ["dimensions", "methods", "domains", "populations"] },
+    // >>> ASSESSOR-WORKSPACE: the coordinator's grants page is reached from the assessor workspace (a different capability, so not a child).
+    { key: "frameworks.assessments.grants", label: "Assessor Grants", href: "/super-admin/checklist-assessments/grants", via: "/super-admin/checklist-assessments", keywords: ["grant authority to assess", "assessment coordinator"] },
+    // <<< ASSESSOR-WORKSPACE
   ]},
 
   { key: "ai", label: "AI & Intelligence", icon: "🧠", sections: [

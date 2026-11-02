@@ -5,11 +5,12 @@
  *   npx tsx scripts/assessment-core-harness.ts            static sections only (no database)
  *   npx tsx scripts/assessment-core-harness.ts db         S1a database proofs on STAGING (rolls back, keeps nothing)
  *   npx tsx scripts/assessment-core-harness.ts scholar    S3a database proofs of migration 893 (Scholar adapter) on STAGING
- *   npx tsx scripts/assessment-core-harness.ts all        static, db and scholar
  *   npx tsx scripts/assessment-core-harness.ts all        both, then the catalogue and its acceptance
  *   npx tsx scripts/assessment-core-harness.ts catalogue  catalogue (894) static checks, DB proofs with planted reds, acceptance
  *   npx tsx scripts/assessment-core-harness.ts catalogue-static   the catalogue static checks only (no database)
  *   npx tsx scripts/assessment-core-harness.ts acceptance the three example instruments on STAGING (rolled back)
+ *   npx tsx scripts/assessment-core-harness.ts assessor   assessor workspace (S4): static checks with planted reds, then DB proofs on STAGING
+ *   npx tsx scripts/assessment-core-harness.ts assessor-static   the assessor static checks only (no database)
  *
  * SECTION S1a -- DATABASE (migrations 890, 891, 892)
  *   S1a.static  the literal ban. The core DDL knows no profession, framework or proficiency model. Comments are
@@ -27,6 +28,7 @@
 import { readFileSync, existsSync, readdirSync, statSync } from "node:fs";
 import { createRequire } from "node:module";
 import { resolve } from "node:path";
+import { extractReads } from "../src/lib/access/plane-boundary-scan";
 
 const PRODUCTION_REF = "rnnqhlrcgvsauigxwszl";
 const MIGRATIONS = ["890-asmt-core-definitions.sql", "891-asmt-capture.sql", "892-asmt-progression.sql"];
@@ -172,8 +174,8 @@ function stagingUrl(): string {
   return conn;
 }
 
-async function runProofs(client: any, plantSql: string, proofFile: string = PROOF_FILE, resultTag: string = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
-  const base = readFileSync(proofFile, "utf8");
+async function runProofs(client: any, plantSql: string, file = PROOF_FILE, label = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
+  const base = readFileSync(file, "utf8");
   if (!base.includes("-- @@PLANT@@")) throw new Error("the proof file lost its plant marker");
   const sql = base.replace("-- @@PLANT@@", plantSql);
   await client.query("begin");
@@ -182,7 +184,7 @@ async function runProofs(client: any, plantSql: string, proofFile: string = PROO
     return { pass: 0, fail: 0, failed: [], raw: "the proof block did not raise its RESULT" };
   } catch (e: any) {
     const msg = String(e.message ?? e);
-    const m = msg.match(new RegExp("RESULT " + resultTag + " pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$"));
+    const m = msg.match(new RegExp(`RESULT ${label} pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$`));
     if (!m) return { pass: 0, fail: -1, failed: [], raw: msg };
     return { pass: +m[1], fail: +m[2], failed: m[3].trim() ? m[3].trim().split(/\s+/) : [], raw: msg };
   } finally {
@@ -240,6 +242,26 @@ execute 'create trigger zz_plant_sat before insert on asmt_response_scale_level 
   { name: "adapter function opened to signed-in people", control: "execute rights are service role only",
     sql: "execute 'grant execute on function public.asmt_scholar_erase_user(uuid) to authenticated';", expect: ["P1"] },
 ];
+
+async function scholarSection() {
+  console.log("\nS3a.scholar  migration 893 database proofs on STAGING (each run rolls back and keeps nothing)\n");
+  const require = createRequire(resolve(process.cwd(), "package.json"));
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const base = await runProofs(client, "", SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
+    ok("S3a.scholar.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 600) : `failed: ${base.failed.join(" ")}`);
+    for (const p of SCHOLAR_PLANTS) {
+      const r = await runProofs(client, p.sql, SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
+      const missing = p.expect.filter(id => !r.failed.includes(id));
+      ok(`S3a.scholar.red`, `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
+        r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
 
 // ---- catalogue (migration 894) ----------------------------------------------------------------------------------
 
@@ -328,26 +350,6 @@ export const CATALOGUE_PLANTS: Plant[] = [
   { name: "row level security off", control: "RLS on the catalogue tables", sql: "execute 'alter table asmt_collection disable row level security';", expect: ["U2"] },
 ];
 
-async function scholarSection() {
-  console.log("\nS3a.scholar  migration 893 database proofs on STAGING (each run rolls back and keeps nothing)\n");
-  const require = createRequire(resolve(process.cwd(), "package.json"));
-  const { Client } = require("pg");
-  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
-  await client.connect();
-  try {
-    const base = await runProofs(client, "", SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
-    ok("S3a.scholar.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 600) : `failed: ${base.failed.join(" ")}`);
-    for (const p of SCHOLAR_PLANTS) {
-      const r = await runProofs(client, p.sql, SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
-      const missing = p.expect.filter(id => !r.failed.includes(id));
-      ok(`S3a.scholar.red`, `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
-        r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
-    }
-  } finally {
-    await client.end();
-  }
-}
-
 async function catalogueDb() {
   console.log("\ncatalogue.db  database proofs on STAGING (each run rolls back and keeps nothing)\n");
   const require = createRequire(resolve(process.cwd(), "package.json"));
@@ -384,6 +386,196 @@ async function catalogueAcceptance() {
   }
 }
 
+// >>> ASSESSOR-WORKSPACE (Checklist Studio S4) ---------------------------------------------------------------------------------
+// SECTION assessor -- the assessor-led workspace in the HQ plane.
+//   assessor.static  every page and API route under checklist-assessments is gated by hqApiGate / requireHqCapability with an
+//                    assessment capability BEFORE any read; every reader of an instance or grant in src/lib/assessment/assessor
+//                    is filtered by the actor (respondent_id, or granted_by for the grants I made) and every reader of answers,
+//                    evidence, comments and outcomes takes an instance proved to be the actor's; no AI import anywhere in the
+//                    workspace; the literal ban covers src/lib/assessment/assessor/**; nothing writes verification or a
+//                    progression decision table. Each control is PLANTED in a copy of the real source and must go red.
+//   assessor.db      scripts/sql/asmt-assessor-proofs.sql on STAGING (rolls back): a coordinator makes a grant, the person accepts
+//                    it, the assessor starts, answers and submits, a failed critical item forces a negative outcome, a second
+//                    assessor without a grant cannot start, a person cannot read another person's instance. Then each control is
+//                    broken inside the same rolled back transaction and the proofs that depend on it must go red.
+const ASR_LIB = resolve(__dirname, "../src/lib/assessment/assessor");
+const ASR_PAGES = resolve(__dirname, "../src/app/super-admin/checklist-assessments");
+const ASR_API = resolve(__dirname, "../src/app/api/hq/checklist-assessments");
+const ASR_PROOF = resolve(__dirname, "sql/asmt-assessor-proofs.sql");
+const ASR_RESULT = "ASMT ASSESSOR PROOFS";
+const ASR_REPO = (p: string) => p.replace(/\\/g, "/").replace(/^.*?\/(src\/)/, "$1");
+
+/** The text of a file with comments removed (a needle must never match its own documentation). */
+const code = (src: string) => stripTsComments(src);
+
+/**
+ * Is the capability gate called, with an assessment capability, before the file first touches data? A page calls
+ * requireHqCapability("hq.assessment..."), a route calls hqApiGate([ASSESS_CAPABILITY | ASSIGN_CAPABILITY | "hq.assessment..."]).
+ * "Touches data" is the first use of the context's admin client or of a loader imported from the assessor library.
+ */
+export function gatedBeforeReads(src: string): { ok: boolean; why: string } {
+  const c = code(src);
+  const gate = /(?:requireHqCapability\(\s*["'`]hq\.assessment\.[a-z.]+["'`]\s*\)|hqApiGate\(\s*\[\s*(?:ASSESS_CAPABILITY|ASSIGN_CAPABILITY|["'`]hq\.assessment\.[a-z.]+["'`])\s*\]\s*\))/.exec(c);
+  if (!gate) return { ok: false, why: "no assessment-capability gate" };
+  const touch = /\b(?:ctx|gate)\.admin\b|\b(?:list|load|start|patch|add|submit|create|end|find)[A-Za-z]*\(\s*(?:ctx|gate)\./.exec(c);
+  if (touch && touch.index < gate.index) return { ok: false, why: "data is touched before the gate" };
+  // the gate result must also be used: a route must return the refusal
+  if (/hqApiGate/.test(c) && !/isHqRefusal\(\s*(?:ctx|gate)\s*\)\s*\)\s*return/.test(c)) return { ok: false, why: "the refusal is not returned" };
+  return { ok: true, why: "" };
+}
+
+const ASR_CHILD = ["asmt_response", "asmt_evidence", "asmt_comment", "asmt_outcome", "asmt_instance_layout"];
+
+/** Reads of an instance or grant must carry the actor filter, child reads the instance filter. Returns the offending sites. */
+export function readerProblems(src: string, file: string): string[] {
+  const out: string[] = [];
+  const isProgression = /progression\.ts$/.test(file);
+  for (const x of extractReads(src, file)) {
+    if (x.write) continue; // a write that reads nothing back; one that reads back is a write site with .select(), judged by the plane harness
+    const f = new Set(x.filters);
+    if (x.table === "asmt_instance") {
+      if (isProgression) { if (!(f.has("subject_user_id") && f.has("status") && f.has("attestation"))) out.push(`${file}:${x.line} asmt_instance read without subject_user_id + status + attestation`); }
+      else if (!f.has("respondent_id")) out.push(`${file}:${x.line} asmt_instance read without respondent_id`);
+    } else if (x.table === "asmt_respondent_grant") {
+      if (!(f.has("respondent_id") || f.has("granted_by"))) out.push(`${file}:${x.line} asmt_respondent_grant read without respondent_id or granted_by`);
+    } else if (x.table && ASR_CHILD.includes(x.table)) {
+      if (!f.has("instance_id")) out.push(`${file}:${x.line} ${x.table} read without instance_id`);
+    }
+  }
+  return out;
+}
+
+/** Every function that reads answers, evidence, comments, outcomes or layouts takes an OwnedInstance, and every function that takes an instance id calls own() first. */
+export function ownershipProblems(src: string): string[] {
+  const out: string[] = [];
+  const c = code(src);
+  for (const m of c.matchAll(/export async function (read[A-Za-z]+)\(([^)]*)\)/g)) if (!/OwnedInstance/.test(m[2])) out.push(`${m[1]} does not take an OwnedInstance`);
+  for (const part of c.split(/\nexport async function /).slice(1)) {
+    const name = part.slice(0, part.indexOf("(")).trim();
+    const head = part.slice(0, part.indexOf("{\n") > 0 ? part.indexOf("{\n") : 400);
+    if (/\(\s*admin: Admin, actor: string, instanceId: string/.test(head) && !/await own\(admin, actor, instanceId\)/.test(part) && !/await own\(admin, actor, instanceId\)/.test(part.replace(/loadInstance/, "")) && name !== "own") {
+      if (!/\bown\(/.test(part)) out.push(`${name} takes an instance id and never calls own()`);
+    }
+  }
+  return out;
+}
+
+function listFiles(dir: string): string[] { return filesBelow(dir); }
+
+/** (id, condition, message): the message is the name and, when the condition fails, the evidence. */
+const aok = (id: string, cond: boolean, msg: string) => ok(id, msg, cond, msg);
+
+function assessorStatic() {
+  console.log("\nassessor.static  the assessor workspace in the HQ plane (source read, comments stripped)\n");
+  const read = (f: string) => readFileSync(f, "utf8");
+  const lib = listFiles(ASR_LIB), pages = listFiles(ASR_PAGES), api = listFiles(ASR_API);
+  aok("AS.control", lib.length >= 9 && pages.length >= 6 && api.length >= 8, `the scan found ${lib.length} library, ${pages.length} page and ${api.length} route files`);
+
+  // ---- gates ----
+  const gated = [...pages.filter(f => /(page|route)\.tsx?$/.test(f)), ...api.filter(f => /route\.ts$/.test(f))];
+  const caps = gated.map(f => ({ f, g: gatedBeforeReads(read(f)) }));
+  const bad = caps.filter(x => !x.g.ok);
+  aok("AS.gate", gated.length >= 13 && bad.length === 0, bad.length ? bad.map(x => `${ASR_REPO(x.f)}: ${x.g.why}`).join("; ") : `${gated.length} pages and routes are gated by an assessment capability before any read`);
+  const sample = gated.find(f => /instances[\\/]route\.ts$/.test(f))!;
+  const src0 = read(sample);
+  aok("AS.gate.red1", !gatedBeforeReads(src0.replace(/const ctx = await hqApiGate\(\[ASSESS_CAPABILITY\]\);\s*\n\s*if \(isHqRefusal\(ctx\)\) return ctx;/, "const ctx: any = null;")).ok, "planted: a route without its gate is caught");
+  aok("AS.gate.red2", !gatedBeforeReads(src0.replace(/hqApiGate\(\[ASSESS_CAPABILITY\]\)/, "hqApiGate([\"hq.platform.home.view\"])")).ok, "planted: a route gated by a capability that is not an assessment one is caught");
+  const pg0 = read(gated.find(f => /checklist-assessments[\\/]page\.tsx$/.test(f))!);
+  aok("AS.gate.red3", !gatedBeforeReads(pg0.replace(/const ctx = await requireHqCapability\("hq\.assessment\.instrument\.assess"\);/, "const ctx = { admin: null as any, userId: '' };")).ok, "planted: a page without its gate is caught");
+  // each surface uses the right capability
+  const capOf = (f: string) => (/GrantsPage|grants[\\/]/.test(ASR_REPO(f)) ? "assign" : "assess");
+  const wrong = gated.filter(f => { const c = code(read(f)); const grants = /checklist-assessments[\\/]grants|grants[\\/]/.test(f.replace(/\\/g, "/")) || /grants/.test(ASR_REPO(f)); return grants ? !/ASSIGN_CAPABILITY|hq\.assessment\.assessor\.assign/.test(c) : !/ASSESS_CAPABILITY|hq\.assessment\.instrument\.assess/.test(c); });
+  void capOf;
+  aok("AS.gate.caps", wrong.length === 0, wrong.length ? `wrong capability: ${wrong.map(ASR_REPO).join(", ")}` : "grants surfaces need assessor.assign, assessing surfaces need instrument.assess");
+
+  // ---- respondent filter in every reader ----
+  const libFiles = lib.filter(f => /\.ts$/.test(f) && !/\.test\./.test(f));
+  const problems = libFiles.flatMap(f => readerProblems(read(f), ASR_REPO(f)));
+  aok("AS.filter", problems.length === 0, problems.join("; ") || "every reader of an instance or grant is filtered by the actor, and every child read by the instance");
+  const sites = libFiles.flatMap(f => extractReads(read(f), ASR_REPO(f))).filter(x => !x.write);
+  aok("AS.filter.count", sites.filter(x => x.table === "asmt_instance").length >= 4 && sites.filter(x => x.table === "asmt_respondent_grant").length >= 3, `the scan sees the readers (${sites.length} read sites, ${sites.filter(x => x.table === "asmt_instance").length} on asmt_instance)`);
+  const inst = read(resolve(ASR_LIB, "instances.ts"));
+  const planted1 = inst.replace('.eq("id", instanceId).eq("respondent_id", actor)', '.eq("id", instanceId)');
+  aok("AS.filter.red1", planted1 !== inst && readerProblems(planted1, "src/lib/assessment/assessor/instances.ts").length > 0, "planted: removing respondent_id = actor from own() goes RED");
+  const planted2 = inst.replace('.eq("instance_id", inst.id).order("created_at");', ".order(\"created_at\");");
+  aok("AS.filter.red2", planted2 !== inst && readerProblems(planted2, "src/lib/assessment/assessor/instances.ts").length > 0, "planted: a child read without instance_id goes RED");
+  const grants = read(resolve(ASR_LIB, "grants.ts"));
+  const planted3 = grants.replace('.eq("granted_by", actor)', "");
+  aok("AS.filter.red3", planted3 !== grants && readerProblems(planted3, "src/lib/assessment/assessor/grants.ts").length > 0, "planted: a grants read without granted_by goes RED");
+  const planted4 = inst.replace(/\n  const o = await own\(admin, actor, instanceId\);\n  if \(!o\.ok\) return o;\n  const inst = o\.value;\n  if \(inst\.status !== "in_progress"\) return fail\(409, "Evidence/, '\n  const inst: any = null;\n  if (inst.status !== "in_progress") return fail(409, "Evidence');
+  aok("AS.own", ownershipProblems(inst).length === 0, ownershipProblems(inst).join("; ") || "every function that takes an instance id calls own() first, every reader takes an OwnedInstance");
+  aok("AS.own.red", planted4 !== inst && ownershipProblems(planted4).length > 0, "planted: addEvidence without own() goes RED");
+  const planted5 = inst.replace("readResponses(admin: Admin, inst: OwnedInstance,", "readResponses(admin: Admin, inst: { id: string },");
+  aok("AS.own.red2", planted5 !== inst && ownershipProblems(planted5).length > 0, "planted: a reader that takes any object instead of an OwnedInstance goes RED");
+  // progression reads the subject's evidence and nothing else
+  const prog = read(resolve(ASR_LIB, "progression.ts"));
+  aok("AS.progression", !/asmt_progression_decision/.test(code(prog)) && !libFiles.some(f => /\.from\(\s*["']asmt_progression_decision["']/.test(code(read(f)))), "progression decisions are never read in the workspace (asmt_record_progression is the only door)");
+  aok("AS.progression.red", /\.from\(\s*["']asmt_progression_decision["']/.test(code(prog + '\nconst x = admin.from("asmt_progression_decision").select("id");')), "planted: a read of asmt_progression_decision is visible to this check");
+
+  // ---- no AI ----
+  const ai = (src: string) => [...code(src).matchAll(/from\s+["']([^"']+)["']/g)].map(m => m[1]).filter(s => /(^|\/)ai(\/|$)|anthropic|openai|@ai-sdk|llm|completion|gemini|embedding/i.test(s));
+  const aiHits = [...lib, ...pages, ...api].flatMap(f => ai(read(f)).map(s => `${ASR_REPO(f)} imports ${s}`));
+  aok("AS.noai", aiHits.length === 0, aiHits.join("; ") || "no file of the workspace imports an AI module");
+  aok("AS.noai.red", ai('import { x } from "@/lib/ai/anything";').length === 1 && ai('import { y } from "@anthropic-ai/sdk";').length === 1, "planted: an AI import is caught");
+
+  // ---- literal ban over the library (comments stripped, the two design exemptions removed) ----
+  const banHits = (src: string) => { let c = code(src); for (const e of EXEMPT) c = c.split(e).join(""); const h: string[] = []; c.split("\n").forEach((l, i) => { const m = BANNED.exec(l); if (m) h.push(`line ${i + 1}: ${m[0]}: ${l.trim().slice(0, 80)}`); }); return h; };
+  const banned = lib.flatMap(f => banHits(read(f)).map(h => `${ASR_REPO(f)} ${h}`));
+  aok("AS.ban", banned.length === 0, banned.slice(0, 4).join(" | ") || `src/lib/assessment/assessor/** (${lib.length} files) names no profession, framework or proficiency model`);
+  aok("AS.ban.red", banHits("const x = 'nursing competency';").length === 1 && banHits("// nursing competency\nconst x = 1;").length === 0, "planted: a banned word in code is caught, in a comment it is not");
+  aok("AS.ban.exempt", lib.some(f => read(f).includes("competency_appointment_holds")), "the one exemption (the database function that checks an appointment) is really used");
+
+  // ---- nothing under the workspace writes verification or progression decisions ----
+  const forbidden = /\.from\(\s*["'](competency_verification[a-z_]*|competency_decisions|asmt_progression_decision)["']/;
+  const writers = [...lib, ...pages, ...api].filter(f => forbidden.test(code(read(f)))).map(ASR_REPO);
+  aok("AS.noverify", writers.length === 0, writers.join(", ") || "the workspace touches no verification or decision table");
+
+  // ---- the workspace never sends a computed value ----
+  const sends = /(insert|update)\(\s*\{[^}]*\bsatisfactory\b/.test(code(inst));
+  aok("AS.nosat", !sends, "an answer is written without satisfactory: the database computes it");
+
+  // ---- evidence: notes and references only ----
+  aok("AS.noupload", !/\.storage\.from\(|createSignedUrl|\.upload\(/.test(lib.map(f => code(read(f))).join("\n")), "no upload path in the workspace library (notes and record references only)");
+}
+
+type DbPlant = { name: string; control: string; sql: string; expect: string[] };
+export const ASSESSOR_PLANTS: DbPlant[] = [
+  { name: "instance guard removed", control: "asmt_instance_guard (live grant, matching grant, independence)",
+    sql: PERMISSIVE_INSTANCE, expect: ["I1", "J1", "J2", "J2b", "J3", "M4"] },
+  { name: "outcome backstop removed", control: "asmt_outcome_guard (a failed critical item forces the gate outcome)",
+    sql: dis("asmt_outcome", "asmt_outcome_guard"), expect: ["K8", "K8b", "L9"] },
+  { name: "grant guard removed", control: "asmt_respondent_grant_guard (who may grant, accept, end) and the apart check",
+    sql: [dis("asmt_respondent_grant", "asmt_respondent_grant_guard"), drop("asmt_respondent_grant", "asmt_respondent_grant_apart_check")].join("\n"), expect: ["H1", "H1b", "H1c", "H1d", "I2", "I2b", "M1", "M5"] },
+  { name: "row level security off", control: "own-row read on instances and answers",
+    sql: "execute 'alter table asmt_instance disable row level security';\nexecute 'alter table asmt_response disable row level security';", expect: ["N1", "N2", "N3"] },
+  { name: "append-only trails removed", control: "asmt_append_only_guard on evidence and comments",
+    sql: [dis("asmt_comment", "asmt_comment_append_only"), dis("asmt_evidence", "asmt_evidence_append_only")].join("\n"), expect: ["L5", "L5b"] },
+  { name: "response guard removed", control: "asmt_response_guard (the database computes satisfactory and advances the revision)",
+    sql: dis("asmt_response", "asmt_response_guard"), expect: ["K3", "K4"] },
+];
+
+async function assessorDb() {
+  console.log("\nassessor.db  assessor workspace database proofs on STAGING (each run rolls back and keeps nothing)\n");
+  const require = createRequire(resolve(process.cwd(), "package.json"));
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const base = await runProofs(client, "", ASR_PROOF, ASR_RESULT);
+    ok("AS.db.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw : `failed: ${base.failed.join(" ")}`);
+    if (base.fail !== 0) console.log(`      ${base.raw.slice(0, 700)}`);
+    for (const p of ASSESSOR_PLANTS) {
+      const r = await runProofs(client, p.sql, ASR_PROOF, ASR_RESULT);
+      const missing = p.expect.filter(id => !r.failed.includes(id));
+      ok("AS.db.red", `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
+        r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+// <<< ASSESSOR-WORKSPACE
+
 async function main() {
   const arg = process.argv[2] ?? "static";
   if (arg === "static" || arg === "all") staticSection();
@@ -391,6 +583,8 @@ async function main() {
   if (arg === "scholar" || arg === "all") await scholarSection();
   if (arg === "catalogue" || arg === "all") { catalogueStatic(); await catalogueDb(); }
   if (arg === "catalogue-static") catalogueStatic();
+  if (arg === "assessor-static" || arg === "assessor" || arg === "all") assessorStatic();
+  if (arg === "assessor-db" || arg === "assessor" || arg === "all") await assessorDb();
   if (arg === "acceptance" || arg === "catalogue" || arg === "all") await catalogueAcceptance();
   console.log(bad === 0 ? "\n  ALL PASS\n" : `\n  ${bad} FAILURE(S)\n`);
   process.exitCode = bad === 0 ? 0 : 1;

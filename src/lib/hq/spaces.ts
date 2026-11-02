@@ -194,6 +194,15 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // relates, references and keeps collections and terms. Neither edits checklist content (Checklist Studio does).
   { code: "hq.assessment.catalogue.view",     space: "quality"  },
   { code: "hq.assessment.catalogue.manage",   space: "quality"  },
+  // >>> ASSESSOR-WORKSPACE (Checklist Studio S4) capabilities, migration 890. One block; the Studio slice declares the same six
+  // codes, so a merge keeps ONE copy of each. Assess opens the assessor workspace, assign the coordinator's grants.
+  { code: "hq.assessment.studio.view",        space: "quality"  },
+  { code: "hq.assessment.instrument.author",  space: "quality"  },
+  { code: "hq.assessment.instrument.review",  space: "quality"  },
+  { code: "hq.assessment.instrument.publish", space: "quality"  },
+  { code: "hq.assessment.assessor.assign",    space: "quality"  },
+  { code: "hq.assessment.instrument.assess",  space: "quality"  },
+  // <<< ASSESSOR-WORKSPACE
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -285,6 +294,10 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/assessment-catalogue/families", capability: "hq.assessment.catalogue.manage" },
   { prefix: "/super-admin/assessment-catalogue/terms",    capability: "hq.assessment.catalogue.manage" },
   { prefix: "/super-admin/assessment-catalogue",          capability: "hq.assessment.catalogue.view" },
+  // >>> ASSESSOR-WORKSPACE (Checklist Studio S4). Distinct from the verification assessor below. Grants first: the first match wins.
+  { prefix: "/super-admin/checklist-assessments/grants", capability: "hq.assessment.assessor.assign" },
+  { prefix: "/super-admin/checklist-assessments",        capability: "hq.assessment.instrument.assess" },
+  // <<< ASSESSOR-WORKSPACE
   { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
   { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
   // Migration 690: the programme lead door, separate from both.
