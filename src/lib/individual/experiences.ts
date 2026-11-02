@@ -122,6 +122,13 @@ export const SCHOLAR: ExperienceConfig = {
   // under ONE module with its own sub-navigation, so the sidebar and the bottom bar each gain one entry.
   modules: [
     { key: "study", segment: "study", label: "My Learning", short: "Study", icon: "▤", bottom: true },
+    // SCHOLAR-MODULES-01: two more modules, NOT on the bottom bar (the five-tab bar is kept). Courses reuses Competen
+    // Learning and the programme by reference, and My Competencies reuses the competency, practice and Passport readers:
+    // neither copies a record. The segment is my-competencies, not competencies: Professional owns that one.
+    { key: "courses", segment: "courses", label: "Courses & Training", short: "Courses", icon: "▦",
+      summary: "Structured programmes and courses: what is offered, what you are taking and what you have completed." },
+    { key: "my-competencies", segment: "my-competencies", label: "My Competencies", short: "Competencies", icon: "◇",
+      summary: "Your competency profile, frameworks, development gaps, practice and evidence, with formative work kept apart from formal records." },
   ],
   homeIntro: "Your study space. Open My Learning to upload your notes, have them explained with page citations, practise questions from them and revise what you miss. Your Passport, profile and personal AI are here too.",
   planned: [
