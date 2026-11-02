@@ -62,7 +62,7 @@ export async function proxy(request: NextRequest) {
   const pending: { name: string; value: string; options?: Record<string, unknown> }[] = [];
 
   // ── HQ-SCHOLAR-PREVIEW-01: SURFACES THAT DO NOT EXIST ON THIS HOST ARE A 404 BEFORE ANYTHING ELSE RUNS ─────
-  // /preview/* exists only on the preview host, and the preview host serves nothing but what host-policy.ts lists.
+  // the /preview routes exist only on the preview host, and the preview host serves nothing but what host-policy.ts lists.
   // This needs no session, so it answers before the auth round trip.
   const requestHost = request.headers.get("host");
   const onPreviewHost = isPreviewHost(requestHost);
@@ -164,7 +164,7 @@ export async function proxy(request: NextRequest) {
     if (!session || !user || user.id !== session.learnerId) {
       if (session && user && user.id !== session.learnerId) await endPreview(admin, token, "identity_mismatch");
       const returnOrigin = session?.returnOrigin ?? (await previewReturnOrigin(admin, token));
-      try { await supabase.auth.signOut({ scope: "local" }); } catch { /* the cookies are cleared below regardless */ }
+      try { await supabase.auth.signOut({ scope: "local" }); } catch { void 0; }
       let res: NextResponse;
       if (isApi) {
         res = NextResponse.json({ error: "This preview has ended" }, { status: 401 });

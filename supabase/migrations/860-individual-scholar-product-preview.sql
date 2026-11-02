@@ -71,12 +71,14 @@ where exists (select 1 from hq_position x where x.code = p.code)
   );
 
 insert into hq_position_capability (position_code, capability_code, source)
-select 'individual_product_reviewer', 'hq.platform.home.view', 'position_default'
-where exists (select 1 from hq_position x where x.code = 'individual_product_reviewer')
-  and exists (select 1 from hq_capability y where y.code = 'hq.platform.home.view')
+select p.code, c.code, 'position_default'
+from (values ('individual_product_reviewer')) as p(code)
+cross join (values ('hq.platform.home.view')) as c(code)
+where exists (select 1 from hq_position x where x.code = p.code)
+  and exists (select 1 from hq_capability y where y.code = c.code)
   and not exists (
     select 1 from hq_position_capability x
-    where x.position_code = 'individual_product_reviewer' and x.capability_code = 'hq.platform.home.view' and x.effective_to is null
+    where x.position_code = p.code and x.capability_code = c.code and x.effective_to is null
   );
 
 
