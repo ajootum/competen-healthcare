@@ -81,8 +81,9 @@ export function ReadAloudButton({ text, label = "Listen", about, className = "" 
 
   return (
     <div ref={wrap} className={`relative inline-flex items-center gap-1.5 ${className}`}>
-      <button type="button" onClick={onMain} disabled={!speakable} aria-pressed={status === "speaking"}
-        aria-label={`${main}${subject}`} className={`${base} min-w-[6.25rem]`}>
+      {/* An action whose words change (Listen, Pause, Resume), so it is not also a pressed/unpressed toggle. */}
+      <button type="button" onClick={onMain} disabled={!speakable}
+        aria-label={`${main}${about ? `, ${about}` : ""}`} className={`${base} min-w-[6.25rem]`}>
         <Icon d={status === "speaking" ? PAUSE : PLAY} fill={status !== "speaking"} />{main}
       </button>
       {/* Held in place (hidden, out of the tab order) when nothing is being read, so starting does not shift the row. */}
@@ -167,13 +168,13 @@ export function DictateButton({ inputRef, fieldId, onValue, label = "Dictate", d
 
   return (
     <div className={`inline-flex max-w-full flex-wrap items-center gap-2 ${className}`}>
+      {/* The name stays "Dictate" and the state is aria-pressed (a toggle); while it records, a plain Stop sits beside it. */}
       <button type="button" onClick={onClick} disabled={disabled && !listening} aria-pressed={listening}
-        aria-label={listening ? "Stop dictating" : `${label} into this box`}
-        className={`${listening ? recording : base} min-w-[6.5rem]`}>
-        {listening
-          ? <><span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[var(--cmp-color-critical)]" /><Icon d={STOP} fill />Stop</>
-          : <><Icon d={MIC} />{label}</>}
+        aria-label={`${label} into this box`} className={`${listening ? recording : base} min-w-[6.5rem]`}>
+        {listening && <span aria-hidden="true" className="h-2 w-2 shrink-0 rounded-full bg-[var(--cmp-color-critical)]" />}
+        <Icon d={MIC} />{label}
       </button>
+      {listening && <button type="button" onClick={dict.stop} className={base}><Icon d={STOP} fill />Stop</button>}
       <span role="status" aria-live="polite"
         className={`min-w-0 text-[12.5px] ${error ? "basis-full text-[var(--cmp-text-critical)]" : "truncate text-gray-700"}`}>
         {error ? DICTATION_ERROR_TEXT[error]
