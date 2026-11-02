@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect } from "react";
-import { PLAN_VIEWS, PLAN_VIEW_LABEL, PLAN_VIEW_STORE, planViewHref, resolveView, type PlanView } from "@/lib/individual/scholar/plan-view";
+import { PLAN_CALENDAR_STORE, PLAN_VIEWS, PLAN_VIEW_LABEL, PLAN_VIEW_STORE, planViewHref, resolveView, type PlanView } from "@/lib/individual/scholar/plan-view";
 import { focusRing } from "./plan-style";
 import { CalendarIcon, ChartIcon, SunIcon } from "./plan-ui";
 
@@ -45,6 +45,17 @@ export function PlanViewNav({ base, current, explicit, extra }: {
     // Once, on arrival: choosing a view later is an ordinary link.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  // Back to the Calendar from Today or Insights: the day and span the learner left it on in this tab. Read on the click (without script the plain
+  // link opens on today).
+  function calendarKeep(): Record<string, string> {
+    const keep: Record<string, string> = {};
+    try {
+      const v = JSON.parse(window.sessionStorage.getItem(PLAN_CALENDAR_STORE) ?? "null") as { date?: unknown; span?: unknown } | null;
+      if (typeof v?.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.date)) keep.date = v.date;
+      if (v?.span === "week" || v?.span === "month") keep.span = v.span;
+    } catch { /* opens on today */ }
+    return keep;
+  }
   return (
     <nav aria-label="My Plan views" data-testid="plan-views" className="mt-3">
       <ul className="grid grid-cols-3 gap-2">
@@ -53,7 +64,13 @@ export function PlanViewNav({ base, current, explicit, extra }: {
           const t = TINT[v];
           return (
             <li key={v} className="flex">
-              <Link href={planViewHref(base, v, extra)} aria-current={on ? "page" : undefined} onClick={() => { try { window.localStorage.setItem(PLAN_VIEW_STORE, v); } catch { /* not remembered */ } }}
+              <Link href={planViewHref(base, v, extra)} aria-current={on ? "page" : undefined}
+                onClick={ev => {
+                  try { window.localStorage.setItem(PLAN_VIEW_STORE, v); } catch { /* not remembered */ }
+                  if (v !== "calendar" || on || ev.metaKey || ev.ctrlKey || ev.shiftKey) return;
+                  const keep = calendarKeep();
+                  if (keep.date || keep.span) { ev.preventDefault(); router.push(planViewHref(base, v, { ...extra, ...keep })); }
+                }}
                 className={`flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl border-2 px-1.5 text-[13px] font-bold leading-tight sm:text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "shadow-sm" : ""}`}
                 style={{ background: t.bg, color: t.ink, borderColor: on ? t.edge : t.bg }}>
                 <span aria-hidden className="shrink-0">{ICON[v]}</span>

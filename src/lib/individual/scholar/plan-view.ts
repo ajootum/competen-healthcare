@@ -31,6 +31,8 @@ export function planViewHref(base: string, view: PlanView, extra: Record<string,
 }
 /** Where the learner's last view is kept on this device (a convenience only: a private window simply opens the Calendar). */
 export const PLAN_VIEW_STORE = "myplan.view";
+/** The Calendar's chosen day and span in this browser tab (sessionStorage), so the Calendar tile returns to the day the learner left. */
+export const PLAN_CALENDAR_STORE = "myplan.calendar";
 /**
  * Pure. Which view opens. An explicit ?view= always wins (and is what gets remembered). With none, the default is the Calendar unless this device
  * remembers another view: then `redirectTo` says so (the client replaces the address, once; the server never redirects).

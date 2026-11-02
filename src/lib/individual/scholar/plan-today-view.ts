@@ -34,11 +34,21 @@ export function planRefOfKey(key: string): string | null {
  * activities, cards due on a later day and the monthly review, in the order the calendar reads them. Times the learner is unavailable and what is
  * already done are not "coming up". Today's cards due have their own card. At most `max`.
  */
-export function buildComingUp(days: readonly AgendaDay[], o: { today: string; nextRef: string | null; max?: number }): ComingUpItem[] {
+/**
+ * Pure. Today's schedule on the Today view: today's calendar items (all of them still decide whether anything is planned) without the one already shown as "Your next study session" (its plan activity, and
+ * the cards-due row when that session is the due-cards review), so nothing is listed twice.
+ */
+export function todaySchedule(items: AgendaDay["items"], nextRef: string | null): AgendaDay["items"] {
+  if (!nextRef) return [...items];
+  return items.filter(i => !(i.kind === "planned" && planRefOfKey(i.key) === nextRef) && !(i.kind === "due_revision" && nextRef === "revise:due"));
+}
+
+/** `fromTomorrow`: today is already listed on the page (Today's schedule), so Coming up starts tomorrow. */
+export function buildComingUp(days: readonly AgendaDay[], o: { today: string; nextRef: string | null; max?: number; fromTomorrow?: boolean }): ComingUpItem[] {
   const out: ComingUpItem[] = [];
   const max = o.max ?? COMING_UP_MAX;
   for (const d of days) {
-    if (d.date < o.today) continue;
+    if (d.date < o.today || (o.fromTomorrow && d.date === o.today)) continue;
     for (const i of d.items) {
       if (out.length >= max) return out;
       const tone = agendaTone(i);

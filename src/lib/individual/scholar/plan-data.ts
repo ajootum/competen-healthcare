@@ -285,7 +285,7 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
   const reflWorkload = refl && typeof refl.value.workload === "string" ? (refl.value.workload as Workload) : null;
   return {
     ok: true, today, tz: c.tz, hasPlan: !c.starting, starting: c.starting, settings: c.settings, next: choice.next, nextAbout, alternatives: choice.alternatives, dueCards: c.dueCards,
-    comingUp: agenda ? buildComingUp(agenda, { today, nextRef: choice.next?.ref ?? null }) : [], doneToday: agenda ? buildDoneToday(agenda, today) : [], todayItems: agenda ? agenda.find(d => d.date === today)?.items ?? [] : null,
+    comingUp: agenda ? buildComingUp(agenda, { today, nextRef: choice.next?.ref ?? null, fromTomorrow: true }) : [], doneToday: agenda ? buildDoneToday(agenda, today) : [], todayItems: agenda ? agenda.find(d => d.date === today)?.items ?? [] : null,
     upcomingMonthlyReview: nudge ? { month: nudge.month, recommendedDate: nudge.recommended, late: nudge.late, startHref: experienceHref("scholar", "study/evaluate") } : null,
     notes, missed, week, examOffers: examOffers(c.occurrences, c.settings, today), personalWeek: c.occurrences.filter(x => x.status !== "cancelled" && x.date >= today && x.date <= plusDays(today, 6)), declinedHidden: choice.declined, features: c.features,
     reflection: {

@@ -1,8 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type CSSProperties } from "react";
-import { rangeLabel, type AgendaDay, type EntryForm, type LinkOption } from "@/lib/individual/scholar/plan-view";
+import { useEffect, useId, useState, type CSSProperties } from "react";
+import { PLAN_CALENDAR_STORE, rangeLabel, type AgendaDay, type EntryForm, type LinkOption } from "@/lib/individual/scholar/plan-view";
 import {
   calendarHref, cellLabel, dayChip, dayUnits, dotSlice, emptyDayActions, itemsOfDay, longDayLabel, monthGridDates, planStudyPrefill, spanMonthLabel, stepDate,
   type DotKind, type PlanSpan,
@@ -58,6 +58,8 @@ export function PlanWorkspace(p: WorkspaceProps) {
   const hrefAt = (span: PlanSpan, date: string, more: Record<string, string | null> = {}) => calendarHref(p.base, { span, date, today: p.today, extra: { ...p.extra, ...more } });
   const keepUrl = (date: string, more: Record<string, string | null> = {}) => { try { window.history.replaceState(null, "", hrefAt(p.span, date, more)); } catch { /* the address stays as it was */ } };
   function select(date: string) { setSelected(date); keepUrl(date); }
+  // Remember the chosen day and span for this tab: the Calendar tile (plan-view-nav) comes back to them from Today or Insights.
+  useEffect(() => { try { window.sessionStorage.setItem(PLAN_CALENDAR_STORE, JSON.stringify({ date: selected, span: p.span })); } catch { /* not remembered */ } }, [selected, p.span]);
   function closeEditor() { setEditor(null); keepUrl(selected); }
 
   const first = p.days[0]?.date ?? p.today, last = p.days[p.days.length - 1]?.date ?? p.today;
@@ -100,9 +102,8 @@ export function PlanWorkspace(p: WorkspaceProps) {
           )}
         </div>
       </div>
-      <Notes notes={p.notes} unattached={p.unattached} />
 
-      <div className="mt-3 grid gap-4 @5xl/plan:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @5xl/plan:items-start">
+      <div className="mt-3 grid gap-4 @3xl/plan:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] @3xl/plan:items-start">
         <div>
           <div className="grid grid-cols-7 gap-1 text-center text-[11px] font-semibold text-gray-600" aria-hidden>{WEEKDAY_HEAD.map(w => <div key={w}>{w}</div>)}</div>
           <div className="mt-1 grid grid-cols-7 gap-1" role="group" aria-label={`${heading}: choose a day`}>
@@ -145,7 +146,7 @@ export function PlanWorkspace(p: WorkspaceProps) {
         </div>
 
         {/* the selected day: a tinted header band with the day and what is on it, then its rows */}
-        <section aria-labelledby={`${uid}-day`} className="border-t border-gray-200 pt-4 @5xl/plan:border-l @5xl/plan:border-t-0 @5xl/plan:pl-4 @5xl/plan:pt-0" data-testid="selected-day">
+        <section aria-labelledby={`${uid}-day`} className="border-t border-gray-200 pt-4 @3xl/plan:border-l @3xl/plan:border-t-0 @3xl/plan:pl-4 @3xl/plan:pt-0" data-testid="selected-day">
           <header className="flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2" style={{ background: "var(--cmp-surface-information)", color: "var(--cmp-text-information)" }}>
             <h3 id={`${uid}-day`} className="flex min-w-0 items-center gap-2 text-[15px] font-bold"><CalendarIcon size={18} /><span>{longDayLabel(selected)}{selected === p.today ? " (Today)" : ""}</span></h3>
             {chip && <span className="rounded-full border border-current px-3 py-0.5 text-[12.5px] font-semibold">{chip}</span>}
@@ -170,6 +171,7 @@ export function PlanWorkspace(p: WorkspaceProps) {
           </div>
         </section>
       </div>
+      <div className="mt-4 empty:hidden"><Notes notes={p.notes} unattached={p.unattached} /></div>
 
       {editor && <EntryEditor key={`${selected}-${editor.prefill ? "plan" : "add"}`} mode={{ kind: "create", date: selected, prefill: editor.prefill }} today={p.today} links={p.links} accent={p.accent} onClose={closeEditor} />}
     </div>

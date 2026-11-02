@@ -4,7 +4,7 @@ import type { CalendarDay, CalendarItem } from "./study-calendar";
 import { buildAdjustments, buildInsights, buildTiles, planCompletion, planTile, practiceCaption, adjustmentRef, MAX_ADJUSTMENTS } from "./plan-insights";
 import { STARTING_PLAN, effectiveSettings } from "./plan-settings";
 import { agendaTone, clock12, dayParts, isAvailableDay, rangeLabel, setupFormFrom, weekAgenda, whenLabel } from "./plan-view";
-import { buildComingUp, buildDoneToday, dayWord, planRefOfKey, relatesTo, startHref, startLabel } from "./plan-today-view";
+import { buildComingUp, buildDoneToday, dayWord, planRefOfKey, relatesTo, startHref, startLabel, todaySchedule } from "./plan-today-view";
 import { chooseToday, type RecommendInput } from "./plan-recommend";
 import type { MasteryEntry } from "./mastery";
 
@@ -85,6 +85,15 @@ describe("what Today shows below its main card", () => {
     ]);
     expect(up[0].when).toBe("7:00 PM · 30 min");
     expect(buildComingUp(week, { today: TODAY, nextRef: null }).map(i => i.title)[0]).toBe("Learn Renal");
+  });
+  it("with today's schedule on the page, Coming up starts tomorrow", () => {
+    expect(buildComingUp(week, { today: TODAY, nextRef: null, fromTomorrow: true }).map(i => i.title)[0]).toBe("Revise deterioration");
+  });
+  it("today's schedule leaves out the next study session (and its cards-due row), never anything else", () => {
+    const items = week[0].items;
+    expect(todaySchedule(items, "learn:renal").map(i => i.key)).toEqual(["due:2026-11-02", "done:1"]);
+    expect(todaySchedule(items, "revise:due").map(i => i.key)).toEqual(["plan:learn:renal|0", "done:1"]);
+    expect(todaySchedule(items, null)).toHaveLength(3);
   });
   it("is capped at five", () => {
     const many = weekAgenda([day(TODAY, Array.from({ length: 9 }, (_, i) => item({ key: `plan:learn:t${i}|0`, kind: "planned" })))], TODAY, TODAY);

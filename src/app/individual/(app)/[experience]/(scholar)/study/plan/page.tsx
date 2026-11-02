@@ -7,7 +7,7 @@ import { countDue, libraryTopics, listMaterials } from "@/lib/individual/scholar
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import { loadInsights, loadPlanCalendar, loadToday } from "@/lib/individual/scholar/plan-data";
-import { startHref } from "@/lib/individual/scholar/plan-today-view";
+import { startHref, todaySchedule } from "@/lib/individual/scholar/plan-today-view";
 import { materialTopics } from "@/lib/individual/scholar/library";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
 import { linkOptions, parsePlanView, planViewHref, resolveView, weekAgenda } from "@/lib/individual/scholar/plan-view";
@@ -94,9 +94,9 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
             <Link href={calendarHref(base, { span: cs.span, date: today, today, extra: keep })} className={squareBtn} aria-label="Go to today in the calendar"><CalendarIcon size={18} /></Link>
           </div>
         </header>
-        <LearningOnlyNote notice={FORMATIVE_NOTICE} />
         <PlanViewNav base={base} current={view} explicit={explicit} extra={keep} />
         {inner && <div className="mt-4">{inner}</div>}
+        <div className="mt-4"><LearningOnlyNote notice={FORMATIVE_NOTICE} /></div>
       </section>
     </>
   );
@@ -107,7 +107,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
     if (!t.ok) return <>{frame()}<NotReady reason={t.reason} /></>;
     const flashcards = experienceHref("scholar", "study/revise/flashcards");
     const calHref = calendarHref(base, { span: "month", date: today, today, extra: keep });
-    const scheduled = (t.todayItems ?? []).filter(i => i.kind !== "completed");
+    const scheduled = todaySchedule(t.todayItems ?? [], t.next?.ref ?? null).filter(i => i.kind !== "completed");
     const planned = hasPlansOn(t.todayItems, t.dueCards, !!t.next);
     const links = scheduled.some(i => i.kind === "personal") ? await loadLinks() : [];
     const learn = experienceHref("scholar", "study/learn");
