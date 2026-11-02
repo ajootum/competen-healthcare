@@ -4,7 +4,8 @@
  *
  *   npx tsx scripts/assessment-core-harness.ts            static sections only (no database)
  *   npx tsx scripts/assessment-core-harness.ts db         S1a database proofs on STAGING (rolls back, keeps nothing)
- *   npx tsx scripts/assessment-core-harness.ts all        both
+ *   npx tsx scripts/assessment-core-harness.ts scholar    S3a database proofs of migration 893 (Scholar adapter) on STAGING
+ *   npx tsx scripts/assessment-core-harness.ts all        static, db and scholar
  *
  * SECTION S1a -- DATABASE (migrations 890, 891, 892)
  *   S1a.static  the literal ban. The core DDL knows no profession, framework or proficiency model. Comments are
@@ -26,6 +27,7 @@ import { resolve } from "node:path";
 const PRODUCTION_REF = "rnnqhlrcgvsauigxwszl";
 const MIGRATIONS = ["890-asmt-core-definitions.sql", "891-asmt-capture.sql", "892-asmt-progression.sql"];
 const PROOF_FILE = resolve(__dirname, "sql/asmt-core-proofs.sql");
+const SCHOLAR_PROOF_FILE = resolve(__dirname, "sql/asmt-scholar-proofs.sql");
 
 let bad = 0;
 const ok = (id: string, name: string, cond: boolean, evidence = "") => {
@@ -166,8 +168,8 @@ function stagingUrl(): string {
   return conn;
 }
 
-async function runProofs(client: any, plantSql: string): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
-  const base = readFileSync(PROOF_FILE, "utf8");
+async function runProofs(client: any, plantSql: string, file = PROOF_FILE, label = "ASMT PROOFS"): Promise<{ pass: number; fail: number; failed: string[]; raw: string }> {
+  const base = readFileSync(file, "utf8");
   if (!base.includes("-- @@PLANT@@")) throw new Error("the proof file lost its plant marker");
   const sql = base.replace("-- @@PLANT@@", plantSql);
   await client.query("begin");
@@ -176,7 +178,7 @@ async function runProofs(client: any, plantSql: string): Promise<{ pass: number;
     return { pass: 0, fail: 0, failed: [], raw: "the proof block did not raise its RESULT" };
   } catch (e: any) {
     const msg = String(e.message ?? e);
-    const m = msg.match(/RESULT ASMT PROOFS pass=(\d+) fail=(\d+) failed:\s*(.*)$/);
+    const m = msg.match(new RegExp(`RESULT ${label} pass=(\\d+) fail=(\\d+) failed:\\s*(.*)$`));
     if (!m) return { pass: 0, fail: -1, failed: [], raw: msg };
     return { pass: +m[1], fail: +m[2], failed: m[3].trim() ? m[3].trim().split(/\s+/) : [], raw: msg };
   } finally {
@@ -205,10 +207,61 @@ async function dbSection() {
   }
 }
 
+// ---- S3a.scholar ------------------------------------------------------------------------------------------------
+// Migration 893 (the Scholar competency adapter). scripts/sql/asmt-scholar-proofs.sql reads the real staging DACUM 0-6 scale
+// with its published mapping, the real NUR-CCF Respiratory Assessment criteria and the real assessment components, and plants
+// everything else inside one rolled back transaction. Each CONTROL is then broken in that same transaction and the proofs
+// that depend on it must go red.
+const SCHOLAR_RESULT = "ASMT SCHOLAR PROOFS";
+const fnBody = (name: string, args: string, body: string) => `execute $plant$ create or replace function public.${name}(${args}) ${body} $plant$;`;
+export const SCHOLAR_PLANTS: Plant[] = [
+  { name: "mapping guard trigger removed", control: "asmt_instrument_version_scholar_check",
+    sql: dis("asmt_instrument_version", "asmt_instrument_version_scholar_check"), expect: ["M1", "M2", "M2c", "M3", "M8"] },
+  { name: "mapping check permissive", control: "asmt_scholar_mapping_check",
+    sql: fnBody("asmt_scholar_mapping_check", "p_version uuid", `returns jsonb language sql as $b$ select '{"ok":true,"problems":[]}'::jsonb $b$`),
+    expect: ["M0", "M1", "M1a", "M2", "M2a", "M2b", "M3", "M4", "M5", "M8", "M8b", "M9"] },
+  { name: "clinical approval always true", control: "competency_clinically_approved",
+    sql: fnBody("competency_clinically_approved", "p_competency uuid", `returns boolean language sql stable as $b$ select true $b$`), expect: ["M0", "M3", "M8b", "C3"] },
+  { name: "scale level satisfactory forced", control: "satisfactory copied from is_passing in the import",
+    sql: `execute $plant$ create or replace function public.zz_plant_sat() returns trigger language plpgsql as $b$ begin new.satisfactory := true; return new; end $b$ $plant$;
+execute 'create trigger zz_plant_sat before insert on asmt_response_scale_level for each row execute function public.zz_plant_sat()';`, expect: ["I2", "I2b", "I3b"] },
+  { name: "stage band guard removed", control: "asmt_scholar_stage_band_guard",
+    sql: dis("asmt_scholar_stage_band", "asmt_scholar_stage_band_guard"), expect: ["I9", "I9b", "I11", "I11b", "I11c"] },
+  { name: "assessment component retired", control: "groups come from the active components",
+    sql: "execute 'update competency_assessment_component set is_active = false where code = ''knowledge''';", expect: ["G1", "G2"] },
+  { name: "erasure trigger removed", control: "asmt_scholar_erasure_run",
+    sql: dis("asmt_scholar_erasure", "asmt_scholar_erasure_run"), expect: ["E2", "E3", "E5"] },
+  { name: "erasure receipt not append-only", control: "asmt_scholar_erasure_append_only",
+    sql: dis("asmt_scholar_erasure", "asmt_scholar_erasure_append_only"), expect: ["E6", "E6b"] },
+  { name: "adapter function opened to signed-in people", control: "execute rights are service role only",
+    sql: "execute 'grant execute on function public.asmt_scholar_erase_user(uuid) to authenticated';", expect: ["P1"] },
+];
+
+async function scholarSection() {
+  console.log("\nS3a.scholar  migration 893 database proofs on STAGING (each run rolls back and keeps nothing)\n");
+  const require = createRequire(resolve(process.cwd(), "package.json"));
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const base = await runProofs(client, "", SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
+    ok("S3a.scholar.base", `all proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 600) : `failed: ${base.failed.join(" ")}`);
+    for (const p of SCHOLAR_PLANTS) {
+      const r = await runProofs(client, p.sql, SCHOLAR_PROOF_FILE, SCHOLAR_RESULT);
+      const missing = p.expect.filter(id => !r.failed.includes(id));
+      ok(`S3a.scholar.red`, `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0,
+        r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   const arg = process.argv[2] ?? "static";
   if (arg === "static" || arg === "all") staticSection();
   if (arg === "db" || arg === "all") await dbSection();
+  if (arg === "scholar" || arg === "all") await scholarSection();
   console.log(bad === 0 ? "\n  ALL PASS\n" : `\n  ${bad} FAILURE(S)\n`);
   process.exitCode = bad === 0 ? 0 : 1;
 }

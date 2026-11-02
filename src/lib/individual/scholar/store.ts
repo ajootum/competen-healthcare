@@ -321,8 +321,13 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   // SCHOLAR-CE-2026 CE-04 (880): the simulated-patient conversations go too, library plays included (their sessions are not material, so
   // no cascade reaches them). Private plays also cascade with their case. The function is the guard's one other way out. Absent: nothing to do.
   const { error: cvErr } = await admin.rpc("individual_scholar_case_conversation_erase", { p_user: userId });
+  // CHECKLIST STUDIO S3a (893): the learner's own assessments go too -- instances, answers, evidence, comments, outcomes, progression
+  // decisions and grants of their own. A DB function does it (the capture guards only let a delete through a trigger level, so the
+  // function drives the delete from a receipt insert). It returns the storage paths of uploaded evidence, which the route that stores
+  // evidence files removes. Absent function (893 not applied): nothing to do.
+  const { error: asErr } = await admin.rpc("asmt_scholar_erase_user", { p_user: userId });
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
+  return { ok: fine(asErr) && fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
