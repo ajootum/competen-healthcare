@@ -727,6 +727,27 @@ export async function countDue(admin: Admin, userId: string): Promise<number | n
 }
 
 /**
+ * SCHOLAR-CE-2026 CE-01: the learner's own flashcards on some materials that they last rated badly (last_quality below 3, SM-2's own lapse
+ * line), weakest first. Two bounded owner-keyed reads, no hydrate: `id`, `front` (the card's stem) and the quality only. Null where it could
+ * not be read (nothing is then said about cards, never "no weak cards"). A governed library copy is not the learner's card and is not read.
+ */
+export async function weakFlashcards(admin: Admin, userId: string, materialIds: readonly string[], limit = 5): Promise<{ id: string; front: string; chunkId: string; quality: number }[] | null> {
+  const ids = materialIds.filter(isUuid).slice(0, 10);
+  if (!ids.length) return [];
+  try {
+    const qs = await admin.from("individual_scholar_question").select("id, stem, chunk_id").eq("user_id", userId).eq("kind", "flashcard").in("material_id", ids).limit(400);
+    if (qs.error) return null;
+    const rows = (qs.data ?? []) as any[];
+    if (!rows.length) return [];
+    const cs = await admin.from("individual_scholar_card").select("question_id, last_quality").eq("user_id", userId).eq("status", "active").not("last_quality", "is", null).lt("last_quality", 3).in("question_id", rows.map(r => r.id)).limit(400);
+    if (cs.error) return null;
+    const by = new Map(rows.map(r => [r.id as string, r]));
+    return ((cs.data ?? []) as any[]).flatMap(c => { const q = by.get(c.question_id); return q ? [{ id: q.id as string, front: String(q.stem ?? ""), chunkId: String(q.chunk_id ?? ""), quality: Number(c.last_quality) }] : []; })
+      .sort((a, b) => a.quality - b.quality || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, Math.max(0, limit));
+  } catch { return null; }
+}
+
+/**
  * The learner self-grades recall 0..5. SM-2 (imported) reschedules, within the policy's bounds (REVISION-01 R3,
  * revision.ts scheduleReview; the defaults are exactly the earlier rule). Owner-keyed.
  */
@@ -2487,14 +2508,67 @@ export async function artefactIdsForChunks(admin: Admin, userId: string, chunkId
   return [...out].slice(0, max);
 }
 
-/** The caller's sections mapped to one competency (proposed or accepted, never rejected), at most 2000. */
-export async function chunksForCompetency(admin: Admin, userId: string, competencyId: string): Promise<string[]> {
+/**
+ * The caller's sections mapped to one competency (proposed or accepted, never rejected), at most 2000. `acceptedOnly` (CE-02, the
+ * library's Competency filter): only the mappings the learner or an approver accepted, never a bare AI proposal.
+ */
+export async function chunksForCompetency(admin: Admin, userId: string, competencyId: string, o: { acceptedOnly?: boolean } = {}): Promise<string[]> {
   if (!isUuid(competencyId)) return [];
   const { data, error } = await admin.from("individual_scholar_competency_map").select("id, chunk_id").eq("user_id", userId).eq("competency_id", competencyId).limit(2000);
   if (error || !data?.length) return [];
   const { data: d } = await admin.from("individual_scholar_competency_decision").select("map_id, decision, decided_by, created_at").eq("user_id", userId).in("map_id", (data as any[]).map(r => r.id).slice(0, 500)).limit(5000);
   const states = mappingStates(((d ?? []) as any[]).map(x => ({ mappingId: x.map_id, decision: x.decision, decidedBy: x.decided_by, createdAt: x.created_at })));
-  return [...new Set((data as any[]).filter(r => states.get(r.id)?.state !== "rejected").map(r => r.chunk_id as string))];
+  return [...new Set((data as any[]).filter(r => (o.acceptedOnly ? states.get(r.id)?.state === "accepted" : states.get(r.id)?.state !== "rejected")).map(r => r.chunk_id as string))];
+}
+
+/**
+ * CE-02: the caller's sessions that hold saved items -- a current saved lesson or a note recorded against the session (820) -- most
+ * recently active first, at most `limit`. Empty without 820. A foreign session id never appears: both reads are keyed on the caller.
+ */
+export async function sessionsWithSavedItems(admin: Admin, userId: string, limit = 100): Promise<LearningSessionRow[]> {
+  if (!(await librarySchema(admin, userId))) return [];
+  const [a, n] = await Promise.all([
+    admin.from("individual_scholar_artefact").select("session_id").eq("user_id", userId).is("superseded_at", null).not("session_id", "is", null).limit(2000),
+    admin.from("individual_scholar_note").select("session_id").eq("user_id", userId).not("session_id", "is", null).limit(2000),
+  ]);
+  const ids = [...new Set([...(a.error ? [] : (a.data ?? [])), ...(n.error ? [] : (n.data ?? []))].map((r: any) => r.session_id as string))].filter(isUuid);
+  const rows = await sessionsByIds(admin, userId, ids);
+  return rows.sort((x, y) => y.lastActiveAt.localeCompare(x.lastActiveAt)).slice(0, limit);
+}
+
+/**
+ * CE-02: the caller's saved lessons that belong to one session: those 820 recorded against it at save, and older ones (no session
+ * recorded) whose sections all sit inside the session's own steps. null when unreadable; [] for a session that is not theirs.
+ */
+export async function artefactIdsForSession(admin: Admin, userId: string, sessionId: string): Promise<string[] | null> {
+  if (!isUuid(sessionId)) return [];
+  const v820 = await librarySchema(admin, userId);
+  const out = new Set<string>();
+  if (v820) {
+    const { data, error } = await admin.from("individual_scholar_artefact").select("id").eq("user_id", userId).eq("session_id", sessionId).limit(2000);
+    if (error) return null;
+    for (const r of (data ?? []) as any[]) out.add(r.id);
+  }
+  const chunks = (await sessionStepSummaries(admin, userId, [sessionId])).get(sessionId)?.chunkIds ?? [];
+  if (chunks.length) {
+    const inside = new Set(chunks);
+    const cand = await artefactIdsForChunks(admin, userId, chunks);
+    if (cand === null) return null;
+    if (cand.length) {
+      const [src, own] = await Promise.all([
+        artefactSources(admin, userId, cand),
+        v820 ? admin.from("individual_scholar_artefact").select("id, session_id").eq("user_id", userId).in("id", cand.slice(0, 300)).limit(300) : Promise.resolve({ data: null, error: null }),
+      ]);
+      if (own.error) return null;
+      const recorded = new Map(((own.data ?? []) as any[]).map(r => [r.id as string, r.session_id as string | null]));
+      for (const id of cand) {
+        const sources = src.get(id) ?? [];
+        // A lesson recorded against ANOTHER session is that session's; an older one is matched by its sections alone.
+        if (sources.length && sources.every(c => inside.has(c)) && !recorded.get(id)) out.add(id);
+      }
+    }
+  }
+  return [...out];
 }
 
 /** One of the caller's saved teachings by id, current or earlier, with its sources. null: not theirs, or none. */

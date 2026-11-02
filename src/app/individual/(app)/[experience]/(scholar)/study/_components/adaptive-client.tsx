@@ -353,7 +353,7 @@ export function AdaptiveReportView({ report, sessionId, title, review }: { repor
           {review.map(r => (
             <li key={r.questionId} className="rounded-xl border border-gray-200 p-3">
               <p className="text-[14px] font-semibold text-gray-900">{r.n}. {r.stem}</p>
-              {r.feedback ? <FeedbackPanel f={r.feedback} sessionId={null} compact questionId={r.questionId} />
+              {r.feedback ? <FeedbackPanel f={r.feedback} sessionId={null} compact questionId={r.questionId} stem={r.stem} />
                 : r.held ? <GradeAtEnd questionId={r.questionId} sessionId={sessionId} g={r.held} onGraded={() => router.refresh()} />
                   : <p className="text-[13px] text-gray-500">Not answered.</p>}
             </li>

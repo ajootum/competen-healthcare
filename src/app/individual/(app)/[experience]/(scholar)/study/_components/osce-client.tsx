@@ -15,6 +15,8 @@ import {
   type OsceFeedbackParts, type OsceGap, type OsceGuidance, type OsceMark, type OsceRemedy, type OsceResult,
 } from "@/lib/individual/scholar/osce";
 import type { OsceChecklistView, OsceStationView } from "@/lib/individual/scholar/osce-service";
+import { askPrefill } from "@/lib/individual/scholar/ask-context";
+import { AskAbout } from "./ask-panel";
 
 // OSCE PRACTICE -- SCHOLAR-PRACTICE-EXAMS-01 (720) and SCHOLAR-OSCE-01 (721), the learner's side. Create a station (the
 // Competen station library, a practice template, a competency, or from notes), then run it in a focused workspace: the
@@ -405,7 +407,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
 
       {phase === "done" && result && (
         <div className="mt-3 space-y-4">
-          <ResultView r={result} />
+          <ResultView r={result} ask={{ chunkIds: station.askChunkIds, materialId: station.askMaterialId, title: station.title }} />
           <button type="button" onClick={() => { setPhase("brief"); setChecklist(null); setTicks({}); setFeedback(null); setUseAi(false); setResult(null); setResumed(false); }} className={ghost}>Practise this station again</button>
         </div>
       )}
@@ -436,7 +438,7 @@ export function FeedbackPanel({ parts }: { parts: OsceFeedbackParts }) {
 const gapLine = (g: OsceGap) => `${g.text} (${g.mark === "missed" ? "missed" : "partly"})`;
 
 /** A marked run: critical misses FIRST and apart, then the score and how it is made, strengths, gaps, guidance, next steps. */
-export function ResultView({ r }: { r: OsceResultView }) {
+export function ResultView({ r, ask }: { r: OsceResultView; /** CE-01: the station's own sections and title, for "Ask about this" (none: a general explanation under the label). */ ask?: { chunkIds: readonly string[]; materialId: string | null; title: string } | null }) {
   const otherGaps = r.result.gaps.filter(g => !(g.critical && g.mark === "missed"));
   const anyAi = r.marks.some(m => m.suggested);
   return (
@@ -478,6 +480,8 @@ export function ResultView({ r }: { r: OsceResultView }) {
 
       {r.feedback && <FeedbackPanel parts={r.feedback} />}
       <GuidanceView guidance={r.guidance} expectedActivities={r.expectedActivities} />
+      {/* SCHOLAR-CE-2026 CE-01: after a marked run, ask about the feedback in place. */}
+      {ask && <AskAbout surface="osce" chunkIds={ask.chunkIds} materialId={ask.materialId} refLabel={`OSCE feedback: ${ask.title}`} prefill={askPrefill("osce", { title: ask.title })} />}
 
       {r.remediation.length > 0 && (
         <div>

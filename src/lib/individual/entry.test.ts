@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   requestedExperience, entryDestination, signInHref, experienceOfPath, isIndividualNext, signInProductName, forQuery,
 } from "./entry";
-import { parseEndDate, validateGrant, isGrantRefusal, normaliseLookupEmail } from "./grants";
+import { parseEndDate, validateGrant, isGrantRefusal, normaliseLookupEmail, normaliseLookupName } from "./grants";
 
 // COMPETEN-IND-ACCESS-001 -- entry and destination. Every value these return is one of a fixed set of
 // /individual paths; nothing a visitor types can become a redirect target.
@@ -79,5 +79,9 @@ describe("pilot grant validity (s4)", () => {
   it("the lookup email is normalised and must look like an address", () => {
     expect(normaliseLookupEmail("  Ada@Example.ORG ")).toBe("ada@example.org");
     for (const bad of ["", "ada", "a@b", "a b@c.d", null, 5]) expect(normaliseLookupEmail(bad)).toBeNull();
+  });
+  it("a lookup name is 2-80 characters, spaces collapsed, and never an email address", () => {
+    expect(normaliseLookupName("  Pius   Oboo ")).toBe("Pius Oboo");
+    for (const bad of ["", " a ", "pius@oboo.org", "x".repeat(81), null, 5]) expect(normaliseLookupName(bad)).toBeNull();
   });
 });

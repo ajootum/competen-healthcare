@@ -114,7 +114,7 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
 
       {library ? (
         <SavedLibrary admin={ctx.admin} userId={ctx.userId} params={search} policy={policy}
-          materials={(materials.ok ? materials.data : []).map(m => ({ id: m.id, title: m.title }))}
+          materials={(materials.ok ? materials.data : []).map(m => ({ id: m.id, title: m.title, mime: m.mimeType }))}
           competencies={competencies ? competencies.map(c => ({ id: c.id, title: c.title })) : null} notesOn={notesOn} />
       ) : (
       <section aria-labelledby="explanations-h">
