@@ -1,4 +1,5 @@
-import { Unreadable } from "@/app/individual/_components/chrome";
+import Link from "next/link";
+import { Unreadable, focusRing } from "@/app/individual/_components/chrome";
 import { EmptyLine, RowList } from "../_module/module-parts";
 import type { EvidenceSection } from "./competencies-view";
 
@@ -17,7 +18,7 @@ export function EvidenceSections({ sections }: { sections: EvidenceSection[] }) 
                 {s.rows.map(r => (
                   <li key={r.key} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
                     <div className="min-w-0">
-                      <p className="text-[14.5px] font-semibold text-gray-900">{r.title}</p>
+                      <p className="text-[14.5px] font-semibold text-gray-900">{r.href ? <Link href={r.href} className={`underline underline-offset-2 ${focusRing}`}>{r.title}</Link> : r.title}</p>
                       {r.detail && <p className="text-[12.5px] text-gray-600">{r.detail}</p>}
                     </div>
                     <p className="text-[12.5px] font-semibold text-gray-800">{r.label}</p>

@@ -132,7 +132,9 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection";
 /** PRIVATE MODULE DEVELOPMENT ACCESS (owner GO 2 Nov 2026): who may see a Scholar module that is still being developed. */
 export type ModuleAccessPolicyKey = "scholar_module_courses_access" | "scholar_module_competencies_access";
-export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey | ModuleAccessPolicyKey;
+/** CHECKLIST STUDIO S3: which assessment instruments (by permanent code) Scholar offers a learner. Empty by default: nothing is offered. */
+export type InstrumentCodesPolicyKey = "scholar_assessment_instruments";
+export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey | ModuleAccessPolicyKey | InstrumentCodesPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
@@ -153,7 +155,9 @@ export type LevelsPolicy = Common & { key: LevelsPolicyKey; kind: "levels"; maxP
 export type ChoicePolicy = Common & { key: ChoicePolicyKey; kind: "choice"; options: readonly { value: string; label: string }[]; fallback: string };
 /** Who may see one Scholar module: stored as account ids and participation categories, never as emails or names. */
 export type ModuleAccessPolicy = Common & { key: ModuleAccessPolicyKey; kind: "module_access"; maxUsers: number };
-export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy | SequencePolicy | ModuleAccessPolicy;
+/** Instrument codes (asmt_instrument.code). The route checks each against the library; every read narrows to the published ones again. */
+export type InstrumentCodesPolicy = Common & { key: InstrumentCodesPolicyKey; kind: "instrument_codes"; max: number };
+export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy | SequencePolicy | ModuleAccessPolicy | InstrumentCodesPolicy;
 export const MODULE_ACCESS_MODES = ["private", "pilot", "public"] as const;
 export type ModuleAccessMode = (typeof MODULE_ACCESS_MODES)[number];
 export type ModuleAccess = { mode: ModuleAccessMode; users: string[]; groups: ParticipationCategory[] };
@@ -176,6 +180,9 @@ export function meetsMinStatus(status: string, min: ContentStatusLevel): boolean
   return min === "unreviewed" || (i > -1 && i >= CONTENT_STATUS_ORDER.indexOf(min));
 }
 export const CATALOGUES_MAX = 50;
+export const INSTRUMENT_CODES_MAX = 20;
+/** The permanent shape of an instrument code (migration 890 asmt_instrument_code_check). */
+export const INSTRUMENT_CODE = /^[A-Z][A-Z0-9-]{2,40}$/;
 export type ContextOption = { code: string; label: string };
 const OPTION_CODE = /^[a-z0-9][a-z0-9-]{0,62}$/;
 const PROGRAMME_CODE = /^[a-z0-9][a-z0-9-]{1,62}$/;
@@ -901,6 +908,15 @@ export const POLICIES: readonly PolicyDef[] = [
     label: "My Competencies access",
     help: "Who can see My Competencies in Competen Scholar. Private development: only the accounts listed. Pilot: the accounts listed and every account in the chosen participation categories. Public: everyone who has Scholar.",
     limitReason: "At most 50 named accounts. Accounts are stored by id. Default: private, with nobody listed, so the module is hidden from everyone until HQ opens it.",
+  },
+  // ── CHECKLIST STUDIO S3: WHICH ASSESSMENT INSTRUMENTS SCHOLAR OFFERS ── owner decision D10, 3 Nov 2026 ──
+  // EMPTY UNTIL HQ CHOOSES, and unreadable is empty too: no instrument reaches a learner by existing. A listed code is offered only
+  // while the instrument has a published version that allows self-assessment (checked on every read, never trusted from here).
+  {
+    key: "scholar_assessment_instruments", kind: "instrument_codes", product: "Scholar", max: INSTRUMENT_CODES_MAX,
+    label: "Assessment instruments Scholar may offer",
+    help: "The codes of the published assessment instruments a Scholar learner may start as a self-assessment from My Competencies. Nothing is offered until a code is listed here.",
+    limitReason: "Only existing instrument codes, at most 20. Empty by default: nothing is offered automatically.",
   },
   // ⚠ COMPETEN-SCHOLAR-01 S1: EMPTY UNTIL HQ CHOOSES. No catalogue reaches a person by existing -- not the
   // shared frameworks already in the library, not a newly published one. Unreadable is empty too.
@@ -1981,9 +1997,10 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [
       { value: "due_revision", label: "Revision that is due" }, { value: "gaps", label: "Gaps shown by practice" }, { value: "unfinished", label: "Unfinished lessons" },
       { value: "exam", label: "Exam date" }, { value: "deadline", label: "Deadlines in the student calendar" }, { value: "consolidate", label: "Consolidate recent study" }, { value: "coverage", label: "Cover all accepted notes" },
+      { value: "competency", label: "Competency gaps from a self-assessment" },
     ],
-    fallback: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"],
-    limitReason: "Only these seven rules. Default order as listed.",
+    fallback: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"],
+    limitReason: "Only these eight rules. Default order as listed.",
   },
   {
     key: "scholar_plan_weekly_reflection", kind: "choice", product: "Scholar",
@@ -2041,6 +2058,12 @@ export function clampModuleAccess(p: ModuleAccessPolicy, settings: any): ModuleA
 export function clampCatalogues(p: CataloguePolicy, settings: any): string[] {
   if (settings == null || !Array.isArray(settings.ids)) return [];
   return [...new Set(settings.ids.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)).map((v: string) => v.toLowerCase()))].slice(0, p.max) as string[];
+}
+
+/** Pure: the instrument codes Scholar offers. Anything not a well-formed code is dropped, and nothing published is none. */
+export function clampInstrumentCodes(p: InstrumentCodesPolicy, settings: any): string[] {
+  if (settings == null || !Array.isArray(settings.codes)) return [];
+  return [...new Set(settings.codes.filter((v: unknown): v is string => typeof v === "string" && INSTRUMENT_CODE.test(v)))].slice(0, p.max) as string[];
 }
 
 /** Pure: the programmes offered at join, or null for "every active programme" (nothing published). */
@@ -2146,6 +2169,13 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
     }
     // Whether each programme code is a programme row is checked by the route.
     return { ok: true, def, settings: { byProgramme } };
+  }
+  if (def.kind === "instrument_codes") {
+    if (!Array.isArray(raw) || raw.some(v => typeof v !== "string" || !INSTRUMENT_CODE.test(v))) return { ok: false, error: `${def.label}: send the list of instrument codes to offer.` };
+    const codes = [...new Set(raw as string[])];
+    if (codes.length > def.max) return { ok: false, error: `${def.label}: at most ${def.max}. That limit is fixed.` };
+    // Whether each code is an instrument is checked by the route, against the library.
+    return { ok: true, def, settings: { codes } };
   }
   if (def.kind === "catalogues") {
     if (!Array.isArray(raw) || raw.some(v => typeof v !== "string" || !UUID.test(v))) return { ok: false, error: `${def.label}: send the list of catalogue ids to allow.` };
@@ -2369,6 +2399,8 @@ export type IndividualPolicy = {
   scholarPlanRuleOrder: string[];
   scholarPlanWeeklyReflection: "on" | "off";
   scholarPlanMaxWeeklyMinutes: number;
+  /** CHECKLIST STUDIO S3: the assessment instrument codes offered to a Scholar learner. Empty: nothing is offered. */
+  scholarAssessmentInstruments: string[];
 };
 
 /** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
@@ -2558,6 +2590,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
     scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),
+    scholarAssessmentInstruments: clampInstrumentCodes(policyDef("scholar_assessment_instruments") as InstrumentCodesPolicy, published.get(policyPath("scholar_assessment_instruments"))),
   };
 }
 

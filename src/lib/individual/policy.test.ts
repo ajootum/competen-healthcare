@@ -109,7 +109,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
       scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
       scholarVisualClassify: "on", scholarVisualTextWords: 40,
-      scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"],
+      scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"], scholarAssessmentInstruments: [],
       scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
@@ -436,7 +436,7 @@ describe("My Plan policy keys", () => {
   const p = (key: string, value: unknown) => resolvePolicy([{ config_path: policyPath(key as never), published: value as never }]);
   it("default to on, 12 minutes a section, the design rule order and a 600-minute week", () => {
     expect(DEFAULT_POLICY).toMatchObject({ scholarMyPlan: "on", scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600 });
-    expect(DEFAULT_POLICY.scholarPlanRuleOrder).toEqual(["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"]);
+    expect(DEFAULT_POLICY.scholarPlanRuleOrder).toEqual(["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"]);
   });
   it("clamp the integers to their ranges and fall back on nonsense", () => {
     expect(p("scholar_plan_section_minutes", { value: 2 }).scholarPlanSectionMinutes).toBe(5);
@@ -456,5 +456,25 @@ describe("My Plan policy keys", () => {
     expect(isMyPlanOn({ scholarMyPlan: "on", scholarStudyPlan: true }, false)).toBe(false);
     expect(isMyPlanOn({ scholarMyPlan: "off", scholarStudyPlan: true }, true)).toBe(false);
     expect(isMyPlanOn({ scholarMyPlan: "on", scholarStudyPlan: false }, true)).toBe(false);
+  });
+});
+
+// CHECKLIST STUDIO S3 (D10): the instruments Scholar offers are a list of CODES, empty by default, fail closed.
+describe("scholar_assessment_instruments", () => {
+  const p = (value: unknown) => resolvePolicy([{ config_path: policyPath("scholar_assessment_instruments"), published: value as never }]);
+  it("offers nothing by default and for anything unreadable", () => {
+    expect(DEFAULT_POLICY.scholarAssessmentInstruments).toEqual([]);
+    expect(p(null).scholarAssessmentInstruments).toEqual([]);
+    expect(p({ codes: "CHK-RESP-ASSESS" }).scholarAssessmentInstruments).toEqual([]);
+    expect(p({ ids: ["CHK-RESP-ASSESS"] }).scholarAssessmentInstruments).toEqual([]);
+  });
+  it("keeps only well-formed instrument codes, once each, in order", () => {
+    expect(p({ codes: ["CHK-RESP-ASSESS", "bad code", 7, "CHK-RESP-ASSESS", "AUD-HH-01"] }).scholarAssessmentInstruments).toEqual(["CHK-RESP-ASSESS", "AUD-HH-01"]);
+  });
+  it("validates a draft as a list of codes, at most the fixed limit", () => {
+    expect(validateDraft("scholar_assessment_instruments", ["CHK-RESP-ASSESS"])).toMatchObject({ ok: true, settings: { codes: ["CHK-RESP-ASSESS"] } });
+    expect(validateDraft("scholar_assessment_instruments", ["lower"]).ok).toBe(false);
+    expect(validateDraft("scholar_assessment_instruments", "CHK-RESP-ASSESS").ok).toBe(false);
+    expect(validateDraft("scholar_assessment_instruments", Array.from({ length: 21 }, (_, i) => `CHK-${i}X`)).ok).toBe(false);
   });
 });

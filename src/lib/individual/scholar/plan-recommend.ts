@@ -18,13 +18,14 @@ import { acc, learnHref, noun, refKey, reviseHref, topicApply, topicLearn, topic
 //   deadline       a deadline the learner put in their calendar within 14 days, linked to a material or topic
 //   consolidate    topics practised in the last days that would benefit from a short revision now
 //   coverage       the next unstarted section of an accepted material, in order
+//   competency     a competency the learner's own self-assessment rated below what their programme expects (CHECKLIST STUDIO S3)
 //
 // A declined suggestion is NOT offered again until the evidence behind it changes (its fingerprint). A topic the learner postponed is
 // left out until the date they chose.
 //
 // ⚠ A RECOMMENDATION IS A SUGGESTION ABOUT WHAT TO STUDY. It says nothing about competence, and it never changes the plan by itself.
 
-export const RULES = ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"] as const;
+export const RULES = ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"] as const;
 export type RuleId = (typeof RULES)[number];
 export const isRuleId = (x: string): x is RuleId => (RULES as readonly string[]).includes(x);
 export const DEADLINE_DAYS = 14;
@@ -37,6 +38,18 @@ export type PlanRecommendation = PlanItem & {
   fingerprint: string;
   /** Normalised topic keys it is about (for postponing). */
   topics: readonly string[];
+};
+
+/**
+ * A competency where the learner's OWN latest self-assessment is below the level their programme expects, or where an item was
+ * left unjudged. It is the learner's word, never a verified fact and never an AI declaration: the rule only suggests studying it.
+ */
+export type CompetencyGapInput = {
+  competencyId: string; title: string;
+  /** When the self-assessment was submitted (ISO) and the rating it gave on the programme's scale. */
+  assessedAt: string; self: number | null; expected: number | null;
+  /** Criteria rated below the expected level, unjudged or left unanswered. */
+  gapItems: number;
 };
 
 export type UnfinishedItem = { id: string; title: string; kind: "lesson" | "revision"; lastAt: string; href: string };
@@ -62,6 +75,8 @@ export type RecommendInput = {
   moved?: ReadonlySet<string>;
   /** Fallback minutes for an activity when the plan does not give one. */
   fallbackMinutes: number;
+  /** CHECKLIST STUDIO S3: gaps the learner's own self-assessments show. Absent or empty: the rule offers nothing. */
+  competencyGaps?: readonly CompetencyGapInput[];
 };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -70,7 +85,7 @@ const ago = (n: number) => (n === 1 ? "yesterday" : `${n} days ago`);
 
 /** Pure. Everything the engine could suggest, grouped by rule and in each rule's own order, before declines and postponements. */
 export function candidatesByRule(i: RecommendInput): Record<RuleId, PlanRecommendation[]> {
-  const out: Record<RuleId, PlanRecommendation[]> = { due_revision: [], gaps: [], unfinished: [], exam: [], deadline: [], consolidate: [], coverage: [] };
+  const out: Record<RuleId, PlanRecommendation[]> = { due_revision: [], gaps: [], unfinished: [], exam: [], deadline: [], consolidate: [], coverage: [], competency: [] };
   const planned = new Map<string, number>();
   for (const d of i.plan?.thisWeek ?? []) for (const a of d.activities) if (!planned.has(a.ref)) planned.set(a.ref, a.minutes);
   const minutesFor = (ref: string) => planned.get(ref) ?? i.fallbackMinutes;
@@ -202,6 +217,23 @@ export function candidatesByRule(i: RecommendInput): Record<RuleId, PlanRecommen
       whyNow: "Working through your notes in order keeps the whole plan covered.",
       ifPostponed: "It stays next in line and the sections after it wait too.",
       fingerprint: `coverage:${s.chunkId}`,
+    }));
+  }
+
+  // 8. a competency the learner's own self-assessment rated below the programme's expectation: the largest shortfall first, then by title
+  const shortfall = (g: CompetencyGapInput) => (g.expected !== null && g.self !== null ? Math.max(0, g.expected - g.self) : 0);
+  const gapsOwn = [...(i.competencyGaps ?? [])].filter(g => g.gapItems > 0 || shortfall(g) > 0)
+    .sort((a, b) => shortfall(b) - shortfall(a) || b.gapItems - a.gapItems || a.title.localeCompare(b.title) || a.competencyId.localeCompare(b.competencyId));
+  for (const g of gapsOwn.slice(0, 3)) {
+    const ref = `learn:competency-${g.competencyId.toLowerCase()}`;
+    out.competency.push(mk({
+      rule: "competency", space: "learn", ref, title: `Study ${g.title}`, minutes: minutesFor(ref), href: experienceHref("scholar", `study/learn?competency=${encodeURIComponent(g.competencyId)}`), topics: [topicKey(g.title)],
+      why: shortfall(g) > 0
+        ? `Your self-assessment on ${g.assessedAt.slice(0, 10)} rated ${g.title} at ${g.self} where your programme expects ${g.expected}. That is your own rating, not a verified result.`
+        : `Your self-assessment on ${g.assessedAt.slice(0, 10)} left ${plural(g.gapItems, "criterion", "criteria")} of ${g.title} unjudged or unanswered. That is your own rating, not a verified result.`,
+      whyNow: "Studying what you rated lowest is the quickest way to see whether your rating changes.",
+      ifPostponed: "Your self-assessment stays as it is until you study this and repeat it.",
+      fingerprint: `competency:${g.competencyId}:${g.assessedAt}`,
     }));
   }
   return out;

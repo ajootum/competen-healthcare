@@ -4,7 +4,7 @@ import { buildCalendar, planKey, type CalendarEntryRow, type CalendarInput } fro
 import type { MasteryEntry } from "./mastery";
 import { examOffers, planCalendarFrom } from "./plan-calendar";
 import { acceptedMaterialIds, acceptedUnstarted, buildProposal, dedupeTopics, postponedTopics, proposalDecisions, topicKey, type MaterialIn } from "./plan-proposal";
-import { chooseToday, candidatesByRule, type RecommendInput } from "./plan-recommend";
+import { chooseToday, candidatesByRule, RULES, type RecommendInput } from "./plan-recommend";
 import { buildInsights } from "./plan-insights";
 import { detectCarryOvers } from "./plan-carry";
 import { cleanPlanSettings, increaseNeedsConfirmation, sessionMinutesOf, settingsDiff, settingsFromRow } from "./plan-settings";
@@ -530,5 +530,39 @@ describe("calendar route references", () => {
     expect(PLAN_ACTIVITY_REF.test("learn:renal")).toBe(false);
     expect(LEGACY_PLAN_ACTIVITY_REF.test("learn|renal|0")).toBe(true);
     expect(LEGACY_PLAN_ACTIVITY_REF.test(`learn:${refKey("renal")}|0`)).toBe(false);
+  });
+});
+
+// CHECKLIST STUDIO S3: the competency rule turns the learner's OWN self-assessment gaps into suggestions to study, nothing more.
+describe("the competency rule", () => {
+  const C1 = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1", C2 = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb2";
+  const gaps = [
+    { competencyId: C1, title: "Airway management", assessedAt: "2026-11-01T09:00:00Z", self: 2, expected: 4, gapItems: 3 },
+    { competencyId: C2, title: "Oxygen therapy", assessedAt: "2026-11-01T09:00:00Z", self: 3, expected: 4, gapItems: 1 },
+  ];
+  it("is the last of the default rules and offers nothing without gaps", () => {
+    expect(RULES[RULES.length - 1]).toBe("competency");
+    expect(candidatesByRule(rec()).competency).toEqual([]);
+    expect(chooseToday(rec({ ruleOrder: ["competency"] })).next).toBeNull();
+  });
+  it("suggests the largest shortfall first, links to Learn on that competency and says it is the learner's own rating", () => {
+    const c = candidatesByRule(rec({ competencyGaps: gaps })).competency;
+    expect(c.map(x => x.title)).toEqual(["Study Airway management", "Study Oxygen therapy"]);
+    expect(c[0].href).toContain(`study/learn?competency=${C1}`);
+    expect(c[0].why).toMatch(/your own rating, not a verified result/);
+    expect(c[0].rule).toBe("competency");
+    expect(/^learn:[a-z0-9-]{1,80}$/.test(c[0].ref)).toBe(true);
+  });
+  it("is used only where the configured order names it, after the other rules by default", () => {
+    const withAll = rec({ competencyGaps: gaps, dueCards: 2, ruleOrder: ["due_revision", "competency"] });
+    const choice = chooseToday(withAll);
+    expect(choice.next?.rule).toBe("due_revision");
+    expect(choice.alternatives[0]?.rule).toBe("competency");
+    expect(chooseToday({ ...withAll, ruleOrder: ["due_revision"] }).alternatives).toEqual([]);
+  });
+  it("ignores a competency with no shortfall and no unjudged criterion, and is deterministic", () => {
+    const none = candidatesByRule(rec({ competencyGaps: [{ ...gaps[0], self: 4, gapItems: 0 }] })).competency;
+    expect(none).toEqual([]);
+    expect(candidatesByRule(rec({ competencyGaps: gaps }))).toEqual(candidatesByRule(rec({ competencyGaps: [...gaps].reverse() })));
   });
 });

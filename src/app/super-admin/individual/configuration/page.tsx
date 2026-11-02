@@ -2,7 +2,7 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import {
-  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, clampSequence, clampModuleAccess, policyPath,
+  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampInstrumentCodes, clampChoice, clampProgrammes, clampOptions, clampLevels, clampSequence, clampModuleAccess, policyPath,
   MODULE_ACCESS_MODE_LABEL, MODULE_ACCESS_MODE_MEANING, type ModuleAccessPolicy, type PolicyDef,
 } from "@/lib/individual/policy";
 import { PARTICIPATION_LABEL } from "@/lib/hq/account-participation";
@@ -42,6 +42,10 @@ function describe(def: PolicyDef, settings: any, names: Map<string, string> = ne
     if (codes === null) return "Every active programme";
     return codes.length ? codes.map(c => names.get(c) ?? `${c} (not an active programme: not offered)`).join(", ") : "None offered (nobody can join Scholar until one is)";
   }
+  if (def.kind === "instrument_codes") {
+    const codes = clampInstrumentCodes(def, settings);
+    return codes.length ? codes.join(", ") : "None offered (no instrument reaches a learner until a code is listed)";
+  }
   if (def.kind === "options") {
     const list = clampOptions(def, settings);
     // A long list (every country, by default) is summarised, not printed whole.
@@ -68,7 +72,7 @@ export default async function IndividualPolicyPage() {
   const admin = ctx.admin;
   const scope = (q: any) => q.eq("scope_type", POLICY_SCOPE.scopeType).eq("scope_ref", POLICY_SCOPE.scopeRef);
 
-  const [ovr, ver, aud, cats, progs, lcpdRow, presRow] = await Promise.all([
+  const [ovr, ver, aud, cats, progs, lcpdRow, presRow, instruments] = await Promise.all([
     scope(admin.from("workspace_config_overrides").select("config_path, draft, published, updated_by_name, updated_at")).like("config_path", `${POLICY_PATH_PREFIX}%`),
     scope(admin.from("workspace_config_versions").select("id, note, status, published_by_name, created_at, snapshot")).order("created_at", { ascending: false }).limit(25),
     scope(admin.from("workspace_config_audit").select("action, config_path, actor_name, created_at, new_value")).order("created_at", { ascending: false }).limit(40),
@@ -80,6 +84,8 @@ export default async function IndividualPolicyPage() {
     scope(admin.from("workspace_config_overrides").select("draft, published, updated_by_name")).eq("config_path", LCPD_PATH).maybeSingle(),
     // DESIGN-SYSTEM-01 s4: the sign-in chooser wording for Individual, Scholar and Professional, one more path in the scope.
     scope(admin.from("workspace_config_overrides").select("draft, published, updated_by_name")).eq("config_path", PRESENTATION_PATH).maybeSingle(),
+    // CHECKLIST STUDIO S3: the instruments an offer list may name. A missing table (890 not applied) is simply none.
+    admin.from("asmt_instrument").select("code, name").order("code"),
   ]);
   const presPending = !!presRow.data && !same(presRow.data.draft, presRow.data.published);
   const lcpdPublished = resolveLcpd(lcpdRow.data?.published ?? null);
@@ -87,6 +93,7 @@ export default async function IndividualPolicyPage() {
   const lcpdPending = !!lcpdRow.data && !same(lcpdRow.data.draft, lcpdRow.data.published);
   const catalogueOptions = ((cats.data ?? []) as any[]).map(f => ({ value: String(f.id).toLowerCase(), label: f.competency_layer ? `${f.name} (${f.competency_layer})` : `${f.name} (layer not set)` }));
   const programmeOptions = ((progs.data ?? []) as any[]).map(p => ({ value: String(p.code), label: String(p.label) }));
+  const instrumentOptions = ((instruments.data ?? []) as any[]).map(i => ({ value: String(i.code), label: `${i.code} · ${i.name}` }));
   // One lookup for both: catalogue ids are uuids and programme codes are not, so they cannot collide.
   const catalogueNames = new Map([...catalogueOptions, ...programmeOptions].map(o => [o.value, o.label]));
   const unreadable = !!(ovr.error || ver.error || aud.error);
@@ -226,7 +233,7 @@ export default async function IndividualPolicyPage() {
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective now</dt><dd className="font-semibold text-gray-900">{effective}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Source</dt><dd className="text-gray-800">{source}</dd></div>
                 <div><dt className="text-[12px] font-semibold text-gray-500">Effective since</dt><dd className="text-gray-800">{published == null ? "Not applicable: the default has always applied" : at ? fmt(at) : "Not recorded in the recent versions"}</dd></div>
-                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: ${def.emptyMeans ?? "none"}.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: ${def.fallback.length === def.options.length ? "all" : def.fallback.length ? def.options.filter(o => def.fallback.includes(o.value)).map(o => o.label).join(", ") : "none"}.` : def.kind === "sequence" ? `Only: ${def.options.map(o => o.label).join(", ")}, in any order. Default: all, in that order.` : def.kind === "options" ? `At most ${def.max}. Default: ${def.fallback ? `${def.fallback.length} listed` : def.emptyMeans ?? "none"}.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
+                <div><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.kind === "int" ? `${def.min} to ${def.max} ${def.unit}. Default ${def.fallback}.` : def.kind === "catalogues" ? `Shared, active, published catalogues only, at most ${def.max}. Default: ${def.emptyMeans ?? "none"}.` : def.kind === "choice" ? `One of: ${def.options.map(o => o.label).join("; ")}. Default: ${def.options.find(o => o.value === def.fallback)?.label ?? def.fallback}.` : def.kind === "set" ? `Only: ${def.options.map(o => o.label).join(", ")}. Default: ${def.fallback.length === def.options.length ? "all" : def.fallback.length ? def.options.filter(o => def.fallback.includes(o.value)).map(o => o.label).join(", ") : "none"}.` : def.kind === "sequence" ? `Only: ${def.options.map(o => o.label).join(", ")}, in any order. Default: all, in that order.` : def.kind === "options" ? `At most ${def.max}. Default: ${def.fallback ? `${def.fallback.length} listed` : def.emptyMeans ?? "none"}.` : def.kind === "instrument_codes" ? `Existing instrument codes only, at most ${def.max}. Default: none.` : ""} <span className="text-gray-500">{def.limitReason}</span></dd></div>
               </dl>
               {draftDiffers && (
                 <p className="mt-3 rounded-lg bg-[var(--cmp-surface-information)] px-3 py-1.5 text-[13px] text-blue-900">
@@ -236,6 +243,8 @@ export default async function IndividualPolicyPage() {
               <div className="mt-3 border-t border-gray-100 pt-3">
                 {def.kind === "int"
                   ? <IntDraft policyKey={def.key} label={def.label} unit={def.unit} min={def.min} max={def.max} draft={clampInt(def, r?.draft ?? published)} hasOverride={!!r} />
+                  : def.kind === "instrument_codes"
+                    ? <SetDraft policyKey={def.key} legend="Draft: assessment instruments offered" emptyText="No assessment instrument exists yet." options={instrumentOptions} draft={clampInstrumentCodes(def, r?.draft ?? published)} hasOverride={!!r} />
                   : def.kind === "catalogues"
                     ? <SetDraft policyKey={def.key} legend="Draft: catalogues offered" options={catalogueOptions} draft={clampCatalogues(def, r?.draft ?? published)} hasOverride={!!r} />
                     : def.kind === "choice"
