@@ -65,10 +65,11 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
   // The native modal dialog already traps focus; the shared hook keeps the doctrine (pui-a11y) and returns focus to the trigger.
   // It is declared FIRST so it records the trigger before showModal() moves focus into the dialog.
   useModalFocus(true, panel, () => ref.current?.close());
+  // Opened once. No close() in a cleanup: close() fires onClose, which unmounts this dialog -- under React's development
+  // double-run of effects that closed it before it was seen. Removing the element on unmount closes it anyway.
   useEffect(() => {
     const d = ref.current;
     if (d && !d.open) d.showModal();
-    return () => { if (d?.open) d.close(); };
   }, []);
   if (!current) return null;
   const same = visuals.filter(v => v.n === current.n);
@@ -205,7 +206,7 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
           {arranged.textOnly.map(v => (
             <li key={v.key}>
               <details className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-800">
-                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: original {noun(v)} (the lesson text covers it)</summary>
+                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: the original {noun(v)}</summary>
                 <p className="mt-1 text-gray-700">{v.hasText ? `The text of this ${noun(v)} teaches it; the original is kept here.` : "No text was read from this picture."}</p>
                 <button type="button" onClick={() => setOpen(v.key)} className={`${ghostBtn} mt-2`}>Open the original {noun(v)}</button>
               </details>
