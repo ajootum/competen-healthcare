@@ -13,11 +13,12 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { ASK_INTENT_SURFACE, parseAskContext, ownedPassages, safeRefLabel } from "@/lib/individual/scholar/ask-context";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { PERSONAL_AI_LABEL, QUESTION_MAX, STEP_MAX_SECTIONS } from "@/lib/individual/scholar/config";
+import { QUESTION_MAX, STEP_MAX_SECTIONS } from "@/lib/individual/scholar/config";
 import { parseDepth, parseFollowUp } from "@/lib/individual/personal-ai-options";
 import { personalAiFlight, personalAiResponse } from "@/lib/individual/personal-ai-stream";
 import { citedSources, dropUnknownTags, numberPassages } from "@/lib/individual/personal-ai-sources";
 import { splitNotCovered } from "@/lib/individual/scholar/answer-format";
+import { answerLabel, askSectionIds } from "@/lib/individual/scholar/ask-grounding";
 import { normaliseLearnerText, spellingNotice, vocabularyOf } from "@/lib/individual/scholar/spelling";
 import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
 import type { IntentContext } from "@/lib/ai/request-intent";
@@ -77,6 +78,7 @@ export async function POST(req: Request) {
 
   // ── the step's own sections, by the caller's id ──
   let ids: string[] = [];
+  let viaClaims = !!askCtx;
   // Owner item 5 (1 Nov 2026): the lesson the question is asked in -- its session's title and topic, else what the page
   // sent (lessonTitle, objective: framing words only, which can never lower real-patient evidence).
   const said = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim().slice(0, 200) : null);
@@ -88,12 +90,15 @@ export async function POST(req: Request) {
     lesson = { lessonTitle: s.data.session.title || lesson.lessonTitle, objective: s.data.session.topic ?? lesson.objective };
     const here = s.data.steps.find(x => x.step === Number(body?.step)) ?? s.data.steps[0];
     ids = here ? here.sections.map(x => x.chunkId) : [];
+    // ask-grounding-01: a connected lesson whose step carries no section must not leave the question ungrounded while the panel says it
+    // is grounded: the panel's own ids (a saved lesson's source links) ground it instead, ownership-checked like any claim.
+    if (askCtx) { const g = askSectionIds({ hasSession: true, sessionIds: ids, claimedIds: askCtx.chunkIds }); ids = g.ids; viaClaims = g.viaClaims; }
   } else if (askCtx) ids = askCtx.chunkIds;
   else if (Array.isArray(body?.chunkIds)) ids = [...new Set((body.chunkIds as unknown[]).filter(isUuid))].slice(0, STEP_MAX_SECTIONS) as string[];
   if (!ids.length && !askCtx) return NextResponse.json({ error: "Choose what to learn from." }, { status: 400 });
   let passages: Passage[];
   let askDropped = 0;
-  if (askCtx && !isUuid(body?.sessionId)) {
+  if (askCtx && viaClaims) {
     // The panel's ids are claims: only the caller's own sections ground the answer; the rest are dropped without a word.
     const owned = await ownedPassages(ids, id => getPassage(ctx.admin, ctx.userId, id));
     passages = owned.passages; askDropped = owned.dropped; ids = passages.map(p => p.chunkId);
@@ -135,10 +140,14 @@ export async function POST(req: Request) {
   const record = (out: Extract<Out, { ok: true } | { kind: "generation" }>) => audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn_assistant", isUuid(body?.sessionId) ? body.sessionId : null, {
     mode, chunk_ids: ids, question_chars: question.length, purpose,
     ...(askCtx ? { ask_surface: askCtx.surface, ask_material_id: askCtx.materialId, ask_dropped: askDropped } : {}), scopes_read: out.ok ? out.scopesRead : [], outcome: out.ok ? "shown" : `error:${out.result.error}`, model: out.ok ? out.model : null,
+    ...(out.ok ? { sections_given: given(out), sections_cited: shape(out.answer).sources.length } : {}),
     depth, follow_up: followUp?.kind ?? null, streamed: flight.streamed, timing_ms: flight.timing(),
   });
   // The label the answer is shown under, on both the JSON and the streamed answer (one place, so it cannot drift).
-  const shown = { label: PERSONAL_AI_LABEL };
+  // ask-grounding-01: decided by what happened -- the sections given to the model and the ones the answer cites (ask-grounding.ts).
+  // Sections count as GIVEN only when the study material was actually read into the request (the published profile can leave that scope out).
+  const given = (out: Extract<Out, { ok: true }>) => (out.scopesRead.includes("study_context") ? numbered.sources.length : 0);
+  const shown = (out: Extract<Out, { ok: true }>, cited: number) => ({ label: answerLabel(given(out), cited) });
   const declined = (out: Extract<Out, { kind: "generation" }>) => out.result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.";
   return personalAiResponse(flight, async () => {
     const out = await runIndividualAssistant(ctx.admin, {
@@ -157,11 +166,11 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: declined(out) }, { status });
       }
       const a = shape(out.answer);
-      return NextResponse.json({ answer: a.text, mode: out.mode, model: out.model, ...shown, sources: a.sources, notCovered: a.notCovered, ...understood });
+      return NextResponse.json({ answer: a.text, mode: out.mode, model: out.model, ...shown(out, a.sources.length), sources: a.sources, notCovered: a.notCovered, ...understood });
     },
     // Text was already sent: the answer ended, or failed after it began (the browser discards the partial text).
     finish: async out => {
-      if (out.ok) { await record(out); const a = shape(out.answer); return { type: "done", mode: out.mode, ...shown, timing: flight.timing(), sources: a.sources, notCovered: a.notCovered, ...understood }; }
+      if (out.ok) { await record(out); const a = shape(out.answer); return { type: "done", mode: out.mode, ...shown(out, a.sources.length), timing: flight.timing(), sources: a.sources, notCovered: a.notCovered, ...understood }; }
       if (out.kind === "generation") { await record(out); return { type: "error", code: out.result.error, message: declined(out) }; }
       return { type: "error", code: "failed", message: "The assistant could not answer just now. Try again shortly." };
     },

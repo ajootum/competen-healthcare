@@ -27,7 +27,8 @@ import { StatePanel, Unreadable, focusRing } from "../../../../../_components/ch
 import { sourceHref } from "./question-view";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { LibraryNotes, NewNoteForm, StandaloneNote, type ClientNote } from "./library-notes-client";
-import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
+import { askPrefill } from "@/lib/individual/scholar/ask-context";
+import { savedLessonChunkIds } from "@/lib/individual/scholar/ask-grounding";
 import { AskAbout } from "./ask-panel";
 
 // SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026): THE PERSONAL LIBRARY on Saved learning. A server component: database
@@ -312,7 +313,7 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
             <a href={`${EXPORT}?selected=${a.id}`} download className={actionCls}>Download (PDF)</a>
           </p>
           {/* SCHOLAR-CE-2026 CE-01: ask about this lesson in place -- its session's step where it still has one, else the sections it was taught from. */}
-          <AskAbout className="mt-2" surface="library" chunkIds={a.sources.slice(0, ASK_CHUNK_MAX)} materialId={a.materialId} sessionId={live?.sessionId ?? null} step={live?.step ?? null}
+          <AskAbout className="mt-2" surface="library" chunkIds={savedLessonChunkIds(a.sources)} materialId={a.materialId} sessionId={live?.sessionId ?? null} step={live?.step ?? null}
             refLabel={`Saved lesson: ${itemTitle(a, c)}`} prefill={askPrefill("library", { title: itemTitle(a, c) })} />
           <details className="mt-2 rounded-xl border border-gray-200" open={open}>
             <summary className={`cursor-pointer list-none px-3 py-2 text-[13.5px] font-semibold text-gray-900 ${focusRing}`}>Read it here</summary>
@@ -505,7 +506,7 @@ async function NotesView({ admin, userId, q, titles, names, notes, v820, topicRo
           const art = n.artefactId ? artById.get(n.artefactId) : undefined, ses = n.sessionId ? sesById.get(n.sessionId) : undefined, ch = n.chunkId ? chunkById.get(n.chunkId) : undefined;
           const materialId = n.materialId ?? art?.materialId ?? ch?.materialId ?? null;
           const chunkId = n.chunkId ?? art?.sources[0] ?? null;
-          const chunkIds = n.chunkId ? [n.chunkId] : (art?.sources ?? []).slice(0, ASK_CHUNK_MAX);
+          const chunkIds = n.chunkId ? [n.chunkId] : savedLessonChunkIds(art?.sources);
           const unit = materialId ? names.get(materialId)?.unit ?? "page" : "page";
           const attached = noteAttachedTo({
             targetKind: n.targetKind, materialTitle: materialId ? titles.get(materialId) ?? null : null, lessonTitle: art ? lessonTitleOf(art.content) || null : null,
@@ -622,7 +623,7 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
             {g.hits.map(h => {
               const art = h.artefactId ? arts.get(h.artefactId) : undefined;
               const materialId = h.materialId ?? art?.materialId ?? null;
-              const chunkIds = h.chunkId ? [h.chunkId] : (art?.sources ?? []).slice(0, ASK_CHUNK_MAX);
+              const chunkIds = h.chunkId ? [h.chunkId] : savedLessonChunkIds(art?.sources);
               const t = title(h);
               return (
                 <li key={`${h.kind}-${h.id}`} className="rounded-2xl border border-gray-200 bg-white px-4 py-3">

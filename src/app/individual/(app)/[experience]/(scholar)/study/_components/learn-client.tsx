@@ -258,7 +258,7 @@ export function LearnWorkspace(props: {
   const [askThread, setAskThread] = useState<Card[]>([]);
   // Owner D3: the shared personal AI on this step. Its own thread, never mixed into a Learn answer, never saved.
   // SCHOLAR-PAI-EXPERIENCE-01: streamed in as it is written (`streaming`), shown structured, with its depth and follow-ups.
-  const [assist, setAssist] = useState<{ id: number; asked: string; answer?: string; error?: string; streaming?: boolean; followUp?: FollowUpKind; sources?: PersonalAiSourceRef[] }[]>([]);
+  const [assist, setAssist] = useState<{ id: number; asked: string; answer?: string; error?: string; streaming?: boolean; followUp?: FollowUpKind; sources?: PersonalAiSourceRef[]; label?: string }[]>([]);
   const [paDepth, setPaDepth] = useState<PersonalAiDepth>("standard");
   const [pending, setPending] = useState<Pending | null>(null);
   // SCHOLAR-GUIDED-LEARNING-01: Guided by default (opening a lesson teaches it); Manual is the learner's own choice.
@@ -593,12 +593,12 @@ export function LearnWorkspace(props: {
     const failed = (error: string) => setAssist(list => [{ id, asked: question, error, followUp: followUp?.kind }, ...list.filter(a => a.id !== id)]);
     if (r.kind === "stream") {
       if (r.error) { failed(r.error.message); return; }
-      setAssist(list => list.map(a => (a.id === id ? { ...a, answer: r.text, streaming: false, sources: r.done?.sources } : a)));
+      setAssist(list => list.map(a => (a.id === id ? { ...a, answer: r.text, streaming: false, sources: r.done?.sources, label: r.done?.label } : a)));
       return;
     }
     const prompt = r.ok ? null : clarifyFrom(r.json);
     if (prompt) { setPending({ prompt, target: "assistant", question, followUp }); return; }
-    if (r.ok) setAssist(list => [{ id, asked: question, answer: String(r.json.answer ?? ""), followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources : undefined }, ...list]);
+    if (r.ok) setAssist(list => [{ id, asked: question, answer: String(r.json.answer ?? ""), followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources : undefined, label: typeof r.json.label === "string" ? r.json.label : undefined }, ...list]);
     else failed(String(r.json.error ?? "Your assistant could not answer just now."));
   }, [session, step, studyBody, paDepth, spelling]);
   // SCHOLAR-SQIE-02: a withheld answer offers evidence recovery beneath it, in the learner's own source mode. "Explain
@@ -1286,7 +1286,7 @@ export function LearnWorkspace(props: {
                   if (i > 0) return (
                     <details key={a.id} className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50">
                       <summary className={`flex min-h-[40px] cursor-pointer items-center gap-2 rounded-xl px-3 py-2 text-[12.5px] text-gray-700 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-                        <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{PERSONAL_AI_LABEL}</span>
+                        <span className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{a.label ?? PERSONAL_AI_LABEL}</span>
                         <span className="min-w-0 flex-1 truncate"><span className="font-semibold">You:</span> {asked}</span>
                       </summary>
                       <div className="px-3 pb-3">{body}</div>
@@ -1294,7 +1294,7 @@ export function LearnWorkspace(props: {
                   );
                   return (
                     <article key={a.id} className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-3">
-                      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{PERSONAL_AI_LABEL}</p>
+                      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{a.label ?? PERSONAL_AI_LABEL}</p>
                       <p className="mt-1 text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {asked}</p>
                       {body}
                       {!a.error && !a.streaming && a.answer && (
