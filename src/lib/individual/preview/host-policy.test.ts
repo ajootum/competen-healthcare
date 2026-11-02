@@ -1,8 +1,9 @@
+import { COMPETEN_DOMAIN as D } from "@/lib/identity/domains";
 import { describe, it, expect } from "vitest";
 import { decidePreviewRequest, classifyPreviewPath, isTestingWritePath, normalisePath } from "./host-policy";
 
-const PREVIEW = "preview.competenhealthcare.com";
-const MAIN = "www.competenhealthcare.com";
+const PREVIEW = `preview.${D}`;
+const MAIN = `www.${D}`;
 const d = (path: string, method = "GET", mode: "read_only" | "testing" | null = "read_only", host = PREVIEW) =>
   decidePreviewRequest(host, path, method, mode);
 
@@ -94,7 +95,7 @@ describe("preview host: testing mode writes", () => {
 
 describe("the main host and lookalikes", () => {
   it("404s /preview/* on the main host and on every non-preview host", () => {
-    for (const h of [MAIN, "competenhealthcare.com", "staff.competenhealthcare.com", "localhost", "localhost:3100", "127.0.0.1", null, undefined, ""])
+    for (const h of [MAIN, `${D}`, `staff.${D}`, "localhost", "localhost:3100", "127.0.0.1", null, undefined, ""])
       expect(decidePreviewRequest(h, "/preview/enter", "GET", null).action, String(h)).toBe("not_found");
   });
   it("leaves every other path on the main host untouched", () => {
@@ -102,7 +103,7 @@ describe("the main host and lookalikes", () => {
       expect(decidePreviewRequest(MAIN, p, "POST", null).action, p).toBe("allow");
   });
   it("treats a lookalike host as the main host, so it gets no preview behaviour at all", () => {
-    for (const h of ["notpreview.competenhealthcare.com", "preview.competenhealthcare.com.evil.test", "x.preview.competenhealthcare.com", "preview.localhost.evil.test"]) {
+    for (const h of [`notpreview.${D}`, `preview.${D}.evil.test`, `x.preview.${D}`, "preview.localhost.evil.test"]) {
       expect(decidePreviewRequest(h, "/preview/enter", "GET", null).action, h).toBe("not_found");
       expect(decidePreviewRequest(h, "/super-admin", "GET", null).action, h).toBe("allow");
     }
@@ -110,7 +111,7 @@ describe("the main host and lookalikes", () => {
   it("recognises the dev host and a port", () => {
     expect(decidePreviewRequest("preview.localhost:3100", "/login", "GET", null).action).toBe("not_found");
     expect(decidePreviewRequest("preview.localhost:3100", "/individual/scholar", "GET", "read_only").action).toBe("allow");
-    expect(decidePreviewRequest("PREVIEW.competenhealthcare.com", "/login", "GET", null).action).toBe("not_found");
+    expect(decidePreviewRequest(`PREVIEW.${D}`, "/login", "GET", null).action).toBe("not_found");
   });
   it("leaves an unjudgeable path on the main host alone (only /preview is ours to refuse)", () => {
     expect(decidePreviewRequest(MAIN, "/a/%zz", "GET", null).action).toBe("allow");
