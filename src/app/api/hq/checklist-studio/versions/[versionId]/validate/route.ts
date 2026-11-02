@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { validateInstrument } from "@/lib/assessment/studio/service";
 import { isUuid, refuse } from "@/lib/assessment/studio/api";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 // writes the result as a validated event in the history, which needs the author capability to be held.
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.view]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.view]));
   if (isHqRefusal(ctx)) return ctx;
   const { versionId } = await params;
   if (!isUuid(versionId)) return refuse(400, "Choose a version.");

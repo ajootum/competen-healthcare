@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { saveContent } from "@/lib/assessment/studio/write";
 import { isUuid, mustHold, refuse } from "@/lib/assessment/studio/api";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 // changes positions only: item stable keys never change. A version that is not a draft is refused (409).
 
 export async function PUT(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;

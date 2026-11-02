@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { saveScoring } from "@/lib/assessment/studio/write";
 import { copyScoringTemplate, validateInstrument } from "@/lib/assessment/studio/service";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 //   POST { action: "copy_template", templateVersionId }  copies a PUBLISHED scoring template and re-validates it against this checklist.
 
 export async function PUT(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;
@@ -28,7 +29,7 @@ export async function PUT(req: Request, { params }: { params: Promise<{ versionI
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;

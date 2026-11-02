@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { listLibrary, loadRegistries } from "@/lib/assessment/studio/read";
 import { LibraryTable } from "./_components/LibraryTable";
@@ -13,7 +14,7 @@ export const metadata: Metadata = { title: "Checklist Studio" };
 // reads; each action inside re-checks its own capability, held through a Checklist Studio appointment. A platform owner without one can
 // look but not change. Reads definition tables only: never an instance, response, evidence or outcome.
 export default async function ChecklistStudioPage() {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const [rows, registries] = await Promise.all([listLibrary(ctx.admin), loadRegistries(ctx.admin)]);
   const canAuthor = ctx.capabilities.includes(CAP.author);
   return (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { saveSettings, saveTags, type SettingsPatch } from "@/lib/assessment/studio/write";
 import { isUuid, mustHold, refuse } from "@/lib/assessment/studio/api";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 //   respondent_roles, delivery_modes, evidence_policy, effective_from, review_due }, tags?: uuid[] }.
 
 export async function PUT(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;

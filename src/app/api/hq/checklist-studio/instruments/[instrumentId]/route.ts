@@ -1,4 +1,5 @@
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { createFirstVersion, renameInstrument } from "@/lib/assessment/studio/write";
 import { isUuid, mustHold, refuse, respond } from "@/lib/assessment/studio/api";
@@ -11,7 +12,7 @@ export const dynamic = "force-dynamic";
 //         the first draft for an instrument that was registered in the catalogue without a version
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ instrumentId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;
@@ -25,7 +26,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ instru
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ instrumentId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { nameMap, reviewQueue } from "@/lib/assessment/studio/read";
 
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 // decided on its current content.
 
 export async function GET() {
-  const ctx = await hqApiGate([CAP.review, CAP.domainReview]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.review, CAP.domainReview]));
   if (isHqRefusal(ctx)) return ctx;
   const queue = await reviewQueue(ctx.admin, ctx.userId, ctx.capabilities);
   const names = await nameMap(ctx.admin, queue.map((q) => q.submittedBy));

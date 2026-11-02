@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { listProgressionVersions, listScaleVersions } from "@/lib/assessment/studio/read";
 import { DefCreate } from "../_components/DefCreate";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Progression rules" };
 
 export default async function ProgressionPage() {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const canAuthor = ctx.capabilities.includes(CAP.author);
   const [versions, scales] = await Promise.all([listProgressionVersions(ctx.admin), listScaleVersions(ctx.admin)]);
   const stageScales = scales.filter((s) => s.scale_kind === "stage" && s.state === "published").map((s) => ({ id: s.id, label: `${s.scale_name} (${s.scale_code}) v${s.version_no}` }));

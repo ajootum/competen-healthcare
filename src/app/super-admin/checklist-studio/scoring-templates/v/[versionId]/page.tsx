@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadRuleTemplateVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Scoring template" };
 
 export default async function RuleTemplateVersionPage({ params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const { versionId } = await params;
   const v = await loadRuleTemplateVersion(ctx.admin, versionId);
   if (!v) notFound();

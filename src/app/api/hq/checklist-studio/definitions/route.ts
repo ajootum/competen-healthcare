@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { createDefinition } from "@/lib/assessment/studio/write";
 import { isUuid, mustHold, refuse, respond } from "@/lib/assessment/studio/api";
@@ -14,7 +15,7 @@ export const dynamic = "force-dynamic";
 //   { action: "import_scale", scaleId, mappingId? }   a draft response scale (and its stage scale) made from an existing scoring scale
 
 export async function POST(req: Request) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { buildTimeline, loadInstrument, loadRegistries, loadTrail, nameMap } from "@/lib/assessment/studio/read";
 import { isUuid } from "@/lib/assessment/studio/api";
@@ -13,7 +14,7 @@ export const metadata: Metadata = { title: "Checklist versions" };
 // /super-admin/checklist-studio/[instrumentId] -- Checklist Studio (S2): the versions of one instrument and its history timeline
 // (definition events and review decisions). Duplicate to a new draft and retire are here. Studio view opens it.
 export default async function InstrumentPage({ params }: { params: Promise<{ instrumentId: string }> }) {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const { instrumentId } = await params;
   if (!isUuid(instrumentId)) notFound();
   const data = await loadInstrument(ctx.admin, instrumentId);

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadProgressionVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Progression rule set" };
 
 export default async function ProgressionVersionPage({ params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const { versionId } = await params;
   const v = await loadProgressionVersion(ctx.admin, versionId);
   if (!v) notFound();

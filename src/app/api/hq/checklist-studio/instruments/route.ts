@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { listLibrary, loadRegistries } from "@/lib/assessment/studio/read";
 import { createInstrument } from "@/lib/assessment/studio/write";
@@ -15,14 +16,14 @@ export const dynamic = "force-dynamic";
 // The actor is always the signed-in person. The database refuses a person who does not hold the capability.
 
 export async function GET() {
-  const ctx = await hqApiGate([CAP.view]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.view]));
   if (isHqRefusal(ctx)) return ctx;
   const [rows, registries] = await Promise.all([listLibrary(ctx.admin), loadRegistries(ctx.admin)]);
   return NextResponse.json({ rows, registries });
 }
 
 export async function POST(req: Request) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;

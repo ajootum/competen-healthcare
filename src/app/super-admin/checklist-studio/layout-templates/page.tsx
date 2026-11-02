@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { listLayoutTemplates } from "@/lib/assessment/studio/read";
 import { DefCreate } from "../_components/DefCreate";
@@ -14,7 +15,7 @@ const PRES: Record<string, string> = {
 };
 
 export default async function LayoutTemplatesPage() {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const canAuthor = ctx.capabilities.includes(CAP.author);
   const versions = await listLayoutTemplates(ctx.admin);
   return (

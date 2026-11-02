@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { isUuid } from "@/lib/assessment/studio/api";
 import { listLayoutTemplates, listRuleTemplates, listScaleChoices, loadInstrumentVersion, loadRegistries } from "@/lib/assessment/studio/read";
@@ -17,7 +18,7 @@ export const metadata: Metadata = { title: "Checklist version" };
 // Settings & Review and Preview for one version. Studio view opens it. Editing needs the author capability, held through an appointment,
 // and only on a draft. Every action re-checks its own capability in the API and the database refuses what is not independent.
 export default async function VersionPage({ params }: { params: Promise<{ instrumentId: string; versionId: string }> }) {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const { instrumentId, versionId } = await params;
   if (!isUuid(instrumentId) || !isUuid(versionId)) notFound();
   const loaded = await loadInstrumentVersion(ctx.admin, versionId);

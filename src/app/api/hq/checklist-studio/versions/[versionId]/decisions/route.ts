@@ -1,4 +1,5 @@
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { recordDecision } from "@/lib/assessment/studio/write";
 import { isUuid, kindOf, mustHold, refuse, respond } from "@/lib/assessment/studio/api";
@@ -12,7 +13,7 @@ export const dynamic = "force-dynamic";
 // was made on, so changing the content later makes it stale.
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.review, CAP.domainReview]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.review, CAP.domainReview]));
   if (isHqRefusal(ctx)) return ctx;
   const { versionId } = await params;
   const b = await req.json().catch(() => ({}));

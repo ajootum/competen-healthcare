@@ -12,7 +12,9 @@ export const refuse = (status: number, error: string, extra: Record<string, unkn
 /**
  * hqApiGate admits a platform owner, who holds no appointment. The 890 design gives the owner NO database
  * short-circuit (appointments are required), so a Studio write also needs the capability to be HELD through a
- * live appointment. Returns a refusal response, or null.
+ * live appointment. ctx.capabilities is the effective list: the route wraps its gate in withOwnAppointments, which
+ * for an owner asks individual_holds_capability (the database's own question) and for anyone else changes nothing.
+ * Returns a refusal response, or null.
  */
 export function mustHold(ctx: HqContext, capability: string): NextResponse | null {
   return ctx.capabilities.includes(capability)

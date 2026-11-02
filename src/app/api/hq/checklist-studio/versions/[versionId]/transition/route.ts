@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { approveVersion, deleteDraft, duplicateVersion, publishVersion, retireVersion, returnToDraft } from "@/lib/assessment/studio/write";
 import { submitForReview } from "@/lib/assessment/studio/service";
@@ -16,7 +17,7 @@ export const dynamic = "force-dynamic";
 // The gate admits the lowest right and each action re-checks its own. Every refusal of the database comes back in plain words.
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.author, CAP.review, CAP.publish]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author, CAP.review, CAP.publish]));
   if (isHqRefusal(ctx)) return ctx;
   const { versionId } = await params;
   const b = await req.json().catch(() => ({}));

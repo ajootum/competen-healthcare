@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { nameMap, reviewQueue } from "@/lib/assessment/studio/read";
 import { KIND_LABEL } from "@/lib/assessment/studio/types";
@@ -13,7 +14,7 @@ export const metadata: Metadata = { title: "Review queue" };
 
 // The versions in review that THIS person may still decide: never one they authored, edited or submitted, and not one they already decided on.
 export default async function ReviewQueuePage() {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const canReview = ctx.capabilities.includes(CAP.review) || ctx.capabilities.includes(CAP.domainReview);
   const queue = canReview ? await reviewQueue(ctx.admin, ctx.userId, ctx.capabilities) : [];
   const names = await nameMap(ctx.admin, queue.map((q) => q.submittedBy));

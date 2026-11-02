@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { listScaleVersions } from "@/lib/assessment/studio/read";
 import { listSourceScales } from "@/lib/assessment/adapters/scholar/scales";
@@ -13,7 +14,7 @@ export const metadata: Metadata = { title: "Response scales" };
 // /super-admin/checklist-studio/scales -- Checklist Studio (S2). One right opens every Studio page (studio.view). Creating needs the author
 // capability, held through an appointment. A scale is versioned like a checklist, and an item may use only a PUBLISHED scale version.
 export default async function ScalesPage() {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const canAuthor = ctx.capabilities.includes(CAP.author);
   const [versions, sources] = await Promise.all([listScaleVersions(ctx.admin), listSourceScales(ctx.admin).catch(() => [])]);
   return (

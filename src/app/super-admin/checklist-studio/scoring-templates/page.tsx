@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { listRuleTemplates } from "@/lib/assessment/studio/read";
 import { DefCreate } from "../_components/DefCreate";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Scoring templates" };
 
 export default async function ScoringTemplatesPage() {
-  const ctx = await requireHqCapability("hq.assessment.studio.view");
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
   const canAuthor = ctx.capabilities.includes(CAP.author);
   const versions = await listRuleTemplates(ctx.admin);
   return (

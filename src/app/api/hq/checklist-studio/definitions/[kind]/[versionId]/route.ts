@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { saveLayoutTemplate, saveProgression, saveRuleTemplate, saveScale, type ScaleSave } from "@/lib/assessment/studio/write";
 import { isUuid, mustHold, refuse } from "@/lib/assessment/studio/api";
@@ -15,7 +16,7 @@ export const dynamic = "force-dynamic";
 // Lifecycle (submit, review, publish, retire, duplicate) goes through versions/[versionId]/transition with the kind in the body.
 
 export async function PUT(req: Request, { params }: { params: Promise<{ kind: string; versionId: string }> }) {
-  const ctx = await hqApiGate([CAP.author]);
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
   if (isHqRefusal(ctx)) return ctx;
   const denied = mustHold(ctx, CAP.author);
   if (denied) return denied;
