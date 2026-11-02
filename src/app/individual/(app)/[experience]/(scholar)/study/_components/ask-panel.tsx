@@ -60,7 +60,8 @@ export function AskAbout(props: AskAboutProps) {
   );
 }
 
-type Turn = { id: number; q: string; a: string; streaming: boolean; followUp?: FollowUpKind; sources?: PersonalAiSourceRef[]; error?: string };
+// `label` is what the SERVER says the answer is (ask-grounding.ts: sections given and cited). Until it arrives, and when it does not, the cautious PERSONAL_AI_LABEL.
+type Turn = { id: number; q: string; a: string; streaming: boolean; followUp?: FollowUpKind; sources?: PersonalAiSourceRef[]; label?: string; error?: string };
 
 function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, prefill, onClose }: AskAboutProps & { onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
@@ -107,14 +108,14 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
     if (r.kind === "stream") {
       // A failure after text began: the partial text is not an answer and is not kept.
       if (r.error) { setTurns(t => t.filter(x => x.id !== id)); setError({ body: { error: r.error.message } }); return; }
-      patch({ a: r.text, streaming: false, sources: r.done?.sources });
+      patch({ a: r.text, streaming: false, sources: r.done?.sources, label: r.done?.label });
       if (!followUp) setQuestion("");
       return;
     }
     const prompt = r.status === 409 ? clarifyFrom(r.json) : null;
     if (prompt) { setClarify({ q: text, followUp, prompt }); return; }
     if (!r.ok) { setError({ body: r.json }); return; }
-    setTurns(t => [{ id, q: text, a: String(r.json.answer ?? ""), streaming: false, followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources as PersonalAiSourceRef[] : undefined }, ...t]);
+    setTurns(t => [{ id, q: text, a: String(r.json.answer ?? ""), streaming: false, followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources as PersonalAiSourceRef[] : undefined, label: typeof r.json.label === "string" ? r.json.label : undefined }, ...t]);
     if (!followUp) setQuestion("");
   }
 
@@ -134,7 +135,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
 
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700">
-            {grounded ? "Your Personal AI is given the sections of your notes linked to this, and cites them. " : "No section of your notes is linked to this, so the answer is a general explanation. "}
+            {grounded ? "Your Personal AI is given the sections of your notes linked to this and asked to cite them. The label above each answer says whether it did. " : "No section of your notes is linked to this, so the answer is a general explanation. "}
             Nothing is saved: the conversation is gone when you leave this page.
           </p>
           <form onSubmit={e => { e.preventDefault(); void send(question); }}>
@@ -168,7 +169,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
               );
               return (
                 <article key={t.id} className="rounded-xl border-2 border-indigo-200 bg-indigo-50/50 p-3">
-                  <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{PERSONAL_AI_LABEL}</p>
+                  <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-indigo-900">{t.label ?? PERSONAL_AI_LABEL}</p>
                   <p className="mt-1 text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {asked}</p>
                   {body}
                   {!t.streaming && t.a && (

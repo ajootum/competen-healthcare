@@ -615,8 +615,8 @@ const assistantShared = (src: Src) => {
     && /experience: "scholar", mode, question,/.test(r) && /const mode = body\?\.mode === "ask" \? "ask" : "teach";/.test(r)
     && /const study = await scholarRisk\(ctx\.admin, ctx\.userId, \{ passages \}\);/.test(r) && /, study, purpose,\n/.test(r)
     && !/saveArtefact|recordLearningEvent|updateLearningSession|runMeteredAi|scholarAiRunner|generate\(/.test(r)
-    && /label: PERSONAL_AI_LABEL/.test(r)
-    && /\{PERSONAL_AI_LABEL\}/.test(client) && /setAssist\(/.test(client) && !/setCards\([^;]*assistant/.test(client)
+    && /label: answerLabel\(given\(out\), cited\)/.test(r)
+    && /\{a\.label \?\? PERSONAL_AI_LABEL\}/.test(client) && /setAssist\(/.test(client) && !/setCards\([^;]*assistant/.test(client)
     && !/runIndividualAssistant/.test(act);
 };
 /**
@@ -1283,7 +1283,7 @@ function main() {
   ok("P47. ⚠ K29 goes red when the screen moves after the call, the answer is saved as an artefact, or the label goes",
     !assistantShared(plant(ASSIST, "if (findPatientIdentifiers(question).length)", "if (false)"))
     && !assistantShared(plant(ASSIST, "  const study = await scholarRisk(", "  await saveArtefact(ctx.admin, ctx.userId, {} as never);\n  const study = await scholarRisk("))
-    && !assistantShared(plant(ASSIST, "label: PERSONAL_AI_LABEL", "label: null")));
+    && !assistantShared(plant(ASSIST, "label: answerLabel(given(out), cited)", "label: null")));
   ok("P61. ⚠ K43 goes red when the search runs without the risk gate, or the query is built from the passages",
     !meteredEverywhere(plant(`${API}/learn/act/route.ts`, "if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: \"risk_raised\" };", ""))
     && !researchGoverned(plant(`${API}/learn/act/route.ts`, "const gate = await scholarRiskGate(ctx, activity, risk);", "const gate = null;"))
