@@ -6,6 +6,8 @@ import type { ActivityColumns, GoalColumns, GoalSourceRefs, ReviewInput } from "
 import type { GoalStatus } from "./plan-vocabulary";
 import { linkGoal, versionOf } from "./needs-store";
 import { ORIGIN } from "./vocabulary";
+import { professionalPlanItems } from "../learning-plan/professional-adapter";
+import type { PlanItem } from "../learning-plan/types";
 
 // ── THE DEVELOPMENT PLAN, READ AND WRITTEN ── COMPETEN-PROFESSIONAL-PLAN-01, migration 480 ─────────────────────────
 //
@@ -88,6 +90,17 @@ export async function loadPlanWorkspace(admin: any, userId: string): Promise<Pla
   ]);
   if (!provisioned) return { provisioned, goals: [], history: [], activities: [], activityGoals: [], milestones: [], competencies: [], evidence: [], reviews: [] };
   return { provisioned, goals, history, activities, activityGoals, milestones, competencies, evidence, reviews };
+}
+
+/**
+ * PLP-01..04 (Professional ready, not surfaced): the person's open planned activities and dated open goals as the shared
+ * PlanItem. A read of the caller's own rows only. Null when the plan could not be read. Empty before 480 is applied.
+ */
+export async function loadProfessionalPlanItems(admin: any, userId: string, today: string): Promise<PlanItem[] | null> {
+  const w = await loadPlanWorkspace(admin, userId);
+  if (!w.provisioned) return [];
+  if (!w.goals || !w.activities) return null;
+  return professionalPlanItems({ goals: w.goals, activities: w.activities }, today);
 }
 
 export type Write = { ok: true; id: string | null } | { ok: false; status: number; error: string };

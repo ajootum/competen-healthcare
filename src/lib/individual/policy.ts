@@ -77,7 +77,8 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
-  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words";
+  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
+  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -101,7 +102,7 @@ export type OptionsPolicyKey = "scholar_institutions" | "professional_evaluation
 /** COMPETEN-PROFESSIONAL-PROFILE-01: an ORDERED choice from a fixed list (form fields, profile sections). */
 export type SequencePolicyKey = "professional_progress_views" | "professional_registration_fields" | "professional_profile_sections" | "professional_need_fields" | "professional_need_stages"
   | "professional_goal_fields" | "professional_goal_statuses" | "professional_activity_statuses" | "professional_goal_review_fields"
-  | "professional_self_assessment_fields" | "passport_sections" | "scholar_recovery_provider_order";
+  | "professional_self_assessment_fields" | "passport_sections" | "scholar_recovery_provider_order" | "scholar_plan_rule_order";
 export type LevelsPolicyKey = "scholar_programme_levels";
 /** One value from a fixed list. P0: the least-reviewed content status Scholar offers (migration 394). */
 export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_profile_ai"
@@ -125,7 +126,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
-  | "scholar_lesson_visuals" | "scholar_visual_classify";
+  | "scholar_lesson_visuals" | "scholar_visual_classify"
+  | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1897,6 +1899,56 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 40, min: 10, max: 200,
     limitReason: "Ten to two hundred words. Default: forty.",
   },
+  // PLP-01..04 (owner GO "Personal Learning and Development Planning Engine"): My Plan, deterministic and without AI. One contiguous block.
+  {
+    key: "scholar_my_plan", kind: "choice", product: "Scholar",
+    label: "My Plan: today, calendar and insights",
+    help: "Whether Scholar offers My Plan: the one next activity for today with the reasons for it, a calendar, and study insights. Built from the student's own settings and records with fixed rules. No AI is used to plan, show or reschedule anything.",
+    options: [{ value: "on", label: "Offer My Plan" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Decisions, reflections, goal type and session minutes need migration 840. Without it My Plan works from the study plan and calendar alone. Default: offered.",
+  },
+  {
+    key: "scholar_plan_proposal", kind: "choice", product: "Scholar",
+    label: "My Plan: propose a plan for each upload",
+    help: "Whether the page shown when a student's notes are ready offers a suggested sequence, workload and revision points that the student may accept, change or decline. Learning never waits for the answer.",
+    options: [{ value: "on", label: "Offer a proposal" }, { value: "off", label: "Do not offer" }],
+    fallback: "on",
+    limitReason: "Remembering the answer needs migration 840. Default: offered.",
+  },
+  {
+    key: "scholar_plan_section_minutes", kind: "int", product: "Scholar", unit: "minutes",
+    label: "My Plan: minutes estimated for one section",
+    help: "The time a plan proposal allows for studying one section of a student's notes, used for the workload estimate.",
+    fallback: 12, min: 5, max: 60,
+    limitReason: "Five to sixty minutes. Default: twelve.",
+  },
+  {
+    key: "scholar_plan_rule_order", kind: "sequence", product: "Scholar",
+    label: "My Plan: what comes first",
+    help: "The order the planning rules are applied in when choosing the next activity. Revision that is due, topics showing gaps, unfinished lessons, the exam date, a deadline the student put in their calendar, consolidating what was recently studied, and covering all accepted notes. Rules left out are not used.",
+    options: [
+      { value: "due_revision", label: "Revision that is due" }, { value: "gaps", label: "Gaps shown by practice" }, { value: "unfinished", label: "Unfinished lessons" },
+      { value: "exam", label: "Exam date" }, { value: "deadline", label: "Deadlines in the student calendar" }, { value: "consolidate", label: "Consolidate recent study" }, { value: "coverage", label: "Cover all accepted notes" },
+    ],
+    fallback: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"],
+    limitReason: "Only these seven rules. Default order as listed.",
+  },
+  {
+    key: "scholar_plan_weekly_reflection", kind: "choice", product: "Scholar",
+    label: "My Plan: weekly reflection",
+    help: "Whether My Plan asks once a week if the workload felt manageable, too demanding or too light. The answer is private. It may lead to an offer to change session length, which the student accepts or ignores. Nothing changes by itself.",
+    options: [{ value: "on", label: "Ask once a week" }, { value: "off", label: "Do not ask" }],
+    fallback: "on",
+    limitReason: "Keeping the answer needs migration 840. Default: ask.",
+  },
+  {
+    key: "scholar_plan_max_weekly_minutes", kind: "int", product: "Scholar", unit: "minutes",
+    label: "My Plan: most weekly minutes without confirmation",
+    help: "The most study minutes a week a student can set, or be offered, without confirming the increase. A higher setting needs the student to confirm it. A student may still choose it.",
+    fallback: 600, min: 60, max: 3000,
+    limitReason: "Sixty to three thousand minutes. Default: six hundred.",
+  },
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -2225,6 +2277,14 @@ export type IndividualPolicy = {
   /** SCHOLAR-VISUAL-CLASSIFY-01. */
   scholarVisualClassify: "on" | "off";
   scholarVisualTextWords: number;
+  /** PLP-01..04: My Plan. */
+  scholarMyPlan: "on" | "off";
+  scholarPlanProposal: "on" | "off";
+  scholarPlanSectionMinutes: number;
+  /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
+  scholarPlanRuleOrder: string[];
+  scholarPlanWeeklyReflection: "on" | "off";
+  scholarPlanMaxWeeklyMinutes: number;
 };
 
 /** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
@@ -2402,6 +2462,12 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLessonVisualsMinPx: int("scholar_lesson_visuals_min_px"),
     scholarVisualClassify: clampChoice(policyDef("scholar_visual_classify") as ChoicePolicy, published.get(policyPath("scholar_visual_classify"))) as "on" | "off",
     scholarVisualTextWords: int("scholar_visual_text_words"),
+    scholarMyPlan: clampChoice(policyDef("scholar_my_plan") as ChoicePolicy, published.get(policyPath("scholar_my_plan"))) as "on" | "off",
+    scholarPlanProposal: clampChoice(policyDef("scholar_plan_proposal") as ChoicePolicy, published.get(policyPath("scholar_plan_proposal"))) as "on" | "off",
+    scholarPlanSectionMinutes: int("scholar_plan_section_minutes"),
+    scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
+    scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
+    scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),
   };
 }
 
@@ -2547,6 +2613,13 @@ export const isStudySessionsOn = (policy: Pick<IndividualPolicy, "scholarStudySe
  */
 export const isStudyPlanOn = (policy: Pick<IndividualPolicy, "scholarStudyPlan">, schema780: boolean): boolean =>
   policy.scholarStudyPlan === true && schema780 === true;
+
+/**
+ * PLP-01..04. My Plan is on only where HQ switched it on AND the study plan table (780) is present. The parts that need 840
+ * (decisions, reflections, proposal memory, goal type, session minutes) are separately gated on learningPlanSchema.
+ */
+export const isMyPlanOn = (policy: Pick<IndividualPolicy, "scholarMyPlan" | "scholarStudyPlan">, schema780: boolean): boolean =>
+  policy.scholarMyPlan === "on" && policy.scholarStudyPlan === true && schema780 === true;
 
 /** The effective policy now. Fail-soft: anything unreadable is today's constant. */
 export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy> {

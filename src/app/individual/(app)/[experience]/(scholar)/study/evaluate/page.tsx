@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { evaluationPrefill } from "@/lib/individual/scholar/study-carry";
@@ -49,7 +51,7 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
   ]);
   const mats = (materials.ok ? materials.data : []).filter(m => m.chunkCount > 0);
   // SCHOLAR-MONTHLY-REVIEW-01: the optional monthly learning review (no migration; opt-out and resume need 830). Unreadable is said, never hidden.
-  const today = new Date().toISOString().slice(0, 10);
+  const today = learnerToday(await headers());
   const monthlyOn = monthlyReviewOn(policy) && mats.length > 0;
   const monthly = monthlyOn ? await loadMonthlyOverview(ctx.admin, ctx.userId, policy, today) : null;
   // SCHOLAR-SESSION-AI-02: the open study session (database reads only) only chooses EvaluationStart's first scope (D5).

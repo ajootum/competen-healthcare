@@ -127,6 +127,11 @@ function main() {
     // (14g). Never a programme delete -- a programme is retired by deactivation. Kept out of the Scholar store on
     // purpose: scholar-learning K1 keeps those configuration tables read-only for Scholar code.
     "src/lib/individual/programme-admin.ts": ["individual_scholar_programme.update", "individual_scholar_programme.insert", "individual_scholar_programme_framework.delete", "individual_scholar_programme_framework.upsert"],
+    // PLP-01..04 (migration 840): the shared Individual learning plan. The append-only event log has ONE writer (insert only: the table refuses update and
+    // delete), and the learner own calendar tables have ONE writer, called only from the Scholar plan services with the experience named (the Professional
+    // experience reuses the same tables with experience professional). Every statement in both is keyed on the caller own user_id and on the experience.
+    "src/lib/individual/learning-plan/event-store.ts": ["individual_learning_plan_event.insert"],
+    "src/lib/individual/learning-plan/entry-store.ts": ["individual_learning_calendar_entry.insert", "individual_learning_calendar_entry.update", "individual_learning_calendar_entry.delete", "individual_learning_calendar_exception.upsert", "individual_learning_calendar_exception.delete"],
   };
   const writes: string[] = [];
   for (const [f, src] of SRC) {

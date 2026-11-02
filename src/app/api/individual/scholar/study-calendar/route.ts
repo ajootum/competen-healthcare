@@ -3,7 +3,8 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { audit } from "@/lib/individual/scholar/http";
 import { calendarSchema, putCalendarEntry, removeCalendarEntry } from "@/lib/individual/scholar/store";
-import { CALENDAR_REACH_DAYS, validateMove } from "@/lib/individual/scholar/study-calendar";
+import { CALENDAR_REACH_DAYS, LEGACY_PLAN_ACTIVITY_REF, PLAN_ACTIVITY_REF, validateMove } from "@/lib/individual/scholar/study-calendar";
+import { learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import { OPTOUT_REF, addDays, dayNum, isDay, isMonth, recommendedDate } from "@/lib/individual/scholar/monthly-review";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
@@ -18,14 +19,17 @@ export const dynamic = "force-dynamic";
 // OWN ROWS ONLY, keyed on the caller. NEVER A CARD DATE: nothing here reads or writes a card schedule. A move is a scheduling
 // choice for the plan and the review only. Without 830 every action answers 409 and the calendar offers no Move button.
 
-const PLAN_REF = /^(learn|revise|apply|evaluate)\|[a-z0-9-]{0,60}\|[0-9]{1,3}$/;
+// A planned activity is `${ref}|${nth}`, ref = `${space}:${topic key | chunk id | due | mixed}` (PLP-01..04). The OLD title format
+// (`space|slug|nth`) is accepted ONLY to put an earlier move back (restore): it is never written again.
+const PLAN_REF = PLAN_ACTIVITY_REF;
+const LEGACY_PLAN_REF = LEGACY_PLAN_ACTIVITY_REF;
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
   const policy = await loadIndividualPolicy(ctx.admin);
-  const today = new Date().toISOString().slice(0, 10);
+  const today = learnerToday(req.headers);
   const action = body?.action;
   const notReady = () => NextResponse.json({ error: "Moving things on the calendar is not available here yet." }, { status: 409 });
   if (!(await calendarSchema(ctx.admin, ctx.userId))) return notReady();
@@ -51,7 +55,7 @@ export async function POST(req: Request) {
   const kind = body?.kind;
   const ref = typeof body?.ref === "string" ? body.ref : "";
   if (kind !== "plan_activity" && kind !== "monthly_review") return NextResponse.json({ error: "Choose a planned activity or the monthly review." }, { status: 400 });
-  if (kind === "plan_activity" ? !PLAN_REF.test(ref) : !isMonth(ref)) return NextResponse.json({ error: "That item could not be found." }, { status: 400 });
+  if (kind === "plan_activity" ? !(PLAN_REF.test(ref) || (action === "restore" && LEGACY_PLAN_REF.test(ref))) : !isMonth(ref)) return NextResponse.json({ error: "That item could not be found." }, { status: 400 });
 
   if (action === "reschedule") {
     const to = validateMove(body?.scheduledDate, today);

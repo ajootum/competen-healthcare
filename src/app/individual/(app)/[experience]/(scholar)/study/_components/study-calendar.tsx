@@ -23,6 +23,7 @@ const CHIP: Record<CalendarKind, string> = {
   due_revision: "border-green-300 bg-green-50 text-green-900",
   completed: "border-gray-300 bg-gray-50 text-gray-800",
   monthly_review: "border-amber-300 bg-amber-50 text-amber-900",
+  personal: "border-purple-300 bg-purple-50 text-purple-900",
 };
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const longDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });

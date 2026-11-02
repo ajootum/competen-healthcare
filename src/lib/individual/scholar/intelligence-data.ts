@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { progressRows, reviewRows, type Read } from "./store";
+import { caseDecisionTimes, learningEventTimes, progressRows, reviewRows, type Read } from "./store";
+import type { StudyStamp } from "./learning-definitions";
 import { buildIntelligence, type LearningIntelligence } from "./intelligence";
 import { COMPETENCY_SOURCES, type CompetencyCatalogueSource, type CompetencyMappingSource } from "./competency-sources";
 import type { IndividualPolicy } from "../policy";
@@ -19,11 +20,18 @@ export async function loadLearningIntelligence(admin: any, userId: string, polic
   sources?: { catalogue: CompetencyCatalogueSource; mappings: CompetencyMappingSource };
   /** Rows the caller has already read (the progress page), so nothing is read twice. */
   pre?: { rows: Rows; reviews: Reviews };
+  /** PLP-01..04: the learner's time zone, so a study day is their local day (UTC when not given). */
+  tz?: string;
 } = {}): Promise<Read<LearningIntelligence>> {
   const sources = opts.sources ?? COMPETENCY_SOURCES;
   const [rows, reviews] = opts.pre ? [opts.pre.rows, opts.pre.reviews] : await Promise.all([progressRows(admin, userId), reviewRows(admin, userId)]);
   if (!rows.ok) return rows;
   if (!reviews.ok) return reviews;
+  // PLP-01..04: the other recorded learning (lesson events, case decisions) so a study day is the shared definition. An unreadable source adds none.
+  const [lessons, decisions] = await Promise.all([learningEventTimes(admin, userId), caseDecisionTimes(admin, userId)]);
+  const activity: StudyStamp[] = [
+    ...(lessons.ok ? lessons.data.map(at => ({ kind: "lesson" as const, at })) : []), ...(decisions.ok ? decisions.data.map(at => ({ kind: "decision" as const, at })) : []),
+  ];
   const questionIds = rows.data.questions.map(q => q.id);
   const [catalogue, mappings] = await Promise.all([
     sources.catalogue.competenciesFor(admin, userId),
@@ -36,7 +44,7 @@ export async function loadLearningIntelligence(admin: any, userId: string, polic
       reviews: reviews.data,
       catalogue: catalogue.ok ? catalogue.value : null, mappings: mappings.ok ? mappings.value : null,
       competencyUnreadable: !catalogue.ok || !mappings.ok,
-      today, t: { minAnswers: policy.scholarInsightMinAnswers, windowDays: policy.scholarInsightWindowDays },
+      today, t: { minAnswers: policy.scholarInsightMinAnswers, windowDays: policy.scholarInsightWindowDays }, tz: opts.tz, activity,
     }),
   };
 }

@@ -2,6 +2,8 @@
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
+import { learningPlanSchema } from "../learning-plan/event-store";
+import type { GoalType } from "../learning-plan/types";
 import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { AiReading, Chunk, ExtractionQuality } from "./extract";
 import { planChunkInsertion, type NewChunk } from "./slide-images";
@@ -2117,6 +2119,13 @@ export async function learningEventTimes(admin: Admin, userId: string): Promise<
   return { ok: true, data: ((data ?? []) as any[]).map(r => r.created_at as string) };
 }
 
+/** When the caller made a case decision (an answer to a decision point of a case), newest first: timestamps only, for the shared study-activity day. */
+export async function caseDecisionTimes(admin: Admin, userId: string): Promise<Read<string[]>> {
+  const { data, error } = await admin.from("individual_scholar_case_answer").select("created_at").eq("user_id", userId).order("created_at", { ascending: false }).limit(5000);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => r.created_at as string) };
+}
+
 // ── SCH-LEARN-UX-01: SEARCH-FIRST LEARN ── reads only, over what Stages 2 and 3 already store ────────────────
 //
 // No AI, no index of its own: Postgres full-text search on the chunks' tsv (372), the material titles and file
@@ -4005,10 +4014,14 @@ export async function setFlashcardMark(admin: Admin, userId: string, questionId:
 // assessment, verification or a Passport row.
 let plan780: boolean | null = null;
 const STUDY_PLAN_COLS = "exam_date, exam_label, weekly_minutes, days_per_week, goal, priorities, updated_at";
-export type StudyPlanRow = { examDate: string | null; examLabel: string | null; weeklyMinutes: number; daysPerWeek: number; goal: string | null; priorities: string[]; updatedAt: string };
+/** goalType and sessionMinutes are 840's (PLP-01..04): null before 840 is applied, and for a plan saved before it. */
+export type StudyPlanRow = { examDate: string | null; examLabel: string | null; weeklyMinutes: number; daysPerWeek: number; goal: string | null; priorities: string[]; updatedAt: string; goalType: GoalType | null; sessionMinutes: number | null };
+const STUDY_PLAN_COLS_840 = `${STUDY_PLAN_COLS}, goal_type, session_minutes`;
 const toStudyPlan = (r: any): StudyPlanRow => ({
   examDate: r.exam_date ?? null, examLabel: r.exam_label ?? null, weeklyMinutes: Number(r.weekly_minutes), daysPerWeek: Number(r.days_per_week),
   goal: r.goal ?? null, priorities: Array.isArray(r.priorities) ? r.priorities.filter((x: unknown): x is string => typeof x === "string") : [], updatedAt: r.updated_at,
+  goalType: r.goal_type === "learn" || r.goal_type === "exam" || r.goal_type === "revise" ? r.goal_type : null,
+  sessionMinutes: typeof r.session_minutes === "number" ? r.session_minutes : null,
 });
 /** Whether migration 780 is applied on this environment. A transient read error is "no" for now, and asked again. */
 export async function studyPlanSchema(admin: Admin, userId: string): Promise<boolean> {
@@ -4027,8 +4040,9 @@ export const resetStudyPlanSchema = () => { plan780 = null; };
 export async function getStudyPlan(admin: Admin, userId: string): Promise<Read<StudyPlanRow | null>> {
   if (plan780 === false) return { ok: false, notProvisioned: true };
   try {
-    const { data, error } = await admin.from("individual_scholar_study_plan").select(STUDY_PLAN_COLS).eq("user_id", userId).maybeSingle();
-    if (error) { if (isNotProvisioned(error)) plan780 = false; return fail(error); }
+    const with840 = await learningPlanSchema(admin, userId);
+    const { data, error } = await admin.from("individual_scholar_study_plan").select(with840 ? STUDY_PLAN_COLS_840 : STUDY_PLAN_COLS).eq("user_id", userId).maybeSingle();
+    if (error) { if (isNotProvisioned(error) && !with840) plan780 = false; return fail(error); }
     plan780 = true;
     return { ok: true, data: data ? toStudyPlan(data) : null };
   } catch { return { ok: false, notProvisioned: false }; }
@@ -4037,14 +4051,17 @@ export async function getStudyPlan(admin: Admin, userId: string): Promise<Read<S
 /** Save (insert or replace) the caller's settings. The values were validated by cleanStudyPlanInput; the table's CHECKs hold them too. */
 export async function saveStudyPlan(
   admin: Admin, userId: string,
-  v: { examDate: string | null; examLabel: string | null; weeklyMinutes: number; daysPerWeek: number; goal: string | null; priorities: readonly string[] },
+  v: { examDate: string | null; examLabel: string | null; weeklyMinutes: number; daysPerWeek: number; goal: string | null; priorities: readonly string[]; goalType?: GoalType | null; sessionMinutes?: number | null },
 ): Promise<{ ok: true; plan: StudyPlanRow } | { ok: false; error: "not_provisioned" | "failed" }> {
   if (plan780 === false) return { ok: false, error: "not_provisioned" };
   try {
+    // goal_type and session_minutes are written only where 840 is present (the columns are not there otherwise).
+    const with840 = await learningPlanSchema(admin, userId);
     const { data, error } = await admin.from("individual_scholar_study_plan").upsert({
       user_id: userId, exam_date: v.examDate, exam_label: v.examLabel, weekly_minutes: v.weeklyMinutes, days_per_week: v.daysPerWeek,
       goal: v.goal, priorities: [...v.priorities], updated_at: new Date().toISOString(),
-    }, { onConflict: "user_id" }).select(STUDY_PLAN_COLS).single();
+      ...(with840 ? { goal_type: v.goalType ?? null, session_minutes: v.sessionMinutes ?? null } : {}),
+    }, { onConflict: "user_id" }).select(with840 ? STUDY_PLAN_COLS_840 : STUDY_PLAN_COLS).single();
     if (error || !data) { if (isNotProvisioned(error)) { plan780 = false; return { ok: false, error: "not_provisioned" }; } return { ok: false, error: "failed" }; }
     plan780 = true;
     return { ok: true, plan: toStudyPlan(data) };

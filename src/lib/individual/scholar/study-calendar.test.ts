@@ -29,8 +29,8 @@ describe("the month grid", () => {
   });
   it("gives every kind its own word and glyph", () => {
     const words = Object.values(CALENDAR_KIND).map(k => k.word), glyphs = Object.values(CALENDAR_KIND).map(k => k.glyph);
-    expect(new Set(words).size).toBe(4);
-    expect(new Set(glyphs).size).toBe(4);
+    expect(new Set(words).size).toBe(5);
+    expect(new Set(glyphs).size).toBe(5);
   });
 });
 

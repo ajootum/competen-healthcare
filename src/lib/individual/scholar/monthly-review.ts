@@ -15,6 +15,8 @@
 // ⚠ A KIND WITH NOTHING STORED IS SAID, NOT HIDDEN. When no application or gap question exists for a section its share
 //   goes to core knowledge, and the result records that it did (`spilled`).
 
+import { studyActivityDays, type StudyStamp } from "./learning-definitions";
+
 export const MONTHLY_REVIEW_VERSION = "monthly-review/1";
 export const MONTHLY_STANDING_LINE = "Optional formative review · not verified competence";
 /** Sections one review can cover (the Learn "sources" scope holds at most this many). */
@@ -71,15 +73,15 @@ export type MonthActivity = {
   caseSessions: number;
   answers: number;
   reviews: number;
-  /** The distinct days (YYYY-MM-DD) with any real activity. */
+  /** The distinct learner-local days (YYYY-MM-DD) with recorded learning (the shared study-activity day: no uploads, no sessions without an answer). */
   activeDays: string[];
 };
 
 /** Pure. What the learner did in `month`. Only records dated inside the month count. */
-export function monthActivity(r: ActivityRecords, month: string): MonthActivity {
+export function monthActivity(r: ActivityRecords, month: string, tz: string = "UTC"): MonthActivity {
   const dir = new Map(r.sections.map(s => [s.chunkId, s]));
   const per = new Map<string, ActiveSection>();
-  const days = new Set<string>();
+  const stamps: StudyStamp[] = [];
   const touch = (chunkId: string, at: string, kind: "lessons" | "answers" | "reviews" | "cases") => {
     const s = dir.get(chunkId);
     if (!s) return;   // a section that is no longer the learner's: not counted
@@ -93,23 +95,23 @@ export function monthActivity(r: ActivityRecords, month: string): MonthActivity 
   const lessonKeys = new Map<string, { sessionId: string; step: number; title: string; firstAt: string }>();
   for (const l of r.lessons) {
     if (!inMonth(l.at, month)) continue;
-    days.add(isoOf(l.at).slice(0, 10));
+    stamps.push({ kind: "lesson", at: l.at });
     const k = `${l.sessionId}:${l.step}`;
     const prev = lessonKeys.get(k);
     if (!prev) { lessonKeys.set(k, { sessionId: l.sessionId, step: l.step, title: l.title, firstAt: isoOf(l.at) }); for (const c of new Set(l.chunkIds)) touch(c, l.at, "lessons"); }
     else if (isoOf(l.at) < prev.firstAt) prev.firstAt = isoOf(l.at);
   }
   let answers = 0, reviews = 0, cases = 0, rev = 0;
-  for (const a of r.answers) if (inMonth(a.at, month)) { answers++; days.add(isoOf(a.at).slice(0, 10)); touch(a.chunkId, a.at, "answers"); }
-  for (const v of r.reviews) if (inMonth(v.at, month)) { reviews++; days.add(isoOf(v.at).slice(0, 10)); touch(v.chunkId, v.at, "reviews"); }
-  for (const c of r.caseSessions) if (inMonth(c.at, month)) { cases++; days.add(isoOf(c.at).slice(0, 10)); for (const id of new Set(c.chunkIds)) touch(id, c.at, "cases"); }
-  for (const s of r.revisionSessions) if (inMonth(s.at, month)) { rev++; days.add(isoOf(s.at).slice(0, 10)); }
+  for (const a of r.answers) if (inMonth(a.at, month)) { answers++; stamps.push({ kind: "answer", at: a.at }); touch(a.chunkId, a.at, "answers"); }
+  for (const v of r.reviews) if (inMonth(v.at, month)) { reviews++; stamps.push({ kind: "review", at: v.at }); touch(v.chunkId, v.at, "reviews"); }
+  for (const c of r.caseSessions) if (inMonth(c.at, month)) { cases++; stamps.push({ kind: "decision", at: c.at }); for (const id of new Set(c.chunkIds)) touch(id, c.at, "cases"); }
+  for (const s of r.revisionSessions) if (inMonth(s.at, month)) { rev++; }
   const sections = [...per.values()].map(s => ({ ...s, weight: Math.max(1, 2 * s.lessons + s.answers + s.reviews + 2 * s.cases) }))
     .sort((a, b) => b.weight - a.weight || a.materialTitle.localeCompare(b.materialTitle) || a.chunkId.localeCompare(b.chunkId));
   const matIds = new Set(sections.map(s => s.materialId));
   const materials = new Map<string, string>();
   for (const s of sections) materials.set(s.materialId, s.materialTitle);
-  for (const m of r.materials) if (inMonth(m.at, month)) { matIds.add(m.id); materials.set(m.id, m.title); days.add(isoOf(m.at).slice(0, 10)); }
+  for (const m of r.materials) if (inMonth(m.at, month)) { matIds.add(m.id); materials.set(m.id, m.title); }
   const active = new Set(sections.map(s => s.chunkId));
   const subjects = [...new Set(sections.flatMap(s => r.topics[s.chunkId] ?? []).map(t => t.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
   const compIds = new Set(r.links.filter(l => active.has(l.chunkId)).map(l => l.competencyId));
@@ -117,7 +119,7 @@ export function monthActivity(r: ActivityRecords, month: string): MonthActivity 
   return {
     month, lessons: [...lessonKeys.values()].sort((a, b) => a.firstAt.localeCompare(b.firstAt) || a.sessionId.localeCompare(b.sessionId) || a.step - b.step),
     materials: [...matIds].map(id => ({ id, title: materials.get(id) ?? "A material" })).sort((a, b) => a.title.localeCompare(b.title)),
-    sections, subjects, competencies, revisionSessions: rev, caseSessions: cases, answers, reviews, activeDays: [...days].sort(),
+    sections, subjects, competencies, revisionSessions: rev, caseSessions: cases, answers, reviews, activeDays: studyActivityDays(stamps, tz).filter(d => d.slice(0, 7) === month),
   };
 }
 

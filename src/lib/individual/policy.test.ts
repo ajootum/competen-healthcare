@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import { DEFAULT_CAREER_CATEGORIES, DEFAULT_MILESTONE_CATEGORIES } from "./professional/progress-policy";
-import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, isStudyPlanOn, isStudySessionsOn, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
+import { DEFAULT_POLICY, POLICIES, POLICY_SCOPE, clampInt, individualAiQuota, individualQuotaRefusal, isMyPlanOn, isStudyPlanOn, isStudySessionsOn, loadIndividualPolicy, meetsMinStatus, policyDef, policyPath, resolvePolicy, validateDraft, type IntPolicy } from "./policy";
 import { publishScope, rollbackVersion, setOverride } from "@/lib/config/workspace-config-write";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX, parseShare } from "./professional/share";
@@ -109,6 +109,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
       scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
       scholarVisualClassify: "on", scholarVisualTextWords: 40,
+      scholarMyPlan: "on", scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"],
+      scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -425,4 +427,32 @@ it("SCHOLAR-LESSON-VISUALS-01: lesson pictures default on (3 per section, 120 px
   expect(p("scholar_visual_classify", "off").scholarVisualClassify).toBe("off");
   expect(p("scholar_visual_text_words", 5).scholarVisualTextWords).toBe(10);
   expect(p("scholar_visual_text_words", 500).scholarVisualTextWords).toBe(200);
+});
+
+// PLP-01..04 (My Plan): six no-code keys, one block, defaults that make My Plan work without any configuration.
+describe("My Plan policy keys", () => {
+  const p = (key: string, value: unknown) => resolvePolicy([{ config_path: policyPath(key as never), published: value as never }]);
+  it("default to on, 12 minutes a section, the design rule order and a 600-minute week", () => {
+    expect(DEFAULT_POLICY).toMatchObject({ scholarMyPlan: "on", scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600 });
+    expect(DEFAULT_POLICY.scholarPlanRuleOrder).toEqual(["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"]);
+  });
+  it("clamp the integers to their ranges and fall back on nonsense", () => {
+    expect(p("scholar_plan_section_minutes", { value: 2 }).scholarPlanSectionMinutes).toBe(5);
+    expect(p("scholar_plan_section_minutes", { value: 500 }).scholarPlanSectionMinutes).toBe(60);
+    expect(p("scholar_plan_max_weekly_minutes", { value: 10 }).scholarPlanMaxWeeklyMinutes).toBe(60);
+    expect(p("scholar_plan_max_weekly_minutes", { value: 99999 }).scholarPlanMaxWeeklyMinutes).toBe(3000);
+    expect(p("scholar_plan_max_weekly_minutes", { value: "abc" }).scholarPlanMaxWeeklyMinutes).toBe(600);
+  });
+  it("switch off, and keep only known rules in the administrator's order", () => {
+    expect(p("scholar_my_plan", { value: "off" }).scholarMyPlan).toBe("off");
+    expect(p("scholar_plan_proposal", { value: "off" }).scholarPlanProposal).toBe("off");
+    expect(p("scholar_plan_weekly_reflection", { value: "off" }).scholarPlanWeeklyReflection).toBe("off");
+    expect(p("scholar_plan_rule_order", { order: ["coverage", "bogus", "gaps", "coverage"] }).scholarPlanRuleOrder).toEqual(["coverage", "gaps"]);
+  });
+  it("My Plan is on only with its own switch, the study plan switch and migration 780", () => {
+    expect(isMyPlanOn({ scholarMyPlan: "on", scholarStudyPlan: true }, true)).toBe(true);
+    expect(isMyPlanOn({ scholarMyPlan: "on", scholarStudyPlan: true }, false)).toBe(false);
+    expect(isMyPlanOn({ scholarMyPlan: "off", scholarStudyPlan: true }, true)).toBe(false);
+    expect(isMyPlanOn({ scholarMyPlan: "on", scholarStudyPlan: false }, true)).toBe(false);
+  });
 });

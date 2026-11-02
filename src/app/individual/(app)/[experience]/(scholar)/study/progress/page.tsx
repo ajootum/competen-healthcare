@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { headers } from "next/headers";
+import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -212,12 +214,15 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const { ctx } = page;
   const x = SCHOLAR;
   const [rows, reviews] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId)]);
-  const today = new Date().toISOString().slice(0, 10);
+  // PLP-01..04: today is the learner's own local day (x-vercel-ip-timezone, UTC when absent), the same one My Plan uses.
+  const hdrs = await headers();
+  const tz = learnerTimeZone(hdrs);
+  const today = learnerToday(hdrs);
   const policy = await loadIndividualPolicy(ctx.admin);
   // SCHOLAR-SESSION-AI-02: an open study session is carried by the tabs (Progress is not a stage of it).
   const study = await loadStudy(ctx.admin, ctx.userId, sp.study, null, policy);
   // COMPETEN-SCHOLAR-01 S5: the four measures, from the rows already read (nothing is read twice).
-  const li = rows.ok ? await loadLearningIntelligence(ctx.admin, ctx.userId, policy, today, { pre: { rows, reviews } }) : null;
+  const li = rows.ok ? await loadLearningIntelligence(ctx.admin, ctx.userId, policy, today, { pre: { rows, reviews }, tz }) : null;
   const reviewRefs = reviews.ok && reviews.data ? reviews.data : [];
   const p = rows.ok ? buildProgress({ ...rows.data, today }) : null;
   const choices = rows.ok ? await listPassportChoices(ctx.admin, ctx.userId) : null;
@@ -248,7 +253,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const activity = cp ? await learningActivityByCompetency(ctx.admin, ctx.userId) : null;
   // PROGRESS-01 (Stage 8): one read of the evidence for the workspace. No AI.
   const period: PeriodKind = sp.period === "week" || sp.period === "month" || sp.period === "programme" ? sp.period : policy.scholarProgressPeriod;
-  const pv = rows.ok && p && p.materials.length > 0 ? await loadProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), { period }) : null;
+  const pv = rows.ok && p && p.materials.length > 0 ? await loadProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), { period, tz }) : null;
   // SCHOLAR-COMPANION-01 P1: "Study next" and learning progress by topic, from the same rows plus one bounded evidence read.
   // No AI. Gated by an option of scholar_progress_sections (topicProgressEnabled). Merged with Learning Intelligence's recommendations:
   // the ones the card already says (same place, or covered) are dropped from its own list below.

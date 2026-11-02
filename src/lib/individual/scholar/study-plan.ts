@@ -1,6 +1,7 @@
 import { experienceHref } from "@/lib/individual/experiences";
 import { COGNITIVE_LEVELS } from "./question-intel";
 import { withStudy } from "./study-carry";
+import { topicKey } from "./plan-proposal";
 import type { MasteryEntry } from "./mastery";
 
 // ── THE STUDY PLAN ── SCHOLAR-COMPANION-01, Learning and Progress Intelligence E ────────────────────────────────
@@ -27,6 +28,13 @@ import type { MasteryEntry } from "./mastery";
 //      before the exam) is mixed practice, review of the weak topics and one evaluate activity. no_date is a rolling week.
 //   8. Whatever time is left is mixed practice across the learner's own topics.
 //
+// PLP-01..04 / MY PLAN CALENDAR (owner GO 2 Nov 2026), all optional inputs, so the plan above is unchanged without them:
+//   - every activity has a STABLE `ref` (`${space}:${topic key | chunk id | "due" | "mixed"}`), so a move survives a change of wording;
+//   - `postponed` topics (put off by the learner) and `excludeRefs` (a carry-over the learner took back) are left out;
+//   - `calendar` (the learner's OWN entries, plan-calendar.ts): an all-day busy day or placement plans no study that day (the week's minutes
+//     are shared across the days left, never above the agreed time); a timed one leaves the day open and is noted; a personal study session
+//     takes its minutes off that day (and its topic is not planned that day too).
+//
 // ⚠ A STUDY PLAN IS NOT AN ASSESSMENT. Nothing here says how competent anyone is, and nothing is written to the Passport.
 // ⚠ EVERY REASON IS IN THE LEARNER'S OWN NUMBERS (their accuracy, their cards, their sections), or their own choice.
 
@@ -42,7 +50,18 @@ export type StudyPlanSettings = {
   goal: string | null;
   priorities: readonly string[];
 };
-export type UnstartedSection = { chunkId: string; label: string; competencyTitle?: string | null };
+export type UnstartedSection = { chunkId: string; label: string; competencyTitle?: string | null; materialIds?: readonly string[] };
+/** The learner's own calendar as the plan reads it (plan-calendar.ts). Dates are YYYY-MM-DD. */
+export type PlanCalendar = {
+  /** Days with an all-day busy or placement entry: no study is planned. */
+  blockedDays: readonly string[];
+  /** Day -> notes for timed busy or placement entries, e.g. "around your 14:00-18:00 placement". */
+  timedNotes: Readonly<Record<string, readonly string[]>>;
+  /** Day -> minutes of the learner's own planned study sessions. */
+  personalMinutes: Readonly<Record<string, number>>;
+  /** Day -> normalised topics, material ids and decks the learner's own study sessions are about. */
+  personalTopics: Readonly<Record<string, readonly string[]>>;
+};
 export type StudyPlanInput = {
   plan: StudyPlanSettings;
   /** The topic entries of buildMastery (MasteryResult.topics). */
@@ -55,8 +74,14 @@ export type StudyPlanInput = {
   today: string;
   /** A connected study session: carried onto every link. */
   studyId?: string | null;
+  /** Normalised topic keys or labels the learner put off: nothing about them is planned. */
+  postponed?: ReadonlySet<string>;
+  /** Activity refs left out (a carry-over the learner took back). */
+  excludeRefs?: ReadonlySet<string>;
+  /** The learner's own calendar entries, as the plan reads them. */
+  calendar?: PlanCalendar | null;
 };
-export type PlanActivity = { space: PlanSpace; title: string; reason: string; href: string; minutes: number };
+export type PlanActivity = { space: PlanSpace; title: string; reason: string; href: string; minutes: number; ref: string; note?: string };
 export type PlanDay = { day: string; minutes: number; activities: PlanActivity[] };
 export type StudyPlanResult = {
   daysLeft: number | null;
@@ -81,50 +106,56 @@ const WINDOW_DAYS = 7;
 const DAY = 86_400_000;
 
 const norm = (t: string) => t.trim().toLowerCase().replace(/\s+/g, " ");
+const fnv = (s: string) => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(36); };
+/** A short, stable, URL-safe key for a topic (a-z, 0-9 and hyphens only): the same words give the same key whatever else changes. */
+export const refKey = (raw: string) => { const base = norm(raw); const slug = base.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40).replace(/-+$/, ""); return `${slug || "topic"}-${fnv(base)}`; };
+const chunkKey = (id: string) => (/^[0-9a-f-]{36}$/i.test(id) ? id.toLowerCase() : refKey(id));
+export const PLAN_REF = /^(learn|revise|apply|evaluate):[a-z0-9-]{1,80}$/;
 const dayNum = (iso: string) => Math.floor(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / DAY);
 const addDays = (iso: string, n: number) => new Date((dayNum(iso) + n) * DAY).toISOString().slice(0, 10);
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const LADDER: readonly string[] = COGNITIVE_LEVELS;
 const belowApplication = (e: MasteryEntry) => e.highestLevel === null || LADDER.indexOf(e.highestLevel) < LADDER.indexOf("application");
 
-const learnHref = (q: string) => experienceHref("scholar", `study/learn?${q}`);
-const reviseHref = (q = "") => experienceHref("scholar", `study/revise${q ? `?${q}` : ""}`);
-const applyHref = (q = "") => experienceHref("scholar", `study/apply${q ? `?${q}` : ""}`);
+export const learnHref = (q: string) => experienceHref("scholar", `study/learn?${q}`);
+export const reviseHref = (q = "") => experienceHref("scholar", `study/revise${q ? `?${q}` : ""}`);
+export const applyHref = (q = "") => experienceHref("scholar", `study/apply${q ? `?${q}` : ""}`);
 const evaluateHref = () => experienceHref("scholar", "study/evaluate");
 
-type Item = { space: PlanSpace; title: string; reason: string; href: string };
+type Item = { space: PlanSpace; title: string; reason: string; href: string; ref: string; topics?: string[] };
+const tag = (e: MasteryEntry): { topics: string[] } => ({ topics: [...new Set([topicKey(e.key), topicKey(e.label), ...(e.materialId ? [topicKey(e.materialId)] : [])])] });
 
-const topicLearn = (e: MasteryEntry) => (e.topicSource === "material" && e.materialId ? experienceHref("scholar", `study/${e.materialId}`) : learnHref(`topic=${encodeURIComponent(e.label)}`));
-const topicRevise = (e: MasteryEntry, harder = false) => reviseHref(e.materialId ? `material=${e.materialId}${harder ? "&difficulty=harder" : ""}` : "");
-const topicApply = (e: MasteryEntry) => (e.chunkId ? applyHref(`section=${e.chunkId}&from=revision`) : topicRevise(e, true));
-const noun = (e: MasteryEntry) => (e.topicSource === "material" ? `your notes "${e.label}"` : e.label);
-const acc = (e: MasteryEntry) => (e.recentAccuracy === null ? "" : ` (${e.recentAccuracy}% recent accuracy)`);
+export const topicLearn = (e: MasteryEntry) => (e.topicSource === "material" && e.materialId ? experienceHref("scholar", `study/${e.materialId}`) : learnHref(`topic=${encodeURIComponent(e.label)}`));
+export const topicRevise = (e: MasteryEntry, harder = false) => reviseHref(e.materialId ? `material=${e.materialId}${harder ? "&difficulty=harder" : ""}` : "");
+export const topicApply = (e: MasteryEntry) => (e.chunkId ? applyHref(`section=${e.chunkId}&from=revision`) : topicRevise(e, true));
+export const noun = (e: MasteryEntry) => (e.topicSource === "material" ? `your notes "${e.label}"` : e.label);
+export const acc = (e: MasteryEntry) => (e.recentAccuracy === null ? "" : ` (${e.recentAccuracy}% recent accuracy)`);
 
 const learnItem = (e: MasteryEntry, priority: boolean): Item => ({
-  space: "learn", title: `Learn ${noun(e)}`, href: topicLearn(e),
+  space: "learn", title: `Learn ${noun(e)}`, href: topicLearn(e), ref: `learn:${refKey(e.key)}`, ...tag(e),
   reason: e.status === "not_started"
     ? (priority ? `You put ${noun(e)} first, and you have not practised it yet.` : `${noun(e)} is in your notes and you have not practised it yet.`)
     : `${priority ? `You put ${noun(e)} first, and it` : noun(e)} needs work: your recent accuracy is ${e.recentAccuracy}% over ${plural(e.attempts, "answer")}, so go back over it first.`,
 });
 const reviseAfterItem = (e: MasteryEntry): Item => ({
-  space: "revise", title: `Check ${noun(e)} has stuck`, href: topicRevise(e),
+  space: "revise", title: `Check ${noun(e)} has stuck`, href: topicRevise(e), ref: `revise:${refKey(e.key)}`, ...tag(e),
   reason: `After learning ${noun(e)} again, practice questions on it show whether it holds${e.recentAccuracy === null ? "" : ` (it was ${e.recentAccuracy}%)`}.`,
 });
 const applyItem = (e: MasteryEntry, priority: boolean): Item => ({
-  space: "apply", title: `Use ${noun(e)} in a scenario`, href: topicApply(e),
+  space: "apply", title: `Use ${noun(e)} in a scenario`, href: topicApply(e), ref: `apply:${refKey(e.key)}`, ...tag(e),
   reason: `${priority ? `You put ${noun(e)} first. ` : ""}You are developing on ${noun(e)}${acc(e)} and have not yet shown it at application level. A scenario shows whether it holds when you use it.`,
 });
 const reviseTopicItem = (e: MasteryEntry, priority: boolean): Item => ({
-  space: "revise", title: `Revise ${noun(e)}`, href: topicRevise(e),
+  space: "revise", title: `Revise ${noun(e)}`, href: topicRevise(e), ref: `revise:${refKey(e.key)}`, ...tag(e),
   reason: priority ? `You put ${noun(e)} first${e.status === "secure" ? `, and it is going well${acc(e)}, so keep it fresh` : acc(e)}.` : `Keep ${noun(e)} fresh, it is going well${acc(e)}.`,
 });
 const unstartedItem = (s: UnstartedSection): Item => ({
-  space: "learn", title: `Start on ${s.label}`, href: learnHref(`section=${s.chunkId}`),
+  space: "learn", title: `Start on ${s.label}`, href: learnHref(`section=${s.chunkId}`), ref: `learn:${chunkKey(s.chunkId)}`, topics: [topicKey(s.label), ...(s.materialIds ?? []).map(topicKey)],
   reason: s.competencyTitle ? `This section of your notes is linked to ${s.competencyTitle} and has no practice yet.` : "This section of your notes has no practice yet.",
 });
-const mixedItem = (reason: string): Item => ({ space: "revise", title: "Mixed practice across your topics", href: reviseHref(), reason });
+const mixedItem = (reason: string): Item => ({ space: "revise", title: "Mixed practice across your topics", href: reviseHref(), reason, ref: "revise:mixed" });
 const weakReviewItem = (e: MasteryEntry): Item => ({
-  space: "revise", title: `Review ${noun(e)}`, href: topicRevise(e),
+  space: "revise", title: `Review ${noun(e)}`, href: topicRevise(e), ref: `revise:${refKey(e.key)}`, ...tag(e),
   reason: `${noun(e)} is still ${e.status === "needs_work" ? "needing work" : "developing"}${acc(e)}, and the exam is close.`,
 });
 
@@ -149,27 +180,55 @@ export function buildStudyPlan(input: StudyPlanInput): StudyPlanResult {
   const affordable = Math.max(1, Math.floor(weeklyMinutes / MIN_ACTIVITY_MINUTES));
   const perWeekDays = Math.min(wanted, affordable);
   if (perWeekDays < wanted) notes.push(`${plural(weeklyMinutes, "minute")} a week is too little for ${plural(wanted, "day")} (a session needs at least ${MIN_ACTIVITY_MINUTES} minutes), so the plan uses ${plural(perWeekDays, "day")}.`);
-  const sessionMinutes = Math.round(weeklyMinutes / perWeekDays);
-  const studyDays = Math.min(perWeekDays, windowLen);
-  if (phase === "final_week" && daysLeft! > 0 && studyDays < perWeekDays) notes.push(`Only ${plural(windowLen, "day")} are left before the exam, so the plan has ${plural(studyDays, "study day")}.`);
+  let sessionMinutes = Math.round(weeklyMinutes / perWeekDays);
+  // The learner's own calendar: an all-day busy day or placement plans no study. The week's minutes are shared across the days left, never above.
+  const cal = input.calendar ?? null;
+  const blocked = new Set(cal?.blockedDays ?? []);
+  const freeIdx: number[] = [];
+  for (let i = 0; i < windowLen; i++) if (!blocked.has(addDays(today, i))) freeIdx.push(i);
+  const studyDays = Math.min(perWeekDays, freeIdx.length);
+  if (freeIdx.length < windowLen) {
+    const days = Array.from({ length: windowLen }, (_, i) => addDays(today, i)).filter(d => blocked.has(d));
+    notes.push(`Nothing is planned on ${days.join(", ")}: you marked ${days.length === 1 ? "it" : "them"} as busy.`);
+    if (studyDays > 0 && studyDays < Math.min(perWeekDays, windowLen)) { sessionMinutes = Math.round(weeklyMinutes / studyDays); notes.push(`Your ${plural(weeklyMinutes, "minute")} are shared across the ${plural(studyDays, "day")} left, so the week stays within the time you agreed.`); }
+  }
+  if (phase === "final_week" && daysLeft! > 0 && studyDays < perWeekDays && freeIdx.length === windowLen) notes.push(`Only ${plural(windowLen, "day")} are left before the exam, so the plan has ${plural(studyDays, "study day")}.`);
 
   // ── activities per session ──
   const hasDue = dueCards > 0;
-  let slots = Math.max(1, Math.round(sessionMinutes / TARGET_ACTIVITY_MINUTES));
-  while (sessionMinutes / slots > MAX_ACTIVITY_MINUTES) slots++;
-  if (hasDue && slots === 1 && sessionMinutes >= 2 * MIN_ACTIVITY_MINUTES) slots = 2;
+  const slotsFor = (m: number) => {
+    let n = Math.max(1, Math.round(m / TARGET_ACTIVITY_MINUTES));
+    while (m / n > MAX_ACTIVITY_MINUTES) n++;
+    if (hasDue && n === 1 && m >= 2 * MIN_ACTIVITY_MINUTES) n = 2;
+    return n;
+  };
+  const slots = slotsFor(sessionMinutes);
   const alternateDue = hasDue && slots === 1;
   if (alternateDue) notes.push("Your sessions are short, so reviewing due cards alternates with new study.");
 
   const dayIdx: number[] = [];
-  for (let i = 0; i < studyDays; i++) dayIdx.push(Math.floor((i * windowLen) / studyDays));
-  const sessions = dayIdx.map((d, i) => ({ day: addDays(today, d), dueSlot: hasDue && (!alternateDue || i % 2 === 0) }));
+  for (let i = 0; i < studyDays; i++) dayIdx.push(freeIdx[Math.floor((i * freeIdx.length) / studyDays)]);
+  const allSessions = dayIdx.map((d, i) => {
+    const day = addDays(today, d);
+    // A personal study session is planned time too: Scholar plans only what is left of this day's session minutes.
+    const minutes = Math.max(0, sessionMinutes - Math.floor(cal?.personalMinutes[day] ?? 0));
+    return { day, dueSlot: hasDue && (!alternateDue || i % 2 === 0), minutes, slots: minutes > 0 ? slotsFor(minutes) : 0 };
+  });
+  const covered = allSessions.filter(s => s.minutes <= 0).map(s => s.day);
+  if (covered.length) notes.push(`Your own study ${covered.length === 1 ? "session" : "sessions"} on ${covered.join(", ")} cover${covered.length === 1 ? "s" : ""} the time, so Scholar plans nothing then.`);
+  const sessions = allSessions.filter(s => s.minutes > 0);
 
   // ── the candidate activities, in priority order ──
   const used = new Set<string>();
   const byKey = new Map(entries.map(e => [norm(e.key), e]));
   const queue: Item[] = [];
-  const push = (list: Item[], item: Item) => { const k = `${item.space}|${item.title}`; if (!used.has(k)) { used.add(k); list.push(item); } };
+  const postponed = input.postponed ?? new Set<string>();
+  const excluded = input.excludeRefs ?? new Set<string>();
+  const push = (list: Item[], item: Item) => {
+    if (excluded.has(item.ref) || (item.topics ?? []).some(t => postponed.has(t))) return;
+    const k = `${item.space}|${item.title}`;
+    if (!used.has(k)) { used.add(k); list.push(item); }
+  };
   const touched = new Set<string>();   // topic keys already placed by a priority or a rule
   const hasEvidence = entries.some(e => e.attempts > 0);
 
@@ -181,7 +240,7 @@ export function buildStudyPlan(input: StudyPlanInput): StudyPlanResult {
       if (!k || touched.has(k)) continue;
       touched.add(k);
       const e = byKey.get(k);
-      if (!e) { push(lists.priority, { space: "learn", title: `Learn ${p.trim()}`, href: learnHref(`topic=${encodeURIComponent(p.trim())}`), reason: `You put ${p.trim()} first.` }); continue; }
+      if (!e) { push(lists.priority, { space: "learn", title: `Learn ${p.trim()}`, href: learnHref(`topic=${encodeURIComponent(p.trim())}`), reason: `You put ${p.trim()} first.`, ref: `learn:${refKey(p)}`, topics: [topicKey(p)] }); continue; }
       if (e.status === "needs_work" || e.status === "not_started") { push(lists.priority, learnItem(e, true)); if (e.status === "needs_work") push(lists.weakRevise, reviseAfterItem(e)); }
       else if (e.status === "developing" && belowApplication(e)) push(lists.priority, applyItem(e, true));
       else push(lists.priority, reviseTopicItem(e, true));
@@ -201,12 +260,11 @@ export function buildStudyPlan(input: StudyPlanInput): StudyPlanResult {
   }
 
   const mixedReason = hasEvidence ? "Questions across all your topics keep each one fresh, and show which need attention." : "You have little practice recorded yet, so start with mixed practice. The plan sharpens as you answer questions.";
-  const perSession = (hasDue && !alternateDue ? slots - 1 : slots);
-  const freeSlots = sessions.reduce((n, s) => n + (s.dueSlot && alternateDue ? 0 : perSession), 0);
+  const freeSlots = sessions.reduce((n, s) => n + (s.dueSlot && alternateDue ? 0 : (s.dueSlot ? s.slots - 1 : s.slots)), 0);
 
   if (phase === "final_week") {
     const prio = (e: MasteryEntry) => Number(plan.priorities.some(p => norm(p) === norm(e.key)));
-    const weak = entries.filter(e => e.status === "needs_work" || e.status === "developing")
+    const weak = entries.filter(e => (e.status === "needs_work" || e.status === "developing") && !tag(e).topics.some(t => postponed.has(t)))
       .sort((a, b) => prio(b) - prio(a) || (a.status === "needs_work" ? 0 : 1) - (b.status === "needs_work" ? 0 : 1)
         || (a.recentAccuracy ?? 0) - (b.recentAccuracy ?? 0) || a.label.localeCompare(b.label));
     // weak-topic review and mixed practice, alternating, weak first
@@ -229,27 +287,35 @@ export function buildStudyPlan(input: StudyPlanInput): StudyPlanResult {
   }
 
   // ── fill the sessions ──
-  let q = 0;
+  const rest = [...queue];
+  // Take the next planned item that is not about what the learner's own study session covers that day.
+  const take = (day: string): Item | undefined => {
+    const covers = new Set(cal?.personalTopics[day] ?? []);
+    const i = rest.findIndex(it => !(it.topics ?? []).some(t => covers.has(t)));
+    return i >= 0 ? rest.splice(i, 1)[0] : undefined;
+  };
   const evalDay = phase === "final_week" && daysLeft! > 0 && sessions.length ? Math.max(0, sessions.length - 2) : -1;
   const thisWeek: PlanDay[] = sessions.map((s, si) => {
-    const n = slots;
-    const base = Math.floor(sessionMinutes / n);
-    const extra = sessionMinutes - base * n;
+    const n = s.slots;
+    const base = Math.floor(s.minutes / n);
+    const extra = s.minutes - base * n;
+    const notes_ = cal?.timedNotes[s.day];
+    const note = notes_ && notes_.length ? notes_.join(" and ") : undefined;
     const acts: PlanActivity[] = [];
     for (let a = 0; a < n; a++) {
       const minutes = base + (a < extra ? 1 : 0);
       let item: Item | undefined;
       if (si === evalDay && a === n - 1) {
-        item = { space: "evaluate", title: `A practice evaluation before ${exam}`, href: evaluateHref(), reason: "One evaluation in your last week shows where your practice stands. It is a study aid, not an assessment of competence." };
+        item = { space: "evaluate", title: `A practice evaluation before ${exam}`, href: evaluateHref(), ref: "evaluate:eval", reason: "One evaluation in your last week shows where your practice stands. It is a study aid, not an assessment of competence." };
       } else if (a === 0 && s.dueSlot) {
         item = {
-          space: "revise", title: "Review your due cards", href: reviseHref(),
+          space: "revise", title: "Review your due cards", href: reviseHref(), ref: "revise:due",
           reason: si === 0 ? `${plural(dueCards, "card has", "cards have")} reached ${dueCards === 1 ? "its" : "their"} review date. Reviewing on time is what makes them stick.` : "Cards come due as you study, so each session starts with a short review.",
         };
       } else {
-        item = queue[q++] ?? mixedItem(mixedReason);
+        item = take(s.day) ?? mixedItem(mixedReason);
       }
-      acts.push({ ...item, href: withStudy(item.href, input.studyId), minutes });
+      acts.push({ space: item.space, title: item.title, reason: item.reason, ref: item.ref, href: withStudy(item.href, input.studyId), minutes, ...(note ? { note } : {}) });
     }
     return { day: s.day, minutes: acts.reduce((m, x) => m + x.minutes, 0), activities: acts };
   });
