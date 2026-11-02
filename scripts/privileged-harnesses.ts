@@ -491,6 +491,14 @@ const STAGING: Listed[] = [
       + "(PEND without) and BASE_URL naming a STAGING-pointed dev server. Own harness-revhold-* identities.",
   },
   {
+    file: "scholar-preview-harness.ts",
+    note: "HQ-SCHOLAR-PREVIEW-01 (migration 860): an HQ user opens the real Scholar as the designated demonstration learner on the separate "
+      + "preview host. Static controls (route capability, proxy learner check, header stripping, read-only, demo-only designation, composite "
+      + "foreign key, service-role-only functions) run with no database. Live groups P1-P10 need 860 on STAGING, the two learners provisioned "
+      + "(provision-scholar-demo-learner.ts up) and BASE_URL naming a staging-pointed dev server on localhost (preview.localhost is the same server). "
+      + "PEND without 860, without a designated learner or without BASE_URL. Creates and deletes its own harness-prevw-* identities.",
+  },
+  {
     file: "scholar-journey-harness.ts",
     note: "Scholar Stages 4 and 5 final acceptance, the ONE integrated journey (owner GO 2026-10-25): one student "
       + "Upload -> Teach Me -> Revision -> Clinical Case -> Feedback -> Learning History, connecting what learn01, "
