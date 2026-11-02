@@ -24,6 +24,7 @@ import { readFileSync, readdirSync, existsSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { ACCESS_DOORS } from "../src/lib/access-doors";
 import { EXPERIENCES, EXPERIENCE_KEYS, FOUNDATION_NAV, navFor } from "../src/lib/individual/experiences";
+import { ALL_LEAVES } from "../src/lib/individual/scholar/nav";
 import { capabilityForRoute } from "../src/lib/hq/spaces";
 import { GENERAL_NAV } from "../src/app/super-admin/_components/nav-tables";
 import { inviteDeliveryMode } from "../src/lib/individual/invitations";
@@ -267,6 +268,11 @@ function main() {
     modulePages.every(f => /experienceModulePage\(/.test(SRC.get(f) ?? "")), modulePages.filter(f => !/experienceModulePage\(/.test(SRC.get(f) ?? "")).join(", "));
   ok("7b. the experience route accepts exactly the registry's experiences",
     /isExperienceKey\(experience\)/.test(SRC.get("src/app/individual/(app)/[experience]/layout.tsx") ?? "") && EXPERIENCE_KEYS.length === 2);
+  // Scholar's modular sidebar (scholar/nav.ts) is a second list besides navFor: every leaf in it must be a real page too, whether it
+  // is a foundation page or sits under (scholar)/. (The Courses and My Competencies pages come from their own branch.)
+  const leavesWithoutPage = ALL_LEAVES.filter(l => !existsSync(`${EXP_DIR}/${l.segment ? `${l.segment}/` : ""}page.tsx`)
+    && !existsSync(`${EXP_DIR}/(scholar)/${l.segment}/page.tsx`)).map(l => `scholar/${l.segment || "(home)"}`);
+  ok("7g. every SCHOLAR_NAV leaf has a page.tsx", leavesWithoutPage.length === 0, leavesWithoutPage.join(", "));
 
   // ── 8. THE NEUTRAL RESOLVER OFFERS INDIVIDUAL FROM ITS GATE, AND ONLY FROM ITS GATE ─────────────
   const pr = strip(readFileSync("src/lib/identity/product-resolution.ts", "utf8"));
@@ -337,9 +343,9 @@ function main() {
   const gatedViews = routeFiles.filter(f => /\/(page|layout)\.tsx$/.test(f));
   const leakyMeta = gatedViews.filter(f => {
     const s = SRC.get(f) ?? "";
-    return /export const metadata\b/.test(s) || (/export async function generateMetadata/.test(s) && !/gatedMetadata\(/.test(s));
+    return /export const metadata\b/.test(s) || (/export async function generateMetadata/.test(s) && !/gated(?:Module)?Metadata\(/.test(s));
   });
-  ok("11e. no gated Individual page or layout exports static metadata; every generateMetadata goes through gatedMetadata",
+  ok("11e. no gated Individual page or layout exports static metadata; every generateMetadata goes through gatedMetadata (or gatedModuleMetadata, which gates on the module as well)",
     gatedViews.length >= 10 && leakyMeta.length === 0, leakyMeta.join(", "));
   // Found on Vercel Preview 2026-10-22, after 11a: with no service key the routes answered 500, not 404 --
   // createAdminClient()'s constructor throws on a missing key, before the gate's own try could say OFF.

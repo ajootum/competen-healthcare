@@ -122,6 +122,13 @@ export const SCHOLAR: ExperienceConfig = {
   // under ONE module with its own sub-navigation, so the sidebar and the bottom bar each gain one entry.
   modules: [
     { key: "study", segment: "study", label: "My Learning", short: "Study", icon: "▤", bottom: true },
+    // SCHOLAR-MODULES-01: two more modules, NOT on the bottom bar (the five-tab bar is kept). Courses reuses Competen
+    // Learning and the programme by reference, and My Competencies reuses the competency, practice and Passport readers:
+    // neither copies a record. The segment is my-competencies, not competencies: Professional owns that one.
+    { key: "courses", segment: "courses", label: "Courses & Training", short: "Courses", icon: "▦",
+      summary: "Structured programmes and courses: what is offered, what you are taking and what you have completed." },
+    { key: "my-competencies", segment: "my-competencies", label: "My Competencies", short: "Competencies", icon: "◇",
+      summary: "Your competency profile, frameworks, development gaps, practice and evidence, with formative work kept apart from formal records." },
   ],
   homeIntro: "Your study space. Open My Learning to upload your notes, have them explained with page citations, practise questions from them and revise what you miss. Your Passport, profile and personal AI are here too.",
   planned: [
@@ -193,15 +200,21 @@ export const EXPERIENCES: Readonly<Record<ExperienceKey, ExperienceConfig>> = {
 // The ONLY place the shell's navigation is composed (ShellNav renders these, nothing else), so the two
 // experiences cannot drift and an experience module appears the day it is added to `modules`.
 
+/** Scholar modules in private development: the registry key of each, and the gate key (scholar/module-access.ts) it answers to. */
+export const PRIVATE_MODULE_GATE: Readonly<Record<string, "courses" | "competencies">> = { courses: "courses", "my-competencies": "competencies" };
+
 export type ShellNavItem = { key: string; segment: string; label: string; short: string; icon: string };
 
 const asItem = (n: NavItem): ShellNavItem => ({ key: n.module, segment: n.segment, label: n.label, short: n.short, icon: n.icon });
 
 /** Sidebar order: Home, the experience's own modules, then the rest of the foundation. */
-export function navFor(experience: ExperienceKey): ShellNavItem[] {
+export function navFor(experience: ExperienceKey, allowedPrivate?: readonly string[]): ShellNavItem[] {
   const home = FOUNDATION_NAV.filter(n => n.module === "home").map(asItem);
   const rest = FOUNDATION_NAV.filter(n => n.module !== "home").map(asItem);
-  const own = EXPERIENCES[experience].modules.filter(m => m.nav !== false).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
+  // Private module development access (owner GO 2 Nov 2026): when the shell passes the modules the person may see, a private
+  // module they may not see is left out entirely. Without the argument this is the registry as built (tests and harnesses read that).
+  const own = EXPERIENCES[experience].modules.filter(m => m.nav !== false)
+    .filter(m => allowedPrivate === undefined || experience !== "scholar" || !Object.hasOwn(PRIVATE_MODULE_GATE, m.key) || allowedPrivate.includes(PRIVATE_MODULE_GATE[m.key])).map(m => ({ key: m.key, segment: m.segment, label: m.label, short: m.short, icon: m.icon }));
   return [...home, ...own, ...rest];
 }
 
@@ -217,9 +230,9 @@ export function bottomNavFor(experience: ExperienceKey): ShellNavItem[] {
 
 /** HFE-01 D1 (owner Option A): every sidebar destination that is NOT on the phone's bottom bar, in sidebar order.
  *  The account menu lists these below md, so no destination is unreachable on a phone while the bar stays at five. */
-export function overflowNavFor(experience: ExperienceKey): ShellNavItem[] {
+export function overflowNavFor(experience: ExperienceKey, allowedPrivate?: readonly string[]): ShellNavItem[] {
   const onBar = new Set(bottomNavFor(experience).map(i => i.key));
-  return navFor(experience).filter(i => !onBar.has(i.key));
+  return navFor(experience, allowedPrivate).filter(i => !onBar.has(i.key));
 }
 
 /** The href of a foundation module inside an experience. */

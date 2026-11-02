@@ -4,6 +4,7 @@ import { notFound, redirect } from "next/navigation";
 import { resolveIndividualShell, contextTermsGate, type IndividualContext } from "@/lib/individual/guard";
 import { EXPERIENCES, isExperienceKey, type ExperienceKey } from "@/lib/individual/experiences";
 import { forQuery, signInHref } from "@/lib/individual/entry";
+import { scholarModulesOnce, type ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
 // One gate-3 resolution per request, shared by the group layout, the experience layout and the page.
 // React's cache() scopes it to the render, so three callers cost one read -- and, more importantly, they
@@ -18,6 +19,17 @@ export const individualShell = cache(resolveIndividualShell);
  */
 export async function gatedMetadata(meta: Metadata): Promise<Metadata> {
   return (await individualShell()).state === "DISABLED" ? {} : meta;
+}
+
+/**
+ * Metadata for a page of a PRIVATE Scholar module (private module development access): the route's title only for a person who
+ * may see the module, and NOTHING otherwise, so a refused page carries the same default title as a route that does not exist.
+ * Anything unreadable is nothing.
+ */
+export async function gatedModuleMetadata(key: ScholarModuleKey, meta: Metadata): Promise<Metadata> {
+  const shell = await individualShell();
+  if (shell.state !== "READY") return {};
+  return (await scholarModulesOnce(shell.ctx.admin, shell.ctx.userId)).has(key) ? meta : {};
 }
 
 /**

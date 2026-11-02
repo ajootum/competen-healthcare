@@ -61,12 +61,19 @@ function strip(src: string): string {
 const LIB = "src/lib/individual/scholar";
 const PAGES = "src/app/individual/(app)/[experience]/(scholar)/study";
 const API = "src/app/api/individual/scholar";
-const FILES = [...walk(LIB), ...walk(PAGES), ...walk(API)];
+// SCHOLAR-MODULES-01: the Courses & Training and My Competencies pages sit beside study/ in the (scholar) group. They
+// are walked with everything else, so every Scholar-wide rule below covers them too.
+const SCHOLAR_GROUP = "src/app/individual/(app)/[experience]/(scholar)";
+const MODULE_SEGMENTS = ["courses", "my-competencies"] as const;
+const MODULE_DIRS = MODULE_SEGMENTS.map(seg => `${SCHOLAR_GROUP}/${seg}`);
+const FILES = [...walk(LIB), ...walk(PAGES), ...walk(API), ...MODULE_DIRS.flatMap(walk)];
 type Src = Map<string, string>;
 // Line endings normalised: a Windows checkout (core.autocrlf) has CRLF, and the planted-failure controls match
 // multi-line text. Without this the plants silently stop applying on Windows and the run aborts.
 const read = (f: string) => readFileSync(f, "utf8").replace(/\r\n/g, "\n");
 const REAL: Src = new Map(FILES.map(f => [f, strip(read(f))]));
+// Everything the Individual application renders (src/app/individual/**), stripped: K2 refuses the preview catalogue reader anywhere in it.
+const INDIVIDUAL_APP: Src = new Map(walk("src/app/individual").map(f => [f, strip(read(f))]));
 const MIG_FILE = "supabase/migrations/372-individual-scholar-learning.sql";
 const MIG_REAL = existsSync(MIG_FILE) ? read(MIG_FILE).replace(/--.*$/gm, "").toLowerCase() : "";
 // Migration 375 and the surfaces outside the Scholar tree that show what it holds (s11).
@@ -243,8 +250,10 @@ const CANDIDACY_ROUTES = [`${API}/clinical/cases/[id]/offer/route.ts`, `${API}/c
 const OWN_LIBRARY = /My learning library|scholarLearningLibrary|scholar_learning_library/g;
 /** My Plan's calendar entry type "Placement or training" (a clinical placement, not model training) is the one benign use of the word. */
 const PLACEMENT_LABEL = /Placement or training/g;
+/** SCHOLAR-MODULES-01: "Courses & Training" is the owner's name for the Courses module (courses taken on Competen Learning), not model training. */
+const COURSES_MODULE_LABEL = /Courses (?:&|&amp;) Training/g;
 const sharingPaths = (src: Src) => [...src].filter(([f]) => f !== `${LIB}/config.ts`)
-  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s.replace(OWN_LIBRARY, "").replace(PLACEMENT_LABEL, "")))).map(([f]) => f);
+  .filter(([f, s]) => (CANDIDACY_ROUTES.includes(f) ? /\btrain(ing)?\b|fine[_ -]?tun/i.test(s) : SHARING.test(s.replace(OWN_LIBRARY, "").replace(PLACEMENT_LABEL, "").replace(COURSES_MODULE_LABEL, "")))).map(([f]) => f);
 /** S1b: the candidacy routes go through candidates.ts only, never the tables, and the offer is one case at a time. */
 const candidacyGoverned = (src: Src) => {
   const offer = src.get(CANDIDACY_ROUTES[0]) ?? "", cand = src.get(CANDIDACY_ROUTES[1]) ?? "";
@@ -780,9 +789,12 @@ const mig389Shape = (m: string) => (m.split(FIVE).length - 1) === 2
  * it. Unreadable is a refusal. No Scholar file reads the catalogue tables itself (names for links already
  * made come from Professional's shared-only referenceNames).
  */
-const catalogueLeaks = (src: Src): string[] => {
+const catalogueLeaks = (src: Src, individualApp: Src = INDIVIDUAL_APP): string[] => {
   const c = src.get(CAT) ?? "";
   const bad: string[] = [];
+  // SCHOLAR-MODULES-01: the HQ-preview catalogue reader (draft and unpublished content) is never imported or called by any
+  // page, component or helper of the Individual application -- Scholar and Professional learners get published content only.
+  bad.push(...[...individualApp].filter(([, t]) => /\bloadCatalogueForPreview\b/.test(t)).map(([f]) => `${f} (preview catalogue reader)`));
   if (!/import \{ loadCatalogueFor \} from "\.\.\/catalogue";/.test(c) || !/const all = await loadCatalogueFor\(admin, "scholar"\);/.test(c)) bad.push("not read through S1's Scholar allowlist");
   if (!/if \(all === null\) return \{ ok: false \};/.test(c)) bad.push("unreadable not refused");
   // CFCA-STUDIO-P1 (660): a competency is the programme's when it sits in one of its catalogues, or one of ITS
@@ -791,6 +803,85 @@ const catalogueLeaks = (src: Src): string[] => {
     || !/const rank = new Map\(programme\.frameworks\.map\(f => \[f\.frameworkId, f\.sortOrder\]\)\);/.test(c)
     || !/o: pickOverlay\(c\.overlays, rank\)/.test(c)) bad.push("programme does not narrow");
   bad.push(...[...src].filter(([, s]) => /from\("(frameworks|framework_domains|framework_competencies)"\)/.test(s)).map(([f]) => f));
+  return bad;
+};
+/**
+ * C7b (SCHOLAR-MODULES-01): the Courses & Training and My Competencies pages. Each page takes its context from
+ * experienceModulePage with ITS OWN segment (so Professional's URL is a 404 and the release gate, live experience and terms
+ * all apply); none enrols, pays, certifies, writes or posts, none carries a control that could, none reads a table itself
+ * (only the existing readers), and none touches an AI.
+ */
+const moduleSurfacesSafe = (src: Src): string[] => {
+  const bad: string[] = [];
+  for (const seg of MODULE_SEGMENTS) {
+    const dir = `${SCHOLAR_GROUP}/${seg}`;
+    const files = [...src].filter(([f]) => f.startsWith(`${dir}/`));
+    const pages = files.filter(([f]) => f.endsWith("/page.tsx"));
+    if (pages.length < 5) bad.push(`${seg}: too few pages (${pages.length})`);
+    for (const [f, t] of pages) if (!new RegExp(`await experienceModulePage\\([^,]+, "${seg}"\\)`).test(t)) bad.push(`${f} (not experienceModulePage(..., "${seg}"))`);
+    for (const [f, t] of files) {
+      if (/\benrol\(|startCourseCheckout|issueCertificates\(|recordExternalCompletion\(|completeActivity\(/.test(t)) bad.push(`${f} (enrols, pays or certifies)`);
+      if (/\/api\/individual\/learning|\/api\/individual\/scholar\/|\bfetch\(|method:\s*["']POST|["']use client["']|<form\b|<button\b|<Button\b/.test(t)) bad.push(`${f} (posts, fetches or carries a control)`);
+      if (/>\s*(Enrol|Buy|Pay|Get certificate|Certificate)\b/i.test(t)) bad.push(`${f} (Enrol/Buy/Pay/Certificate text)`);
+      if (/from "@\/lib\/ai|scholar\/generation|scholar\/ai-standing|scholarAiRunner|\bgenerate\(/.test(t)) bad.push(`${f} (AI)`);
+      if (/requireIndividualContext|resolveIndividualShell|createAdminClient|\.from\("|\.(insert|update|upsert|delete)\(/.test(t)) bad.push(`${f} (reads or writes around the readers)`);
+    }
+  }
+  if (!MODULE_SEGMENTS.every(seg => EXPERIENCES.scholar.modules.some(m => m.segment === seg && !m.bottom) && !EXPERIENCES.professional.modules.some(m => m.segment === seg)))
+    bad.push("registry: both modules are Scholar's, off the bottom bar, and not Professional's");
+  return bad;
+};
+/**
+ * C7c (PRIVATE MODULE DEVELOPMENT ACCESS, owner GO 2 Nov 2026): Courses & Training and My Competencies are seen only by the accounts
+ * HQ names. EVERY page under courses/** and my-competencies/** calls requireScholarModule with its own module key, AFTER the
+ * entitlement check (experienceModulePage) and BEFORE its first await of anything else, so no data is read for a person who may not
+ * see the module (layouts and pages render in parallel, so a layout gate alone would not stop a page read). Each page's metadata is
+ * gated too. The layout computes the allowed set once and hands it to the sidebar, the drawer and the account menu; the home draws
+ * only the cards and activity the set allows; the gate fails closed to the ordinary not-found and names no account.
+ */
+const PRIVATE_KEY: Record<(typeof MODULE_SEGMENTS)[number], string> = { courses: "courses", "my-competencies": "competencies" };
+const LAYOUT_FILE = "src/app/individual/(app)/[experience]/layout.tsx";
+const NAV_DIR = "src/app/individual/_components";
+const HOME_DIR = `${PAGES}/_components`;
+const GATE_FILES = [LAYOUT_FILE, `${NAV_DIR}/ScholarSidebar.tsx`, `${NAV_DIR}/ScholarDrawer.tsx`, `${NAV_DIR}/ShellNav.tsx`, `${HOME_DIR}/home.tsx`, `${HOME_DIR}/home-activity.tsx`, `${HOME_DIR}/home-model.ts`,
+  `${LIB}/module-access.ts`, `${LIB}/module-access-admin.ts`];
+const GATE_RAW: Src = new Map(GATE_FILES.map(f => [f, read(f)]));
+const GATE: Src = new Map(GATE_FILES.map(f => [f, strip(GATE_RAW.get(f) ?? "")]));
+const EMAIL_LITERAL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9-]+\.[A-Za-z]{2,}/;
+const moduleAccessEnforced = (pages: Src, gate: Src, raw: Src): string[] => {
+  const bad: string[] = [];
+  for (const seg of MODULE_SEGMENTS) {
+    const key = PRIVATE_KEY[seg];
+    const files = [...pages].filter(([f]) => f.startsWith(`${SCHOLAR_GROUP}/${seg}/`) && f.endsWith("/page.tsx"));
+    if (files.length < 5) bad.push(`${seg}: too few pages (${files.length})`);
+    for (const [f, t] of files) {
+      const gateAt = t.search(new RegExp(`await requireScholarModule\\([^,()]+(?:\\.[a-zA-Z]+)*, [^,()]+(?:\\.[a-zA-Z]+)*, "${key}"\\)`));
+      const entitlementAt = t.search(/await experienceModulePage\(/);
+      const bodyAt = t.indexOf("export default async function");
+      if (gateAt < 0) { bad.push(`${f} (no requireScholarModule for "${key}")`); continue; }
+      if (entitlementAt < 0 || entitlementAt > gateAt) bad.push(`${f} (the module gate is not after experienceModulePage)`);
+      const before = t.slice(bodyAt, gateAt).replace(/\(await params\)/g, "").replace(/await experienceModulePage\(/g, "experienceModulePage(");
+      if (bodyAt < 0 || /\bawait\b/.test(before)) bad.push(`${f} (awaits something before the module gate)`);
+      if (!new RegExp(`gatedModuleMetadata\\("${key}",`).test(t) || /\bgatedMetadata\(/.test(t)) bad.push(`${f} (metadata is not gated by the module)`);
+    }
+  }
+  const layout = gate.get(LAYOUT_FILE) ?? "";
+  if (!/scholarModulesOnce\(shell\.ctx\.admin, shell\.ctx\.userId\)/.test(layout)) bad.push("layout does not compute the allowed set");
+  if (!/<ScholarDrawer[^>]*modules=\{scholarModules\}/.test(layout)) bad.push("layout: drawer not given the set");
+  if (!/<SidebarNav[^>]*scholarModules=\{scholarModules\}/.test(layout)) bad.push("layout: sidebar not given the set");
+  if (!/<AccountMenu[^>]*scholarModules=\{scholarModules\}/.test(layout)) bad.push("layout: account menu not given the set");
+  const tree = gate.get(`${NAV_DIR}/ScholarSidebar.tsx`) ?? "";
+  if (!/visibleModules\(modules\)\.map\(/.test(tree) || /SCHOLAR_NAV\.modules\.map\(/.test(tree)) bad.push("the module tree draws modules the set does not allow");
+  const shell = gate.get(`${NAV_DIR}/ShellNav.tsx`) ?? "";
+  if (!/navFor\(experience, allowedPrivate\)/.test(shell) || !/overflowNavFor\(experience, allowedPrivate\)/.test(shell) || /overflowNavFor\(experience\)/.test(shell)) bad.push("the account menu lists modules the set does not allow");
+  const home = gate.get(`${HOME_DIR}/home.tsx`) ?? "";
+  if (!/visibleHomeCards\(modules\)/.test(home) || /HOME_CARDS\.map\(/.test(home)) bad.push("the home draws cards the set does not allow");
+  if (!/if \(!o\.modules\.includes\("courses"\)\) return offPart;/.test(gate.get(`${HOME_DIR}/home-activity.tsx`) ?? "")) bad.push("the home reads courses for a learner without the module");
+  if (!/if \(allowed\.includes\("courses"\)\) add\("courses"/.test(gate.get(`${HOME_DIR}/home-model.ts`) ?? "")) bad.push("the home shows courses activity for a learner without the module");
+  const mod = gate.get(`${LIB}/module-access.ts`) ?? "";
+  if (!/if \(!\(await scholarModulesOnce\(admin, userId\)\)\.has\(key\)\) notFound\(\);/.test(mod)) bad.push("requireScholarModule does not answer not-found");
+  if (!/\} catch \{\s*return new Set\(\);\s*\}/.test(mod)) bad.push("scholarModulesFor does not fail closed");
+  for (const f of [`${LIB}/module-access.ts`, `${LIB}/module-access-admin.ts`]) if (EMAIL_LITERAL.test(raw.get(f) ?? "")) bad.push(`${f} (an email address in source)`);
   return bad;
 };
 /** K3: the model is shown tags, never an id, and a proposal's id comes only from the catalogue entry its tag names. */
@@ -834,7 +925,8 @@ const tutorContextBounded = (src: Src) => {
  */
 const contentStatusLabelled = (src: Src) => {
   const c = src.get(CAT) ?? "", cc = src.get(`${PAGES}/_components/competency-client.tsx`) ?? "", cl = src.get(CLIENT) ?? "";
-  const pg = src.get(`${PAGES}/progress/page.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
+  // The competency section moved out of the progress page (SCHOLAR-MODULES-01) so My Competencies shows the same one.
+  const pg = src.get(`${PAGES}/_components/competency-section.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
   return /const min = \(await loadIndividualPolicy\(admin\)\)\.scholarCatalogueMinStatus;/.test(c)
     && /const kept = rows\.filter\(c => meetsMinStatus\(c\.contentStatus, min\)\);/.test(c) && /belowFloor: rows\.length - kept\.length/.test(c)
     && /<ContentStatusTag status=\{m\.contentStatus\} \/>/.test(cc) && /<ContentStatusTag status=\{competency\.contentStatus\} \/>/.test(cc)
@@ -969,6 +1061,16 @@ function main() {
     PAGE_FILES.every(f => /await experienceModulePage\([^,]+, "study"\)/.test(REAL.get(f) ?? ""))
     && !PAGE_FILES.some(f => /requireIndividualContext|resolveIndividualShell|createAdminClient/.test(REAL.get(f) ?? ""))
     && EXPERIENCES.scholar.modules.some(m => m.segment === "study") && !EXPERIENCES.professional.modules.some(m => m.segment === "study"));
+
+  ok("C7b. every Courses & Training and My Competencies page takes its context from experienceModulePage with its own segment, and none enrols, pays, certifies, writes or calls an AI",
+    moduleSurfacesSafe(REAL).length === 0, moduleSurfacesSafe(REAL).join(", "));
+
+  ok("C7c. every page of Courses & Training and My Competencies calls requireScholarModule first (after the entitlement check, before any other await), the layout hands the allowed set to every navigation surface, the home draws only what it allows, and the gate fails closed",
+    moduleAccessEnforced(REAL, GATE, GATE_RAW).length === 0, moduleAccessEnforced(REAL, GATE, GATE_RAW).join(", "));
+  ok("C7d. nothing publishes the module-access policy: no migration or seed names it, and the default policy is private to nobody",
+    !walk("supabase/migrations").concat(existsSync("supabase/seed.sql") ? ["supabase/seed.sql"] : []).some(f => /scholar_module_(courses|competencies)_access/.test(read(f)))
+    && DEFAULT_POLICY.scholarModuleAccess.courses.mode === "private" && DEFAULT_POLICY.scholarModuleAccess.courses.users.length === 0
+    && DEFAULT_POLICY.scholarModuleAccess.competencies.mode === "private" && DEFAULT_POLICY.scholarModuleAccess.competencies.users.length === 0);
 
   // ── D. GROUNDING AND PROVENANCE ─────────────────────────────────────────────────────────────────
   ok("D1. only questions that passed the checks are stored", onlyCheckedQuestionsStored(REAL));
@@ -1257,7 +1359,48 @@ function main() {
     catalogueLeaks(plant(CAT, 'loadCatalogueFor(admin, "scholar")', 'loadCatalogueFor(admin, "professional")')).length > 0
     && catalogueLeaks(plant(CAT, ".filter(({ c, o }) => config.has(c.catalogue.id) || o !== null)", ".filter(() => true)")).length > 0
     && catalogueLeaks(plant(CAT, "o: pickOverlay(c.overlays, rank)", "o: c.overlays?.[0] ?? null")).length > 0
-    && catalogueLeaks(plant(`${PAGES}/progress/page.tsx`, "const learner = rows.ok", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = rows.ok')).length > 0);
+    && catalogueLeaks(plant(`${PAGES}/progress/page.tsx`, "const learner = rows.ok", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = rows.ok')).length > 0
+    // SCHOLAR-MODULES-01: the walk covers the new modules, and the preview reader is refused anywhere in the Individual application.
+    && catalogueLeaks(plant(`${SCHOLAR_GROUP}/my-competencies/frameworks/page.tsx`, "const learner = await loadLearnerCatalogue", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = await loadLearnerCatalogue')).length > 0
+    && catalogueLeaks(REAL, new Map([...INDIVIDUAL_APP, [`${SCHOLAR_GROUP}/my-competencies/gaps/page.tsx`, `${INDIVIDUAL_APP.get(`${SCHOLAR_GROUP}/my-competencies/gaps/page.tsx`) ?? ""}\nconst leak = loadCatalogueForPreview;`]])).length > 0
+    && catalogueLeaks(REAL, new Map([...INDIVIDUAL_APP, ["src/app/individual/_components/planted.ts", 'import { loadCatalogueForPreview } from "@/lib/competency/foundation";']])).length > 0);
+  ok("P22b. ⚠ C7b goes red when a module page takes another segment, enrols, posts, carries a control, reads a table itself or calls an AI",
+    moduleSurfacesSafe(REAL).length === 0
+    && moduleSurfacesSafe(plant(`${SCHOLAR_GROUP}/courses/mine/page.tsx`, 'experienceModulePage((await params).experience, "courses")', 'experienceModulePage((await params).experience, "study")')).length > 0
+    && moduleSurfacesSafe(plant(`${SCHOLAR_GROUP}/courses/explore/page.tsx`, "const x = SCHOLAR;", 'const x = SCHOLAR;\n  await enrol(page.ctx.admin, page.ctx.userId, "o");')).length > 0
+    && moduleSurfacesSafe(plant(`${SCHOLAR_GROUP}/courses/explore/page.tsx`, "Open the Competen Learning catalogue", "Pay now")).length > 0
+    && moduleSurfacesSafe(plant(`${SCHOLAR_GROUP}/courses/progress/page.tsx`, "export const dynamic", 'const post = fetch("/api/individual/learning", { method: "POST" });\nexport const dynamic')).length > 0
+    && moduleSurfacesSafe(plant(`${SCHOLAR_GROUP}/my-competencies/evidence/page.tsx`, "export const dynamic", 'import { generate } from "@/lib/ai/gateway";\nexport const dynamic')).length > 0
+    && moduleSurfacesSafe(plant(`${SCHOLAR_GROUP}/my-competencies/gaps/page.tsx`, "export const dynamic", 'const t = (a: any) => a.from("frameworks");\nexport const dynamic')).length > 0);
+  // PRIVATE MODULE DEVELOPMENT ACCESS: a planted violation in a copy of the real source must turn C7c red.
+  const plantG = (file: string, from: RegExp | string, to: string, into: "pages" | "gate" | "raw"): { pages: Src; gate: Src; raw: Src } => {
+    const src = into === "pages" ? REAL : into === "gate" ? GATE : GATE_RAW;
+    const copy = new Map(src);
+    const before = copy.get(file) ?? "";
+    const after = before.replace(from, to);
+    if (after === before) throw new Error(`plant did not apply in ${file}: ${String(from)}`);
+    copy.set(file, after);
+    return { pages: into === "pages" ? copy : REAL, gate: into === "gate" ? copy : GATE, raw: into === "raw" ? copy : GATE_RAW };
+  };
+  const redC7c = (p: { pages: Src; gate: Src; raw: Src }) => moduleAccessEnforced(p.pages, p.gate, p.raw).length > 0;
+  const MINE = `${SCHOLAR_GROUP}/courses/mine/page.tsx`, GAPS = `${SCHOLAR_GROUP}/my-competencies/gaps/page.tsx`;
+  ok("P22c. ⚠ C7c goes red when a module page drops the gate, takes another module's key, reads before it, or leaves its metadata ungated",
+    moduleAccessEnforced(REAL, GATE, GATE_RAW).length === 0
+    && redC7c(plantG(MINE, /await requireScholarModule\([^;]*\);/, "", "pages"))
+    && redC7c(plantG(MINE, 'page.ctx.userId, "courses")', 'page.ctx.userId, "competencies")', "pages"))
+    && redC7c(plantG(GAPS, 'page.ctx.userId, "competencies")', 'page.ctx.userId, "courses")', "pages"))
+    && redC7c(plantG(MINE, "await requireScholarModule(", "await learningEnabled(page.ctx.admin);\n  await requireScholarModule(", "pages"))
+    && redC7c(plantG(GAPS, "if (!page) return null;", "await Promise.resolve();\n  if (!page) return null;", "pages"))
+    && redC7c(plantG(MINE, "gatedModuleMetadata(", "gatedMetadata(", "pages")));
+  ok("P22d. ⚠ C7c goes red when the layout, the tree, the account menu or the home stop honouring the set, or the gate stops failing closed or names an email",
+    redC7c(plantG(LAYOUT_FILE, "modules={scholarModules}", "", "gate"))
+    && redC7c(plantG(LAYOUT_FILE, "scholarModules={scholarModules} />", "/>", "gate"))
+    && redC7c(plantG(`${NAV_DIR}/ScholarSidebar.tsx`, "visibleModules(modules).map(", "SCHOLAR_NAV.modules.map(", "gate"))
+    && redC7c(plantG(`${NAV_DIR}/ShellNav.tsx`, "overflowNavFor(experience, allowedPrivate)", "overflowNavFor(experience)", "gate"))
+    && redC7c(plantG(`${HOME_DIR}/home.tsx`, "cards.map(", "HOME_CARDS.map(", "gate"))
+    && redC7c(plantG(`${HOME_DIR}/home-model.ts`, 'if (allowed.includes("courses")) add(', "add(", "gate"))
+    && redC7c(plantG(`${LIB}/module-access.ts`, /\} catch \{\s*return new Set\(\);\s*\}/, "} catch { return new Set(SCHOLAR_MODULE_KEYS); }", "gate"))
+    && redC7c(plantG(`${LIB}/module-access.ts`, "export const SCHOLAR_MODULE_KEYS", "const owner = \"someone-at-example.org\".replace(\"-at-\", \"@\");\nconst planted = \"tester@example.org\";\nexport const SCHOLAR_MODULE_KEYS", "raw")));
   ok("P23. ⚠ K3 goes red when the prompt shows the model competency ids",
     idsReachModel(new Map([...HOLD, [ENGINE, (HOLD.get(ENGINE) ?? "").replace("[${candidateTag(i)}]", "[${c.competencyId}]")]])));
   ok("P34. ⚠ K17 goes red when coverage counts proposed links, or the section totals its own",
@@ -1269,7 +1412,7 @@ function main() {
     && !tutorContextBounded(plant(`${LIB}/learner-context.ts`, "export const NEEDS_PRACTICE_BELOW", "export const who = (p: { fullName: string }) => p.fullName;\nexport const NEEDS_PRACTICE_BELOW")));
   ok("P36. ⚠ K19 goes red when the floor is ignored, a progress row loses its label, or held-back content goes unsaid",
     !contentStatusLabelled(plant(CAT, "const kept = rows.filter(c => meetsMinStatus(c.contentStatus, min));", "const kept = rows;"))
-    && !contentStatusLabelled(plant(`${PAGES}/progress/page.tsx`, "<ContentStatusTag status={r.contentStatus} />", ""))
+    && !contentStatusLabelled(plant(`${PAGES}/_components/competency-section.tsx`, "<ContentStatusTag status={r.contentStatus} />", ""))
     && !contentStatusLabelled(plant(`${PAGES}/[materialId]/page.tsx`, "learner.belowFloor > 0", "false")));
   ok("P37. ⚠ K20 goes red when processing stops re-checking the format, or a material stops showing its context",
     !uploadGoverned(plant(`${API}/materials/route.ts`, "(rules.mimes as readonly string[]).includes(declared)", "true"))

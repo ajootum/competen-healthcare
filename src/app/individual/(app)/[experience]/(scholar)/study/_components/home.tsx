@@ -3,131 +3,77 @@ import { headers } from "next/headers";
 import { EXPERIENCES, SCHOLAR, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
 import { countDue, listLearningSessions, listMaterials } from "@/lib/individual/scholar/store";
 import type { IndividualContext } from "@/lib/individual/guard";
-import { PageHeader, Unreadable, focusRing } from "../../../../../_components/chrome";
+import { PageHeader, focusRing } from "../../../../../_components/chrome";
 import HomeNotices from "../../../../../_components/HomeNotices";
-import { JourneyButton, linkBtn } from "./shell-pieces";
-import { LibraryRows } from "./library-list";
-import { libraryRow } from "./library-rows";
 import { continueStudy } from "@/lib/individual/scholar/study-context";
-import { stageHref } from "@/lib/individual/scholar/study-carry";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { loadToday } from "@/lib/individual/scholar/plan-data";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
+import HomeActivity, { readHomeExtras } from "./home-activity";
+import { scholarModulesOnce } from "@/lib/individual/scholar/module-access";
+import { competenciesHref, continueTarget, coursesExploreHref, failedPart, HOME_CARDS, offPart, okPart, visibleHomeCards } from "./home-model";
 
-// THE SCHOLAR HOME -- the study space (Scholar HFE redesign, 2026-10-26; COMPETEN-IND-003 s2(1) and s3).
+// THE SCHOLAR HOME -- the study space (Scholar HFE redesign, 2026-10-26; COMPETEN-IND-003 s2(1) and s3), now the
+// door to the three modules (modular restructuring S3): My Learning, Courses & Training, My Competencies.
 //
-// Every figure is the person's own and read here: cards due, their latest material, their last learning
-// session. A figure that could not be read says so; nothing stands in for it. Suggestions point at a space
-// and never lock one -- the eight stages are a guide, not a route. The capabilities Scholar does not have
-// yet stay listed with the reason, as the experience registry requires.
+// Every figure is the person's own and read here, in parallel, each read failing on its own: cards due, their latest
+// material, their last learning session, their open study session, and the rows in home-activity.tsx. A figure that
+// could not be read says so; nothing stands in for it. The capabilities Scholar does not have yet stay listed with
+// the reason, as the experience registry requires.
 
-const card = "rounded-2xl border border-gray-200 bg-white p-6";
-const primary = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] px-4 py-2.5 text-[15px] font-semibold text-white hover:opacity-90 ${focusRing}`;
-const secondary = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] border border-gray-200 bg-white px-4 py-2.5 text-[15px] font-semibold text-gray-900 hover:bg-[var(--cmp-theme-soft)] ${focusRing}`;
+const card = "flex flex-col rounded-2xl border border-gray-200 bg-white p-6";
+const primary = `inline-flex min-h-[44px] w-full items-center justify-center rounded-[9px] px-4 py-2.5 text-[15px] font-semibold text-white hover:opacity-90 sm:w-auto ${focusRing}`;
+
+const firstNameOf = (ctx: IndividualContext) => ctx.profile.fullName?.split(" ")[0] ?? null;
 
 export default async function ScholarHome({ ctx, other }: { ctx: IndividualContext; other: ExperienceKey | undefined }) {
   const x = SCHOLAR;
-  const firstName = ctx.profile.fullName?.split(" ")[0] ?? null;
-  // SCHOLAR-SESSION-AI-02: an open study session takes the Continue slot, reopened in its last stage (null where off).
-  const [materials, due, sessions, study] = await Promise.all([
-    listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1), continueStudy(ctx.admin, ctx.userId),
-  ]);
-  // PLP-01..04: "Continue My Plan" only where My Plan is on and it has a next step (anything else: nothing new on the home). Never an error.
   const hdrs = await headers();
-  const policy = await loadIndividualPolicy(ctx.admin);
-  const todayPlan = policy.scholarMyPlan === "on"
-    ? await loadToday(ctx, policy, { now: new Date(), tz: learnerTimeZone(hdrs), today: learnerToday(hdrs) }).catch(() => null)
-    : null;
-  const nextStep = todayPlan?.ok ? todayPlan.next : null;
+  const tz = learnerTimeZone(hdrs), today = learnerToday(hdrs);
+  // Policy first, as the other reads need it; it runs alongside the reads that do not.
+  const policyP = loadIndividualPolicy(ctx.admin);
+  // Private module development access: the modules this person may see (any failure: none). Asked before the reads that depend on it.
+  const modules = [...(await scholarModulesOnce(ctx.admin, ctx.userId))];
+  // SCHOLAR-SESSION-AI-02: an open study session takes the Continue slot, reopened in its last stage (null where off).
+  const [materials, due, sessions, study, extras] = await Promise.all([
+    listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1),
+    policyP.then(p => continueStudy(ctx.admin, ctx.userId, p)),
+    policyP.then(p => readHomeExtras(ctx, p, { now: new Date(), tz, today, modules })),
+  ]);
   const none = materials.ok && materials.data.length === 0;
   const resume = sessions.ok ? sessions.data.find(s => s.status === "active") ?? null : null;
-  const recent = materials.ok ? materials.data.slice(0, 3).map(m => libraryRow(m)) : [];
+  const go = continueTarget({ noMaterial: none, study, resumeSessionId: resume?.id ?? null });
+  const hrefOf = { learning: go.href, courses: coursesExploreHref(), competencies: competenciesHref() } as const;
+  const labelOf = { learning: go.label, courses: HOME_CARDS[1].cta, competencies: HOME_CARDS[2].cta } as const;
+  const cards = visibleHomeCards(modules);
 
   return (
     <>
-      <PageHeader accent={x.accent} eyebrow="Your study space" title="Make your next session count." intro="Pick up where you left off, or follow your curiosity." />
+      <PageHeader accent={x.accent} eyebrow={firstNameOf(ctx) ? `Welcome back, ${firstNameOf(ctx)}` : "Welcome back"} title="Make your next session count." intro="Pick up where you left off, or follow your curiosity." />
       {/* Notices in the person's own account (migration 437). Nothing while there are none. */}
       <HomeNotices admin={ctx.admin} userId={ctx.userId} accent={x.accent} />
 
-      <section aria-labelledby="hero-h" className="relative mb-6 overflow-hidden rounded-2xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-6 shadow-sm md:p-[30px]">
-        <span aria-hidden className="pointer-events-none absolute -top-[35px] right-[35px] hidden select-none text-[220px] font-extrabold leading-none text-[var(--cmp-theme-soft)] md:block">C</span>
-        <div className="relative">
-          <p className="text-[11px] font-extrabold uppercase tracking-[0.18em]" style={{ color: x.accent }}>{firstName ? `Welcome back, ${firstName}` : "Welcome back"}</p>
-          <h2 id="hero-h" className="mt-3 text-[28px] font-bold leading-tight tracking-[-0.02em] text-gray-900">A little understanding.<br />A stronger next decision.</h2>
-          <p className="mt-2 max-w-[600px] text-[15px] text-gray-600">
-            {none ? "Start with your own notes. No programme or competency selection is required."
-              : study ? `Continue your study session “${study.title}”, where you left it.`
-              : resume ? `Continue “${resume.title}”, with your source alongside you.`
-                : "Learn from your own material, with your source alongside you."}
-          </p>
-          <div className="mt-4 flex flex-wrap gap-2.5">
-            {none
-              ? <Link href={`${experienceHref("scholar", "study")}#upload`} className={primary} style={{ background: x.accent }}>Upload your first material</Link>
-              : study ? <Link href={stageHref(study.space, study.id)} className={primary} style={{ background: x.accent }}>Continue your study session →</Link>
-              : <Link href={experienceHref("scholar", resume ? `study/learn?session=${resume.id}` : "study/learn")} className={primary} style={{ background: x.accent }}>Continue learning →</Link>}
-            <Link href={experienceHref("scholar", "study")} className={secondary}>Explore my library</Link>
-          </div>
-        </div>
-      </section>
-
-      {nextStep && (
-        <section aria-labelledby="myplan-h" data-testid="continue-my-plan" className="mb-5 flex flex-col gap-3 rounded-2xl border border-gray-200 bg-white p-5 sm:flex-row sm:items-center sm:justify-between">
-          <div className="min-w-0">
-            <h2 id="myplan-h" className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-gray-500">Continue My Plan</h2>
-            <p className="mt-1 break-words text-[18px] font-bold text-gray-900">{nextStep.title}{nextStep.minutes !== null ? <span className="ml-2 text-[14px] font-semibold tabular-nums text-gray-700">{nextStep.minutes} min</span> : null}</p>
-          </div>
-          <div className="flex flex-wrap gap-2.5">
-            {nextStep.href && <Link href={nextStep.href} className={primary} style={{ background: x.accent }}>Start studying<span className="sr-only">: {nextStep.title}</span></Link>}
-            <Link href={experienceHref("scholar", "study/plan")} className={secondary}>Open My Plan</Link>
-          </div>
-        </section>
-      )}
-
-      <div className="mb-5 grid gap-[18px] sm:grid-cols-2 lg:grid-cols-3">
-        <section className={card}>
-          <p className="text-[12px] text-gray-600">Ready to revisit</p>
-          {due === null ? <p className="mt-2 text-[15px] font-semibold text-gray-800">Could not be read just now</p> : (
-            <p className="my-2 text-[30px] font-bold leading-tight text-gray-900 tabular-nums">{due} <span className="text-[12px] font-normal text-gray-600">{due === 1 ? "card due" : "cards due"}</span></p>
-          )}
-          <p className="text-[15px] text-gray-600">A short recall session from your saved questions.</p>
-          <Link href={experienceHref("scholar", "study/revise")} className={linkBtn} style={{ color: x.accent }}>Open revision →</Link>
-        </section>
-        <section className={card}>
-          <p className="text-[12px] text-gray-600">Practise your reasoning</p>
-          <h2 className="mt-3 text-[21px] font-bold tracking-tight text-gray-900">Work through a case</h2>
-          <p className="text-[15px] text-gray-600">A scenario from your notes, with new information at each stage.</p>
-          <Link href={experienceHref("scholar", "study/apply")} className={linkBtn} style={{ color: x.accent }}>Open Apply →</Link>
-        </section>
-        <section className={card}>
-          <p className="text-[12px] text-gray-600">Your learning evidence</p>
-          <h2 className="mt-3 text-[21px] font-bold tracking-tight text-gray-900">Find the next gap</h2>
-          <p className="text-[15px] text-gray-600">What your practice supports, and where evidence is still thin.</p>
-          <Link href={experienceHref("scholar", "study/evaluate")} className={linkBtn} style={{ color: x.accent }}>Explore Evaluate →</Link>
-        </section>
+      <div className={`mb-6 grid gap-[18px] ${cards.length >= 3 ? "md:grid-cols-3" : cards.length === 2 ? "md:grid-cols-2" : ""}`}>
+        {cards.map(c => (
+          <section key={c.key} aria-labelledby={`card-${c.key}`} data-testid={`home-card-${c.key}`} className={card}>
+            <h2 id={`card-${c.key}`} className="text-[21px] font-bold tracking-tight text-gray-900">{c.title}</h2>
+            <p className="mb-5 mt-1 text-[15px] text-gray-600">{c.line}</p>
+            <div className="mt-auto">
+              <Link href={hrefOf[c.key]} className={primary} style={{ background: x.accent }}>{labelOf[c.key]}</Link>
+            </div>
+          </section>
+        ))}
       </div>
 
-      <div className="grid gap-[22px] lg:grid-cols-[1.7fr_1fr]">
-        <section aria-labelledby="recent-h" className={card}>
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <h2 id="recent-h" className="text-[21px] font-bold tracking-tight text-gray-900">Your recent material</h2>
-            <Link href={experienceHref("scholar", "study")} className={linkBtn} style={{ color: x.accent }}>View all</Link>
-          </div>
-          {!materials.ok ? (materials.notProvisioned
-            ? <p className="text-[15px] text-gray-600">My Learning is not set up here yet.</p>
-            : <Unreadable what="study materials" />)
-            : recent.length === 0 ? <p className="text-[15px] text-gray-600">Nothing yet. Upload your notes to start.</p>
-              : <LibraryRows rows={recent} />}
-        </section>
-        <section className={card}>
-          <h3 className="text-[16px] font-bold text-gray-900">A guide, not a fixed route</h3>
-          <p className="mt-1.5 text-[15px] text-gray-600">Move freely between learning, revision and cases. Suggestions help you choose; they never lock your next step.</p>
-          <JourneyButton label="See the eight-stage journey" />
-          <hr className="my-[18px] border-0 border-t border-gray-200" />
-          <p className="text-[12px] text-gray-600">Your profile</p>
-          <p className="mt-1 text-[15px] text-gray-600">One profile and Passport, shared by every experience on your account.</p>
-          <Link href={experienceHref("scholar", "profile")} className={linkBtn} style={{ color: x.accent }}>Review your profile</Link>
-        </section>
-      </div>
+      <HomeActivity
+        accent={x.accent}
+        modules={modules}
+        input={{
+          study: study ? { id: study.id, title: study.title, space: study.space } : null,
+          ...extras,
+          due,
+          materials: materials.ok ? okPart(materials.data.slice(0, 1).map(m => ({ id: m.id, title: m.title }))) : materials.notProvisioned ? offPart : failedPart,
+        }}
+      />
 
       {other && (
         <section className="mt-6 rounded-2xl p-5" style={{ background: EXPERIENCES[other].accentSoft }}>

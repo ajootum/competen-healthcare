@@ -20,3 +20,22 @@ describe("account menu overflow", () => {
     for (const seg of ["evidence", "competencies", "progress", "profile"]) expect(menu.some(i => i.segment === seg)).toBe(true);
   });
 });
+
+// Private module development access: the account menu lists a private Scholar module only for a person who may see it.
+describe("account menu and private Scholar modules", () => {
+  const has = (allowed: readonly string[], segment: string) => navFor("scholar", allowed).some(i => i.segment === segment);
+  it("lists neither Courses nor My Competencies when no module is allowed", () => {
+    expect(has([], "courses")).toBe(false);
+    expect(has([], "my-competencies")).toBe(false);
+    expect(overflowNavFor("scholar", []).some(i => i.segment === "courses" || i.segment === "my-competencies")).toBe(false);
+    for (const seg of ["study", "profile", "settings"]) expect(has([], seg)).toBe(true);
+  });
+  it("lists exactly the modules allowed", () => {
+    expect(has(["courses"], "courses")).toBe(true);
+    expect(has(["courses"], "my-competencies")).toBe(false);
+    expect(has(["competencies"], "my-competencies")).toBe(true);
+    expect(has(["competencies"], "courses")).toBe(false);
+    expect(overflowNavFor("scholar", ["courses", "competencies"]).map(i => i.segment)).toEqual(expect.arrayContaining(["courses", "my-competencies"]));
+  });
+  it("leaves Professional untouched", () => expect(navFor("professional", []).map(i => i.key)).toEqual(navFor("professional").map(i => i.key)));
+});

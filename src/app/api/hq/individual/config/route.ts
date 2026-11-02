@@ -5,6 +5,7 @@ import { POLICY_SCOPE, policyDef, policyPath, validateDraft } from "@/lib/indivi
 import { checkLcpdDraft, LCPD_PATH } from "@/lib/individual/lcpd-config";
 import { checkDocumentsDraft, DOCUMENTS_PATH, loadDocumentsConfig } from "@/lib/individual/documents-config";
 import { checkPresentationDraft, PRESENTATION_PATH } from "@/lib/design/presentation-config";
+import { labelAccounts, normaliseAccountEmail, resolveAccountByEmail } from "@/lib/individual/scholar/module-access-admin";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -27,6 +28,10 @@ export const dynamic = "force-dynamic";
 // "presentation" (COMPETEN-DESIGN-SYSTEM-01 s4) is how Individual, Scholar and Professional present themselves on the
 // sign-in chooser (src/lib/design/presentation-config.ts): role, description, action label and icon from a fixed set.
 // Names and colours are not configurable here. Validated whole, drafted, and published with the rest.
+//
+// "module_access_lookup" (PRIVATE MODULE DEVELOPMENT ACCESS) turns an email typed on the Module access section into an account id
+// (src/lib/individual/scholar/module-access-admin.ts). The two module-access policies store ids only, and "set" refuses an id that
+// is not an account.
 //
 // ⚠ GATED BY hqApiGate(["hq.individual.config.manage"]) (migration 376) -- the right the Individual Product
 // Administrator appointment holds. Not super-admin, not landlord authority: this door can write only the
@@ -73,8 +78,24 @@ export async function POST(req: Request) {
           if (codes.some(c => !ok.has(c))) return refuse(422, `${v.def.label}: only active Scholar programmes can be named.`);
         }
       }
+      // PRIVATE MODULE DEVELOPMENT ACCESS: every listed id must be an account. Only ids are stored.
+      if (v.def.kind === "module_access") {
+        const ids = (v.settings.users as string[]) ?? [];
+        const known = await labelAccounts(ctx.admin, ids);
+        if (known === null) return refuse(503, "The accounts could not be checked just now. Nothing has changed.");
+        if (ids.some(id => !known.has(id))) return refuse(422, `${v.def.label}: every account listed must be an existing account.`);
+      }
       const r = await setOverride(ctx.admin, actor, SCOPE, policyPath(v.def.key), v.settings);
       return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The draft could not be saved. Nothing has changed.");
+    }
+    // Turns the email typed in "Add by email" into an account id for the editor. Reads the profiles only; stores nothing.
+    case "module_access_lookup": {
+      const email = normaliseAccountEmail(body.email);
+      if (!email) return refuse(422, "Type the full email address of the account.");
+      const found = await resolveAccountByEmail(ctx.admin, email);
+      if (!found.ok) return refuse(503, found.message);
+      if (!found.found) return refuse(404, "No account has that email address. Nothing was added.");
+      return NextResponse.json({ ok: true, account: found.account });
     }
     case "lcpd": {
       const v = checkLcpdDraft(body.settings);

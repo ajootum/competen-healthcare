@@ -12,6 +12,7 @@ import {
 } from "./scholar/config";
 import { STUDY_ACHIEVEMENT, STUDY_ACHIEVEMENT_KINDS, type StudyAchievementKind } from "./scholar/passport-items";
 import { COUNTRIES } from "../countries";
+import { PARTICIPATION_CATEGORIES, isParticipationCategory, type ParticipationCategory } from "../hq/account-participation";
 import { PROFESSIONAL_EVALUATION_POLICIES } from "./professional/evaluation-policy";
 import { PROFESSIONAL_PROGRESS_POLICIES, type PeriodKind, type ProgressRule, type ProgressView } from "./professional/progress-policy";
 import type { ConfidenceFactor, RecommendationRule, ScopeKind } from "./professional/evaluation-vocabulary";
@@ -129,7 +130,9 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection";
-export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
+/** PRIVATE MODULE DEVELOPMENT ACCESS (owner GO 2 Nov 2026): who may see a Scholar module that is still being developed. */
+export type ModuleAccessPolicyKey = "scholar_module_courses_access" | "scholar_module_competencies_access";
+export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey | ModuleAccessPolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
 export type IntPolicy = Common & { key: IntPolicyKey; kind: "int"; unit: string; fallback: number; min: number; max: number };
@@ -148,7 +151,21 @@ export type SequencePolicy = Common & { key: SequencePolicyKey; kind: "sequence"
 /** Per programme, its own list of levels. */
 export type LevelsPolicy = Common & { key: LevelsPolicyKey; kind: "levels"; maxPerProgramme: number };
 export type ChoicePolicy = Common & { key: ChoicePolicyKey; kind: "choice"; options: readonly { value: string; label: string }[]; fallback: string };
-export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy | SequencePolicy;
+/** Who may see one Scholar module: stored as account ids and participation categories, never as emails or names. */
+export type ModuleAccessPolicy = Common & { key: ModuleAccessPolicyKey; kind: "module_access"; maxUsers: number };
+export type PolicyDef = IntPolicy | SetPolicy | CataloguePolicy | ChoicePolicy | ProgrammesPolicy | OptionsPolicy | LevelsPolicy | SequencePolicy | ModuleAccessPolicy;
+export const MODULE_ACCESS_MODES = ["private", "pilot", "public"] as const;
+export type ModuleAccessMode = (typeof MODULE_ACCESS_MODES)[number];
+export type ModuleAccess = { mode: ModuleAccessMode; users: string[]; groups: ParticipationCategory[] };
+export const MODULE_ACCESS_MAX_USERS = 50;
+export const MODULE_ACCESS_MODE_LABEL: Record<ModuleAccessMode, string> = { private: "Private development", pilot: "Pilot", public: "Public" };
+export const MODULE_ACCESS_MODE_MEANING: Record<ModuleAccessMode, string> = {
+  private: "Only the accounts listed can see it. Nobody else sees any sign of it.",
+  pilot: "The accounts listed, and every account in the participation categories chosen, can see it.",
+  public: "Everyone who has Competen Scholar can see it.",
+};
+/** FAIL CLOSED: nothing stored, or anything unreadable, is private to nobody. */
+export const MODULE_ACCESS_CLOSED: ModuleAccess = { mode: "private", users: [], groups: [] };
 /** Content statuses from least to most reviewed (migration 394). "At least draft" offers draft and approved. */
 export const CONTENT_STATUS_ORDER = ["unreviewed", "draft", "approved"] as const;
 export type ContentStatusLevel = (typeof CONTENT_STATUS_ORDER)[number];
@@ -868,6 +885,22 @@ export const POLICIES: readonly PolicyDef[] = [
     options: STUDY_ACHIEVEMENT_KINDS.map(k => ({ value: k, label: STUDY_ACHIEVEMENT[k].name })),
     fallback: STUDY_ACHIEVEMENT_KINDS,
     limitReason: "Only the kinds migration 375 records can be offered.",
+  },
+  // ── PRIVATE MODULE DEVELOPMENT ACCESS ── owner GO "COMPETEN SCHOLAR -- Private Module Development Access" ──
+  // Courses & Training and My Competencies are built but not released. Nothing published means PRIVATE TO NOBODY: a
+  // module is seen only by the accounts named here (or, in Pilot, by a participation category), always IN ADDITION to
+  // the person's Scholar entitlement, never instead of it. My Learning and the shared links are not governed here.
+  {
+    key: "scholar_module_courses_access", kind: "module_access", product: "Scholar", maxUsers: MODULE_ACCESS_MAX_USERS,
+    label: "Courses & Training access",
+    help: "Who can see Courses & Training in Competen Scholar. Private development: only the accounts listed. Pilot: the accounts listed and every account in the chosen participation categories. Public: everyone who has Scholar.",
+    limitReason: "At most 50 named accounts. Accounts are stored by id. Default: private, with nobody listed, so the module is hidden from everyone until HQ opens it.",
+  },
+  {
+    key: "scholar_module_competencies_access", kind: "module_access", product: "Scholar", maxUsers: MODULE_ACCESS_MAX_USERS,
+    label: "My Competencies access",
+    help: "Who can see My Competencies in Competen Scholar. Private development: only the accounts listed. Pilot: the accounts listed and every account in the chosen participation categories. Public: everyone who has Scholar.",
+    limitReason: "At most 50 named accounts. Accounts are stored by id. Default: private, with nobody listed, so the module is hidden from everyone until HQ opens it.",
   },
   // ⚠ COMPETEN-SCHOLAR-01 S1: EMPTY UNTIL HQ CHOOSES. No catalogue reaches a person by existing -- not the
   // shared frameworks already in the library, not a newly published one. Unreadable is empty too.
@@ -1988,6 +2021,22 @@ export function clampSet(p: SetPolicy, settings: any): string[] {
   return p.options.map(o => o.value).filter(v => chosen.has(v));
 }
 
+/**
+ * Pure: who may see one Scholar module, from a stored settings object. FAILS CLOSED: a missing, malformed or unreadable value,
+ * or a mode that is not one of the three, is private with nobody listed. Only well-formed account ids (lower case, once each,
+ * at most the limit) and known participation categories survive. A stored email or name is not an id and is dropped.
+ */
+export function clampModuleAccess(p: ModuleAccessPolicy, settings: any): ModuleAccess {
+  if (settings == null || typeof settings !== "object" || Array.isArray(settings)) return { ...MODULE_ACCESS_CLOSED };
+  const mode = (MODULE_ACCESS_MODES as readonly unknown[]).includes(settings.mode) ? (settings.mode as ModuleAccessMode) : null;
+  if (mode === null) return { ...MODULE_ACCESS_CLOSED };
+  const users = Array.isArray(settings.users)
+    ? ([...new Set(settings.users.filter((v: unknown): v is string => typeof v === "string" && UUID.test(v)).map((v: string) => v.toLowerCase()))].slice(0, p.maxUsers) as string[])
+    : [];
+  const groups = Array.isArray(settings.groups) ? PARTICIPATION_CATEGORIES.filter(c => settings.groups.includes(c)) : [];
+  return { mode, users, groups };
+}
+
 /** Pure: a catalogue allowlist from a stored settings object. Well-formed ids only, deduplicated, capped. */
 export function clampCatalogues(p: CataloguePolicy, settings: any): string[] {
   if (settings == null || !Array.isArray(settings.ids)) return [];
@@ -2104,6 +2153,18 @@ export function validateDraft(key: unknown, raw: unknown): { ok: true; def: Poli
     if (ids.length > def.max) return { ok: false, error: `${def.label}: at most ${def.max} catalogues. That limit is fixed.` };
     // Whether each id is a shared, active, published framework is checked by the route, against the library.
     return { ok: true, def, settings: { ids } };
+  }
+  if (def.kind === "module_access") {
+    if (raw == null || typeof raw !== "object" || Array.isArray(raw)) return { ok: false, error: `${def.label}: send the mode, the accounts and the groups.` };
+    const r = raw as Record<string, unknown>;
+    if (!(MODULE_ACCESS_MODES as readonly unknown[]).includes(r.mode)) return { ok: false, error: `${def.label}: choose Private development, Pilot or Public.` };
+    if (!Array.isArray(r.users) || r.users.some(v => typeof v !== "string" || !UUID.test(v))) return { ok: false, error: `${def.label}: send the accounts as account ids.` };
+    const users = [...new Set((r.users as string[]).map(v => v.toLowerCase()))];
+    if (users.length > def.maxUsers) return { ok: false, error: `${def.label}: at most ${def.maxUsers} accounts. That limit is fixed.` };
+    if (!Array.isArray(r.groups) || r.groups.some(v => !isParticipationCategory(v))) return { ok: false, error: `${def.label}: a group must be Regular, Pilot or Staff tester.` };
+    const groups = PARTICIPATION_CATEGORIES.filter(c => (r.groups as unknown[]).includes(c));
+    // Whether each id is an account is checked by the route, against the profiles.
+    return { ok: true, def, settings: { mode: r.mode, users, groups } };
   }
   if (def.kind === "choice") {
     if (typeof raw !== "string" || !def.options.some(o => o.value === raw)) return { ok: false, error: `${def.label}: choose one of ${def.options.map(o => o.label).join("; ")}.` };
@@ -2300,6 +2361,8 @@ export type IndividualPolicy = {
   scholarVisualTextWords: number;
   /** PLP-01..04: My Plan. */
   scholarMyPlan: "on" | "off";
+  /** Private module development access: who may see Courses & Training and My Competencies. Closed unless HQ publishes otherwise. */
+  scholarModuleAccess: { courses: ModuleAccess; competencies: ModuleAccess };
   scholarPlanProposal: "on" | "off";
   scholarPlanSectionMinutes: number;
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
@@ -2486,6 +2549,10 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarVisualClassify: clampChoice(policyDef("scholar_visual_classify") as ChoicePolicy, published.get(policyPath("scholar_visual_classify"))) as "on" | "off",
     scholarVisualTextWords: int("scholar_visual_text_words"),
     scholarMyPlan: clampChoice(policyDef("scholar_my_plan") as ChoicePolicy, published.get(policyPath("scholar_my_plan"))) as "on" | "off",
+    scholarModuleAccess: {
+      courses: clampModuleAccess(policyDef("scholar_module_courses_access") as ModuleAccessPolicy, published.get(policyPath("scholar_module_courses_access"))),
+      competencies: clampModuleAccess(policyDef("scholar_module_competencies_access") as ModuleAccessPolicy, published.get(policyPath("scholar_module_competencies_access"))),
+    },
     scholarPlanProposal: clampChoice(policyDef("scholar_plan_proposal") as ChoicePolicy, published.get(policyPath("scholar_plan_proposal"))) as "on" | "off",
     scholarPlanSectionMinutes: int("scholar_plan_section_minutes"),
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),

@@ -2,8 +2,12 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
 import {
-  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, clampSequence, policyPath, type PolicyDef,
+  POLICIES, POLICY_SCOPE, POLICY_PATH_PREFIX, clampInt, clampSet, clampCatalogues, clampChoice, clampProgrammes, clampOptions, clampLevels, clampSequence, clampModuleAccess, policyPath,
+  MODULE_ACCESS_MODE_LABEL, MODULE_ACCESS_MODE_MEANING, type ModuleAccessPolicy, type PolicyDef,
 } from "@/lib/individual/policy";
+import { PARTICIPATION_LABEL } from "@/lib/hq/account-participation";
+import { labelAccounts } from "@/lib/individual/scholar/module-access-admin";
+import ModuleAccessEditor from "./_components/ModuleAccessEditor";
 import { ChoiceDraft, IntDraft, LevelsDraft, OptionsDraft, PublishBar, RollbackButton, SequenceDraft, SetDraft } from "./_components/PolicyControls";
 import LcpdEditor from "./_components/LcpdEditor";
 import PresentationEditor from "./_components/PresentationEditor";
@@ -48,6 +52,11 @@ function describe(def: PolicyDef, settings: any, names: Map<string, string> = ne
     const by = Object.entries(clampLevels(def, settings));
     return by.length ? by.map(([c, l]) => `${names.get(c) ?? c}: ${l.map(x => x.label).join(", ")}`).join(". ") : "None (no level is asked)";
   }
+  // Private module development access: the version and trail lines say the mode and how many accounts, never who (the section above names them).
+  if (def.kind === "module_access") {
+    const a = clampModuleAccess(def, settings);
+    return `${MODULE_ACCESS_MODE_LABEL[a.mode]}${a.mode === "public" ? "" : `, ${a.users.length} ${a.users.length === 1 ? "account" : "accounts"}`}${a.mode === "pilot" && a.groups.length ? `, plus ${a.groups.map(g => PARTICIPATION_LABEL[g]).join(" and ")} accounts` : ""}`;
+  }
   if (def.kind === "choice") { const v = clampChoice(def, settings); return def.options.find(o => o.value === v)?.label ?? v; }
   if (def.kind === "sequence") return clampSequence(def, settings).map((v, i) => `${i + 1}. ${def.options.find(o => o.value === v)?.label ?? v}`).join("  ");
   const on = clampSet(def, settings);
@@ -81,6 +90,12 @@ export default async function IndividualPolicyPage() {
   // One lookup for both: catalogue ids are uuids and programme codes are not, so they cannot collide.
   const catalogueNames = new Map([...catalogueOptions, ...programmeOptions].map(o => [o.value, o.label]));
   const unreadable = !!(ovr.error || ver.error || aud.error);
+  // Private module development access: the accounts named in any published or draft module list, resolved once for display.
+  const moduleDefs = POLICIES.filter((p): p is ModuleAccessPolicy => p.kind === "module_access");
+  const moduleRows = new Map<string, any>((ovr.data ?? []).map((r: any) => [r.config_path, r]));
+  const namedIds = moduleDefs.flatMap(d => { const r = moduleRows.get(policyPath(d.key)); return [...clampModuleAccess(d, r?.published).users, ...clampModuleAccess(d, r?.draft).users]; });
+  const accountLabels = await labelAccounts(admin, namedIds);
+  const accountLine = (id: string) => { const a = accountLabels?.get(id); return a ? `${a.name ?? "No name on record"}${a.email ? ` (${a.email})` : ""}` : "An account that no longer exists (it sees nothing)"; };
   const rows = new Map<string, any>((ovr.data ?? []).map((r: any) => [r.config_path, r]));
   const versions: any[] = ver.data ?? [];
   const pending = POLICIES.filter(p => { const r = rows.get(policyPath(p.key)); return r && !same(r.draft, r.published); }).length + (lcpdPending ? 1 : 0) + (presPending ? 1 : 0);
@@ -123,9 +138,72 @@ export default async function IndividualPolicyPage() {
         </p>
       )}
 
+      <section aria-labelledby="mod-h" className="space-y-3">
+        <h2 id="mod-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Module access</h2>
+        <p className="text-[13px] text-gray-600">
+          Courses & Training and My Competencies are still being developed. Until a module is opened here, nobody sees it: not the menu, not the
+          home card, not the pages. A person who is listed still needs Competen Scholar on their account. Save a draft, then publish below.
+        </p>
+        <article className="rounded-xl border border-gray-200 bg-white p-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <h3 className="text-[15px] font-bold text-gray-900">My Learning access</h3>
+            <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[12px] font-semibold text-gray-700">Scholar</span>
+          </div>
+          <p className="mt-1 text-[13.5px] font-semibold text-gray-900">Public (existing entitlement)</p>
+          <p className="text-[13px] text-gray-600">My Learning follows each person&apos;s Competen Scholar access. It is not set here.</p>
+        </article>
+        {accountLabels === null && (
+          <p role="alert" className="rounded-lg border border-[var(--cmp-color-error)] bg-[var(--cmp-surface-critical)] px-3 py-2 text-[13px] text-[var(--cmp-text-critical)]">
+            The names of the accounts could not be read just now, so the module access editors are not shown rather than shown wrong. Reload the page to try again.
+          </p>
+        )}
+        {moduleDefs.map(def => {
+          const r = moduleRows.get(policyPath(def.key));
+          const pub = clampModuleAccess(def, r?.published);
+          const draft = clampModuleAccess(def, r?.draft ?? r?.published);
+          const at = r?.published != null ? since(policyPath(def.key), r.published) : null;
+          const differs = r && !same(r.draft, r.published);
+          return (
+            <article key={def.key} className="rounded-xl border border-gray-200 bg-white p-4">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h3 className="text-[15px] font-bold text-gray-900">{def.label}</h3>
+                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-[12px] font-semibold text-gray-700">{def.product}</span>
+              </div>
+              <p className="mt-1 text-[13px] text-gray-600">{def.help}</p>
+              <dl className="mt-3 grid gap-x-6 gap-y-2 text-[13.5px] md:grid-cols-2">
+                <div>
+                  <dt className="text-[12px] font-semibold text-gray-500">Effective now</dt>
+                  <dd className="font-semibold text-gray-900">{MODULE_ACCESS_MODE_LABEL[pub.mode]}{r?.published == null ? " (default: nobody)" : ""}</dd>
+                  {pub.mode !== "public" && (
+                    <dd className="font-normal text-gray-800">
+                      {pub.users.length === 0 ? "No account is listed." : pub.users.map(accountLine).join("; ")}
+                      {pub.mode === "pilot" && pub.groups.length > 0 ? ` Also every ${pub.groups.map(g => PARTICIPATION_LABEL[g]).join(" and ")} account.` : ""}
+                    </dd>
+                  )}
+                </div>
+                <div><dt className="text-[12px] font-semibold text-gray-500">Effective since</dt><dd className="text-gray-800">{r?.published == null ? "Not applicable: the default has always applied" : at ? fmt(at) : "Not recorded in the recent versions"}</dd></div>
+                <div className="md:col-span-2"><dt className="text-[12px] font-semibold text-gray-500">Fixed limit</dt><dd className="text-gray-800">{def.limitReason}</dd></div>
+              </dl>
+              {differs && (
+                <p className="mt-3 rounded-lg bg-[var(--cmp-surface-information)] px-3 py-1.5 text-[13px] text-blue-900">
+                  Unpublished draft: {describe(def, r.draft)}{r.updated_by_name ? `, saved by ${r.updated_by_name}` : ""}.
+                </p>
+              )}
+              {accountLabels !== null && (
+                <div className="mt-3 border-t border-gray-100 pt-3">
+                  <ModuleAccessEditor policyKey={def.key} label={def.label} mode={draft.mode} hasOverride={!!r} maxUsers={def.maxUsers} groups={draft.groups}
+                    accounts={draft.users.map(id => accountLabels.get(id) ?? { id, name: null, email: null })}
+                    modeLabels={MODULE_ACCESS_MODE_LABEL} modeMeanings={MODULE_ACCESS_MODE_MEANING} />
+                </div>
+              )}
+            </article>
+          );
+        })}
+      </section>
+
       <section aria-labelledby="pol-h" className="space-y-3">
         <h2 id="pol-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Policies</h2>
-        {POLICIES.map(def => {
+        {POLICIES.filter(p => p.kind !== "module_access").map(def => {
           const path = policyPath(def.key);
           const r = rows.get(path);
           const published = r?.published ?? null;
