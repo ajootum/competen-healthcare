@@ -161,13 +161,16 @@ export async function materialVisualFile(ctx: IndividualContext, materialId: str
   if (policy.scholarLessonVisuals !== "on") return { status: 404, error: "Not found" };
   const idx = await indexOf(ctx, opened.material, settingsOf(policy));
   if (!idx.ok) return { status: idx.out.status, error: String(idx.out.body.error ?? "") };
-  const visual = idx.index.visuals.find(v => v.key === key);
+  // "p{n}" on a PDF page that holds a picture: the whole page, so a picture taken out of it can be seen in its place.
+  const wholePage = /^p(\d+)$/.exec(key);
+  const visual = idx.index.visuals.find(v => v.key === key)
+    ?? (wholePage && idx.index.unit === "page" ? idx.index.visuals.find(v => v.n === Number(wholePage[1])) : undefined);
   if (!visual) return { status: 404, error: "Not found" };
 
   const bytes = await materialBytes(ctx.admin, ctx.userId, materialId);
   if (!bytes) return { status: 503, error: "Your original file could not be read just now. Try again shortly." };
 
-  if (visual.kind === "pdf_page") {
+  if (visual.kind === "pdf_page" || wholePage) {
     const pdf = await pdfPagesPdf(bytes, [visual.n]);
     if (!pdf) return { status: 404, error: "That page could not be shown." };
     return { status: 200, bytes: new Uint8Array(Buffer.from(pdf.base64, "base64")), type: "application/pdf", maxAge: "short" };
