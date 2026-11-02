@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from "react";
 import type { PlanAiLimit } from "./commerce";
 import { REMINDER_HORIZON_DAYS } from "./professional/vocabulary";
 import { SHARE_DAYS_MAX } from "./professional/share";
@@ -2629,6 +2630,9 @@ export async function loadIndividualPolicy(admin: any): Promise<IndividualPolicy
     return error ? DEFAULT_POLICY : resolvePolicy(data ?? []);
   } catch { return DEFAULT_POLICY; }
 }
+
+/** MY PLAN PERF: the same read, once per server render (React cache(), a plain call outside a render): the shell layout and the page both ask for it. */
+export const loadIndividualPolicyOnce = cache(loadIndividualPolicy);
 
 /**
  * The Individual AI hourly check: the estate quota (src/lib/ai/quota.ts, unchanged) AND the Individual

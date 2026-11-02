@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { cache } from "react";
 import { noProgrammeText } from "./classify-view";
 import { referenceNames } from "../professional/frameworks";
 import { scholarCatalogue, structureLabel, type CatalogueCompetency, type ProgrammeConfig } from "./catalogue";
@@ -24,13 +25,14 @@ export type LearnerCatalogue = {
   minStatus: "unreviewed" | "draft" | "approved";
 };
 
-export async function loadLearnerCatalogue(admin: any, userId: string): Promise<LearnerCatalogue> {
+/** Once per request (React cache(); a call-through outside a render): My Plan asks for it from the context and from every month it loads. */
+export const loadLearnerCatalogue = cache(async (admin: any, userId: string): Promise<LearnerCatalogue> => {
   const p = await learnerProgramme(admin, userId);
   if (!p.ok) return { provisioned: !p.notProvisioned, programme: null, competencies: p.notProvisioned ? [] : null, belowFloor: 0, minStatus: "unreviewed" };
   if (!p.data) return { provisioned: true, programme: null, competencies: [], belowFloor: 0, minStatus: "unreviewed" };
   const c = await scholarCatalogue(admin).forProgramme(p.data);
   return { provisioned: true, programme: p.data, competencies: c.ok ? c.data : null, belowFloor: c.ok ? c.belowFloor ?? 0 : 0, minStatus: c.ok ? c.minStatus ?? "unreviewed" : "unreviewed" };
-}
+});
 
 /**
  * UPLOAD-01 U3 and R1 (Stage 1 close-out): why no competency is suggested for this person's notes, said where

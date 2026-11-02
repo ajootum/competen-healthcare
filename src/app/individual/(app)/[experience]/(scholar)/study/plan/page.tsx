@@ -2,15 +2,16 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { countDue, libraryTopics, listMaterials } from "@/lib/individual/scholar/store";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
-import { loadInsights, loadPlanCalendar, loadToday } from "@/lib/individual/scholar/plan-data";
+import { loadInsights, loadPlanCalendars, loadToday, warmPlanReads } from "@/lib/individual/scholar/plan-data";
+import { entriesHorizon } from "@/lib/individual/scholar/study-calendar-data";
 import { startHref, todaySchedule } from "@/lib/individual/scholar/plan-today-view";
 import { materialTopics } from "@/lib/individual/scholar/library";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
-import { linkOptions, parsePlanView, planViewHref, resolveView, weekAgenda } from "@/lib/individual/scholar/plan-view";
+import { linkOptions, monthsOfWeek, parsePlanView, planViewHref, resolveView, weekAgenda } from "@/lib/individual/scholar/plan-view";
 import { calendarHref, hasPlansOn, mergeDueRevisionDays, resolveCalendarState } from "@/lib/individual/scholar/plan-workspace";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { ShellAction } from "../../../../../_components/Dialog";
@@ -19,7 +20,8 @@ import StudyNav from "../_components/StudyNav";
 import { PlanViewNav } from "../_components/plan-view-nav";
 import { ComingUp, DoneToday, DueAndReview, ExamOffers, MissedList, NotesList, ReflectionCard, StartingPlanNote, TodayEmpty, TodayNextCard, TodaySchedule } from "../_components/plan-today";
 import { PlanWorkspace } from "../_components/plan-workspace";
-import { AgendaRows } from "../_components/plan-agenda-rows";
+import { LiveAgendaRows } from "../_components/plan-agenda-rows";
+import { PlanOptimistic } from "../_components/plan-optimistic";
 import { InsightsView } from "../_components/plan-insights-view";
 import { CalendarIcon, LearningOnlyNote } from "../_components/plan-ui";
 import { secondaryBtn, squareBtn } from "../_components/plan-style";
@@ -62,15 +64,19 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
   const hdrs = await headers();
   const o = { now: new Date(), tz: learnerTimeZone(hdrs), today: learnerToday(hdrs) };
   const today = o.today;
+  // changes with every render of this page: the instant updates (plan-optimistic.tsx) give way to the server's answer when it arrives
+  const stamp = String(o.now.getTime());
   const view = parsePlanView(sp.view);
   const explicit = resolveView(sp.view, null).remember !== null;
   const base = experienceHref("scholar", "study/plan");
-  const [policy, due] = await Promise.all([loadIndividualPolicy(ctx.admin), countDue(ctx.admin, ctx.userId)]);
+  const cs = resolveCalendarState(sp, today);
+  // read the plan's rows while HQ's policy is read (the loaders below find them already asked for)
+  const warmMonths = view === "calendar" ? cs.months : view === "today" ? monthsOfWeek(today, 7) : [];
+  warmPlanReads(ctx, { now: o.now, today, months: warmMonths, entriesTo: warmMonths[0] ? entriesHorizon(warmMonths[0], today) : undefined });
+  const [policy, due] = await Promise.all([loadIndividualPolicyOnce(ctx.admin), countDue(ctx.admin, ctx.userId)]);
   const study = await loadStudy(ctx.admin, ctx.userId, sp.study, null, policy);
   const studyId = study ? (sp.study as string) : null;
   const keep: Record<string, string> = studyId ? { study: studyId } : {};
-  const cs = resolveCalendarState(sp, today);
-
   const loadLinks = async () => {
     const [mats, topics] = await Promise.all([listMaterials(ctx.admin, ctx.userId), libraryTopics(ctx.admin, ctx.userId)]);
     return linkOptions(
@@ -113,7 +119,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
     const learn = experienceHref("scholar", "study/learn");
     const studyNow = (t.next ? startHref(t.next.href, studyId) : null) ?? learn;
     return (
-      <>
+      <PlanOptimistic stamp={stamp}>
         {frame()}
         {t.starting && <div className="mb-4"><StartingPlanNote accent={x.accent} today={today} settings={t.settings} extras={t.features.settingsExtras} /></div>}
         <div className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
@@ -122,7 +128,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
               <>
                 {scheduled.length > 0 && (
                   <TodaySchedule>
-                    <AgendaRows items={scheduled} ctx={{ date: today, today, accent: x.accent, links, studyId, canDecide: t.features.decisions, elseHref: planViewHref(base, "today", keep) }} />
+                    <LiveAgendaRows items={scheduled} ctx={{ date: today, today, accent: x.accent, links, studyId, canDecide: t.features.decisions, elseHref: planViewHref(base, "today", keep) }} />
                   </TodaySchedule>
                 )}
                 <TodayNextCard accent={x.accent} today={today} next={t.next} alternatives={t.alternatives} canDecide={t.features.decisions}
@@ -143,7 +149,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
             {t.hasPlan && t.reflection.enabled && <ReflectionCard accent={x.accent} week={t.reflection.week} answered={t.reflection.answered} offer={t.reflection.offer} settings={t.settings} />}
           </div>
         </div>
-      </>
+      </PlanOptimistic>
     );
   }
 
@@ -155,7 +161,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
   }
 
   // ── CALENDAR ── the selected month (and the next one only when the week shown crosses a month end)
-  const [links, loads] = await Promise.all([loadLinks(), Promise.all(cs.months.map(m => loadPlanCalendar(ctx, policy, { ...o, month: m })))]);
+  const [links, loads] = await Promise.all([loadLinks(), loadPlanCalendars(ctx, policy, { ...o, months: cs.months })]);
   const failed = loads.find(l => !l.ok);
   if (failed && !failed.ok) return <>{frame()}<NotReady reason={failed.reason} /></>;
   const ready = loads.flatMap(l => (l.ok ? [l] : []));
@@ -166,11 +172,11 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
   const unattached = [...new Map(views.flatMap(v => v.unattached).map(u => [u.ref, u])).values()];
   const canAdd = ready[0].features.learnerCalendar;
   return (
-    <>
+    <PlanOptimistic stamp={stamp}>
       {frame(
         <PlanWorkspace accent={x.accent} today={today} base={base} extra={keep} studyId={studyId} span={cs.span} date={cs.date} month={cs.month}
           days={days} canAdd={canAdd} canDecide={ready[0].features.decisions} links={links} notes={notes} unattached={unattached} openAdd={sp.add === "1" && canAdd} />,
       )}
-    </>
+    </PlanOptimistic>
   );
 }

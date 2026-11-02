@@ -24,6 +24,15 @@ export const MASTERY_WINDOW_DAYS = 180;
 export const MASTERY_MAX_ROWS = 1000;
 const DAY = 86_400_000;
 
+const sinceOf = (now: string) => new Date(Date.parse(now) - MASTERY_WINDOW_DAYS * DAY).toISOString();
+/**
+ * MY PLAN PERF: start the evidence read now. It does not depend on the materials or links loadMastery joins it to, and masteryEvidence is read once per
+ * request, so loadMastery's own call a moment later is answered by this one. Never throws.
+ */
+export function prefetchMastery(admin: unknown, userId: string, now: string): void {
+  try { void Promise.resolve(masteryEvidence(admin, userId, { sinceIso: sinceOf(now), maxRows: MASTERY_MAX_ROWS })).catch(() => {}); } catch { /* the real read reports it */ }
+}
+
 const MARKING: Record<string, MasteryMarking> = { deterministic: "code", ai_evaluation: "ai_evaluation", self_graded: "self" };
 const DIFFICULTY_LEVEL: Record<number, MasteryLevel> = { 1: "recall", 2: "understanding", 3: "application" };
 
@@ -35,7 +44,7 @@ export async function loadMastery(admin: unknown, userId: string, policy: Indivi
   competencies: readonly { id: string; title: string }[] | null;
   studyId?: string | null;
 }): Promise<Read<MasteryResult>> {
-  const since = new Date(Date.parse(now) - MASTERY_WINDOW_DAYS * DAY).toISOString();
+  const since = sinceOf(now);
   const raw = await masteryEvidence(admin, userId, { sinceIso: since, maxRows: MASTERY_MAX_ROWS });
   if (!raw.ok) return raw;
   const { questions, attempts, reviews, cards, osce, stations, truncated } = raw.data;

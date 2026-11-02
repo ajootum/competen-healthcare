@@ -14,14 +14,19 @@ const h = vi.hoisted(() => ({
 // The month calendar over the real pure builder, so Today and the Calendar are read from the same days (a move shows in both).
 vi.mock("./study-calendar-data", async () => {
   const { buildCalendar } = await import("./study-calendar");
-  return {
-    loadStudyCalendar: async (o: { month: string; today: string; plan: unknown }) => ({
-      view: buildCalendar({
-        month: o.month, today: o.today, plan: o.plan as never, personal: [], dueByDate: h.dueByDate, completed: h.completed, entries: h.moves, canMove: true, flashcardsHref: "/flashcards",
-        review: { recommendDays: 5, reminders: false, optedOut: false, hasActivity: false, taken: null, startHref: "/evaluate" },
-      }),
-      moveOn: true, optOut: { available: false, optedOut: false },
+  const build = (o: { month: string; today: string; plan: unknown }) => ({
+    view: buildCalendar({
+      month: o.month, today: o.today, plan: o.plan as never, personal: [], dueByDate: h.dueByDate, completed: h.completed, entries: h.moves, canMove: true, flashcardsHref: "/flashcards",
+      review: { recommendDays: 5, reminders: false, optedOut: false, hasActivity: false, taken: null, startHref: "/evaluate" },
     }),
+    moveOn: true, optOut: { available: false, optedOut: false },
+  });
+  return {
+    loadStudyCalendar: async (o: { month: string; today: string; plan: unknown }) => build(o),
+    // the reads and the pure build, as plan-data uses them (the reads are stubbed; the build is the real calendar)
+    readStudyCalendar: async (o: { month: string }) => ({ month: o.month }),
+    buildStudyCalendar: (_reads: unknown, o: { month: string; today: string; plan: unknown }) => build(o),
+    entriesHorizon: () => "2027-01-01",
   };
 });
 vi.mock("./store", () => ({
@@ -31,13 +36,13 @@ vi.mock("./store", () => ({
   competencyProgressRows: async () => ({ ok: true, data: { mappings: [], concepts: new Map(), questions: [], attempts: [] } }),
   countDue: async () => h.due,
   sectionsOf: async (_a: unknown, _u: string, ids: string[]) => ({ ok: true, data: h.sections.filter(s => ids.includes(s.materialId)) }),
-  topicsOfSections: async () => h.topicOf,
+  topicsOfSections: async () => h.topicOf, chunkContents: async () => [],
   listLearningSessions: async () => ({ ok: true, data: [] }), listRevisionSessions: async () => ({ ok: true, data: [] }),
   getEvaluation: async () => ({ ok: true, data: null }),
   evaluationEvidence: async () => ({ ok: true, data: { attempts: [{ marking: "deterministic", correct: true, answeredAt: "2026-11-01T10:00:00Z" }], reviews: [], checks: [], decisions: [] } }),
   learningEventTimes: async () => ({ ok: true, data: [] }), caseDecisionTimes: async () => ({ ok: true, data: [] }),
 }));
-vi.mock("./mastery-data", () => ({ loadMastery: async () => ({ ok: true, data: { topics: h.topics, competencies: [], studyNext: [] } }) }));
+vi.mock("./mastery-data", () => ({ prefetchMastery: () => {}, loadMastery: async () => ({ ok: true, data: { topics: h.topics, competencies: [], studyNext: [] } }) }));
 vi.mock("./competency-view", () => ({ loadLearnerCatalogue: async () => ({ provisioned: false, programme: null, competencies: null }) }));
 vi.mock("./monthly-review-data", () => ({ loadMonthlyOverview: async () => null, listMonthlyReviews: async () => [], monthlyReviewOn: () => false }));
 
