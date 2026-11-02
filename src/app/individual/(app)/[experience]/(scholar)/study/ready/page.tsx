@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { headers } from "next/headers";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
@@ -20,6 +21,9 @@ import { AnalysePanel, LayerTag, PictureSlides } from "../_components/competency
 import { pageInfoOf, plannedPages } from "@/lib/individual/scholar/material-visuals";
 import { OrganiseMaterial } from "../_components/library-client";
 import { countDue, listChunks } from "@/lib/individual/scholar/store";
+import { loadProposal } from "@/lib/individual/scholar/plan-data";
+import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
+import { PlanProposalCard } from "../_components/plan-proposal-card";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -95,7 +99,12 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
   const topicsOf = (id: string) => materialTopics(library?.get(id) ?? []);
   const others = [...(library?.keys() ?? [])].map(id => ({ materialId: id, title: titleOf.get(id) ?? "Your material", topics: topicsOf(id).map(t => t.topic) }));
 
+  // PLP-01..04: the suggested study plan per material, only where My Plan and plan proposals are on (the loader says off otherwise). Reads only; Start learning never waits for it.
+  const hdrs = await headers();
+  const planWhen = { now: new Date(), tz: learnerTimeZone(hdrs), today: learnerToday(hdrs) };
+  const proposalsOn = policy.scholarMyPlan === "on" && policy.scholarPlanProposal === "on";
   const cards = await Promise.all(materials.map(async m => {
+    const proposal = proposalsOn ? await loadProposal(ctx, policy, m.id, planWhen).catch(() => null) : null;
     const [analysis, mapped] = await Promise.all([analysisStatus(ctx.admin, ctx.userId, m.id), listMappings(ctx.admin, ctx.userId, m.id)]);
     const live = mapped.ok ? mapped.data.mappings.filter(r => r.state !== "rejected") : [];
     const labels = mapped.ok ? await competencyLabels(ctx.admin, learner.competencies, live.map(r => r.competencyId), new Map(live.map(r => [r.competencyId, r.layer]))) : new Map();
@@ -108,7 +117,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
     }
     const competencies = [...byCompetency.values()].sort((a, b) => Number(b.accepted) - Number(a.accepted) || b.sections - a.sections).slice(0, 8);
     const topics = topicsOf(m.id);
-    return { m, analysis, mapped, competencies, labels, topics, related: relatedMaterials({ materialId: m.id, topics: topics.map(t => t.topic) }, others) };
+    return { m, analysis, mapped, competencies, labels, topics, proposal: proposal?.ok ? proposal : null, related: relatedMaterials({ materialId: m.id, topics: topics.map(t => t.topic) }, others) };
   }));
 
   return (
@@ -118,7 +127,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
       <StudyNav dueCount={due} study={study?.bar ?? null} />
 
       <div className="space-y-6">
-        {cards.map(({ m, analysis, mapped, competencies, labels, topics, related }) => {
+        {cards.map(({ m, analysis, mapped, competencies, labels, topics, related, proposal }) => {
           const unit = UNIT_OF(m.mimeType);
           const plan = plans.get(m.id) ?? null;
           const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null, { recoverable: !!plan?.slides.length }) : null;
@@ -160,6 +169,11 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
                 <Link href={experienceHref("scholar", "study/progress")} className={secondaryBtn}>Explore competencies</Link>
                 <a href={`/api/individual/scholar/materials/${m.id}`} className={secondaryBtn}>View original notes</a>
               </div>
+
+              {proposal && (
+                <PlanProposalCard accent={x.accent} today={planWhen.today} proposal={proposal.proposal} decision={proposal.decision}
+                  hasPlan={proposal.hasPlan} recordable={proposal.recordable} extras={proposal.recordable} planHref={experienceHref("scholar", "study/plan")} />
+              )}
 
               <div className="mt-5 grid gap-5 lg:grid-cols-2">
                 <section aria-labelledby={`topics-${m.id}`}>

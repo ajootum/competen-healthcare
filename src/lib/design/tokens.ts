@@ -192,7 +192,7 @@ export const accentRole = {
 export type AccentRole = keyof typeof accentRole;
 // Scholar's learning spaces, each an icon tint on a soft chip (an icon, never the only label). Teal is the product
 // accent (core study and action); amber marks revision, green progress, indigo reasoning and evaluation.
-export const activityRole = { library: "scholar", learn: "scholar", revise: "revision", apply: "indigo", evaluate: "indigo", progress: "progress" } as const;
+export const activityRole = { plan: "scholar", library: "scholar", learn: "scholar", revise: "revision", apply: "indigo", evaluate: "indigo", progress: "progress" } as const;
 export type ActivityKey = keyof typeof activityRole;
 
 // ── Consumption helpers ─────────────────────────────────────────────────────────────────────────────────

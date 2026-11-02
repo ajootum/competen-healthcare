@@ -8,8 +8,9 @@ import { SCHOLAR_SPACES, spaceOfPath, type ScholarSpaceKey } from "@/lib/individ
 import { withStudy, type StudyBarView } from "@/lib/individual/scholar/study-carry";
 import { StudySessionBar } from "./study-session-bar";
 import { STUDY_EVENT, setActiveStudy } from "./study-active";
+import { useMyPlanOn } from "./plan-nav";
 
-// My Learning's learning spaces: Library, Learn, Revise, Apply, Evaluate and Progress (spaces.ts). Upload,
+// My Learning's learning spaces: My Plan (first, only while on), Library, Learn, Revise, Apply, Evaluate and Progress (spaces.ts). Upload,
 // classification and a material's own study start in the Library. Every tab is a real link to a real page,
 // open at any time: the spaces are a guide, never a sequence. Scrolls sideways on a narrow screen.
 // SCHOLAR-SESSION-AI-02 slice B: with a connected study session open (`study`, resolved by the server), every tab
@@ -22,6 +23,7 @@ const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-
 // for revision, indigo for reasoning and evaluation, green for progress (tokens.ts activityRole). The tab text always
 // names the space and the chip is aria-hidden, so the cue never carries meaning on colour alone.
 const ICON: Record<ScholarSpaceKey, React.ReactNode> = {
+  plan: <><rect x="4" y="5" width="16" height="15" rx="2" /><path d="M8 3v4M16 3v4M4 10h16M8 14h3" /></>,
   library: <path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />,
   learn: <><path d="M9 18h6M10 21h4" /><path d="M12 3a6 6 0 0 0-3.5 10.9V16h7v-2.1A6 6 0 0 0 12 3z" /></>,
   revise: <><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" /><path d="M14 3v5h5M9 13h6M9 17h4" /></>,
@@ -40,6 +42,8 @@ function ActivityChip({ space }: { space: ScholarSpaceKey }) {
 
 export default function StudyNav({ dueCount, study = null }: { dueCount?: number | null; study?: StudyBarView | null }) {
   const pathname = usePathname() ?? "";
+  // My Plan (PLP-01..04) is the first tab only while it is on; the layout decides (plan-nav.tsx).
+  const planOn = useMyPlanOn();
   const current = spaceOfPath(pathname);
   const [started, setStarted] = useState<StudyBarView | null>(null);
   const bar = study ?? started;
@@ -53,7 +57,7 @@ export default function StudyNav({ dueCount, study = null }: { dueCount?: number
     <>
     <nav aria-label="Learning spaces" className="sticky top-14 z-20 -mx-4 mb-6 overflow-x-auto bg-gray-50/95 px-4 backdrop-blur md:static md:mx-0 md:mt-[23px] md:bg-transparent md:px-0 md:backdrop-blur-none">
       <ul className="flex min-w-max gap-[15px] border-b border-gray-200 md:gap-5">
-        {SCHOLAR_SPACES.map(s => {
+        {SCHOLAR_SPACES.filter(s => s.key !== "plan" || planOn).map(s => {
           const on = current === s.key;
           return (
             <li key={s.key}>

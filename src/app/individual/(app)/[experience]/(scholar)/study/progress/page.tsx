@@ -261,7 +261,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   // SCHOLAR-COMPANION-01 (780): the study plan. On only where HQ switched it on AND 780 is present (fails closed). It reads the same topic evidence.
   const planOn = policy.scholarStudyPlan && isStudyPlanOn(policy, await studyPlanSchema(ctx.admin, ctx.userId));
   const planRead = planOn ? await getStudyPlan(ctx.admin, ctx.userId) : null;
-  const tp = (showTopicProgress || planRead?.ok === true) && rows.ok && p && p.materials.length > 0
+  // PLP-01..04: where My Plan is on, the plan card and the calendar live in My Plan (this page links there); where it is off, Progress is unchanged.
+  const myPlan = planOn && policy.scholarMyPlan === "on";
+  const tp = (showTopicProgress || (planRead?.ok === true && !myPlan)) && rows.ok && p && p.materials.length > 0
     ? await loadTopicProgress(ctx.admin, ctx.userId, policy, new Date().toISOString(), {
       materials: rows.data.materials,
       linked: allRows?.ok ? { mappings: allRows.data.mappings, concepts: allRows.data.concepts } : null,
@@ -271,7 +273,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
     : null;
   // SCHOLAR-MONTHLY-REVIEW-01: the study calendar (one calendar, extending the plan) and the monthly review's banner and last-result card.
   // The calendar reads the plan the card above is built from; both fail closed, and an unreadable one is said, never drawn empty.
-  const calendarOn = policy.scholarStudyCalendar === "on";
+  const calendarOn = policy.scholarStudyCalendar === "on" && !myPlan;
   const calMonth = monthFromQuery(sp.month, today);
   const calPlan = planRead?.ok && planRead.data && tp?.ok
     ? {
@@ -317,6 +319,13 @@ export default async function ProgressPage({ params, searchParams }: { params: P
         ) : p && (
           <>
             {/* PROGRESS-01 (Stage 8 of 8): the learning command centre, above the detail by material. */}
+            {myPlan ? (
+              <Link href={experienceHref("scholar", "study/plan")} data-testid="plan-moved"
+                className={`mb-6 flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+                <span className="text-[14.5px] font-semibold text-gray-900">Your plan and calendar are in My Plan</span>
+                <span className="text-[13px] font-semibold underline underline-offset-2" style={{ color: x.accent }}>Open My Plan</span>
+              </Link>
+            ) : (<>
             {planRead?.ok ? (tp?.ok
               ? <StudyPlanCard
                 accent={x.accent} today={today} topics={tp.data.topics.map(t => ({ label: t.label }))}
@@ -330,6 +339,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 }) : null} />
               : <div className="mb-6"><Unreadable what="your study plan" /></div>)
               : planRead ? (planRead.notProvisioned ? null : <div className="mb-6"><Unreadable what="your study plan" /></div>) : null}
+            </>)}
             {monthlyOverview && monthlyOverview.nudges.length > 0 && !monthlyOverview.optedOut && (
               <MonthlyBanner nudges={monthlyOverview.nudges.map(n => ({ month: n.month, recommended: n.recommended, late: n.late }))} evaluateHref={experienceHref("scholar", "study/evaluate")} />
             )}
