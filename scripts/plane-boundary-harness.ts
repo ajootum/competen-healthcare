@@ -507,12 +507,40 @@ const org = extractReads(`export const f = (a: any) => a.from("asmt_instrument_o
 ok("AC7", !!org && judge(org).code === "TABLE_NOT_ALLOWED", "asmt_instrument_org_scope has no screen in Phase 1, so no grant: refused");
 const defs = extractReads(`export const f = (a: any) => a.from("asmt_instrument").select("*");`, CAT_DIR + "probe.ts");
 ok("AC8", defs.length === 0, "the Studio's definition tables (asmt_instrument and its versions) are NOT governed here: a separate decision, not widened by this one");
-const acSites = judged.filter(x => x.table && policyFor(x.table)?.onlyFrom);
+const acSites = judged.filter(x => x.table && policyFor(x.table)?.onlyFrom === CAT_DIR);
 const acOutside = acSites.filter(x => !x.file.startsWith(CAT_DIR));
 ok("AC9", acSites.length >= 8 && acOutside.length === 0,
   `every reachable read of a catalogue table (${acSites.length} sites) is inside src/lib/assessment/catalogue/**${acOutside.length ? ` -- outside: ${acOutside.map(x => x.file).join(", ")}` : ""}`);
 const acCapture = judged.filter(x => x.table && /^asmt_(instance|instance_layout|response|evidence|comment|outcome|respondent_grant|progression_decision)$/.test(x.table));
-ok("AC10", acCapture.length === 0, `no file the landlord plane can reach reads a capture or progression table (${acCapture.length} found)`);
+const ASR_DIR = "src/lib/assessment/assessor/";
+const acCaptureOutside = acCapture.filter(x => !x.file.startsWith(ASR_DIR) || x.table === "asmt_progression_decision");
+ok("AC10", acCaptureOutside.length === 0, `no file the landlord plane can reach reads a capture or progression table, except the assessor workspace library, and never a progression decision (${acCaptureOutside.length} found)`);
+
+// >>> ASSESSOR-WORKSPACE (Checklist Studio S4) -- the capture tables belong to src/lib/assessment/assessor/** and nowhere else.
+console.log("\n── §AS assessor workspace controls ──────────────────────────────────────────");
+const asrFiles = [...walk(join(ROOT, "src/lib/assessment/assessor")), ...walk(join(ROOT, "src/app/api/hq/checklist-assessments"))].filter(f => !/\.test\.tsx?$/.test(f));
+const asrSites = asrFiles.flatMap(f => extractReads(readFileSync(f, "utf8"), rel(f)));
+const asrCapture = asrSites.filter(x => x.table && /^asmt_(instance|instance_layout|response|evidence|comment|outcome|respondent_grant|progression_decision)$/.test(x.table));
+const asrRefused = asrSites.filter(x => !judge(x).ok);
+ok("AS1", asrCapture.length >= 15 && asrRefused.length === 0,
+  `every read in the assessor library and its API routes (${asrSites.length} sites, ${asrCapture.length} on capture tables, including routes no page reaches) is inside the allowlist${asrRefused.length ? ` -- refused: ${asrRefused.map(x => `${x.file}:${x.line} ${judge(x).detail}`).join("; ")}` : ""}`);
+ok("AS1b", asrSites.every(x => x.table !== null && x.select !== "unresolved"), "no read in the assessor library has a computed table name or select list (a scanner-blind read would be refused anyway)");
+const sample = `export const f = (a: any) => a.from("asmt_response").select("item_id, value");`;
+for (const [where, file] of [["the Studio", "src/lib/assessment/studio/library.ts"], ["the catalogue", "src/lib/assessment/catalogue/classify.ts"], ["a page", "src/app/super-admin/somewhere/page.tsx"], ["another library", "src/lib/individual/other.ts"]] as const) {
+  const x = extractReads(sample, file)[0];
+  ok(`AS2.${file.split("/")[3]}`, !!x && judge(x).code === "TABLE_NOT_ALLOWED" && /only from/.test(judge(x).detail),
+    `⚠ PLANTED: the right table with allowed columns read from ${where} goes RED -- the grant names WHO may read`);
+}
+const inAsr = extractReads(sample, ASR_DIR + "instances.ts")[0];
+ok("AS3", !!inAsr && judge(inAsr).ok, "...and the same read from the assessor library passes (the opposite control)");
+const decision = extractReads(`export const f = (a: any) => a.from("asmt_progression_decision").select("id");`, ASR_DIR + "progression.ts")[0];
+ok("AS4", !!decision && judge(decision).code === "TABLE_NOT_ALLOWED" && policyFor("asmt_progression_decision") === undefined,
+  "asmt_progression_decision has NO allowlist entry: a read of it is refused even from inside the assessor library");
+const widen = extractReads(`export const f = (a: any) => a.from("asmt_evidence").select("id, storage_path, provenance");`, ASR_DIR + "instances.ts")[0];
+ok("AS5", !!widen && judge(widen).code === "COLUMN_NOT_ALLOWED", "a widened column list (storage_path, provenance) on asmt_evidence is refused even from the assessor library");
+const star = extractReads(`export const f = (a: any) => a.from("asmt_instance").select("*");`, ASR_DIR + "instances.ts")[0];
+ok("AS6", !!star && judge(star).code === "STAR_NOT_ALLOWED", "select(\"*\") on a capture table is refused even from the assessor library");
+// <<< ASSESSOR-WORKSPACE
 
 // ── The allowlist, printed, because a policy nobody reads is a policy nobody keeps. ──────────────────
 console.log("\n── The allowlist ────────────────────────────────────────────────────────────");

@@ -9,7 +9,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { normaliseLookupEmail, normaliseLookupName, searchPeopleByName } from "@/lib/individual/grants";
 import {
-  type Admin, type GrantRow, type Res, ASSESS_CAPABILITY, GRANT_COLS, NOT_SET_UP, fail, grantState, guardMessage, isMissingRelation, isUuid, okRes, type GrantState,
+  type Admin, type GrantRow, type Res, ASSESS_CAPABILITY, NOT_SET_UP, fail, grantState, guardMessage, isMissingRelation, isUuid, okRes, type GrantState,
 } from "./common";
 
 export interface GrantView extends GrantRow {
@@ -47,7 +47,7 @@ async function decorate(admin: Admin, rows: GrantRow[]): Promise<GrantView[]> {
 
 /** The grants made TO me, all states. */
 export async function listMyGrants(admin: Admin, actor: string): Promise<Res<GrantView[]>> {
-  const { data, error } = await admin.from("asmt_respondent_grant").select(GRANT_COLS).eq("respondent_id", actor).eq("respondent_role", "assessor").order("created_at", { ascending: false }).limit(200);
+  const { data, error } = await admin.from("asmt_respondent_grant").select("id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at").eq("respondent_id", actor).eq("respondent_role", "assessor").order("created_at", { ascending: false }).limit(200);
   if (isMissingRelation(error)) return fail(501, NOT_SET_UP);
   if (error) return fail(503, "Your assessments could not be read just now.");
   return okRes(await decorate(admin, (data ?? []) as GrantRow[]));
@@ -55,7 +55,7 @@ export async function listMyGrants(admin: Admin, actor: string): Promise<Res<Gra
 
 /** The grants I made. */
 export async function listGrantsIMade(admin: Admin, actor: string): Promise<Res<GrantView[]>> {
-  const { data, error } = await admin.from("asmt_respondent_grant").select(GRANT_COLS).eq("granted_by", actor).order("created_at", { ascending: false }).limit(300);
+  const { data, error } = await admin.from("asmt_respondent_grant").select("id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at").eq("granted_by", actor).order("created_at", { ascending: false }).limit(300);
   if (isMissingRelation(error)) return fail(501, NOT_SET_UP);
   if (error) return fail(503, "The grants could not be read just now.");
   return okRes(await decorate(admin, (data ?? []) as GrantRow[]));

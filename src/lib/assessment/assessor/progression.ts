@@ -94,7 +94,7 @@ export async function recordProgression(admin: Admin, inst: OwnedInstance, deps:
       const v = validateProgression(rules, scale);
       if (v.errors.length) { note.reason = "the rule version does not validate"; continue; }
 
-      const evidence = await subjectEvidence(admin, subject, set.target_ref as string, deps.now);
+      const evidence = await subjectEvidence(admin, subject, set.target_ref as string);
       if (!evidence) { note.reason = "the evidence could not be read"; continue; }
       const result = evaluateProgression(rules, scale, evidence, deps.now ?? new Date());
       const qualifying = evidence.filter(e => result.qualifying_ids.includes(e.id));
@@ -115,7 +115,7 @@ export async function recordProgression(admin: Admin, inst: OwnedInstance, deps:
 }
 
 /** The subject's submitted assessor-evaluated outcomes whose checklist version maps to the target. Null when unreadable. */
-async function subjectEvidence(admin: Admin, subject: string, targetRef: string, _now?: Date): Promise<ProgressionEvidence[] | null> {
+async function subjectEvidence(admin: Admin, subject: string, targetRef: string): Promise<ProgressionEvidence[] | null> {
   const insts = await admin.from("asmt_instance").select("id, instrument_version_id, respondent_id, submitted_at, attestation")
     .eq("subject_user_id", subject).eq("status", "submitted").eq("attestation", "assessor_evaluated");
   if (insts.error) return null;

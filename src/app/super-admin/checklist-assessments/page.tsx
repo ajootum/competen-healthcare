@@ -36,6 +36,9 @@ export default async function ChecklistAssessmentsPage() {
         <h1 className="text-xl font-bold text-[var(--cmp-app-text)]">Assessor workspace</h1>
         <p className="mt-1 text-sm text-[var(--cmp-app-text-secondary)]">Assessments you are authorised to carry out. Each is for one person, with one checklist, under a grant the person accepted.</p>
         <p className="mt-1 text-xs text-[var(--cmp-app-text-secondary)]">Your result is assessor-evaluated. It is not formal verification.</p>
+        {ctx.isOwner || ctx.capabilities.includes("hq.assessment.assessor.assign") ? (
+          <p className="mt-2 text-sm"><Link href="/super-admin/checklist-assessments/grants" className="font-semibold text-[var(--cmp-theme-ink)] underline underline-offset-2">Assessor grants</Link> <span className="text-[var(--cmp-app-text-secondary)]">(coordinators)</span></p>
+        ) : null}
       </header>
 
       {!grants.ok ? (

@@ -46,7 +46,7 @@ export type GrantRow = {
   respondent_id: string; respondent_role: string; appointment_id: string; granted_by: string; reason: string;
   valid_from: string; valid_until: string | null; accepted_at: string | null; ended_at: string | null; end_reason: string | null; created_at: string;
 };
-export const GRANT_COLS = "id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at";
+// (the column lists are written out at each read: the plane-boundary scanner reads string literals only)
 
 export type GrantState = "ended" | "expired" | "pending" | "not_yet" | "live";
 
@@ -71,7 +71,6 @@ export type InstanceRow = {
   owner_scope: string; status: "in_progress" | "submitted" | "withdrawn"; attestation: string; amends_instance_id: string | null;
   started_at: string; submitted_at: string | null;
 };
-export const INSTANCE_COLS = "id, instrument_version_id, subject_kind, subject_id, subject_user_id, respondent_role, respondent_id, respondent_snapshot, grant_id, owner_scope, status, attestation, amends_instance_id, started_at, submitted_at";
 
 declare const ownedBrand: unique symbol;
 /** An instance row proved to belong to the actor as assessor. Only own() makes one. */

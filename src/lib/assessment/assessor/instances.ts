@@ -10,7 +10,7 @@
 import type { LayoutDoc, ResponseValue, Responses } from "@/lib/assessment/core";
 import { rkey, PRIMARY } from "@/lib/assessment/core";
 import {
-  type Admin, type GrantRow, type InstanceRow, type OwnedInstance, type Res, ASSESS_CAPABILITY, GRANT_COLS, INSTANCE_COLS,
+  type Admin, type GrantRow, type InstanceRow, type OwnedInstance, type Res, ASSESS_CAPABILITY,
   fail, grantState, guardMessage, isUuid, okRes,
 } from "./common";
 import { loadDefinition, pickLayouts, type LoadedDefinition } from "./definition";
@@ -18,7 +18,7 @@ import { loadDefinition, pickLayouts, type LoadedDefinition } from "./definition
 /** The instance, if and only if the actor is its assessor. */
 export async function own(admin: Admin, actor: string, instanceId: string): Promise<Res<OwnedInstance>> {
   if (!isUuid(instanceId) || !isUuid(actor)) return fail(404, "That assessment could not be found.");
-  const { data, error } = await admin.from("asmt_instance").select(INSTANCE_COLS)
+  const { data, error } = await admin.from("asmt_instance").select("id, instrument_version_id, subject_kind, subject_id, subject_user_id, respondent_role, respondent_id, respondent_snapshot, grant_id, owner_scope, status, attestation, amends_instance_id, started_at, submitted_at")
     .eq("id", instanceId).eq("respondent_id", actor).eq("respondent_role", "assessor").maybeSingle();
   if (error) return fail(503, "The assessment could not be read just now.");
   if (!data) return fail(404, "That assessment could not be found.");
@@ -41,7 +41,7 @@ export async function listMyInstances(admin: Admin, actor: string): Promise<Res<
 /** Start an assessor instance from a grant of mine, or resume the one already in progress for it. */
 export async function startInstance(admin: Admin, actor: string, grantId: string): Promise<Res<{ instanceId: string; resumed: boolean }>> {
   if (!isUuid(grantId)) return fail(400, "Choose an assessment.");
-  const g = await admin.from("asmt_respondent_grant").select(GRANT_COLS).eq("id", grantId).eq("respondent_id", actor).maybeSingle();
+  const g = await admin.from("asmt_respondent_grant").select("id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at").eq("id", grantId).eq("respondent_id", actor).maybeSingle();
   if (g.error) return fail(503, "The assessment could not be read just now.");
   const grant = g.data as GrantRow | null;
   if (!grant) return fail(404, "That assessment could not be found.");
