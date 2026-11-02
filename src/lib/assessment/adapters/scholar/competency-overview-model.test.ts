@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOverview, verificationPanel, type OverviewCompetency, type OverviewInput, type ProgressFact } from "./competency-overview-model";
+import { EXPECTED_NOT_SET, NOT_IN_PROGRAMME_NOTE, buildOverview, unionCompetencies, verificationPanel, type OverviewCompetency, type OverviewInput, type ProgressFact } from "./competency-overview-model";
 import type { Attempt } from "./history";
 import { NOT_VERIFIED_LINE, NO_MAPPED_EVIDENCE, VERIFICATION_UNREADABLE } from "./vocab";
 
@@ -84,5 +84,51 @@ describe("verified competency", () => {
     expect(m.rows[0].verification).toMatchObject({ state: "unreadable", line: VERIFICATION_UNREADABLE });
     expect(m.verifiedCount).toBeNull();
     expect(m.topLine).toBe(VERIFICATION_UNREADABLE);
+  });
+});
+
+describe("the competencies listed: the programme's plus every one the learner has rated themselves on", () => {
+  const C = "c0000000-0000-4000-8000-00000000000c";
+  const labels = new Map([[C, { code: "NUR-CCF-001", title: "Respiratory Assessment", domain: "Clinical care", framework: "NUR-CCF" }]]);
+  it("adds a self-assessed competency the programme does not offer, named from its labels, after the programme's own", () => {
+    const u = unionCompetencies([comp(A, "Airway")], [C], labels);
+    expect(u.map(c => c.id)).toEqual([A, C]);
+    expect(u[1]).toMatchObject({ title: "Respiratory Assessment", code: "NUR-CCF-001", domain: "Clinical care", framework: "NUR-CCF", inProgramme: false, expected: null });
+    expect(u[0].inProgramme).toBe(true);
+  });
+  it("lists a competency in both once, as the programme's, with its programme expected level", () => {
+    const u = unionCompetencies([comp(A, "Airway", 4)], [A, A], labels);
+    expect(u).toHaveLength(1);
+    expect(u[0]).toMatchObject({ id: A, inProgramme: true, expected: { score: 4, label: "Competent" } });
+  });
+  it("still lists one whose label cannot be read, named plainly", () => {
+    const u = unionCompetencies([], [C], new Map());
+    expect(u[0]).toMatchObject({ id: C, title: "A competency you rated yourself on", inProgramme: false });
+  });
+  it("orders the extra ones by name", () => {
+    const L = new Map<string, { code: string | null; title: string; domain: string; framework: string | null }>([[C, labels.get(C)!], [B, { code: null, title: "Airway", domain: "", framework: null }]]);
+    expect(unionCompetencies([], [C, B], L).map(c => c.title)).toEqual(["Airway", "Respiratory Assessment"]);
+  });
+  it("shows the learner's rating for it unconditionally, with the neutral note and no expected level, and mapped evidence stays filtered", () => {
+    const union = unionCompetencies([comp(A, "Airway")], [C], labels);
+    const m = buildOverview(base({
+      competencies: union, attempts: new Map([[C, [at("i1", "2026-11-02T00:00:00Z", 4)]]]), openSelf: new Map(),
+    }));
+    const row = m.rows.find(r => r.competency.id === C)!;
+    expect(row.self).toMatchObject({ rating: 4, latestInstanceId: "i1" });
+    expect(row.active).toBe(true);
+    expect(row.competency.inProgramme).toBe(false);
+    expect(row.competency.expected).toBeNull();
+    expect(row.evidence).toEqual({ state: "none", text: NO_MAPPED_EVIDENCE });
+    expect(row.compare.state).toBe("no_evidence");
+    expect(NOT_IN_PROGRAMME_NOTE).toBe("Not in your current programme");
+    expect(EXPECTED_NOT_SET).toBe("Expected level: not set for your programme");
+    expect(`${NOT_IN_PROGRAMME_NOTE} ${EXPECTED_NOT_SET}`).not.toMatch(/draft|unpublished|publish/i);
+    expect(m.rows.find(r => r.competency.id === A)?.competency.inProgramme).toBe(true);
+  });
+  it("shows an open self-assessment on such a competency with a way to continue it", () => {
+    const m = buildOverview(base({ competencies: unionCompetencies([], [C], labels), openSelf: new Map([[C, "open-1"]]) }));
+    expect(m.rows[0].self).toMatchObject({ rating: null, openInstanceId: "open-1" });
+    expect(m.rows[0].active).toBe(true);
   });
 });

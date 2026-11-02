@@ -20,7 +20,14 @@ export type OverviewCompetency = {
   /** The level the programme expects (the scale's own ordinal), or null when it sets none. */
   expected: { score: number; label: string } | null;
   contentStatus: "approved" | "draft" | "unreviewed";
+  /** False for a competency the learner rated themselves on that their programme does not offer. Absent means true. */
+  inProgramme?: boolean;
+  framework?: string | null;
 };
+
+/** The small neutral note on a competency outside the learner's programme. It says nothing about the competency's status. */
+export const NOT_IN_PROGRAMME_NOTE = "Not in your current programme";
+export const EXPECTED_NOT_SET = "Expected level: not set for your programme";
 
 export type ProgressFact = {
   sectionsAccepted: number; sectionsProposed: number; questions: number; answered: number; latestAccuracy: number | null;
@@ -42,6 +49,8 @@ export type OverviewInput = {
   findings: ReadonlyMap<string, readonly Finding[]>;
   /** The highest ordinal on the self-assessment scale (6 on the 0-6 scale). */
   scaleMax: number | null;
+  /** competency id -> the learner's own open (not yet submitted) self instance, so the row can offer Continue. */
+  openSelf?: ReadonlyMap<string, string>;
 };
 
 export type SelfPanel = {
@@ -52,6 +61,8 @@ export type SelfPanel = {
   points: (number | null)[];
   strengths: Finding[]; gaps: Finding[];
   latestInstanceId: string | null;
+  /** A self-assessment started and not yet submitted that rates this competency. */
+  openInstanceId: string | null;
   /** Review the latest report, or repeat the self-assessment. */
   canRepeat: { code: string; name: string } | null;
   unjudged: number; unanswered: number;
@@ -94,13 +105,14 @@ export function buildOverview(input: OverviewInput): { rows: OverviewRow[]; veri
     const latest = history.latest?.rating ?? null;
     const findings = input.findings.get(c.id) ?? [];
     const startable = input.startable.get(c.id) ?? null;
-    const self: SelfPanel | null = history.attempts.length || startable ? {
+    const openInstanceId = input.openSelf?.get(c.id) ?? null;
+    const self: SelfPanel | null = history.attempts.length || startable || openInstanceId ? {
       history, rating: latest?.rating ?? null, descriptor: latest?.descriptor ?? null,
       range: latest && latest.low !== null && latest.high !== null && latest.rated > 1 ? `${latest.low} to ${latest.high} across ${latest.rated} criteria` : null,
       delta: history.delta, deltaText: deltaText(history.delta), trend: history.trend,
       points: history.attempts.map(a => a.rating.rating),
       strengths: findings.filter(f => f.kind === "met"), gaps: findings.filter(f => f.kind !== "met"),
-      latestInstanceId: history.latest?.instanceId ?? null, canRepeat: startable,
+      latestInstanceId: history.latest?.instanceId ?? null, openInstanceId, canRepeat: startable,
       unjudged: latest?.unjudged ?? 0, unanswered: latest?.unanswered ?? 0,
     } : null;
     const evidence = evidencePanel(input.progress.get(c.id), input.activity?.get(c.id));
@@ -120,3 +132,24 @@ export function buildOverview(input: OverviewInput): { rows: OverviewRow[]; veri
 }
 
 export type { PracticeEvidence };
+
+/**
+ * The competencies the Overview lists: the programme's own, then EVERY other competency the learner has a self-assessment on (submitted or still open),
+ * named from `labels`. A learner's own self-reported ratings are shown unconditionally: they do not depend on the programme or the catalogue offering the
+ * competency. A competency that is in both is listed once, as the programme's. One with no readable label is still listed, named plainly.
+ */
+export function unionCompetencies(
+  programme: readonly OverviewCompetency[],
+  selfMappedIds: Iterable<string>,
+  labels: ReadonlyMap<string, { code: string | null; title: string; domain: string; framework: string | null }>,
+): OverviewCompetency[] {
+  const have = new Set(programme.map(c => c.id));
+  const extra: OverviewCompetency[] = [];
+  for (const id of new Set(selfMappedIds)) {
+    if (have.has(id)) continue;
+    const l = labels.get(id);
+    extra.push({ id, code: l?.code ?? null, title: l?.title ?? "A competency you rated yourself on", domain: l?.domain ?? "", framework: l?.framework ?? null, expected: null, contentStatus: "approved", inProgramme: false });
+  }
+  extra.sort((a, b) => a.title.localeCompare(b.title) || a.id.localeCompare(b.id));
+  return [...programme.map(c => ({ ...c, inProgramme: true })), ...extra];
+}

@@ -400,6 +400,8 @@ export type SelfHistory = {
   latestFindings: Map<string, Finding[]>;
   /** The highest ordinal on a rating scale the learner has used (6 on a 0-6 scale). */
   scaleMax: number | null;
+  /** EVERY competency one of the learner's own self instances (submitted or still open) is mapped to, with the open instance if there is one. Whether the programme offers it or not. */
+  selfMapped: Map<string, { inProgressId: string | null }>;
 };
 
 /**
@@ -413,7 +415,7 @@ export async function loadHistory(admin: Admin, userId: string, expected: Readon
       .eq("subject_user_id", userId).neq("status", "withdrawn").order("started_at", { ascending: false }).limit(300);
     if (inst.error) return fail(503, "Your assessments could not be read just now.");
     const rows = (inst.data ?? []) as any[];
-    const empty: SelfHistory = { summaries: [], attempts: new Map(), latestFindings: new Map(), scaleMax: null };
+    const empty: SelfHistory = { summaries: [], attempts: new Map(), latestFindings: new Map(), scaleMax: null, selfMapped: new Map() };
     if (!rows.length) return { ok: true, data: empty };
     const ids = rows.map(r => r.id);
     const [resp, oc] = await Promise.all([
@@ -442,6 +444,7 @@ export async function loadHistory(admin: Admin, userId: string, expected: Readon
     const attempts = new Map<string, Attempt[]>();
     const latestFindings = new Map<string, { at: string; findings: Finding[] }>();
     let scaleMax: number | null = null;
+    const selfMapped = new Map<string, { inProgressId: string | null }>();
     for (const r of rows) {
       const d = defs.get(r.instrument_version_id);
       if (!d) continue;
@@ -456,6 +459,13 @@ export async function loadHistory(admin: Admin, userId: string, expected: Readon
         assessorName: r.respondent_role !== "self" ? names.get(r.respondent_id) ?? null : null,
       });
       for (const it of d.loaded.def.items) for (const l of it.scale?.levels ?? []) scaleMax = scaleMax === null ? l.ordinal : Math.max(scaleMax, l.ordinal);
+      if (r.respondent_role === "self") {
+        for (const m of d.map.values()) {
+          const cur = selfMapped.get(m.competencyId);
+          // rows are newest first: the first open instance seen is the newest
+          if (!cur || (cur.inProgressId === null && r.status === "in_progress")) selfMapped.set(m.competencyId, { inProgressId: r.status === "in_progress" ? r.id : cur?.inProgressId ?? null });
+        }
+      }
       // Ratings only from SUBMITTED SELF instances: an assessor's instance is another class, and a draft is not yet an attempt.
       if (r.respondent_role !== "self" || r.status !== "submitted" || !r.submitted_at) continue;
       const competencyOf = new Map<string, string>([...d.map].map(([k, m]) => [k, m.competencyId]));
@@ -473,7 +483,7 @@ export async function loadHistory(admin: Admin, userId: string, expected: Readon
         if (!cur || cur.at < r.submitted_at) latestFindings.set(competencyId, { at: r.submitted_at, findings: mine });
       }
     }
-    return { ok: true, data: { summaries, attempts, latestFindings: new Map([...latestFindings].map(([k, v]) => [k, v.findings])), scaleMax } };
+    return { ok: true, data: { summaries, attempts, latestFindings: new Map([...latestFindings].map(([k, v]) => [k, v.findings])), scaleMax, selfMapped } };
   } catch { return fail(503, "Your assessments could not be read just now."); }
 }
 
@@ -508,4 +518,26 @@ export async function startFromPage(admin: Admin, userId: string, code: string):
     const policy = await loadIndividualPolicyOnce(admin);
     return await startSelf(admin, userId, code, policy.scholarAssessmentInstruments);
   } catch { return fail(503, "This could not be started just now."); }
+}
+
+export type CompetencyLabel = { id: string; code: string | null; title: string; domain: string; framework: string | null };
+
+/**
+ * Name, code, domain and framework NAME of competencies a learner has rated themselves on, whether or not their programme offers them. Only those four
+ * labels are read: no criterion wording, no status, no content. The learner already holds these competencies' ids through their own instances.
+ */
+export async function loadCompetencyLabels(admin: Admin, ids: readonly string[]): Promise<Map<string, CompetencyLabel>> {
+  const out = new Map<string, CompetencyLabel>();
+  const want = [...new Set(ids.filter(isUuid))];
+  if (!want.length) return out;
+  try {
+    const r = await admin.from("framework_competencies").select("id, name, code, framework_domains(name, frameworks(name))").in("id", want);
+    if (r.error) return out;
+    for (const c of (r.data ?? []) as any[]) {
+      const dom = Array.isArray(c.framework_domains) ? c.framework_domains[0] : c.framework_domains;
+      const fw = dom ? (Array.isArray(dom.frameworks) ? dom.frameworks[0] : dom.frameworks) : null;
+      out.set(c.id, { id: c.id, code: c.code ?? null, title: c.name, domain: dom?.name ?? "", framework: fw?.name ?? null });
+    }
+  } catch { /* a label that cannot be read is simply not named: the row still shows the learner's rating */ }
+  return out;
 }

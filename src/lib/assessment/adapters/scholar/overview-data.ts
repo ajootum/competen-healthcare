@@ -2,9 +2,9 @@
 import { loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { scholarModulesFor } from "@/lib/individual/scholar/module-access";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { listOffers, loadHistory, startableByCompetency, assessmentsReady, type InstanceSummary, type SelfHistory } from "./store";
+import { listOffers, loadCompetencyLabels, loadHistory, startableByCompetency, assessmentsReady, type InstanceSummary, type SelfHistory } from "./store";
 import type { OfferCard } from "./offer";
-import { buildOverview, type ActivityFact, type OverviewCompetency, type ProgressFact, type VerificationFact } from "./competency-overview-model";
+import { buildOverview, unionCompetencies, type ActivityFact, type OverviewCompetency, type ProgressFact, type VerificationFact } from "./competency-overview-model";
 import type { Attempt } from "./history";
 import type { Finding } from "./findings";
 
@@ -50,6 +50,15 @@ export function progressFacts(progress: { layers: { rows: { id: string; sections
   return out;
 }
 
+/** The programme's competencies plus every competency the learner has a self-assessment on. The extra ones are named from their labels only. */
+export async function competenciesWithOwn(admin: Admin, programme: readonly OverviewCompetency[], side: Extract<SelfSide, { state: "ready" }> | null): Promise<OverviewCompetency[]> {
+  if (!side) return [...programme];
+  const have = new Set(programme.map(c => c.id));
+  const extraIds = [...side.history.selfMapped.keys()].filter(id => !have.has(id));
+  const labels = extraIds.length ? await loadCompetencyLabels(admin, extraIds) : new Map();
+  return unionCompetencies(programme, side.history.selfMapped.keys(), labels);
+}
+
 export function overviewFrom(args: {
   competencies: readonly OverviewCompetency[]; side: Extract<SelfSide, { state: "ready" }> | null;
   progress: ReadonlyMap<string, ProgressFact>; activity: ReadonlyMap<string, ActivityFact> | null; verifications: readonly VerificationFact[] | null;
@@ -59,6 +68,7 @@ export function overviewFrom(args: {
   return buildOverview({
     competencies: args.competencies, attempts, progress: args.progress, activity: args.activity, verifications: args.verifications,
     startable: args.side?.startable ?? new Map(), findings, scaleMax: args.side?.history.scaleMax ?? null,
+    openSelf: new Map([...(args.side?.history.selfMapped ?? [])].flatMap(([id, v]) => (v.inProgressId ? [[id, v.inProgressId] as [string, string]] : []))),
   });
 }
 

@@ -9,7 +9,7 @@ import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_com
 import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import OverviewPanels from "@/app/individual/_components/competencies/OverviewPanels";
-import { expectedMap, loadSelfSide, overviewFrom, progressFacts, verificationFacts } from "@/lib/assessment/adapters/scholar/overview-data";
+import { competenciesWithOwn, expectedMap, loadSelfSide, overviewFrom, progressFacts, verificationFacts } from "@/lib/assessment/adapters/scholar/overview-data";
 import type { ActivityFact, OverviewCompetency } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 import { SELF_CLASS_LABEL } from "@/lib/assessment/adapters/scholar/vocab";
 import { Block, EmptyLine, TextLink } from "../_module/module-parts";
@@ -45,10 +45,13 @@ export default async function MyCompetenciesOverview({ params, searchParams }: {
     myPlanOn(ctx.admin, ctx.userId),
   ]);
   const catalogue = d.learner.competencies ?? [];
-  const side = d.learner.provisioned && d.learner.programme ? await loadSelfSide(ctx.admin, ctx.userId, expectedMap(catalogue)) : null;
-  const competencies: OverviewCompetency[] = catalogue.map(c => ({ id: c.id, code: c.code, title: c.title, domain: c.domain, expected: c.expectedLevel, contentStatus: c.contentStatus === "approved" || c.contentStatus === "draft" ? c.contentStatus : "unreviewed" }));
+  // The learner's own self-reported ratings are shown whatever the programme offers: the self side is read for everyone, and its competencies are
+  // UNIONED with the programme's (a competency outside the programme carries a neutral note, and no expected level).
+  const side = await loadSelfSide(ctx.admin, ctx.userId, expectedMap(catalogue));
+  const programmeCompetencies: OverviewCompetency[] = catalogue.map(c => ({ id: c.id, code: c.code, title: c.title, domain: c.domain, expected: c.expectedLevel, contentStatus: c.contentStatus === "approved" || c.contentStatus === "draft" ? c.contentStatus : "unreviewed" }));
   const activity: ReadonlyMap<string, ActivityFact> | null = d.activity;
-  const ready = side && side.state === "ready" ? side : null;
+  const ready = side.state === "ready" ? side : null;
+  const competencies = await competenciesWithOwn(ctx.admin, programmeCompetencies, ready);
   const model = overviewFrom({ competencies, side: ready, progress: progressFacts(d.progress), activity, verifications: verificationFacts(passport) });
   const rows = model.rows.filter(r => r.active || r.self);
   const others = model.rows.filter(r => !rows.includes(r));
@@ -60,14 +63,15 @@ export default async function MyCompetenciesOverview({ params, searchParams }: {
       <PageHeader accent={x.accent} eyebrow="My Competencies" title="My Competencies" intro="How you rate yourself, what your learning shows, and where they differ. Each is kept apart, and none of it is verified competence." />
       <Notice>{FORMATIVE_NOTICE}. {SELF_CLASS_LABEL}: your ratings are your own view of yourself. Your practice is observed practice on your own notes. Only an independent verification is a verified competency, and each is shown on its own line.</Notice>
 
-      {!d.learner.provisioned ? <EmptyLine>{noProgrammeText(0)}</EmptyLine>
-        : !d.learner.programme ? <EmptyLine>{noProgrammeText(d.offered)}</EmptyLine>
-          : d.unreadable ? <Unreadable what="competencies" />
-            : catalogue.length === 0 ? <EmptyLine>{framework.kind === "empty" ? framework.text : "Your programme has no competencies to show yet."}</EmptyLine>
+      {rows.length === 0 && others.length === 0 && !d.learner.provisioned ? <EmptyLine>{noProgrammeText(0)}</EmptyLine>
+        : rows.length === 0 && others.length === 0 && !d.learner.programme ? <EmptyLine>{noProgrammeText(d.offered)}</EmptyLine>
+          : rows.length === 0 && others.length === 0 && d.unreadable ? <Unreadable what="competencies" />
+            : rows.length === 0 && others.length === 0 && catalogue.length === 0 ? <EmptyLine>{framework.kind === "empty" ? framework.text : "Your programme has no competencies to show yet."}</EmptyLine>
               : (
                 <>
-                  {side?.state === "unreadable" && <Unreadable what="self-assessments" />}
-                  {side?.state === "not_ready" && <p className="mb-4 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-3 text-[13.5px] text-gray-700">Self-assessments are not available yet. Your learning evidence and verification status are shown below.</p>}
+                  {d.unreadable && <Unreadable what="competencies" />}
+                  {side.state === "unreadable" && <Unreadable what="self-assessments" />}
+                  {side.state === "not_ready" && <p className="mb-4 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-3 text-[13.5px] text-gray-700">Self-assessments are not available yet. Your learning evidence and verification status are shown below.</p>}
                   <OverviewPanels rows={rows} others={others} scaleMax={ready?.history.scaleMax ?? 6} myPlanOn={planOn} study={study ?? null} topLine={model.topLine}
                     verifiedClass={model.verifiedCount === null ? "unreadable" : model.verifiedCount === 0 ? "not_yet" : "verified"} reportBase={base} />
                   <p className="mt-4"><TextLink href={base} accent={x.accent}>Go to Assessments</TextLink></p>

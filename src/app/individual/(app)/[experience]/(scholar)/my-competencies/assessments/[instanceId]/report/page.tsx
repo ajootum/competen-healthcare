@@ -8,7 +8,7 @@ import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import ReportHost, { type GapAction } from "@/app/individual/_components/competencies/ReportHost";
 import { evaluate } from "@/lib/assessment/core";
-import { loadInstanceBundle, itemContextsFor } from "@/lib/assessment/adapters/scholar/store";
+import { loadInstanceBundle, itemContextsFor, loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
 import { expectedMap } from "@/lib/assessment/adapters/scholar/overview-data";
 import { findStrengthsAndGaps, findingText } from "@/lib/assessment/adapters/scholar/findings";
 import { ASSESSOR_NOTICE, SELF_ATTESTATION_LABEL, SELF_BANNER, SELF_NOTICE } from "@/lib/assessment/adapters/scholar/vocab";
@@ -44,7 +44,10 @@ export default async function AssessmentReportPage({ params, searchParams }: { p
   ]);
   const { contexts, wording } = await itemContextsFor(ctx.admin, b.loaded, expectedMap(learner.competencies));
   const { strengths, gaps } = findStrengthsAndGaps(b.loaded.def, b.responses, contexts, b.loaded.rules.defaults);
-  const titleOf = (id: string | null) => (id ? learner.competencies?.find(c => c.id === id)?.title ?? "A competency in your programme" : "This assessment");
+  // A competency the learner rated themselves on that their programme does not offer is still named (name only), never hidden.
+  const outside = [...new Set(gaps.map(g => g.competencyId).filter((id): id is string => !!id && !learner.competencies?.some(c => c.id === id)))];
+  const outsideNames = outside.length ? await loadCompetencyLabels(ctx.admin, outside) : new Map();
+  const titleOf = (id: string | null) => (id ? learner.competencies?.find(c => c.id === id)?.title ?? outsideNames.get(id)?.title ?? "A competency you rated yourself on" : "This assessment");
   const m = b.loaded.meta;
   const counts: Record<string, number> = {};
   for (const e of b.evidence) if (e.itemKey) counts[e.itemKey] = (counts[e.itemKey] ?? 0) + 1;
