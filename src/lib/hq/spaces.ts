@@ -80,6 +80,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // P1 Commercial (migration 400): create, price, activate and retire the Competen Individual plans, through
   // /api/hq/individual/plans. Granted to NO position -- the platform owners only, until a separate owner GO.
   { code: "hq.individual.commercial.manage",  space: "platform"  },
+  // HQ-SCHOLAR-PREVIEW-01 (migration 860): open the real Competen Scholar as the designated demonstration learner, on the
+  // separate preview host. Read-only by default. Held by the Individual Product Administrator and the Individual Product
+  // Reviewer positions, and by the platform owners. It grants no write and no access to any real learner.
+  { code: "hq.individual.scholar.preview",    space: "platform"  },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
   // catalogue did not, so B1 went red -- which is the drift control working.
@@ -304,6 +308,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // (migration 370, D9) with no page; this declares the page it opens, so the intent map stays the whole truth.
   // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not
   // inherit the pilot-grant right by sitting under this prefix -- it declares its own entry.
+  // HQ-SCHOLAR-PREVIEW-01: View Scholar (product preview launcher). Its own right. BEFORE the exact /super-admin/individual entry.
+  { prefix: "/super-admin/individual/scholar",    capability: "hq.individual.scholar.preview" },
   { prefix: "/super-admin/individual",            capability: "hq.individual.pilot.grant", exact: true },
 
   // ── The Product Director workspace ────────────────────────────────────────────────────────────────
