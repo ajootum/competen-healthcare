@@ -5,7 +5,7 @@
 // here creates a network request, and no audio ever reaches Competen.
 
 import {
-  DICTATION_IDLE, DICTATION_SILENCE_MS, chunkForSpeech, dictationReducer, mapRecognitionError, pickVoice,
+  DICTATION_IDLE, DICTATION_SILENCE_MS, chunkForSpeech, dictationReducer, insertAtCursor, mapRecognitionError, mergeFinalSegments, pickVoice,
   type DictationEvent, type DictationState, type ReadRate, type VoiceLike,
 } from "./speech";
 
@@ -141,10 +141,18 @@ export type RecognitionEnv = {
 export class DictationEngine {
   private rec: any = null;
   private timer: unknown = null;
-  private emitted = -1;
+  /** This session's final transcripts by result index (rebuilt from every event's full result list). */
+  private finals: string[] = [];
+  /** The merged text this session has already handed out (via onFinal / onRevise). */
+  private inserted = "";
   private state: DictationState = DICTATION_IDLE;
   private listeners = new Set<(s: DictationState) => void>();
+  /** New words to add after what this session has already delivered. */
   onFinal: (text: string) => void = () => {};
+  /** The engine revised words it had already delivered: replace `previous` (this session's delivered text) with `next`. */
+  onRevise: (previous: string, next: string) => void = () => {};
+  /** A new session begins (the page forgets where the previous one wrote). */
+  onSessionStart: () => void = () => {};
 
   constructor(private env: RecognitionEnv) {}
 
@@ -161,7 +169,8 @@ export class DictationEngine {
     if (this.state.status === "starting" || this.state.status === "listening") return;
     if (!this.env.ctor) { this.dispatch({ type: "error", code: "not_supported" }); return; }
     this.dispatch({ type: "start" });
-    this.emitted = -1;
+    this.finals = []; this.inserted = "";
+    this.onSessionStart();
     let rec: any;
     try { rec = new this.env.ctor(); } catch { this.dispatch({ type: "error", code: "not_supported" }); return; }
     this.rec = rec;
@@ -174,15 +183,26 @@ export class DictationEngine {
     rec.onresult = (ev: any) => {
       if (this.rec !== rec) return;
       this.arm();
-      let interim = "", final = "";
       const results = ev?.results;
-      for (let i = Number(ev?.resultIndex) || 0; i < (results?.length ?? 0); i++) {
+      const interims: string[] = [];
+      for (let i = 0; i < (results?.length ?? 0); i++) {
         const r = results[i];
         const t = String(r?.[0]?.transcript ?? "");
-        if (r?.isFinal) { if (i > this.emitted) { final += t; this.emitted = i; } } else interim += t;
+        if (r?.isFinal) this.finals[i] = t; else interims.push(t);
       }
-      if (final.trim()) { this.dispatch({ type: "final" }); this.onFinal(final.trim()); }
-      this.dispatch({ type: "interim", text: interim.trim() });
+      // Android Chrome reports each growing hypothesis as its own final, so the session's finals are merged, and only what is
+      // new against what was already delivered goes out.
+      const merged = mergeFinalSegments(this.finals.filter(t => t !== undefined));
+      const had = this.inserted;
+      if (merged && merged.toLowerCase() !== had.toLowerCase()) {
+        this.dispatch({ type: "final" });
+        this.inserted = merged;
+        if (merged.toLowerCase().startsWith(had.toLowerCase())) {
+          const delta = merged.slice(had.length).trim();
+          if (delta) this.onFinal(delta);
+        } else this.onRevise(had, merged);
+      }
+      this.dispatch({ type: "interim", text: mergeFinalSegments(interims) });
     };
     rec.onerror = (ev: any) => {
       if (this.rec !== rec) return;
@@ -226,4 +246,72 @@ export class DictationEngine {
     }, this.env.silenceMs ?? DICTATION_SILENCE_MS);
   }
   private clearTimer() { if (this.timer != null) { this.env.clearTimer(this.timer); this.timer = null; } }
+}
+
+/* ------------------------------------------------------------------ writing a dictation session into a field */
+
+export type DictationField = {
+  value: string; selectionStart: number | null; selectionEnd: number | null; maxLength: number;
+  setSelectionRange(start: number, end: number): void;
+};
+
+/**
+ * Writes one dictation session's words into a text field, remembering the span they occupy so that when the engine REVISES words it
+ * already delivered, that span is replaced (never appended again) and the learner's other text, before and after, is untouched.
+ */
+export class DictationFieldWriter {
+  private span: { start: number; end: number } | null = null;
+  constructor(
+    private getField: () => DictationField | null,
+    private onValue: (next: string) => void,
+    private schedule: (fn: () => void) => void = fn => { if (typeof requestAnimationFrame === "function") requestAnimationFrame(fn); },
+  ) {}
+
+  /** A new session: forget the previous span. */
+  reset() { this.span = null; }
+
+  private write(el: DictationField, value: string, caret: number) {
+    this.onValue(value);
+    // Keep the DOM current so a following result reads the right value before React has re-rendered.
+    try { el.value = value; el.setSelectionRange(caret, caret); } catch { /* not a text field */ }
+    // The caret follows the words once React has written the value back.
+    this.schedule(() => { try { el.setSelectionRange(caret, caret); } catch { /* not a text field */ } });
+  }
+
+  append(text: string) {
+    const el = this.getField();
+    if (!el) return;
+    const max = el.maxLength > 0 ? el.maxLength : undefined;
+    const s = el.selectionStart ?? el.value.length, e = el.selectionEnd ?? el.value.length;
+    const r = insertAtCursor(el.value, s, e, text, max);
+    if (r.value === el.value) return;
+    const start = Math.min(s, e);
+    // Contiguous with the previous words (the caret sits at their end): the span grows; otherwise a new span starts here.
+    this.span = this.span && this.span.end === start && s === e ? { start: this.span.start, end: r.caret } : { start, end: r.caret };
+    this.write(el, r.value, r.caret);
+  }
+
+  revise(previous: string, next: string) {
+    const el = this.getField();
+    if (!el) return;
+    const norm = (t: string) => t.replace(/\s+/g, " ").trim();
+    let span = this.span;
+    if (!span || norm(el.value.slice(span.start, span.end)) !== norm(previous)) {
+      // The learner edited or moved things: find the old words as they stand, else just add the new words at the caret.
+      const at = previous ? el.value.indexOf(previous) : -1;
+      if (at < 0) { this.span = null; this.append(next); return; }
+      span = { start: at, end: at + previous.length };
+    }
+    const old = el.value.slice(span.start, span.end);
+    const lead = old.length - old.trimStart().length;
+    const trail = old.length - old.trimEnd().length;
+    const innerStart = span.start + lead, innerEnd = Math.max(innerStart, span.end - trail);
+    let ins = norm(next);
+    const max = el.maxLength > 0 ? el.maxLength : undefined;
+    if (max) { const room = max - (el.value.length - (innerEnd - innerStart)); ins = ins.slice(0, Math.max(0, room)); }
+    const value = el.value.slice(0, innerStart) + ins + el.value.slice(innerEnd);
+    const caret = innerStart + ins.length;
+    this.span = { start: span.start, end: caret + trail };
+    this.write(el, value, caret + trail);
+  }
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { DictationEngine, ReadAloudEngine, type RecognitionEnv, type SynthEnv } from "./speech-engine";
+import { DictationEngine, DictationFieldWriter, ReadAloudEngine, type RecognitionEnv, type SynthEnv } from "./speech-engine";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -165,5 +165,99 @@ describe("DictationEngine", () => {
     e.dispose();
     expect(second.aborted).toBe(true);
     expect(m.timers).toHaveLength(0);
+  });
+});
+
+/* Real-device bug: Android Chrome reports each growing hypothesis as its own "final" result. */
+function fakeField(value = "", caret = value.length) {
+  const f: any = {
+    value, selectionStart: caret, selectionEnd: caret, maxLength: -1,
+    setSelectionRange(s: number, e: number) { f.selectionStart = s; f.selectionEnd = e; },
+  };
+  return f;
+}
+function wire(field: any) {
+  const m = mockRecognition(); const e = new DictationEngine(m.env);
+  const w = new DictationFieldWriter(() => field, v => { field.value = v; }, fn => fn());
+  e.onSessionStart = () => w.reset();
+  e.onFinal = t => w.append(t);
+  e.onRevise = (p, n) => w.revise(p, n);
+  return { m, e };
+}
+const finals = (...t: string[]) => result(t.map(x => [x, true] as [string, boolean]));
+
+describe("DictationEngine: cumulative and repeated finals", () => {
+  it("(a) Android cumulative finals give the text once, in the last final's case", () => {
+    const field = fakeField(); const { m, e } = wire(field);
+    e.start();
+    const steps = ["teach", "teach me", "teach me about", "teach me about", "teach me about pdsa", "teach me about pdsa Cycles"];
+    const seen: string[] = [];
+    steps.forEach((_, i) => { m.rec().onresult(finals(...steps.slice(0, i + 1))); seen.push(field.value); });
+    expect(field.value).toBe("teach me about pdsa Cycles");
+    expect(seen[0]).toBe("teach");
+    expect(e.getState().interim).toBe("");
+  });
+  it("(b) repeated identical finals do not duplicate", () => {
+    const field = fakeField(); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(finals("hello there"));
+    m.rec().onresult(finals("hello there", "hello there"));
+    m.rec().onresult(finals("hello there", "hello there", "Hello there"));
+    expect(field.value).toBe("hello there");
+  });
+  it("(c) desktop distinct sentence finals append once each", () => {
+    const field = fakeField(); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(finals("first sentence."));
+    m.rec().onresult(finals("first sentence.", "second sentence."));
+    expect(field.value).toBe("first sentence. second sentence.");
+  });
+  it("(d) text before and after the cursor is preserved", () => {
+    const field = fakeField("Before  after", 7); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(finals("teach"));
+    m.rec().onresult(finals("teach", "teach me"));
+    m.rec().onresult(finals("teach", "teach me", "teach me about"));
+    expect(field.value.startsWith("Before ")).toBe(true);
+    expect(field.value.endsWith("after")).toBe(true);
+    expect(field.value.match(/teach/g)).toHaveLength(1);
+    expect(field.value.replace(/\s+/g, " ")).toBe("Before teach me about after");
+  });
+  it("(e) a revised earlier final replaces, not appends", () => {
+    const field = fakeField("Note: ", 6); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(finals("recognise speech today"));
+    expect(field.value).toBe("Note: recognise speech today");
+    m.rec().onresult(finals("recognise speech today", "and more"));
+    expect(field.value).toBe("Note: recognise speech today and more");
+    // the engine now revises its first final: the merge no longer starts with what was inserted
+    m.rec().onresult(finals("Recognize speech today", "and more"));
+    expect(field.value).toBe("Note: Recognize speech today and more");
+  });
+  it("(e2) a revision keeps text typed after the dictated words", () => {
+    const field = fakeField("", 0); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(finals("recognise speech"));
+    field.value += " (typed)";
+    m.rec().onresult(finals("Recognize speech"));
+    expect(field.value).toBe("Recognize speech (typed)");
+  });
+  it("(f) a new start() resets the session", () => {
+    const field = fakeField(); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(finals("teach me"));
+    e.stop();
+    field.selectionStart = field.selectionEnd = field.value.length;
+    e.start();
+    m.rec().onresult(finals("about pdsa"));
+    expect(field.value).toBe("teach me about pdsa");
+    m.rec().onresult(finals("about pdsa cycles"));
+    expect(field.value).toBe("teach me about pdsa cycles");
+  });
+  it("shows only the current interim text", () => {
+    const field = fakeField(); const { m, e } = wire(field);
+    e.start();
+    m.rec().onresult(result([["teach", true], ["teach me", true], ["teach me about", false]]));
+    expect(e.getState().interim).toBe("teach me about");
   });
 });
