@@ -210,9 +210,9 @@ describe("the plan proposal", () => {
     expect(p.revisionPoints.map(r => r.afterDays)).toEqual([1, 3, 7]);
     expect(p.firstPlan).toBe(true);
   });
-  it("uses 30 minutes x 3 days when there are no settings, and says so", () => {
+  it("uses the starting plan (30 minutes x 5 days) when there are no settings, and says so", () => {
     const p = buildProposal({ material: A, earlier: [], settings: null, sectionMinutes: 12, firstPlan: true });
-    expect(p.sessions).toMatchObject({ sessionMinutes: 30, daysPerWeek: 3, usingDefaults: true });
+    expect(p.sessions).toMatchObject({ sessionMinutes: 30, daysPerWeek: 5, usingDefaults: true });
     expect(p.summary).toMatch(/starting suggestion/);
   });
   it("a topic an earlier accepted material already covers is listed as covered and not counted twice", () => {
