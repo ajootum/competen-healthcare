@@ -147,7 +147,9 @@ export const PROMPT_VERSIONS = {
   // SCHOLAR-CE-2026 CE-05: an evolving scenario -- a situation that unfolds over two to four stages, each stage one question of an
   // existing kind -- on the revision rules (generation.ts REVISION_SYSTEM.scenario). Its own version: a new prompt.
   // v2: a clinical situation that develops over time; no answer given away in the opening or an earlier stage; no talk of notes or students.
-  scenario: "scholar-scenario-v2",
+  // v3: a decision at every stage, about THIS person (never plain recall); three stages when the material supports them: a person with a decision, a meaningful
+  // change needing reassessment, further judgement.
+  scenario: "scholar-scenario-v3",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
   // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per

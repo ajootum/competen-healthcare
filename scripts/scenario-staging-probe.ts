@@ -30,7 +30,7 @@ const envDir = resolve(arg("env", join(process.cwd(), "..", "competen-p2")) as s
 function refuse(msg: string): never { console.error(`\n⛔ ${msg}\n`); process.exit(1); }
 
 async function main() {
-  if (!email || (!chunkId && !materialLike)) refuse("usage: --email <learner> (--chunk <section id> | --material-like <title fragment>) [--n 3] [--env <dir>]");
+  if (!arg("find") && (!email || (!chunkId && !materialLike))) refuse("usage: --find <email prefix> | --email <learner> (--chunk <section id> | --material-like <title fragment>) [--n 3] [--env <dir>]");
   if (!existsSync(join(envDir, ".env.local"))) refuse(`no .env.local in ${envDir} (pass --env <dir>)`);
   createRequire(import.meta.url)("@next/env").loadEnvConfig(envDir);
 
@@ -59,6 +59,20 @@ async function main() {
   const suff = await import("../src/lib/individual/scholar/sufficiency");
   const pol = await import("../src/lib/individual/policy");
   const parseJsonArray = (await import("../src/lib/ai/grounding")).parseJsonArray;
+
+  // --find: which learners and materials exist (staging, read-only), so a section can be chosen.
+  if (arg("find")) {
+    const prefix = (arg("find") as string).toLowerCase();
+    for (let page = 1; page <= 5; page++) {
+      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+      if (error || !data.users.length) break;
+      for (const u of data.users.filter((x: { email?: string }) => x.email?.toLowerCase().startsWith(prefix)).slice(0, 12)) {
+        const mats = await store.listMaterials(admin, u.id);
+        console.log(`${u.email}: ${mats.ok ? mats.data.map(m => `${m.title} (${m.chunkCount})`).join("; ") || "no materials" : "materials unreadable"}`);
+      }
+    }
+    return;
+  }
 
   // ── the learner (read-only) ──
   let userId: string | null = null;

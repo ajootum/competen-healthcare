@@ -298,7 +298,7 @@ export type DraftReason =
   | "not_a_scenario" | "answer_leaked" | "repeated_stage" | "uncited_stage"
   // ... and where the clinical content is not on the cited sentences, or the scenario is not well formed (codes counted in the audit).
   | "ungrounded_number" | "ungrounded_opening" | "ungrounded_reveal" | "ungrounded_rationale"
-  | "reveal_not_new"
+  | "reveal_not_new" | "reveal_plan" | "generic_question"
   | "scenario_opening" | "scenario_stage_count" | "scenario_stage_shape" | "scenario_prompt" | "scenario_options" | "scenario_no_reveal" | "scenario_duplicate_stage"
   // SCHOLAR-FLASHCARDS-QA-01: a back that repeats the note sentence, or adds a second unrelated fact.
   | "back_copied" | "second_fact";

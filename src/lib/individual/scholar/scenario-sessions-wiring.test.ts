@@ -20,6 +20,10 @@ describe("sessions route and scenarios", () => {
     expect(route).toContain('call.kind === "scenario" && !ids.length && outcome.startsWith("kept:0")) scenarioSkipped = true');
     expect(route).toContain("scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE");
   });
+  it("the stage count of each kept scenario is in the audit, without the route touching an answer key", () => {
+    expect(route).toContain("scenarioStages = scenarioStageCounts(r.kept)");
+    expect(route).toContain("scenario_stages: scenarioStages");
+  });
   it("the audit outcome counts the dropped drafts by the rule's own name", () => {
     expect(route).toContain("const why = [...new Set(r.dropped)].map(x => `${x}:${r.dropped.filter(y => y === x).length}`).join(\"/\");");
     expect(route).toContain("outcome = s.ok ? `kept:${ids.length},dropped:${r.dropped.length}${why ? `(${why})` : \"\"}`");

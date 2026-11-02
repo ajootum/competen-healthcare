@@ -21,16 +21,16 @@ export const GOOD = {
   situation: "A person on a medical ward has had their observations taken, and the early warning score has been worked out.",
   stages: [
     {
-      reveal: "", prompt: "What should happen when the score is rising?", kind: "mcq",
+      reveal: "", prompt: "What should the team do now that the score is rising?", kind: "mcq",
       options: ["The person should be escalated to a senior colleague or doctor", "The observations should be left", "The person should be discharged", "The score should be ignored"], correct: [0], weight: 1,
       keyPoint: "A rising score means the person should be escalated to a senior colleague or doctor.", source: "A rising score means the person should be escalated to a senior colleague or doctor.",
     },
     {
-      reveal: "Some time later the oxygen saturation falls.", prompt: "What should be done about the oxygen?", kind: "short", accepted: ["give oxygen as prescribed"], weight: 2,
+      reveal: "Some time later the oxygen saturation falls.", prompt: "What should be done now about the oxygen?", kind: "short", accepted: ["give oxygen as prescribed"], weight: 2,
       keyPoint: "Give oxygen as prescribed and recheck the observations.", source: "If the oxygen saturation falls, give oxygen as prescribed and recheck the observations.",
     },
     {
-      reveal: "The person now also has a fever and a fast heart rate.", prompt: "What may be suspected?", kind: "mcq", options: ["Sepsis", "Dehydration", "Anxiety", "Pain"], correct: [0], weight: 2,
+      reveal: "The person now also has a fever and a fast heart rate.", prompt: "What may be suspected now?", kind: "mcq", options: ["Sepsis", "Dehydration", "Anxiety", "Pain"], correct: [0], weight: 2,
       keyPoint: "Sepsis may be suspected when a person has a fever and a fast heart rate.", source: "Sepsis may be suspected when a person has a fever and a fast heart rate.",
     },
   ],
@@ -42,7 +42,7 @@ export const LEAKING = {
   situation: "A person on a medical ward is getting worse. A raised respiratory rate is often the first sign, and an early warning score combines several observations.",
   stages: [
     {
-      reveal: "", prompt: "What is often the first sign that a person is getting worse?", kind: "mcq", options: ["A raised respiratory rate", "A fever", "A fast heart rate", "A low blood pressure"], correct: [0], weight: 1,
+      reveal: "", prompt: "Which sign here is the first to show that this person is getting worse?", kind: "mcq", options: ["A raised respiratory rate", "A fever", "A fast heart rate", "A low blood pressure"], correct: [0], weight: 1,
       keyPoint: "A raised respiratory rate is often the first sign that a person is getting worse.", source: "A raised respiratory rate is often the first sign that a person is getting worse.",
     },
     GOOD.stages[1],
@@ -73,7 +73,7 @@ export const DET_NOTE = [
 ].join("\n");
 export const detPassage: Passage = { chunkId: "c2", materialId: "m2", materialTitle: "Recognising deterioration", ordinal: 1, pageFrom: 1, pageTo: 1, content: DET_NOTE };
 const DET_SRC = DET_NOTE.split("\n").slice(1).map(l => l.replace(/^[0-9]+[.] /, ""));
-export const LIVE_FOUR_STAGES = {
+export const LIVE_RECALL = {
   situation: "A person on the ward looks less well than earlier in the shift. A member of staff begins a set of observations to see whether the person is getting worse.",
   stages: [
     { reveal: "", prompt: "Which observation is often the first sign that a person is getting worse?", kind: "mcq", options: ["A raised respiratory rate", "A drop in blood pressure", "A raised temperature", "A change in pulse"], correct: [0], weight: 1, keyPoint: "A raised respiratory rate is often the first sign of deterioration.", source: DET_SRC[0], references: [] },
@@ -83,4 +83,15 @@ export const LIVE_FOUR_STAGES = {
   ],
   rationale: "The passage states a raised respiratory rate is often the first sign, NEWS2 combines the listed observations, new confusion is a red flag and SBAR is used to escalate.",
   sourceQuote: DET_SRC[2], difficulty: 2, level: "application", objective: "Recognise early deterioration and escalate.", keyPoints: ["A raised respiratory rate is often the first sign"], misconceptions: [], references: [],
+};
+
+/** The same four lines, asked as DECISIONS about the person (what v3 of the prompt asks for): two plan-only "reveals" are still left out. */
+export const LIVE_FOUR_STAGES = {
+  ...LIVE_RECALL,
+  stages: [
+    { ...LIVE_RECALL.stages[0], prompt: "Which observation here is most likely to show first that this person is getting worse?" },
+    { ...LIVE_RECALL.stages[1], prompt: "What should the team combine now to judge how unwell this person is?" },
+    { ...LIVE_RECALL.stages[2], prompt: "What does this new confusion mean for this person, and what does it need?" },
+    { ...LIVE_RECALL.stages[3], prompt: "Which structure should the colleague use to escalate now?" },
+  ],
 };

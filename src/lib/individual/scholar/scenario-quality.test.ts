@@ -5,7 +5,7 @@ import { REVISION_SYSTEM, revisionPromptVersion, runRevisionQuestions } from "./
 import { citationFlaw, parseScenarioRaw, scenarioFlaw, SCENARIO_INSUFFICIENT_NOTE, SCENARIO_SCOPE_LINE, stageAnswers } from "./scenario";
 import { caseReadiness } from "./sufficiency";
 import { unsupportedTerms } from "./question-quality";
-import { GOOD, LEAKING, LIVE_FOUR_STAGES, NOTE, STUDENT_FRAMED, UNCITED, detPassage, passage } from "./scenario.fixture";
+import { GOOD, LEAKING, LIVE_FOUR_STAGES, LIVE_RECALL, NOTE, STUDENT_FRAMED, UNCITED, detPassage, passage } from "./scenario.fixture";
 
 // SCHOLAR-CE-2026 CE-05, owner decision 2 Nov ("content quality correction"): a scenario is a patient-centred clinical story that develops, asks a
 // decision at each stage, gives no stage's answer away earlier, invents nothing, and cites every stage. These are canned model outputs (a small
@@ -70,8 +70,8 @@ describe("the validation rules, one at a time", () => {
 });
 
 describe("the prompt and the level", () => {
-  it("scholar-scenario-v2: a patient-centred clinical story, no invented findings, a decision per stage, cited", () => {
-    expect(revisionPromptVersion("scenario")).toBe("scholar-scenario-v2");
+  it("scholar-scenario-v3: a patient-centred clinical story, a decision at every stage, no invented findings, cited", () => {
+    expect(revisionPromptVersion("scenario")).toBe("scholar-scenario-v3");
     const p = REVISION_SYSTEM.scenario;
     for (const must of ["PATIENT-CENTRED CLINICAL SCENARIO", "NEVER mention notes", "MUST reveal NEW clinical information", "NO LEAKAGE", "NOTHING INVENTED", "never repeats a question", "If the passage does not describe", "reply []"])
       expect(p, must).toContain(must);
@@ -183,5 +183,30 @@ describe("the shape of what the live model writes from a four-line list of guida
   it("with only one stage left standing the draft is refused, and the reason is why a stage was left out", () => {
     const one = { ...LIVE_FOUR_STAGES, stages: [LIVE_FOUR_STAGES.stages[0], LIVE_FOUR_STAGES.stages[3]] };
     expect(verdictOn(one)).toBe("reveal_plan");
+  });
+});
+
+describe("every question is a decision about this person, not plain recall (scholar-scenario-v3)", () => {
+  const sc = (mut: (r: any) => void) => { const r = JSON.parse(JSON.stringify(GOOD)); mut(r); return r; };
+  const two = (mut: (r: any) => void, i = 1) => { const r = JSON.parse(JSON.stringify(GOOD)); r.stages = [r.stages[0], r.stages[i]]; mut(r); return r; };
+  it("the old live reply -- 'Which observation is often the first sign...' -- is refused as a recall question", () => {
+    expect(verdictOn(LIVE_RECALL)).toBe("generic_question");
+  });
+  it("the recall frames are refused: which X is often, what is the, what does X stand for, according to", () => {
+    for (const q of ["Which sign is usually the first to show a person is getting worse?", "What is the purpose of an early warning score?", "What does SBAR stand for?", "According to the guidance, how is it escalated?", "Which observations does NEWS2 combine?"])
+      expect(verdict(two(r => { r.stages[0].prompt = q; })), q).toBe("generic_question");
+  });
+  it("the same frames are fine once they point at this person or this moment", () => {
+    for (const q of ["What is the priority for this person now?", "What should you do first here?", "What does this change suggest, and what is the next step?", "Which finding here most needs acting on?"])
+      expect(verdict(sc(r => { r.stages[0].prompt = q; })), q).toBe("accepted");
+  });
+  it("a later stage that is plain recall is left out, and the draft survives on the others", () => {
+    const c = checkRevisionDraft("scenario", sc(r => { r.stages[2].prompt = "What is the commonest sign of sepsis?"; }), passage);
+    expect(c.ok).toBe(true);
+    expect(c.ok && (c.draft.answer as any).stages).toHaveLength(2);
+  });
+  it("the prompt asks for three stages, a decision each, and names the three roles", () => {
+    const p = REVISION_SYSTEM.scenario;
+    for (const must of ["THREE STAGES WHEN THE MATERIAL SUPPORTS THEM", "EVERY QUESTION IS A DECISION", "What should the team do first now?", "NEVER a generic recall question", "meaningful CHANGE", "clinical judgement"]) expect(p, must).toContain(must);
   });
 });

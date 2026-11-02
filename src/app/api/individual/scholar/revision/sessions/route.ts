@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { answerOutcome, noCalls, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 import { offerable } from "@/lib/individual/scholar/scenario-service";
 import { caseReadiness } from "@/lib/individual/scholar/sufficiency";
-import { SCENARIO_INSUFFICIENT_NOTE } from "@/lib/individual/scholar/scenario";
+import { SCENARIO_INSUFFICIENT_NOTE, scenarioStageCounts } from "@/lib/individual/scholar/scenario";
 import { randomUUID } from "node:crypto";
 import { outcomeOf } from "@/lib/ai/outcomes";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
@@ -334,6 +334,8 @@ export async function POST(req: Request) {
             if (context.mode === "notes_and_references") referencesUsed = true;
             let ids: string[] = [], outcome = "", calls = 0;
             let mixPlan: { levels: Record<string, number>; fallback: string[]; relabelled: number } | null = null;
+            // CE-05: how many stages each kept scenario has (a thin passage supports two, a richer one three or four): counts only, in the audit.
+            let scenarioStages: number[] | null = null;
             let measured: { accepted: number; rejected: number; reasons: string[]; promptVersion: string | null } | null = null;
             if (call.kind === "mcq") {
               // Each call asks for up to three: the checks drop some, and what is kept beyond this session is saved
@@ -352,6 +354,7 @@ export async function POST(req: Request) {
               const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
               const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
               if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
+              if (r.ok && call.kind === "scenario") scenarioStages = scenarioStageCounts(r.kept);
               if (r.ok) {
                 calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
@@ -375,6 +378,7 @@ export async function POST(req: Request) {
               ai_calls: calls, difficulty: context.difficulty, source: context.mode, references: context.references.length,
               // The level mix asked for, the levels the passage could not support (why), and cards relabelled: codes and counts.
               ...(mixPlan ? { level_mix: mixPlan.levels, level_fallback: mixPlan.fallback, level_relabelled: mixPlan.relabelled } : {}),
+              ...(scenarioStages ? { scenario_stages: scenarioStages } : {}),
             });
             aiCalls += calls;
             made += ids.length;

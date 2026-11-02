@@ -32,41 +32,42 @@ beforeEach(() => { h.reads.length = 0; h.content = NOTE; });
 
 describe("the stored rule", () => {
   it("the current version is the oldest offered", () => {
-    expect(scenarioVersionOf("scholar-scenario-v2+x")).toBe(2);
+    expect(scenarioVersionOf("scholar-scenario-v3+x")).toBe(3);
     expect(scenarioVersionOf("scholar-scenario-v1")).toBe(1);
     expect(scenarioVersionOf(null)).toBeNull();
     expect(scenarioVersionOf("scholar-revision-v3:short")).toBeNull();
-    expect(SCENARIO_MIN_VERSION).toBe(2);
+    expect(SCENARIO_MIN_VERSION).toBe(3);
   });
   it("a stored v1 item -- even one that is otherwise sound -- is not offered; a missing version is not either", () => {
     expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v1", "a"), NOTE)).toBe("stale_scenario");
+    expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v2", "a"), NOTE)).toBe("stale_scenario"); // v2 allowed plain recall questions
     expect(storedScenarioProblem(stored(GOOD, "", "a"), NOTE)).toBe("stale_scenario");
-    expect(storedScenarioProblem({ ...stored(GOOD, "scholar-scenario-v2", "a"), promptVersion: undefined }, NOTE)).toBe("stale_scenario");
+    expect(storedScenarioProblem({ ...stored(GOOD, "scholar-scenario-v3", "a"), promptVersion: undefined }, NOTE)).toBe("stale_scenario");
   });
-  it("a stored v2 valid item is offered, and so is a later version", () => {
-    expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v2", "a"), NOTE)).toBeNull();
+  it("a stored v3 valid item is offered, and so is a later version", () => {
     expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v3", "a"), NOTE)).toBeNull();
+    expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v4", "a"), NOTE)).toBeNull();
   });
-  it("a v2 item that fails today's checks is not offered, with the reason", () => {
-    expect(storedScenarioProblem(stored(LEAKING, "scholar-scenario-v2", "a"), NOTE)).toBe("answer_leaked");
-    expect(storedScenarioProblem(stored(STUDENT_FRAMED, "scholar-scenario-v2", "a"), NOTE)).toBe("not_a_scenario");
-    expect(storedScenarioProblem(stored(UNCITED, "scholar-scenario-v2", "a"), NOTE)).toBe("uncited_stage");
+  it("a v3 item that fails today's checks is not offered, with the reason", () => {
+    expect(storedScenarioProblem(stored(LEAKING, "scholar-scenario-v3", "a"), NOTE)).toBe("answer_leaked");
+    expect(storedScenarioProblem(stored(STUDENT_FRAMED, "scholar-scenario-v3", "a"), NOTE)).toBe("not_a_scenario");
+    expect(storedScenarioProblem(stored(UNCITED, "scholar-scenario-v3", "a"), NOTE)).toBe("uncited_stage");
   });
   it("a section that can no longer be read, or a stored shape that is no longer a scenario, is not offered", () => {
-    expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v2", "a"), null)).toBe("stale_scenario");
-    expect(storedScenarioProblem({ ...stored(GOOD, "scholar-scenario-v2", "a"), answer: { format: "scenario", accepted: ["x"], stages: [] } }, NOTE)).toBe("stale_scenario");
+    expect(storedScenarioProblem(stored(GOOD, "scholar-scenario-v3", "a"), null)).toBe("stale_scenario");
+    expect(storedScenarioProblem({ ...stored(GOOD, "scholar-scenario-v3", "a"), answer: { format: "scenario", accepted: ["x"], stages: [] } }, NOTE)).toBe("stale_scenario");
   });
 });
 
 describe("what a new session or a replayed set may be given", () => {
-  const rows = () => [stored(LEAKING, "scholar-scenario-v1", "old"), stored(GOOD, "scholar-scenario-v2", "new"), { ...stored(GOOD, "x", "plain"), kind: "mrq", answer: { correct: [0] } }];
+  const rows = () => [stored(LEAKING, "scholar-scenario-v1", "old"), stored(GOOD, "scholar-scenario-v3", "new"), { ...stored(GOOD, "x", "plain"), kind: "mrq", answer: { correct: [0] } }];
   it("the stale scenario is withheld, the valid one and every other format are not; the notes are read once", async () => {
     const r = await offerable({} as any, "u1", rows());
     expect(r.questions.map((q: any) => q.id)).toEqual(["new", "plain"]);
     expect([...r.stale]).toEqual([["old", "stale_scenario"]]);
     expect(h.reads).toEqual(["c1"]);
   });
-  it("a stored v1 leaking item is not selected for a new session; the stored v2 valid one is", async () => {
+  it("a stored v1 leaking item is not selected for a new session; the stored v3 valid one is", async () => {
     const { questions } = await offerable({} as any, "u1", rows().slice(0, 2));
     const pool: PoolItem[] = questions.map((q: any) => ({ id: q.id, kind: effectiveKind(q), difficulty: 2, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: null, misses: 0, lastAnsweredAt: null, due: false }));
     const pick = pickQuestions({ mode: "quick", pool, quantity: 5, formats: ["scenario"], difficulty: "any", seed: "s", recentMisses: [] } as any);
@@ -87,6 +88,6 @@ describe("what a new session or a replayed set may be given", () => {
   });
   it("when the section is gone, a stored scenario is not offered", async () => {
     h.content = "";
-    expect((await offerable({} as any, "u1", [stored(GOOD, "scholar-scenario-v2", "new")])).questions).toEqual([]);
+    expect((await offerable({} as any, "u1", [stored(GOOD, "scholar-scenario-v3", "new")])).questions).toEqual([]);
   });
 });

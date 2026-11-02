@@ -383,6 +383,23 @@ export function scenarioFlaw(sc: ScenarioRaw): "not_a_scenario" | "answer_leaked
 
 // ── SHAPING A DRAFT: keep the stages that stand on their own ──
 
+/** Words that point at THIS person or THIS moment: a question that has one is a question about the situation. */
+const DEICTIC = /\b(?:the person|this person|the person's|their|they|them|he|she|his|her|this|these|now|currently|at this point|here|so far|you|your|the team|the colleague)\b/i;
+/** The frames of a plain recall question: "which X is often...", "what is the...", "what does X stand for / combine / include", "according to...". */
+const GENERIC = /\b(?:often|usually|typically|commonly|generally)\b|^(?:what|which) (?:is|are) (?:the|a|an)\b|\baccording to\b|\bstands? for\b|\bdefin(?:e|ed|ition)\b|\bwhat does \S+ (?:combine|include|mean)\b|\bwhich (?:\w+ ){0,3}(?:does|do) \S+ (?:combine|include)\b/i;
+
+/**
+ * Pure. Whether a stage's question is plain RECALL rather than a decision in the situation: it uses a recall frame ("which ... is often", "what is the",
+ * "what does X stand for", "according to") without pointing at this person or this moment, or it says nothing that ties it to the opening or to what has
+ * been revealed so far. `story` is the opening and the reveals up to and including this stage's own.
+ */
+export function isGenericQuestion(prompt: string, story: string): boolean {
+  if (DEICTIC.test(prompt)) return false;
+  if (GENERIC.test(prompt.trim())) return true;
+  const mine = unsupportedTerms(prompt, "").filter(w => !isNarrative(w));
+  return !mine.some(w => !unsupportedTerms(w, story).length);
+}
+
 /** A reveal that narrates an intention rather than a finding: "the team decides / plans / prepares / wants to ...". */
 const PLAN = /\b(?:decid(?:es?|ed|ing)|plan(?:s|ned|ning)?|prepar(?:es?|ed|ing)|intend(?:s|ed)?|about to|going to|wants? to|needs? to|ready to|begins? to|starts? to)\b/i;
 
@@ -393,6 +410,8 @@ const PLAN = /\b(?:decid(?:es?|ed|ing)|plan(?:s|ned|ning)?|prepar(?:es?|ed|ing)|
  */
 function stageProblem(situation: string, kept: readonly ScenarioStage[], st: ScenarioStage, passageText: string, references: ReadonlyMap<string, string>): string | null {
   const before = [situation, ...kept.flatMap(s => [s.reveal, s.prompt])].join(" ");
+  // A decision about this person, not plain recall (the stage is left out; the first stage must stand).
+  if (isGenericQuestion(st.prompt, [situation, ...kept.map(k => k.reveal), st.reveal].join(" "))) return "generic_question";
   const keys = stageAnswers(st);
   if (st.kind === "mrq" ? keys.every(a => containsAnswer(before, a)) : keys.some(a => containsAnswer(before, a))) return "answer_leaked";
   const keyOf = (x: ScenarioStage) => stageAnswers(x).map(a => contentWords(a).sort().join(" ")).filter(Boolean).sort().join("|");
@@ -419,7 +438,12 @@ function stageProblem(situation: string, kept: readonly ScenarioStage[], st: Sce
  */
 export function shapeScenario(sc: ScenarioRaw, passageText: string, references: ReadonlyMap<string, string>): { sc: ScenarioRaw; pruned: string[] } | { reason: string } {
   const kept: ScenarioStage[] = [], pruned: string[] = [];
-  for (const [i, st] of sc.stages.entries()) {
+  for (const [i, raw] of sc.stages.entries()) {
+    // A key point that wanders beyond the sentence(s) the stage cites is replaced by that cited text itself (never by anything new): what the learner is told rests on the source.
+    const base = raw.source && unsupportedTerms(raw.keyPoint, raw.source).length > 2 ? { ...raw, keyPoint: raw.source.length > 300 ? raw.source.slice(0, raw.source.lastIndexOf(" ", 300)) : raw.source } : raw;
+    // A short answer the cited text does not state (an alternative from another sentence) is dropped from the accepted answers; if none is left the stage fails as uncited.
+    const supported = base.source && (base.kind === "short" || base.kind === "cloze") ? base.accepted.filter(a => unsupportedTerms(a, base.source).length <= 1) : base.accepted;
+    const st = supported.length && supported.length !== base.accepted.length ? { ...base, accepted: supported } : base;
     const p = stageProblem(sc.situation, kept, st, passageText, references);
     if (!p) kept.push(st);
     else if (kept.length === 0) return { reason: p };
@@ -485,7 +509,7 @@ const NARRATIVE = new Set((
   "family friend friends husband wife son daughter mother father partner home bay corridor chair bedside trolley chart charts record records recorded recording " +
   "handover colleague senior junior called phone bleep speak speaks spoke speaking tell telling " +
   "several many few some single separate together bring brings structured judge telephone deteriorate deteriorates deteriorating deterioration help helps ask asking " +
-  "sort set thorough fuller picture full whole complete join joined staff pass passes passed wider wide reassess reassessed reassessment reassessing").split(" "));
+  "sort set thorough fuller picture full whole complete join joined staff pass passes passed wider wide reassess reassessed reassessment reassessing closer close moves move moved care cared caring carers concerned concern bedside seems different before since last develop develops developed developing emerge emerges emerged comes arrives contact contacts contacted alert alerts alerted alerting informed inform informs begin begins begun joins joined involved involve").split(" "));
 /** A word reduced to a root for the story-word test, so visits / visited / visiting are one. */
 const rootOf = (w: string) => (w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "").replace(/(.)\1$/, "$1") : w); // dropped -> drop
 const NARRATIVE_ROOTS = new Set([...NARRATIVE].map(rootOf));
@@ -527,6 +551,9 @@ export function scenarioGroundingFlaw(sc: ScenarioRaw, rationale: string, passag
   if (clinicalGaps(rationale, corpus.join(" ")).length > 4) return "ungrounded_rationale";
   return null;
 }
+
+/** Pure. How many stages each kept scenario has (counts only, for the audit: a thin passage supports two, a richer one three or four). */
+export const scenarioStageCounts = (drafts: readonly { answer: unknown }[]): number[] => drafts.map(d => scenarioSpecOf(d.answer)?.stages.length ?? 0);
 
 /** Pure. The stored answer of a checked scenario (the 416 `short` shape: accepted holds the key points). */
 export const scenarioAnswer = (stages: readonly ScenarioStage[]): Record<string, unknown> => ({
