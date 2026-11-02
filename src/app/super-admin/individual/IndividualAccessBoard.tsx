@@ -36,18 +36,30 @@ const messageOf = (r: { status: number; json: any }) =>
 export default function IndividualAccessBoard({ enabled, experiences }: { enabled: boolean; experiences: Exp[] }) {
   const [email, setEmail] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [lookup, setLookup] = useState<{ kind: "found"; value: Found } | ({ kind: "none"; email: string } & Invitations) | { kind: "error"; message: string } | null>(null);
+  const [lookup, setLookup] = useState<{ kind: "found"; value: Found } | ({ kind: "none"; email: string } & Invitations) | { kind: "error"; message: string }
+    | { kind: "matches"; term: string; matches: { id: string; name: string | null; email: string | null; isSelf: boolean }[]; more: boolean } | null>(null);
   const [notice, setNotice] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   const nameOf = (k: string) => experiences.find(x => x.key === k)?.name ?? k;
 
-  async function find(e?: React.FormEvent, quiet = false) {
+  // By name or by email: text with an "@" is the exact sign-in email; anything else lists accounts whose name matches, and choosing
+  // one opens it by its exact email (the same lookup, the same access shown).
+  async function find(e?: React.FormEvent, quiet = false, chosen?: string) {
     e?.preventDefault();
     if (!quiet) setNotice(null);
+    const term = (chosen ?? email).trim();
+    if (!term) return;
     setBusy("lookup");
     try {
-      const r = await call(`/api/hq/individual/grants?email=${encodeURIComponent(email.trim())}`);
+      if (!term.includes("@")) {
+        const n = await call(`/api/hq/individual/grants?name=${encodeURIComponent(term)}`);
+        if (!n.ok) setLookup({ kind: "error", message: messageOf(n) });
+        else setLookup({ kind: "matches", term, matches: n.json.matches ?? [], more: !!n.json.more });
+        return;
+      }
+      if (chosen) setEmail(chosen);
+      const r = await call(`/api/hq/individual/grants?email=${encodeURIComponent(term)}`);
       if (!r.ok) setLookup({ kind: "error", message: messageOf(r) });
-      else if (!r.json.found) setLookup({ kind: "none", email: email.trim(), invitations: r.json.invitations, invitationsProvisioned: r.json.invitationsProvisioned });
+      else if (!r.json.found) setLookup({ kind: "none", email: term, invitations: r.json.invitations, invitationsProvisioned: r.json.invitationsProvisioned });
       else setLookup({ kind: "found", value: r.json as Found });
     } catch {
       setLookup({ kind: "error", message: "The lookup could not be completed. Check your connection." });
@@ -69,10 +81,10 @@ export default function IndividualAccessBoard({ enabled, experiences }: { enable
     <Shell>
       <form onSubmit={find} className="rounded-xl border border-gray-200 bg-white p-4">
         <label htmlFor="ind-email" className="block text-sm font-semibold text-gray-900">Find a Competen account</label>
-        <p className="mt-0.5 text-[12.5px] text-gray-500">By the email address they sign in with. The pilot is by invitation, and access is added to the account the person already has.</p>
+        <p className="mt-0.5 text-[12.5px] text-gray-500">By name or by the email address they sign in with. The pilot is by invitation, and access is added to the account the person already has.</p>
         <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-          <input id="ind-email" type="email" required autoComplete="off" value={email} onChange={e => setEmail(e.target.value)}
-            placeholder="name@example.com" className={input} />
+          <input id="ind-email" type="search" required minLength={2} maxLength={254} autoComplete="off" value={email} onChange={e => setEmail(e.target.value)}
+            placeholder="Name or name@example.com" className={input} />
           <button type="submit" disabled={busy !== null} className={`${btn} bg-gray-900 text-white`}>{busy === "lookup" ? "Looking up…" : "Find"}</button>
         </div>
       </form>
@@ -88,6 +100,26 @@ export default function IndividualAccessBoard({ enabled, experiences }: { enable
         <p role="alert" className="rounded-lg bg-[var(--cmp-surface-warning)] px-3 py-2 text-sm text-amber-900">
           <span className="font-semibold">Not read.</span> {lookup.message} This is not &ldquo;no access&rdquo; &mdash; nothing was concluded about the account.
         </p>
+      )}
+      {lookup?.kind === "matches" && (
+        <div className="rounded-xl border border-gray-200 bg-white p-4 text-sm text-gray-700">
+          {lookup.matches.length === 0 ? (
+            <p><span className="font-semibold text-gray-900">No account has a name matching &ldquo;{lookup.term}&rdquo;.</span> Try part of the name, or their email address. Inviting someone new needs their email address.</p>
+          ) : (
+            <>
+              <p className="font-semibold text-gray-900">{lookup.matches.length === 1 ? "One account matches" : `${lookup.matches.length} accounts match`} &ldquo;{lookup.term}&rdquo;{lookup.more ? " (the first 10 by name; type more of the name to narrow it)" : ""}.</p>
+              <ul className="mt-2 divide-y divide-gray-100">
+                {lookup.matches.map(m => (
+                  <li key={m.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <span className="min-w-0 break-words"><span className="font-semibold text-gray-900">{m.name ?? "No name recorded"}</span>{m.isSelf ? " (you)" : ""} <span className="text-gray-600">· {m.email ?? "no email address recorded"}</span></span>
+                    <button type="button" disabled={busy !== null || !m.email} onClick={() => m.email && find(undefined, false, m.email)}
+                      className={`${btn} border border-gray-300 bg-white text-gray-900`}>Open</button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </div>
       )}
       {lookup?.kind === "none" && (
         <>

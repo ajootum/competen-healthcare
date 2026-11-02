@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { individualAppEnabled } from "@/lib/individual/gate";
 import { currentTraceId } from "@/lib/trace";
-import { grantIndividualAccess, isGrantRefusal, validateGrant, lookupIndividualPerson, normaliseLookupEmail } from "@/lib/individual/grants";
+import { grantIndividualAccess, isGrantRefusal, validateGrant, lookupIndividualPerson, normaliseLookupEmail, normaliseLookupName, searchPeopleByName } from "@/lib/individual/grants";
 import { invitationsForEmail } from "@/lib/individual/invitations";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -32,7 +32,16 @@ export async function GET(req: Request) {
   const ctx = await hqApiGate(["hq.individual.pilot.grant"]);
   if (isHqRefusal(ctx)) return ctx;
   if (!(await individualAppEnabled(ctx.admin))) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
-  const email = normaliseLookupEmail(new URL(req.url).searchParams.get("email"));
+  const params = new URL(req.url).searchParams;
+  // ?name= lists accounts whose name matches (id, name, email only); choosing one comes back here by its exact email.
+  const name = params.has("name") ? normaliseLookupName(params.get("name")) : null;
+  if (params.has("name")) {
+    if (!name) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Enter at least two letters of the person's name, or their email address." } }, { status: 400 });
+    const found = await searchPeopleByName(ctx.admin, name);
+    if (!found.ok) return NextResponse.json({ error: { code: "UNAVAILABLE", message: found.message } }, { status: 503 });
+    return NextResponse.json({ matches: found.value.map(p => ({ ...p, isSelf: p.id === ctx.userId })), more: found.more });
+  }
+  const email = normaliseLookupEmail(params.get("email"));
   if (!email) return NextResponse.json({ error: { code: "VALIDATION_ERROR", message: "Enter the person's email address." } }, { status: 400 });
   const res = await lookupIndividualPerson(ctx.admin, email);
   if (!res.ok) return NextResponse.json({ error: { code: "UNAVAILABLE", message: res.message } }, { status: 503 });
