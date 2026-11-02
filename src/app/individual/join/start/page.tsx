@@ -8,9 +8,9 @@ import { readIndividualAccess } from "@/lib/individual/access";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadJoinOptions } from "@/lib/individual/scholar/context";
 import { learnerContextPointer } from "@/lib/individual/scholar/store";
-import { EXPERIENCES } from "@/lib/individual/experiences";
 import { gatedMetadata } from "../../_components/shell-context";
-import { ExperienceMark, StatePanel, secondaryBtn } from "../../_components/chrome";
+import { StatePanel, secondaryBtn } from "../../_components/chrome";
+import { ScholarLogoFluid } from "@/components/brand/ScholarLogo";
 import { SignOutButton } from "../../_components/ShellNav";
 import { JoinActivate } from "../../_components/JoinForms";
 
@@ -84,11 +84,10 @@ export default async function JoinStartPage() {
 }
 
 function Frame({ children }: { children: React.ReactNode }) {
-  const x = EXPERIENCES.scholar;
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 sm:py-14">
       <div className="mx-auto max-w-md">
-        <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
+        <div className="mb-6"><ScholarLogoFluid variant="lockup" maxWidth={220} eager /></div>
         {children}
       </div>
     </main>

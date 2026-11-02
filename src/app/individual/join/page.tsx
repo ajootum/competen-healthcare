@@ -6,7 +6,7 @@ import { createClient, createAdminClientOrNull } from "@/lib/supabase/server";
 import { JOIN_SIGN_IN, JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
 import { EXPERIENCES } from "@/lib/individual/experiences";
 import { gatedMetadata } from "../_components/shell-context";
-import { ExperienceMark } from "../_components/chrome";
+import { ScholarLogoFluid } from "@/components/brand/ScholarLogo";
 import { JoinRegister } from "../_components/JoinForms";
 
 // Request-time only: it reads two gates and the session, and must never be prerendered at build.
@@ -34,7 +34,7 @@ export default async function JoinPage() {
   return (
     <main className="min-h-screen bg-gray-50 px-4 py-8 sm:py-14">
       <div className="mx-auto max-w-md">
-        <div className="mb-6"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></div>
+        <div className="mb-6"><ScholarLogoFluid variant="lockup" maxWidth={220} eager /></div>
         <h1 className="text-[1.6rem] font-bold tracking-tight text-gray-900 text-balance">Study from your own notes</h1>
         <p className="mt-2 text-[15px] leading-relaxed text-gray-700">{x.micro} Create your account, confirm your email, choose your programme, and upload your first notes.</p>
         <section className="mt-6 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6" aria-label="Create your account">

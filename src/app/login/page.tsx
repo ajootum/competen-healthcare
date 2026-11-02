@@ -7,6 +7,7 @@ import { signInProductName } from "@/lib/individual/entry";
 import { DestinationChooser } from "./DestinationChooser";
 import type { PresentationConfig } from "@/lib/design/presentation-config";
 import { themeForName } from "@/lib/design/product-themes";
+import { ScholarLogoFluid } from "@/components/brand/ScholarLogo";
 
 // Login. Two-panel enterprise sign-in: brand panel left, form right, matching the approved design.
 //
@@ -248,6 +249,7 @@ export default function LoginPage() {
             {individualProduct && !resolution && (
               // DESIGN-SYSTEM-01: the banner wears the theme of the experience being signed in to.
               <div data-cmp-theme={themeForName(individualProduct)} className="mt-5 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-theme-soft)] px-4 py-3">
+                {individualProduct === "Competen Scholar" && <div className="mb-3"><ScholarLogoFluid variant="lockup" maxWidth={160} /></div>}
                 <p className="text-[13px] font-semibold text-[var(--cmp-theme-ink)]">Signing in to {individualProduct}</p>
                 <p className="mt-1 text-[12.5px] leading-relaxed text-gray-800">
                   Use your Competen account: the email address your invitation was sent to. There is no
