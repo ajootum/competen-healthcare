@@ -190,6 +190,16 @@ function selectRows(table: string, tail: string): string[][] {
   }
   if (!sources.length) { parseProblems.push(`${table}: a select-form INSERT with no (values …) source`); return []; }
 
+  // ⚠ A THIRD DIALECT -- migration 890 (Checklist Studio), 2026-11-03. It grants through a join to the position table:
+  //   `select p.code, c.code, 'position_default' from (values …) as c(position_code, code)
+  //    join (select code from hq_position) p on p.code = c.position_code where …`
+  // `p` is not a values source. It is the position table filtered to the codes the values name, so `p.code` IS the values
+  // column named on the right of the join condition. The alias is bound to that column and nothing else: any other
+  // `join (select …)` form is still reported by the projection check below, so the parser cannot shrug at a new shape.
+  const bound = new Map<string, { alias: string; col: string }>();
+  for (const j of rest.matchAll(/\bjoin\s*\(\s*select\s+code\s+from\s+[a-z0-9_]+\s*\)\s+([a-z0-9_]+)\s+on\s+\1\.code\s*=\s*([a-z0-9_]+)\.([a-z0-9_]+)/gi))
+    bound.set(j[1], { alias: j[2], col: j[3] });
+
   // The cross product, in source order -- which is what CROSS JOIN means.
   let combos: string[][][] = [[]];
   for (const s of sources) combos = combos.flatMap(c => s.rows.map(r => [...c, r]));
@@ -202,7 +212,9 @@ function selectRows(table: string, tail: string): string[][] {
     const row: string[] = [];
     for (const p of projection) {
       if (p.startsWith("'")) { row.push(unquote(p)); continue; }
-      const [alias, col] = p.split(".");
+      let [alias, col] = p.split(".");
+      const b = bound.get(alias);
+      if (b && col === "code") { alias = b.alias; col = b.col; }
       const i = sources.findIndex(s => s.alias === alias);
       const j = i < 0 ? -1 : sources[i].cols.indexOf(col);
       if (i < 0 || j < 0) { parseProblems.push(`${table}: the projection names "${p}" and no source supplies it`); return []; }

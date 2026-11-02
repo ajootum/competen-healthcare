@@ -298,6 +298,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/checklist-assessments/grants", capability: "hq.assessment.assessor.assign" },
   { prefix: "/super-admin/checklist-assessments",        capability: "hq.assessment.instrument.assess" },
   // <<< ASSESSOR-WORKSPACE
+  // >>> CHECKLIST STUDIO (S2). One right opens every Studio page. Each action inside re-checks its own capability.
+  { prefix: "/super-admin/checklist-studio",              capability: "hq.assessment.studio.view" },
+  // <<< CHECKLIST STUDIO
   { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
   { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
   // Migration 690: the programme lead door, separate from both.

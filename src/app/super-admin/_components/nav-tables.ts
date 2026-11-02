@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.3.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.4.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -213,6 +213,9 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // here because the HQ has no Holdings shared-infrastructure group yet. Checklist Studio (authoring) joins this group.
     { key: "frameworks.assessments", group: "Assessments & Checklists", items: [
       { key: "frameworks.assessments.catalogue", label: "Assessment & Checklist Catalogue", href: "/super-admin/assessment-catalogue", icon: "🗃️", keywords: ["assessment catalogue", "checklist catalogue", "instrument registry", "audit checklists"] },
+      // >>> CHECKLIST STUDIO (S2): authoring of checklists, scales, scoring and layout templates, progression rules and the review queue.
+      { key: "frameworks.assessments.studio", label: "Checklist Studio", href: "/super-admin/checklist-studio", icon: "☑️", keywords: ["checklist builder", "assessment studio", "scoring rules", "rules builder", "templates", "instrument authoring"] },
+      // <<< CHECKLIST STUDIO
       // >>> ASSESSOR-WORKSPACE (Checklist Studio S4): the assessor's own door, a different capability from the catalogue and from verification.
       { key: "frameworks.assessments.assessor", label: "Assessor workspace", href: "/super-admin/checklist-assessments", icon: "📋", keywords: ["checklist assessments", "assessor-led assessment", "assess a person"] },
       // <<< ASSESSOR-WORKSPACE
@@ -330,6 +333,13 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // Migration 894: the catalogue's configuration pages are reached from the catalogue (manage right).
     { key: "frameworks.assessments.families", label: "Catalogue Families", href: "/super-admin/assessment-catalogue/families", via: "/super-admin/assessment-catalogue", keywords: ["instrument families", "CA CPA DA"] },
     { key: "frameworks.assessments.terms", label: "Catalogue Classification Terms", href: "/super-admin/assessment-catalogue/terms", via: "/super-admin/assessment-catalogue", keywords: ["dimensions", "methods", "domains", "populations"] },
+    // >>> CHECKLIST STUDIO (S2): the Studio's own pages, reached from the Studio.
+    { key: "frameworks.assessments.studio.scales", label: "Studio Response Scales", href: "/super-admin/checklist-studio/scales", via: "/super-admin/checklist-studio", keywords: ["response scales", "rating scale", "stage scale"] },
+    { key: "frameworks.assessments.studio.scoring", label: "Studio Scoring Templates", href: "/super-admin/checklist-studio/scoring-templates", via: "/super-admin/checklist-studio", keywords: ["scoring rules", "rules templates"] },
+    { key: "frameworks.assessments.studio.layouts", label: "Studio Layout Templates", href: "/super-admin/checklist-studio/layout-templates", via: "/super-admin/checklist-studio", keywords: ["layout", "presentation", "template designer"] },
+    { key: "frameworks.assessments.studio.progression", label: "Studio Progression Rules", href: "/super-admin/checklist-studio/progression", via: "/super-admin/checklist-studio", keywords: ["progression", "stage rules"] },
+    { key: "frameworks.assessments.studio.review", label: "Studio Review Queue", href: "/super-admin/checklist-studio/review", via: "/super-admin/checklist-studio", keywords: ["review", "approve", "checklist review"] },
+    // <<< CHECKLIST STUDIO
     // >>> ASSESSOR-WORKSPACE: the coordinator's grants page is reached from the assessor workspace (a different capability, so not a child).
     { key: "frameworks.assessments.grants", label: "Assessor Grants", href: "/super-admin/checklist-assessments/grants", via: "/super-admin/checklist-assessments", keywords: ["grant authority to assess", "assessment coordinator"] },
     // <<< ASSESSOR-WORKSPACE
