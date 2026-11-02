@@ -131,6 +131,14 @@ describe("the transcription and the record", () => {
     expect(qualitySummary(q).text).toContain("Page 2 was read by AI from a picture: check it against the page.");
     expect(aiReadLabel("page", 2)).toBe("Text read from the page image by AI (page 2) — check it against the original");
   });
+  it("while a reading is on offer the warning names the action, never 'cannot be read'", () => {
+    const q = { unit: "page" as const, units: 40, emptyUnits: [7, 8, 11, 26, 36], chars: 10263, sections: 35 };
+    const on = qualitySummary(q, { recoverable: true });
+    expect(on.partial).toBe(true);
+    expect(on.text).toBe("Partly read: 5 of 40 pages held no readable text (pages 7, 8, 11, 26, 36). Scholar can read them from their pictures with AI on request: choose Recover unreadable pages.");
+    expect(qualitySummary(q).text).toContain("cannot be read yet");
+    expect(qualitySummary({ ...q, unit: "slide", emptyUnits: [3] }, { recoverable: true }).text).toContain("read it from its picture with AI on request: choose Read the pictures.");
+  });
   it("the label says the text was read from the slide picture by AI, and provenance is found by unit", () => {
     expect(aiReadLabel("slide", 33)).toContain(`${AI_READ_LABEL} (slide 33)`);
     const q = { unit: "slide" as const, units: 49, emptyUnits: [], chars: 1, sections: 1, aiReadUnits: [33, 34],
