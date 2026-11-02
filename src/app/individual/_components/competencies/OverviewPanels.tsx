@@ -7,6 +7,7 @@ import { experienceHref } from "@/lib/individual/experiences";
 import type { OverviewRow } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 import { BAND_LABEL } from "@/lib/assessment/adapters/scholar/compare";
 import { TREND_TEXT } from "@/lib/assessment/adapters/scholar/history";
+import { EXPECTED_NOT_SET, NOT_IN_PROGRAMME_NOTE } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 import { COMPARE_CLASS_LABEL, EVIDENCE_CLASS_LABEL, NO_SELF_RATING, SELF_CLASS_LABEL } from "@/lib/assessment/adapters/scholar/vocab";
 import StartButton from "./StartButton";
 import GapActions from "./GapActions";
@@ -36,7 +37,7 @@ function Spark({ points, max }: { points: (number | null)[]; max: number }) {
   );
 }
 
-function SelfSection({ row, scaleMax, reportHref }: { row: OverviewRow; scaleMax: number; reportHref: (id: string) => string }) {
+function SelfSection({ row, scaleMax, reportHref, assessmentsBase }: { row: OverviewRow; scaleMax: number; reportHref: (id: string) => string; assessmentsBase: string }) {
   const s = row.self;
   return (
     <section aria-label={`${row.competency.title}: how I rate myself`} className={`${card} p-3`}>
@@ -44,7 +45,8 @@ function SelfSection({ row, scaleMax, reportHref }: { row: OverviewRow; scaleMax
       {!s || s.history.attempts.length === 0 ? (
         <div className="mt-2 space-y-2">
           <p className={`text-[13px] ${mutedText}`}>{NO_SELF_RATING}.{row.competency.expected ? ` Your programme expects level ${row.competency.expected.score}.` : ""}</p>
-          {s?.canRepeat && <StartButton code={s.canRepeat.code} label="Start Self-Assessment" />}
+          {s?.openInstanceId && <Link href={`${assessmentsBase}/${s.openInstanceId}`} className={`inline-flex min-h-9 items-center rounded-lg border border-[var(--cmp-app-control-border)] bg-[var(--cmp-app-surface)] px-3 text-[13px] font-semibold text-[var(--cmp-app-text)] hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Continue my self-assessment</Link>}
+          {s?.canRepeat && !s.openInstanceId && <StartButton code={s.canRepeat.code} label="Start Self-Assessment" />}
         </div>
       ) : (
         <div className="mt-2 space-y-2">
@@ -57,7 +59,7 @@ function SelfSection({ row, scaleMax, reportHref }: { row: OverviewRow; scaleMax
           {s.descriptor && <p className="line-clamp-3 text-[13px] text-[var(--cmp-app-text)]">{s.descriptor}</p>}
           <p className={`text-[12.5px] ${mutedText}`}>
             {s.rating === null ? "Every criterion was left unjudged or unanswered." : s.range ? `Across your criteria: ${s.range}.` : null}
-            {row.competency.expected ? ` Expected for your programme: ${row.competency.expected.score}.` : " Your programme sets no expected level."}
+            {row.competency.expected ? ` Expected for your programme: ${row.competency.expected.score}.` : ` ${EXPECTED_NOT_SET}.`}
             {s.unjudged > 0 || s.unanswered > 0 ? ` ${s.unjudged} unable to judge, ${s.unanswered} not answered.` : ""}
           </p>
           <p className={`text-[12.5px] ${mutedText}`}>{TREND_TEXT[s.trend]}.</p>
@@ -78,7 +80,8 @@ function SelfSection({ row, scaleMax, reportHref }: { row: OverviewRow; scaleMax
           )}
           <div className="flex flex-wrap items-center gap-2">
             {s.latestInstanceId && <Link href={reportHref(s.latestInstanceId)} className={`inline-flex min-h-9 items-center rounded-lg border border-[var(--cmp-app-control-border)] bg-[var(--cmp-app-surface)] px-3 text-[13px] font-semibold text-[var(--cmp-app-text)] hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Review report</Link>}
-            {s.canRepeat && <StartButton code={s.canRepeat.code} label="Repeat self-assessment" primary={false} />}
+            {s.openInstanceId && <Link href={`${assessmentsBase}/${s.openInstanceId}`} className={`inline-flex min-h-9 items-center rounded-lg border border-[var(--cmp-app-control-border)] bg-[var(--cmp-app-surface)] px-3 text-[13px] font-semibold text-[var(--cmp-app-text)] hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Continue my self-assessment</Link>}
+            {s.canRepeat && !s.openInstanceId && <StartButton code={s.canRepeat.code} label="Repeat self-assessment" primary={false} />}
           </div>
         </div>
       )}
@@ -138,11 +141,11 @@ export default function OverviewPanels({ rows, others, scaleMax, myPlanOn, study
     <li key={row.competency.id} id={`c-${row.competency.id}`} className={`${card} p-3`}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="text-[14.5px] font-bold text-[var(--cmp-app-text)]">{row.competency.code ? `${row.competency.code} ` : ""}{row.competency.title}</h3>
-        <p className={`text-[12.5px] ${mutedText}`}>{row.competency.domain}{row.competency.expected ? ` · Expected level ${row.competency.expected.score}` : ""}</p>
+        <p className={`text-[12.5px] ${mutedText}`}>{[row.competency.domain, row.competency.framework].filter(Boolean).join(" · ")}{row.competency.expected ? ` · Expected level ${row.competency.expected.score}` : row.competency.inProgramme === false ? ` · ${EXPECTED_NOT_SET}` : ""}</p>
       </div>
-      <p className="mt-1"><Chip tone={row.verification.state === "verified" ? "success" : "neutral"}>{row.verification.line}</Chip>{row.verification.detail && <span className={`ml-2 text-[12px] ${mutedText}`}>{row.verification.detail}</span>}</p>
+      <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">{row.competency.inProgramme === false && <Chip>{NOT_IN_PROGRAMME_NOTE}</Chip>}<Chip tone={row.verification.state === "verified" ? "success" : "neutral"}>{row.verification.line}</Chip>{row.verification.detail && <span className={`text-[12px] ${mutedText}`}>{row.verification.detail}</span>}</p>
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
-        <div className={view === "self" ? "block" : "hidden lg:block"}><SelfSection row={row} scaleMax={scaleMax} reportHref={reportHref} /></div>
+        <div className={view === "self" ? "block" : "hidden lg:block"}><SelfSection row={row} scaleMax={scaleMax} reportHref={reportHref} assessmentsBase={reportBase} /></div>
         <div className={view === "evidence" ? "block" : "hidden lg:block"}><EvidenceSection row={row} study={study} /></div>
         <div className={`lg:col-span-2 ${view === "compare" ? "block" : "hidden lg:block"}`}><CompareSection row={row} myPlanOn={myPlanOn} study={study} /></div>
       </div>
