@@ -125,7 +125,8 @@ const evaluateHref = () => experienceHref("scholar", "study/evaluate");
 type Item = { space: PlanSpace; title: string; reason: string; href: string; ref: string; topics?: string[] };
 const tag = (e: MasteryEntry): { topics: string[] } => ({ topics: [...new Set([topicKey(e.key), topicKey(e.label), ...(e.materialId ? [topicKey(e.materialId)] : [])])] });
 
-export const topicLearn = (e: MasteryEntry) => (e.topicSource === "material" && e.materialId ? experienceHref("scholar", `study/${e.materialId}`) : learnHref(`topic=${encodeURIComponent(e.label)}`));
+// A material topic opens Learn on that material (the lesson itself), not the material overview page.
+export const topicLearn = (e: MasteryEntry) => (e.topicSource === "material" && e.materialId ? learnHref(`material=${e.materialId}`) : learnHref(`topic=${encodeURIComponent(e.label)}`));
 export const topicRevise = (e: MasteryEntry, harder = false) => reviseHref(e.materialId ? `material=${e.materialId}${harder ? "&difficulty=harder" : ""}` : "");
 export const topicApply = (e: MasteryEntry) => (e.chunkId ? applyHref(`section=${e.chunkId}&from=revision`) : topicRevise(e, true));
 export const noun = (e: MasteryEntry) => (e.topicSource === "material" ? `your notes "${e.label}"` : e.label);
