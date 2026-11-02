@@ -38,6 +38,8 @@ import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
 import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
+import { AskAbout, type AskAboutProps } from "./ask-panel";
+import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
@@ -1049,7 +1051,8 @@ export function LearnWorkspace(props: {
           ) : thread.map((c, k) => <ReplyCard key={c.id} card={c} labels={props.labels} anchorId={lessonAnchorId(st.step, `a${k}`)} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }, "lesson", undefined, st.step) : undefined}
             onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c, st)} wider={widerFor(c, st)} expansions={expansionsFor(c, st)}
             onAnswer={canCheck && c === lastTeach ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
-            renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkForm(true) : null) : undefined} />)}
+            renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkForm(true) : null) : undefined}
+            ask={lessonAsk(st, session, c.reply)} />)}
           {preparing && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <span aria-hidden="true" className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full motion-safe:animate-pulse" style={{ background: accent }} />
@@ -1349,7 +1352,25 @@ function Withheld({ r, asked, onRephrase }: { r: Reply; asked?: string; onRephra
 }
 
 /** One reply, its four kinds of content kept apart and labelled (owner GO s7). */
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId }: {
+/**
+ * SCHOLAR-CE-2026 CE-01 (Learn lesson): the "Ask about this" context of one lesson reply -- the sections the lesson cites (else the
+ * step's own sections), at most ASK_CHUNK_MAX, with the material, the session and the step. The server reads every id again by the
+ * caller's own id; these are claims. Same builder inputs as the Library, Revise, flashcards and case surfaces.
+ */
+function lessonAsk(st: { step: number; title: string; sections: { chunkId: string; materialId: string }[] }, session: { id: string | null }, r: Reply): Omit<AskAboutProps, "className"> {
+  const cited = new Set(r.cited ?? []);
+  const fromCited = r.sources.filter((x, i) => cited.has(i + 1)).map(x => x.chunkId);
+  const ids = [...new Set((fromCited.length ? fromCited : st.sections.map(x => x.chunkId)).filter(Boolean))].slice(0, ASK_CHUNK_MAX);
+  const title = st.title || "this lesson";
+  return {
+    surface: "learn", chunkIds: ids, materialId: st.sections[0]?.materialId ?? null, sessionId: session.id, step: session.id ? st.step : null,
+    refLabel: `This lesson: ${title}`, prefill: askPrefill("library", { title }),
+  };
+}
+
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask }: {
+  /** The lesson-level "Ask about this" (the lesson thread only; not the short Ask replies or a saved list). */
+  ask?: Omit<AskAboutProps, "className">;
   /** SCHOLAR-LEARN-GAPS-02 item 2: the fixed DOM id of this reply in its lesson (the reading place is saved against it). */
   anchorId?: string;
   card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover;
@@ -1399,7 +1420,12 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           <div className="mt-2"><AiBadge /></div>
           <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
           {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). */}
-          {r.answer && <ReadAloudButton text={r.answer} about="this lesson" className="mt-2" />}
+          {r.answer && (
+            <div className="mt-2 flex flex-wrap items-start gap-2">
+              <ReadAloudButton text={r.answer} about="this lesson" />
+              {ask && <AskAbout {...ask} />}
+            </div>
+          )}
           {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} />}
           {/* SCHOLAR-GUIDED-LEARNING-01: a salvaged lesson -- shown, and said calmly what was left out (a count, never which). */}
           {r.salvage && (

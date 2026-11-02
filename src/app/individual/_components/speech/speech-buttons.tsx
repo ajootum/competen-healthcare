@@ -18,7 +18,6 @@ const touch = "min-h-[40px] pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const baseLayout = `inline-flex ${touch} items-center justify-center gap-1.5 rounded-lg border px-3 text-[13px] font-semibold disabled:opacity-50 ${focusRing}`;
 const base = `${baseLayout} border-gray-300 bg-white text-gray-800 hover:bg-gray-50`;
 const recording = `${baseLayout} border-[var(--cmp-color-critical)] bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]`;
-const square = `inline-flex ${touch} min-w-[40px] pointer-coarse:min-w-[var(--cmp-touch-min)] items-center justify-center rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
 
 function Icon({ d, fill }: { d: string; fill?: boolean }) {
   return (
@@ -30,6 +29,7 @@ function Icon({ d, fill }: { d: string; fill?: boolean }) {
 const PLAY = "M6 4l10 6-10 6V4z";
 const PAUSE = "M6 4v12M14 4v12";
 const STOP = "M5 5h10v10H5z";
+const CHEVRON = "M5 8l5 5 5-5";
 const MIC = "M10 2.5a2.5 2.5 0 00-2.5 2.5v5a2.5 2.5 0 005 0V5A2.5 2.5 0 0010 2.5zM4.5 9.5a5.5 5.5 0 0011 0M10 15v2.5M7 17.5h6";
 
 /** Space held until the page knows what the browser can do, so a control appearing never moves what is around it. */
@@ -69,7 +69,7 @@ export function ReadAloudButton({ text, label = "Listen", about, className = "" 
     return () => { document.removeEventListener("keydown", onKey); document.removeEventListener("pointerdown", onDown); };
   }, [open]);
 
-  if (support === null) return <Placeholder w="w-[9.5rem]" />;
+  if (support === null) return <Placeholder w="w-[12rem]" />;
   if (!support.synthesis || !enabled) return null;
 
   const speakable = chunkForSpeech(text).length > 0;
@@ -80,20 +80,23 @@ export function ReadAloudButton({ text, label = "Listen", about, className = "" 
   const shown = english.length ? english : voices;
 
   return (
-    <div ref={wrap} className={`relative inline-flex items-center gap-1.5 ${className}`}>
+    <div ref={wrap} className={`relative inline-flex flex-wrap items-center gap-1.5 ${className}`}>
       {/* An action whose words change (Listen, Pause, Resume), so it is not also a pressed/unpressed toggle. */}
       <button type="button" onClick={onMain} disabled={!speakable}
         aria-label={`${main}${about ? `, ${about}` : ""}`} className={`${base} min-w-[6.25rem]`}>
         <Icon d={status === "speaking" ? PAUSE : PLAY} fill={status !== "speaking"} />{main}
       </button>
-      {/* Held in place (hidden, out of the tab order) when nothing is being read, so starting does not shift the row. */}
-      <button type="button" onClick={ra.stop} aria-label={`Stop reading${subject}`} className={`${square} ${status === "idle" ? "invisible" : ""}`}>
-        <Icon d={STOP} fill />
-      </button>
+      {/* A compact, labelled control (not an empty box): the visible word "Speed" is part of its accessible name. */}
       <button ref={trigger} type="button" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-controls={open ? menuId : undefined}
-        aria-label="Listening options: speed and voice" className={square}>
-        <span aria-hidden="true" className="text-[12px]">{"▾"}</span>
+        aria-label="Listening options: speed and voice" className={base}>
+        Speed<Icon d={CHEVRON} />
       </button>
+      {/* Only while reading, and last in the row, so starting adds no gap when idle and moves nothing before it. */}
+      {status !== "idle" && (
+        <button type="button" onClick={ra.stop} aria-label={`Stop reading${subject}`} className={base}>
+          <Icon d={STOP} fill />Stop
+        </button>
+      )}
       <span role="status" aria-live="polite" className="cmp-sr-only">
         {status === "speaking" ? `Reading${subject}.` : status === "paused" ? "Paused." : ""}
       </span>
