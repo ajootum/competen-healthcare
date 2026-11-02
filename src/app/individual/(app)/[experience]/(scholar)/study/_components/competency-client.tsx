@@ -201,10 +201,12 @@ const SKIP_TEXT: Record<string, string> = {
   no_text: "no text could be read from its picture",
 };
 
-export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true }: {
+export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true, requests = null }: {
   materialId: string; unit?: "slide" | "page"; slides: number; beyondCap: number; consent: boolean;
   /** Units with no readable text (including ones the cap or an earlier attempt leaves out). */
   unreadable?: number; policyOn?: boolean;
+  /** SCHOLAR-IMAGE-RECOVERY: the AI requests the reading will use (TRANSCRIBE_BATCH units each), worked out on the server. */
+  requests?: number | null;
 }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
@@ -249,9 +251,14 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
         <p className="mt-2 text-[13px] text-gray-600">Reading pictures with AI is not turned on for Scholar, so {count === 1 ? "it stays" : "they stay"} unread. The rest of the material can be studied as normal.</p>
       ) : consent ? (
         slides > 0 && (
-          <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={run}>
-            {busy ? `Reading… ${done} of ${slides}` : "Read the pictures"}
-          </button>
+          <>
+            {!busy && !finished && requests !== null && requests > 0 && (
+              <p className="mt-2 text-[13px] text-gray-600">{`Reads ${slides} ${Us(slides)}, using about ${requests} AI request${requests === 1 ? "" : "s"} from your AI allowance. A ${U} read once is kept: it is not read again when you come back.`}</p>
+            )}
+            <button type="button" className={`${ghost} mt-3`} disabled={busy} onClick={run}>
+              {busy ? `Reading… ${done} of ${slides}` : U === "page" ? "Recover unreadable pages" : "Read the pictures"}
+            </button>
+          </>
         )
       ) : <p className="mt-2 text-[13px] text-gray-600">Reading pictures needs AI help to be on. Turn it on in My Learning, then come back here.</p>}
       {busy && (

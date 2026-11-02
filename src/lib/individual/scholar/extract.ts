@@ -132,7 +132,7 @@ export function extractionQuality(mime: MaterialMime, pages: readonly ExtractedP
 }
 
 /** Pure. "Partial" when some pages or slides held no readable text. The sentence the material shows. */
-export function qualitySummary(q: ExtractionQuality | null): { partial: boolean; text: string } {
+export function qualitySummary(q: ExtractionQuality | null, opts: { recoverable?: boolean } = {}): { partial: boolean; text: string } {
   if (!q) return { partial: false, text: "How completely this file was read was not recorded: it was uploaded before Scholar measured it." };
   const listOf = (u: readonly number[]) => u.length > 8 ? `${u.slice(0, 8).join(", ")} and ${u.length - 8} more` : u.join(", ");
   // SCHOLAR-UPLOAD-FIX: slides read by AI from their pictures are said, every time, never folded into "read".
@@ -140,7 +140,13 @@ export function qualitySummary(q: ExtractionQuality | null): { partial: boolean;
   const ai = q.aiReadUnits?.length ? ` ${q.aiReadUnits.length === 1 ? U[0].toUpperCase() + U.slice(1) : U[0].toUpperCase() + U.slice(1) + "s"} ${listOf(q.aiReadUnits)} ${q.aiReadUnits.length === 1 ? "was" : "were"} read by AI from a picture: check ${q.aiReadUnits.length === 1 ? "it" : "them"} against the ${U}${q.aiReadUnits.length === 1 ? "" : "s"}.` : "";
   if (!q.emptyUnits.length) return { partial: false, text: (q.unit === "section" ? `Read in full: ${q.sections} section${q.sections === 1 ? "" : "s"}.` : `Every ${q.unit} was read: ${q.units} ${q.unit}${q.units === 1 ? "" : "s"}, ${q.sections} section${q.sections === 1 ? "" : "s"}.`) + ai };
   const list = listOf(q.emptyUnits);
-  return { partial: true, text: `Partly read: ${q.emptyUnits.length} of ${q.units} ${q.unit}s held no readable text (${q.unit}${q.emptyUnits.length === 1 ? "" : "s"} ${list}). A scanned page or a picture-only slide cannot be read yet, so Scholar cannot teach from ${q.emptyUnits.length === 1 ? "it" : "them"}.${ai}` };
+  const one = q.emptyUnits.length === 1;
+  // SCHOLAR-IMAGE-RECOVERY: where the reading is on offer (policy on, the learner's own PDF or PowerPoint), say so and how --
+  // never "cannot be read" while a reading is one click away.
+  const tail = opts.recoverable
+    ? ` Scholar can read ${one ? "it" : "them"} from ${one ? "its picture" : "their pictures"} with AI on request: choose ${q.unit === "page" ? "Recover unreadable pages" : "Read the pictures"}.`
+    : ` A scanned page or a picture-only slide cannot be read yet, so Scholar cannot teach from ${one ? "it" : "them"}.`;
+  return { partial: true, text: `Partly read: ${q.emptyUnits.length} of ${q.units} ${q.unit}s held no readable text (${q.unit}${one ? "" : "s"} ${list}).${tail}${ai}` };
 }
 
 /** Pure. SCHOLAR-UPLOAD-FIX: the slides whose sections were read by AI from a picture -- labelled on every section. */

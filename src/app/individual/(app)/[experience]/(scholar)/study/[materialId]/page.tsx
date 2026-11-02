@@ -19,7 +19,7 @@ import { PaneGrid } from "@/components/ui/pane-grid";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { getExamPaper } from "@/lib/individual/scholar/exam-store";
-import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
+import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE, TRANSCRIBE_BATCH } from "@/lib/individual/scholar/exam-service";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
 import { StudyAsPaper } from "../_components/paper-client";
@@ -68,7 +68,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
     : null;
   const [extras, collections] = await Promise.all([materialExtras(ctx.admin, ctx.userId, [m.id]), listCollections(ctx.admin, ctx.userId)]);
   const unit = UNIT_OF(m.mimeType);
-  const quality = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
+  let quality = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null) : null;
   const [chunks, questions, consent, due, analysis, mapped, learner] = await Promise.all([
     listChunks(ctx.admin, ctx.userId, m.id),
     listQuestions(ctx.admin, ctx.userId, { materialId: m.id }),
@@ -127,6 +127,8 @@ export default async function MaterialPage({ params, searchParams }: { params: P
     ? planPictureSlides({ emptyUnits: rawQuality.emptyUnits, triedUnits: rawQuality.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
     : null;
   const unreadableUnits = recoverable && rawQuality ? rawQuality.emptyUnits.length : 0;
+  // SCHOLAR-IMAGE-RECOVERY: while a reading is on offer, the warning says so instead of "cannot be read".
+  if (policyOn && pictures?.slides.length && rawQuality) quality = qualitySummary(rawQuality, { recoverable: true });
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -150,7 +152,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       )}
       {pictures && (
         <PictureSlides materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
-          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} />
+          beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} requests={policyOn ? Math.ceil(pictures.slides.length / TRANSCRIBE_BATCH) : null} />
       )}
 
       <div className="mb-6 flex flex-wrap items-start gap-3">
