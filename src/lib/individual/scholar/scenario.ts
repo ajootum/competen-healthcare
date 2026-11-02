@@ -72,7 +72,25 @@ function stageOf(raw: unknown): ScenarioStage | null {
     const set = [...new Set(correct)].sort();
     return options.length >= 4 && options.length <= 6 && set.length >= 1 && set.length < options.length && set.every(i => i >= 0 && i < options.length) ? { ...base, options, correct: set, accepted: [] } : null;
   }
-  return accepted.length >= 1 && accepted.length <= 4 && accepted.every(a => a.trim() && a.length <= 200) ? { ...base, options: [], correct: [], accepted } : null;
+  return accepted.length >= 1 && accepted.length <= 6 && accepted.every(a => a.trim() && a.length <= 200) ? { ...base, options: [], correct: [], accepted } : null;
+}
+
+/** Pure. In words, what is wrong with a stage that stageOf refused (for the probe and the audit detail: field names only, never learner text). */
+export function stageWhy(raw: unknown): string {
+  const x = (raw ?? {}) as Record<string, unknown>;
+  if (!STAGE_KINDS.includes(x.kind as StageKind)) return `kind "${String(x.kind)}" is not one of mcq, mrq, short, cloze`;
+  if (!text(x.prompt, 400)) return "prompt missing or over 400 characters";
+  if (!text(x.keyPoint, 300)) return "keyPoint missing or over 300 characters";
+  if (typeof x.reveal === "string" && x.reveal.trim().length > 600) return "reveal over 600 characters";
+  if (!Number.isInteger(x.weight) || (x.weight as number) < 1 || (x.weight as number) > SCENARIO_WEIGHT_MAX) return `weight ${JSON.stringify(x.weight)} is not a whole number from 1 to ${SCENARIO_WEIGHT_MAX}`;
+  const options = strs(x.options) ?? [], accepted = strs(x.accepted) ?? [];
+  const correct = Array.isArray(x.correct) && x.correct.every(i => Number.isInteger(i)) ? (x.correct as number[]) : [];
+  if (x.kind === "mcq") return options.length !== 4 ? `mcq needs exactly 4 options, has ${options.length}` : correct.length !== 1 ? `mcq needs exactly one correct index, has ${correct.length}` : "correct index out of range";
+  if (x.kind === "mrq") {
+    const set = [...new Set(correct)];
+    return options.length < 4 || options.length > 6 ? `mrq needs 4 to 6 options, has ${options.length}` : !set.length ? "mrq has no correct index" : set.length >= options.length ? "mrq marks EVERY option correct (at least one must be wrong)" : "correct index out of range";
+  }
+  return accepted.length < 1 || accepted.length > 6 ? `${String(x.kind)} needs 1 to 6 accepted answers, has ${accepted.length}` : "an accepted answer is empty or over 200 characters";
 }
 
 /** Pure. A stored scenario's stages, or null where the row does not carry a sound one (the question is then not offered). */
@@ -245,42 +263,62 @@ function order(n: number, seed: string): number[] {
 }
 
 /**
- * Pure. The fields of a generated scenario, or null where it is not well formed: a situation, two to four stages, each of a known
- * kind with its own key, every stage after the first revealing something, no two stages asking the same thing. An mcq or mrq stage
- * is stored in a seeded shuffle with the key remapped; a cloze stage's prompt must hold the blank.
+ * Pure. The fields of a generated scenario, or why it is not well formed: a situation, two to four stages, each of a known kind with its own
+ * key, every stage after the first revealing something, no two stages asking the same thing. An mcq or mrq stage is stored in a seeded shuffle
+ * with the key remapped; a cloze stage's prompt must hold the blank.
+ * STRICT (the default): any fault refuses the draft. LENIENT (the draft check): a fault in a stage AFTER the first leaves that stage out and
+ * carries on (`skipped` says why), so one bad later stage does not cost an otherwise sound scenario; the first stage and the opening must be sound,
+ * and at least two stages must remain.
  */
-export function parseScenario(r: Record<string, unknown>): { sc: ScenarioRaw; why?: undefined } | { sc?: undefined; why: ScenarioParseWhy } {
+export function parseScenario(r: Record<string, unknown>, lenient = false): { sc: ScenarioRaw; skipped: ScenarioParseWhy[]; why?: undefined; detail?: undefined } | { sc?: undefined; skipped?: undefined; why: ScenarioParseWhy; detail?: string } {
   const situation = text(r.situation ?? r.stem, 800);
   const raw = Array.isArray(r.stages) ? r.stages : null;
   if (!situation) return { why: "scenario_opening" };
   if (!raw || raw.length < SCENARIO_STAGES_MIN || raw.length > SCENARIO_STAGES_MAX) return { why: "scenario_stage_count" };
   const stages: ScenarioStage[] = [];
+  const skipped: ScenarioParseWhy[] = [];
+  const seenPrompts = new Set<string>();
+  let firstWhy: { why: ScenarioParseWhy; detail?: string } | null = null;
   for (let i = 0; i < raw.length; i++) {
+    // A fault in this stage: refuse the draft (strict, or the first stage), or leave this stage out (lenient, a later stage).
+    const bad = (why: ScenarioParseWhy, detail?: string): { why: ScenarioParseWhy; detail?: string } | null => {
+      if (!lenient || i === 0) return { why, ...(detail ? { detail } : {}) };
+      skipped.push(why); firstWhy ??= { why, ...(detail ? { detail } : {}) };
+      return null;
+    };
     const x = (raw[i] ?? {}) as Record<string, unknown>;
     const weight = x.weight === undefined ? 1 : x.weight;
     const prompt = text(x.prompt, 400);
     const correctRaw = Number.isInteger(x.correct) ? [x.correct as number] : x.correct;
-    if (!prompt) return { why: "scenario_stage_shape" };
-    const s = stageOf({
-      reveal: typeof x.reveal === "string" ? x.reveal : "", prompt, kind: x.kind, options: strs(x.options)?.map(o => o.trim()), correct: correctRaw, accepted: strs(x.accepted)?.map(a => a.trim()).filter(Boolean), weight, keyPoint: x.keyPoint,
-      source: x.source, refs: strs(x.references)?.map(t => t.replace(/[[\]\s]/g, "").toUpperCase()),
-    });
-    if (!s) return { why: "scenario_stage_shape" };
-    if (s.kind === "cloze" ? !s.prompt.includes(CLOZE_BLANK) : !asksQuestion(s.prompt)) return { why: "scenario_prompt" };
-    if (s.options.length && new Set(s.options.map(norm)).size !== s.options.length) return { why: "scenario_options" };
+    let f = !prompt ? bad("scenario_stage_shape", `stage ${i + 1}: prompt missing or over 400 characters`) : null;
+    if (f) return f;
+    if (!prompt) continue;
+    const built = {
+      reveal: typeof x.reveal === "string" ? x.reveal : "", prompt, kind: x.kind, options: strs(x.options)?.map(o => o.trim()), correct: correctRaw, accepted: strs(x.accepted)?.map(a => a.trim()).filter(Boolean),
+      weight, keyPoint: x.keyPoint, source: x.source, refs: strs(x.references)?.map(t => t.replace(/[[\]\s]/g, "").toUpperCase()),
+    };
+    const s = stageOf(built);
+    if (!s) { f = bad("scenario_stage_shape", `stage ${i + 1}: ${stageWhy(built)}`); if (f) return f; continue; }
+    if (s.kind === "cloze" ? !s.prompt.includes(CLOZE_BLANK) : !asksQuestion(s.prompt)) { f = bad("scenario_prompt", `stage ${i + 1}: the prompt does not ask a question`); if (f) return f; continue; }
+    if (s.options.length && new Set(s.options.map(norm)).size !== s.options.length) { f = bad("scenario_options", `stage ${i + 1}: two options are the same`); if (f) return f; continue; }
+    if (i > 0 && !s.reveal) { f = bad("scenario_no_reveal", `stage ${i + 1}: nothing is revealed`); if (f) return f; continue; }
+    if (seenPrompts.has(norm(s.prompt))) { f = bad("scenario_duplicate_stage", `stage ${i + 1}: the same question as an earlier stage`); if (f) return f; continue; }
     if (s.kind === "mcq" || s.kind === "mrq") {
       const shown = order(s.options.length, `${situation}:${i}:${s.options.join("|")}`);
       s.options = shown.map(k => s.options[k]);
       // correct (old indexes) -> where each now sits
       const old = (x.options as string[]).map(o => o.trim());
       s.correct = (correctRaw as number[]).map(k => s.options.indexOf(old[k])).sort((a, b) => a - b);
-      if (s.correct.some(k => k < 0)) return { why: "scenario_stage_shape" };
+      if (s.correct.some(k => k < 0)) { f = bad("scenario_stage_shape", `stage ${i + 1}: a correct index is out of range`); if (f) return f; continue; }
     }
+    seenPrompts.add(norm(s.prompt));
     stages.push(s);
   }
-  if (stages.some((s, i) => i > 0 && !s.reveal)) return { why: "scenario_no_reveal" };
-  if (new Set(stages.map(s => norm(s.prompt))).size !== stages.length) return { why: "scenario_duplicate_stage" };
-  return { sc: { situation, stages } };
+  if (stages.length < SCENARIO_STAGES_MIN) {
+    const fw = firstWhy as { why: ScenarioParseWhy; detail?: string } | null; // the first stage left out says why there are too few
+    return fw ? { why: fw.why, ...(fw.detail ? { detail: fw.detail } : {}) } : { why: "scenario_stage_count" };
+  }
+  return { sc: { situation, stages }, skipped };
 }
 
 /** Pure. The fields of a generated scenario, or null where it is not well formed (parseScenario says why). */
@@ -316,16 +354,79 @@ const META = /\b(?:the|your|their|these|my) notes\b|\b(?:student|learner)s?\b[^.
  *   "answer_leaked"   a stage's answer (the correct option, or an accepted answer of two or more content words, normalised, no synonyms)
  *                     already appears in the opening or in an EARLIER stage's new information or question.
  */
-export function scenarioFlaw(sc: ScenarioRaw): "not_a_scenario" | "answer_leaked" | "repeated_stage" | null {
+/** Pure. Whether the draft talks about notes, a passage or a student revising anywhere (the whole draft, before any stage is left out). */
+export const scenarioIsMeta = (sc: ScenarioRaw): boolean => [sc.situation, ...sc.stages.flatMap(s => [s.reveal, s.prompt])].some(t => META.test(t));
+
+export function scenarioFlaw(sc: ScenarioRaw): "not_a_scenario" | "answer_leaked" | "repeated_stage" | "reveal_not_new" | null {
   if ([sc.situation, ...sc.stages.flatMap(s => [s.reveal, s.prompt])].some(t => META.test(t))) return "not_a_scenario";
   for (let i = 0; i < sc.stages.length; i++) {
     const before = [sc.situation, ...sc.stages.slice(0, i).flatMap(s => [s.reveal, s.prompt])].join(" ");
-    if (stageAnswers(sc.stages[i]).some(a => containsAnswer(before, a))) return "answer_leaked";
+    // A choice from several (mrq) is a leak only when the WHOLE key is already in the earlier text: one option of it ("respiratory rate") may just be the topic.
+    const st = sc.stages[i], keys = stageAnswers(st);
+    if (st.kind === "mrq" ? keys.every(a => containsAnswer(before, a)) : keys.some(a => containsAnswer(before, a))) return "answer_leaked";
   }
-  // A later stage asks about the NEW information, never what an earlier stage already asked: two stages with the same answer repeat each other.
+  // A reveal adds something (the prompt asks it to state what is now seen, measured, reported or found, not what someone plans): at least one clinical term the learner has not already been shown (the opening, an earlier reveal, an earlier question or its options).
+  for (let i = 1; i < sc.stages.length; i++) {
+    const rv = sc.stages[i].reveal;
+    const seen = [sc.situation, ...sc.stages.slice(0, i).flatMap(s => [s.reveal, s.prompt, ...s.options])].join(" ");
+    const mine = unsupportedTerms(rv, "").filter(w => !isNarrative(w));
+    if (mine.length && !unsupportedTerms(mine.join(" "), seen).length) return "reveal_not_new";
+  }
+  // A later stage asks about the NEW information, never what an earlier stage already asked: two stages with the same answer, or resting on the same
+  // sentence of the section, repeat each other.
+  const sources = sc.stages.map(s => words(s.source).join(" ")).filter(Boolean);
+  if (new Set(sources).size !== sources.length) return "repeated_stage";
   const keys = sc.stages.map(s => stageAnswers(s).map(a => contentWords(a).sort().join(" ")).filter(Boolean).sort().join("|"));
   if (new Set(keys).size !== keys.length) return "repeated_stage";
   return null;
+}
+
+// ── SHAPING A DRAFT: keep the stages that stand on their own ──
+
+/** A reveal that narrates an intention rather than a finding: "the team decides / plans / prepares / wants to ...". */
+const PLAN = /\b(?:decid(?:es?|ed|ing)|plan(?:s|ned|ning)?|prepar(?:es?|ed|ing)|intend(?:s|ed)?|about to|going to|wants? to|needs? to|ready to|begins? to|starts? to)\b/i;
+
+/**
+ * Pure. Why ONE stage cannot stand in a scenario, given the stages already kept before it, or null:
+ *   answer_leaked / repeated_stage / uncited_stage / reveal_not_new / ungrounded_reveal  -- the same rules as the whole-draft checks, applied to this stage alone.
+ * `at` is its position among the kept stages (0 is the first, which reveals nothing).
+ */
+function stageProblem(situation: string, kept: readonly ScenarioStage[], st: ScenarioStage, passageText: string, references: ReadonlyMap<string, string>): string | null {
+  const before = [situation, ...kept.flatMap(s => [s.reveal, s.prompt])].join(" ");
+  const keys = stageAnswers(st);
+  if (st.kind === "mrq" ? keys.every(a => containsAnswer(before, a)) : keys.some(a => containsAnswer(before, a))) return "answer_leaked";
+  const keyOf = (x: ScenarioStage) => stageAnswers(x).map(a => contentWords(a).sort().join(" ")).filter(Boolean).sort().join("|");
+  if (kept.some(k => (k.source && words(k.source).join(" ") === words(st.source).join(" ")) || keyOf(k) === keyOf(st))) return "repeated_stage";
+  if (citationFlaw([st], passageText, references, unsupportedTerms)) return "uncited_stage";
+  if (kept.length > 0) {
+    // A reveal states what is now seen, measured, reported or found. One that only narrates what someone decides, plans or wants to do reveals nothing about the
+    // person (the decision is the question): the stage is left out.
+    if (PLAN.test(st.reveal)) return "reveal_plan";
+    const seen = [situation, ...kept.flatMap(s => [s.reveal, s.prompt, ...s.options])].join(" ");
+    const mine = unsupportedTerms(st.reveal, "").filter(w => !isNarrative(w));
+    if (mine.length && !unsupportedTerms(mine.join(" "), seen).length) return "reveal_not_new";
+    const known = [situation, passageText, ...references.values(), ...kept.map(k => k.reveal)].join(" ");
+    if (clinicalGaps(st.reveal, known).length || textGroundingViolations(st.reveal, [known]).some(v => v.kind === "asserted_finding")) return "ungrounded_reveal";
+  }
+  return null;
+}
+
+/**
+ * Pure. A draft cut to the stages that stand on their own: each stage, in order, is kept if it is cited, gives no earlier answer away, repeats
+ * no kept stage, and (after the first) reveals something new and grounded. A stage that fails is LEFT OUT, never rewritten: nothing is added, so
+ * nothing is invented. The first stage must stand (the reason is then the draft's) and at least two stages must remain (else the first reason
+ * a stage was left out is the draft's). `pruned` lists why stages were left out (codes, for the audit and the probe).
+ */
+export function shapeScenario(sc: ScenarioRaw, passageText: string, references: ReadonlyMap<string, string>): { sc: ScenarioRaw; pruned: string[] } | { reason: string } {
+  const kept: ScenarioStage[] = [], pruned: string[] = [];
+  for (const [i, st] of sc.stages.entries()) {
+    const p = stageProblem(sc.situation, kept, st, passageText, references);
+    if (!p) kept.push(st);
+    else if (kept.length === 0) return { reason: p };
+    else pruned.push(`stage ${i + 1} left out: ${p}`);
+  }
+  if (kept.length < SCENARIO_STAGES_MIN) return { reason: (pruned[0] ?? "").replace(/^stage [0-9]+ left out: /, "") || "scenario_stage_count" };
+  return { sc: { situation: sc.situation, stages: kept }, pruned };
 }
 
 // ── A STORED SCENARIO IS HELD TO THE CURRENT RULES TOO ──
@@ -376,21 +477,32 @@ const NARRATIVE = new Set((
   "additional new news information details detail situation mentioned noted noting shows show showed shown worked work works working now present currently " +
   "observation observations notes describe describes described score scores give given gives giving needs need needed " +
   "visit visits visited visiting out nearby around beside near sitting sits sat lying lies lay standing walking walks walked talking talks talked speaking speaks spoke " +
-  "arrival leaves left stay waiting waits waited called asks asked answers answered responds responded mention mentions").split(" "));
+  "arrival leaves left stay waiting waits waited called asks asked answers answered responds responded mention mentions " +
+  "member members shift shifts less more earlier before after during while wants want decide decides decided pick picks condition conditions unit area areas " +
+  "assess assessing assessed assessment looking looks review reviewing seen see sees saw find finds found early earliest indication indications changes " +
+  "concern concerned concerns worried worry worrying thinks think thought wonders ready prepare prepares preparing prepared decision decisions reason reasons " +
+  "something anything nothing everything others other one same different usual usually normal normally slightly slowly quickly quite rather bit lot " +
+  "family friend friends husband wife son daughter mother father partner home bay corridor chair bedside trolley chart charts record records recorded recording " +
+  "handover colleague senior junior called phone bleep speak speaks spoke speaking tell telling " +
+  "several many few some single separate together bring brings structured judge telephone deteriorate deteriorates deteriorating deterioration help helps ask asking " +
+  "sort set thorough fuller picture full whole complete join joined staff pass passes passed wider wide reassess reassessed reassessment reassessing").split(" "));
 /** A word reduced to a root for the story-word test, so visits / visited / visiting are one. */
-const rootOf = (w: string) => (w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "") : w);
+const rootOf = (w: string) => (w.length > 4 ? w.replace(/(ing|ed|es|s)$/, "").replace(/(.)\1$/, "$1") : w); // dropped -> drop
 const NARRATIVE_ROOTS = new Set([...NARRATIVE].map(rootOf));
-const isNarrative = (w: string) => NARRATIVE.has(w) || NARRATIVE_ROOTS.has(rootOf(w));
+const isNarrative = (w: string) => NARRATIVE.has(w) || NARRATIVE_ROOTS.has(rootOf(w)) || /ly$/.test(w);
 
 const NUMBERISH = /^(?:\d|zero$|one$|two$|three$|four$|five$|six$|seven$|eight$|nine$|ten$|eleven$|twelve$|thirteen$|fourteen$|fifteen$|sixteen$|seventeen$|eighteen$|nineteen$|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|half$|double$|triple$)/i;
 
 /** Pure. The words of `text` the source never uses, leaving out the story words (NARRATIVE). */
-const clinicalGaps = (text: string, source: string): string[] => unsupportedTerms(text, source).filter(w => !isNarrative(w));
+export const clinicalGaps = (text: string, source: string): string[] => {
+  const roots = new Set(words(source).map(rootOf)); // "drops" is the section's "drop"
+  return unsupportedTerms(text, source).filter(w => !isNarrative(w) && !roots.has(rootOf(w)));
+};
 
 /**
  * Pure. Whether the CLINICAL content of a scenario rests on the cited sentences, or the first thing that does not:
  *   "ungrounded_number"   a figure, in digits or words, that the section and the cited references do not hold (a value, a dose, a count);
- *   "ungrounded_opening"  the opening names a finding the section does not hold (an asserted-finding word, or more than two clinical terms unsupported);
+ *   "ungrounded_opening"  the opening names a finding the section does not hold (an asserted-finding word, or more than five clinical terms unsupported);
  *   "ungrounded_reveal"   a stage's new information names an observation, finding, result, drug or procedure that its cited sentence (or an earlier
  *                         stage's, or the opening it develops) does not support. The story words around it (a person, "some time later", the team) are not held.
  *   "ungrounded_rationale" the explanation shown with the feedback leans on more than four clinical terms the section does not hold.
@@ -404,12 +516,13 @@ export function scenarioGroundingFlaw(sc: ScenarioRaw, rationale: string, passag
   // The existing screen sees digits and some spelled counts; a spelled figure of the story ("Thirty minutes later") is also a figure the section does not hold.
   const held = new Set(words(corpus.join(" ")));
   if (words(all).some(w => w !== "one" && NUMBERISH.test(w) && !held.has(w))) return "ungrounded_number";
-  if (textGroundingViolations(sc.situation, corpus).some(v => v.kind === "asserted_finding") || clinicalGaps(sc.situation, corpus.join(" ")).length > 2) return "ungrounded_opening";
-  let known = sc.situation;
+  if (textGroundingViolations(sc.situation, corpus).some(v => v.kind === "asserted_finding") || clinicalGaps(sc.situation, corpus.join(" ")).length > 5) return "ungrounded_opening";
+  // A reveal's clinical terms must be ones the section (or a cited reference) holds, or that the story has already shown. The stage's own citation is held
+  // to its key and key point (citationFlaw); a finding in a reveal may rest on another sentence of the same section.
+  let known = [sc.situation, passageText, ...refAll].join(" ");
   for (const st of sc.stages) {
-    const cited = [st.source, ...st.refs.map(t => references.get(t) ?? "")].filter(Boolean).join(" ");
-    known = `${known} ${cited}`;
     if (st.reveal && (clinicalGaps(st.reveal, known).length || textGroundingViolations(st.reveal, [known]).some(v => v.kind === "asserted_finding"))) return "ungrounded_reveal";
+    known = `${known} ${st.reveal}`;
   }
   if (clinicalGaps(rationale, corpus.join(" ")).length > 4) return "ungrounded_rationale";
   return null;

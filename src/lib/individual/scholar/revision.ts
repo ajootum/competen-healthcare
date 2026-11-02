@@ -23,7 +23,7 @@ import { isClozeQuestion, markCloze } from "./cloze";
 import {
   extendedSpecOf, isExtendedQuestion, isScenarioQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
 } from "./formats";
-import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenarioAnswer, scenarioFlaw, scenarioGroundingFlaw, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
+import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenarioAnswer, shapeScenario, scenarioFlaw, scenarioGroundingFlaw, scenarioIsMeta, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
@@ -298,6 +298,7 @@ export type DraftReason =
   | "not_a_scenario" | "answer_leaked" | "repeated_stage" | "uncited_stage"
   // ... and where the clinical content is not on the cited sentences, or the scenario is not well formed (codes counted in the audit).
   | "ungrounded_number" | "ungrounded_opening" | "ungrounded_reveal" | "ungrounded_rationale"
+  | "reveal_not_new"
   | "scenario_opening" | "scenario_stage_count" | "scenario_stage_shape" | "scenario_prompt" | "scenario_options" | "scenario_no_reveal" | "scenario_duplicate_stage"
   // SCHOLAR-FLASHCARDS-QA-01: a back that repeats the note sentence, or adds a second unrelated fact.
   | "back_copied" | "second_fact";
@@ -354,6 +355,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   // SCHOLAR-SQIE-LEARNER-01: the key points an extended item is marked against (grounded with the rest of it).
   let extendedPoints: string[] = [];
   let scenarioWords: string[] = [];
+  let scenarioKeyPoints: string[] = [];
   if (kind === "mrq") {
     const stem = text(r.stem, 400), options = strs(r.options)?.map(o => o.trim()), correct = nums(r.correct), rationale = text(r.rationale, 1200);
     if (stem && options && options.length >= 4 && options.length <= 6 && options.every(o => o && o.length <= 200) && correct && correct.length >= 1
@@ -385,26 +387,37 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     }
   } else if (kind === "scenario") {
     // SCHOLAR-CE-2026 CE-05: a situation that unfolds over 2 to 4 stages, each one question of an existing kind with its own key.
-    const parsed = parseScenario(r);
-    const sc = parsed.sc ?? null;
+    // Lenient: a fault in a LATER stage leaves that stage out rather than costing the scenario (scenario.ts parseScenario).
+    const parsed = parseScenario(r, true);
     if (parsed.why) return { ok: false, reason: parsed.why };
-    // It must be a situation in practice (no talk of notes or a student revising) and give no answer away earlier than its stage.
-    const flaw = sc ? scenarioFlaw(sc) : null;
-    if (flaw) return { ok: false, reason: flaw };
-    // Every stage is cited: a sentence of the section (or an approved reference given), and its key and key point rest on it. Nothing is invented to finish a scenario.
+    let sc = parsed.sc ?? null;
     if (sc) {
       // The identifier screen runs on every word of a scenario first: the story is not held to the notes, but it is never allowed to name a person.
       if (findPatientIdentifiers([sc.situation, ...scenarioTexts(sc.stages)].join("\n")).length) return { ok: false, reason: "identifier" };
       const refs = new Map((checks.references ?? []).map(x => [x.tag.toUpperCase(), referenceGrounding([x]).join(" ")] as const));
+      // A draft that talks of notes, a passage or a student revising is refused whole, before any stage is left out.
+      if (scenarioIsMeta(sc)) return { ok: false, reason: "not_a_scenario" };
+      // Keep the stages that stand on their own (cited, nothing given away earlier, something new and grounded revealed): the rest are LEFT OUT, never rewritten.
+      const shaped = shapeScenario(sc, passage.content, refs);
+      if ("reason" in shaped) return { ok: false, reason: shaped.reason as DraftReason };
+      sc = shaped.sc;
+      // It must be a situation in practice (no talk of notes or a student revising) and give no answer away earlier than its stage.
+      const flaw = scenarioFlaw(sc);
+      if (flaw) return { ok: false, reason: flaw };
+      // Every stage is cited: a sentence of the section (or an approved reference given), and its key and key point rest on it. Nothing is invented to finish a scenario.
       if (citationFlaw(sc.stages, passage.content, refs, unsupportedTerms)) return { ok: false, reason: "uncited_stage" };
       // Then the CLINICAL content rests on the cited sentences (a figure, a finding, a result, a drug or a procedure the section does not hold is refused).
       // The story around it is not held to the notes: the every-word screen below is not run on a scenario.
-      const grounded = scenarioGroundingFlaw(sc, text(r.rationale, 1200) ?? "", passage.content, refs);
+      // The explanation and the key points shown with the feedback are built from the stages KEPT (their own key points, each held to its citation), not taken from
+      // the model's free text: a stage left out takes its explanation with it, and the explanation never speaks of "the passage".
+      scenarioKeyPoints = sc.stages.map(st => st.keyPoint);
+      const grounded = scenarioGroundingFlaw(sc, scenarioKeyPoints.join(" ").slice(0, 1200), passage.content, refs);
       if (grounded) return { ok: false, reason: grounded };
     }
-    const rationale = text(r.rationale, 1200);
-    if (sc && rationale && quote) {
-      d = { stem: sc.situation, options: [], answer: scenarioAnswer(sc.stages), rationale, sourceQuote: quote, difficulty };
+    if (sc) {
+      // The item's source quote is a sentence one of the kept stages cites (the model's own, if it is one of them).
+      const cited = sc.stages.map(st => st.source).filter(Boolean);
+      d = { stem: sc.situation, options: [], answer: scenarioAnswer(sc.stages), rationale: scenarioKeyPoints.join(" ").slice(0, 1200), sourceQuote: quote && cited.includes(quote) ? quote : cited[0] ?? quote ?? "", difficulty };
       scenarioWords = scenarioTexts(sc.stages);
     }
   } else if (kind === "flashcard") {
@@ -481,7 +494,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     if (repeatsObjective(rubric.objective, checks)) return { ok: false, reason: "repeat" };
     return { ok: true, draft: { ...draft, answer: { parts, rubric } } };
   }
-  const rubric = parseRubric(kind === "extended" ? { ...r, keyPoints: extendedPoints } : r, grounding, {
+  const rubric = parseRubric(kind === "extended" ? { ...r, keyPoints: extendedPoints } : kind === "scenario" ? { ...r, keyPoints: scenarioKeyPoints } : r, grounding, {
     expectedAnswer: expected || null, accepted: kind === "short" ? (d.answer.accepted as string[]) : [], difficulty: d.difficulty, references: checks.references,
     ...(kind === "extended" ? { maxKeyPoints: EXTENDED_POINTS_MAX } : {}),
   });

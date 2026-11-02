@@ -59,6 +59,28 @@ export const STUDENT_FRAMED = {
 /** 4. AN UNCITED FINDING: a stage whose citation is not in the section (an invented management step). */
 export const UNCITED = {
   ...GOOD,
-  stages: [GOOD.stages[0], { ...GOOD.stages[1], source: "Start a bolus of fluids and repeat the blood gas straight away." }, GOOD.stages[2]],
+  stages: [GOOD.stages[0], { ...GOOD.stages[1], source: "Start a bolus of fluids and repeat the blood gas straight away." }],
 };
 
+
+/** The staging learner's real "Recognising deterioration: short notes" section (four lines of guidance), and the SHAPE of what the live model wrote from it. */
+export const DET_NOTE = [
+  "Recognising deterioration: short notes",
+  "1. A raised respiratory rate is often the first sign that a person is getting worse, so count it over a full minute.",
+  "2. Use an early warning score such as NEWS2 to combine respiratory rate, oxygen saturation, blood pressure, pulse, temperature and level of consciousness.",
+  "3. A new confusion or a drop in the level of consciousness is a red flag and needs urgent escalation.",
+  "4. Escalate using SBAR: situation, background, assessment and recommendation, and record the escalation.",
+].join("\n");
+export const detPassage: Passage = { chunkId: "c2", materialId: "m2", materialTitle: "Recognising deterioration", ordinal: 1, pageFrom: 1, pageTo: 1, content: DET_NOTE };
+const DET_SRC = DET_NOTE.split("\n").slice(1).map(l => l.replace(/^[0-9]+[.] /, ""));
+export const LIVE_FOUR_STAGES = {
+  situation: "A person on the ward looks less well than earlier in the shift. A member of staff begins a set of observations to see whether the person is getting worse.",
+  stages: [
+    { reveal: "", prompt: "Which observation is often the first sign that a person is getting worse?", kind: "mcq", options: ["A raised respiratory rate", "A drop in blood pressure", "A raised temperature", "A change in pulse"], correct: [0], weight: 1, keyPoint: "A raised respiratory rate is often the first sign of deterioration.", source: DET_SRC[0], references: [] },
+    { reveal: "The team decide to use an early warning score to bring the observations together.", prompt: "Which observations does NEWS2 combine?", kind: "short", accepted: ["respiratory rate, oxygen saturation, blood pressure, pulse, temperature and level of consciousness"], weight: 2, keyPoint: "NEWS2 combines respiratory rate, oxygen saturation, blood pressure, pulse, temperature and level of consciousness.", source: DET_SRC[1], references: [] },
+    { reveal: "Shortly afterwards the person becomes newly confused.", prompt: "What does this new confusion mean and what does it need?", kind: "mcq", options: ["It is a sign the person is improving", "It should be rechecked over a full minute", "It is a red flag and needs urgent escalation", "It is expected and needs no action"], correct: [2], weight: 2, keyPoint: "A new confusion is a red flag that needs urgent escalation.", source: DET_SRC[2], references: [] },
+    { reveal: "A colleague prepares to escalate the person's deterioration.", prompt: "Which structure should be used to escalate?", kind: "short", accepted: ["SBAR", "Escalate using SBAR"], weight: 2, keyPoint: "Escalate using SBAR and record the escalation.", source: DET_SRC[3], references: [] },
+  ],
+  rationale: "The passage states a raised respiratory rate is often the first sign, NEWS2 combines the listed observations, new confusion is a red flag and SBAR is used to escalate.",
+  sourceQuote: DET_SRC[2], difficulty: 2, level: "application", objective: "Recognise early deterioration and escalate.", keyPoints: ["A raised respiratory rate is often the first sign"], misconceptions: [], references: [],
+};
