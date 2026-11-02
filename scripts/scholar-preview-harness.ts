@@ -54,7 +54,7 @@ function statics() {
     /hqApiGate\(\["hq\.individual\.scholar\.preview"\]\)/.test(route) && route.indexOf("hqApiGate(") < route.indexOf("openPreview("));
   ok("S2. the HQ route checks the Origin is its own before it mints a ticket", /sameOrigin\(/.test(route) && route.indexOf("sameOrigin(") < route.indexOf("openPreview("));
   ok("S3. the proxy admits a preview request only when the learner's own session is the one the preview names (learner_id check)",
-    /user\.id\s*!==\s*session\.learnerId/.test(proxy));
+    /!session\s*\|\|\s*!user\s*\|\|\s*user\.id\s*!==\s*session\.learnerId/.test(proxy));
   ok("S4. the proxy deletes every client-sent x-scholar-preview-* header on every host before it sets its own",
     /startsWith\(PREVIEW_HEADER_PREFIX\)/.test(proxy) && /h\.delete\(name\)/.test(proxy));
   const readOnlyPost = decidePreviewRequest("preview.localhost:3100", "/api/individual/scholar/materials", "POST", "read_only");
