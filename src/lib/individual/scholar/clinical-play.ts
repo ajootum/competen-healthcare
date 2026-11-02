@@ -9,9 +9,9 @@
 // ⚠ A DECISION IS KEPT AS MADE. Each answer is an append-only row (435). Progress is what applyAnswer says.
 
 import { randomBytes } from "node:crypto";
-import { answeredView, caseClosing, learnerView, resolveOptions, resolveToken, viewToken, type Blueprint, type CaseClosing, type LearnerView } from "@/lib/cases/blueprint";
+import { answeredView, caseClosing, isWritten, learnerView, resolveOptions, resolveToken, viewToken, type Blueprint, type CaseClosing, type LearnerView } from "@/lib/cases/blueprint";
 import { applyAnswer } from "@/lib/cases/library";
-import { brokenSafety, caseDebrief, markDecision, type Debrief } from "./clinical";
+import { brokenSafety, caseDebrief, markDecision, markHandoverAnswer, type Debrief } from "./clinical";
 import {
   createPrivateCaseSession, getPrivateCase, getPrivateCaseSession, insertCaseAnswer, insertCaseReason, updatePrivateCaseSession,
   type CaseAnswerRow, type CaseSessionRow, type PrivateCaseRow,
@@ -52,7 +52,7 @@ function feedbackOf(b: Blueprint, s: CaseSessionRow, a: CaseAnswerRow): Decision
   const d = b.decisionPoints.find(x => x.id === a.decisionPointId);
   return {
     token: viewToken(s.viewSalt, "decision", a.decisionPointId), correct: a.correct, marking: a.marking as keyof typeof MARKING_LABEL,
-    markingLabel: MARKING_LABEL[a.marking as keyof typeof MARKING_LABEL] ?? a.marking, answered: answeredView(b, a.decisionPointId, a.chosen, s.viewSalt),
+    markingLabel: MARKING_LABEL[a.marking as keyof typeof MARKING_LABEL] ?? a.marking, answered: answeredView(b, a.decisionPointId, a.chosen, s.viewSalt, a.reasoning),
     expected: d?.kind === "free_text" ? d.expectedResponse ?? null : null, aiFeedback: a.aiFeedback,
     safety: a.safety.map(id => b.safetyCriteria.find(c => c.id === id)?.text).filter((x): x is string => !!x),
     chunkIds: d?.sourceRefs ?? [],
@@ -138,13 +138,14 @@ export async function answerPrivate(admin: any, userId: string, sessionId: strin
   const dpId = resolveToken(x.b, x.session.viewSalt, "decision", args.decisionToken);
   if (!dpId) return { error: "No such decision.", status: 400 };
   const d = x.b.decisionPoints.find(p => p.id === dpId)!;
-  const chosen = d.kind === "free_text" ? [] : resolveOptions(x.b, x.session.viewSalt, dpId, args.optionTokens ?? []);
+  const chosen = isWritten(d) ? [] : resolveOptions(x.b, x.session.viewSalt, dpId, args.optionTokens ?? []);
   if (chosen === null) return { error: "Choose from this decision's options.", status: 400 };
-  const text = d.kind === "free_text" ? (args.text ?? "").trim().slice(0, 4000) : null;
+  const text = isWritten(d) ? (args.text ?? "").trim().slice(0, 4000) : null;
   const r = applyAnswer(x.b, asState(x.session, x.answers), dpId, chosen, text, new Date().toISOString());
   if ("error" in r) return { error: r.error, status: 400 };
 
-  let mark: { correct: boolean | null; score: number | null } = markDecision(x.b, dpId, chosen);
+  // CE-04: a handover is marked by code (the SBAR boxes written, the expected elements mentioned), as part marks.
+  let mark: { correct: boolean | null; score: number | null } = d.kind === "handover" ? markHandoverAnswer(x.b, dpId, text) : markDecision(x.b, dpId, chosen);
   let marking: "deterministic" | "self_graded" | "ai_evaluation" = "deterministic", aiFeedback: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   if (d.kind === "free_text") {
     const visible = x.b.facts.filter(f => f.revealedAt === "start" || x.session.reachedStageIds.includes(f.revealedAt) || x.session.revealedFactIds.includes(f.id));
@@ -152,14 +153,14 @@ export async function answerPrivate(admin: any, userId: string, sessionId: strin
     if (j.kind === "ai") { mark = { correct: j.correct, score: j.score }; marking = "ai_evaluation"; aiFeedback = j.feedback; evaluator = j.evaluator; }
     else { mark = { correct: null, score: null }; marking = "self_graded"; }
   }
-  const safety = d.kind === "free_text" ? [] : brokenSafety(x.b, dpId, chosen);
+  const safety = isWritten(d) ? [] : brokenSafety(x.b, dpId, chosen);
   const saved = await insertCaseAnswer(admin, userId, sessionId, {
-    decisionPointId: dpId, chosen: d.kind === "free_text" ? null : chosen, reasoning: text, marking, correct: mark.correct, score: mark.score, safety, aiFeedback, evaluator,
+    decisionPointId: dpId, chosen: isWritten(d) ? null : chosen, reasoning: text, marking, correct: mark.correct, score: mark.score, safety, aiFeedback, evaluator,
   });
   if (!saved) return { error: "Your answer could not be recorded just now.", status: 500 };
   // "Explain your choice" (askReason): kept beside the choice it explains (810), after it. Not kept (810 absent, or a
   // failed write): no error -- the browser still shows it. It never changes the marking.
-  const why = d.kind !== "free_text" && d.askReason === true ? (args.reason ?? "").trim() : "";
+  const why = !isWritten(d) && d.askReason === true ? (args.reason ?? "").trim() : "";
   const reasonKept = why ? await insertCaseReason(admin, userId, sessionId, dpId, why) : false;
   const answers: CaseAnswerRow[] = [...x.answers, { decisionPointId: dpId, chosen, reasoning: text, marking, correct: mark.correct, score: mark.score, safety, aiFeedback, evaluatorModel: evaluator?.model ?? null, createdAt: new Date().toISOString(), reason: reasonKept ? why.slice(0, 1500) : null }];
   const current = r.completed ? x.session.reachedStageIds[x.session.reachedStageIds.length - 1] : r.reached[r.reached.length - 1];
