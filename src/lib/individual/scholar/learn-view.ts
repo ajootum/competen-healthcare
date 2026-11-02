@@ -20,7 +20,11 @@ export type SessionView = {
   status: "active" | "completed";
   coverage: { sections: number; of: number } | null;
   /** SCHOLAR-LEARN-FIX-01: each lesson's title and objective, from the material's own headings and topics (learn.lessonOutline, no AI). */
-  steps: { step: number; title: string; objective: string; sections: { chunkId: string; materialId: string; materialTitle: string; citation: string }[] }[];
+  steps: { step: number; title: string; objective: string; sections: {
+    chunkId: string; materialId: string; materialTitle: string; citation: string;
+    /** SCHOLAR-LESSON-VISUALS-01: the section's slide / page range and unit ("slide" = PowerPoint, "page" = PDF), to find its original pictures. */
+    pageFrom: number | null; pageTo: number | null; unit: "page" | "slide" | "section";
+  }[] }[];
 };
 
 export function sessionView(input: {
@@ -32,7 +36,7 @@ export function sessionView(input: {
     steps: input.steps.map(s => ({
       ...(({ title, objective }) => ({ step: s.step, title, objective }))(lessonOutline(s, input.topics, input.profiles)),
       // SCH-LEARN-UX-01: a file-like material title is shown as a title here; the act route cites the passages as stored.
-      sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: displayTitle(x.materialTitle), citation: `${displayTitle(x.materialTitle)}, ${citeChunk(x, x.unit)}` })),
+      sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: displayTitle(x.materialTitle), citation: `${displayTitle(x.materialTitle)}, ${citeChunk(x, x.unit)}`, pageFrom: x.pageFrom, pageTo: x.pageTo, unit: x.unit })),
     })),
   };
 }

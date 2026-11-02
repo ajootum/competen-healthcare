@@ -11,6 +11,7 @@ import { carry, studyField } from "./study-active";
 import type { flashcardPrefill } from "@/lib/individual/scholar/study-carry";
 import { DECK_SORT_LABEL, groupByOrganise, needsRevisionOf, scheduleAfterRating, searchDecks, sortDecks, type CardSchedule, type DeckSort } from "@/lib/individual/scholar/flashcard-decks";
 import type { PersonalDeck } from "@/lib/individual/scholar/flashcards";
+import { SourcePictureButton } from "./learn-visuals";
 
 // SCHOLAR FLASHCARDS -- SCHOLAR-FLASHCARDS-01 (owner, 31 Oct 2026), to the owner mock-up.
 //
@@ -521,6 +522,12 @@ function SourceLink({ card }: { card: StudyCard }) {
       {card.links?.study && <p className="mt-1 text-[13.5px] text-gray-700">Study session: <Link href={card.links.study.href} className={`font-semibold underline ${focusRing}`}>{card.links.study.title}</Link></p>}
       {card.origin !== "library" && (
         <Link href={`${studyHref("learn")}?section=${card.chunkId}`} className={`mt-1 inline-flex items-center gap-1 text-[13.5px] font-semibold text-[var(--cmp-role-indigo-ink)] underline-offset-2 hover:underline ${focusRing}`}>Revise this topic in Learn →</Link>
+      )}
+      {/* SCHOLAR-LESSON-VISUALS-01: the original picture of the cited slide / page, asked for on the click (no AI). */}
+      {card.origin === "notes" && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <SourcePictureButton materialId={card.materialId} materialTitle={card.materialTitle} citation={card.citation} className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} />
+        </div>
       )}
     </div>
   );

@@ -76,7 +76,8 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
-  | "scholar_monthly_review_max_new";
+  | "scholar_monthly_review_max_new"
+  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -123,7 +124,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
-  | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu";
+  | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
+  | "scholar_lesson_visuals";
 export type PolicyKey = IntPolicyKey | SetPolicyKey | CataloguePolicyKey | ChoicePolicyKey | ProgrammesPolicyKey | OptionsPolicyKey | LevelsPolicyKey | SequencePolicyKey;
 
 type Common = { label: string; help: string; product: "Professional" | "Scholar" | "Competen Individual"; limitReason: string };
@@ -1855,6 +1857,30 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Only actions the learning actions policy already offers appear. Default: offered.",
   },
+  // SCHOLAR-LESSON-VISUALS-01 (owner GO "Competen Scholar: Visual Learning From Uploaded Presentations"): the learner's OWN pictures,
+  // shown exactly as in their file beside the lesson that cites them. Read-only, no AI, no new storage. One contiguous block.
+  {
+    key: "scholar_lesson_visuals", kind: "choice", product: "Scholar",
+    label: "Lesson pictures from the student's slides",
+    help: "Whether a lesson shows the original pictures from the PowerPoint slides (and the image-only pages of a PDF) it was taught from, exactly as they are in the student's file, labelled as original and not AI-generated. Nothing is drawn, rewritten or generated. Logos, backgrounds and tiny images are left out by fixed rules.",
+    options: [{ value: "on", label: "Show original pictures" }, { value: "off", label: "Do not show" }],
+    fallback: "on",
+    limitReason: "Needs no migration and no AI. Pictures that cannot be shown (EMF, WMF, SVG, linked) are counted, not shown. A PDF's text pages carry no extracted pictures. Default: on.",
+  },
+  {
+    key: "scholar_lesson_visuals_max_per_section", kind: "int", product: "Scholar", unit: "pictures",
+    label: "Lesson pictures: most shown with a lesson",
+    help: "The most original pictures shown under one lesson section. The rest stay one tap away in the slide's own view.",
+    fallback: 3, min: 1, max: 6,
+    limitReason: "One to six. Default: three.",
+  },
+  {
+    key: "scholar_lesson_visuals_min_px", kind: "int", product: "Scholar", unit: "pixels",
+    label: "Lesson pictures: smallest side counted as a picture",
+    help: "A picture whose shorter side is below this many pixels is treated as an icon or bullet and left out.",
+    fallback: 120, min: 40, max: 600,
+    limitReason: "Forty to six hundred pixels. Default: 120.",
+  },
 ];
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -2176,6 +2202,10 @@ export type IndividualPolicy = {
   scholarLearnStyleGuide: "on" | "off";
   scholarLearnStyleChallenge: "on" | "off";
   scholarLearnMoreMenu: "on" | "off";
+  /** SCHOLAR-LESSON-VISUALS-01: the student's own slide / page pictures beside a lesson. */
+  scholarLessonVisuals: "on" | "off";
+  scholarLessonVisualsMaxPerSection: number;
+  scholarLessonVisualsMinPx: number;
 };
 
 /** COMPETEN-PROFESSIONAL-PASSPORT-01 (Stage 7): the Passport and its shared views, as configured. */
@@ -2347,6 +2377,10 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLearnStyleGuide: clampChoice(policyDef("scholar_learn_style_guide") as ChoicePolicy, published.get(policyPath("scholar_learn_style_guide"))) as "on" | "off",
     scholarLearnStyleChallenge: clampChoice(policyDef("scholar_learn_style_challenge") as ChoicePolicy, published.get(policyPath("scholar_learn_style_challenge"))) as "on" | "off",
     scholarLearnMoreMenu: clampChoice(policyDef("scholar_learn_more_menu") as ChoicePolicy, published.get(policyPath("scholar_learn_more_menu"))) as "on" | "off",
+    // SCHOLAR-LESSON-VISUALS-01: one contiguous block.
+    scholarLessonVisuals: clampChoice(policyDef("scholar_lesson_visuals") as ChoicePolicy, published.get(policyPath("scholar_lesson_visuals"))) as "on" | "off",
+    scholarLessonVisualsMaxPerSection: int("scholar_lesson_visuals_max_per_section"),
+    scholarLessonVisualsMinPx: int("scholar_lesson_visuals_min_px"),
   };
 }
 

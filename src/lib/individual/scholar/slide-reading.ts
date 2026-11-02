@@ -53,7 +53,7 @@ export async function pictureSlidePlan(admin: any, userId: string, materialId: s
  * SCHOLAR-IMAGE-RECOVERY: the named pages of the learner's own PDF, copied one after another into a new PDF (the
  * original is never changed), for the same transcription runner. `pages` are the original page numbers that were copied.
  */
-async function pdfPagesPdf(bytes: Uint8Array, wanted: readonly number[]): Promise<{ base64: string; pages: number[] } | null> {
+export async function pdfPagesPdf(bytes: Uint8Array, wanted: readonly number[]): Promise<{ base64: string; pages: number[] } | null> {
   try {
     const { PDFDocument } = await import("pdf-lib");
     const src = await PDFDocument.load(bytes, { ignoreEncryption: false, updateMetadata: false });
