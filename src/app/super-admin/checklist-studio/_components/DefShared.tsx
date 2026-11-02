@@ -1,22 +1,18 @@
 "use client";
 // Checklist Studio, definition pages: pieces shared by scales, scoring templates, layout templates and progression rules.
-import { useEffect, useRef, type ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import Link from "next/link";
 import { Btn } from "@/components/assessment/ui";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { fmtDateTime } from "@/lib/assessment/studio/vocab";
 import type { TimelineEntry } from "@/lib/assessment/studio/types";
 import { Panel, StateChip, td, th } from "./studio-ui";
 import type { LifecycleState } from "@/lib/assessment/studio/types";
 
-/** A plain modal dialog: overlay, focus moved in, Escape closes. */
+/** A modal dialog: overlay, focus moved in, Tab trapped, Escape closes, focus restored (useModalFocus). */
 export function DefModal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    ref.current?.focus();
-    const key = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", key);
-    return () => document.removeEventListener("keydown", key);
-  }, [onClose]);
+  useModalFocus(true, ref, onClose);
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} data-cmp-theme="platform"

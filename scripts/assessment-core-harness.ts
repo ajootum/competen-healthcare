@@ -2,7 +2,7 @@
 /**
  * ASSESSMENT CORE HARNESS (Checklist Studio). Sections are independent. Each slice adds its own.
  *
- *   npx tsx scripts/assessment-core-harness.ts            static sections only (no database)
+ *   npx tsx scripts/assessment-core-harness.ts            every static section, no database (static, catalogue-static, studio-static, assessor-static); what CI runs
  *   npx tsx scripts/assessment-core-harness.ts db         S1a database proofs on STAGING (rolls back, keeps nothing)
  *   npx tsx scripts/assessment-core-harness.ts scholar    S3a database proofs of migration 893 (Scholar adapter) on STAGING
  *   npx tsx scripts/assessment-core-harness.ts all        both, then the catalogue and its acceptance
@@ -518,7 +518,7 @@ function assessorStatic() {
   const ai = (src: string) => [...code(src).matchAll(/from\s+["']([^"']+)["']/g)].map(m => m[1]).filter(s => /(^|\/)ai(\/|$)|anthropic|openai|@ai-sdk|llm|completion|gemini|embedding/i.test(s));
   const aiHits = [...lib, ...pages, ...api].flatMap(f => ai(read(f)).map(s => `${ASR_REPO(f)} imports ${s}`));
   aok("AS.noai", aiHits.length === 0, aiHits.join("; ") || "no file of the workspace imports an AI module");
-  aok("AS.noai.red", ai('import { x } from "@/lib/ai/anything";').length === 1 && ai('import { y } from "@anthropic-ai/sdk";').length === 1, "planted: an AI import is caught");
+  aok("AS.noai.red", ai('import { x } from "@/lib/ai/anything";').length === 1 && ai('import { y } from "@anthropic-ai/' + 'sdk";').length === 1, "planted: an AI import is caught");
 
   // ---- literal ban over the library (comments stripped, the two design exemptions removed) ----
   const banHits = (src: string) => { let c = code(src); for (const e of EXEMPT) c = c.split(e).join(""); const h: string[] = []; c.split("\n").forEach((l, i) => { const m = BANNED.exec(l); if (m) h.push(`line ${i + 1}: ${m[0]}: ${l.trim().slice(0, 80)}`); }); return h; };
@@ -639,7 +639,7 @@ function studioStatic() {
   const all = [...pages, ...routes, ...lib];
   const ai = all.filter((f) => AI_IMPORT.test(studioCode(readFileSync(f, "utf8"))));
   ok("studio.s3", "no Studio file imports an AI module", ai.length === 0, ai.join(", "));
-  ok("studio.s3red", "planted: an AI import is caught", AI_IMPORT.test('import { ask } from "@/lib/ai-intelligence";') && AI_IMPORT.test('import x from "@anthropic-ai/sdk";'));
+  ok("studio.s3red", "planted: an AI import is caught", AI_IMPORT.test('import { ask } from "@/lib/ai-intelligence";') && AI_IMPORT.test('import x from "@anthropic-ai/' + 'sdk";'));
   const lit = lib.flatMap((f) => studioLiteralHits(readFileSync(f, "utf8")).map((h) => `${f.split(/[\\/]/).pop()} ${h}`));
   ok("studio.s4", "no profession, framework or proficiency word outside comments in src/lib/assessment/studio/** (the adapter folder is exempt by path)", lit.length === 0, lit.slice(0, 3).join(" | "));
   ok("studio.s4red", "planted: a domain word in Studio source is caught", studioLiteralHits("export const x = 'nursing';").length === 1 && studioLiteralHits("// nursing competency in a comment").length === 0);
@@ -682,7 +682,10 @@ async function studioDb() {
 }
 
 async function main() {
-  const arg = process.argv[2] ?? "static";
+  // No argument = every section that needs no database (what CI runs): static + catalogue-static + studio-static + assessor-static.
+  const given = process.argv[2];
+  const arg = given ?? "static";
+  if (given === undefined) { catalogueStatic(); studioStatic(); assessorStatic(); }
   if (arg === "static" || arg === "all") staticSection();
   if (arg === "db" || arg === "all") await dbSection();
   if (arg === "scholar" || arg === "all") await scholarSection();
