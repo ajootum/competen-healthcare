@@ -1,12 +1,14 @@
 import { requireHqCapability } from "@/lib/hq/context";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import UsersWorkspace, { type AuditEntry, type ClassificationEntry } from "./UsersWorkspace";
+import UsersWorkspace from "./UsersWorkspace";
 import { loadDirectory } from "./load-directory";
-import { directoryStats, parseDirectoryFilters, queryDirectory } from "@/lib/hq/user-directory-query";
+import { directoryStats, parseDirectoryFilters, parseUserParam, queryDirectory } from "@/lib/hq/user-directory-query";
 import { viewMatches } from "@/lib/hq/account-classification";
 
 // Landlord Portal — User Management (Design System spec §6). The rows are built in ./load-directory.ts.
+// HQ users directory (2 Nov 2026): the profile opens over the list from ?user=<id> and loads its own detail from
+// /api/super-admin/users/[id], so the per-page audit reads this file used to make for the drawer are gone.
 // HQ-USERS-CLASSIFY-01: the filters, the account view and the pagination run HERE, on the server, so the browser
 // receives one page. The URL is the whole query. With no ?view the configured default applies
 // (hq_config.users_default_view, Active Humans unless changed), or All Accounts while migration 650 is absent.
@@ -23,46 +25,10 @@ export default async function AllUsersPage({ searchParams }: { searchParams: Pro
   const [dir, sp] = await Promise.all([loadDirectory(admin), searchParams]);
   const filters = parseDirectoryFilters(sp, dir.defaultView);
   const result = queryDirectory(dir.users, filters);
-  const pageIds = result.rows.map(u => u.id);
-
-  // History for the drawer, for this page's people only: what they did, and how their account was classified.
-  const [{ data: audit }, { data: classAudit }] = await Promise.all([
-    pageIds.length
-      ? admin.from("audit_log")
-          .select("id, actor_id, actor_name, action, entity_type, entity_name, created_at")
-          .in("actor_id", pageIds)
-          .order("created_at", { ascending: false }).limit(400)
-      : Promise.resolve({ data: [] }),
-    pageIds.length
-      ? admin.from("audit_log")
-          .select("id, actor_name, entity_id, old_value, new_value, created_at")
-          .eq("action", "hq_account_classified").in("entity_id", pageIds)
-          .order("created_at", { ascending: false }).limit(400)
-      : Promise.resolve({ data: [] }),
-  ]);
-
-  const auditByActor = new Map<string, AuditEntry[]>();
-  for (const e of (audit ?? []) as { id: string; actor_id: string | null; action: string; entity_type: string | null; entity_name: string | null; created_at: string }[]) {
-    if (!e.actor_id) continue;
-    const list = auditByActor.get(e.actor_id) ?? [];
-    if (list.length < 15) list.push({
-      id: e.id, action: e.action, entityType: e.entity_type ?? null,
-      entityName: e.entity_name ?? null, at: e.created_at,
-    });
-    auditByActor.set(e.actor_id, list);
-  }
-
-  const classHistory = new Map<string, ClassificationEntry[]>();
-  type ClassAuditRow = { id: string; actor_name: string | null; entity_id: string; old_value: Record<string, unknown> | null; new_value: Record<string, unknown> | null; created_at: string };
-  for (const e of (classAudit ?? []) as ClassAuditRow[]) {
-    const list = classHistory.get(e.entity_id) ?? [];
-    if (list.length < 10) list.push({
-      id: e.id, at: e.created_at, by: e.actor_name ?? "System (migration 650)",
-      from: String(e.old_value?.account_type ?? "unclassified"), to: String(e.new_value?.account_type ?? ""),
-      reason: typeof e.new_value?.reason === "string" ? e.new_value.reason : null,
-    });
-    classHistory.set(e.entity_id, list);
-  }
+  // The profile that ?user= names, even when the current filters would not list it (a shared link, or a filter changed
+  // behind an open profile). The full directory is already in memory here, so this is a lookup, not a read.
+  const focusId = parseUserParam(sp);
+  const focusUser = focusId ? dir.users.find(u => u.id === focusId) ?? null : null;
 
   return (
     <UsersWorkspace
@@ -75,8 +41,8 @@ export default async function AllUsersPage({ searchParams }: { searchParams: Pro
       filters={{ ...filters, page: result.page }}
       defaultView={dir.defaultView}
       classificationAvailable={dir.classificationAvailable}
-      classificationHistory={Object.fromEntries(classHistory)}
-      auditByActor={Object.fromEntries(auditByActor)}
+      participationAvailable={dir.participationAvailable}
+      focusUser={focusUser}
       hospitals={dir.hospitals}
       organisations={dir.organisations}
       departments={dir.departments}
