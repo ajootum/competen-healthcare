@@ -14,6 +14,8 @@ import { CASE_CONTEXT_LABEL, CASE_DIMENSION_LABEL, CASE_ENTRY_LABEL, MARKING_LAB
 import type { LearnerView } from "@/lib/cases/blueprint";
 import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
+import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
+import { AskAbout } from "./ask-panel";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -334,6 +336,10 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       {play.status !== "active" && play.attempt && <AttemptRecord a={play.attempt} />}
       {play.status !== "active" && <ClosingNotes closing={play.closing ?? null} reasons={reason} view={v} />}
       {play.status !== "active" && <ReflectionCard prompt={play.closing?.reflectionPrompt ?? null} revisit={play.debrief?.revisit ?? []} materialId={play.materialId} />}
+      {/* SCHOLAR-CE-2026 CE-01: ask about the debrief in place, on the sections the case rests on (the server keeps only the learner's own). */}
+      {play.status !== "active" && <AskAbout className="mt-4 block" surface="case" materialId={play.materialId ?? null} refLabel="Case debrief"
+        chunkIds={[...new Set([...play.feedback.flatMap(f => f.chunkIds ?? []), ...(play.debrief?.revisit ?? []).flatMap(r => r.chunkIds)])].slice(0, ASK_CHUNK_MAX)}
+        prefill={askPrefill("case", {})} />}
       {/* SCHOLAR-AI-OPT-01 s7: optional feedback on an AI-written private case (a library case is clinically reviewed). */}
       {play.status !== "active" && play.kind === "private" && <AiFeedback kind="case" target="case" refId={play.caseId} />}
       <nav aria-label="What next" className="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4">

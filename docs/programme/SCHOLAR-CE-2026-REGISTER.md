@@ -6,7 +6,7 @@ Waves: 1 = CE-01, CE-02, CE-03 · 2 = CE-04, CE-05 · 3 = CE-06 · 4 = CE-07 acc
 
 | ID | Workstream | Status | Last update |
 |---|---|---|---|
-| CE-01 | Seamless, context-aware Personal AI | Gap confirmed | 2 Nov 2026 |
+| CE-01 | Seamless, context-aware Personal AI | Implementing | 2 Nov 2026 |
 | CE-02 | AI Notebook and Personal Learning Library | Gap confirmed | 2 Nov 2026 |
 | CE-03 | Unified My Plan | Deployed | 2 Nov 2026 |
 | CE-04 | Conversational clinical simulation | Gap confirmed | 2 Nov 2026 |
@@ -18,7 +18,7 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 
 ---
 
-## CE-01 — Seamless, context-aware Personal AI — Gap confirmed
+## CE-01 — Seamless, context-aware Personal AI — Implementing
 
 **Exists and works**
 - One engine, two entry points: `/api/individual/assistant` (Personal AI page) and `/api/individual/scholar/learn/assistant` (Learn "Ask"), both via `runPersonalAssistant` → `runMeteredAi` (identifier screen, clinical-risk classification, eligibility, routing, reservation).
@@ -33,6 +33,16 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 3. The context block lacks flashcard state (weak/due cards) and the learner's plan (goal, next step, exam date).
 
 **Decisions**: reuse the existing engine and Route B grounding; add an in-place Ask panel with a typed context payload; no new tutor or memory store; Personal AI answers stay unsaved (stated product rule).
+
+**Implementing (branch `programme/scholar-ce-2026-wave1`, 2 Nov 2026)** — not yet merged, deployed or accepted.
+- **Ask about this** (one shared panel, `study/_components/ask-panel.tsx`): native modal `<dialog>` with the shared `useModalFocus` hook, side drawer from `md`, bottom sheet on a phone; posts to Route B (`/api/individual/scholar/learn/assistant`) with `askContext { surface, chunkIds (max 6), materialId?, studyId?, refLabel, prefill? }` (`scholar/ask-context.ts`). Answers use the Learn rendering: source chips, "NOT COVERED", `PERSONAL_AI_LABEL`, depth, follow-ups, the shared unavailability copy (`useAiAvailability("ask")`, button disabled with the reason). Nothing is stored.
+- **Server (Route B)**: every chunk id is read again by the caller's id (`getPassage`); ids that are not the caller's are dropped silently; no owned section left = general explanation under the same label. Intent, risk, eligibility and allowance path unchanged. Surface maps onto existing intent surfaces (revise, flashcards -> revise; case, osce -> apply; plan, library, learn -> learn; personal_ai -> personal_ai); `refLabel` is framing only and dropped if it carries an identifier shape.
+- **Entry points live**: Revise and Adaptive question feedback (the question's section), Flashcards answer side (the card's section; none for a library card), Apply case debrief (sections of the case's decisions), OSCE result (the station's own source sections, ids via `stationView`; template and library stations: general), Saved library item (the lesson's session step, else its sections).
+- **Personal AI page continuity**: `/assistant?study=&material=&section=` resolved on the server (`scholar/ask-link.ts`, the caller's own only); chip "Using your study session: <focus>" with remove; questions then go through Route B grounding and show sources. Without params: as before.
+- **Study-session block**: adds flashcard state (due count in words; up to five weakest card fronts of the session's materials, `store.weakFlashcards`) and the learner's plan (goal type, own goal words, how far off the exam is in words, up to three priorities, from `getStudyPlan`); same 3000-character cap, words only, identifier-screened, never cited.
+- **Decisions / deviations**: (1) My Plan Today entry point is OUT of this branch (owner reopened CE-03; separate rebuild) -- the panel is exported, `askPrefill("plan")` and `sectionIdsInHref`/`sessionIdInHref` exist to add it there later. (2) Today's next-step title is not read into the block (the Today planner is heavy and records carry-overs); plan settings plus due count only. (3) `personal_ai` added to the ask surfaces for the Personal AI page. (4) `?material=` alone grounds nothing and is ignored; it only narrows `?section=`. (5) No migrations.
+- **Files**: `ask-context.ts`, `ask-link.ts`, `ask-panel.tsx`, Route B `route.ts`, `study-session-context.ts`, `study-context.ts`, `store.ts` (`weakFlashcards`), `osce-service.ts`, `revision-client`, `adaptive-client`, `flashcards-client`, `case-client`, `osce-client`, OSCE station page, `saved-library-view`, `AssistantPanel`, assistant `page`; tests `ask-context.test.ts`, `study-session-context-ce01.test.ts`, Route B `route.test.ts`.
+- **Acceptance still to do**: staging/browser walk of each entry point on desktop and phone; production acceptance after deployment.
 
 ---
 

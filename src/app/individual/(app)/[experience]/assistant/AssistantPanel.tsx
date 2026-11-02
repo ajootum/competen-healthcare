@@ -7,7 +7,9 @@ import { AiRefusalNotice, aiActionProps } from "../../../_components/ai/AiAvaila
 import ClarifyPurpose from "../../../_components/ai/ClarifyPurpose";
 import { clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi, type OwnCardTarget } from "../../../_components/ai/PersonalAiAnswer";
-import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth } from "@/lib/individual/personal-ai-options";
+import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
+import { askRequestBody } from "@/lib/individual/scholar/ask-context";
+import type { AskLink } from "@/lib/individual/scholar/ask-link";
 
 // The personal AI's question box. One question, one answer, held only in this page's state -- the
 // server stores nothing (see src/lib/individual/assistant.ts). Earlier answers in this visit stay on
@@ -29,17 +31,21 @@ const STARTERS: Record<ExperienceKey, string[]> = {
   professional: ["What should I focus on in my CPD this year?", "Summarise what is on my Competen record."],
 };
 
-type Turn = { id: number; q: string; a: string; streaming: boolean; followUp?: FollowUpKind };
+type Turn = { id: number; q: string; a: string; streaming: boolean; followUp?: FollowUpKind; sources?: PersonalAiSourceRef[] };
 type Request = { q: string; followUp?: FollowUp };
 
 // HFE-01 Wave 1: `unavailable` (from the page's standing) disables asking, with the reason the page shows above
 // (#ai-unavailable). A refusal that still comes back is shown in the shared words.
-export default function AssistantPanel({ experience, accent, unavailable = false, ownCards = null }: {
+export default function AssistantPanel({ experience, accent, unavailable = false, ownCards = null, link: initialLink = null }: {
   experience: ExperienceKey; accent: string; unavailable?: boolean;
+  /** SCHOLAR-CE-2026 CE-01: the study session / section the learner arrived from (resolved on the server, the caller's own). Questions are
+   *  then grounded on it and cite it; removing the chip returns to the plain Personal AI. */
+  link?: AskLink | null;
   /** Scholar: where an "Edit and save as my card" may be filed (the learner's own materials); null hides saving. */
   ownCards?: OwnCardTarget | null;
 }) {
   const scholar = experience === "scholar";
+  const [link, setLink] = useState<AskLink | null>(scholar ? initialLink : null);
   const [question, setQuestion] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<{ body: unknown } | null>(null);
@@ -65,10 +71,13 @@ export default function AssistantPanel({ experience, accent, unavailable = false
     const ctl = new AbortController(); abort.current = ctl;
     const update = (patch: Partial<Turn>) => setTurns(t => t.map(x => (x.id === id ? { ...x, ...patch } : x)));
     let shown = false;
-    const r = await askPersonalAi("/api/individual/assistant", {
-      experience, question: text, ...(purpose ? { purpose } : {}),
-      ...(scholar ? { depth, ...(req.followUp ? { followUp: req.followUp } : {}) } : {}),
-    }, soFar => {
+    // With a study place the question goes through the grounded Learn route (sources, NOT COVERED, the study-session block); without one, as before.
+    const r = await askPersonalAi(link ? "/api/individual/scholar/learn/assistant" : "/api/individual/assistant", link
+      ? askRequestBody({ question: text, context: { surface: "personal_ai", chunkIds: link.chunkIds, materialId: link.materialId, studyId: link.studyId, refLabel: link.focus }, depth, purpose, followUp: req.followUp })
+      : {
+        experience, question: text, ...(purpose ? { purpose } : {}),
+        ...(scholar ? { depth, ...(req.followUp ? { followUp: req.followUp } : {}) } : {}),
+      }, soFar => {
       if (!shown) { shown = true; setTurns(t => [{ id, q: text, a: soFar, streaming: true, followUp: req.followUp?.kind }, ...t]); }
       else update({ a: soFar });
     }, ctl.signal);
@@ -77,14 +86,14 @@ export default function AssistantPanel({ experience, accent, unavailable = false
       if (r.kind === "stream") {
         // A failure after text began: the partial text is not an answer and is not kept.
         if (r.error) { drop(); setError({ body: { error: r.error.message } }); return; }
-        update({ a: r.text, streaming: false });
+        update({ a: r.text, streaming: false, sources: r.done?.sources });
         if (!req.followUp) setQuestion("");
         return;
       }
       const prompt = r.status === 409 ? clarifyFrom(r.json) : null;
       if (prompt) { setClarify({ req, prompt }); return; }
       if (!r.ok) { setError({ body: r.json }); return; }
-      setTurns(t => [{ id, q: text, a: String(r.json.answer ?? ""), streaming: false, followUp: req.followUp?.kind }, ...t]);
+      setTurns(t => [{ id, q: text, a: String(r.json.answer ?? ""), streaming: false, followUp: req.followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources as PersonalAiSourceRef[] : undefined }, ...t]);
       if (!req.followUp) setQuestion("");
     } finally {
       setBusy(false);
@@ -96,6 +105,14 @@ export default function AssistantPanel({ experience, accent, unavailable = false
 
   return (
     <div>
+      {link && (
+        <p role="status" className="mb-3 inline-flex max-w-full flex-wrap items-center gap-2 rounded-full border border-indigo-200 bg-indigo-50 py-1 pl-3 pr-1 text-[13px] font-semibold text-indigo-950">
+          <span className="min-w-0 break-words">{link.studyId ? "Using your study session" : "Using your notes"}: {link.focus}</span>
+          <button type="button" aria-label={"Stop using " + (link.studyId ? "your study session" : "your notes") + ": " + link.focus}
+            onClick={() => { setLink(null); try { window.history.replaceState(null, "", window.location.pathname); } catch { /* the address stays */ } }}
+            className={"inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-indigo-100 pointer-coarse:h-[var(--cmp-touch-min)] pointer-coarse:w-[var(--cmp-touch-min)] " + focusRing}>{"✕"}</button>
+        </p>
+      )}
       <form onSubmit={e => { e.preventDefault(); void ask({ q: question }); }} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
         <label htmlFor="ind-q" className="text-[14px] font-semibold text-gray-900">Your question</label>
         <textarea id="ind-q" value={question} onChange={e => setQuestion(e.target.value)} maxLength={QUESTION_MAX} rows={3}
@@ -130,7 +147,7 @@ export default function AssistantPanel({ experience, accent, unavailable = false
         {turns.map((t, i) => {
           const asked = t.followUp ? `${FOLLOW_UP_LABEL[t.followUp]}: ${t.q}` : t.q;
           const answer = scholar
-            ? <PersonalAiAnswer text={t.a} streaming={t.streaming} save={ownCards} />
+            ? <PersonalAiAnswer text={t.a} streaming={t.streaming} save={ownCards} sources={t.sources} />
             : <div className="whitespace-pre-wrap text-[14.5px] leading-relaxed text-gray-800">{t.a}</div>;
           if (i > 0) return (
             // Earlier turns fold to their question: the newest answer is the one being read.

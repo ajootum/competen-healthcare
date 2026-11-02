@@ -17,12 +17,12 @@
 
 import { isStudySessionsOn, loadIndividualPolicy, type IndividualPolicy } from "@/lib/individual/policy";
 import {
-  addStudyLink, getConnectedSession, getLearningSession, getOsceAttempt, latestConnectedSession, learningEvents, listStudyLinks, recentWrittenFeedback, revisionPool, setLastSpace, studySessionSchema, topicsOfSections,
+  addStudyLink, countDue, getConnectedSession, getLearningSession, getOsceAttempt, getStudyPlan, latestConnectedSession, learningEvents, listStudyLinks, recentWrittenFeedback, revisionPool, setLastSpace, studySessionSchema, topicsOfSections, weakFlashcards,
   type StudySessionRow,
 } from "./store";
 import { REVISION_FORMATS } from "./config";
 import { rubricOf } from "./question-intel";
-import { buildStudySessionContext, type StudySessionContextInput, type StudySessionSection } from "./study-session-context";
+import { buildStudySessionContext, daysUntil, type StudySessionContextInput, type StudySessionSection } from "./study-session-context";
 import type { StudyLinkKind, StudySpace } from "./study-session";
 import { isStudyId, studyScopeOf, studyStages, type StudyBarView, type StudyScope } from "./study-carry";
 import { displaySessionTitle } from "./learn-search";
@@ -81,6 +81,8 @@ export async function linkStudy(admin: Admin, userId: string, raw: unknown, kind
   } catch { /* a link is never worth failing the activity */ }
 }
 
+/** One extra read, failing to null: a missing or failing reader costs only its own lines, never the block. */
+const safely = async <T,>(read: () => Promise<T>): Promise<T | null> => { try { return await read(); } catch { return null; } };
 const desc = (a: string, b: string) => (a < b ? 1 : a > b ? -1 : 0);
 
 /**
@@ -151,12 +153,24 @@ export async function studySessionBlock(admin: Admin, userId: string, raw: unkno
       }];
     });
 
+    // SCHOLAR-CE-2026 CE-01: flashcard state (due now; the weakest cards on the session's materials) and the learner's plan settings. Cheap
+    // owner-keyed reads, none of them heavy (not the Today planner, which also records carry-overs). Each fails to nothing, never to the block.
+    const materialIds = [...byMaterial.keys()];
+    const [due, weak, plan] = await Promise.all([safely(() => countDue(admin, userId)), safely(() => weakFlashcards(admin, userId, materialIds, 5)), safely(() => getStudyPlan(admin, userId))]);
+    const flashcards: StudySessionContextInput["flashcards"] = due === null && weak === null ? null
+      : { due, weak: (weak ?? []).map(c => ({ id: c.id, front: c.front, topic: topicOf(c.chunkId), quality: c.quality })) };
+    const planRow = plan && plan.ok ? plan.data : null;
+    const planInput: StudySessionContextInput["plan"] = planRow
+      ? { goalType: planRow.goalType, goal: planRow.goal, priorities: planRow.priorities, examInDays: planRow.examDate ? daysUntil(planRow.examDate, new Date().toISOString().slice(0, 10)) : null }
+      : null;
+
     const stagesTouched =studyStages(session, steps.length, links).filter(s => s.mark !== "none").map(s => s.label);
     const competency = session.competencyId ? opts.competencyTitle?.(session.competencyId) ?? null : null;
     return buildStudySessionContext({
       focus: { title: displaySessionTitle(session.title), objective: session.objectiveOutcome ?? session.objectiveText ?? null, competencies: competency ? [competency] : [] },
       sources: [...byMaterial.values()], missed, mistakes, unsure, osce, written,
       progress: { stepsDone: Math.min(session.currentStep, steps.length), stepsTotal: steps.length, completed: session.status === "completed", stagesTouched },
+      flashcards, plan: planInput,
     });
   } catch { return null; }
 }

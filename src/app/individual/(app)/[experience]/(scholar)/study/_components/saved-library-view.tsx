@@ -20,6 +20,8 @@ import { StatePanel, Unreadable, focusRing } from "../../../../../_components/ch
 import { sourceHref } from "./question-view";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { LibraryNotes, type ClientNote } from "./library-notes-client";
+import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
+import { AskAbout } from "./ask-panel";
 
 // SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026): THE PERSONAL LIBRARY on Saved learning. A server component: database
 // reads only, keyed on the caller (store.ts), shaped by saved-library.ts. NO AI anywhere: opening a lesson from here is the
@@ -225,6 +227,9 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
             {live && <Link href={href(`study/learn?session=${encodeURIComponent(live.sessionId)}`)} className={linkCls}>Open its session</Link>}
             <a href={`${EXPORT}?selected=${a.id}`} download className={linkCls}>Download (PDF)</a>
           </p>
+          {/* SCHOLAR-CE-2026 CE-01: ask about this lesson in place -- its session's step where it still has one, else the sections it was taught from. */}
+          <AskAbout className="mt-2" surface="library" chunkIds={a.sources.slice(0, ASK_CHUNK_MAX)} materialId={a.materialId} sessionId={live?.sessionId ?? null} step={live?.step ?? null}
+            refLabel={`Saved lesson: ${itemTitle(a, c)}`} prefill={askPrefill("library", { title: itemTitle(a, c) })} />
           <details className="mt-2 rounded-xl border border-gray-200" open={open}>
             <summary className={`cursor-pointer list-none px-3 py-2 text-[13.5px] font-semibold text-gray-900 ${focusRing}`}>Read it here</summary>
             <div id={domId} className="border-t border-gray-100 px-3 py-3"><ArtefactBody a={a} c={c} /></div>

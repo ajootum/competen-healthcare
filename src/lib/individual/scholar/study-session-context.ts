@@ -18,6 +18,9 @@ import { words } from "./learner-context";
 // ⚠ ONLY WHAT IS NAMED BELOW is read from the input. Nothing about who the learner is, nothing from Professional,
 //   an employer or another learner: the input type has no such field and anything extra passed in is ignored.
 // ⚠ NO PASSAGE TEXT. Sources are material titles and section topics only; the passages reach the AI on their own.
+// ⚠ CE-01 (SCHOLAR-CE-2026): flashcard state and the learner's plan join the same block, under the same rules. Weak flashcard fronts sit with the
+//   misconceptions; the due count, the plan's goal, priorities and how far off the exam is sit with progress (the lowest priority, so they are the
+//   first to go over the cap). Counts and the exam distance are said in words. A plan or a card the reader could not read is simply absent.
 // ⚠ NOT FORMAL EVIDENCE (D5). Practice results here are formative and say nothing about competence. Written-answer
 //   feedback (SCHOLAR-WRITTEN-FEEDBACK-01) is the AI's formative feedback, labelled so: never self-assessment, never verified.
 
@@ -27,7 +30,13 @@ export const STUDY_CONTEXT_MAX_CHARS = 3000;
 /** Fixed limits, so the selection never depends on how much was read. */
 export const STUDY_CONTEXT_LIMITS = {
   competencies: 5, sources: 6, topicsPerSource: 4, missed: 6, unsure: 4, mistakes: 3, osce: 3, gapsPerOsce: 5, suggestionsPerOsce: 3, written: 3, pointsPerWritten: 2, stemChars: 160, itemChars: 200,
+  weakCards: 5, priorities: 3,
 } as const;
+
+/** CE-01: the learner's flashcards, for the session's materials. `due` null: not counted (nothing is said). `weak`: cards they last rated badly. */
+export type StudyFlashcardsInput = { due: number | null; weak: readonly { id: string; front: string; topic: string | null; quality: number | null }[] };
+/** CE-01: the learner's own study plan settings. `examInDays`: whole days to the exam date from the learner's today (null: none, or already past). */
+export type StudyPlanInput = { goalType: "learn" | "exam" | "revise" | null; goal: string | null; priorities: readonly string[]; examInDays: number | null };
 
 export type StudySessionContextInput = {
   focus: { title: string; objective: string | null; competencies: readonly string[] };
@@ -48,6 +57,10 @@ export type StudySessionContextInput = {
    */
   written?: readonly { id: string; stem: string; topic: string | null; at: string; missing: readonly string[]; misconceptions: readonly string[]; next: string | null; summary: string | null }[];
   progress: { stepsDone: number; stepsTotal: number; completed: boolean; stagesTouched: readonly string[] } | null;
+  /** CE-01: flashcard state for the session's materials. Optional: absent, nothing about cards is said. */
+  flashcards?: StudyFlashcardsInput | null;
+  /** CE-01: the learner's plan. Optional: absent, nothing about the plan is said. */
+  plan?: StudyPlanInput | null;
 };
 
 export type StudySessionSection = "focus" | "sources" | "misconceptions" | "feedback" | "progress";
@@ -66,6 +79,24 @@ function clean(raw: string | null | undefined, max: number = STUDY_CONTEXT_LIMIT
   const w = words(s);
   return w.length > max ? `${w.slice(0, max - 3).replace(/\s+\S*$/, "")}...` : w;
 }
+/** CE-01: whole days from `today` to a calendar date (both YYYY-MM-DD). Null where either is not a date. Negative: already past. */
+export function daysUntil(date: string | null | undefined, today: string): number | null {
+  const ok = (s: unknown): s is string => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(`${s}T00:00:00Z`));
+  if (!ok(date) || !ok(today)) return null;
+  return Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86_400_000);
+}
+
+/** CE-01: a distance in days, in words ("tomorrow", "in about three weeks"). Past or unknown: "". */
+export function examDistance(days: number | null | undefined): string {
+  if (days === null || days === undefined || !Number.isFinite(days) || days < 0) return "";
+  const d = Math.floor(days);
+  if (d === 0) return "today";
+  if (d === 1) return "tomorrow";
+  if (d <= 14) return `in ${spell(d)} days`;
+  const weeks = Math.round(d / 7);
+  return weeks <= 20 ? `in about ${spell(weeks)} weeks` : "more than twenty weeks away";
+}
+const GOAL_WORDS = { learn: "to learn new material", exam: "to prepare for an exam", revise: "to keep revising what I have learned" } as const;
 const cmp = (a: string, b: string) => (a < b ? -1 : a > b ? 1 : 0);
 /** Distinct non-empty items, first kept, in the given order. */
 const distinct = (xs: readonly string[]) => { const seen = new Set<string>(); return xs.filter(x => x && !seen.has(x.toLowerCase()) && (seen.add(x.toLowerCase()), true)); };
@@ -120,16 +151,32 @@ function sections(input: StudySessionContextInput): Section[] {
     return `Formative AI feedback on my written answer${t ? ` on ${t}` : ""} to "${stem}": ${body}`;
   })).slice(0, L.written);
 
+  // CE-01: weakest flashcards first (last rated lowest), then by id: a fixed order whatever the read order was.
+  const weakCards = distinct([...(input.flashcards?.weak ?? [])].sort((a, b) => (a.quality ?? 9) - (b.quality ?? 9) || cmp(a.id, b.id))
+    .map(c => { const f = clean(c.front, L.stemChars); if (!f) return ""; const t = clean(c.topic); return `${t ? `${t}: ` : ""}${f}`; }))
+    .slice(0, L.weakCards).map(x => `A flashcard I find hard: ${x}`);
+  const due = input.flashcards?.due;
+  const dueLine = due === null || due === undefined || due < 0 ? "" : due === 0 ? "I have no flashcards due for review." : `I have ${due === 1 ? "one" : due > 20 ? "many" : spell(due)} flashcard${due === 1 ? "" : "s"} due for review.`;
+  const pl = input.plan;
+  const planLines = !pl ? [] : distinct([
+    pl.goalType ? `My study goal is ${GOAL_WORDS[pl.goalType]}.` : "",
+    clean(pl.goal) ? `In my own words: ${clean(pl.goal)}.` : "",
+    examDistance(pl.examInDays) ? `My exam is ${examDistance(pl.examInDays)}.` : "",
+    (() => { const t = distinct([...pl.priorities].map(x => clean(x))).slice(0, L.priorities); return t.length ? `Topics I am prioritising: ${t.join("; ")}.` : ""; })(),
+  ]);
+
   const p = input.progress;
   const progress = !p ? [] : distinct([
     p.completed ? "I have finished the learning steps." : p.stepsTotal > 0 ? `I have done ${spell(Math.min(p.stepsDone, p.stepsTotal))} of ${spell(p.stepsTotal)} learning steps.` : "",
     (() => { const s = distinct([...p.stagesTouched].map(x => clean(x))); return s.length ? `Stages I have used in this session: ${s.join(", ")}.` : ""; })(),
   ]);
+  // The due count and the plan stand even where the session has no step progress to report.
+  progress.push(...[dueLine, ...planLines].filter(Boolean));
 
   return [
     { name: "focus", head: "", items: focus, join: " " },
     { name: "sources", head: "Sources I am studying from: ", items: sources, join: "; " },
-    { name: "misconceptions", head: "", items: [...missed, ...unsure, ...mistakes], join: "\n" },
+    { name: "misconceptions", head: "", items: [...missed, ...unsure, ...mistakes, ...weakCards], join: "\n" },
     { name: "feedback", head: "", items: [...feedback, ...written], join: "\n" },
     { name: "progress", head: "", items: progress, join: " " },
   ];

@@ -40,6 +40,10 @@ export function stationView(s: OsceStationRow) {
     id: s.id, title: s.title, scenario: s.scenario, candidateInstructions: s.candidateInstructions, durationMinutes: s.durationMinutes,
     sections: s.sections, source: s.source, contentStatus: s.contentStatus, version: s.version,
     profession: s.profession, programmeLabel: s.programmeLabel, topic: s.topic, bodySystem: s.bodySystem, difficulty: s.difficulty, objectives: s.objectives,
+    // SCHOLAR-CE-2026 CE-01: the learner's own sections the station was written from (ids only: no text, no item), so "Ask about this" can ground
+    // on them after a run. A library or template station has none. The Ask route checks each id belongs to the caller.
+    askMaterialId: s.materialId ?? null,
+    askChunkIds: [...new Set([s.chunkId, ...s.checklist.map(i => i.chunkId)].filter((x): x is string => typeof x === "string" && x.length > 0))].slice(0, 6),
   };
 }
 export type OsceStationView = ReturnType<typeof stationView>;

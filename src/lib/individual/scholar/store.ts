@@ -727,6 +727,27 @@ export async function countDue(admin: Admin, userId: string): Promise<number | n
 }
 
 /**
+ * SCHOLAR-CE-2026 CE-01: the learner's own flashcards on some materials that they last rated badly (last_quality below 3, SM-2's own lapse
+ * line), weakest first. Two bounded owner-keyed reads, no hydrate: `id`, `front` (the card's stem) and the quality only. Null where it could
+ * not be read (nothing is then said about cards, never "no weak cards"). A governed library copy is not the learner's card and is not read.
+ */
+export async function weakFlashcards(admin: Admin, userId: string, materialIds: readonly string[], limit = 5): Promise<{ id: string; front: string; chunkId: string; quality: number }[] | null> {
+  const ids = materialIds.filter(isUuid).slice(0, 10);
+  if (!ids.length) return [];
+  try {
+    const qs = await admin.from("individual_scholar_question").select("id, stem, chunk_id").eq("user_id", userId).eq("kind", "flashcard").in("material_id", ids).limit(400);
+    if (qs.error) return null;
+    const rows = (qs.data ?? []) as any[];
+    if (!rows.length) return [];
+    const cs = await admin.from("individual_scholar_card").select("question_id, last_quality").eq("user_id", userId).eq("status", "active").not("last_quality", "is", null).lt("last_quality", 3).in("question_id", rows.map(r => r.id)).limit(400);
+    if (cs.error) return null;
+    const by = new Map(rows.map(r => [r.id as string, r]));
+    return ((cs.data ?? []) as any[]).flatMap(c => { const q = by.get(c.question_id); return q ? [{ id: q.id as string, front: String(q.stem ?? ""), chunkId: String(q.chunk_id ?? ""), quality: Number(c.last_quality) }] : []; })
+      .sort((a, b) => a.quality - b.quality || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)).slice(0, Math.max(0, limit));
+  } catch { return null; }
+}
+
+/**
  * The learner self-grades recall 0..5. SM-2 (imported) reschedules, within the policy's bounds (REVISION-01 R3,
  * revision.ts scheduleReview; the defaults are exactly the earlier rule). Owner-keyed.
  */

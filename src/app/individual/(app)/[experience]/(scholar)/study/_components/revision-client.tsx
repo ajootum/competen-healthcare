@@ -24,6 +24,8 @@ import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spel
 import { CLOZE_LABEL } from "@/lib/individual/scholar/cloze";
 import { SourcePictureButton } from "./learn-visuals";
 import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
+import { askPrefill } from "@/lib/individual/scholar/ask-context";
+import { AskAbout } from "./ask-panel";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -304,7 +306,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
             {items.map((i, n) => { const a = state.answered.find(x => x.questionId === i.id); return (
               <li key={i.id} className="rounded-xl border border-gray-200 p-3">
                 <p className="text-[14px] font-semibold text-gray-900">{n + 1}. {i.stem}</p>
-                {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact questionId={i.id} />
+                {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact questionId={i.id} stem={i.stem} />
                   : a?.selfGrade && sid ? <GradeAtEnd questionId={i.id} sessionId={sid} g={a.selfGrade} onGraded={graded} />
                     : <p className="text-[13px] text-gray-500">Not answered.</p>}
               </li>
@@ -416,7 +418,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
       </p>
       <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
       {answered ? (
-        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} /></> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
+        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} stem={item.stem} /></> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
       ) : item.kind === "flashcard" ? (
         !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
@@ -666,7 +668,7 @@ function AttemptRecordNotes({ f }: { f: RevisionFeedback }) {
   );
 }
 
-export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string }) {
+export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string; stem?: string | null }) {
   const basis = f.library ? "the Competen library answer" : "your notes";
   return (
     <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
@@ -748,6 +750,9 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId }: { f
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
         {/* SCHOLAR-SQIE-01: more on the same material, a step easier after a miss and harder after a right answer. */}
         {f.nextDifficulty && <Link href={`${studyHref("revise")}?material=${f.source.materialId}&difficulty=${f.nextDifficulty}`} className={ghost}>{f.correct ? "Try harder questions on this" : "More practice on this"}</Link>}
+        {/* SCHOLAR-CE-2026 CE-01: ask about this question in place -- the question's own section, no leaving the page. */}
+        <AskAbout surface="revise" chunkIds={f.library ? [] : [f.source.chunkId]} materialId={f.library ? null : f.source.materialId} refLabel={`Question feedback: ${f.source.citation}`}
+          prefill={askPrefill("revise", { stem, correct: f.correct })} />
       </div>
       {/* SCHOLAR-AI-OPT-01 s7: optional, one tap, about the AI-written question itself (not the student's answer). */}
       {!f.library && <AiFeedback kind="question" target="question" refId={questionId} />}

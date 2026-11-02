@@ -154,7 +154,7 @@ export default async function OsceStationPage({ params, searchParams }: { params
           {last && (
             <section aria-labelledby="osce-last-h" className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4 md:p-5">
               <h2 id="osce-last-h" className="text-[16px] font-bold text-gray-900">Your last marked run</h2>
-              <ResultView r={last} />
+              <ResultView r={last} ask={{ chunkIds: stationView(station).askChunkIds, materialId: stationView(station).askMaterialId, title: station.title }} />
             </section>
           )}
         </div>
