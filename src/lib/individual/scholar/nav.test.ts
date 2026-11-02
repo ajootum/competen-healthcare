@@ -26,9 +26,8 @@ describe("Scholar navigation model", () => {
       ["Overview", "courses"], ["Explore Courses", "courses/explore"], ["My Courses", "courses/mine"],
       ["My Programmes", "courses/programmes"], ["Learning Progress", "courses/progress"],
     ]);
-    expect(comp.items.map(l => l.label)).toEqual([
-      "Overview", "My Competency Profile", "Competency Frameworks", "My Development Gaps", "Practice Assessments",
-      "Competen Assessments", "Competency Verification", "My Evidence",
+    expect(comp.items.map(l => [l.label, l.segment])).toEqual([
+      ["Overview", "my-competencies"], ["Assessments", "my-competencies/assessments"], ["My Evidence", "my-competencies/evidence"],
     ]);
     expect(comp.items.every(l => l.segment === "my-competencies" || l.segment.startsWith("my-competencies/"))).toBe(true);
   });
@@ -43,8 +42,8 @@ describe("Scholar navigation model", () => {
     expect(new Set(ALL_LEAVES.map(l => l.key)).size).toBe(ALL_LEAVES.length);
   });
 
-  it("marks only Competen Assessments and Competency Verification as future", () => {
-    expect(ALL_LEAVES.filter(l => l.status === "future").map(l => l.label)).toEqual(["Competen Assessments", "Competency Verification"]);
+  it("marks no leaf as future: Assessments is operational and verification has its place in My Evidence", () => {
+    expect(ALL_LEAVES.filter(l => l.status === "future")).toEqual([]);
   });
 
   it("offers no enrol, buy, pay or certify wording", () => {
@@ -72,10 +71,22 @@ describe("activeOf", () => {
     expect(keyOf("courses")).toBe("courses");
     expect(keyOf("courses/explore")).toBe("courses-explore");
     expect(keyOf("my-competencies")).toBe("competencies");
-    expect(keyOf("my-competencies/gaps")).toBe("competencies-gaps");
+    expect(keyOf("my-competencies/gaps")).toBe("competencies");
     expect(keyOf("passport/share")).toBe("passport");
     expect(keyOf("ai-allowance")).toBe("settings");
     expect(keyOf("")).toBe("home");
+  });
+
+  it("keeps the retired My Competencies pages on the leaf that took over, and gives the new routes their own", () => {
+    for (const old of ["profile", "frameworks", "gaps"]) expect(keyOf(`my-competencies/${old}`)).toBe("competencies");
+    expect(keyOf("my-competencies/practice")).toBe("competencies-assessments");
+    expect(keyOf("my-competencies/verification")).toBe("competencies-evidence");
+    expect(keyOf("my-competencies/assessments")).toBe("competencies-assessments");
+    expect(keyOf("my-competencies/assessments/2f7c1a5e-0000-4000-8000-000000000000")).toBe("competencies-assessments");
+    expect(keyOf("my-competencies/assessments/start/CHK-RESP-ASSESS")).toBe("competencies-assessments");
+    expect(keyOf("my-competencies/assessments/2f7c1a5e-0000-4000-8000-000000000000/report")).toBe("competencies-assessments");
+    expect(keyOf("my-competencies/evidence")).toBe("competencies-evidence");
+    expect(keyOf("/individual/scholar/my-competencies/frameworks#frameworks")).toBe("competencies");
   });
 
   it("names the holding module, and none for Home and the shared links", () => {

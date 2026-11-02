@@ -18,6 +18,7 @@ import { mergeDueRevisionDays } from "./plan-workspace";
 import type { CalendarItem } from "./study-calendar";
 import { acceptedMaterialIds, acceptedUnstarted, buildProposal, postponedTopics, proposalDecisions, type MaterialIn, type PlanProposal, type ProposalDecision } from "./plan-proposal";
 import { chooseToday, type PlanRecommendation, type UnfinishedItem } from "./plan-recommend";
+import { competencyGapsForPlan } from "@/lib/assessment/adapters/scholar/overview-data";
 import { isoWeek, reflectionOffer, type ReflectionOffer, type Workload } from "./plan-reflection";
 import { effectiveSettings, settingsFromRow, sessionMinutesOf } from "./plan-settings";
 import { buildStudyPlan, unstartedMappedSections, type PlanCalendar, type StudyPlanInput, type StudyPlanResult, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
@@ -354,8 +355,10 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
       ...(week.thisWeek.find(d => d.day === today)?.activities ?? []).map(a => a.ref).filter(r => r !== "revise:due" && !planned.has(r)),
     ].filter(Boolean)
     : []);
+  // CHECKLIST STUDIO S3: the learner's OWN self-assessment gaps, only when the rule is in their order (the module gate and the readiness probe are the adapter's).
+  const competencyGaps = policy.scholarPlanRuleOrder.includes("competency") ? await competencyGapsForPlan(admin, userId) : [];
   const choice = chooseToday({
-    today, ruleOrder: policy.scholarPlanRuleOrder, settings: c.settings, plan: week, entries: c.mastery.topics, dueCards: c.dueCards, unfinished, monthlyWeak,
+    competencyGaps, today, ruleOrder: policy.scholarPlanRuleOrder, settings: c.settings, plan: week, entries: c.mastery.topics, dueCards: c.dueCards, unfinished, monthlyWeak,
     coverage: c.unstarted.filter(u => (u.materialIds ?? []).length > 0), calendar: c.occurrences, events: c.events, postponed: c.postponed,
     moved: movedOffToday, fallbackMinutes: Math.min(30, Math.max(10, sessionMinutesOf(c.settings))),
   });
