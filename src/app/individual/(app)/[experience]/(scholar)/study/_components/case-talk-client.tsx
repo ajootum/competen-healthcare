@@ -42,6 +42,7 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
+  const [noticeKind, setNoticeKind] = useState<"unavailable" | "info">("info");
   const log = useRef<HTMLOListElement | null>(null);
   const url = `${base}/talk`;
 
@@ -62,7 +63,8 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
     setBusy("ask"); setNotice("");
     const r = await send(url, { action: "ask", question });
     setBusy("");
-    if (!r.ok) { setNotice(r.json.unavailable ?? r.json.error ?? "That could not be asked just now."); return; }
+    // An unavailable conversation or a reached cap is a 200 with the plain reason, never a made-up reply.
+    if (!r.ok || !r.json.turn) { setNotice(r.json.unavailable ?? r.json.error ?? "That could not be asked just now."); setNoticeKind(r.json.unavailable ? "unavailable" : "info"); return; }
     setQ("");
     setTalk(t => t ? { ...t, stage: r.json.stage, turns: [...t.turns, { stageId: r.json.turn.stageId, stageTitle: "", question: r.json.turn.question, reply: r.json.turn.reply }] } : t);
     setTimeout(() => log.current?.lastElementChild?.scrollIntoView({ block: "nearest" }), 0);
@@ -71,7 +73,7 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
     setBusy("note"); setNotice("");
     const r = await send(url, { action: "note" });
     setBusy("");
-    if (!r.ok) { setNotice(r.json.unavailable ?? r.json.error ?? "The note could not be written just now."); return; }
+    if (!r.ok || !r.json.talk) { setNotice(r.json.unavailable ?? r.json.error ?? "The note could not be written just now."); setNoticeKind(r.json.unavailable ? "unavailable" : "info"); return; }
     setTalk(r.json.talk as Talk);
   }
 
@@ -112,7 +114,7 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
             <p className="mt-1 text-[12.5px] text-gray-600">The two lists above come from the case itself. The note is an AI comment on your questions, and is optional.</p>
           </div>
         )}
-        {notice && <p role="status" className="mt-2 text-[13px] text-gray-800"><span className="font-semibold">Conversation unavailable.</span> {notice}</p>}
+        {notice && <p role="status" className="mt-2 text-[13px] text-gray-800">{noticeKind === "unavailable" && <span className="font-semibold">Conversation unavailable. </span>}{notice}</p>}
       </section>
     );
   }
@@ -141,7 +143,7 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
           {cap && <p className="mt-1 text-[12.5px] text-gray-600" aria-live="polite">{cap.full ? `You have used all ${cap.cap} questions for this stage. Carry on with the case.` : `${cap.left} of ${cap.cap} questions left at this stage.`}</p>}
         </form>
       )}
-      {notice && <p role="status" className="mt-2 text-[13px] text-gray-800"><span className="font-semibold">Conversation unavailable.</span> {notice}</p>}
+      {notice && <p role="status" className="mt-2 text-[13px] text-gray-800">{noticeKind === "unavailable" && <span className="font-semibold">Conversation unavailable. </span>}{notice}</p>}
     </section>
   );
 }
