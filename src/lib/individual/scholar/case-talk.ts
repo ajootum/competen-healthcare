@@ -17,7 +17,7 @@
 
 import { resolveOwner } from "@/lib/ai/consumption";
 import { caseSessionRecord, sessionAttemptSource } from "@/lib/cases/library";
-import { conversationEnabled, resolveToken, type Blueprint } from "@/lib/cases/blueprint";
+import { conversationEnabled, resolveToken, viewToken, type Blueprint, type LearnerView } from "@/lib/cases/blueprint";
 import {
   COMMUNICATION_NOTE_LABEL, CONVERSATION_LABEL, buildCommunicationNoteRequest, buildVoiceRequest, cleanCommunicationNote, cleanQuestion, reviewQuestions,
   screenReply, turnState, type QuestionReview,
@@ -198,6 +198,32 @@ export async function communicationNote(ctx: IndividualContext, req: Request, sr
   return talkState(ctx, s);
 }
 
+/** The session's view salt (it never leaves the server): what turns a decision id into the token the browser holds. */
+async function sessionSalt(admin: any, userId: string, kind: TalkKind, sessionId: string): Promise<string | null> {
+  if (kind === "private") return (await getPrivateCaseSession(admin, userId, sessionId))?.session.viewSalt ?? null;
+  const { data } = await admin.from("case_library_session").select("view_salt").eq("id", sessionId).eq("user_id", userId).maybeSingle();
+  return data?.view_salt ?? null;
+}
+
+/**
+ * The kept AI comments on answered handovers of a session, by decision token, for a play that is opened again. Read only when
+ * the view has an answered handover decision, so a case without one costs nothing. undefined: none.
+ */
+export async function handoverNotesView(admin: any, userId: string, kind: TalkKind, sessionId: string, view: LearnerView, answered: readonly string[]): Promise<Record<string, { label: string; text: string }> | undefined> {
+  const has = view.stages.some(st => st.decisionPoints.some(d => d.kind === "handover" && answered.includes(d.token)));
+  if (!has) return undefined;
+  try {
+    const list = await listCaseConversation(admin, userId, kind, sessionId);
+    const notes = list.ok ? list.data.filter(e => e.kind === "handover_note" && e.decisionPointId) : [];
+    if (!notes.length) return undefined;
+    const salt = await sessionSalt(admin, userId, kind, sessionId);
+    if (!salt) return undefined;
+    return Object.fromEntries(notes.map(n => [viewToken(salt, "decision", n.decisionPointId!), { label: HANDOVER_NOTE_LABEL, text: n.reply }]));
+  } catch {
+    return undefined;
+  }
+}
+
 export const HANDOVER_NOTE_SYSTEM = [
   "You give a healthcare student short, kind, formative feedback on an SBAR handover they wrote in a practice case.",
   "You are given the handover in four sections, the points a good handover mentions (the student has not seen this list), and which of those points the system found or did not find.",
@@ -219,9 +245,7 @@ export async function handoverFeedbackNote(ctx: IndividualContext, req: Request,
     if (policy.scholarCaseReasoningFeedback !== "ai_then_self") return null;
     const src = await loadTalkSource(ctx.admin, ctx.userId, kind, sessionId);
     if (!src) return null;
-    let salt: string | null = null;
-    if (kind === "private") salt = (await getPrivateCaseSession(ctx.admin, ctx.userId, sessionId))?.session.viewSalt ?? null;
-    else { const { data } = await ctx.admin.from("case_library_session").select("view_salt").eq("id", sessionId).eq("user_id", ctx.userId).maybeSingle(); salt = data?.view_salt ?? null; }
+    const salt = await sessionSalt(ctx.admin, ctx.userId, kind, sessionId);
     const dpId = salt ? resolveToken(src.blueprint, salt, "decision", decisionToken) : null;
     const d = dpId ? src.blueprint.decisionPoints.find(x => x.id === dpId) : null;
     if (!d || d.kind !== "handover") return null;

@@ -369,5 +369,5 @@ export async function answerInSession(admin: any, userId: string, sessionId: str
     ...(r.completed ? { status: "completed" } : {}),
   }).eq("id", x.s.id).eq("status", "in_progress").select("*").single();
   if (error || !s) return { error: "Your answer could not be recorded just now." };
-  return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt), session: viewOf({ ...x, s }, false) };
+  return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt, args.text ?? null), session: viewOf({ ...x, s }, false) };
 }

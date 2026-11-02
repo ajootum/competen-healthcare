@@ -15,13 +15,14 @@
 | `summary`, `learnerIntro` | `summary`: catalogue and educator text, **server-side only** (B2). `learnerIntro`: the optional spoiler-free opening a learner sees | yes |
 | `facts[]` | Every finding and its value: id, kind, label, value, unit, `revealedAt` ("start", a stage, or "request": only when asked for or a consequence), `safetyCritical`, optional `aliases` a typed request may use (N1) | yes |
 | `stages[]` | Ordered stages: title, the facts each reveals automatically, its decision points, an optional `narrativeHint` | yes (the hint is guidance for AI phrasing, not a fact) |
-| `decisionPoints[]` | Prompt; kind `single`, `multiple` or `free_text`; the reasoning `dimension` (B7); options each with the deterministic key `correct` and a `rationale`; an optional decision-level `rationale` (B6); `permittedReveals` (facts the learner may ask for at THIS point); an optional governed `hint` for guided mode (N2); `expectedResponse` and `rubric` (each criterion with its `dimension`) for free text; `sourceRefs`, private only (B8) | yes |
+| `decisionPoints[]` | Prompt; kind `single`, `multiple`, `free_text` or `handover` (CE-04: four SBAR boxes, marked by code against the decision's `handover` elements, server-side only); the reasoning `dimension` (B7); options each with the deterministic key `correct` and a `rationale`; an optional decision-level `rationale` (B6); `permittedReveals` (facts the learner may ask for at THIS point); an optional governed `hint` for guided mode (N2); `expectedResponse` and `rubric` (each criterion with its `dimension`) for free text; `sourceRefs`, private only (B8) | yes |
 | `progression[]` | Deterministic transitions: from a stage, on options (or the one default), to a stage, revealing `consequenceFactIds`. Empty means the stages run in order | yes |
 | `learningObjectives[]` | Text, the CFCA competency ids each serves (the original identifiers), optional measurable `outcomes` (N4) | yes |
 | `safetyCriteria[]` | Machine-checkable: a decision point plus `mustSelect` and/or `mustNotSelect` option ids | yes |
 | `feedback`, `assessment` | Debrief, the safety-event message, the rubric and pass mark | yes |
 | `variation.rules[]` | Which non-safety-critical facts may vary, and to what values or range | yes (the boundaries) |
 | `aiBoundary` | What AI may do around the facts: `patientVoice`, `phraseReveals`, `explain` | yes |
+| `voice` (CE-04, optional) | Who the AI voices in Talk to the patient: `speaker` (patient or caregiver), `persona`, `style`, `knowsFactIds`, `knowsStatements` (each `from` "start" or a stage), `keyQuestions` (label and terms), `notKnownReply`. Used only when `aiBoundary.patientVoice` is on. The AI may speak only from what is listed AND already shown to the learner. Server-side only | yes |
 | `metadata` | Level, complexity 1–5, risk (`standard` is the engine tier `clinical_educational`, `high` is `high_risk_clinical`: N3), profession, specialties (several: one case, no copies across specialties), CFCA domains and CPUs, and provenance (kind, candidate, parent version, rights, attestation version) | yes |
 
 ## IND-004's review, adopted
