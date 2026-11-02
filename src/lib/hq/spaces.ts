@@ -194,6 +194,16 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // relates, references and keeps collections and terms. Neither edits checklist content (Checklist Studio does).
   { code: "hq.assessment.catalogue.view",     space: "quality"  },
   { code: "hq.assessment.catalogue.manage",   space: "quality"  },
+  // >>> CHECKLIST STUDIO (migration 890, slice S2). Six capabilities in the quality space, mirrored from the 890 seed. Studio view
+  // opens the library, versions and history. Author edits, duplicates and submits drafts (checklists, scales, templates). Review
+  // records independent decisions. Publish publishes and retires. Assign and assess belong to the assessor workspace slice.
+  { code: "hq.assessment.studio.view",        space: "quality"  },
+  { code: "hq.assessment.instrument.author",  space: "quality"  },
+  { code: "hq.assessment.instrument.review",  space: "quality"  },
+  { code: "hq.assessment.instrument.publish", space: "quality"  },
+  { code: "hq.assessment.assessor.assign",    space: "quality"  },
+  { code: "hq.assessment.instrument.assess",  space: "quality"  },
+  // <<< CHECKLIST STUDIO
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -285,6 +295,9 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/assessment-catalogue/families", capability: "hq.assessment.catalogue.manage" },
   { prefix: "/super-admin/assessment-catalogue/terms",    capability: "hq.assessment.catalogue.manage" },
   { prefix: "/super-admin/assessment-catalogue",          capability: "hq.assessment.catalogue.view" },
+  // >>> CHECKLIST STUDIO (S2). One right opens every Studio page. Each action inside re-checks its own capability.
+  { prefix: "/super-admin/checklist-studio",              capability: "hq.assessment.studio.view" },
+  // <<< CHECKLIST STUDIO
   { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
   { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
   // Migration 690: the programme lead door, separate from both.
