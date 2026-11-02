@@ -29,10 +29,13 @@ describe("stripForSpeech", () => {
 });
 
 describe("chunkForSpeech", () => {
-  it("splits into sentences packed under the limit and never loses words", () => {
+  it("puts each sentence in its own chunk", () => {
+    expect(chunkForSpeech("One is short. Two is short too! Is three? Yes.")).toEqual(["One is short.", "Two is short too!", "Is three?", "Yes."]);
+  });
+  it("splits into sentences under the limit and never loses words", () => {
     const text = Array.from({ length: 40 }, (_, i) => `Sentence number ${i} says something useful.`).join(" ");
     const chunks = chunkForSpeech(text);
-    expect(chunks.length).toBeGreaterThan(3);
+    expect(chunks).toHaveLength(40);
     for (const c of chunks) expect(c.length).toBeLessThanOrEqual(CHUNK_MAX);
     expect(chunks.join(" ")).toBe(text);
   });
@@ -193,5 +196,59 @@ describe("mergeFinalSegments", () => {
   it("appends distinct finals with single spaces and ignores blanks", () => {
     expect(mergeFinalSegments(["first sentence.", "  second   sentence. ", ""])).toBe("first sentence. second sentence.");
     expect(mergeFinalSegments([])).toBe("");
+  });
+});
+
+describe("stripForSpeech: diagram fences", () => {
+  const flow = JSON.stringify({
+    title: "Sepsis response",
+    nodes: [
+      { id: "a", label: "Suspect sepsis", kind: "start" },
+      { id: "b", label: "Is the patient unstable", kind: "decision" },
+      { id: "c", label: "Give fluids", kind: "step" },
+      { id: "d", label: "Monitor", kind: "end" },
+    ],
+    edges: [{ from: "a", to: "b" }, { from: "b", to: "c", label: "Yes" }, { from: "b", to: "d", label: "No" }, { from: "c", to: "d" }],
+  });
+  it("speaks a flow fence as numbered steps with decisions and branches", () => {
+    const out = stripForSpeech("Before.\n\n```flow\n" + flow + "\n```\n\nAfter.");
+    expect(out).toContain("Flowchart: Sepsis response.");
+    expect(out).toContain("Step 1, Start: Suspect sepsis. Go to step 2.");
+    expect(out).toContain("Step 2, Decision: Is the patient unstable? If yes, go to step 3; if no, go to step 4.");
+    expect(out).toContain("Step 3, Step: Give fluids. Go to step 4.");
+    expect(out).toContain("Step 4, End: Monitor.");
+    expect(out).not.toMatch(/[{}"]|```/);
+    expect(out.startsWith("Before.")).toBe(true);
+    expect(out.endsWith("After.")).toBe(true);
+  });
+  it("speaks a map fence", () => {
+    const map = JSON.stringify({
+      title: "Shock", center: "Shock",
+      nodes: [{ id: "n1", label: "Low blood pressure", group: "feature" }, { id: "n2", label: "Bleeding", group: "cause" }, { id: "n3", label: "Spare idea", group: "other" }],
+      edges: [{ from: "n2", to: "center", label: "leads to" }, { from: "center", to: "n1" }],
+    });
+    const out = stripForSpeech("```map\n" + map + "\n```");
+    expect(out).toContain("Concept map: Shock.");
+    expect(out).toContain("Centre: Shock.");
+    expect(out).toContain("Bleeding leads to Shock.");
+    expect(out).toContain("Shock is linked to Low blood pressure.");
+    expect(out).toContain("Not linked: Spare idea.");
+  });
+  it("speaks a timeline fence", () => {
+    const tl = JSON.stringify({ title: "Course of illness", events: [{ at: "Day 1", label: "Fever starts" }, { at: "Day 3", label: "Rash appears" }] });
+    expect(stripForSpeech("```timeline\n" + tl + "\n```")).toBe("Timeline: Course of illness. Day 1: Fever starts. Day 3: Rash appears.");
+  });
+  it("chunks a diagram one sentence at a time", () => {
+    const chunks = chunkForSpeech("```flow\n" + flow + "\n```");
+    expect(chunks[0]).toBe("Flowchart: Sepsis response.");
+    expect(chunks).toContain("Step 2, Decision: Is the patient unstable?");
+    expect(chunks).toContain("If yes, go to step 3; if no, go to step 4.");
+  });
+  it("still skips an invalid or unfinished diagram fence, code and practice fences", () => {
+    expect(stripForSpeech("Hi.\n\n```flow\n{not json\n```\n\nBye.")).toBe("Hi.\n\nBye.");
+    expect(stripForSpeech("Hi.\n\n```flow\n" + JSON.stringify({ nodes: [{ id: "a", label: "Only" }], edges: [] }) + "\n```\n\nBye.")).toBe("Hi.\n\nBye.");
+    expect(stripForSpeech("Hi.\n\n```flow\n" + flow)).toBe("Hi.");
+    expect(stripForSpeech("Hi.\n\n```js\nconst x = 1;\n```\n\nBye.")).toBe("Hi.\n\nBye.");
+    expect(stripForSpeech("Hi.\n\n```practice\n{\"a\":1}\n```\n\nBye.")).toBe("Hi.\n\nBye.");
   });
 });

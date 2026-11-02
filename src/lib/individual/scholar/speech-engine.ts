@@ -28,14 +28,17 @@ export type SynthEnv = {
 };
 
 /**
- * Speaks a text one chunk at a time. PAUSE IS "stop here, remember where": the current chunk is cancelled and speaking again
- * restarts that chunk. That is slightly less smooth than a native pause but it behaves the same in every browser (native pause
- * is unreliable on Android and some desktop engines). A generation number makes the end/error events of a cancelled utterance
- * harmless.
+ * Speaks a text one chunk (one sentence) at a time. PAUSE IS "stop here, remember where": the current utterance is cancelled and
+ * speaking again continues from the last word the browser reported (a boundary event) inside that chunk; if it reported none,
+ * the current sentence restarts. That is slightly less smooth than a native pause but it behaves the same in every browser
+ * (native pause is unreliable on Android and some desktop engines). A generation number makes the end/error/boundary events of a
+ * cancelled utterance harmless.
  */
 export class ReadAloudEngine {
   private chunks: string[] = [];
   private index = 0;
+  /** Characters of the current chunk already spoken (the last word boundary, or where this utterance began). */
+  private pos = 0;
   private gen = 0;
   private state: ReadState = READ_IDLE;
   private rate: ReadRate = 1;
@@ -54,7 +57,7 @@ export class ReadAloudEngine {
   play(text: string, opts?: { rate?: ReadRate; voiceURI?: string | null }) {
     this.cancelCurrent();
     this.chunks = chunkForSpeech(text);
-    this.index = 0;
+    this.index = 0; this.pos = 0;
     if (opts?.rate) this.rate = opts.rate;
     if (opts && "voiceURI" in opts) this.voiceURI = opts.voiceURI ?? null;
     if (!this.chunks.length) { this.set(READ_IDLE); return; }
@@ -76,11 +79,11 @@ export class ReadAloudEngine {
 
   stop() {
     this.cancelCurrent();
-    this.chunks = []; this.index = 0;
+    this.chunks = []; this.index = 0; this.pos = 0;
     if (this.state.status !== "idle") this.set(READ_IDLE);
   }
 
-  /** A new rate or voice takes effect now (the current chunk restarts) while speaking, or on resume while paused. */
+  /** A new rate or voice takes effect now (the current chunk continues from the last spoken word) while speaking, or on resume while paused. */
   configure(opts: { rate?: ReadRate; voiceURI?: string | null }) {
     if (opts.rate) this.rate = opts.rate;
     if ("voiceURI" in opts) this.voiceURI = opts.voiceURI ?? null;
@@ -94,8 +97,14 @@ export class ReadAloudEngine {
 
   private speakCurrent() {
     const gen = ++this.gen;
-    const text = this.chunks[this.index];
-    if (text === undefined) { this.finish(); return; }
+    const chunk = this.chunks[this.index];
+    if (chunk === undefined) { this.finish(); return; }
+    // Continue from the remembered word. A boundary's charIndex is relative to the text this utterance speaks, so `start` turns
+    // it back into a position in the chunk.
+    const text = chunk.slice(Math.min(this.pos, chunk.length)).trimStart();
+    if (!text) { this.advance(); return; }
+    const start = chunk.length - text.length;
+    this.pos = start;
     let u: any;
     try { u = this.env.makeUtterance(text); } catch { this.finish(); return; }
     const lang = this.env.pageLang();
@@ -105,18 +114,25 @@ export class ReadAloudEngine {
       u.lang = voice?.lang || lang || "en-GB";
       if (voice) u.voice = voice;
     } catch { /* the browser's defaults are used */ }
-    u.onend = () => {
-      if (gen !== this.gen) return;
-      this.index++;
-      if (this.index >= this.chunks.length) this.finish();
-      else { this.set({ ...this.state, index: this.index }); this.speakCurrent(); }
+    u.onboundary = (ev: any) => {
+      if (gen !== this.gen || (ev?.name && ev.name !== "word")) return;
+      const at = Number(ev?.charIndex);
+      if (Number.isFinite(at) && at >= 0 && start + at < chunk.length) this.pos = Math.max(this.pos, start + at);
     };
+    u.onend = () => { if (gen === this.gen) this.advance(); };
     u.onerror = () => { if (gen === this.gen) this.finish(); };
     try { this.env.synth.speak(u); } catch { this.finish(); }
   }
 
+  /** The current chunk is done: on to the next, or finish. */
+  private advance() {
+    this.index++; this.pos = 0;
+    if (this.index >= this.chunks.length) this.finish();
+    else { this.set({ ...this.state, index: this.index }); this.speakCurrent(); }
+  }
+
   private finish() {
-    this.chunks = []; this.index = 0;
+    this.chunks = []; this.index = 0; this.pos = 0;
     this.set(READ_IDLE);
   }
 }
