@@ -2,6 +2,13 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEVICE_COOKIE, DEVICE_COOKIE_OPTIONS, mintDeviceId, needsDeviceCookie } from "@/lib/practice/device-register";
 import { gatewayEntryRewrite } from "@/lib/identity/gateway-entry";
+import { isPreviewHost } from "@/lib/identity/domains";
+import { classifyPreviewPath, decidePreviewRequest } from "@/lib/individual/preview/host-policy";
+import {
+  PREVIEW_COOKIE, PREVIEW_EXPIRES_HEADER, PREVIEW_HEADER_PREFIX, PREVIEW_MODE_HEADER, PREVIEW_RETURN_HEADER,
+  auditRefusedWrite, endPreview, livePreview, previewAdmin, previewCookieClear, previewReturnOrigin,
+} from "@/lib/individual/preview/session";
+import { isRegisteredOrigin } from "@/lib/individual/preview/origins";
 
 export async function proxy(request: NextRequest) {
   // ONE TRACE ID PER REQUEST (XWI P2-15).
@@ -24,10 +31,19 @@ export async function proxy(request: NextRequest) {
   // for the redirect guard ONLY because that guard runs during a server render, where the header and the
   // request are the same request by construction.
   const traceId = crypto.randomUUID();
+
+  // ── HQ-SCHOLAR-PREVIEW-01: THE PREVIEW HEADERS ARE SET HERE AND NOWHERE ELSE ─────────────────────────────
+  // `x-scholar-preview-*` tells the Individual layout "this render is a staff preview". A client must never be
+  // able to say so, on ANY host: every copy a client sent is deleted below, on every request, before the proxy
+  // sets its own (only when it has just verified a live session on the preview host). A spoofed header on the main
+  // host therefore shows no banner and changes nothing (harness P9).
+  const previewInject: Record<string, string> = {};
   const withTrace = (req: NextRequest) => {
     const h = new Headers(req.headers);
+    for (const name of [...h.keys()]) if (name.toLowerCase().startsWith(PREVIEW_HEADER_PREFIX)) h.delete(name);
     h.set("x-trace-id", traceId);
     h.set("x-pathname", req.nextUrl.pathname);
+    for (const [k, v] of Object.entries(previewInject)) h.set(k, v);
     return h;
   };
 
@@ -44,6 +60,15 @@ export async function proxy(request: NextRequest) {
   // is mutated as each writer decides, the forwarded headers are derived from it after all of them have
   // finished, and every pending cookie is written onto the single response.
   const pending: { name: string; value: string; options?: Record<string, unknown> }[] = [];
+
+  // ── HQ-SCHOLAR-PREVIEW-01: SURFACES THAT DO NOT EXIST ON THIS HOST ARE A 404 BEFORE ANYTHING ELSE RUNS ─────
+  // /preview/* exists only on the preview host, and the preview host serves nothing but what host-policy.ts lists.
+  // This needs no session, so it answers before the auth round trip.
+  const requestHost = request.headers.get("host");
+  const onPreviewHost = isPreviewHost(requestHost);
+  if (decidePreviewRequest(requestHost, request.nextUrl.pathname, request.method, null).action === "not_found") {
+    return new NextResponse("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } });
+  }
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -115,6 +140,56 @@ export async function proxy(request: NextRequest) {
   // IT STILL AUTHORIZES NOTHING. `gatewayEntryRewrite` reads the route from the registry and rewrites
   // the bare root; s5's principle is that the gateway sets context, never permission. Verified against
   // the live hosts: /super-admin and /practice/home are refused IDENTICALLY on all six.
+  // ── HQ-SCHOLAR-PREVIEW-01: THE PREVIEW HOST'S SESSION GATE ────────────────────────────────────────────────
+  //
+  // On the preview host, an Individual page or API is served only to the demonstration learner's own Supabase session
+  // AND a live preview session (migration 860, judged on the database clock) naming that SAME learner. Anything else
+  // signs the session out, clears the preview cookie and sends the person to /preview/ended (a JSON 401 for an API).
+  // /preview/enter and /preview/ended need no session, and assets are public files.
+  //
+  // ⚠ THE learner_id CHECK IS THE ONE THAT MATTERS: without it, a live preview token plus ANY Supabase session on
+  // this host would be admitted. Read-only and testing rules (host-policy.ts) are applied with the session's mode.
+  // ⚠ EVERY EXIT BELOW GOES THROUGH `finish`, so a refreshed-session cookie is never dropped on a refusal.
+  const finish = (res: NextResponse) => {
+    for (const c of pending) res.cookies.set(c.name, c.value, c.options);
+    return res;
+  };
+  if (onPreviewHost && classifyPreviewPath(request.nextUrl.pathname) === "session") {
+    const path = request.nextUrl.pathname;
+    const isApi = path.startsWith("/api/");
+    const token = request.cookies.get(PREVIEW_COOKIE)?.value;
+    const admin = await previewAdmin();
+    const session = await livePreview(admin, token);
+
+    if (!session || !user || user.id !== session.learnerId) {
+      if (session && user && user.id !== session.learnerId) await endPreview(admin, token, "identity_mismatch");
+      const returnOrigin = session?.returnOrigin ?? (await previewReturnOrigin(admin, token));
+      try { await supabase.auth.signOut({ scope: "local" }); } catch { /* the cookies are cleared below regardless */ }
+      let res: NextResponse;
+      if (isApi) {
+        res = NextResponse.json({ error: "This preview has ended" }, { status: 401 });
+      } else {
+        const to = request.nextUrl.clone();
+        to.pathname = "/preview/ended";
+        to.search = "";
+        if (returnOrigin && isRegisteredOrigin(returnOrigin)) to.searchParams.set("r", returnOrigin);
+        res = NextResponse.redirect(to, 303);
+      }
+      res.cookies.set(PREVIEW_COOKIE, "", previewCookieClear());
+      return finish(res);
+    }
+
+    const decision = decidePreviewRequest(requestHost, path, request.method, session.mode);
+    if (decision.action === "not_found") return finish(new NextResponse("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8" } }));
+    if (decision.action === "forbidden") {
+      await auditRefusedWrite(admin, session, request.method, path);
+      return finish(NextResponse.json({ error: decision.reason, preview: session.mode }, { status: 403 }));
+    }
+    previewInject[PREVIEW_MODE_HEADER] = session.mode;
+    previewInject[PREVIEW_EXPIRES_HEADER] = session.expiresAt;
+    if (session.returnOrigin && isRegisteredOrigin(session.returnOrigin)) previewInject[PREVIEW_RETURN_HEADER] = session.returnOrigin;
+  }
+
   const gatewayTarget = gatewayEntryRewrite(request.headers.get("host"), request.nextUrl.pathname);
   let response: NextResponse;
   if (gatewayTarget) {
@@ -125,8 +200,7 @@ export async function proxy(request: NextRequest) {
   } else {
     response = NextResponse.next({ request: { headers: withTrace(request) } });
   }
-  for (const c of pending) response.cookies.set(c.name, c.value, c.options);
-  return response;
+  return finish(response);
 }
 
 export const config = {
