@@ -1,3 +1,4 @@
+import { offerable } from "@/lib/individual/scholar/scenario-service";
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { getRevisionSession, revisionPool, updateRevisionSession, type QuestionRow } from "@/lib/individual/scholar/store";
@@ -26,7 +27,9 @@ async function load(ctx: { admin: unknown; userId: string }, id: string) {
   if (!pool.ok) return { error: NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 }) };
   const byId = new Map(pool.data.questions.map(q => [q.id, q]));
   // A question removed with its material leaves the session; the rest stay in order.
-  const questions = s.data.questionIds.map(qid => byId.get(qid)).filter((q): q is QuestionRow => !!q);
+  // CE-05: a scenario no longer offered (an earlier prompt, or failing today's checks) leaves a session that has not answered it; one answered stays, with its history.
+  const doneIds = new Set([...s.data.attempts.map(a => a.questionId), ...s.data.held.map(h => h.questionId)]);
+  const questions = (await offerable(ctx.admin, ctx.userId, s.data.questionIds.map(qid => byId.get(qid)).filter((q): q is QuestionRow => !!q), doneIds)).questions;
   return { s: s.data, questions };
 }
 

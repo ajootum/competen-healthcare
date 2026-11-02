@@ -3,6 +3,7 @@ export const maxDuration = 300;
 
 import { NextResponse } from "next/server";
 import { answerOutcome, noCalls, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
+import { offerable } from "@/lib/individual/scholar/scenario-service";
 import { caseReadiness } from "@/lib/individual/scholar/sufficiency";
 import { SCENARIO_INSUFFICIENT_NOTE } from "@/lib/individual/scholar/scenario";
 import { randomUUID } from "node:crypto";
@@ -130,7 +131,9 @@ export async function POST(req: Request) {
     const pool = await revisionPool(ctx.admin, ctx.userId, { kinds: [...REVISION_FORMATS, "case"] });
     if (!pool.ok) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
     const have = new Map(pool.data.questions.map(q => [q.id, q]));
-    const ordered = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate") && (!needsImmediateFeedback(effectiveKind(q)) || set.feedback === "immediate"));
+    const orderedAll = set.questionIds.map(id => have.get(id)).filter((q): q is QuestionRow => !!q && !!keyOf(q) && (q.kind !== "structured" || set.feedback === "immediate") && (!needsImmediateFeedback(effectiveKind(q)) || set.feedback === "immediate"));
+    // CE-05: replaying a saved set is a NEW attempt: a scenario written under an earlier prompt, or failing today's checks, is not offered again (it is kept, with its history).
+    const ordered = (await offerable(ctx.admin, ctx.userId, orderedAll)).questions;
     if (!ordered.length) return NextResponse.json({ error: "The questions in this set are no longer stored (their materials were removed)." }, { status: 404 });
     const made = await createRevisionSession(ctx.admin, ctx.userId, { mode, feedback: set.feedback, setId: set.id, questionIds: ordered.map(q => q.id) });
     await touchRevisionSet(ctx.admin, ctx.userId, set.id);
@@ -201,11 +204,16 @@ export async function POST(req: Request) {
   const genCap = mode === "flashcards" ? policy.scholarFlashcardsPerGeneration : Number.POSITIVE_INFINITY;
   // Library copies this session reuses: read with the pool wherever they were first filed.
   let libraryIds: string[] = [];
+  // CE-05: stored scenarios not offered this time (an earlier prompt version, or failing today's checks), counted in the audit.
+  let staleScenario = 0;
   const poolOf = async () => {
     // Flashcards: cards, and governed library questions that stand alone as a recall prompt (recallCardOf).
     const p = await revisionPool(ctx.admin, ctx.userId, { chunkIds, kinds: mode === "flashcards" ? ["flashcard", "mcq"] : kinds, extraIds: libraryIds });
     if (!p.ok) return null;
     let qs = mode === "flashcards" ? p.data.questions.map(recallCardOf).filter((q): q is QuestionRow => !!q) : p.data.questions;
+    // CE-05: a STORED scenario is served only if it passes today's rules and was written at the current prompt version; a new one is written in its place.
+    const off = await offerable(ctx.admin, ctx.userId, qs);
+    qs = off.questions; staleScenario = off.stale.size;
     if (cardIds) {
       // A library copy made during this request is not in cardIds yet, but is a card all the same if it stands alone as a recall prompt.
       const keep = new Set(withoutFlashcards(qs.map(q => q.id), cardIds));
@@ -407,7 +415,7 @@ export async function POST(req: Request) {
   const fromLibrary = ordered.filter(q => q.library && libraryIds.includes(q.id)).length;
   const reused = Math.max(0, ordered.length - Math.min(generated, ordered.length) - fromLibrary);
   await audit(ctx, "individual_scholar_revision_started", "individual_scholar_revision_session", made.ok ? made.id : null,
-    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, cloze_written: clozeWritten, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
+    { mode, scope: chunkIds ? "scoped" : "library", questions: ordered.length, generated, cloze_written: clozeWritten, stale_scenario: staleScenario, reused, library: fromLibrary, library_versions: libraryVersions, formats: kinds, ai_calls: aiCalls, difficulty, adapted: !asked, source: sourceMode, references_used: referencesUsed });
   // Mode notes_and_references with no approved reference linked to these notes: said, never implied.
   const sourceNote = sourceMode === "notes_and_references" && generated > 0 && !referencesUsed
     ? "No clinically approved reference is linked to these notes yet, so the new questions are from your notes only." : null;

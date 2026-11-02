@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { offerable } from "@/lib/individual/scholar/scenario-service";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -83,7 +84,9 @@ export default async function Revise({ params, searchParams }: { params: Promise
     if (s.data && (s.data.session.mode === "adaptive" || await getAdaptiveSet(ctx.admin, ctx.userId, s.data.session.setId))) redirect(adaptiveHref(s.data.session.id));
     if (!s.data) return <>{header}<StatePanel title="That revision session could not be found" actions={<Link href={studyHref("revise")} className={focusRing}>Back to Revision</Link>}><p>It may have been removed with the materials it used.</p></StatePanel></>;
     const byId = new Map(pool.data.questions.map(qq => [qq.id, qq]));
-    const questions = s.data.questionIds.map(id => byId.get(id)).filter((qq): qq is QuestionRow => !!qq);
+    // CE-05: a scenario that is no longer offered (an earlier prompt, or failing today's checks) leaves a session that has not answered it; one answered stays, with its history.
+    const doneIds = new Set([...s.data.attempts.map(a => a.questionId), ...s.data.held.map(h => h.questionId)]);
+    const questions = (await offerable(ctx.admin, ctx.userId, s.data.questionIds.map(id => byId.get(id)).filter((qq): qq is QuestionRow => !!qq), doneIds)).questions;
     const show = s.data.session.feedback === "immediate" || s.data.session.status === "completed";
     const answered = s.data.attempts.filter(a => byId.has(a.questionId)).map(a => ({
       questionId: a.questionId, ...(show ? { feedback: feedbackView(byId.get(a.questionId)!, { correct: a.correct, score: a.score, marking: a.marking as Marking, ...keptAttemptView(byId.get(a.questionId)!, a) }) } : {}),

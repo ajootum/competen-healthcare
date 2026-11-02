@@ -18,11 +18,12 @@
 // Pure apart from node:crypto (the token). No I/O, no clock of its own (the route passes `now`), no model.
 
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
-import { SCENARIO_STAGES_MAX, SCENARIO_STAGES_MIN, SCENARIO_WEIGHT_MAX } from "./config";
+import { PROMPT_VERSIONS, SCENARIO_STAGES_MAX, SCENARIO_STAGES_MIN, SCENARIO_WEIGHT_MAX } from "./config";
 import { CLOZE_BLANK, markCloze } from "./cloze";
 import { markShortAnswer } from "./revision";
 import { rubricHash } from "./rubric-snapshot";
 import { asksQuestion } from "./question-intel";
+import { unsupportedTerms } from "./question-quality";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
@@ -318,6 +319,36 @@ export function scenarioFlaw(sc: ScenarioRaw): "not_a_scenario" | "answer_leaked
   const keys = sc.stages.map(s => stageAnswers(s).map(a => contentWords(a).sort().join(" ")).filter(Boolean).sort().join("|"));
   if (new Set(keys).size !== keys.length) return "repeated_stage";
   return null;
+}
+
+// ── A STORED SCENARIO IS HELD TO THE CURRENT RULES TOO ──
+
+/** Pure. The version number in a scenario prompt version ("scholar-scenario-v2+..." -> 2), or null (none, or not a scenario version). */
+export const scenarioVersionOf = (v: string | null | undefined): number | null => {
+  const m = /^scholar-scenario-v(\d+)/.exec(v ?? "");
+  return m ? Number(m[1]) : null;
+};
+/** The oldest prompt version still offered: the current one. Earlier versions let an opening give a stage's answer away, and talked of notes and students. */
+export const SCENARIO_MIN_VERSION = scenarioVersionOf(PROMPT_VERSIONS.scenario) ?? 2;
+
+/**
+ * Pure. Why a scenario ALREADY STORED must not be offered for a new attempt, or null when it may be. Written before the current rules existed
+ * (prompt version below the current one, or none), no longer a sound scenario, or failing today's draft checks against its stored stages and
+ * their citations:
+ *   "stale_scenario"  old prompt version, missing version, unsound shape, or the section it cites can no longer be read;
+ *   "not_a_scenario" | "answer_leaked" | "repeated_stage" | "uncited_stage"  as scenarioFlaw / citationFlaw say.
+ * A stage that cites an approved reference was checked against it when written (the reference text is not kept with the item), so only a stage
+ * quoting the section is re-checked against `passageText`. Nothing is deleted: the item and its attempts stay for history; it is simply not offered.
+ */
+export function storedScenarioProblem(q: { stem: string; answer: unknown; promptVersion: string | null | undefined }, passageText: string | null): string | null {
+  const v = scenarioVersionOf(q.promptVersion);
+  if (v === null || v < SCENARIO_MIN_VERSION) return "stale_scenario";
+  const spec = scenarioSpecOf(q.answer);
+  if (!spec || passageText === null) return "stale_scenario";
+  const flaw = scenarioFlaw({ situation: q.stem, stages: spec.stages });
+  if (flaw) return flaw;
+  const quoting = spec.stages.filter(s => !s.refs.length);
+  return citationFlaw(quoting, passageText, new Map(), unsupportedTerms);
 }
 
 /** Pure. The stored answer of a checked scenario (the 416 `short` shape: accepted holds the key points). */
