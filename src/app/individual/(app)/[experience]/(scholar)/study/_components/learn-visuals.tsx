@@ -61,6 +61,8 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
   const ref = useRef<HTMLDialogElement>(null);
   const panel = useRef<HTMLDivElement>(null);
   const [key, setKey] = useState(startKey);
+  // A picture taken out of a PDF page: the whole original page can be shown in its place (the single page, as it is in the file).
+  const [whole, setWhole] = useState(false);
   const current = visuals.find(v => v.key === key) ?? visuals[0];
   // The native modal dialog already traps focus; the shared hook keeps the doctrine (pui-a11y) and returns focus to the trigger.
   // It is declared FIRST so it records the trigger before showModal() moves focus into the dialog.
@@ -90,10 +92,10 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
         </div>
         {/* The original, at its own size, scrolled inside the dialog only (pinch to zoom on a touch screen). */}
         <div className="min-h-0 flex-1 overflow-auto bg-white p-2 [touch-action:pan-x_pan-y_pinch-zoom]">
-          {page ? (
+          {page || whole ? (
             <>
-              <iframe title={`Original ${noun(current)} ${current.n} of ${materialTitle}`} src={visualUrl(materialId, current.key)} className="h-[70vh] w-full rounded-lg border border-gray-200 bg-white" />
-              <p className="mt-2 text-[13px] text-gray-700">If the page does not appear, <a href={visualUrl(materialId, current.key)} target="_blank" rel="noreferrer" className={`font-semibold underline ${focusRing}`}>open the original page</a>.</p>
+              <iframe title={`Original ${noun(current)} ${current.n} of ${materialTitle}`} src={visualUrl(materialId, page ? current.key : `p${current.n}`)} className="h-[70vh] w-full rounded-lg border border-gray-200 bg-white" />
+              <p className="mt-2 text-[13px] text-gray-700">If the page does not appear, <a href={visualUrl(materialId, page ? current.key : `p${current.n}`)} target="_blank" rel="noreferrer" className={`font-semibold underline ${focusRing}`}>open the original page</a>.</p>
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
@@ -110,7 +112,7 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
               <ul className="mt-2 flex flex-wrap gap-2">
                 {same.map((v, i) => (
                   <li key={v.key}>
-                    <button type="button" aria-pressed={v.key === current.key} aria-label={`Picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => setKey(v.key)}
+                    <button type="button" aria-pressed={v.key === current.key} aria-label={`Picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setKey(v.key); setWhole(false); }}
                       className={`rounded-lg border bg-white p-1 ${touch} ${focusRing} ${v.key === current.key ? "border-gray-900" : "border-gray-300"}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
                       <img src={visualUrl(materialId, v.key)} alt="" loading="lazy" className="h-14 w-auto max-w-[120px] object-contain" />
@@ -119,6 +121,9 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
                 ))}
               </ul>
             ) : <p className="mt-1 text-gray-700">{page ? "This is the whole page, as it is in your file." : `This is the only picture on ${noun(current)} ${current.n}.`}</p>}
+            {!page && current.unit === "page" && (
+              <button type="button" aria-pressed={whole} onClick={() => setWhole(w => !w)} className={`${ghostBtn} mt-2`}>{whole ? "Back to the picture" : `Show the whole page ${current.n}`}</button>
+            )}
             <p className="mt-2 text-gray-700">{NOTE(current.unit)}</p>
             <p className="mt-2"><a href={`/api/individual/scholar/materials/${materialId}`} className={`inline-flex items-center font-semibold underline ${touch} ${focusRing}`}>{current.unit === "page" ? "Download the original file" : "Download the original presentation"}</a></p>
           </section>
