@@ -5,7 +5,7 @@ export const maxDuration = 300;
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { createMaterial, discardUpload, findDuplicate, isUuid, readUpload, recentUploads, sha256Hex, uploadPath } from "@/lib/individual/scholar/store";
-import { type MaterialMime, PDF_MIME, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
+import { type MaterialMime, PDF_MIME, PPTX_MIME, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, extractionQuality, findPatientIdentifiers, qualitySummary, sniffUpload, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
@@ -103,7 +103,10 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Your material could not be saved. Nothing was kept. Try again shortly." }, { status: 500 });
   }
 
-  const summary = qualitySummary(quality);
+  // SCHOLAR-IMAGE-RECOVERY: where the image-only pages (or picture-only slides) can be read on request, the summary says so.
+  const recoverable = policy.scholarMaterialImageSlides === "ai_transcription" && quality.emptyUnits.length > 0
+    && ((mime === PDF_MIME && quality.unit === "page") || (mime === PPTX_MIME && quality.unit === "slide"));
+  const summary = qualitySummary(quality, { recoverable });
   await audit(ctx, "individual_scholar_material_uploaded", "individual_scholar_material", created.id,
     { mime, bytes: bytes.byteLength, pages: extraction.pageCount, chunks: chunks.length, extractor: extraction.extractor, partial: summary.partial, empty_units: quality.emptyUnits.length });
   return NextResponse.json({ ok: true, id: created.id, chunks: chunks.length, pages: extraction.pageCount,
