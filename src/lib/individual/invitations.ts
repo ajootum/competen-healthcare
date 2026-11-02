@@ -6,6 +6,10 @@ import { grantIndividualAccess, parseEndDate, normaliseLookupEmail, type GrantOu
 import { INDIVIDUAL_HOME } from "./entry";
 import { individualIdentityProfile } from "../platform-membership";
 import { identityHoldsNoStanding } from "../identity/standing";
+import {
+  cleanPersonDetails, cleanPrefill, composeFullName, isParticipation,
+  type Participation, type PersonDetails, type Prefill,
+} from "../hq/person-details";
 
 // ── INVITATIONS FOR PEOPLE WITHOUT A COMPETEN ACCOUNT ── COMPETEN-IND-ACCESS-001, migration 378 ────────────
 //
@@ -33,6 +37,14 @@ import { identityHoldsNoStanding } from "../identity/standing";
 
 export const INVITE_DEFAULT_DAYS = 14;
 export const INVITE_MAX_DAYS = 30;
+/** An ordinary invitation's access must end within this many days (owner GO 2 Nov 2026: no open-ended access). */
+export const ORDINARY_MAX_ACCESS_DAYS = 366;
+
+/**
+ * "ordinary": an HQ Add User invitation. Complimentary access with a REQUIRED end date, source hq_grant.
+ * "pilot": the HQ access board's invitation, exactly as before (end date optional, source pilot).
+ */
+export type InviteBasis = "ordinary" | "pilot";
 
 export type InvitationRequest = {
   email: string;
@@ -44,13 +56,23 @@ export type InvitationRequest = {
   /** How long the invitation may be accepted, in days (1-30). Stored as expires_at by the database clock. */
   expiresInDays: number;
   note: string | null;
+  basis: InviteBasis;
+  /** Name parts and contact details. Recorded by HQ onto the identity this invitation created (src/lib/hq/invitee-record.ts), never here. */
+  details: PersonDetails;
+  /** Optional "More about this person" values. Stored on the invitation for the person to confirm. */
+  prefill: Prefill | null;
+  /** The participation label to record. A pilot-basis invitation is always "pilot". */
+  participation: Participation;
 };
 
 export type Refusal = { ok: false; status: number; code: string; message: string; personId?: string };
 export const isRefusal = (x: unknown): x is Refusal => !!x && typeof x === "object" && (x as any).ok === false;
 
-/** Pure: validate an invitation request body. */
-export function validateInvitation(body: any): InvitationRequest | Refusal {
+/** The UTC calendar date `days` from `now`, as YYYY-MM-DD. */
+const utcDatePlus = (now: Date, days: number) => new Date(now.getTime() + days * 86_400_000).toISOString().slice(0, 10);
+
+/** Pure: validate an invitation request body. `basis` defaults to "pilot", so the HQ access board is unchanged. */
+export function validateInvitation(body: any, basis: InviteBasis = "pilot", now: Date = new Date()): InvitationRequest | Refusal {
   const email = normaliseLookupEmail(body?.email);
   if (!email) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "Enter the email address to invite." };
   const raw: unknown[] = Array.isArray(body?.experiences) ? body.experiences : [];
@@ -59,15 +81,32 @@ export function validateInvitation(body: any): InvitationRequest | Refusal {
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "Choose Competen Scholar, Competen Professional or both." };
   const adultConfirmed = body?.adultConfirmed === true;
   if (experiences.includes("scholar") && !adultConfirmed)
-    return { ok: false, status: 422, code: "AGE_ELIGIBILITY_REQUIRED", message: "The Competen Scholar pilot is for people aged 18 or over. Confirm eligibility to invite to Scholar." };
+    return { ok: false, status: 422, code: "AGE_ELIGIBILITY_REQUIRED", message: "Competen Scholar is for people aged 18 or over. Confirm eligibility to invite to Scholar." };
   const endsAt = parseEndDate(body?.endsOn);
   if (endsAt === false) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be a date (YYYY-MM-DD)." };
+  if (basis === "ordinary") {
+    // No open-ended access through an ordinary invite. The range is checked on calendar dates (UTC), the same
+    // basis parseEndDate stores. Whether the end is in the future is still the schema's to decide.
+    if (endsAt === null) return { ok: false, status: 400, code: "END_DATE_REQUIRED", message: "Choose when this person's access ends." };
+    const ends = String(body.endsOn);
+    if (ends < utcDatePlus(now, 0)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be today or later." };
+    if (ends > utcDatePlus(now, ORDINARY_MAX_ACCESS_DAYS)) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `Access can be given for at most ${ORDINARY_MAX_ACCESS_DAYS} days.` };
+  }
   const days = body?.expiresInDays === undefined || body?.expiresInDays === null || body?.expiresInDays === "" ? INVITE_DEFAULT_DAYS : Number(body.expiresInDays);
   if (!Number.isInteger(days) || days < 1 || days > INVITE_MAX_DAYS)
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: `An invitation can be open for 1 to ${INVITE_MAX_DAYS} days.` };
-  const name = typeof body?.name === "string" ? body.name.trim().slice(0, 200) || null : null;
+  const details = cleanPersonDetails(body);
+  if (!details.ok) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: details.error };
+  const prefill = cleanPrefill(body?.prefill);
+  if (!prefill.ok) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: prefill.error };
+  if (body?.participation !== undefined && body?.participation !== null && !isParticipation(body.participation))
+    return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "Choose Regular invited user, Pilot participant or Staff tester." };
+  // The name the invitation carries: composed from the typed parts when there are any, else the single name given.
+  const composed = composeFullName(details.value);
+  const name = composed ?? (typeof body?.name === "string" ? body.name.trim().slice(0, 200) || null : null);
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) || null : null;
-  return { email, name, experiences, adultConfirmed, endsAt, expiresInDays: days, note };
+  const participation: Participation = basis === "pilot" ? "pilot" : (body?.participation as Participation | undefined) ?? "regular";
+  return { email, name, experiences, adultConfirmed, endsAt, expiresInDays: days, note, basis, details: details.value, prefill: prefill.value, participation };
 }
 
 /**
@@ -141,10 +180,23 @@ export async function invitationsForEmail(admin: any, email: string): Promise<{ 
 }
 
 export type InviteOutcome =
-  | { ok: true; invitationId: string; authUserId: string; expiresAt: string; delivery: "email" | "link"; reusedIdentity: boolean; testLink?: string }
+  | {
+    ok: true; invitationId: string; authUserId: string; expiresAt: string; delivery: "email" | "link"; reusedIdentity: boolean; testLink?: string;
+  }
   | Refusal;
 
 const NOT_SET_UP: Refusal = { ok: false, status: 503, code: "NOT_SET_UP", message: "Invitations are not set up in this environment yet." };
+const NOT_SET_UP_850: Refusal = { ok: false, status: 503, code: "NOT_SET_UP", message: "Inviting people from Users is not set up in this environment yet. Nothing was created." };
+
+/**
+ * WHETHER MIGRATION 850 INVITATION COLUMNS EXIST, asked before anything is created. A tolerant read of the
+ * columns: absent is "not set up", never an error and never a guess. The ordinary path refuses on false.
+ */
+async function invitationColumnsReady(admin: any): Promise<boolean | "unavailable"> {
+  const probe = await admin.from("individual_invitation").select("entitlement_source, prefill").limit(1);
+  if (isNotProvisioned(probe.error)) return false;
+  return probe.error ? "unavailable" : true;
+}
 
 /**
  * Create an invitation. Order matters: every refusal that can be decided without creating anything is
@@ -165,6 +217,12 @@ export async function createIndividualInvitation(
       ? { ok: false, status: 409, code: "INVITATION_PENDING", message: "This email already has an invitation waiting to be accepted." }
       : { ok: false, status: 409, code: "INVITATION_EXPIRED_PENDING", message: "This email has an expired invitation. Revoke it, with a reason, before inviting again." };
   }
+
+  // 1b. Migration 850 columns. The ordinary path (and any request carrying a prefill) refuses while they are
+  //     absent. A plain pilot invitation simply leaves them unwritten, as before.
+  const columns = await invitationColumnsReady(admin);
+  if (columns === "unavailable") return { ok: false, status: 503, code: "UNAVAILABLE", message: "Invitations could not be checked." };
+  if (!columns && (req.basis === "ordinary" || req.prefill)) return NOT_SET_UP_850;
 
   // 2. An existing Competen account goes to the existing-account grant path -- never a second identity.
   //    The one exception is an identity a previous Individual invitation created that has never been
@@ -240,6 +298,7 @@ export async function createIndividualInvitation(
     invite_scholar: req.experiences.includes("scholar"), invite_professional: req.experiences.includes("professional"),
     ...(req.experiences.includes("scholar") ? { adult_confirmed_at: new Date().toISOString(), adult_confirmed_by: inviter.id } : {}),
     entitlement_ends_at: req.endsAt, note: req.note, expires_at: expires, auth_user_id: authUserId, created_by: inviter.id,
+    ...(columns ? { entitlement_source: req.basis === "ordinary" ? "hq_grant" : "pilot", prefill: req.prefill } : {}),
   }).select("id, expires_at").single();
   if (row.error || !row.data) {
     // ⚠ NO ORPHANED IDENTITY. An identity THIS call created, for an invitation that was then not recorded,
@@ -301,9 +360,19 @@ export async function acceptIndividualInvitation(
   if (!inv.created_by) return { ok: false, status: 409, code: "INVITER_GONE", message: "The person who invited you no longer has an account here. Ask Competen to invite you again." };
 
   const experiences = experiencesOf(inv);
+  // THE SOURCE IS READ APART FROM THE SELECT ABOVE. Adding entitlement_source to that select would make a missing
+  // column (42703) look like NO_INVITATION to isNotProvisioned and break every pilot acceptance while 850 is
+  // absent. The live view does not carry the column either, so it is read from the invitation row by id. A
+  // missing column or a NULL is a legacy invitation and is accepted as pilot. Any other failure refuses, rather
+  // than guess a source.
+  const srcRead = await admin.from("individual_invitation").select("entitlement_source").eq("id", inv.id).maybeSingle();
+  if (srcRead.error && !isNotProvisioned(srcRead.error))
+    return { ok: false, status: 503, code: "UNAVAILABLE", message: "Your invitation could not be read. Try again shortly." };
+  const source: "pilot" | "hq_grant" = !srcRead.error && srcRead.data?.entitlement_source === "hq_grant" ? "hq_grant" : "pilot";
+
   const grant = await grantIndividualAccess(admin, {
     targetUserId: user.id, experiences, adultConfirmed: inv.invite_scholar, endsAt: inv.entitlement_ends_at ?? null,
-    adultConfirmedAt: inv.adult_confirmed_at ?? null, note: inv.note ?? `Invitation ${inv.id}`,
+    adultConfirmedAt: inv.adult_confirmed_at ?? null, note: inv.note ?? `Invitation ${inv.id}`, source,
   }, inv.created_by);
   if (!grant.ok) return { ok: false, status: grant.status, code: grant.code, message: grant.code === "END_DATE_NOT_FUTURE" ? "The access period this invitation offered has already ended. Ask Competen to invite you again." : grant.message };
 

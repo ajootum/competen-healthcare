@@ -20,6 +20,8 @@ const F = {
   page: "src/app/super-admin/users/page.tsx",
   ws: "src/app/super-admin/users/UsersWorkspace.tsx",
   loader: "src/app/super-admin/users/load-directory.ts",
+  detail: "src/app/super-admin/users/UserDetailWorkspace.tsx",
+  table: "src/app/super-admin/users/UsersTable.tsx",
 } as const;
 type K = keyof typeof F;
 type Src = Map<string, string>;
@@ -56,11 +58,18 @@ const checkHqOffices = (src: Src): R => {
   const s = code(src, "lib");
   return { ok: /from\("ogs_offices"\)\.select\("id"\)\.like\("office_type", "hq_%"\)/.test(s) && /if \(!a\.person_id \|\| !a\.role \|\| !hqOffice\.has\(a\.office_id\)\) continue;/.test(s), detail: "HQ seats must be filtered to hq_* offices" };
 };
+// HQ users directory (2 Nov 2026): the drawer became the user detail workspace and the list became UsersTable. The
+// pin follows the sentence to where it now lives: each of the five sources is tested for readability before it is
+// worded (seats in the profile's Roles section, products and HQ positions in the list), the unreadable word is
+// "Not readable", and the page-level warning stays in UsersWorkspace.
 const checkUnreadable = (src: Src): R => {
-  const ws = code(src, "ws");
-  const all = ["platform", "enterprise", "practice", "individual", "hq"].every(k => ws.includes(`!readable.${k} ? "Not readable"`));
+  const ws = code(src, "ws"), detail = code(src, "detail"), table = code(src, "table");
+  const seats = ["platform", "enterprise", "practice", "individual"].every(k => detail.includes(`seat(readable.${k},`));
+  const word = detail.includes(`<span className="text-[var(--cmp-text-warning)]">Not readable</span>`);
+  const hq = detail.includes("!readable.hq ?") && table.includes("!readable.hq &&");
+  const list = table.includes("productSummary(u.access, readable)") && table.includes("Not readable:");
   const banner = /\(!authComplete \|\| Object\.values\(readable\)\.some\(v => !v\)\) && \(/.test(ws);
-  return { ok: all && banner, detail: `all five sources ${all}, banner ${banner}` };
+  return { ok: seats && word && hq && list && banner, detail: `four seats ${seats}, word ${word}, hq ${hq}, list ${list}, banner ${banner}` };
 };
 // HQ-USERS-CLASSIFY-01: the reads moved to load-directory.ts, so the Auth read is pinned there and the page must
 // still pass completeness through.
@@ -102,7 +111,7 @@ red("D2 on a patient table", checkReads(plant("lib", `rows(admin.from("hq_positi
 red("D2 on Individual record content", checkReads(plant("lib", `rows(admin.from("hq_position").select("code, name").limit(500)),`, `rows(admin.from("hq_position").select("code, name").limit(500)),\n    rows(admin.from("individual_professional_cpd").select("id")),`)));
 red("D2 on a write", checkReads(plant("lib", `const rows = async (p: Promise<any>) =>`, `const w = (admin: any) => admin.from("tenants").update({});\nconst rows = async (p: Promise<any>) =>`)));
 red("D3 on tenant offices counted as HQ", checkHqOffices(plant("lib", `.like("office_type", "hq_%")`, "")));
-red("D4 on an unreadable source shown as none", checkUnreadable(plant("ws", `!readable.practice ? "Not readable" : `, "")));
+red("D4 on an unreadable source shown as none", checkUnreadable(plant("detail", `seat(readable.practice, `, `(`)));
 red("D5 on the first page only", checkPaging(plant("loader", "listAllAuthUsers(admin),", "admin.auth.admin.listUsers({ page: 1, perPage: 1000 }),")));
 red("D1 on the loader called before the gate", checkPageGate(plant("page", `  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");`, `  await loadDirectory(null);\n  const { admin, isOwner, capabilities } = await requireHqCapability("hq.platform.users.view");`)));
 red("D6 on a loader that reads a patient table", checkLoader(plant("loader", `admin.from("hospitals").select("id, name, country"),`, `admin.from("hospitals").select("id, name, country"),

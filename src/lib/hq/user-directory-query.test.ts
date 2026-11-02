@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PAGE_SIZE, directoryStats, parseDirectoryFilters, queryDirectory, toQueryString, type FilterableRow } from "./user-directory-query";
+import { PAGE_SIZE, directoryStats, parseDirectoryFilters, parseUserParam, queryDirectory, toQueryString, withUserParam, type FilterableRow } from "./user-directory-query";
 import type { AccountType } from "./account-classification";
 
 // HQ-USERS-CLASSIFY-01: the Users directory's server-side query -- filters, view counts and pagination.
@@ -16,7 +16,7 @@ const base = (p: Record<string, string> = {}) => parseDirectoryFilters(p, "activ
 
 describe("parseDirectoryFilters", () => {
   it("no query string is the configured default view, page 1, every filter off", () => {
-    expect(base()).toEqual({ view: "active_humans", q: "", role: "all", org: "all", facility: "all", status: "all", login: "all", product: "all", hq: "all", page: 0 });
+    expect(base()).toEqual({ view: "active_humans", q: "", role: "all", org: "all", facility: "all", status: "all", login: "all", product: "all", hq: "all", access: "all", page: 0 });
   });
   it("an unknown view, status or page falls back rather than failing", () => {
     expect(base({ view: "everyone", status: "deleted", page: "-4" })).toMatchObject({ view: "active_humans", status: "all", page: 0 });
@@ -103,5 +103,51 @@ describe("directoryStats", () => {
     expect(s.active).toBe(2);
     expect(s.byRole.nurse).toEqual({ count: 2, active: 1 });
     expect(s.byRole.assessor).toEqual({ count: 1, active: 0 });
+  });
+});
+
+// HQ users directory (2 Nov 2026): Scholar / Professional product filters, the access category, and ?user=.
+describe("directory filters: experiences, access category and the open person", () => {
+  const rows = [
+    u("human", { products: ["individual"], experiences: ["scholar"], participation: "pilot" }),
+    u("human", { products: ["individual"], experiences: ["scholar", "professional"], participation: "regular" }),
+    u("human", { products: ["platform"], experiences: [], participation: null }),
+    u("human", { products: [], participation: "staff_tester" }),
+  ];
+  const all = (p: Record<string, string>) => queryDirectory(rows, base({ view: "all", ...p }), NOW);
+
+  it("filters by a live experience, not by the Individual product as a whole", () => {
+    expect(all({ product: "scholar" }).total).toBe(2);
+    expect(all({ product: "professional" }).total).toBe(1);
+    expect(all({ product: "individual" }).total).toBe(2);
+  });
+  it("a row with no experiences list matches neither experience filter, and is not an error", () => {
+    expect(all({ product: "scholar" }).rows.every(r => (r.experiences ?? []).includes("scholar"))).toBe(true);
+  });
+  it("filters by access category, and 'unset' means no participation row", () => {
+    expect(all({ access: "pilot" }).total).toBe(1);
+    expect(all({ access: "staff_tester" }).total).toBe(1);
+    expect(all({ access: "unset" }).total).toBe(1);
+  });
+  it("an unknown access category falls back to all", () => {
+    expect(base({ access: "vip" }).access).toBe("all");
+  });
+  it("round-trips the new filters through the query string", () => {
+    const f = base({ product: "scholar", access: "pilot" });
+    expect(toQueryString(f, "active_humans")).toBe("product=scholar&access=pilot");
+    expect(base(Object.fromEntries(new URLSearchParams(toQueryString(f, "active_humans"))))).toEqual(f);
+  });
+  it("parses ?user= only when it is an id, and the filters ignore it", () => {
+    const id = "3F2504E0-4F89-41D3-9A0C-0305E82C3301";
+    expect(parseUserParam({ user: id })).toBe(id.toLowerCase());
+    expect(parseUserParam({ user: "../../etc" })).toBeNull();
+    expect(parseUserParam({})).toBeNull();
+    expect(base({ user: id })).toEqual(base());
+  });
+  it("opens and closes a person without touching the search, the filters or the page", () => {
+    const id = "3f2504e0-4f89-41d3-9a0c-0305e82c3301";
+    expect(withUserParam("/super-admin/users", "q=amu&status=pending&page=3", id)).toBe(`/super-admin/users?q=amu&status=pending&page=3&user=${id}`);
+    expect(withUserParam("/super-admin/users", `q=amu&user=${id}`, null)).toBe("/super-admin/users?q=amu");
+    expect(withUserParam("/super-admin/users", "", null)).toBe("/super-admin/users");
   });
 });

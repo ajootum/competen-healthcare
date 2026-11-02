@@ -6,6 +6,7 @@ import { EXPERIENCES } from "@/lib/individual/experiences";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import { isHqOfficeType } from "@/lib/hq/spaces";
 import { estateRolesOf, ROLE_CONFIG, type AppRole } from "@/lib/roles";
+import { composeFullName } from "@/lib/account/compose-name";
 
 // ── MY PROFILE -- ONE PERSONAL-PROFILE EXPERIENCE ACROSS COMPETEN PRODUCTS ── owner GO 2026-10-23, PR D ──
 //
@@ -35,14 +36,26 @@ import { estateRolesOf, ROLE_CONFIG, type AppRole } from "@/lib/roles";
 // stores with their own verification states, and the card says so.
 
 export const PROFILE_FIELDS = ["full_name", "phone", "country", "specialization"] as const;
-export const NAME_FIELDS = ["given_name", "family_name"] as const;
+export const NAME_FIELDS = ["given_name", "middle_names", "family_name"] as const;
 type ProfileField = (typeof PROFILE_FIELDS)[number];
 type NameField = (typeof NAME_FIELDS)[number];
 export type ProfilePatch = Partial<Record<ProfileField | NameField, string | null>>;
 
 const LIMITS: Record<ProfileField | NameField, number> = {
-  full_name: 120, phone: 40, country: 80, specialization: 120, given_name: 100, family_name: 100,
+  full_name: 120, phone: 40, country: 80, specialization: 120, given_name: 100, middle_names: 100, family_name: 100,
 };
+
+/**
+ * Pure. ONE field's value, cleaned by the rule the self-update uses, or the reason it is refused. HQ's edit of
+ * a person's details (/api/super-admin/users/profile) calls this too, so the two paths cannot drift apart.
+ * Blank is null ("not recorded"). Whether a blank is allowed (full_name) is the caller's rule.
+ */
+export function cleanProfileValue(key: ProfileField | NameField, raw: unknown): { ok: true; value: string | null } | { ok: false; error: string } {
+  if (raw !== null && raw !== undefined && typeof raw !== "string") return { ok: false, error: `${label(key)} must be text.` };
+  const v = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : "";
+  if (v.length > LIMITS[key]) return { ok: false, error: `${label(key)} must be ${LIMITS[key]} characters or fewer.` };
+  return { ok: true, value: v || null };
+}
 
 /**
  * Pure. The fields a self-update may carry, cleaned, or the reason it is refused. Unknown keys are
@@ -53,20 +66,40 @@ export function parseProfilePatch(body: unknown): { ok: true; patch: ProfilePatc
   const patch: ProfilePatch = {};
   for (const key of [...PROFILE_FIELDS, ...NAME_FIELDS]) {
     if (!(key in b)) continue;
-    const raw = b[key];
-    if (raw !== null && raw !== undefined && typeof raw !== "string") return { ok: false, error: `${label(key)} must be text.` };
-    const v = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : "";
-    if (v.length > LIMITS[key]) return { ok: false, error: `${label(key)} must be ${LIMITS[key]} characters or fewer.` };
-    patch[key] = v || null;
+    const cleaned = cleanProfileValue(key, b[key]);
+    if (!cleaned.ok) return cleaned;
+    patch[key] = cleaned.value;
   }
   if ("full_name" in patch && patch.full_name === null) return { ok: false, error: "Your full name cannot be empty." };
   if (!Object.keys(patch).length) return { ok: false, error: "Nothing to update." };
   return { ok: true, patch };
 }
 
+export type OwnNames = { full_name: string | null; given_name: string | null; middle_names: string | null; family_name: string | null };
+
+/**
+ * Pure. The full name to write with a self-edit of name parts, or null for "leave full_name alone".
+ *
+ * A person who changes a name part keeps a full name that follows it ONLY when the full name they have now is exactly
+ * what their OLD parts compose to (given, middle, family, single-spaced, missing parts ignored). A full name they
+ * chose themselves, which differs from that, is never touched. And only when they will have BOTH a given and a
+ * family name afterwards, so composing never drops part of a name that was not recorded as parts.
+ */
+export function recomposedOwnFullName(current: OwnNames, patch: ProfilePatch): string | null {
+  if ("full_name" in patch) return null;
+  if (!NAME_FIELDS.some(k => k in patch)) return null;
+  const oldFull = composeFullName({ givenName: current.given_name, middleNames: current.middle_names, familyName: current.family_name });
+  if (!oldFull || oldFull !== (current.full_name ?? "").replace(/\s+/g, " ").trim()) return null;
+  const pick = (k: NameField) => (k in patch ? patch[k] ?? null : current[k]);
+  if (!pick("given_name") || !pick("family_name")) return null;
+  const full = composeFullName({ givenName: pick("given_name"), middleNames: pick("middle_names"), familyName: pick("family_name") });
+  if (!full || full.length > LIMITS.full_name || full === current.full_name) return null;
+  return full;
+}
+
 const label = (k: string) => ({
   full_name: "Full name", phone: "Phone", country: "Country", specialization: "Speciality",
-  given_name: "Given name", family_name: "Family name",
+  given_name: "Given name", middle_names: "Middle name(s)", family_name: "Family name",
 } as Record<string, string>)[k] ?? k;
 
 // ── What the card shows ───────────────────────────────────────────────────────────────────────────
@@ -79,7 +112,7 @@ export type OwnProfile = {
   country: string | null;
   specialization: string | null;
   /** Migration 380. `supported: false` where it is not applied: the fields cannot be shown or set. */
-  names: { supported: true; given: string | null; family: string | null } | { supported: false };
+  names: { supported: true; given: string | null; family: string | null; middle: string | null; middleSupported: boolean } | { supported: false };
   /** From Supabase Auth, the sign-in identity. `pending` is an unconfirmed change in progress. */
   email: { current: string | null; pending: string | null };
 };
@@ -103,6 +136,8 @@ export async function readOwnProfile(db: any, user: { id: string; email?: string
   if (error) return { ok: false, error: error.message };
   if (!row) return { ok: false, error: "No profile row exists for this account." };
   const names = await db.from("profiles").select("given_name, family_name").eq("id", user.id).maybeSingle();
+  // Middle names are migration 850's, read apart so their absence degrades only that field.
+  const middle = names.error ? null : await db.from("profiles").select("middle_names").eq("id", user.id).maybeSingle();
   return {
     ok: true,
     value: {
@@ -112,7 +147,10 @@ export async function readOwnProfile(db: any, user: { id: string; email?: string
       specialization: row.specialization ?? null,
       names: names.error
         ? { supported: false }
-        : { supported: true, given: names.data?.given_name ?? null, family: names.data?.family_name ?? null },
+        : {
+            supported: true, given: names.data?.given_name ?? null, family: names.data?.family_name ?? null,
+            middle: middle && !middle.error ? middle.data?.middle_names ?? null : null, middleSupported: !!middle && !middle.error,
+          },
       email: { current: user.email ?? null, pending: user.new_email ?? null },
     },
   };

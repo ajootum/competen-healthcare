@@ -6,6 +6,8 @@ import { grantPlatformMembership } from "@/lib/platform-membership";
 
 import { currentTraceId } from "@/lib/trace";
 import { SITE_URL } from "@/lib/marketing/site";
+import { cleanPersonDetails, composeFullName } from "@/lib/hq/person-details";
+import { isNotProvisioned } from "@/lib/individual/access";
 
 // HQ-USERS-A: every handler here is OWNER-ONLY, as before, but the owner is now decided by the HQ gate
 // (super_admin in roles[], or platform_owner) instead of the single legacy profiles.role column. Role and
@@ -41,12 +43,27 @@ export async function PATCH(req: Request) {
   if (organisation_id !== undefined) update.organisation_id = organisation_id ?? null;
   if (department_id !== undefined) update.department_id = department_id ?? null;
 
+  // The audit trail for a role or tenancy change: who, what it was, what it became. Read before the write.
+  const AUDITED = "role, roles, org_role, org_roles, platform_role, platform_roles, hospital_id, organisation_id, department_id, full_name";
+  const { data: before } = await ctx.admin.from("profiles").select(AUDITED).eq("id", userId).maybeSingle();
+
   const { error } = await ctx.admin.from("profiles").update(update).eq("id", userId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { data: after } = await ctx.admin.from("profiles").select(AUDITED).eq("id", userId).maybeSingle();
+  await ctx.admin.from("audit_log").insert({ trace_id: await currentTraceId(),
+    actor_id: ctx.actorId, actor_name: ctx.actorName,
+    action: "update_user_roles", entity_type: "user", entity_id: userId, entity_name: after?.full_name ?? before?.full_name ?? null,
+    old_value: before ? { ...before, full_name: undefined } : null,
+    new_value: after ? { ...after, full_name: undefined } : { requested: Object.keys(update) },
+  });
   return NextResponse.json({ ok: true });
 }
 
-const PORTALS = new Set(["super_admin", "hospital_admin", "educator", "assessor", "nurse"]);
+// Routine invitations offer the working portal roles only. Super Admin and Admin (hospital_admin) are elevations:
+// they stay in PATCH above and in the HQ appointments workflow, never in a routine invite (owner GO 2 Nov 2026).
+const PORTALS = new Set(["educator", "assessor", "nurse"]);
+const ELEVATED = new Set(["super_admin", "hospital_admin"]);
 
 // Create a user account: either invite-by-email (user sets their own password)
 // or with a server-generated temporary password returned once in the response.
@@ -55,9 +72,18 @@ export async function POST(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { admin, actorId, actorName } = ctx;
 
-  const { email, full_name, role, mode, organisation_id, hospital_id, account_type } = await req.json();
+  const body = await req.json().catch(() => ({}));
+  const { email, role, mode, organisation_id, hospital_id, account_type } = body;
+  // The name: typed parts compose the full name (given, middle, family). A single full_name is still accepted.
+  const parts = cleanPersonDetails(body);
+  if (!parts.ok) return NextResponse.json({ error: parts.error }, { status: 400 });
+  const d = parts.value;
+  const full_name: string | null = composeFullName(d) ?? (typeof body.full_name === "string" ? body.full_name.replace(/\s+/g, " ").trim().slice(0, 120) || null : null);
+  if (!role) return NextResponse.json({ error: "Choose a role" }, { status: 400 });
+  if (ELEVATED.has(role))
+    return NextResponse.json({ error: "Super Admin and Admin are given through HQ appointments, not here." }, { status: 400 });
   if (!email || !full_name || !PORTALS.has(role) || !["invite", "password"].includes(mode)) {
-    return NextResponse.json({ error: "email, full_name, a valid role and mode are required" }, { status: 400 });
+    return NextResponse.json({ error: "email, a name, a valid role and mode are required" }, { status: 400 });
   }
   // Owner 29 Oct 2026: the account type is chosen at onboarding (Human by default), checked before anything is created.
   const kind = onboardingType(account_type);
@@ -84,10 +110,28 @@ export async function POST(req: Request) {
     userId = data.user.id;
   }
 
-  const { error: perr } = await admin.from("profiles").upsert({
+  // The name parts, phone and country ride on the same write. Middle names (850) and the 380 name parts are
+  // optional columns: where one is absent it is dropped and the write retried, so a missing optional column
+  // never costs the account.
+  const core = {
     id: userId, email, full_name, role, roles: [role],
     organisation_id: organisation_id || null, hospital_id: hospital_id || null,
-  });
+    ...(d.phone ? { phone: d.phone } : {}), 
+    // profiles.country defaults to 'Kenya' in the database: always write the chosen country, or null for not recorded.
+    country: d.country || null,
+  };
+  const names = { ...(d.givenName ? { given_name: d.givenName } : {}), ...(d.familyName ? { family_name: d.familyName } : {}) };
+  const attempts = [
+    { ...core, ...names, ...(d.middleNames ? { middle_names: d.middleNames } : {}) },
+    { ...core, ...names },
+    core,
+  ];
+  let perr: { message: string; code?: string } | null = null;
+  for (const row of attempts) {
+    const res = await admin.from("profiles").upsert(row);
+    perr = res.error;
+    if (!perr || !isNotProvisioned(perr)) break;
+  }
   if (perr) {
     await admin.auth.admin.deleteUser(userId);
     return NextResponse.json({ error: `Profile creation failed (rolled back): ${perr.message}` }, { status: 500 });

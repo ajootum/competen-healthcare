@@ -376,6 +376,131 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
       "`question_id` joins an attempt to the copy (never to a person), `correct` is the % correct, `answered_at` is the last-used " +
       "date. `user_id`, `chosen_index`, `response`, `score` and the evaluator columns are outside this plane.",
   },
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // HQ-USERS-DIRECTORY-01 (owner GO 2 Nov 2026) -- THE USERS DIRECTORY AND THE USER PROFILE.
+  //
+  // The directory shows ACTUAL product entitlements, and the profile shows a person's access, their own education and
+  // professional LABELS, and an administrative participation category. Every table below is named EXACTLY in
+  // PLANE_TABLE_PREFIXES (plane-boundary-scan.ts), never as a prefix. `individual_scholar_learner_context` (the person's own
+  // working record) is governed with no entry at all, so a read of it is refused. `individual_professional_profile_item` and
+  // `_context` are not admitted by the professional entry and are not denied either, because verification and reminder code
+  // in the closure reads them today: denying them is a separate decision.
+  // ⚠ NONE OF THESE ADMITS A PRIVATE RECORD. No Scholar note, learning history, Personal AI, formative assessment, plan,
+  // passport item, evidence, registration number, biography or photo is readable from here. Section 7 of the profile
+  // says so on screen, and a planted read of individual_identity_profile.biography turns this harness red.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  {
+    table: "individual_membership",
+    columns: ["user_id", "status", "source", "onboarded_at", "created_at"],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. Gate 3 of the three-gate model: WHETHER a person holds Competen Individual and how it began. " +
+      "`user_id` and `status` build the directory's product access and the Individual filter (user-directory.ts, the same rows the gate " +
+      "reads), `user_id` alone is the reminder job's membership test, and `source`, `onboarded_at` and `created_at` are the profile's " +
+      "Products section (hq_pilot_grant, signup or hq_grant, and whether the welcome was finished). `note`, the terms and privacy " +
+      "acceptance versions, `primary_experience` (the person's own preference) and the granter ids are outside this plane. It is " +
+      "employment-shaped access information of the class the HQ appointments board already shows, and it names no learning content.",
+  },
+  {
+    table: "individual_entitlement",
+    columns: ["id", "user_id", "experience_code", "status", "starts_at", "ends_at", "source", "plan_code", "granted_by", "created_at"],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. The access PERIODS a person holds: which experience (scholar or professional), its status, its dates, " +
+      "the basis it was given on (pilot, hq_grant, payment, signup) and the plan code a paid period carries. `granted_by` is a uuid read " +
+      "ONLY to print the grantor's NAME in the profile (profiles.full_name, the HQ staff member who gave the access), as the pilot " +
+      "access board already attributes a grant. Outside this plane: `note`, the terms and privacy versions, the adult declaration and " +
+      "confirmation columns, `operating_entity` and the checkout reference, so no payment amount, no declaration and no free text " +
+      "leaves the table. Liveness is NEVER computed from these dates: the directory asks individual_live_entitlement.",
+  },
+  {
+    table: "individual_live_entitlement",
+    columns: ["id", "user_id", "experience_code", "ends_at", "source"],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. The periods that are live NOW on the DATABASE clock (the view exists so no caller compares the application " +
+      "clock with a stored date). The directory reads `user_id`, `experience_code` and `ends_at` to print 'Scholar until 31 Jan 2027' " +
+      "beside a person, the profile reads `id` to mark which period is live, and the unit-economics page reads `user_id` and `source` " +
+      "to count paid against complimentary seats. Nothing else of the view is taken.",
+  },
+  {
+    table: "individual_invitation",
+    columns: [
+      "id", "status", "invite_scholar", "invite_professional", "expires_at", "entitlement_ends_at", "created_at", "accepted_at",
+      "revoked_at", "entitlement_source", "prefill",
+    ],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. Where a person's invitation stands: which experiences it offered, when it expires, when the access it " +
+      "grants ends, and (migration 850) which source it writes and the optional details HQ itself typed in when inviting, shown as 'Supplied " +
+      "at invitation, not yet confirmed'. Found by the invited person's profile id, not by email. NEVER taken: `note` (free text), " +
+      "the invited email and name (the profile already holds them), the revocation reason, and the adult-confirmation columns. " +
+      "`prefill` is HQ-authored, an allowlist of eight short strings, and is never written into a learner-owned table.",
+  },
+  {
+    table: "individual_live_invitation",
+    columns: ["id"],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. One column. Which of a person's invitations can still be accepted NOW on the database clock, so an invitation " +
+      "past its expiry reads 'Expired' rather than 'Waiting'. The row's other columns are not taken.",
+  },
+  {
+    table: "individual_identity_profile",
+    columns: ["user_id", "preferred_name"],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. TWO COLUMNS: whether the person has an identity profile at all, and the preferred name they chose, shown " +
+      "next to the official name and marked 'Chosen by the person'. `headline`, `location`, `biography`, the photo path and mime and every " +
+      "other column are the person's own display and are outside this plane permanently. The preferred name is learner-owned: HQ reads it " +
+      "and cannot change it once the profile exists.",
+  },
+  {
+    table: "individual_scholar_learner",
+    columns: ["user_id", "programme_code", "level_label", "institution_label"],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01. The three LABELS the person chose for their study: programme, level and institution, shown read-only in " +
+      "'Education & Professional Context' as 'Set by the person in Scholar'. Labels only. The codes behind level and institution, the " +
+      "chosen-at time and every working record (individual_scholar_learner_context and the rest of the family) are outside this plane, which " +
+      "is why this entry is an exact table name and not a prefix.",
+  },
+  {
+    table: "individual_scholar_programme",
+    columns: "*",
+    count: true,
+    why:
+      "The Scholar programme CATALOGUE (migration 387): a profession, a country, a level and the framework link, one row per programme the " +
+      "product offers. Platform-owned configuration that names no person, which is why `*` is honest here as it is for the identifier format. " +
+      "Read by the programme administration pages and, since HQ-USERS-DIRECTORY-01, by the profile to print a programme's NAME where " +
+      "the person's row holds its code.",
+  },
+  {
+    table: "individual_professional_profile",
+    columns: [
+      "id", "user_id", "self_declared_profession", "self_declared_registration_body", "self_declared_registration_country",
+      "self_declared_registration_expires_on", "registration_reminded_for",
+    ],
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01 reads THREE LABELS the person declared: profession, registration body and registration country, shown read-only " +
+      "and marked self-declared and unverified. The REGISTRATION NUMBER (`self_declared_registration_number`) is outside this plane and the " +
+      "profile says it is not shown to HQ. The other columns here (`id`, `user_id`, the expiry date and the reminded-for date) are the " +
+      "registration-reminder job's, reached through platform/jobs.ts from the CKP intelligence page, a read that existed before this entry and is " +
+      "declared rather than hidden. It reads dates, never the number. The profile's items and context (individual_professional_profile_item and " +
+      "_context: the person's CPD, skills and working notes) are separate tables and stay outside this plane.",
+  },
+  {
+    table: "hq_account_participation",
+    columns: "*",
+    count: true,
+    why:
+      "HQ-USERS-DIRECTORY-01 (migration 850). HQ's OWN administrative label per person: regular, pilot or staff_tester, an optional cohort, an " +
+      "optional end, who set it and why. It is landlord-authored, holds nothing the person wrote and nothing clinical, and DECIDES NO ACCESS: " +
+      "no function, policy or guard reads it. `*` is honest here for the same reason it is for the MOS registers. The directory reads it to " +
+      "filter by category and the profile shows it beside the person's actual entitlements. Absent until 850 is applied: every read here treats a " +
+      "missing table as 'not set up here'.",
+  },
   {
     table: "practice_practitioner_identity",
     // ⚠ `user_id` ADDED 2026-08-18 AS A JOIN KEY AND NOTHING ELSE (CPR-PD-004). The roster shows a

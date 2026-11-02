@@ -11,6 +11,7 @@ import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptanc
 import { contextTermsGate } from "@/lib/individual/guard";
 import { publishedVersions } from "@/lib/individual/legal";
 import { experienceOfPath, forQuery, isIndividualNext, signInHref } from "@/lib/individual/entry";
+import { initialsOf } from "@/lib/individual/initials";
 import { headers } from "next/headers";
 import { JOIN_START, selfRegistrationEnabled } from "@/lib/individual/join";
 import { learningEnabled } from "@/lib/learning/policy";
@@ -155,7 +156,7 @@ export default async function ExperienceLayout({ children, params }: {
   }
 
   // HFE-01 F8: with the experience switcher showing, the phone header keeps only the C mark, so the row fits 375px.
-  const initials = (profile.fullName ?? profile.email ?? "?").split(/\s+/).map(s => s.charAt(0)).join("").slice(0, 2).toUpperCase();
+  const initials = initialsOf(profile);
   // COMPETEN-LEARNING-01: one link to the member-only Learning area, only while learning_app is on (ADR-017).
   const learning = await learningEnabled(shell.ctx.admin);
 

@@ -5,6 +5,7 @@ import { currentTraceId } from "@/lib/trace";
 import { createIndividualInvitation, inviteDeliveryMode, isRefusal, validateInvitation } from "@/lib/individual/invitations";
 import { SITE_URL } from "@/lib/marketing/site";
 import { classifyAtOnboarding, onboardingType } from "@/lib/hq/account-classification";
+import { recordInviteeDetails } from "@/lib/hq/invitee-record";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -13,7 +14,8 @@ export const dynamic = "force-dynamic";
 // POST /api/hq/individual/invitations -- COMPETEN-IND-ACCESS-001 (invitations), migration 378.
 //
 // Invite an email address that has NO Competen account into Competen Scholar, Professional or both. Body:
-// { email, name?, experiences, adultConfirmed, endsOn?, expiresInDays?, note? }.
+// { email, name?, experiences, adultConfirmed, endsOn?, expiresInDays?, note?, basis?: "ordinary", givenName?,
+// middleNames?, familyName?, preferredName?, phone?, country?, prefill?, participation?, accountType? }.
 //
 // ⚠ THE SAME DOOR AS THE GRANT: hqApiGate(["hq.individual.pilot.grant"]), then the release gate. Holding the
 // right opens nothing while Individual is switched off. An address that already has an account is refused
@@ -32,7 +34,9 @@ export async function POST(req: Request) {
   if (!(await individualAppEnabled(ctx.admin))) return NextResponse.json({ error: { code: "NOT_FOUND", message: "Not found" } }, { status: 404 });
 
   const body = await req.json().catch(() => ({}));
-  const parsed = validateInvitation(body);
+  // "ordinary" is the HQ Add User invitation (complimentary access, a required end date, source hq_grant). Anything
+  // else is the HQ access board's pilot invitation, exactly as before.
+  const parsed = validateInvitation(body, body?.basis === "ordinary" ? "ordinary" : "pilot");
   if (isRefusal(parsed)) return NextResponse.json({ error: { code: parsed.code, message: parsed.message } }, { status: parsed.status });
   // Owner 29 Oct 2026: the account type is chosen at onboarding (Human by default), checked before anything is created.
   const kind = onboardingType(body?.accountType);
@@ -45,6 +49,12 @@ export async function POST(req: Request) {
   if (!outcome.ok)
     return NextResponse.json({ error: { code: outcome.code, message: outcome.message, ...(outcome.personId ? { personId: outcome.personId } : {}) } }, { status: outcome.status });
 
+  // What HQ records about the person it just invited: name parts, phone, country, preferred name, participation.
+  // After the invitation exists, best effort, in the HQ plane (src/lib/hq/invitee-record.ts). Warnings are returned.
+  const recorded = await recordInviteeDetails(ctx.admin, {
+    authUserId: outcome.authUserId, reusedIdentity: outcome.reusedIdentity, details: parsed.details, participation: parsed.participation, inviterId: ctx.userId,
+  });
+
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.fullName ?? null,
     action: "individual_invitation_created", entity_type: "individual_invitation", entity_id: outcome.invitationId,
@@ -52,11 +62,18 @@ export async function POST(req: Request) {
       email: parsed.email, experiences: parsed.experiences, auth_user_id: outcome.authUserId, reused_identity: outcome.reusedIdentity,
       adult_confirmed: parsed.experiences.includes("scholar") ? parsed.adultConfirmed : null,
       ends_at: parsed.endsAt, expires_at: outcome.expiresAt, delivery: outcome.delivery, note: parsed.note,
+      basis: parsed.basis, entitlement_source: parsed.basis === "ordinary" ? "hq_grant" : "pilot",
+      participation: recorded.participation,
+      // Field names only for the optional personal details, never their values.
+      prefill_fields: parsed.prefill ? Object.keys(parsed.prefill) : [],
     },
   }).then((r: unknown) => r, () => {});
 
   // The account type, through the owner-only audited function (650). Not the owner, or 650 absent: said, never undone.
   const classification = await classifyAtOnboarding(ctx.admin, { id: ctx.userId, name: ctx.fullName ?? null, isOwner: ctx.isOwner }, outcome.authUserId, kind.type, "Individual invitation", await currentTraceId());
 
-  return NextResponse.json({ ...outcome, accountType: classification.ok ? classification.type : "unclassified", ...(classification.ok ? {} : { classificationWarning: classification.error }) }, { status: 201 });
+  return NextResponse.json({
+    ...outcome, accountType: classification.ok ? classification.type : "unclassified", ...(classification.ok ? {} : { classificationWarning: classification.error }),
+    participation: recorded.participation, ...(recorded.warnings.length ? { warnings: recorded.warnings } : {}),
+  }, { status: 201 });
 }

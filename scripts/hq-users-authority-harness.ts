@@ -22,6 +22,7 @@ const F = {
   users: "src/app/api/super-admin/users/route.ts",
   page: "src/app/super-admin/users/page.tsx",
   ws: "src/app/super-admin/users/UsersWorkspace.tsx",
+  detail: "src/app/super-admin/users/UserDetailWorkspace.tsx",
   classify: "src/app/api/super-admin/users/classification/route.ts",
   exportCsv: "src/app/api/super-admin/users/export/route.ts",
 } as const;
@@ -59,7 +60,7 @@ const checkOwnerGate = (src: Src): R => {
   return { ok: /const ctx = await hqApiGate\(capabilities\);\s*if \(isHqRefusal\(ctx\)\) return ctx;\s*return ctx\.isOwner \? ctx : NextResponse\.json\(/.test(fn), detail: "hqOwnerApiGate must be hqApiGate, then isOwner" };
 };
 const checkUi = (src: Src): R => {
-  const page = code(src, "page"), ws = code(src, "ws");
+  const page = code(src, "page"), ws = code(src, "ws"), detail = code(src, "detail");
   // HQ-USERS-B moved password reset out of the owner-only set (hq-users-reset-harness R6 pins it). What
   // stays owner-only here: creation, invitation, suspension, deletion and role editing.
   const passes = /const \{ admin, isOwner(, capabilities)? \} = await requireHqCapability\("hq\.platform\.users\.view"\)/.test(page) && /canManage=\{isOwner\}/.test(page);
@@ -67,8 +68,12 @@ const checkUi = (src: Src): R => {
     /\{canManage && \(\s*<button onClick=\{\(\) => \{ setAddOpen\(true\)/,
     /\{canManage && <>\s*<button onClick=\{\(\) => \{\s*setBulkOpen\(false\);\s*if \(window\.confirm\(`Suspend/,
     /\{canManage && <>\s*\{u\.status === "pending" && \(\s*<button onClick=\{\(\) => \{ setMenuFor\(null\); act\(u\.id, "resend_invite"/,
-    /\{canManage && <UserRoleEditor/,
-  ].every(r => r.test(ws));
+  ].every(r => r.test(ws))
+    // HQ users directory (2 Nov 2026): the role editor and the account actions moved into the profile (UserDetailWorkspace),
+    // and each is still behind canManage there.
+    && /action=\{canManage \? <UserRoleEditor/.test(detail)
+    && /\{canManage && user\.status === "pending" && <button/.test(detail)
+    && /\{canManage && \(user\.status === "suspended"/.test(detail);
   return { ok: passes && guarded, detail: `page passes the owner flag ${passes}, controls guarded ${guarded}` };
 };
 const checkLastOwner = (src: Src): R => ({
@@ -114,7 +119,8 @@ red("U2 on a list route that skips the gate", checkGates(plant("list", `const ct
 red("U2 on actions behind the view right only", checkGates(plant("actions", `await hqOwnerApiGate(["hq.platform.users.view"])`, `await hqApiGate(["hq.platform.users.view"])`)));
 red("U2 on a users handler that skips requireOwner", checkGates(plant("users", `export async function DELETE(req: Request) {\n  const ctx = await requireOwner();`, `export async function DELETE(req: Request) {\n  await Promise.resolve();\n  const ctx = await requireOwner();`)));
 red("U3 on an owner gate that admits any holder", checkOwnerGate(plant("gate", "return ctx.isOwner ? ctx : NextResponse.json(", "return true ? ctx : NextResponse.json(")));
-red("U4 on unguarded owner-only row actions", checkUi(plant("ws", `{canManage && <>\n                            {u.status === "pending" && (`, `{<>\n                            {u.status === "pending" && (`)));
+red("U4 on unguarded owner-only row actions", checkUi(plant("ws", `{canManage && <>\n            {u.status === "pending" && (`, `{<>\n            {u.status === "pending" && (`)));
+red("U4 on an unguarded role editor in the profile", checkUi(plant("detail", "action={canManage ? <UserRoleEditor", "action={true ? <UserRoleEditor")));
 red("U4 on a page that hands everyone the controls", checkUi(plant("page", "canManage={isOwner}", "canManage={true}")));
 red("U6 on classification behind the view right only (the bypass)", checkClassify(plant("classify", `await hqOwnerApiGate(["hq.platform.users.view"])`, `await hqApiGate(["hq.platform.users.view"])`)));
 red("U6 on classification that also writes an entitlement", checkClassify(plant("classify", `const trace = await currentTraceId();`, `const trace = await currentTraceId();\n  await ctx.admin.from("platform_membership").delete().eq("user_id", ctx.userId);`)));

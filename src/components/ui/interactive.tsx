@@ -217,8 +217,10 @@ export function TabPanel({ tabKey, active, children }: { tabKey: string; active:
 }
 
 // ── Drawer / side panel (PUI-003 s8, PUI-004 s3) ────────────────────────────────────────────────────────
-export function Drawer({ open, title, onClose, children, side = "right" }: {
+export function Drawer({ open, title, onClose, children, side = "right", wide = false }: {
   open: boolean; title: string; onClose: () => void; children: React.ReactNode; side?: "right" | "left";
+  /** A detail workspace: full screen below the md edge, a wide panel (48rem) from md up. Off, it is the usual 28rem panel. */
+  wide?: boolean;
 }) {
   const panel = useRef<HTMLDivElement>(null);
 
@@ -232,7 +234,7 @@ export function Drawer({ open, title, onClose, children, side = "right" }: {
     <div className="fixed inset-0 z-[65] bg-black/20" onClick={onClose}>
       <div ref={panel} role="dialog" aria-modal="true" aria-label={title} tabIndex={-1}
         onClick={e => e.stopPropagation()}
-        className={`absolute top-0 ${side === "right" ? "right-0" : "left-0"} h-full w-full max-w-md bg-white overflow-y-auto`}
+        className={`absolute top-0 ${side === "right" ? "right-0" : "left-0"} h-full w-full ${wide ? "max-w-none md:max-w-3xl" : "max-w-md"} bg-white overflow-y-auto`}
         style={{ boxShadow: "var(--cmp-elevation-4)" }}>
         <div className="sticky top-0 bg-white border-b border-gray-200 px-5 h-14 flex items-center justify-between">
           <h2 className="text-sm font-bold text-gray-900">{title}</h2>

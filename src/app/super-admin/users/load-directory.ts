@@ -1,5 +1,6 @@
 import { estateRolesOf } from "@/lib/roles";
 import { EMPTY_ACCESS, activeProducts, holdsHqPosition, listAllAuthUsers, loadDirectoryAccess, type Readable } from "@/lib/hq/user-directory";
+import { loadParticipations } from "@/lib/hq/account-participation";
 import { loadClassifications, loadDefaultView, typeOf, type UserView } from "@/lib/hq/account-classification";
 import type { UserRow } from "./UsersWorkspace";
 
@@ -28,6 +29,8 @@ export type Directory = {
   authComplete: boolean;
   classificationAvailable: boolean;
   defaultView: UserView;
+  /** False while migration 850 is absent: the access-category filter is hidden. */
+  participationAvailable: boolean;
 };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -42,6 +45,7 @@ export async function loadDirectory(admin: any): Promise<Directory> {
     authList,
     directory,
     classes,
+    participations,
   ] = await Promise.all([
     admin.from("profiles")
       .select("id, full_name, email, phone, role, roles, org_role, org_roles, hospital_id, organisation_id, platform_role, department_id, specialization, created_at")
@@ -57,6 +61,7 @@ export async function loadDirectory(admin: any): Promise<Directory> {
     listAllAuthUsers(admin),
     loadDirectoryAccess(admin),
     loadClassifications(admin),
+    loadParticipations(admin),
   ]);
   const defaultView = await loadDefaultView(admin, classes.available);
 
@@ -143,12 +148,17 @@ export async function loadDirectory(admin: any): Promise<Directory> {
       products: activeProducts(access),
       hqActive: holdsHqPosition(access),
       accountType: typeOf(classes, p.id),
+      // The ACTUAL live entitlements, with their end dates, when the membership is active (the same rule as `products`).
+      entitlements: access.individual.liveDetail,
+      experiences: access.individual.membership === "active" ? access.individual.live : [],
+      participation: participations.byId.get(p.id)?.category ?? null,
+      participationUntil: participations.byId.get(p.id)?.validUntil ?? null,
     };
   });
 
   return {
     users, hospitals: hospitalList, organisations: orgList, departments: deptList,
     readable: directory.readable, authComplete: authList.complete,
-    classificationAvailable: classes.available, defaultView,
+    classificationAvailable: classes.available, defaultView, participationAvailable: participations.available,
   };
 }

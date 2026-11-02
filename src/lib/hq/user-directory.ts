@@ -26,11 +26,11 @@ export type Access = {
   platform: string | null;
   enterprise: EnterpriseSeat[];
   practice: PracticeSeat[];
-  individual: { membership: string | null; live: string[] };
+  individual: { membership: string | null; live: string[]; liveDetail: { experience: string; endsAt: string | null }[] };
   hq: HqSeat[];
 };
 export type Readable = { platform: boolean; enterprise: boolean; practice: boolean; individual: boolean; hq: boolean };
-export const EMPTY_ACCESS = (): Access => ({ platform: null, enterprise: [], practice: [], individual: { membership: null, live: [] }, hq: [] });
+export const EMPTY_ACCESS = (): Access => ({ platform: null, enterprise: [], practice: [], individual: { membership: null, live: [], liveDetail: [] }, hq: [] });
 
 type Rows = {
   platform: { user_id: string; status: string }[] | null;
@@ -39,7 +39,7 @@ type Rows = {
   practice: { user_id: string; workspace_id: string; role_code: string | null; status: string }[] | null;
   workspaces: { id: string; name: string | null }[] | null;
   individual: { user_id: string; status: string }[] | null;
-  live: { user_id: string; experience_code: string }[] | null;
+  live: { user_id: string; experience_code: string; ends_at?: string | null }[] | null;
   appointments: { person_id: string | null; role: string | null; status: string | null; office_id: string }[] | null;
   hqOffices: { id: string }[] | null;
   positions: { code: string; name: string | null }[] | null;
@@ -58,7 +58,13 @@ export function assembleAccess(r: Rows): { readable: Readable; byUser: Map<strin
   for (const m of r.enterprise ?? []) at(m.user_id).enterprise.push({ tenant: tenantName.get(m.tenant_id) ?? null, status: m.status });
   for (const m of r.practice ?? []) at(m.user_id).practice.push({ workspace: wsName.get(m.workspace_id) ?? null, role: m.role_code, status: m.status });
   for (const m of r.individual ?? []) at(m.user_id).individual.membership = m.status;
-  for (const e of r.live ?? []) { const l = at(e.user_id).individual.live; if (!l.includes(e.experience_code)) l.push(e.experience_code); }
+  for (const e of r.live ?? []) {
+    const ind = at(e.user_id).individual;
+    const seen = ind.liveDetail.find(d => d.experience === e.experience_code);
+    if (!seen) { ind.live.push(e.experience_code); ind.liveDetail.push({ experience: e.experience_code, endsAt: e.ends_at ?? null }); }
+    // two live periods for one experience: the one that lasts longest is the person's access (open-ended wins)
+    else if (seen.endsAt !== null && (e.ends_at == null || e.ends_at > seen.endsAt)) seen.endsAt = e.ends_at ?? null;
+  }
   for (const a of r.appointments ?? []) {
     if (!a.person_id || !a.role || !hqOffice.has(a.office_id)) continue;
     at(a.person_id).hq.push({ position: a.role, name: posName.get(a.role) ?? null, status: a.status ?? "unknown" });
@@ -95,7 +101,7 @@ export async function loadDirectoryAccess(admin: any) {
     rows(admin.from("practice_membership").select("workspace_id, user_id, role_code, status").limit(CAP)),
     rows(admin.from("practice_workspace").select("id, name").limit(CAP)),
     rows(admin.from("individual_membership").select("user_id, status").limit(CAP)),
-    rows(admin.from("individual_live_entitlement").select("user_id, experience_code").limit(CAP)),
+    rows(admin.from("individual_live_entitlement").select("user_id, experience_code, ends_at").limit(CAP)),
     rows(admin.from("ogs_office_appointments").select("person_id, role, status, office_id").limit(CAP)),
     rows(admin.from("ogs_offices").select("id").like("office_type", "hq_%").limit(500)),
     rows(admin.from("hq_position").select("code, name").limit(500)),
