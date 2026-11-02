@@ -889,7 +889,7 @@ export function EraseAll({ count }: { count: number }) {
     <form onSubmit={erase} className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <h2 className="text-[16px] font-bold text-gray-900">Erase all my study material</h2>
       <p className="mt-1 text-[13.5px] text-gray-600">
-        Permanently deletes every file you uploaded ({count} now), their sections, every question written from them, your answers and your review cards.
+        Permanently deletes every file you uploaded ({count} now), their sections, every question written from them, your answers and your review cards, and any practice conversations with simulated patients, subject to applicable retention obligations.
         Your record of whether AI processing is on or off is kept, because it records a choice you made, not your material.
       </p>
       <label htmlFor="erase-confirm" className="mt-3 block text-[13.5px] font-semibold text-gray-800">Type ERASE to confirm</label>

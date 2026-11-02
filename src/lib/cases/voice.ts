@@ -59,3 +59,7 @@ export function voiceProblems(v: unknown, factIds: ReadonlySet<string>, stageIds
   return p;
 }
 
+/** Said to the learner BEFORE the first question (owner ruling 2 Nov 2026, CE-04 condition 7). Shown in the panel as a header line. */
+export const CONVERSATION_RECORDED_NOTICE = "This conversation is recorded with your case attempt so you can review it and get feedback. It is not used as Personal AI memory.";
+/** One line at the input (condition 9). The question is also screened for patient identifiers on the server before it is sent anywhere. */
+export const CONVERSATION_PRIVACY_NOTE = "This is a simulated patient. Do not enter real patient names or identifiers.";

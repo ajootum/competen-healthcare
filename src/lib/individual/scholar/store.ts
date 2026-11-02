@@ -315,8 +315,11 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const { error: fdErr } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId);
   // SCHOLAR-LIBRARY-01 (820): the learner's notes, bookmarks and highlights go too (each also cascades with what it is on). Absent table: nothing to do.
   const { error: ntErr } = await admin.from("individual_scholar_note").delete().eq("user_id", userId);
+  // SCHOLAR-CE-2026 CE-04 (880): the simulated-patient conversations go too, library plays included (their sessions are not material, so
+  // no cascade reaches them). Private plays also cascade with their case. The function is the guard's one other way out. Absent: nothing to do.
+  const { error: cvErr } = await admin.rpc("individual_scholar_case_conversation_erase", { p_user: userId });
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
+  return { ok: fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────

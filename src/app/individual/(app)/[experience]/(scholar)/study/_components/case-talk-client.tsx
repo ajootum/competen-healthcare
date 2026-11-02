@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { FormativeAiLabel } from "./edu-notice";
+import { CONVERSATION_PRIVACY_NOTE, CONVERSATION_RECORDED_NOTICE } from "@/lib/cases/voice";
 import { HANDOVER_HELP, HANDOVER_LABEL, HANDOVER_SECTIONS, HANDOVER_SECTION_MAX, type HandoverResultView, type HandoverSection } from "@/lib/cases/handover";
 
 // SCHOLAR-CE-2026 CE-04. Two pieces of the case player, kept apart so case-client.tsx stays readable:
@@ -124,6 +125,7 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
     <section aria-labelledby="talk-h" className="mt-4 rounded-xl border border-gray-200 p-4">
       <h3 id="talk-h" className="text-[15px] font-bold text-gray-900">Talk to the {who}</h3>
       <p className="mt-1 text-[12.5px] text-gray-600">{talk.label} They only know what the case says they know at this point.</p>
+      <p data-testid="conversation-recorded-notice" className="mt-1 rounded-lg bg-sky-50 px-3 py-1.5 text-[12.5px] text-sky-950">{CONVERSATION_RECORDED_NOTICE}</p>
       {talk.unavailable ? (
         <div role="status" className="mt-2 rounded-lg bg-gray-50 px-3 py-2">
           <p className="text-[13.5px] font-semibold text-gray-900">Conversation unavailable</p>
@@ -135,8 +137,9 @@ export function CaseConversation({ base, speaker, active }: { base: string; spea
       {!talk.unavailable && (
         <form onSubmit={ask} className="mt-3">
           <label className="block text-[13px] font-semibold text-gray-800" htmlFor="talk-q">Ask the {who} a question</label>
+          <p id="talk-q-note" className="text-[12.5px] text-gray-600">{CONVERSATION_PRIVACY_NOTE}</p>
           <div className="mt-1 flex flex-wrap gap-2">
-            <input id="talk-q" type="text" value={q} maxLength={400} onChange={e => setQ(e.target.value)} disabled={!!busy || !!cap?.full} autoComplete="off"
+            <input id="talk-q" aria-describedby="talk-q-note" type="text" value={q} maxLength={400} onChange={e => setQ(e.target.value)} disabled={!!busy || !!cap?.full} autoComplete="off"
               placeholder={cap?.full ? "You have used your questions for this stage" : "Type what you would say"} className={`${field} min-w-0 flex-1`} />
             <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !q.trim() || !!cap?.full}>{busy === "ask" ? "Asking…" : "Ask"}</button>
           </div>

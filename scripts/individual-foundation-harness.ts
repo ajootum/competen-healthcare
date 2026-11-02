@@ -599,6 +599,12 @@ function main() {
   ok("9h. D10 exception is narrow: the case-practice table is read and written only by the Scholar store, and no Personal AI route or ask context reads it",
     FILES.every(f => !conversationTables(SRC.get(f) ?? "").includes(D10_CASE_PRACTICE) || f === D10_CASE_PRACTICE_FILE)
       && FILES.filter(f => /\/ask|personal-ai|assistant/.test(f)).every(f => !(SRC.get(f) ?? "").includes(D10_CASE_PRACTICE)));
+  // Owner ruling 2 Nov 2026 (CE-04): the store functions that read and write it are reachable only from the Scholar store, the case
+  // conversation module and the attempt record builder, so the turns cannot become Personal AI memory or context for another activity.
+  const D10_FN_FILES = ["src/lib/individual/scholar/store.ts", "src/lib/individual/scholar/case-talk.ts", "src/lib/individual/scholar/case-integrity.ts"];
+  const fnOffenders = FILES.filter(f => /(listCaseConversation|insertCaseConversation)/.test(SRC.get(f) ?? "") && !D10_FN_FILES.includes(f));
+  ok("9i. D10 exception: only the case conversation module and the attempt record builder call the conversation store functions (scope test: case-conversation-scope.test.ts)",
+    fnOffenders.length === 0, fnOffenders.join(", "));
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }
