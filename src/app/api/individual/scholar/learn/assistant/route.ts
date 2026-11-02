@@ -10,6 +10,7 @@ import { getLearningSession, getPassage, isUuid } from "@/lib/individual/scholar
 import type { Passage } from "@/lib/individual/scholar/generation";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { ASK_INTENT_SURFACE, parseAskContext, ownedPassages, safeRefLabel } from "@/lib/individual/scholar/ask-context";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { PERSONAL_AI_LABEL, QUESTION_MAX, STEP_MAX_SECTIONS } from "@/lib/individual/scholar/config";
@@ -44,6 +45,12 @@ export const dynamic = "force-dynamic";
 // (screened by the engine, never classified). Streamed only once the answer is being written; every refusal before it
 // is the same JSON. The audit row gains depth, follow_up and timing_ms.
 //
+// SCHOLAR-CE-2026 CE-01: the in-place "Ask about this" panel (Revise feedback, a flashcard, a case debrief, OSCE feedback, My Plan, a saved
+// lesson, the Personal AI page) posts here with `askContext` { surface, chunkIds (at most six), materialId?, studyId?, refLabel?, prefill? }
+// (scholar/ask-context.ts). The same grounding as Learn: each chunk id is read again by the CALLER's own id and one that is not theirs is
+// DROPPED (no disclosure), the owned sections are numbered [S1].., cited and covered by the NOT COVERED line. With no section left the question is
+// answered as general explanation under the same label. The surface maps onto an existing intent surface (framing only). Nothing new is stored.
+//
 // SCHOLAR-PAI-RESEARCH-01: the step's sections are handed to the model NUMBERED [S1]..[Sn] (this route only), so the answer may
 // cite what it takes from the notes and put everything else in a General background callout. The reply (JSON, and the streamed
 // done event) carries `sources` -- the numbered notes the answer actually cites -- and `notCovered`, the items of the model's
@@ -63,6 +70,10 @@ export async function POST(req: Request) {
   if (findPatientIdentifiers(question).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
   const mode = body?.mode === "ask" ? "ask" : "teach";
   const purpose = purposeFrom(body);
+  // CE-01: the in-place Ask payload (absent: this route behaves exactly as for Learn).
+  const parsedAsk = parseAskContext(body?.askContext);
+  if (!parsedAsk.ok) return NextResponse.json({ error: parsedAsk.error }, { status: 400 });
+  const askCtx = parsedAsk.value;
 
   // ── the step's own sections, by the caller's id ──
   let ids: string[] = [];
@@ -77,11 +88,20 @@ export async function POST(req: Request) {
     lesson = { lessonTitle: s.data.session.title || lesson.lessonTitle, objective: s.data.session.topic ?? lesson.objective };
     const here = s.data.steps.find(x => x.step === Number(body?.step)) ?? s.data.steps[0];
     ids = here ? here.sections.map(x => x.chunkId) : [];
-  } else if (Array.isArray(body?.chunkIds)) ids = [...new Set((body.chunkIds as unknown[]).filter(isUuid))].slice(0, STEP_MAX_SECTIONS) as string[];
-  if (!ids.length) return NextResponse.json({ error: "Choose what to learn from." }, { status: 400 });
-  const found = await Promise.all(ids.map(id => getPassage(ctx.admin, ctx.userId, id)));
-  if (found.some(p => !p)) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
-  const passages = found as Passage[];
+  } else if (askCtx) ids = askCtx.chunkIds;
+  else if (Array.isArray(body?.chunkIds)) ids = [...new Set((body.chunkIds as unknown[]).filter(isUuid))].slice(0, STEP_MAX_SECTIONS) as string[];
+  if (!ids.length && !askCtx) return NextResponse.json({ error: "Choose what to learn from." }, { status: 400 });
+  let passages: Passage[];
+  let askDropped = 0;
+  if (askCtx && !isUuid(body?.sessionId)) {
+    // The panel's ids are claims: only the caller's own sections ground the answer; the rest are dropped without a word.
+    const owned = await ownedPassages(ids, id => getPassage(ctx.admin, ctx.userId, id));
+    passages = owned.passages; askDropped = owned.dropped; ids = passages.map(p => p.chunkId);
+  } else {
+    const found = await Promise.all(ids.map(id => getPassage(ctx.admin, ctx.userId, id)));
+    if (found.some(p => !p)) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
+    passages = found as Passage[];
+  }
 
   // ── consent, quota, configuration -- as every Scholar AI call ──
   const pre = await aiPreflight(ctx);
@@ -91,7 +111,7 @@ export async function POST(req: Request) {
   const study = await scholarRisk(ctx.admin, ctx.userId, { passages });
   // Owner items 5 and 8: where it was asked (the lesson, its sections' topics and titles), and how the question was read
   // (display only: the question is sent and stored as typed; the classification reads both readings, the more cautious).
-  const intentContext: IntentContext = { surface: "learn", ...lesson,
+  const intentContext: IntentContext = { surface: askCtx ? ASK_INTENT_SURFACE[askCtx.surface] : "learn", ...lesson, ...(askCtx && safeRefLabel(askCtx.refLabel) ? { activity: safeRefLabel(askCtx.refLabel) } : {}),
     materialTopics: [...new Set([...(study.topicTerms ?? []), ...passages.map(p => p.materialTitle)])].slice(0, 60) };
   const understood = spellingNotice(normaliseLearnerText(question, { variant: parseSpellingVariant(body?.spellingVariant), vocabulary: vocabularyOf([study.text, intentContext.lessonTitle, intentContext.objective, ...intentContext.materialTopics!]) }));
   // The material the model reads, numbered. `text` (the risk's plain material) is still what is screened and classified.
@@ -106,14 +126,15 @@ export async function POST(req: Request) {
   // SCHOLAR-SESSION-AI-02 (D4): the study id passed (studySessionId, else the Learn sessionId, which IS the study session
   // when connected). Built only if the published profile lists study_session (default off), and only for the caller's
   // own connected session with the policy on and 740 present (studySessionBlock). Reads only; no extra AI call.
-  const studyId = isUuid(body?.studySessionId) ? body.studySessionId as string : isUuid(body?.sessionId) ? body.sessionId as string : null;
+  const studyId = isUuid(body?.studySessionId) ? body.studySessionId as string : isUuid(body?.sessionId) ? body.sessionId as string : askCtx?.studyId ?? null;
   const studySession = studyId ? async () => {
     const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
     return (await studySessionBlock(ctx.admin, ctx.userId, studyId, { competencyTitle: id => learner.competencies?.find(c => c.id === id)?.title ?? null }))?.text ?? null;
   } : null;
   type Out = Awaited<ReturnType<typeof runIndividualAssistant>>;
   const record = (out: Extract<Out, { ok: true } | { kind: "generation" }>) => audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn_assistant", isUuid(body?.sessionId) ? body.sessionId : null, {
-    mode, chunk_ids: ids, question_chars: question.length, purpose, scopes_read: out.ok ? out.scopesRead : [], outcome: out.ok ? "shown" : `error:${out.result.error}`, model: out.ok ? out.model : null,
+    mode, chunk_ids: ids, question_chars: question.length, purpose,
+    ...(askCtx ? { ask_surface: askCtx.surface, ask_material_id: askCtx.materialId, ask_dropped: askDropped } : {}), scopes_read: out.ok ? out.scopesRead : [], outcome: out.ok ? "shown" : `error:${out.result.error}`, model: out.ok ? out.model : null,
     depth, follow_up: followUp?.kind ?? null, streamed: flight.streamed, timing_ms: flight.timing(),
   });
   // The label the answer is shown under, on both the JSON and the streamed answer (one place, so it cannot drift).

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { askPrefill } from "@/lib/individual/scholar/ask-context";
+import { AskAbout } from "./ask-panel";
 import { ResizeHandle } from "@/components/ui/resizable";
 import { usePaneGrid } from "@/components/ui/pane-grid";
 import { sourceHref, studyHref } from "./question-view";
@@ -361,6 +363,9 @@ export function FlashcardStudy(props: {
             <ActionButton icon={I.source} label="View source" on={panel === "source"} onClick={() => setPanel(p => (p === "source" ? "" : "source"))} />
             <ActionButton icon={I.flag} label={card.issue ? "Issue reported" : "Report issue"} on={panel === "issue"} disabled={!props.marksOn} onClick={() => setPanel(p => (p === "issue" ? "" : "issue"))} />
           </div>
+          {/* SCHOLAR-CE-2026 CE-01: on the answer side, ask about this card in place (its own section; a library card has none of the learner's). */}
+          {revealed && <AskAbout className="mt-2 flex justify-center" surface="flashcards" chunkIds={card.origin === "library" ? [] : [card.chunkId]} materialId={card.origin === "library" ? null : card.materialId}
+            refLabel={`Flashcard: ${card.front}`} prefill={askPrefill("flashcard", { stem: card.front, answer: card.back?.text })} />}
           {!props.marksOn && <p className="mt-1 text-center text-[12px] text-gray-500">Notes, bookmarks and reports are not available here yet.</p>}
           {card.editable && <p className="mt-1 text-center"><Link href={carry(flashcardsHref({ view: "cards", edit: card.id }))} className={`inline-flex items-center text-[13px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Edit this card in Create &amp; manage</Link></p>}
 
