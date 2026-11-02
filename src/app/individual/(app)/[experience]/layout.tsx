@@ -200,7 +200,7 @@ export default async function ExperienceLayout({ children, params }: {
       </header>
 
       <div className="flex">
-        <aside className="hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] w-[236px] shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
+        <aside className={`hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] ${scholar ? "w-[256px]" : "w-[236px]"} shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]`}>
           <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>

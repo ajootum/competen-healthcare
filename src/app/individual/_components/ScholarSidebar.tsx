@@ -96,7 +96,7 @@ export function ScholarNavTree({ myPlan, onNavigate }: { myPlan: boolean; onNavi
               className={`${linkBase} w-full text-left ${accented ? "font-bold" : "font-semibold text-gray-900 hover:bg-gray-50"}`}
               style={accented ? { background: SCHOLAR.accentSoft, color: SCHOLAR.accent } : undefined}>
               <span aria-hidden className="w-5 text-center text-[15px]">{m.icon}</span>
-              {m.label}
+              <span className="min-w-0 truncate whitespace-nowrap">{m.label}</span>
               {accented && <span className="sr-only"> contains current page</span>}
               <Chevron open={isOpen} />
             </button>
