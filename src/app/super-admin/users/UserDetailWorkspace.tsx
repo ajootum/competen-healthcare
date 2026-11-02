@@ -14,7 +14,7 @@ import UserRoleEditor from "./UserRoleEditor";
 import UserDetailPersonal from "./UserDetailPersonal";
 import UserDetailProducts from "./UserDetailProducts";
 import type { UserRow } from "./UsersWorkspace";
-import type { AuditPage, Src, UserDetail } from "./user-detail-load";
+import type { AuditPage, PersonalDetail, Src, UserDetail } from "./user-detail-load";
 import { ROLE_BADGE, STATUS_UI, TYPE_PILL, relTime, tint } from "./users-ui";
 import { Field, Notice, SectionCard, SourceNote, StatePill, SubHead, ValueOrState, btn } from "./UserDetailParts";
 
@@ -69,7 +69,15 @@ export default function UserDetailWorkspace({
   }, [user.id, nonce]);
 
   const reload = () => setNonce(n => n + 1);
-  const afterSave = () => { reload(); onChanged(); };
+  // After a save: show the saved values at once (the route returns them), then read the detail again so the full name
+  // and the audit trail catch up, and refresh the directory row. `auditKey` remounts the audit list, which keeps its
+  // own rows once mounted.
+  const [auditKey, setAuditKey] = useState(0);
+  const afterSave = (saved?: Record<string, string | null>) => {
+    if (saved) setDetail(d => (d && d.personal.state === "ok" ? { ...d, personal: { state: "ok", value: mergeSaved(d.personal.value, saved) } } : d));
+    setAuditKey(k => k + 1);
+    reload(); onChanged();
+  };
 
   function jump(id: DetailSectionId) {
     setActive(id);
@@ -130,7 +138,7 @@ export default function UserDetailWorkspace({
                 hospitals={hospitals} organisations={organisations} departments={departments} onClose={onClose} onChanged={onChanged} />
               <AccountSection user={user} detail={detail} canManage={canManage} canReset={canReset} currentUserId={currentUserId}
                 classificationAvailable={classificationAvailable} onChanged={onChanged} onDelete={onDelete} />
-              <AuditSection userId={user.id} initial={detail.audit} />
+              <AuditSection key={auditKey} userId={user.id} initial={detail.audit} />
               <CompetencySection user={user} />
             </>
           )}
@@ -328,6 +336,16 @@ function AccountSection({ user, detail, canManage, canReset, currentUserId, clas
       {msg && <Notice kind={msg.kind}>{msg.text}</Notice>}
     </SectionCard>
   );
+}
+
+function mergeSaved(p: PersonalDetail, v: Record<string, string | null>): PersonalDetail {
+  const pick = (k: string, cur: string | null) => (k in v ? v[k] ?? null : cur);
+  return {
+    ...p,
+    givenName: pick("given_name", p.givenName), middleNames: pick("middle_names", p.middleNames),
+    familyName: pick("family_name", p.familyName), fullName: pick("full_name", p.fullName),
+    phone: pick("phone", p.phone), country: pick("country", p.country),
+  };
 }
 
 // ── 6. Audit & History -- names and times, never what changed ────────────────────────────────────────────────

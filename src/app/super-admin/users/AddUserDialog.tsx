@@ -233,7 +233,7 @@ export default function AddUserDialog({ open, onClose, organisations, hospitals,
                   className="min-h-[40px] pointer-coarse:min-h-[var(--cmp-touch-min)] rounded-lg px-1 text-sm font-semibold text-teal-800 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/40">
                   {more ? "▾" : "▸"} More about this person (optional)
                 </button>
-                <p className={hint}>Shown to the person to confirm when they first sign in. Nothing here is required.</p>
+                <p className={hint}>Kept with the invitation. HQ sees it as supplied at invitation; the person records their own details in their profile.</p>
                 <div id={id("more")} className={more ? "mt-2 grid gap-3 sm:grid-cols-2" : "hidden"}>
                   <div><label htmlFor={id("phone")} className={labelCls}>Phone</label><input id={id("phone")} type="tel" autoComplete="off" maxLength={40} className={field} {...text("phone")} /></div>
                   <div>

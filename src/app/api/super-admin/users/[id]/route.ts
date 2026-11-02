@@ -8,6 +8,7 @@ import { loadAuditPage, loadUserDetail } from "@/app/super-admin/users/user-deta
 // The same capability as the page it serves (hq.platform.users.view), through the HQ gate. Read-only. The loader lives
 // under src/app/super-admin/users/ so the plane-boundary harness walks every table it reads. With ?section=audit&page=N
 // only that page of the audit trail is read. The audit read selects names and times, never what changed.
+export const dynamic = "force-dynamic";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {

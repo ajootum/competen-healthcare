@@ -116,7 +116,9 @@ export async function POST(req: Request) {
   const core = {
     id: userId, email, full_name, role, roles: [role],
     organisation_id: organisation_id || null, hospital_id: hospital_id || null,
-    ...(d.phone ? { phone: d.phone } : {}), ...(d.country ? { country: d.country } : {}),
+    ...(d.phone ? { phone: d.phone } : {}), 
+    // profiles.country defaults to 'Kenya' in the database: always write the chosen country, or null for not recorded.
+    country: d.country || null,
   };
   const names = { ...(d.givenName ? { given_name: d.givenName } : {}), ...(d.familyName ? { family_name: d.familyName } : {}) };
   const attempts = [

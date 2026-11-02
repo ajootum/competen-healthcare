@@ -22,7 +22,7 @@ export default function UserDetailPersonal({ userId, personal, preferred, canMan
   preferred: PreferredName;
   canManage: boolean;
   /** Called after a successful save so the detail and the directory row are read again. */
-  onSaved: () => void;
+  onSaved: (saved?: Record<string, string | null>) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState<Record<EditableField, string>>(() => emptyDraft());
@@ -61,12 +61,12 @@ export default function UserDetailPersonal({ userId, personal, preferred, canMan
     setSaving(true); setMsg(null);
     try {
       const res = await fetch("/api/super-admin/users/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(built.body) });
-      const j = (await res.json().catch(() => ({}))) as { error?: string | { code?: string; message?: string }; code?: string };
+      const j = (await res.json().catch(() => ({}))) as { error?: string | { code?: string; message?: string }; code?: string; values?: Record<string, string | null> };
       const err = typeof j.error === "object" && j.error ? j.error : { code: j.code, message: typeof j.error === "string" ? j.error : undefined };
       if (!res.ok) { setMsg({ kind: "err", text: patchErrorMessage(res.status, err.code, err.message) }); return; }
       setEditing(false);
       setMsg({ kind: "ok", text: `Saved ${Object.keys(built.body.fields).length} detail${Object.keys(built.body.fields).length === 1 ? "" : "s"}. The change is in the audit trail.` });
-      onSaved();
+      onSaved(j.values);
     } catch {
       setMsg({ kind: "err", text: "The details could not be saved. Check your connection and try again." });
     } finally { setSaving(false); }

@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
-import { parseProfilePatch, readOwnProfile, readOwnHqPositions } from "./own-profile";
+import { parseProfilePatch, readOwnProfile, readOwnHqPositions, recomposedOwnFullName } from "./own-profile";
 
 // Owner GO 2026-10-23, PR D -- My profile. The self-update allowlist, the names that are never inferred,
 // and the access view that never turns a failed read into "none".
@@ -117,5 +117,31 @@ describe("middle names (migration 850)", () => {
       from: () => ({ select: (cols: string) => ({ eq: () => ({ maybeSingle: async () => cols === "middle_names" ? { data: { middle_names: "Grace" }, error: null } : cols === "given_name, family_name" ? { data: { given_name: "Amina", family_name: "Okello" }, error: null } : { data: { full_name: "Amina Grace Okello" }, error: null } }) }) }),
     } as any;
     expect(await readOwnProfile(db, { id: "u1" })).toMatchObject({ ok: true, value: { names: { middle: "Grace", middleSupported: true } } });
+  });
+});
+
+describe("full name follows a self-edit of name parts", () => {
+  const cur = { full_name: "Amani Grace Wanjiru Odhiambo", given_name: "Amani", middle_names: "Grace Wanjiru", family_name: "Odhiambo" };
+  it("recomposes when the full name was the old composition", () => {
+    expect(recomposedOwnFullName(cur, { middle_names: "Grace" })).toBe("Amani Grace Odhiambo");
+    expect(recomposedOwnFullName(cur, { middle_names: null })).toBe("Amani Odhiambo");
+    expect(recomposedOwnFullName(cur, { family_name: "Odhiambo-Kamau" })).toBe("Amani Grace Wanjiru Odhiambo-Kamau");
+  });
+  it("leaves a custom full name alone", () => {
+    expect(recomposedOwnFullName({ ...cur, full_name: "Dr Amani O." }, { middle_names: "Grace" })).toBeNull();
+  });
+  it("leaves it alone when the person sets a full name, or no name part changes", () => {
+    expect(recomposedOwnFullName(cur, { middle_names: "Grace", full_name: "Mani" })).toBeNull();
+    expect(recomposedOwnFullName(cur, { phone: "+256 700 000000" })).toBeNull();
+  });
+  it("needs both a given and a family name afterwards", () => {
+    expect(recomposedOwnFullName(cur, { family_name: null })).toBeNull();
+    expect(recomposedOwnFullName({ full_name: "Amani Odhiambo", given_name: null, middle_names: null, family_name: "Odhiambo" }, { middle_names: "Grace" })).toBeNull();
+  });
+  it("ignores missing parts and extra spaces in the old composition", () => {
+    expect(recomposedOwnFullName({ full_name: "Amani  Odhiambo", given_name: "Amani", middle_names: null, family_name: "Odhiambo" }, { middle_names: "Grace" })).toBe("Amani Grace Odhiambo");
+  });
+  it("does nothing when the result is the same", () => {
+    expect(recomposedOwnFullName(cur, { given_name: "Amani" })).toBeNull();
   });
 });

@@ -6,6 +6,7 @@ import { EXPERIENCES } from "@/lib/individual/experiences";
 import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import { isHqOfficeType } from "@/lib/hq/spaces";
 import { estateRolesOf, ROLE_CONFIG, type AppRole } from "@/lib/roles";
+import { composeFullName } from "@/lib/account/compose-name";
 
 // ── MY PROFILE -- ONE PERSONAL-PROFILE EXPERIENCE ACROSS COMPETEN PRODUCTS ── owner GO 2026-10-23, PR D ──
 //
@@ -72,6 +73,28 @@ export function parseProfilePatch(body: unknown): { ok: true; patch: ProfilePatc
   if ("full_name" in patch && patch.full_name === null) return { ok: false, error: "Your full name cannot be empty." };
   if (!Object.keys(patch).length) return { ok: false, error: "Nothing to update." };
   return { ok: true, patch };
+}
+
+export type OwnNames = { full_name: string | null; given_name: string | null; middle_names: string | null; family_name: string | null };
+
+/**
+ * Pure. The full name to write with a self-edit of name parts, or null for "leave full_name alone".
+ *
+ * A person who changes a name part keeps a full name that follows it ONLY when the full name they have now is exactly
+ * what their OLD parts compose to (given, middle, family, single-spaced, missing parts ignored). A full name they
+ * chose themselves, which differs from that, is never touched. And only when they will have BOTH a given and a
+ * family name afterwards, so composing never drops part of a name that was not recorded as parts.
+ */
+export function recomposedOwnFullName(current: OwnNames, patch: ProfilePatch): string | null {
+  if ("full_name" in patch) return null;
+  if (!NAME_FIELDS.some(k => k in patch)) return null;
+  const oldFull = composeFullName({ givenName: current.given_name, middleNames: current.middle_names, familyName: current.family_name });
+  if (!oldFull || oldFull !== (current.full_name ?? "").replace(/\s+/g, " ").trim()) return null;
+  const pick = (k: NameField) => (k in patch ? patch[k] ?? null : current[k]);
+  if (!pick("given_name") || !pick("family_name")) return null;
+  const full = composeFullName({ givenName: pick("given_name"), middleNames: pick("middle_names"), familyName: pick("family_name") });
+  if (!full || full.length > LIMITS.full_name || full === current.full_name) return null;
+  return full;
 }
 
 const label = (k: string) => ({

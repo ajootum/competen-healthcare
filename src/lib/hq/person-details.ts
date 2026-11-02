@@ -1,4 +1,5 @@
 import { cleanProfileValue } from "@/lib/account/own-profile";
+import { composeFullName } from "@/lib/account/compose-name";
 
 // ── WHO A PERSON IS, AS HQ RECORDS IT AT INVITATION OR EDITS IT LATER ── owner GO "HQ User Management,
 //    Invitations and Individual Profile Completion" (2 Nov 2026), migration 850 ────────────────────────────────
@@ -29,11 +30,8 @@ export const PHONE_PATTERN = /^[+()\d\s.-]{4,}$/;
 
 const refuse = (error: string) => ({ ok: false as const, error });
 
-/** given, then middle names, then family: the parts joined by single spaces, or null when there are none. */
-export function composeFullName(p: Pick<PersonDetails, "givenName" | "middleNames" | "familyName">): string | null {
-  const joined = [p.givenName, p.middleNames, p.familyName].filter((x): x is string => !!x && !!x.trim()).join(" ").replace(/\s+/g, " ").trim();
-  return joined || null;
-}
+// The composer lives in src/lib/account/compose-name.ts, shared with the person's own profile.
+export { composeFullName };
 
 /** The six details from a request body (camelCase keys), cleaned, or the reason one is refused. All optional here. */
 export function cleanPersonDetails(body: unknown): { ok: true; value: PersonDetails } | { ok: false; error: string } {

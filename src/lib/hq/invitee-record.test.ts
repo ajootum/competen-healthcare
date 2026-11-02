@@ -65,9 +65,12 @@ describe("recordInviteeDetails", () => {
     expect(r.warnings.join(" ")).toMatch(/not set up/);
   });
 
-  it("with no details at all it writes no profile row, only the label", async () => {
+  it("⚠ with no details at all the only profile write is country null (the database defaults it to Kenya), then the label", async () => {
     const f = fake();
-    await recordInviteeDetails(f.admin, { ...p, details: NO_DETAILS });
-    expect(f.log.map(l => l.t)).toEqual(["hq_account_participation"]);
+    const r = await recordInviteeDetails(f.admin, { ...p, details: NO_DETAILS });
+    expect(f.log.map(l => l.t)).toEqual(["profiles", "hq_account_participation"]);
+    expect(f.log.find(l => l.t === "profiles")?.row).toEqual({ country: null });
+    expect(r.details).toBe("none");
+    expect(r.warnings).toEqual([]);
   });
 });

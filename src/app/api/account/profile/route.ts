@@ -2,7 +2,7 @@ import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 
 import { currentTraceId } from "@/lib/trace";
-import { NAME_FIELDS, namesUnsupported, parseProfilePatch, readOwnAccess, readOwnProfile } from "@/lib/account/own-profile";
+import { NAME_FIELDS, namesUnsupported, parseProfilePatch, readOwnAccess, readOwnProfile, recomposedOwnFullName } from "@/lib/account/own-profile";
 
 // Request-time only: it reads the session.
 export const dynamic = "force-dynamic";
@@ -44,6 +44,19 @@ export async function PATCH(req: Request) {
   const parsed = parseProfilePatch(await req.json().catch(() => ({})));
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const update = parsed.patch;
+
+  // A name part changed: the full name follows it when it was the composition of the old parts (and not otherwise).
+  // Read apart, so a column that is not there yet (380, 850) only costs the recompose, never the save.
+  if (NAME_FIELDS.some(f => f in update) && !("full_name" in update)) {
+    const cur = await readOwnProfile(supabase, user);
+    if (cur.ok && cur.value.names.supported) {
+      const full = recomposedOwnFullName(
+        { full_name: cur.value.fullName ?? null, given_name: cur.value.names.given, middle_names: cur.value.names.middle, family_name: cur.value.names.family },
+        update,
+      );
+      if (full) update.full_name = full;
+    }
+  }
 
   let { data, error } = await supabase.from("profiles").update(update).eq("id", user.id).select("id");
   // Middle names are migration 850's. Where the column is not there yet, the rest is still saved and the

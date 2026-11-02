@@ -38,7 +38,10 @@ export async function recordInviteeDetails(
   // 1. Name parts, phone and country, onto an identity this call created.
   if (!p.reusedIdentity) {
     const full = composeFullName(d);
-    const base: Record<string, unknown> = { ...(full ? { full_name: full } : {}), ...(d.phone ? { phone: d.phone } : {}), ...(d.country ? { country: d.country } : {}) };
+    // ⚠ COUNTRY IS ALWAYS WRITTEN for a new identity: profiles.country defaults to 'Kenya' in the database (migration
+    //    001), so an invitation that did not choose one would otherwise store a country nobody chose. Null = not recorded.
+    const supplied = !!(full || d.phone || d.country || d.givenName || d.familyName || d.middleNames);
+    const base: Record<string, unknown> = { ...(full ? { full_name: full } : {}), ...(d.phone ? { phone: d.phone } : {}), country: d.country ?? null };
     const parts = { ...(d.givenName ? { given_name: d.givenName } : {}), ...(d.familyName ? { family_name: d.familyName } : {}) };
     const attempts: Record<string, unknown>[] = [
       { ...base, ...parts, ...(d.middleNames ? { middle_names: d.middleNames } : {}) },
@@ -56,7 +59,9 @@ export async function recordInviteeDetails(
           if (!lastWasMissingColumn) break;
         } catch { break; }
       }
-      if (!wrote) { out.details = "failed"; out.warnings.push("The person's name parts, phone or country could not be saved. They can be added later from the user's details."); }
+      if (!wrote && !supplied) { /* nothing the administrator entered was lost */ }
+      else if (!wrote) { out.details = "failed"; out.warnings.push("The person's name parts, phone or country could not be saved. They can be added later from the user's details."); }
+      else if (!supplied) out.details = "none";
       else if (out.details === "partial") out.warnings.push("Some details (such as middle names) are not available in this environment yet and were left out.");
     }
   }
