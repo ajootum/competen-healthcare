@@ -317,8 +317,11 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const { error: fdErr } = await admin.from("individual_scholar_flashcard_deck").delete().eq("user_id", userId);
   // SCHOLAR-LIBRARY-01 (820): the learner's notes, bookmarks and highlights go too (each also cascades with what it is on). Absent table: nothing to do.
   const { error: ntErr } = await admin.from("individual_scholar_note").delete().eq("user_id", userId);
+  // SCHOLAR-CE-2026 CE-04 (880): the simulated-patient conversations go too, library plays included (their sessions are not material, so
+  // no cascade reaches them). Private plays also cascade with their case. The function is the guard's one other way out. Absent: nothing to do.
+  const { error: cvErr } = await admin.rpc("individual_scholar_case_conversation_erase", { p_user: userId });
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
+  return { ok: fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -4491,6 +4494,45 @@ export async function sittingQuestions(admin: Admin, userId: string, ids: readon
 export async function discardRevisionSession(admin: Admin, userId: string, id: string): Promise<void> {
   if (!isUuid(id)) return;
   await admin.from("individual_scholar_revision_session").delete().eq("user_id", userId).eq("id", id);
+}
+
+// -- 880: WHAT THE AI SAID AROUND A CASE (SCHOLAR-CE-2026 CE-04) --
+// Talk to the patient turns, the communication note and the handover note, append-only, beside the attempt.
+// Absent 880: nothing is kept and the panel says so (notProvisioned). Formative and simulated: never a fact.
+
+export type ConversationEntryKind = "turn" | "communication_note" | "handover_note";
+export type ConversationEntry = {
+  id: string; kind: ConversationEntryKind; seq: number; stageId: string | null; decisionPointId: string | null;
+  question: string | null; reply: string; screened: boolean; model: string | null; createdAt: string;
+};
+const CONVERSATION_COLS = "id, entry_kind, seq, stage_id, decision_point_id, question, reply, screened, model, created_at";
+const toConversationEntry = (r: any): ConversationEntry => ({
+  id: r.id, kind: r.entry_kind, seq: r.seq, stageId: r.stage_id ?? null, decisionPointId: r.decision_point_id ?? null,
+  question: r.question ?? null, reply: r.reply, screened: r.screened === true, model: r.model ?? null, createdAt: r.created_at,
+});
+
+/** The caller's conversation entries of one session, oldest first. */
+export async function listCaseConversation(admin: Admin, userId: string, kind: "private" | "library", sessionId: string): Promise<Read<ConversationEntry[]>> {
+  if (!isUuid(sessionId)) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_case_conversation").select(CONVERSATION_COLS).eq("user_id", userId)
+    .eq(kind === "private" ? "private_session_id" : "library_session_id", sessionId).order("seq", { ascending: true }).limit(500);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toConversationEntry) };
+}
+
+/** Keep one entry. The database checks the session is the caller's own, the stage reached, and the order (880's guard). */
+export async function insertCaseConversation(admin: Admin, userId: string, input: {
+  kind: "private" | "library"; sessionId: string; entry: ConversationEntryKind; stageId?: string | null; decisionPointId?: string | null;
+  question?: string | null; reply: string; screened?: boolean; model?: string | null; promptVersion?: string | null;
+}): Promise<{ ok: true } | { ok: false; reason: "not_provisioned" | "refused" }> {
+  if (!isUuid(input.sessionId)) return { ok: false, reason: "refused" };
+  const { error } = await admin.from("individual_scholar_case_conversation").insert({
+    user_id: userId, session_kind: input.kind, ...(input.kind === "private" ? { private_session_id: input.sessionId } : { library_session_id: input.sessionId }),
+    entry_kind: input.entry, stage_id: input.stageId ?? null, decision_point_id: input.decisionPointId ?? null, question: input.question ?? null,
+    reply: input.reply, screened: input.screened === true, model: input.model ?? null, prompt_version: input.promptVersion ?? null,
+  });
+  if (!error) return { ok: true };
+  return { ok: false, reason: isNotProvisioned(error) ? "not_provisioned" : "refused" };
 }
 
 // ── MY PLAN PERF (scholar/plan-perf-01) ── request-scoped reads ──────────────────────────────────────────────────────────────

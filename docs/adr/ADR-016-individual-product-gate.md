@@ -54,9 +54,28 @@ found three facts that shape the answer:
 | D7 | Authenticated routes `/individual/scholar/**` and `/individual/professional/**`. Public marketing routes stay distinct. | `src/app/individual/(app)/[experience]`. |
 | D8 | The Scholar pilot is 18+, enforced during access granting. | The grant refuses Scholar without `adultConfirmed: true`. The schema CHECK `individual_entitlement_scholar_adult` refuses any Scholar row without `adult_confirmed_at`. The grant records `adult_confirmed_by`. |
 | D9 | `hq.individual.pilot.grant` goes through existing HQ governance, assigned to an Individual Product Administrator appointment. No new landlord authority and no parallel grant engine. | 370 seeds the capability, the position `individual_product_administrator` (platform space, product line `individual`) and its grant. `spaces.ts` catalogue. `POST /api/hq/individual/grants` and `/grants/end` behind `hqApiGate(["hq.individual.pilot.grant"])`, refusing self-grant. |
-| D10 | Personal AI persistent memory stays OFF until opt-in, visibility, correction and deletion controls exist. | The assistant stores no conversation (foundation harness 9g), and the page says so. |
+| D10 | Personal AI persistent memory stays OFF until opt-in, visibility, correction and deletion controls exist. | The assistant stores no conversation (foundation harness 9g), and the page says so. One narrow exception: see "D10 exception (owner ruling 2 Nov 2026, CE-04)" below. |
 
 The Scholar operating company's registered name is pending. `INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_REGISTERED_NAME` stays unset, and surfaces show a descriptive label.
+
+## D10 exception (owner ruling 2 Nov 2026, CE-04)
+
+D10 stands in full for Personal AI conversation memory. One narrow exception was approved for SCHOLAR-CE-2026 workstream CE-04, "Talk to the patient" in a clinical case: the turns of a **simulated-patient conversation** are stored as part of the learner's own case attempt. They are assessment evidence for that attempt, not persistent Personal AI memory.
+
+**Scope.** One table, `individual_scholar_case_conversation` (migration 880, unapplied at the time of writing), and its operations: insert (the server, through the Scholar store), read-own, and delete only by cascade from the attempt or by the owner erasure function. UPDATE is refused. The assistant, Personal AI ask, Learn, study-session context and every other activity never read it. Foundation harness 9g still fails for any other conversation, message or session table. 9h and 9i hold the exception to its table and its three files, and `case-conversation-scope.test.ts` proves it from the source.
+
+**The nine conditions.**
+1. Turns are stored only against the specific learner's case attempt (session, same learner) and the stage the session had reached (`stage_id`, checked by the guard).
+2. The saved conversation is shown in that learner's debrief.
+3. Deleting the attempt deletes its conversation: both session foreign keys are `on delete cascade`, and the append-only guard allows the cascade path (`pg_trigger_depth() > 1`).
+4. The Scholar erase-all workflow covers it: private plays by cascade, library plays by `individual_scholar_case_conversation_erase(user)` (server role only), called from `eraseAllMaterial`, subject to applicable retention obligations.
+5. The turns are not reused as Personal AI memory or as context for unrelated activities (harness 9g/9h/9i and the scope test).
+6. Within the same attempt they may be used for feedback and assessment: the end-of-case communication note and the debrief read only that session's turns.
+7. The learner is told before the first turn, in the panel: "This conversation is recorded with your case attempt so you can review it and get feedback. It is not used as Personal AI memory." No separate consent system.
+8. A completed transcript is never silently rewritten: append-only, no UPDATE, and a screened reply is kept flagged, not altered. No correction mechanism exists for it and none was built.
+9. Real patient information is discouraged: a line at the input ("This is a simulated patient. Do not enter real patient names or identifiers.") and the existing patient-identifier screen runs on every question before any AI call.
+
+The feature stays off by default (`scholar_case_conversation`, Individual policy).
 
 ## Consequences and limits
 

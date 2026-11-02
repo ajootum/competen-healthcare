@@ -128,6 +128,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
       scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",
       scholarCaseReasoningFeedback: "self",
+      // SCHOLAR-CE-2026 CE-04: Talk to the patient OFF until HQ switches it on (and 880 is applied), 20 questions per stage.
+      scholarCaseConversation: "off", scholarCaseConversationTurns: 20,
       // EVALUATION-01 (Stage 6): every method and evidence source, five pieces of evidence, two sections, 90 days,
       // strong from 80 and developing from 50 -- descriptions, never a pass mark -- ten fresh questions, suggestions on.
       scholarEvaluationMethods: ["existing", "fresh", "combined"],

@@ -13,13 +13,19 @@ import { caseSourcesOf } from "./store";
 import { answerPrivate, privatePlayView, revealPrivate, type ReasoningJudge } from "./clinical-play";
 import { LIBRARY_CASE_LABEL, MARKING_LABEL, PRIVATE_CASE_LABEL } from "./config";
 import { readCaseAttempt } from "./case-integrity";
+import { handoverNotesView } from "./case-talk";
 
 export type PlayKind = "private" | "library";
 export const isPlayKind = (v: unknown): v is PlayKind => v === "private" || v === "library";
 
 /** The student's view of either kind of session, labelled for what it is. null: not theirs, or not available. */
 export async function viewPlay(admin: any, userId: string, kind: PlayKind, id: string, hints: boolean) {
-  if (kind === "private") { const v = await privatePlayView(admin, userId, id); return v ? { ...v, label: PRIVATE_CASE_LABEL } : null; }
+  if (kind === "private") {
+    const v = await privatePlayView(admin, userId, id);
+    if (!v) return null;
+    const handoverNotes = await handoverNotesView(admin, userId, "private", id, v.view, v.answered);
+    return { ...v, label: PRIVATE_CASE_LABEL, ...(handoverNotes ? { handoverNotes } : {}) };
+  }
   const v = await caseSessionView(admin, userId, id, { hints });
   if (!v) return null;
   // A library session's AI feedback is the shared delivery's record (424), labelled AI evaluation. Every answered
@@ -27,7 +33,9 @@ export async function viewPlay(admin: any, userId: string, kind: PlayKind, id: s
   // what this one showed.
   const ai = new Map((v.feedback ?? []).map(f => [f.decisionToken, f.text]));
   const answeredViews = v.answeredViews ?? {};
+  const handoverNotes = await handoverNotesView(admin, userId, "library", id, v.view, v.answered);
   return {
+    ...(handoverNotes ? { handoverNotes } : {}),
     kind: "library" as const, sessionId: v.sessionId, status: v.status === "in_progress" ? "active" : v.status, current: v.current, view: v.view, answered: v.answered,
     feedback: v.answered.map(t => ai.has(t)
       ? { token: t, marking: "ai_evaluation" as const, markingLabel: MARKING_LABEL.ai_evaluation, answered: answeredViews[t] ?? null, aiFeedback: ai.get(t)! }
