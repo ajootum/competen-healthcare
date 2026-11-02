@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { LayerTag } from "../../study/_components/competency-client";
 import { ContentStatusTag } from "../../study/_components/client";
@@ -17,11 +18,12 @@ export const dynamic = "force-dynamic";
 // sit in, through loadLearnerCatalogue ONLY: published, active, HQ-allowlisted and fail-closed (the preview reader is
 // never used here). Layer, profession and content status are shown on each, as the catalogue records them.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Competency Frameworks" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "Competency Frameworks" }); }
 
 export default async function CompetencyFrameworks({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
   const x = SCHOLAR;
   const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);

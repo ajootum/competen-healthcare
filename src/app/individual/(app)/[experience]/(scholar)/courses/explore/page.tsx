@@ -2,7 +2,8 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { learningEnabled } from "@/lib/learning/policy";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader, focusRing } from "@/app/individual/_components/chrome";
 import { PlaceholderCard } from "../../_module/module-parts";
 import { exploreView } from "../courses-view";
@@ -13,11 +14,12 @@ export const dynamic = "force-dynamic";
 // this is an honest empty state. When it is on, ONE handoff card to the Competen Learning catalogue: nothing of the
 // catalogue is copied here, so a course is described, priced and started in one place only (ADR-017).
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Explore Courses" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("courses", { title: "Explore Courses" }); }
 
 export default async function ExploreCourses({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
   const x = SCHOLAR;
   const view = exploreView(await learningEnabled(page.ctx.admin));
   return (

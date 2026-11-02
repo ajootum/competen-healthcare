@@ -25,6 +25,7 @@ import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityConte
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
 import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
+import { scholarModulesOnce, type ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -176,7 +177,10 @@ export default async function ExperienceLayout({ children, params }: {
   const aiP = getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
   // PLP-01..04: the My Plan tab shows only where HQ has My Plan on AND migration 780 is present (unreadable: off, so it fails closed).
   const myPlanP = scholar ? (async () => { try { const [policy, provisioned] = await Promise.all([loadIndividualPolicyOnce(shell.ctx.admin), studyPlanSchema(shell.ctx.admin, shell.ctx.userId)]); return isMyPlanOn(policy, provisioned); } catch { return false; } })() : false;
-  const [learning, ai, myPlanOn] = await Promise.all([learningP, aiP, myPlanP]);
+  // Private module development access: the private Scholar modules this person may see, computed once and handed to every navigation surface. Any failure is none.
+  const modulesP: Promise<Set<ScholarModuleKey>> | Set<ScholarModuleKey> = scholar ? scholarModulesOnce(shell.ctx.admin, shell.ctx.userId) : new Set<ScholarModuleKey>();
+  const [learning, ai, myPlanOn, moduleSet] = await Promise.all([learningP, aiP, myPlanP, modulesP]);
+  const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
   // SCHOLAR-BRAND-LOGO-01: Scholar's logo is the same size on phone and desktop in the header, so both marks are ONE image request.
@@ -185,7 +189,7 @@ export default async function ExperienceLayout({ children, params }: {
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
       <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
-          {scholar && <ScholarDrawer myPlan={myPlanOn} learning={learning} />}
+          {scholar && <ScholarDrawer myPlan={myPlanOn} modules={scholarModules} learning={learning} />}
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
@@ -195,13 +199,13 @@ export default async function ExperienceLayout({ children, params }: {
           <div className="hidden md:flex md:ml-auto items-center gap-2.5 text-[13px]">
             <span className="rounded-full bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-app-text-secondary)] ring-1 ring-[var(--cmp-app-border)]">Individual account</span>
           </div>
-          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} preview={previewing} />
+          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} preview={previewing} scholarModules={scholarModules} />
         </div>
       </header>
 
       <div className="flex">
         <aside className={`hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] ${scholar ? "w-[256px]" : "w-[236px]"} shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]`}>
-          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} />
+          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} scholarModules={scholarModules} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>
             <p>One account, one Passport.</p>

@@ -4,7 +4,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { NAV_STORAGE_KEY, SCHOLAR_NAV, activeOf, parseExpanded, visibleItems, type NavLeaf, type NavModuleKey } from "@/lib/individual/scholar/nav";
+import { NAV_STORAGE_KEY, SCHOLAR_NAV, activeOf, parseExpanded, visibleItems, visibleModules, type NavLeaf, type NavModuleKey } from "@/lib/individual/scholar/nav";
+import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 import { withStudy } from "@/lib/individual/scholar/study-carry";
 import { useActiveStudyId } from "@/app/individual/(app)/[experience]/(scholar)/study/_components/study-active";
 
@@ -35,7 +36,8 @@ function Chevron({ open }: { open: boolean }) {
 }
 
 /** The navigation list itself (no wrapper), shared by the sidebar and the drawer. `onNavigate` lets the drawer close on a tap. */
-export function ScholarNavTree({ myPlan, onNavigate }: { myPlan: boolean; onNavigate?: () => void }) {
+// `modules`: the private modules this learner may see (private module development access). REQUIRED, so no caller can forget it: a module not named is not drawn.
+export function ScholarNavTree({ myPlan, modules, onNavigate }: { myPlan: boolean; modules: readonly ScholarModuleKey[]; onNavigate?: () => void }) {
   const pathname = usePathname() ?? "";
   const studyId = useActiveStudyId();
   const base = useId();
@@ -85,7 +87,7 @@ export function ScholarNavTree({ myPlan, onNavigate }: { myPlan: boolean; onNavi
   return (
     <div className="flex flex-col gap-[7px]">
       {topLink(SCHOLAR_NAV.home, ICON.home)}
-      {SCHOLAR_NAV.modules.map(m => {
+      {visibleModules(modules).map(m => {
         const isOpen = open.includes(m.key);
         const holds = activeModule === m.key;
         const listId = `${base}-${m.key}`;
@@ -126,10 +128,10 @@ export function ScholarNavTree({ myPlan, onNavigate }: { myPlan: boolean; onNavi
 }
 
 /** The desktop sidebar's navigation, with its own scroll area so a long open tree never pushes the footer off the screen. */
-export function ScholarSidebar({ myPlan }: { myPlan: boolean }) {
+export function ScholarSidebar({ myPlan, modules }: { myPlan: boolean; modules: readonly ScholarModuleKey[] }) {
   return (
     <nav aria-label="Competen Scholar navigation" className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-[26px]">
-      <ScholarNavTree myPlan={myPlan} />
+      <ScholarNavTree myPlan={myPlan} modules={modules} />
     </nav>
   );
 }

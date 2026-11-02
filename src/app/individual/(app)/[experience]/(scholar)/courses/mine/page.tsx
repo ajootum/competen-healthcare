@@ -3,7 +3,8 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { learningEnabled } from "@/lib/learning/policy";
 import { myRecords } from "@/lib/learning/record";
 import { learningRecordHref } from "@/lib/individual/professional/learning";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { EmptyLine, RowList, TextLink } from "../../_module/module-parts";
 import { myCoursesView } from "../courses-view";
@@ -14,13 +15,14 @@ export const dynamic = "force-dynamic";
 // myRecords (only while Learning is on). Each links to its own record page in Competen Learning, where the lesson is
 // taken. Nothing is started, paid for or issued from here.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My Courses" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("courses", { title: "My Courses" }); }
 
 const fmt = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export default async function MyCourses({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
   const { ctx } = page;
   const x = SCHOLAR;
   const on = await learningEnabled(ctx.admin);

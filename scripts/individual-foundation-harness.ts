@@ -343,9 +343,9 @@ function main() {
   const gatedViews = routeFiles.filter(f => /\/(page|layout)\.tsx$/.test(f));
   const leakyMeta = gatedViews.filter(f => {
     const s = SRC.get(f) ?? "";
-    return /export const metadata\b/.test(s) || (/export async function generateMetadata/.test(s) && !/gatedMetadata\(/.test(s));
+    return /export const metadata\b/.test(s) || (/export async function generateMetadata/.test(s) && !/gated(?:Module)?Metadata\(/.test(s));
   });
-  ok("11e. no gated Individual page or layout exports static metadata; every generateMetadata goes through gatedMetadata",
+  ok("11e. no gated Individual page or layout exports static metadata; every generateMetadata goes through gatedMetadata (or gatedModuleMetadata, which gates on the module as well)",
     gatedViews.length >= 10 && leakyMeta.length === 0, leakyMeta.join(", "));
   // Found on Vercel Preview 2026-10-22, after 11a: with no service key the routes answered 500, not 404 --
   // createAdminClient()'s constructor throws on a missing key, before the gate's own try could say OFF.

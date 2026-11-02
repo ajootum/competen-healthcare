@@ -122,5 +122,12 @@ export function parseExpanded(raw: string | null | undefined): NavModuleKey[] {
   } catch { return []; }
 }
 
+/**
+ * Private module development access (owner GO 2 Nov 2026): the modules a learner may see. My Learning is always there; Courses &
+ * Training and My Competencies only when `allowed` names them. A module left out is OMITTED, not greyed. Nothing passed is none.
+ */
+export const visibleModules = (allowed: readonly string[]): NavModule[] =>
+  SCHOLAR_NAV.modules.filter(m => m.key === "learning" || allowed.includes(m.key));
+
 /** The leaves a module shows: the gated ones only while their gate is on. */
 export const visibleItems = (m: NavModule, gates: { myPlan: boolean }): NavLeaf[] => m.items.filter(l => !l.gate || gates[l.gate]);

@@ -6,6 +6,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { EXPERIENCES, experienceHref, navFor, bottomNavFor, overflowNavFor, type ExperienceKey, type ShellNavItem } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
 import { ScholarSidebar } from "./ScholarSidebar";
+import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
 // The Individual navigation, generated from the registry (src/lib/individual/experiences.ts) and nothing
 // else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
@@ -27,11 +28,12 @@ function isActive(pathname: string, href: string, isHome: boolean) {
  * shell header carries the same link.
  * Scholar (modular restructuring, 2 Nov 2026) draws its own module tree instead (ScholarSidebar, from scholar/nav.ts), where
  * Courses & Training covers Competen Learning, so the standalone link is dropped for Scholar only. `myPlan`: My Plan's gate.
+ * `scholarModules`: the private Scholar modules this learner may see (private module development access). Left out: none are drawn.
  */
-export function SidebarNav({ experience, learning = false, myPlan = false }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean }) {
+export function SidebarNav({ experience, learning = false, myPlan = false, scholarModules = [] }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
-  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} />;
+  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} modules={scholarModules} />;
   return (
     <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-[7px] px-4 pt-[26px]">
       {navFor(experience).map(item => {
@@ -90,7 +92,7 @@ export function BottomNav({ experience }: { experience: ExperienceKey }) {
  * md up, where the sidebar shows everything, it holds Profile & history, Settings and Sign out. The bar itself is
  * unchanged (CPR-MOB-001).
  */
-export function AccountMenu({ experience, initials, name, preview = false }: { experience: ExperienceKey; initials: string; name: string; preview?: boolean }) {
+export function AccountMenu({ experience, initials, name, preview = false, scholarModules = [] }: { experience: ExperienceKey; initials: string; name: string; preview?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
   const [open, setOpen] = useState(false);
@@ -105,7 +107,9 @@ export function AccountMenu({ experience, initials, name, preview = false }: { e
     document.addEventListener("mousedown", onDown); document.addEventListener("keydown", onKey);
     return () => { document.removeEventListener("mousedown", onDown); document.removeEventListener("keydown", onKey); };
   }, [open]);
-  const desktop = navFor(experience).filter(i => i.segment === "profile" || i.segment === "settings");
+  // Private modules the person may not see are not listed (Scholar only; Professional has none).
+  const allowedPrivate = experience === "scholar" ? scholarModules : undefined;
+  const desktop = navFor(experience, allowedPrivate).filter(i => i.segment === "profile" || i.segment === "settings");
   const item = (i: ShellNavItem, cls: string) => {
     const href = experienceHref(experience, i.segment);
     const on = isActive(pathname, href, i.segment === "");
@@ -131,7 +135,7 @@ export function AccountMenu({ experience, initials, name, preview = false }: { e
       {open && (
         <div id={menuId} className="absolute right-0 top-full z-40 mt-2 w-[min(18rem,calc(100vw-2rem))] rounded-xl border border-gray-200 bg-white p-2 shadow-lg">
           <ul className="space-y-0.5">
-            {overflowNavFor(experience).map(i => item(i, "md:hidden"))}
+            {overflowNavFor(experience, allowedPrivate).map(i => item(i, "md:hidden"))}
             {desktop.map(i => item(i, "hidden md:block"))}
           </ul>
           <div className="mt-2 border-t border-gray-100 px-1 pt-2">{preview ? <EndPreviewButton /> : <SignOutButton />}</div>

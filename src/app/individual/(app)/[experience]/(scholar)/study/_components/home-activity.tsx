@@ -10,6 +10,7 @@ import { loadMonthlyOverview, monthlyReviewOn } from "@/lib/individual/scholar/m
 import { learningEnabled } from "@/lib/learning/policy";
 import { myRecords } from "@/lib/learning/record";
 import { isStudyPlanOn } from "@/lib/individual/policy";
+import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 import { focusRing } from "../../../../../_components/chrome";
 import { buildActivity, examCheckpoint, failedPart, NOTHING_YET, offPart, okPart, type ActivityInput, type NextStep, type Part } from "./home-model";
 
@@ -27,7 +28,7 @@ async function guarded<T>(read: () => Promise<Part<T>>): Promise<Part<T>> {
   try { return await read(); } catch { return failedPart; }
 }
 
-export async function readHomeExtras(ctx: IndividualContext, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<Extras> {
+export async function readHomeExtras(ctx: IndividualContext, policy: IndividualPolicy, o: { now: Date; tz: string; today: string; modules: readonly ScholarModuleKey[] }): Promise<Extras> {
   const { admin, userId } = ctx;
   const [nextStep, courses, monthly, exam, gaps] = await Promise.all([
     // My Plan's next step, only where My Plan is on. A gate that is shut is "off", not a failure.
@@ -38,6 +39,8 @@ export async function readHomeExtras(ctx: IndividualContext, policy: IndividualP
     }),
     // Active courses: only while Competen Learning is on for this deployment.
     guarded<{ id: string; title: string }[]>(async () => {
+      // Courses & Training is private while in development: its records are not even read for a learner who may not see it.
+      if (!o.modules.includes("courses")) return offPart;
       if (!(await learningEnabled(admin).catch(() => false))) return offPart;
       const rs = await myRecords(admin, userId);
       if (rs === null) return failedPart;
@@ -72,8 +75,8 @@ export async function readHomeExtras(ctx: IndividualContext, policy: IndividualP
   return { nextStep, courses, monthly, exam, gaps };
 }
 
-export default function HomeActivity({ input, accent }: { input: ActivityInput; accent: string }) {
-  const sections = buildActivity(input);
+export default function HomeActivity({ input, accent, modules }: { input: ActivityInput; accent: string; modules: readonly ScholarModuleKey[] }) {
+  const sections = buildActivity(input, modules);
   return (
     <section aria-labelledby="activity-h" data-testid="home-activity" className="mb-6">
       <h2 id="activity-h" className="text-[12px] font-extrabold uppercase tracking-[0.14em] text-gray-500">Your activity</h2>

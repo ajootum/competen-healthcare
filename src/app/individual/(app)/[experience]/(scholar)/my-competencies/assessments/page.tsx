@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader } from "@/app/individual/_components/chrome";
 import { PlaceholderCard } from "../../_module/module-parts";
 
@@ -9,11 +10,12 @@ export const dynamic = "force-dynamic";
 // COMPETEN ASSESSMENTS -- SCHOLAR-MODULES-01. Placeholder, by design: no Competen-approved assessment is operational for
 // Scholar. Nothing is listed, started or scored here, and nothing is invented. The wording is the owner-approved copy.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Competen Assessments" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "Competen Assessments" }); }
 
 export default async function CompetenAssessments({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   return (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow="My Competencies" title="Competen Assessments" intro="Assessments Competen has approved." />

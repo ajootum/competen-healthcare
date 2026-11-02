@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader } from "@/app/individual/_components/chrome";
 import { ModuleCards } from "../_module/module-parts";
 
@@ -11,11 +12,12 @@ export const dynamic = "force-dynamic";
 // Courses live in Competen Learning (ADR-017) and the programme in Scholar's own store: they are shown by reference
 // on the pages below, never copied here.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Courses & Training" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("courses", { title: "Courses & Training" }); }
 
 export default async function CoursesOverview({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
   const go = (s: string) => experienceHref("scholar", `courses/${s}`);
   return (
     <>

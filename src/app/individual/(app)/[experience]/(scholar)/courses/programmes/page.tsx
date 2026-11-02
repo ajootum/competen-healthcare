@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { learnerProgramme, listProgrammes } from "@/lib/individual/scholar/store";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { Block, EmptyLine, RowList, TextLink } from "../../_module/module-parts";
 import { programmeLine, programmesView } from "../courses-view";
@@ -12,11 +13,12 @@ export const dynamic = "force-dynamic";
 // offers (listProgrammes), both read through the Scholar store. Choosing or changing one stays in My Library, where the
 // existing chooser and its API live: this page only reads. A programme is configuration, never a course or a qualification.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My Programmes" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("courses", { title: "My Programmes" }); }
 
 export default async function MyProgrammes({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
   const { ctx } = page;
   const x = SCHOLAR;
   const [chosen, offered] = await Promise.all([learnerProgramme(ctx.admin, ctx.userId), listProgrammes(ctx.admin)]);

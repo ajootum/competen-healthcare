@@ -4,7 +4,8 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { learningEnabled } from "@/lib/learning/policy";
 import { loadLearningRecords } from "@/lib/learning/products";
 import { learningCertificateHref, learningRecordHref } from "@/lib/individual/professional/learning";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable, focusRing } from "@/app/individual/_components/chrome";
 import { EmptyLine, RowList, TextLink } from "../../_module/module-parts";
 import { completedView } from "../courses-view";
@@ -15,13 +16,14 @@ export const dynamic = "force-dynamic";
 // loadLearningRecords (completed only; only while Learning is on). Any number shown belongs to the Holdings record and
 // opens its own page: nothing is issued, copied or re-stated here. A completion is not a qualification.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Learning Progress" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("courses", { title: "Learning Progress" }); }
 
 const fmt = (d: string) => new Date(`${d.slice(0, 10)}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export default async function LearningProgress({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
   const { ctx } = page;
   const x = SCHOLAR;
   const on = await learningEnabled(ctx.admin);

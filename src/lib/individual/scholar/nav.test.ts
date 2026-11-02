@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { ALL_LEAVES, NAV_STORAGE_KEY, SCHOLAR_NAV, activeOf, parseExpanded, visibleItems } from "./nav";
+import { ALL_LEAVES, NAV_STORAGE_KEY, SCHOLAR_NAV, activeOf, parseExpanded, visibleItems, visibleModules } from "./nav";
 import { SCHOLAR_SPACES } from "./spaces";
 import { FOUNDATION_NAV } from "../experiences";
 
@@ -110,4 +110,17 @@ describe("parseExpanded", () => {
     expect(parseExpanded('["bogus",42,null]')).toEqual([]);
     expect(parseExpanded('["competencies","bogus"]')).toEqual(["competencies"]);
   });
+});
+
+describe("visibleModules (private module development access)", () => {
+  it("is My Learning alone when nothing is allowed, and never greys a module", () => {
+    expect(visibleModules([]).map(m => m.key)).toEqual(["learning"]);
+    expect(visibleModules([]).flatMap(m => m.items.map(l => l.segment)).some(s => s.startsWith("courses") || s.startsWith("my-competencies"))).toBe(false);
+  });
+  it("adds exactly the modules named, in sidebar order", () => {
+    expect(visibleModules(["courses"]).map(m => m.key)).toEqual(["learning", "courses"]);
+    expect(visibleModules(["competencies"]).map(m => m.key)).toEqual(["learning", "competencies"]);
+    expect(visibleModules(["competencies", "courses"]).map(m => m.key)).toEqual(["learning", "courses", "competencies"]);
+  });
+  it("ignores a key that is not a module", () => expect(visibleModules(["bogus", "learning"]).map(m => m.key)).toEqual(["learning"]));
 });

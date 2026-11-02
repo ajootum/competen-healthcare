@@ -2,6 +2,7 @@ import { experienceHref } from "@/lib/individual/experiences";
 import { stageHref } from "@/lib/individual/scholar/study-carry";
 import type { StudySpace } from "@/lib/individual/scholar/study-session";
 import { monthLabel } from "@/lib/individual/scholar/monthly-review";
+import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
 // THE SCHOLAR HOME: WHAT IT SAYS, from reads already made (modular restructuring S3). Pure: no reads, no AI.
 //
@@ -14,6 +15,12 @@ export const HOME_CARDS = [
   { key: "courses", title: "Courses & Training", line: "Learn through structured programmes.", cta: "Explore Courses" },
   { key: "competencies", title: "My Competencies", line: "Develop and demonstrate your competencies.", cta: "View My Competencies" },
 ] as const;
+
+/**
+ * Private module development access (owner GO 2 Nov 2026): the cards this learner is shown. My Learning is always there; Courses &
+ * Training and My Competencies only when `allowed` names them. A card not allowed is left out, and the grid adapts. Nothing passed: My Learning alone.
+ */
+export const visibleHomeCards = (allowed: readonly ScholarModuleKey[]) => HOME_CARDS.filter(c => c.key === "learning" || allowed.includes(c.key));
 
 export const NOTHING_YET = "Nothing to pick up yet. Start with your own notes in My Library.";
 
@@ -67,7 +74,7 @@ const MAX_COURSES = 3;
 const MAX_GAPS = 3;
 
 /** The sections of the activity area, empty ones left out. An empty result is the "nothing yet" state. */
-export function buildActivity(a: ActivityInput): ActivitySection[] {
+export function buildActivity(a: ActivityInput, allowed: readonly ScholarModuleKey[]): ActivitySection[] {
   const out: ActivitySection[] = [];
   const add = (key: string, heading: string, items: ActivityItem[], failed: string[]) => { if (items.length || failed.length) out.push({ key, heading, items, failed }); };
 
@@ -86,7 +93,8 @@ export function buildActivity(a: ActivityInput): ActivitySection[] {
     for (const c of a.courses.value.slice(0, MAX_COURSES)) courses.push({ key: c.id, text: c.title, sub: "In progress", href: `/individual/learning/record/${c.id}`, cta: "Open course" });
     if (a.courses.value.length > MAX_COURSES) courses.push({ key: "more", text: `${a.courses.value.length - MAX_COURSES} more in progress`, href: experienceHref("scholar", "courses/mine"), cta: "My Courses" });
   }
-  add("courses", "Active courses", courses, courseFail);
+  // Courses & Training is private while in development: its rows are not shown to a learner who may not see the module.
+  if (allowed.includes("courses")) add("courses", "Active courses", courses, courseFail);
 
   const up: ActivityItem[] = []; const upFail: string[] = [];
   if (a.monthly.state === "failed") upFail.push("Your monthly review");

@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import { loadIndividualPassport } from "@/lib/individual/passport";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { Block, EmptyLine, TextLink } from "../../_module/module-parts";
 import { EvidenceSections } from "../evidence-sections";
@@ -16,11 +17,12 @@ export const dynamic = "force-dynamic";
 // show -- and "Formal records" -- what organisations and Competen Holdings recorded. Every row carries its evidence
 // label (EVIDENCE_LABEL). Choosing, showing, sharing or removing stays in the Passport and in My Learning. No AI.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My Evidence" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "My Evidence" }); }
 
 export default async function MyEvidence({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
   const x = SCHOLAR;
   const passport = await loadIndividualPassport(ctx.admin, ctx.userId, learnerToday(await headers())).catch(() => null);

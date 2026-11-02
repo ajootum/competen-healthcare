@@ -9,7 +9,8 @@ import { continueStudy } from "@/lib/individual/scholar/study-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import HomeActivity, { readHomeExtras } from "./home-activity";
-import { competenciesHref, continueTarget, coursesExploreHref, failedPart, HOME_CARDS, offPart, okPart } from "./home-model";
+import { scholarModulesOnce } from "@/lib/individual/scholar/module-access";
+import { competenciesHref, continueTarget, coursesExploreHref, failedPart, HOME_CARDS, offPart, okPart, visibleHomeCards } from "./home-model";
 
 // THE SCHOLAR HOME -- the study space (Scholar HFE redesign, 2026-10-26; COMPETEN-IND-003 s2(1) and s3), now the
 // door to the three modules (modular restructuring S3): My Learning, Courses & Training, My Competencies.
@@ -30,17 +31,20 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
   const tz = learnerTimeZone(hdrs), today = learnerToday(hdrs);
   // Policy first, as the other reads need it; it runs alongside the reads that do not.
   const policyP = loadIndividualPolicy(ctx.admin);
+  // Private module development access: the modules this person may see (any failure: none). Asked before the reads that depend on it.
+  const modules = [...(await scholarModulesOnce(ctx.admin, ctx.userId))];
   // SCHOLAR-SESSION-AI-02: an open study session takes the Continue slot, reopened in its last stage (null where off).
   const [materials, due, sessions, study, extras] = await Promise.all([
     listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1),
     policyP.then(p => continueStudy(ctx.admin, ctx.userId, p)),
-    policyP.then(p => readHomeExtras(ctx, p, { now: new Date(), tz, today })),
+    policyP.then(p => readHomeExtras(ctx, p, { now: new Date(), tz, today, modules })),
   ]);
   const none = materials.ok && materials.data.length === 0;
   const resume = sessions.ok ? sessions.data.find(s => s.status === "active") ?? null : null;
   const go = continueTarget({ noMaterial: none, study, resumeSessionId: resume?.id ?? null });
-  const hrefs = [go.href, coursesExploreHref(), competenciesHref()];
-  const labels = [go.label, HOME_CARDS[1].cta, HOME_CARDS[2].cta];
+  const hrefOf = { learning: go.href, courses: coursesExploreHref(), competencies: competenciesHref() } as const;
+  const labelOf = { learning: go.label, courses: HOME_CARDS[1].cta, competencies: HOME_CARDS[2].cta } as const;
+  const cards = visibleHomeCards(modules);
 
   return (
     <>
@@ -48,13 +52,13 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
       {/* Notices in the person's own account (migration 437). Nothing while there are none. */}
       <HomeNotices admin={ctx.admin} userId={ctx.userId} accent={x.accent} />
 
-      <div className="mb-6 grid gap-[18px] md:grid-cols-3">
-        {HOME_CARDS.map((c, i) => (
+      <div className={`mb-6 grid gap-[18px] ${cards.length >= 3 ? "md:grid-cols-3" : cards.length === 2 ? "md:grid-cols-2" : ""}`}>
+        {cards.map(c => (
           <section key={c.key} aria-labelledby={`card-${c.key}`} data-testid={`home-card-${c.key}`} className={card}>
             <h2 id={`card-${c.key}`} className="text-[21px] font-bold tracking-tight text-gray-900">{c.title}</h2>
             <p className="mb-5 mt-1 text-[15px] text-gray-600">{c.line}</p>
             <div className="mt-auto">
-              <Link href={hrefs[i]} className={primary} style={{ background: x.accent }}>{labels[i]}</Link>
+              <Link href={hrefOf[c.key]} className={primary} style={{ background: x.accent }}>{labelOf[c.key]}</Link>
             </div>
           </section>
         ))}
@@ -62,6 +66,7 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
 
       <HomeActivity
         accent={x.accent}
+        modules={modules}
         input={{
           study: study ? { id: study.id, title: study.title, space: study.space } : null,
           ...extras,

@@ -3,7 +3,8 @@ import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { EmptyLine, RowList, TextLink } from "../../_module/module-parts";
 import { gapsView } from "../competencies-view";
@@ -16,11 +17,12 @@ export const dynamic = "force-dynamic";
 // computation). "Not practised yet" is a fact about practice, never a judgement that the competency is lacking.
 // Each gap links to Learn on that competency, and to My Plan where it is on. No AI.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My Development Gaps" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "My Development Gaps" }); }
 
 export default async function DevelopmentGaps({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
   const x = SCHOLAR;
   const hdrs = await headers();

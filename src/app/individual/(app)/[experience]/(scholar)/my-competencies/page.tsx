@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader } from "@/app/individual/_components/chrome";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
 import { ModuleCards } from "../_module/module-parts";
@@ -11,11 +12,12 @@ export const dynamic = "force-dynamic";
 // MY COMPETENCIES -- Overview. SCHOLAR-MODULES-01. Seven destinations, linked; this page reads nothing of its own.
 // The segment is my-competencies: Competen Professional owns /competencies.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My Competencies" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "My Competencies" }); }
 
 export default async function MyCompetenciesOverview({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const go = (s: string) => experienceHref("scholar", `my-competencies/${s}`);
   return (
     <>

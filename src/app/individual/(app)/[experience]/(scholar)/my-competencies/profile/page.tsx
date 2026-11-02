@@ -5,7 +5,8 @@ import { learnerToday, learnerTimeZone } from "@/lib/individual/scholar/learning
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { noProgrammeText } from "@/lib/individual/scholar/classify-view";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
-import { experienceModulePage, gatedMetadata } from "@/app/individual/_components/shell-context";
+import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
+import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { CompetencySection } from "../../study/_components/competency-section";
 import { Block, EmptyLine, TextLink } from "../../_module/module-parts";
@@ -22,11 +23,12 @@ export const dynamic = "force-dynamic";
 //      and verifications). Read-only, labelled by who issued it.
 // The catalogue is read only through loadLearnerCatalogue (published, fail-closed). No AI.
 
-export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "My Competency Profile" }); }
+export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "My Competency Profile" }); }
 
 export default async function CompetencyProfile({ params }: { params: Promise<{ experience: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
   const x = SCHOLAR;
   const hdrs = await headers();

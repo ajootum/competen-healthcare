@@ -109,7 +109,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
       scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
       scholarVisualClassify: "on", scholarVisualTextWords: 40,
-      scholarMyPlan: "on", scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"],
+      scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage"],
       scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
