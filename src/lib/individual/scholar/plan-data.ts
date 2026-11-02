@@ -362,7 +362,8 @@ export async function loadProposal(ctx: PlanCtx, policy: IndividualPolicy, mater
   const proposal = buildProposal({
     material: self, earlier: all.filter(m => m.materialId !== materialId),
     settings: s ? { sessionMinutes: s.sessionMinutes ?? Math.max(10, Math.round(s.weeklyMinutes / Math.max(1, s.daysPerWeek))), daysPerWeek: s.daysPerWeek } : null,
-    sectionMinutes: policy.scholarPlanSectionMinutes, firstPlan: s === null,
+    sectionMinutes: policy.scholarPlanSectionMinutes, firstPlan: s === null && earlierIds.length === 0,
   });
-  return { ok: true, proposal, decision, hasPlan: s !== null, recordable: has840 };
+  // A plan exists once settings are saved OR a material has been accepted into it: the next upload is offered as an addition.
+  return { ok: true, proposal, decision, hasPlan: s !== null || earlierIds.length > 0, recordable: has840 };
 }
