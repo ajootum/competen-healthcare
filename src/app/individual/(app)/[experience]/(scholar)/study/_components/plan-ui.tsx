@@ -2,8 +2,9 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import type { IconKind } from "@/lib/individual/scholar/plan-workspace";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
-import { errorCls, focusRing } from "./plan-style";
+import { errorCls, focusRing, pillOutline, squareBtn } from "./plan-style";
 
 // My Plan (PLP-01..04): the small client pieces its screens share.
 
@@ -50,6 +51,64 @@ export const ClipboardCheckIcon = ({ size }: { size?: number }) => (<Svg size={s
 export const CardsIcon = ({ size }: { size?: number }) => (<Svg size={size}><rect x="3" y="7" width="14" height="11" rx="2" /><path d="M7 7V5.5A1.5 1.5 0 0 1 8.5 4H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2" /></Svg>);
 export const RestartIcon = ({ size }: { size?: number }) => (<Svg size={size}><path d="M4 12a8 8 0 1 0 2.5-5.8M4 4v4h4" /></Svg>);
 export const PracticeIcon = ({ size }: { size?: number }) => (<Svg size={size}><circle cx="12" cy="12" r="9" /><path d="M9.5 9.5a2.5 2.5 0 1 1 3.5 2.3c-.7.4-1 .9-1 1.7M12 17h.01" /></Svg>);
+export const FlagIcon = ({ size }: { size?: number }) => (<Svg size={size}><path d="M5 21V4M5 4h11l-2 4 2 4H5" /></Svg>);
+export const BookIcon = ({ size }: { size?: number }) => (<Svg size={size}><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4H11v15H5.5A1.5 1.5 0 0 0 4 20.5zM20 5.5A1.5 1.5 0 0 0 18.5 4H13v15h5.5a1.5 1.5 0 0 1 1.5 1.5z" /></Svg>);
+export const ClockIcon = ({ size }: { size?: number }) => (<Svg size={size}><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" /></Svg>);
+export const ChevronIcon = ({ dir, size }: { dir: "left" | "right" | "down"; size?: number }) => (<Svg size={size}><path d={dir === "left" ? "M15 5l-7 7 7 7" : dir === "right" ? "M9 5l7 7-7 7" : "M6 9l6 6 6-6"} /></Svg>);
+export const DotsIcon = ({ size }: { size?: number }) => (<Svg size={size}><path d="M12 5h.01M12 12h.01M12 19h.01" strokeWidth="3" /></Svg>);
+
+/** The round tinted icon at the left of an agenda row. Tokens only: success (revision, done), information (learning), indigo (own entries). */
+const ROW_TINT: Record<IconKind, { bg: string; fg: string }> = {
+  revision: { bg: "var(--cmp-surface-success)", fg: "var(--cmp-text-success)" },
+  done: { bg: "var(--cmp-surface-success)", fg: "var(--cmp-text-success)" },
+  learning: { bg: "var(--cmp-surface-information)", fg: "var(--cmp-text-information)" },
+  personal: { bg: "var(--cmp-role-indigo-soft)", fg: "var(--cmp-role-indigo-ink)" },
+  deadline: { bg: "var(--cmp-role-indigo-soft)", fg: "var(--cmp-role-indigo-ink)" },
+  unavailable: { bg: "var(--cmp-app-bg)", fg: "var(--cmp-app-text-secondary)" },
+};
+export function RowIcon({ kind }: { kind: IconKind }) {
+  const t = ROW_TINT[kind];
+  const icon = kind === "revision" ? <RestartIcon size={18} /> : kind === "learning" ? <BookIcon size={18} /> : kind === "personal" ? <PersonIcon size={18} /> : kind === "deadline" ? <FlagIcon size={18} /> : kind === "unavailable" ? <CalendarOffIcon size={18} /> : <CheckIcon size={18} />;
+  return <span aria-hidden className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full" style={{ background: t.bg, color: t.fg }}>{icon}</span>;
+}
+
+/**
+ * A small menu on a native <details>: the trigger is a real button (summary), Escape and a press outside close it and return focus to the trigger,
+ * choosing an entry closes it. Dialogs the entries open are rendered by the CALLER beside the menu (never inside it: a closed <details> is not rendered).
+ */
+export function RowMenu({ label, trigger, children }: { label: string; trigger: "dots" | "change"; children: React.ReactNode }) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const d = ref.current;
+    if (!d) return;
+    const down = (e: Event) => { if (d.open && !d.contains(e.target as Node)) d.open = false; };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape" && d.open) { d.open = false; d.querySelector("summary")?.focus(); } };
+    document.addEventListener("pointerdown", down);
+    document.addEventListener("keydown", key);
+    return () => { document.removeEventListener("pointerdown", down); document.removeEventListener("keydown", key); };
+  }, []);
+  return (
+    <details ref={ref} className="relative">
+      <summary aria-label={label} className={`list-none [&::-webkit-details-marker]:hidden cursor-pointer ${trigger === "dots" ? squareBtn : `${pillOutline} gap-1`}`}>
+        {trigger === "dots" ? <DotsIcon size={18} /> : <>Change<span className="sr-only"> ({label})</span></>}
+      </summary>
+      <div role="group" aria-label={label} className="absolute right-0 z-30 mt-1 flex min-w-[12rem] flex-col rounded-xl border border-gray-200 bg-white p-1 shadow-lg"
+        onClick={e => { if ((e.target as HTMLElement).closest("button,a")) { const d = ref.current; if (d) d.open = false; } }}>
+        {children}
+      </div>
+    </details>
+  );
+}
+
+/** The one-line boundary of My Plan: "For learning only · details" (the formative notice is the detail). */
+export function LearningOnlyNote({ notice }: { notice: string }) {
+  return (
+    <details className="text-[12.5px] text-gray-600">
+      <summary className={`inline-flex min-h-9 cursor-pointer items-center font-semibold text-gray-700 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>For learning only · details</summary>
+      <p className="mt-0.5 pb-1">{notice}</p>
+    </details>
+  );
+}
 export const YourEntryChip = () => (
   <span className="inline-flex items-center gap-1 rounded-full border border-purple-300 bg-purple-50 px-2 py-0.5 text-[11.5px] font-semibold text-purple-900"><PersonIcon />Your entry</span>
 );

@@ -9,28 +9,41 @@ import type { EntryType, GoalType, ScholarPlanSettings } from "../learning-plan/
 // a round trip and says it in the learner's words. Imports types only, so client and server components both read it.
 
 // ── the three views ──
-export const PLAN_VIEWS = ["today", "calendar", "insights"] as const;
+// CE-03 (mobile-first): Calendar is the front door, then Today, then Insights.
+export const PLAN_VIEWS = ["calendar", "today", "insights"] as const;
 export type PlanView = (typeof PLAN_VIEWS)[number];
-export const PLAN_VIEW_LABEL: Record<PlanView, string> = { today: "Today", calendar: "Calendar", insights: "Insights" };
-/** The one line under each view's name on the view cards. */
-export const PLAN_VIEW_DESC: Record<PlanView, string> = { today: "What to study next", calendar: "Personal and Scholar plans", insights: "Progress and adjustments" };
-/** ?view=: anything else is Today (the default). */
+export const DEFAULT_PLAN_VIEW: PlanView = "calendar";
+export const PLAN_VIEW_LABEL: Record<PlanView, string> = { calendar: "Calendar", today: "Today", insights: "Insights" };
+/** The one line under each view's name (screen readers and wide layouts). */
+export const PLAN_VIEW_DESC: Record<PlanView, string> = { calendar: "Personal and Scholar plans", today: "What to study next", insights: "Progress and adjustments" };
+const isPlanView = (v: unknown): v is PlanView => typeof v === "string" && (PLAN_VIEWS as readonly string[]).includes(v);
+/** ?view=: anything else is the Calendar (the default). */
 export function parsePlanView(q: unknown): PlanView {
   const v = Array.isArray(q) ? q[0] : q;
-  return typeof v === "string" && (PLAN_VIEWS as readonly string[]).includes(v) ? (v as PlanView) : "today";
+  return isPlanView(v) ? v : DEFAULT_PLAN_VIEW;
 }
-/** The address of a view below `base`, keeping only the parts given. Today is the bare address. */
+/** The address of a view below `base`, keeping only the parts given. The view is ALWAYS written (an explicit ?view= wins over the remembered one). */
 export function planViewHref(base: string, view: PlanView, extra: Record<string, string | null | undefined> = {}): string {
   const q = new URLSearchParams();
-  if (view !== "today") q.set("view", view);
+  q.set("view", view);
   for (const [k, v] of Object.entries(extra)) if (v) q.set(k, v);
-  const s = q.toString();
-  return s ? `${base}?${s}` : base;
+  return `${base}?${q.toString()}`;
+}
+/** Where the learner's last view is kept on this device (a convenience only: a private window simply opens the Calendar). */
+export const PLAN_VIEW_STORE = "myplan.view";
+/**
+ * Pure. Which view opens. An explicit ?view= always wins (and is what gets remembered). With none, the default is the Calendar unless this device
+ * remembers another view: then `redirectTo` says so (the client replaces the address, once; the server never redirects).
+ */
+export function resolveView(query: unknown, stored: unknown): { view: PlanView; redirectTo: PlanView | null; remember: PlanView | null } {
+  const v = Array.isArray(query) ? query[0] : query;
+  if (isPlanView(v)) return { view: v, redirectTo: null, remember: v };
+  return { view: DEFAULT_PLAN_VIEW, redirectTo: isPlanView(stored) && stored !== DEFAULT_PLAN_VIEW ? stored : null, remember: null };
 }
 
 // ── dates (YYYY-MM-DD, UTC arithmetic: the strings are already the learner's local days) ──
 const DAY = 86_400_000;
-const isDay = (x: unknown): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(`${x}T00:00:00Z`)) && new Date(`${x}T00:00:00Z`).toISOString().slice(0, 10) === x;
+export const isDay = (x: unknown): x is string => typeof x === "string" && /^\d{4}-\d{2}-\d{2}$/.test(x) && !Number.isNaN(Date.parse(`${x}T00:00:00Z`)) && new Date(`${x}T00:00:00Z`).toISOString().slice(0, 10) === x;
 export const addDay = (iso: string, n: number) => new Date(Date.parse(`${iso}T00:00:00Z`) + n * DAY).toISOString().slice(0, 10);
 /** 0 = Monday ... 6 = Sunday, as the repeat rule counts weekdays. */
 export const weekdayIndex = (iso: string) => (new Date(`${iso}T00:00:00Z`).getUTCDay() + 6) % 7;

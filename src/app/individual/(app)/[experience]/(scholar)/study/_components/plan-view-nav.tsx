@@ -1,26 +1,63 @@
+"use client";
+
 import Link from "next/link";
-import { PLAN_VIEWS, PLAN_VIEW_DESC, PLAN_VIEW_LABEL, planViewHref, type PlanView } from "@/lib/individual/scholar/plan-view";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { PLAN_VIEWS, PLAN_VIEW_LABEL, PLAN_VIEW_STORE, planViewHref, resolveView, type PlanView } from "@/lib/individual/scholar/plan-view";
 import { focusRing } from "./plan-style";
 import { CalendarIcon, ChartIcon, SunIcon } from "./plan-ui";
 
-// MY PLAN's three views as three large cards: an icon, the name and one line about it. Three real links, the current one marked by aria-current, a
-// tint, a ring and a raised surface (never colour alone). On a phone the three sit in one compact row (icon and name; the line is for screen readers,
-// and from the small breakpoint up it shows), so nothing scrolls sideways. At least the touch minimum high.
-const ICON: Record<PlanView, React.ReactNode> = { today: <SunIcon size={22} />, calendar: <CalendarIcon size={22} />, insights: <ChartIcon size={22} /> };
+// MY PLAN's three views as three equal tinted tiles in ONE row (icon and name; the owner's mockup): Calendar (information tint), Today (success tint),
+// Insights (indigo tint). Each tile keeps its tint; the current one also has a stronger border in its hue, aria-current and a raised look, so the
+// choice is never colour alone. Three real links, each with an explicit ?view= (an explicit view always wins). At least the touch minimum high on a
+// coarse pointer. The text shrinks on a narrow phone; nothing scrolls sideways.
+//
+// The learner's last view is remembered on this device (localStorage, in a try/catch: a private window simply opens the Calendar). It is read here, in
+// the browser, ONLY when the address names no view and the remembered one is not the default: then the address is replaced once. The server never redirects.
+const ICON: Record<PlanView, React.ReactNode> = { calendar: <CalendarIcon size={18} />, today: <SunIcon size={18} />, insights: <ChartIcon size={18} /> };
+const TINT: Record<PlanView, { bg: string; edge: string; ink: string }> = {
+  calendar: { bg: "var(--cmp-surface-information)", edge: "var(--cmp-color-information)", ink: "var(--cmp-text-information)" },
+  today: { bg: "var(--cmp-surface-success)", edge: "var(--cmp-color-success)", ink: "var(--cmp-text-success)" },
+  insights: { bg: "var(--cmp-role-indigo-soft)", edge: "var(--cmp-role-indigo-accent)", ink: "var(--cmp-role-indigo-ink)" },
+};
 
-export function PlanViewNav({ base, current, extra }: { base: string; current: PlanView; /** Query parts kept on every link (the connected study session). */ extra?: Record<string, string | null | undefined> }) {
+export function PlanViewNav({ base, current, explicit, extra }: {
+  base: string; current: PlanView;
+  /** The address names a view (?view=). */
+  explicit: boolean;
+  /** Query parts kept on every link (the connected study session). */
+  extra?: Record<string, string | null | undefined>;
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const params = useSearchParams();
+  useEffect(() => {
+    let stored: string | null = null;
+    try { stored = window.localStorage.getItem(PLAN_VIEW_STORE); } catch { /* not remembered */ }
+    const r = resolveView(explicit ? current : undefined, stored);
+    if (r.remember) { try { window.localStorage.setItem(PLAN_VIEW_STORE, r.remember); } catch { /* not remembered */ } }
+    if (r.redirectTo) {
+      // Keep whatever else the address carries (the connected study session, a chosen day), name the remembered view.
+      const q = new URLSearchParams(params.toString());
+      q.set("view", r.redirectTo);
+      router.replace(`${pathname}?${q.toString()}`);
+    }
+    // Once, on arrival: choosing a view later is an ordinary link.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   return (
-    <nav aria-label="My Plan views" data-testid="plan-views" className="mb-5">
-      <ul className="grid grid-cols-3 gap-2 sm:gap-3">
+    <nav aria-label="My Plan views" data-testid="plan-views" className="mt-3">
+      <ul className="grid grid-cols-3 gap-2">
         {PLAN_VIEWS.map(v => {
           const on = v === current;
+          const t = TINT[v];
           return (
             <li key={v} className="flex">
-              <Link href={planViewHref(base, v, extra)} aria-current={on ? "page" : undefined}
-                className={`flex min-h-[64px] w-full flex-1 flex-col items-center justify-center gap-1 rounded-2xl border px-2 py-3 text-center pointer-coarse:min-h-[var(--cmp-touch-min)] sm:min-h-[104px] sm:gap-1.5 sm:px-3 sm:py-4 ${focusRing} ${on ? "border-transparent bg-[var(--cmp-role-indigo-soft)] text-gray-900 shadow-sm ring-2 ring-[var(--cmp-role-indigo-ink)]" : "border-gray-200 bg-gray-50 text-gray-800 hover:bg-white"}`}>
-                <span className={on ? "text-[var(--cmp-role-indigo-ink)]" : "text-gray-700"}>{ICON[v]}</span>
-                <span className="text-[14px] font-bold leading-tight sm:text-[16px]">{PLAN_VIEW_LABEL[v]}</span>
-                <span className="sr-only text-[13px] font-normal leading-snug text-gray-700 sm:not-sr-only sm:block">{PLAN_VIEW_DESC[v]}</span>
+              <Link href={planViewHref(base, v, extra)} aria-current={on ? "page" : undefined} onClick={() => { try { window.localStorage.setItem(PLAN_VIEW_STORE, v); } catch { /* not remembered */ } }}
+                className={`flex min-h-12 w-full items-center justify-center gap-1.5 rounded-xl border-2 px-1.5 text-[13px] font-bold leading-tight sm:text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "shadow-sm" : ""}`}
+                style={{ background: t.bg, color: t.ink, borderColor: on ? t.edge : t.bg }}>
+                <span aria-hidden className="shrink-0">{ICON[v]}</span>
+                <span>{PLAN_VIEW_LABEL[v]}</span>
               </Link>
             </li>
           );

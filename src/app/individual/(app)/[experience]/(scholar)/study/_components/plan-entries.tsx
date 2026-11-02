@@ -7,8 +7,8 @@ import {
   ENTRY_TYPE_OPTIONS, WEEKDAY_NAMES, buildEntryBody, emptyEntryForm, entryDateBounds, timeChoices,
   type EntryForm, type LinkOption,
 } from "@/lib/individual/scholar/plan-view";
-import { fieldCls, hintCls, labelCls, primaryBtn, secondaryBtn, summaryCls } from "./plan-style";
-import { ErrorLine, PlanDialog, callJson, errorOf } from "./plan-ui";
+import { fieldCls, hintCls, labelCls, menuItemCls, pillOutline, primaryBtn, secondaryBtn, summaryCls } from "./plan-style";
+import { ErrorLine, PlanDialog, RowMenu, callJson, errorOf } from "./plan-ui";
 
 // MY PLAN -> THE LEARNER'S OWN CALENDAR ENTRIES (owner GO "My Plan Calendar Enhancement", 2 Nov 2026).
 //
@@ -230,7 +230,11 @@ function ScopeDialog({ title, lead, thisLabel, seriesLabel, onThis, onSeries, on
 type Step = null | "edit-scope" | "edit-series" | "edit-occ" | "move" | "done-scope" | "delete-scope" | "delete-confirm";
 
 /** The actions of one of the learner's own entries. Owns its dialogs. */
-export function EntryActions({ occ, today, links, accent }: { occ: Occurrence; today: string; links: readonly LinkOption[]; accent: string }) {
+export function EntryActions({ occ, today, links, accent, part = "all" }: {
+  occ: Occurrence; today: string; links: readonly LinkOption[]; accent: string;
+  /** "all": four buttons. "edit": the Edit pill only. "menu": Move, Mark done and Delete in a small menu (the row's three dots). The dialogs are the same. */
+  part?: "all" | "edit" | "menu";
+}) {
   const router = useRouter();
   const uid = useId();
   const [step, setStep] = useState<Step>(null);
@@ -252,12 +256,18 @@ export function EntryActions({ occ, today, links, accent }: { occ: Occurrence; t
   const canDone = occ.entryType === "study_session" && occ.status === "planned";
   if (cancelled) return null;
 
+  const editBtn = <button type="button" className={part === "all" ? secondaryBtn : pillOutline} onClick={() => setStep(occ.recurring ? "edit-scope" : "edit-series")}>Edit<span className="sr-only">: {occ.title}</span></button>;
+  const cls = part === "menu" ? menuItemCls : secondaryBtn;
+  const moveBtn = <button type="button" className={cls} onClick={() => { setTo(occ.date); setStep("move"); }}>Move<span className="sr-only">: {occ.title}</span></button>;
+  const doneBtn = canDone ? <button type="button" className={cls} onClick={() => (occ.recurring ? setStep("done-scope") : void run(callJson(`${API}/${occ.entryId}`, "PATCH", { status: "completed" })))} disabled={busy}>Mark done<span className="sr-only">: {occ.title}</span></button> : null;
+  const deleteBtn = <button type="button" className={cls} onClick={() => setStep(occ.recurring ? "delete-scope" : "delete-confirm")}>Delete<span className="sr-only">: {occ.title}</span></button>;
+
   return (
     <>
-      <button type="button" className={secondaryBtn} onClick={() => setStep(occ.recurring ? "edit-scope" : "edit-series")}>Edit<span className="sr-only">: {occ.title}</span></button>
-      <button type="button" className={secondaryBtn} onClick={() => { setTo(occ.date); setStep("move"); }}>Move<span className="sr-only">: {occ.title}</span></button>
-      {canDone && <button type="button" className={secondaryBtn} onClick={() => (occ.recurring ? setStep("done-scope") : void run(callJson(`${API}/${occ.entryId}`, "PATCH", { status: "completed" })))} disabled={busy}>Mark done<span className="sr-only">: {occ.title}</span></button>}
-      <button type="button" className={secondaryBtn} onClick={() => setStep(occ.recurring ? "delete-scope" : "delete-confirm")}>Delete<span className="sr-only">: {occ.title}</span></button>
+      {part === "all" && <>{editBtn}{moveBtn}{doneBtn}{deleteBtn}</>}
+      {part === "edit" && editBtn}
+      {part === "menu" && <RowMenu label={`More actions: ${occ.title}`} trigger="dots">{moveBtn}{doneBtn}{deleteBtn}</RowMenu>}
+      {part === "menu" && error && step === null && <ErrorLine text={error} />}
 
       {step === "edit-scope" && <ScopeDialog title="Edit a repeating entry" lead={`"${occ.title}" repeats. What do you want to change?`} thisLabel="This occurrence" seriesLabel="The whole series" busy={false} error=""
         onThis={() => setStep("edit-occ")} onSeries={() => setStep("edit-series")} onClose={close} />}
