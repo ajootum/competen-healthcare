@@ -34,7 +34,8 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
   const [setup, setSetup] = useState(false);
   const [saidNow, setSaidNow] = useState<ProposalDecision | null>(null);
   const shown = saidNow ?? decision;
-  const { shown: steps, more } = sequencePreview(proposal.sequence, 6);
+  // A slide that repeats an earlier heading of this material is the same topic: listed once, as it is counted once.
+  const { shown: steps, more } = sequencePreview(proposal.sequence.filter(s => s.minutes > 0 || s.coveredIn.length > 0), 6);
   const later = hasPlan;
 
   async function answer(d: ProposalDecision) {
