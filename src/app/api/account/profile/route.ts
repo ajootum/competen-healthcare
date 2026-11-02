@@ -45,7 +45,16 @@ export async function PATCH(req: Request) {
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
   const update = parsed.patch;
 
-  const { data, error } = await supabase.from("profiles").update(update).eq("id", user.id).select("id");
+  let { data, error } = await supabase.from("profiles").update(update).eq("id", user.id).select("id");
+  // Middle names are migration 850's. Where the column is not there yet, the rest is still saved and the
+  // field is left out -- the card does not offer it in that case, so this only covers a stale page.
+  if (error && namesUnsupported(error) && "middle_names" in update) {
+    const rest = { ...update }; delete rest.middle_names;
+    if (Object.keys(rest).length) {
+      ({ data, error } = await supabase.from("profiles").update(rest).eq("id", user.id).select("id"));
+      delete update.middle_names;
+    }
+  }
   if (error) {
     if (NAME_FIELDS.some(f => f in update) && namesUnsupported(error))
       return NextResponse.json({ error: "Given and family names are not available on this environment yet. Nothing was changed." }, { status: 409 });

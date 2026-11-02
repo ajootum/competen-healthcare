@@ -11,6 +11,7 @@ import { toQueryString, type DirectoryFilters, type DirectoryStats } from "@/lib
 import { usersCsv } from "@/lib/hq/users-csv";
 import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
 import UserRoleEditor from "./UserRoleEditor";
+import AddUserDialog from "./AddUserDialog";
 import { Modal, Drawer } from "@/components/ui/interactive";
 import { formatDateTime } from "@/lib/datetime";
 import type { Access, Readable } from "@/lib/hq/user-directory";
@@ -164,8 +165,6 @@ export default function UsersWorkspace({
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
-  const [addForm, setAddForm] = useState({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "", account_type: "human" });
-  const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
 
   const anyFilter = !!filters.q || (["role", "org", "facility", "status", "login", "product", "hq"] as const).some(k => filters[k] !== "all");
   const shown = users;
@@ -266,30 +265,6 @@ export default function UsersWorkspace({
     }
   }
 
-  async function createUser() {
-    setBusy(true); setNotice(null);
-    const res = await fetch("/api/super-admin/users", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...addForm,
-        organisation_id: addForm.organisation_id || null,
-        hospital_id: addForm.hospital_id || null,
-      }),
-    });
-    setBusy(false);
-    const j = (await res.json().catch(() => ({}))) as { error?: string; tempPassword?: string | null; classificationWarning?: string };
-    if (!res.ok) { setNotice({ kind: "err", text: j.error ?? "Failed to create user." }); return; }
-    if (j.tempPassword) {
-      setCreatedCreds({ email: addForm.email, password: j.tempPassword });
-      if (j.classificationWarning) setNotice({ kind: "err", text: j.classificationWarning });
-    } else {
-      setAddOpen(false);
-      setNotice(j.classificationWarning ? { kind: "err", text: `Invitation sent to ${addForm.email}. ${j.classificationWarning}` } : { kind: "ok", text: `Invitation sent to ${addForm.email}, classified ${ACCOUNT_TYPE_LABEL[addForm.account_type as AccountType] ?? addForm.account_type}.` });
-    }
-    setAddForm({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "", account_type: "human" });
-    router.refresh();
-  }
-
   const toggleSel = (id: string) => setSelected(p => {
     const n = new Set(p);
     if (n.has(id)) n.delete(id); else n.add(id);
@@ -314,7 +289,7 @@ export default function UsersWorkspace({
           <p className="text-gray-500 text-sm mt-0.5">Manage your platform users and workforce</p>
         </div>
         {canManage && (
-          <button onClick={() => { setAddOpen(true); setCreatedCreds(null); }}
+          <button onClick={() => { setAddOpen(true); }}
             className="text-sm font-semibold bg-teal-700 hover:bg-teal-800 text-white px-4 py-2 rounded-lg">
             + Add User
           </button>
@@ -676,95 +651,9 @@ export default function UsersWorkspace({
         </Modal>
       )}
 
-      {/* Add User modal */}
-      {addOpen && (
-        /* One dialog, two states -- the form, then the credentials it produced. The title has to follow the
-           state or the accessible name would still say "Add User" while the dialog shows a password. */
-        <Modal open title={createdCreds ? "Account created" : "Add User"} onClose={() => setAddOpen(false)} initialIndex={createdCreds ? 0 : 1}>
-            {createdCreds ? (
-              <>
-                <p className="text-xs text-gray-500 mb-4">Share these credentials securely — the password is shown only once.</p>
-                <div className="bg-gray-50 rounded-lg p-4 text-sm font-mono flex flex-col gap-1.5">
-                  <p><span className="text-gray-500 text-xs">Email:</span> {createdCreds.email}</p>
-                  <p><span className="text-gray-500 text-xs">Password:</span> {createdCreds.password}</p>
-                </div>
-                <div className="flex gap-2 mt-5">
-                  <button onClick={() => navigator.clipboard.writeText(`Email: ${createdCreds.email}\nPassword: ${createdCreds.password}`)}
-                    className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">⧉ Copy both</button>
-                  <button onClick={() => { setCreatedCreds(null); setAddOpen(false); }}
-                    className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700">Done</button>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex flex-col gap-3">
-                  <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Full name *</label>
-                    <input value={addForm.full_name} onChange={e => setAddForm(p => ({ ...p, full_name: e.target.value }))}
-                      placeholder="e.g. Jane Achieng" className={`${input} w-full`} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Email *</label>
-                    <input value={addForm.email} onChange={e => setAddForm(p => ({ ...p, email: e.target.value }))}
-                      placeholder="name@hospital.org" type="email" className={`${input} w-full`} />
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Portal role *</label>
-                    <select value={addForm.role} onChange={e => setAddForm(p => ({ ...p, role: e.target.value }))} className={`${input} w-full`}>
-                      {Object.entries(ROLE_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.icon} {v.label}</option>)}
-                    </select>
-                    <p className="text-[10px] text-gray-500 mt-1">Fine-grained org roles can be set afterwards via Edit in the user drawer.</p>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500 mb-1 block">Organisation</label>
-                      <select value={addForm.organisation_id} onChange={e => setAddForm(p => ({ ...p, organisation_id: e.target.value }))} className={`${input} w-full`}>
-                        <option value="">—</option>
-                        {organisations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-xs font-semibold text-gray-500 mb-1 block">Facility</label>
-                      <select value={addForm.hospital_id} onChange={e => setAddForm(p => ({ ...p, hospital_id: e.target.value }))} className={`${input} w-full`}>
-                        <option value="">—</option>
-                        {hospitals.map(h => <option key={h.id} value={h.id}>{h.name}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label htmlFor="add-account-type" className="text-xs font-semibold text-gray-500 mb-1 block">Account type</label>
-                    <select id="add-account-type" value={addForm.account_type} onChange={e => setAddForm(p => ({ ...p, account_type: e.target.value }))}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm">
-                      {ACCOUNT_TYPES.map(t => <option key={t} value={t}>{t === "unclassified" ? "Leave unclassified" : ACCOUNT_TYPE_LABEL[t]}</option>)}
-                    </select>
-                    <p className="mt-1 text-[11.5px] text-gray-500">Human for a real person. Only Human accounts can be appointed to HQ positions.</p>
-                  </div>
-                  <div>
-                    <label className="text-xs font-semibold text-gray-500 mb-1 block">Access</label>
-                    <div className="flex flex-col gap-1.5 text-xs text-gray-600">
-                      <label className="flex items-center gap-2">
-                        <input type="radio" checked={addForm.mode === "invite"} onChange={() => setAddForm(p => ({ ...p, mode: "invite" }))} className="accent-teal-600" />
-                        Send invitation email — they set their own password
-                      </label>
-                      <label className="flex items-center gap-2">
-                        <input type="radio" checked={addForm.mode === "password"} onChange={() => setAddForm(p => ({ ...p, mode: "password" }))} className="accent-teal-600" />
-                        Create with a temporary password — shown to you once
-                      </label>
-                    </div>
-                  </div>
-                </div>
-                <div className="flex gap-2 mt-5">
-                  <button onClick={() => setAddOpen(false)}
-                    className="flex-1 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50">Cancel</button>
-                  <button onClick={createUser} disabled={busy || !addForm.full_name.trim() || !/.+@.+\..+/.test(addForm.email)}
-                    className="flex-1 py-2 bg-teal-700 text-white rounded-lg text-sm font-semibold hover:bg-teal-700 disabled:opacity-50">
-                    {busy ? "Creating…" : addForm.mode === "invite" ? "Send Invitation" : "Create Account"}
-                  </button>
-                </div>
-              </>
-            )}
-        </Modal>
-      )}
+      {/* Add User: its own component (AddUserDialog.tsx), so the directory and the dialog change independently. */}
+      <AddUserDialog open={addOpen} onClose={() => setAddOpen(false)} organisations={organisations} hospitals={hospitals}
+        onNotice={setNotice} onCreated={() => router.refresh()} />
 
       {/* Quick-view drawer */}
       {drawer && editorUser && (

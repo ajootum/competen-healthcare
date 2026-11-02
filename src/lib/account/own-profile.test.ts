@@ -90,3 +90,32 @@ describe("HQ positions in 'Your access'", () => {
     ), "u1")).toEqual({ ok: false, error: "denied" });
   });
 });
+
+describe("middle names (migration 850)", () => {
+  it("the self-update takes middle names as typed, blank meaning not recorded, with the 100 character limit", () => {
+    expect(parseProfilePatch({ middle_names: " Grace  Atim " })).toEqual({ ok: true, patch: { middle_names: "Grace Atim" } });
+    expect(parseProfilePatch({ middle_names: "" })).toEqual({ ok: true, patch: { middle_names: null } });
+    expect(parseProfilePatch({ middle_names: "x".repeat(101) })).toMatchObject({ ok: false });
+  });
+  it("is read apart: where 850 is absent only that field is unsupported, the 380 names still show", async () => {
+    const db = {
+      from: () => ({
+        select: (cols: string) => ({
+          eq: () => ({
+            maybeSingle: async () => cols === "middle_names" ? { data: null, error: { code: "42703" } }
+              : cols === "given_name, family_name" ? { data: { given_name: "Amina", family_name: "Okello" }, error: null }
+              : { data: { full_name: "Amina Okello", phone: null, country: null, specialization: null }, error: null },
+          }),
+        }),
+      }),
+    } as any;
+    const r = await readOwnProfile(db, { id: "u1", email: "a@example.test" });
+    expect(r).toMatchObject({ ok: true, value: { names: { supported: true, given: "Amina", middle: null, middleSupported: false } } });
+  });
+  it("and reads them when the column exists", async () => {
+    const db = {
+      from: () => ({ select: (cols: string) => ({ eq: () => ({ maybeSingle: async () => cols === "middle_names" ? { data: { middle_names: "Grace" }, error: null } : cols === "given_name, family_name" ? { data: { given_name: "Amina", family_name: "Okello" }, error: null } : { data: { full_name: "Amina Grace Okello" }, error: null } }) }) }),
+    } as any;
+    expect(await readOwnProfile(db, { id: "u1" })).toMatchObject({ ok: true, value: { names: { middle: "Grace", middleSupported: true } } });
+  });
+});

@@ -93,7 +93,7 @@ function Details({ p, onEdit }: { p: OwnProfile; onEdit: () => void }) {
   const rows: [string, ReactNode][] = [
     ["Full name", p.fullName],
     ...(p.names.supported
-      ? ([["Given name", value(p.names.given)], ["Family name", value(p.names.family)]] as [string, ReactNode][])
+      ? ([["Given name", value(p.names.given)], ...(p.names.middleSupported ? [["Middle name(s)", value(p.names.middle)]] : []), ["Family name", value(p.names.family)]] as [string, ReactNode][])
       : ([["Given and family name", <span key="n" className="italic text-gray-500">Not available on this environment yet</span>]] as [string, ReactNode][])),
     ["Phone", value(p.phone)],
     ["Country", value(p.country)],
@@ -118,6 +118,7 @@ function EditForm({ p, onDone }: { p: OwnProfile; onDone: (saved: boolean) => vo
   const [form, setForm] = useState({
     full_name: p.fullName, phone: p.phone ?? "", country: p.country ?? "", specialization: p.specialization ?? "",
     given_name: p.names.supported ? p.names.given ?? "" : "", family_name: p.names.supported ? p.names.family ?? "" : "",
+    middle_names: p.names.supported ? p.names.middle ?? "" : "",
   });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -127,7 +128,10 @@ function EditForm({ p, onDone }: { p: OwnProfile; onDone: (saved: boolean) => vo
     e.preventDefault();
     setBusy(true); setError("");
     const body: Record<string, string> = { full_name: form.full_name, phone: form.phone, country: form.country, specialization: form.specialization };
-    if (p.names.supported) { body.given_name = form.given_name; body.family_name = form.family_name; }
+    if (p.names.supported) {
+      body.given_name = form.given_name; body.family_name = form.family_name;
+      if (p.names.middleSupported) body.middle_names = form.middle_names;
+    }
     try {
       const res = await fetch("/api/account/profile", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const json = await res.json().catch(() => ({}));
@@ -153,6 +157,7 @@ function EditForm({ p, onDone }: { p: OwnProfile; onDone: (saved: boolean) => vo
       {p.names.supported ? (
         <>
           {field("given_name", "Given name", "Only if you want it recorded. Competen never works it out from your full name.", false, "given-name")}
+          {p.names.middleSupported && field("middle_names", "Middle name(s)", undefined, false, "additional-name")}
           {field("family_name", "Family name", undefined, false, "family-name")}
         </>
       ) : (
@@ -252,10 +257,11 @@ function AccessBlock({ a }: { a: OwnAccess }) {
 // ⚠ Email is never a field here: it changes only through Supabase's verified flow (EmailChange), and stays the
 // sign-in email until the person confirms.
 
-type Key = "full_name" | "given_name" | "family_name" | "phone" | "country";
+type Key = "full_name" | "given_name" | "middle_names" | "family_name" | "phone" | "country";
 const FIELDS: { key: Key; label: string; max: number; required?: boolean; type?: string; autoComplete: string; hint?: string }[] = [
   { key: "full_name", label: "Full name", max: 120, required: true, autoComplete: "name", hint: "As you want it to appear on your Passport." },
   { key: "given_name", label: "Given name", max: 100, autoComplete: "given-name" },
+  { key: "middle_names", label: "Middle name(s)", max: 100, autoComplete: "additional-name" },
   { key: "family_name", label: "Family name", max: 100, autoComplete: "family-name" },
   { key: "phone", label: "Phone", max: 40, type: "tel", autoComplete: "tel" },
   { key: "country", label: "Country", max: 80, autoComplete: "country-name" },
@@ -277,7 +283,7 @@ function valueOf(p: OwnProfile, k: Key): string | null {
   if (k === "phone") return p.phone;
   if (k === "country") return p.country;
   if (!p.names.supported) return null;
-  return k === "given_name" ? p.names.given : p.names.family;
+  return k === "given_name" ? p.names.given : k === "middle_names" ? p.names.middle : p.names.family;
 }
 
 function Row({ f, current, accent, onSaved }: { f: (typeof FIELDS)[number]; current: string | null; accent: string; onSaved: (text: string) => void }) {
@@ -360,7 +366,7 @@ export function OwnProfileInline({ accent }: { accent: string }) {
     <p className="rounded-lg bg-amber-50 px-3 py-2 text-[13px] text-amber-900"><span className="font-semibold">Your details could not be read.</span> This is not the same as none. ({profile.error})</p>
   );
   const p = profile.value;
-  const fields = FIELDS.filter(f => p.names.supported || (f.key !== "given_name" && f.key !== "family_name"));
+  const fields = FIELDS.filter(f => f.key === "middle_names" ? p.names.supported && p.names.middleSupported : p.names.supported || (f.key !== "given_name" && f.key !== "family_name"));
   return (
     <div>
       <p role="status" aria-live="polite" className="min-h-[1.25rem] text-[13px] font-semibold text-green-800">{status}</p>

@@ -36,6 +36,13 @@ export type GrantRequest = {
    * (src/lib/individual/invitations.ts). Absent: the confirmation is made now, with the grant.
    */
   adultConfirmedAt?: string | null;
+  /**
+   * Which source the rows carry. "pilot" (the default, and what every existing caller gets) is a pilot grant.
+   * "hq_grant" is complimentary access given through an ordinary HQ invitation (migration 850 stores the choice
+   * on the invitation). The entitlement source CHECK (370) allows both, the membership CHECK (399) allows
+   * hq_pilot_grant and hq_grant. The compensating delete below matches the same source.
+   */
+  source?: "pilot" | "hq_grant";
 };
 
 export type GrantOutcome =
@@ -52,7 +59,7 @@ export function validateGrant(body: any): GrantRequest | { ok: false; status: nu
     return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "experiences must list scholar and/or professional" };
   const adultConfirmed = body?.adultConfirmed === true;
   if (experiences.includes("scholar") && !adultConfirmed)
-    return { ok: false, status: 422, code: "AGE_ELIGIBILITY_REQUIRED", message: "The Competen Scholar pilot is for people aged 18 or over. Confirm eligibility to grant Scholar." };
+    return { ok: false, status: 422, code: "AGE_ELIGIBILITY_REQUIRED", message: "Competen Scholar is for people aged 18 or over. Confirm eligibility to grant Scholar." };
   const note = typeof body?.note === "string" ? body.note.trim().slice(0, 500) || null : null;
   const endsAt = parseEndDate(body?.endsOn);
   if (endsAt === false) return { ok: false, status: 400, code: "VALIDATION_ERROR", message: "The access end date must be a date (YYYY-MM-DD)." };
@@ -82,10 +89,12 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
   if (existing && existing.status !== "active")
     return { ok: false, status: 409, code: "MEMBERSHIP_NOT_ACTIVE", message: `This person's Competen Individual membership is ${existing.status}.` };
 
+  const entSource = req.source === "hq_grant" ? "hq_grant" : "pilot";
+  const memSource = req.source === "hq_grant" ? "hq_grant" : "hq_pilot_grant";
   let membership: "created" | "existing" = "existing";
   if (!existing) {
     const ins = await admin.from("individual_membership")
-      .insert({ user_id: req.targetUserId, status: "active", source: "hq_pilot_grant", granted_by: grantedBy, note: req.note });
+      .insert({ user_id: req.targetUserId, status: "active", source: memSource, granted_by: grantedBy, note: req.note });
     if (ins.error) return { ok: false, status: 503, code: "WRITE_FAILED", message: "The membership could not be written." };
     membership = "created";
   }
@@ -101,7 +110,7 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
   for (const x of req.experiences) {
     if (live.has(x)) { alreadyLive.push(x); continue; }
     const ins = await admin.from("individual_entitlement").insert({
-      user_id: req.targetUserId, experience_code: x, status: "active", source: "pilot",
+      user_id: req.targetUserId, experience_code: x, status: "active", source: entSource,
       operating_entity: EXPERIENCES[x].operatingEntity, granted_by: grantedBy, note: req.note,
       ...(x === "scholar" ? { adult_confirmed_at: req.adultConfirmedAt ?? now, adult_confirmed_by: grantedBy } : {}),
       ...(req.endsAt ? { ends_at: req.endsAt } : {}),
@@ -110,7 +119,7 @@ export async function grantIndividualAccess(admin: any, req: GrantRequest, grant
       // ⚠ NO STRANDED MEMBERSHIP. A membership this call created, with no entitlement written beside it,
       // would be a member with nothing live -- so it is removed again before the refusal is returned.
       if (membership === "created" && granted.length === 0)
-        await admin.from("individual_membership").delete().eq("user_id", req.targetUserId).eq("source", "hq_pilot_grant").is("onboarded_at", null);
+        await admin.from("individual_membership").delete().eq("user_id", req.targetUserId).eq("source", memSource).is("onboarded_at", null);
       // 23514: a CHECK refused the row -- with an end date, that is ends_at > starts_at (the DB's now()).
       if (req.endsAt && String(ins.error.code) === "23514")
         return { ok: false, status: 422, code: "END_DATE_NOT_FUTURE", message: "The access end date must be in the future." };
