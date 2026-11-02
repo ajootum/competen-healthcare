@@ -20,7 +20,9 @@ const ghostBtn = `inline-flex min-h-[44px] items-center justify-center rounded-x
 const ORIGINAL = "Original image — not AI-generated";
 const AI_NOTE = "Its text was read by AI: check it against the picture.";
 const SAFE_TEXT_LABEL = "Text read by AI from this chart — do not use it for scores or thresholds; check the original";
-const NOTE = "The slide’s own layout is not reproduced here; the pictures are shown exactly as in your file.";
+const NOTE = (unit: "slide" | "page") => unit === "slide"
+  ? "The slide’s own layout is not reproduced here; the pictures are shown exactly as in your file."
+  : "The pictures are shown exactly as in your file. View the original page to see it whole.";
 
 export type VisualsReply = { unit?: string; visuals: Visual[]; notShown?: number; off?: boolean };
 
@@ -116,8 +118,8 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
                 ))}
               </ul>
             ) : <p className="mt-1 text-gray-700">{page ? "This is the whole page, as it is in your file." : `This is the only picture on ${noun(current)} ${current.n}.`}</p>}
-            <p className="mt-2 text-gray-700">{NOTE}</p>
-            <p className="mt-2"><a href={`/api/individual/scholar/materials/${materialId}`} className={`inline-flex items-center font-semibold underline ${touch} ${focusRing}`}>{page ? "Download the original file" : "Download the original presentation"}</a></p>
+            <p className="mt-2 text-gray-700">{NOTE(current.unit)}</p>
+            <p className="mt-2"><a href={`/api/individual/scholar/materials/${materialId}`} className={`inline-flex items-center font-semibold underline ${touch} ${focusRing}`}>{current.unit === "page" ? "Download the original file" : "Download the original presentation"}</a></p>
           </section>
         </div>
       </div>
@@ -188,7 +190,7 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
       </div>
       {mode && <p className="mt-1 text-[12px] text-gray-700">Your choice, kept on this device. <button type="button" onClick={() => pick(null)} className={`font-semibold underline ${touch} ${focusRing}`}>Go back to automatic</button></p>}
       {arranged.shown.length > 0 && (
-        <ul className="mt-2 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className={`mt-2 grid grid-cols-1 gap-3 ${arranged.shown.length === 1 ? "" : arranged.shown.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           {arranged.shown.map(v => (
             <li key={v.key} className="min-w-0">
               <VisualCard v={v} materialId={materialId} materialTitle={materialTitle} onOpen={() => setOpen(v.key)}
