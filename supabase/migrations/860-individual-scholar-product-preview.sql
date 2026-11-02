@@ -67,7 +67,7 @@ where exists (select 1 from hq_position x where x.code = p.code)
   and exists (select 1 from hq_capability y where y.code = c.code)
   and not exists (
     select 1 from hq_position_capability x
-    where x.position_code = p.code and x.capability_code = c.code and x.effective_to is null
+    where x.position_code = p.code and x.capability_code = c.code
   );
 
 insert into hq_position_capability (position_code, capability_code, source)
@@ -78,7 +78,7 @@ where exists (select 1 from hq_position x where x.code = p.code)
   and exists (select 1 from hq_capability y where y.code = c.code)
   and not exists (
     select 1 from hq_position_capability x
-    where x.position_code = p.code and x.capability_code = c.code and x.effective_to is null
+    where x.position_code = p.code and x.capability_code = c.code
   );
 
 
@@ -100,6 +100,7 @@ alter table individual_scholar_preview_learner add constraint individual_scholar
   check (length(btrim(reason)) between 3 and 500);
 alter table individual_scholar_preview_learner drop constraint if exists individual_scholar_preview_learner_mode_key;
 alter table individual_scholar_preview_learner add constraint individual_scholar_preview_learner_mode_key unique (mode);
+alter table if exists individual_scholar_preview_session drop constraint if exists individual_scholar_preview_session_learner_fk;
 alter table individual_scholar_preview_learner drop constraint if exists individual_scholar_preview_learner_user_mode_key;
 alter table individual_scholar_preview_learner add constraint individual_scholar_preview_learner_user_mode_key unique (user_id, mode);
 
