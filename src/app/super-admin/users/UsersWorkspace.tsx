@@ -1,22 +1,20 @@
 "use client";
 
-import { useState, useCallback, useEffect, useTransition } from "react";
+import { useState, useCallback, useEffect, useRef, useTransition } from "react";
 import { useDismiss } from "@/components/ui/use-dismiss";
-import { useRouter, usePathname } from "next/navigation";
+import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   ACCOUNT_TYPES, ACCOUNT_TYPE_LABEL, USER_VIEWS, USER_VIEW_LABEL, USER_VIEW_RULE,
   type AccountType, type UserView,
 } from "@/lib/hq/account-classification";
-import { toQueryString, type DirectoryFilters, type DirectoryStats } from "@/lib/hq/user-directory-query";
+import { parseUserParam, toQueryString, withUserParam, type DirectoryFilters, type DirectoryStats } from "@/lib/hq/user-directory-query";
 import { usersCsv } from "@/lib/hq/users-csv";
-import { ROLE_CONFIG, ORG_ROLE_CONFIG, PLATFORM_ROLE_CONFIG, type AppRole, type OrgRole, type PlatformRole } from "@/lib/roles";
-import UserRoleEditor from "./UserRoleEditor";
-import { Modal, Drawer } from "@/components/ui/interactive";
-import { formatDateTime } from "@/lib/datetime";
+import { ROLE_CONFIG } from "@/lib/roles";
+import { Modal } from "@/components/ui/interactive";
 import type { Access, Readable } from "@/lib/hq/user-directory";
-
-const PRODUCT_LABEL: Record<string, string> = { platform: "Platform", enterprise: "Enterprise", practice: "Practice", individual: "Individual" };
-const EXPERIENCE_LABEL: Record<string, string> = { scholar: "Scholar", professional: "Professional" };
+import { PARTICIPATION_CATEGORIES, PARTICIPATION_LABEL } from "@/lib/hq/account-participation";
+import UsersTable from "./UsersTable";
+import UserDetailWorkspace from "./UserDetailWorkspace";
 
 export type UserRow = {
   id: string; name: string; email: string; phone: string | null;
@@ -38,64 +36,18 @@ export type UserRow = {
   hqActive: boolean;
   /** HQ-USERS-CLASSIFY-01: an administrative label for filtering and reporting. It decides no access. */
   accountType: AccountType;
+  /** Live Competen Individual entitlements with their end dates (individual_live_entitlement), not inferred from roles. */
+  entitlements: { experience: string; endsAt: string | null }[];
+  /** Live experiences while the Individual membership is active: what the Scholar / Professional filter matches. */
+  experiences: string[];
+  /** hq_account_participation.category and end (migration 850), or null: a label that decides no access. */
+  participation: string | null;
+  participationUntil: string | null;
 };
-export type AuditEntry = { id: string; action: string; entityType: string | null; entityName: string | null; at: string };
-export type ClassificationEntry = { id: string; at: string; by: string; from: string; to: string; reason: string | null };
-
-const TYPE_PILL: Record<AccountType, string> = {
-  human: "bg-[var(--cmp-surface-information)] text-[var(--cmp-text-information)]",
-  demo: "bg-purple-100 text-purple-700",
-  test: "bg-amber-100 text-amber-800",
-  system: "bg-slate-200 text-slate-700",
-  unclassified: "bg-gray-100 text-gray-600",
-};
-
-const ROLE_BADGE: Record<string, string> = {
-  nurse:          "bg-teal-100 text-teal-700",
-  assessor:       "bg-indigo-100 text-indigo-700",
-  educator:       "bg-purple-100 text-purple-700",
-  hospital_admin: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",
-  super_admin:    "bg-[var(--cmp-surface-error)] text-[var(--cmp-text-error)]",
-};
-const STATUS_UI = {
-  active:    { label: "Active",    pill: "bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]",  dot: "bg-[var(--cmp-color-success)]" },
-  pending:   { label: "Pending",   pill: "bg-[var(--cmp-surface-warning)] text-[var(--cmp-text-warning)]",  dot: "bg-[var(--cmp-color-warning)]" },
-  suspended: { label: "Suspended", pill: "bg-[var(--cmp-surface-critical)] text-[var(--cmp-text-critical)]",      dot: "bg-[var(--cmp-color-critical)]" },
-} as const;
-
-const AVATAR_TINTS = ["bg-teal-700", "bg-indigo-600", "bg-[var(--cmp-color-error)]", "bg-[var(--cmp-color-warning)]", "bg-violet-600", "bg-[var(--cmp-color-information)]"];
-const tint = (id: string) => AVATAR_TINTS[[...id].reduce((s, ch) => s + ch.charCodeAt(0), 0) % AVATAR_TINTS.length];
-
-const relTime = (iso: string | null) => {
-  if (!iso) return "Never";
-  const mins = Math.floor((Date.now() - new Date(iso).getTime()) / 60000);
-  if (mins < 1) return "Just now";
-  if (mins < 60) return `${mins} min${mins === 1 ? "" : "s"} ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs} hour${hrs === 1 ? "" : "s"} ago`;
-  const days = Math.floor(hrs / 24);
-  if (days === 1) return "Yesterday";
-  if (days < 30) return `${days} days ago`;
-  return new Date(iso).toLocaleDateString();
-};
-
-function Ring({ pct }: { pct: number | null }) {
-  if (pct === null) return <span className="text-[10px] text-gray-500" title="No assessment decisions yet">—</span>;
-  const r = 15, c = 2 * Math.PI * r;
-  const color = pct >= 80 ? "#22c55e" : pct >= 50 ? "#f59e0b" : "#ef4444";
-  return (
-    <svg width="40" height="40" viewBox="0 0 40 40" role="img" aria-label={`${pct}%`}>
-      <circle cx="20" cy="20" r={r} fill="none" stroke="#f3f4f6" strokeWidth="4" />
-      <circle cx="20" cy="20" r={r} fill="none" stroke={color} strokeWidth="4"
-        strokeDasharray={`${Math.max((pct / 100) * c, 0.5)} ${c}`} strokeLinecap="round" transform="rotate(-90 20 20)" />
-      <text x="20" y="23.5" textAnchor="middle" fontSize="9" fontWeight="700" fill="#374151">{pct}%</text>
-    </svg>
-  );
-}
 
 export default function UsersWorkspace({
-  users, total, page, pages, viewCounts, filters, defaultView, classificationAvailable, classificationHistory, stats,
-  auditByActor, hospitals, organisations, departments, currentUserId, canManage, canReset, readable, authComplete,
+  users, total, page, pages, viewCounts, filters, defaultView, classificationAvailable, participationAvailable, focusUser, stats,
+  hospitals, organisations, departments, currentUserId, canManage, canReset, readable, authComplete,
 }: {
   /** HQ-USERS-CLASSIFY-01: ONE page, filtered and paginated on the server. */
   users: UserRow[];
@@ -107,10 +59,12 @@ export default function UsersWorkspace({
   defaultView: UserView;
   /** False while migration 650 is absent: every account reads Unclassified and nothing can be classified. */
   classificationAvailable: boolean;
-  classificationHistory: Record<string, ClassificationEntry[]>;
+  /** False while migration 850 is absent: the access-category filter is hidden and the profile says so. */
+  participationAvailable: boolean;
+  /** The person ?user= names, when the current page does not list them (a shared link). */
+  focusUser: UserRow | null;
   /** The stat cards, counted over the selected account view (named on screen). */
   stats: DirectoryStats;
-  auditByActor: Record<string, AuditEntry[]>;
   hospitals: { id: string; name: string; country: string }[];
   organisations: { id: string; name: string }[];
   departments: { id: string; name: string; hospital_id: string }[];
@@ -130,6 +84,20 @@ export default function UsersWorkspace({
   const [navigating, startNav] = useTransition();
   // HQ-USERS-CLASSIFY-01: the URL is the query. A filter change navigates, and the server answers one page.
   const queryKey = toQueryString(filters, defaultView);
+  // The open profile is ?user=<id>. Opening and closing it changes the URL only (history.pushState, which the Next
+  // router follows), so this list stays mounted: search, filters, selection and scroll position are exactly where the
+  // person left them, and a direct link opens the person.
+  const searchParams = useSearchParams();
+  const openId = parseUserParam({ user: searchParams.get("user") ?? undefined });
+  const pushedByUs = useRef(false);
+  useEffect(() => { if (!openId) pushedByUs.current = false; }, [openId]);
+  const hrefFor = useCallback((id: string | null) => withUserParam(pathname, queryKey, id), [pathname, queryKey]);
+  const openProfile = useCallback((id: string) => { window.history.pushState(null, "", hrefFor(id)); pushedByUs.current = true; }, [hrefFor]);
+  const closeProfile = useCallback(() => {
+    // Back to the entry we came from when we made it, so the Back button and the close button agree.
+    if (pushedByUs.current) { pushedByUs.current = false; window.history.back(); }
+    else window.history.replaceState(null, "", hrefFor(null));
+  }, [hrefFor]);
   const go = useCallback((patch: Partial<DirectoryFilters>) => {
     const qs = toQueryString({ ...filters, page: 0, ...patch }, defaultView);
     startNav(() => router.push(qs ? `${pathname}?${qs}` : pathname, { scroll: false }));
@@ -160,15 +128,15 @@ export default function UsersWorkspace({
   const closeBulkMenu = useCallback(() => setBulkOpen(false), []);
   useDismiss(menuFor !== null, closeRowMenu);
   useDismiss(bulkOpen, closeBulkMenu);
-  const [drawer, setDrawer] = useState<UserRow | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [addOpen, setAddOpen] = useState(false);
   const [addForm, setAddForm] = useState({ full_name: "", email: "", role: "nurse", mode: "invite", organisation_id: "", hospital_id: "", account_type: "human" });
   const [createdCreds, setCreatedCreds] = useState<{ email: string; password: string } | null>(null);
 
-  const anyFilter = !!filters.q || (["role", "org", "facility", "status", "login", "product", "hq"] as const).some(k => filters[k] !== "all");
+  const anyFilter = !!filters.q || (["role", "org", "facility", "status", "login", "product", "hq", "access"] as const).some(k => filters[k] !== "all");
   const shown = users;
+  const openRow = openId ? users.find(u => u.id === openId) ?? (focusUser?.id === openId ? focusUser : null) : null;
   const viewName = USER_VIEW_LABEL[filters.view];
 
   // The stat cards count the SELECTED VIEW, and the first card says which view, with every account beside it, so
@@ -259,7 +227,7 @@ export default function UsersWorkspace({
     setBusy(true); setNotice(null);
     const res = await fetch(`/api/super-admin/users?id=${u.id}`, { method: "DELETE" });
     setBusy(false);
-    if (res.ok) { setNotice({ kind: "ok", text: `Deleted ${u.name}.` }); setDrawer(null); router.refresh(); }
+    if (res.ok) { setNotice({ kind: "ok", text: `Deleted ${u.name}.` }); closeProfile(); router.refresh(); }
     else {
       const j = (await res.json().catch(() => ({}))) as { error?: string };
       setNotice({ kind: "err", text: j.error ?? "Delete failed." });
@@ -298,12 +266,48 @@ export default function UsersWorkspace({
   const allShownSelected = shown.length > 0 && shown.every(u => selected.has(u.id));
 
   const input = "border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30";
-  const editorUser = drawer ? {
-    id: drawer.id, full_name: drawer.name, email: drawer.email, role: drawer.role,
-    roles: drawer.roles, org_role: drawer.orgRole, org_roles: drawer.orgRoles,
-    hospital_id: drawer.hospitalId, organisation_id: drawer.organisationId,
-    platform_role: drawer.platformRole, department_id: drawer.departmentId,
-  } : null;
+  // The row actions menu (copy, reset, resend, suspend, delete). View details moved to the table's own link.
+  const renderRowMenu = (u: UserRow) => (
+    <div className="relative inline-block">
+      <button onClick={() => setMenuFor(menuFor === u.id ? null : u.id)} aria-label={`More actions for ${u.name}`} aria-expanded={menuFor === u.id}
+        className="text-gray-500 hover:text-gray-600 px-1.5 text-sm pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:min-w-[var(--cmp-touch-min)]" title="Actions">⋮</button>
+      {menuFor === u.id && (
+        <>
+          <div className="fixed inset-0 z-20" onClick={() => setMenuFor(null)} />
+          <div className="absolute right-0 top-6 z-30 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 text-left">
+            <button onClick={() => { setMenuFor(null); openProfile(u.id); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">👤 View details</button>
+            <button onClick={() => { setMenuFor(null); navigator.clipboard.writeText(u.email); setNotice({ kind: "ok", text: `Copied ${u.email}` }); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">⧉ Copy email</button>
+            {canReset && u.id !== currentUserId && (
+            <button onClick={() => { setMenuFor(null); act(u.id, "send_reset", `Password reset for ${u.name}`); }}
+              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
+            )}
+            {canManage && <>
+            {u.status === "pending" && (
+              <button onClick={() => { setMenuFor(null); act(u.id, "resend_invite", `Invitation re-sent to ${u.name}`); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">✉️ Resend invitation</button>
+            )}
+            {u.status === "suspended" ? (
+              <button onClick={() => { setMenuFor(null); act(u.id, "unsuspend", `Reactivated ${u.name}`); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-success)] hover:bg-gray-50">✓ Reactivate account</button>
+            ) : u.id !== currentUserId && (
+              <button onClick={() => {
+                setMenuFor(null);
+                if (window.confirm(`Suspend ${u.name}? They will be unable to sign in until reactivated.`)) act(u.id, "suspend", `Suspended ${u.name}`);
+              }}
+                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50">⛔ Suspend account</button>
+            )}
+            {u.id !== currentUserId && (
+              <button onClick={() => { setMenuFor(null); removeUser(u); }}
+                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50 border-t border-gray-50">🗑 Delete account…</button>
+            )}
+            </>}
+          </div>
+        </>
+      )}
+    </div>
+  );
 
   return (
     <div>
@@ -386,7 +390,7 @@ export default function UsersWorkspace({
         <select value={filters.status} onChange={e => go({ status: e.target.value })} className={input} aria-label="Filter by status">
           <option value="all">Status: All</option>
           <option value="active">Active</option>
-          <option value="pending">Pending</option>
+          <option value="pending">Invited</option>
           <option value="suspended">Suspended</option>
         </select>
         <select value={filters.login} onChange={e => go({ login: e.target.value })} className={input} aria-label="Filter by last login">
@@ -402,15 +406,25 @@ export default function UsersWorkspace({
           <option value="enterprise">Enterprise</option>
           <option value="practice">Practice</option>
           <option value="individual">Individual</option>
+          <option value="scholar">Scholar (live)</option>
+          <option value="professional">Professional (live)</option>
           <option value="none">No active product</option>
         </select>
+        {/* hq_account_participation (migration 850). Hidden while the table is absent. */}
+        {participationAvailable && (
+          <select value={filters.access} onChange={e => go({ access: e.target.value })} className={input} aria-label="Filter by access category">
+            <option value="all">Access category: Any</option>
+            {PARTICIPATION_CATEGORIES.map(c => <option key={c} value={c}>{PARTICIPATION_LABEL[c]}</option>)}
+            <option value="unset">No category set</option>
+          </select>
+        )}
         <select value={filters.hq} onChange={e => go({ hq: e.target.value })} className={input} aria-label="Filter by HQ position">
           <option value="all">HQ position: Any</option>
           <option value="yes">Holds an HQ position</option>
           <option value="no">No HQ position</option>
         </select>
         {anyFilter && (
-          <button onClick={() => { setSearch(""); go({ q: "", role: "all", org: "all", facility: "all", status: "all", login: "all", product: "all", hq: "all" }); }}
+          <button onClick={() => { setSearch(""); go({ q: "", role: "all", org: "all", facility: "all", status: "all", login: "all", product: "all", hq: "all", access: "all" }); }}
             className="text-xs font-semibold text-teal-600 hover:text-teal-800 px-2">Clear</button>
         )}
       </div>
@@ -479,131 +493,20 @@ export default function UsersWorkspace({
         </p>
       )}
 
-      {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-100 overflow-x-auto">
-        <table className="w-full text-sm min-w-[900px]">
-          <thead>
-            <tr className="border-b border-gray-100 bg-gray-50/50 text-[10px] font-bold text-gray-500 uppercase tracking-wider">
-              <th className="px-4 py-3 w-8" />
-              <th className="text-left px-2 py-3">User</th>
-              <th className="text-left px-3 py-3">Roles</th>
-              <th className="text-left px-3 py-3">Organisation / Facility</th>
-              <th className="text-left px-3 py-3">Status</th>
-              <th className="text-left px-3 py-3">Last Login</th>
-              <th className="text-center px-3 py-3">Competency</th>
-              <th className="text-center px-3 py-3">Passport</th>
-              <th className="text-right px-4 py-3">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-gray-50">
-            {shown.length === 0 && (
-              <tr><td colSpan={9} className="px-4 py-12 text-center text-sm text-gray-500">
-                {(filters.view === "active_humans" || filters.view === "all_humans") && viewCounts.all_humans === 0 && classificationAvailable ? (
-                  <>No account has been classified Human yet. Accounts stay Unclassified until someone reviews them.{" "}
-                    <button onClick={() => go({ view: "unclassified" })} className="font-semibold text-teal-700 underline">Review Unclassified ({viewCounts.unclassified})</button></>
-                ) : "No users match the current filters."}
-              </td></tr>
-            )}
-            {shown.map(u => {
-              const st = STATUS_UI[u.status];
-              return (
-                <tr key={u.id} className="hover:bg-gray-50/40 cursor-pointer" onClick={() => setDrawer(u)}>
-                  <td className="px-4 py-3" onClick={e => e.stopPropagation()}>
-                    <input type="checkbox" checked={selected.has(u.id)} onChange={() => toggleSel(u.id)} className="accent-teal-600" />
-                  </td>
-                  <td className="px-2 py-3">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-full ${tint(u.id)} text-white flex items-center justify-center text-xs font-bold shrink-0`}>
-                        {u.name[0]?.toUpperCase() ?? "?"}
-                      </div>
-                      <div className="min-w-0">
-                        <p className="font-medium text-gray-900 truncate">{u.name}</p>
-                        <p className="text-[10px] text-gray-500 truncate">{u.email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 py-3">
-                    <div className="flex flex-wrap gap-1 max-w-[180px]">
-                      {u.platformRole && PLATFORM_ROLE_CONFIG[u.platformRole as PlatformRole] && (
-                        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
-                          {PLATFORM_ROLE_CONFIG[u.platformRole as PlatformRole].label}
-                        </span>
-                      )}
-                      {u.roles.map(r => (
-                        <span key={r} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${ROLE_BADGE[r] ?? "bg-gray-100 text-gray-600"}`}>
-                          {ROLE_CONFIG[r as AppRole]?.label ?? r}
-                        </span>
-                      ))}
-                    </div>
-                    {(u.products.length > 0 || u.hqActive) && (
-                      <div className="mt-1 flex flex-wrap gap-1 max-w-[180px]" aria-label="Product access">
-                        {u.products.map(p => <span key={p} className="text-[9px] font-semibold px-1.5 py-0.5 rounded border border-gray-200 text-gray-600">{PRODUCT_LABEL[p] ?? p}</span>)}
-                        {u.hqActive && <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded border border-violet-200 text-violet-700">HQ</span>}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-3 text-xs text-gray-500">
-                    <p>{u.organisation ?? <span className="text-gray-500">—</span>}</p>
-                    <p className="text-[10px] text-gray-500">{u.facility ?? "—"}</p>
-                  </td>
-                  <td className="px-3 py-3">
-                    <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${st.pill}`}>{st.label}</span>
-                    <span className={`ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${TYPE_PILL[u.accountType]}`} title="Account type (administrative, grants no access)">
-                      {ACCOUNT_TYPE_LABEL[u.accountType]}
-                    </span>
-                    <p className="text-[9px] text-gray-500 mt-1">{u.statusDetail}</p>
-                  </td>
-                  {/* Relative times drift between server render and hydration */}
-                  <td className="px-3 py-3 text-xs text-gray-500" suppressHydrationWarning>{relTime(u.lastSignIn)}</td>
-                  <td className="px-3 py-3 text-center"><Ring pct={u.competencyPct} /></td>
-                  <td className="px-3 py-3 text-center"><Ring pct={u.passportPct} /></td>
-                  <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                    <div className="relative inline-block">
-                      <button onClick={() => setMenuFor(menuFor === u.id ? null : u.id)}
-                        className="text-gray-500 hover:text-gray-600 px-1.5 text-sm" title="Actions">⋮</button>
-                      {menuFor === u.id && (
-                        <>
-                          <div className="fixed inset-0 z-20" onClick={() => setMenuFor(null)} />
-                          <div className="absolute right-0 top-6 z-30 w-48 bg-white border border-gray-100 rounded-lg shadow-lg py-1 text-left">
-                            <button onClick={() => { setMenuFor(null); setDrawer(u); }}
-                              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">👤 View details</button>
-                            <button onClick={() => { setMenuFor(null); navigator.clipboard.writeText(u.email); setNotice({ kind: "ok", text: `Copied ${u.email}` }); }}
-                              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">⧉ Copy email</button>
-                            {canReset && u.id !== currentUserId && (
-                            <button onClick={() => { setMenuFor(null); act(u.id, "send_reset", `Password reset for ${u.name}`); }}
-                              className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">🔑 Send password reset</button>
-                            )}
-                            {canManage && <>
-                            {u.status === "pending" && (
-                              <button onClick={() => { setMenuFor(null); act(u.id, "resend_invite", `Invitation re-sent to ${u.name}`); }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50">✉️ Resend invitation</button>
-                            )}
-                            {u.status === "suspended" ? (
-                              <button onClick={() => { setMenuFor(null); act(u.id, "unsuspend", `Reactivated ${u.name}`); }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-success)] hover:bg-gray-50">✓ Reactivate account</button>
-                            ) : u.id !== currentUserId && (
-                              <button onClick={() => {
-                                setMenuFor(null);
-                                if (window.confirm(`Suspend ${u.name}? They will be unable to sign in until reactivated.`)) act(u.id, "suspend", `Suspended ${u.name}`);
-                              }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50">⛔ Suspend account</button>
-                            )}
-                            {u.id !== currentUserId && (
-                              <button onClick={() => { setMenuFor(null); removeUser(u); }}
-                                className="w-full text-left px-3 py-1.5 text-xs text-[var(--cmp-text-critical)] hover:bg-gray-50 border-t border-gray-50">🗑 Delete account…</button>
-                            )}
-                            </>}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      {/* The list: a table from md up, compact cards below. The name and View details open the profile in place. */}
+      <UsersTable
+        rows={shown}
+        selected={selected}
+        onToggle={toggleSel}
+        hrefFor={hrefFor}
+        onOpen={openProfile}
+        readable={readable}
+        renderMenu={renderRowMenu}
+        empty={(filters.view === "active_humans" || filters.view === "all_humans") && viewCounts.all_humans === 0 && classificationAvailable ? (
+          <>No account has been classified Human yet. Accounts stay Unclassified until someone reviews them.{" "}
+            <button onClick={() => go({ view: "unclassified" })} className="font-semibold text-teal-700 underline">Review Unclassified ({viewCounts.unclassified})</button></>
+        ) : "No users match the current filters."}
+      />
 
       {pages > 1 && (
         <div className="flex items-center justify-end gap-2 mt-3 text-xs">
@@ -619,21 +522,17 @@ export default function UsersWorkspace({
           <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Status legend</p>
           <div className="flex flex-col gap-2 text-xs text-gray-600">
             <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-success)] mr-2" /><b>Active</b> — user can sign in; email verified</p>
-            <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-warning)] mr-2" /><b>Pending</b> — invitation sent or email not yet verified</p>
+            <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-warning)] mr-2" /><b>Invited</b> — invitation sent or email not yet verified</p>
             <p><span className="inline-block w-2 h-2 rounded-full bg-[var(--cmp-color-critical)] mr-2" /><b>Suspended</b> — sign-in blocked until reactivated</p>
           </div>
         </div>
         <div className="bg-white rounded-xl border border-gray-100 p-5">
-          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Progress indicators</p>
+          <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Reading the columns</p>
           <div className="flex flex-col gap-1.5 text-xs text-gray-600">
-            <p><b>Competency</b> — share of assessed competencies decided competent or better</p>
-            <p><b>Passport</b> — share of assessed competencies currently valid (not expired)</p>
-            <div className="flex items-center gap-4 mt-1.5">
-              <span className="flex items-center gap-1.5"><Ring pct={92} /><span className="text-[10px] text-gray-500">High (80%+)</span></span>
-              <span className="flex items-center gap-1.5"><Ring pct={58} /><span className="text-[10px] text-gray-500">Medium (50–79%)</span></span>
-              <span className="flex items-center gap-1.5"><Ring pct={26} /><span className="text-[10px] text-gray-500">Low (&lt;50%)</span></span>
-            </div>
-            <p className="text-[10px] text-gray-500 mt-1">“—” means the user has no assessment decisions yet — not 0%.</p>
+            <p><b>Products</b> — what the person can actually use now: live Scholar and Professional periods with their end dates, and active Platform, Enterprise and Practice seats. A role never appears here as access.</p>
+            <p><b>Roles &amp; appointments</b> — the roles on the account and any active HQ position.</p>
+            <p><b>Account type</b> — an administrative label. It grants no access.</p>
+            <p className="text-[10px] text-gray-500 mt-1">Competency, Passport, account history and the audit trail are in the profile. Open it from the name or View details.</p>
           </div>
         </div>
       </div>
@@ -766,152 +665,29 @@ export default function UsersWorkspace({
         </Modal>
       )}
 
-      {/* Quick-view drawer */}
-      {drawer && editorUser && (
-        /* A side panel, so it goes to Drawer rather than Modal -- both give it the dialog semantics and the
-           focus trap it was missing, but only one of them slides in from the right, and a centred dialog
-           here would be a visual regression dressed up as an accessibility fix. */
-        <Drawer open title={drawer.name} onClose={() => setDrawer(null)}>
-            {/* The avatar and status move into the body: Drawer's header carries the name, which is what an
-                assistive technology needs, and repeating it below would announce it twice. */}
-            <div className="-mt-1 mb-4 flex items-start gap-3">
-              <div className={`w-11 h-11 rounded-full ${tint(drawer.id)} text-white flex items-center justify-center text-base font-bold shrink-0`}>
-                {drawer.name[0]?.toUpperCase() ?? "?"}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-xs text-gray-500 truncate">{drawer.email}</p>
-                <span className={`inline-block mt-1.5 text-[9px] font-bold px-1.5 py-0.5 rounded ${STATUS_UI[drawer.status].pill}`}>
-                  {STATUS_UI[drawer.status].label} · {drawer.statusDetail}
-                </span>
-                <span className={`inline-block mt-1.5 ml-1 text-[9px] font-bold px-1.5 py-0.5 rounded ${TYPE_PILL[drawer.accountType]}`}>
-                  {ACCOUNT_TYPE_LABEL[drawer.accountType]}
-                </span>
-              </div>
-            </div>
-
-            {/* HQ-USERS-CLASSIFY-01: how this account came to be classified, from audit_log. */}
-            <div className="-mx-5 px-5 pb-4 mb-4 border-b border-gray-50 text-xs">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-1.5">Account type history</p>
-              {!classificationAvailable ? (
-                <p className="text-gray-500">Not available until migration 650 is applied.</p>
-              ) : (classificationHistory[drawer.id] ?? []).length === 0 ? (
-                <p className="text-gray-500">Never classified. Unclassified until someone reviews it.</p>
-              ) : (
-                <ul className="space-y-1.5">
-                  {(classificationHistory[drawer.id] ?? []).map(h => (
-                    <li key={h.id} className="text-gray-700">
-                      <b>{ACCOUNT_TYPE_LABEL[h.from as AccountType] ?? h.from}</b> → <b>{ACCOUNT_TYPE_LABEL[h.to as AccountType] ?? h.to}</b>
-                      <span className="text-gray-500"> · {h.by} · <span suppressHydrationWarning>{formatDateTime(h.at)}</span></span>
-                      {h.reason && <p className="text-[11px] text-gray-500">{h.reason}</p>}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <div className="-mx-5 px-5 pb-5 grid grid-cols-2 gap-3 text-xs border-b border-gray-50">
-              {[
-                ["Phone", drawer.phone ?? "—"],
-                ["Last login", relTime(drawer.lastSignIn)],
-                ["Organisation", drawer.organisation ?? "—"],
-                ["Facility", drawer.facility ?? "—"],
-                ["Department", drawer.department ?? "—"],
-                ["Specialization", drawer.specialization ?? "—"],
-                ["Joined", new Date(drawer.joinedAt).toLocaleDateString()],
-                ["Active authorizations", String(drawer.activeAuthorizations)],
-              ].map(([k, v]) => (
-                <div key={k}>
-                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">{k}</p>
-                  <p className="text-gray-700 mt-0.5" suppressHydrationWarning>{v}</p>
-                </div>
-              ))}
-            </div>
-
-            {/* HQ-USERS-C: what this person can reach, from the rows the gates read. "Not readable" is a
-                source that did not answer -- never shown as "none". No patient or record content. */}
-            <div className="p-5 border-b border-gray-50">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-2">Product access</p>
-              <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1.5 text-xs">
-                <dt className="text-gray-500">Platform</dt>
-                <dd className="text-gray-800">{!readable.platform ? "Not readable" : drawer.access.platform ?? "No membership"}</dd>
-                <dt className="text-gray-500">Enterprise</dt>
-                <dd className="text-gray-800">{!readable.enterprise ? "Not readable" : drawer.access.enterprise.length ? drawer.access.enterprise.map(e => `${e.tenant ?? "Unnamed tenant"} (${e.status})`).join(", ") : "No membership"}</dd>
-                <dt className="text-gray-500">Practice</dt>
-                <dd className="text-gray-800">{!readable.practice ? "Not readable" : drawer.access.practice.length ? drawer.access.practice.map(p => `${p.workspace ?? "Unnamed practice"}${p.role ? ` · ${p.role.replace(/_/g, " ")}` : ""} (${p.status})`).join(", ") : "No membership"}</dd>
-                <dt className="text-gray-500">Individual</dt>
-                <dd className="text-gray-800">{!readable.individual ? "Not readable" : !drawer.access.individual.membership ? "No membership"
-                  : `${drawer.access.individual.membership}${drawer.access.individual.live.length ? ` · live: ${drawer.access.individual.live.map(x => EXPERIENCE_LABEL[x] ?? x).join(", ")}` : " · no live experience"}`}</dd>
-                <dt className="text-gray-500">HQ positions</dt>
-                <dd className="text-gray-800">{!readable.hq ? "Not readable" : drawer.access.hq.length ? drawer.access.hq.map(h => `${h.name ?? h.position} (${h.status})`).join(", ") : "None"}</dd>
-              </dl>
-            </div>
-
-            <div className="p-5 border-b border-gray-50">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">Roles & access</p>
-                {canManage && <UserRoleEditor
-                  user={editorUser}
-                  hospitals={hospitals} organisations={organisations} departments={departments}
-                  onSaved={() => { setDrawer(null); router.refresh(); }}
-                />}
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {drawer.platformRole && PLATFORM_ROLE_CONFIG[drawer.platformRole as PlatformRole] && (
-                  <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-violet-100 text-violet-700">
-                    {PLATFORM_ROLE_CONFIG[drawer.platformRole as PlatformRole].icon} {PLATFORM_ROLE_CONFIG[drawer.platformRole as PlatformRole].label}
-                  </span>
-                )}
-                {(drawer.orgRoles ?? []).filter(r => ORG_ROLE_CONFIG[r as OrgRole]).map(r => (
-                  <span key={r} className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
-                    {ORG_ROLE_CONFIG[r as OrgRole].icon} {ORG_ROLE_CONFIG[r as OrgRole].label}
-                  </span>
-                ))}
-                {drawer.roles.map(r => (
-                  <span key={r} className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${ROLE_BADGE[r] ?? "bg-gray-100 text-gray-600"}`}>
-                    {ROLE_CONFIG[r as AppRole]?.icon} {ROLE_CONFIG[r as AppRole]?.label ?? r}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div className="p-5 border-b border-gray-50">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Competency readiness</p>
-              <div className="flex items-center gap-6">
-                <div className="text-center">
-                  <Ring pct={drawer.competencyPct} />
-                  <p className="text-[9px] text-gray-500 mt-1">Competency</p>
-                </div>
-                <div className="text-center">
-                  <Ring pct={drawer.passportPct} />
-                  <p className="text-[9px] text-gray-500 mt-1">Passport</p>
-                </div>
-                <div className="text-xs text-gray-500 flex-1">
-                  {drawer.decisionsTotal > 0
-                    ? <>{drawer.decisionsOk}/{drawer.decisionsTotal} competencies decided competent; {drawer.decisionsCurrent} currently valid.</>
-                    : <>No assessment decisions recorded yet.</>}
-                </div>
-              </div>
-            </div>
-
-            <div className="p-5">
-              <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest mb-3">Audit history (their actions)</p>
-              {(auditByActor[drawer.id] ?? []).length === 0
-                ? <p className="text-xs text-gray-500">No audited actions by this user yet.</p>
-                : (
-                  <div className="flex flex-col gap-2">
-                    {(auditByActor[drawer.id] ?? []).map(e => (
-                      <div key={e.id} className="text-xs border-l-2 border-gray-100 pl-3">
-                        <p className="text-gray-700">
-                          <span className="font-medium">{e.action.replace(/_/g, " ")}</span>
-                          {e.entityName ? <> — {e.entityName}</> : null}
-                        </p>
-                        <p className="text-[9px] text-gray-500" suppressHydrationWarning>{formatDateTime(e.at)}{e.entityType ? ` · ${e.entityType}` : ""}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </div>
-        </Drawer>
+      {/* The profile. Its own loader reads the person's detail when it opens; the list behind it is untouched. */}
+      {openRow && (
+        <UserDetailWorkspace
+          key={openRow.id}
+          user={openRow}
+          canManage={canManage}
+          canReset={canReset}
+          currentUserId={currentUserId}
+          hospitals={hospitals}
+          organisations={organisations}
+          departments={departments}
+          classificationAvailable={classificationAvailable}
+          readable={readable}
+          participationAvailable={participationAvailable}
+          onClose={closeProfile}
+          onChanged={() => router.refresh()}
+          onDelete={removeUser}
+        />
+      )}
+      {openId && !openRow && (
+        <p role="status" className="fixed bottom-4 left-1/2 z-[70] -translate-x-1/2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-xs text-gray-700 shadow-lg">
+          That person was not found. <button onClick={closeProfile} className="ml-1 font-semibold text-teal-700 underline">Close</button>
+        </p>
       )}
     </div>
   );

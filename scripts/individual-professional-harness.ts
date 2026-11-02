@@ -185,8 +185,18 @@ const checkNoEstateLearningTouch = (src: Sources) => {
 };
 
 // ── R. READ PATHS ───────────────────────────────────────────────────────────────────────────────────
+// Reads outside Professional code that are declared, each with its reason and its column list pinned in
+// src/lib/access/plane-boundary.ts (the plane-boundary harness judges the columns).
+const PROFESSIONAL_TABLE_READERS_ALLOWED: { file: string; table: string; why: string }[] = [
+  { file: "src/app/super-admin/users/user-detail-load.ts", table: "individual_professional_profile",
+    why: "HQ users directory (2 Nov 2026): three self-declared LABELS (profession, registration body and country), read-only, never the registration number" },
+];
 const checkTablesReadOnlyByProfessional = (src: Sources) => {
-  const bad = [...src].filter(([f, s]) => !isProfessional(f) && /from\(\s*"individual_professional_[a-z_]+"\s*\)/.test(s)).map(([f]) => f);
+  const bad = [...src].filter(([f, s]) => {
+    if (isProfessional(f)) return false;
+    const tables = [...s.matchAll(/from\(\s*"(individual_professional_[a-z_]+)"\s*\)/g)].map(m => m[1]);
+    return tables.some(t => !PROFESSIONAL_TABLE_READERS_ALLOWED.some(a => a.file === f && a.table === t));
+  }).map(([f]) => f);
   return { ok: bad.length === 0, detail: bad.join(", ") };
 };
 // Who may import Professional data code. Each entry is a reason, as in plane-boundary.ts.

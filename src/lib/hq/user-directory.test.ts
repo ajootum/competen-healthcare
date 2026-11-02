@@ -13,7 +13,7 @@ describe("HQ user directory (HQ-USERS-C)", () => {
       practice: [{ user_id: "u", workspace_id: "w", role_code: "practice_owner", status: "active" }],
       workspaces: [{ id: "w", name: "Riverside Clinic" }],
       individual: [{ user_id: "u", status: "active" }],
-      live: [{ user_id: "u", experience_code: "professional" }, { user_id: "u", experience_code: "professional" }],
+      live: [{ user_id: "u", experience_code: "professional", ends_at: "2027-01-31T00:00:00Z" }, { user_id: "u", experience_code: "professional" }],
       appointments: [{ person_id: "u", role: "platform_director", status: "active", office_id: "hq" }, { person_id: "u", role: "nurse_manager", status: "active", office_id: "ward" }],
       hqOffices: [{ id: "hq" }],
       positions: [{ code: "platform_director", name: "Platform Director" }],
@@ -22,7 +22,7 @@ describe("HQ user directory (HQ-USERS-C)", () => {
     const a = byUser.get("u")!;
     expect(a.enterprise).toEqual([{ tenant: "St Mary", status: "suspended" }]);
     expect(a.practice).toEqual([{ workspace: "Riverside Clinic", role: "practice_owner", status: "active" }]);
-    expect(a.individual).toEqual({ membership: "active", live: ["professional"] });
+    expect(a.individual).toEqual({ membership: "active", live: ["professional"], liveDetail: [{ experience: "professional", endsAt: null }] });
     // A tenant office appointment is not an HQ position.
     expect(a.hq).toEqual([{ position: "platform_director", name: "Platform Director", status: "active" }]);
     expect(activeProducts(a)).toEqual(["platform", "practice", "individual"]);
