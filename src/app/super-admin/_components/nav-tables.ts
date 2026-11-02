@@ -126,6 +126,7 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "products.individual.catalogues", label: "Controlled Catalogues", href: "/super-admin/individual/catalogues", icon: "📚", flag: "individual" },
       { key: "products.individual.verification", label: "Professional Verification", href: "/super-admin/individual/verification", icon: "✅", flag: "individual" },
       { key: "products.individual.economics", label: "Unit Economics & FX", href: "/super-admin/individual/economics", icon: "💱", keywords: ["fx exposure","exchange rate","currency"], flag: "individual" },
+      { key: "products.individual.scholar-preview", label: "View Scholar", href: "/super-admin/individual/scholar", icon: "👁️", keywords: ["scholar preview","product preview","demo learner","demonstration"], flag: "individual" },
       { key: "products.individual.course-access", label: "Course Access", href: "/super-admin/learning/access", icon: "🔑", kind: "cross" },
     ]},
     { key: "products.practice", group: "Competen Practice", items: [
