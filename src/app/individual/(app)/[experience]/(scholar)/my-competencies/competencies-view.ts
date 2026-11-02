@@ -1,5 +1,6 @@
 import { EVIDENCE_LABEL, type IndividualPassport } from "@/lib/individual/passport";
 import type { InstanceSummary } from "@/lib/assessment/adapters/scholar/store";
+import { isSelfAssessment } from "@/lib/assessment/adapters/scholar/vocab";
 import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
 import { noProgrammeText } from "@/lib/individual/scholar/classify-view";
 import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
@@ -162,7 +163,7 @@ export function assessmentEvidenceSections(read: InstanceSummary[] | null, repor
     detail: join(`version ${i.versionNo}`, i.submittedAt && `submitted ${day(i.submittedAt)}`, i.outcomeLabel && `outcome: ${i.outcomeLabel}`, i.assessorName && `assessor: ${i.assessorName}`),
     label, href: reportHref(i.id),
   });
-  const submitted = (role: "self" | "assessor") => (read === null ? null : read.filter(i => i.status === "submitted" && (role === "self" ? i.role === "self" : i.role !== "self")));
+  const submitted = (role: "self" | "assessor") => (read === null ? null : read.filter(i => i.status === "submitted" && (role === "self" ? isSelfAssessment(i) : !isSelfAssessment(i))));
   return {
     self: section("self-assessed", SELF_EVIDENCE_TITLE, submitted("self"), "No self-assessments submitted yet. Start one in Assessments.", row(EVIDENCE_LABEL.self_assessed)),
     assessor: section("assessor-evaluated", ASSESSOR_EVIDENCE_TITLE, submitted("assessor"), "No assessor-led assessments yet.", row(EVIDENCE_LABEL.assessor_evaluated)),

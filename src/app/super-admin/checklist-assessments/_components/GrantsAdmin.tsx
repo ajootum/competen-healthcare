@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { Btn, Chip, fieldBase, mutedText, type Tone } from "@/components/assessment/ui";
 import { GRANT_STATE_LABEL, type GrantState } from "@/lib/assessment/assessor/common";
 import type { AssessableInstrument, GrantView, PersonMatch, RespondentCandidate } from "@/lib/assessment/assessor/grants";
@@ -32,6 +33,9 @@ export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: Gra
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
   const [ending, setEnding] = useState<{ id: string; reason: string } | null>(null);
+  const endPanel = useRef<HTMLDivElement>(null);
+  // The end-grant dialog: focus in, Tab trapped, Escape cancels, focus back on the End button.
+  useModalFocus(ending !== null, endPanel, () => setEnding(null));
 
   async function findSubject() {
     setError(null); setSubject(null); setCandidates(null); setRespondent("");
@@ -137,7 +141,7 @@ export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: Gra
 
       {ending ? (
         <div role="dialog" aria-modal="true" aria-labelledby="end-h" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="w-full max-w-md space-y-3 rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-5 text-[var(--cmp-app-text)]">
+          <div ref={endPanel} tabIndex={-1} className="w-full max-w-md space-y-3 rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-5 text-[var(--cmp-app-text)]">
             <h2 id="end-h" className="text-lg font-semibold">End this grant?</h2>
             <p className={`text-sm ${mutedText}`}>The assessor can no longer start or submit under it. Assessments already submitted stay as they are. An ended grant is never reopened: make a new one instead.</p>
             <label className={`flex flex-col gap-1 text-xs font-semibold ${mutedText}`}>

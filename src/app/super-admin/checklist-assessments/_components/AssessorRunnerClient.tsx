@@ -7,6 +7,7 @@ import { Btn, Chip, classTone, mutedText } from "@/components/assessment/ui";
 import { evaluate, itemProgress, RulesError, type Evaluation, type InstrumentDef, type LayoutDoc, type ResponseValue, type Responses, type RulesDoc } from "@/lib/assessment/core";
 import { PatchQueue, type Conflict, type SendResult } from "@/lib/assessment/assessor/autosave";
 import type { CommentView, EvidenceView } from "@/lib/assessment/assessor/instances";
+import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { CommentPanel, EvidencePanel } from "./ItemNotes";
 
 // The assessor's runner. The page hands it the pinned definition and the stored answers. Autosave is per answer with a
@@ -47,6 +48,7 @@ export function AssessorRunnerClient(p: AssessorRunnerProps) {
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const queue = useRef<PatchQueue | null>(null);
+  const submitPanel = useRef<HTMLDivElement>(null);
 
   const codeOf = useMemo(() => new Map(p.def.items.map(i => [i.stable_key, i.code])), [p.def.items]);
   const label = (key: string) => codeOf.get(key.split("#")[0]) ?? key;
@@ -110,6 +112,9 @@ export function AssessorRunnerClient(p: AssessorRunnerProps) {
     try { ev = evaluate(p.def, p.rules, responses, { evidenceCounts }); } catch (e) { err = e instanceof RulesError ? e.message : "The outcome cannot be previewed."; }
     return { open, critical, ev, err, unanswered: rows.filter(r => !r.pr.primary.answered).length };
   }, [confirming, p.def, p.rules, responses, evidenceCounts]);
+
+  // The submit dialog: focus in, Tab trapped, Escape closes it (not while a submit is in flight), focus back on the trigger.
+  useModalFocus(confirming, submitPanel, () => { if (!submitting) setConfirming(false); });
 
   async function startConfirm() {
     setSubmitError(null);
@@ -180,7 +185,7 @@ export function AssessorRunnerClient(p: AssessorRunnerProps) {
 
       {confirming && review ? (
         <div role="dialog" aria-modal="true" aria-labelledby="submit-h" className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-          <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-5 text-[var(--cmp-app-text)]">
+          <div ref={submitPanel} tabIndex={-1} className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-5 text-[var(--cmp-app-text)]">
             <h2 id="submit-h" className="text-lg font-semibold">Submit this assessment?</h2>
             <p className={`mt-1 text-sm ${mutedText}`}>Once submitted, the answers cannot be changed. The result is assessor-evaluated and is not formal verification.</p>
             <div className="mt-3 flex flex-col gap-3 text-sm">

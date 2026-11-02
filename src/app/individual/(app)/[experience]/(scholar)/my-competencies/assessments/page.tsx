@@ -10,7 +10,7 @@ import StartButton from "@/app/individual/_components/competencies/StartButton";
 import GrantActions from "@/app/individual/_components/competencies/GrantActions";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { loadSelfSide, expectedMap } from "@/lib/assessment/adapters/scholar/overview-data";
-import { MODE_LABEL, MODE_SELF, ASSESSOR_NOTICE, SELF_CLASS_LABEL, SELF_NOTICE } from "@/lib/assessment/adapters/scholar/vocab";
+import { MODE_LABEL, MODE_SELF, isSelfAssessment, ASSESSOR_NOTICE, SELF_CLASS_LABEL, SELF_NOTICE } from "@/lib/assessment/adapters/scholar/vocab";
 import { Block, EmptyLine, ModuleCards, PlaceholderCard } from "../../_module/module-parts";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +36,7 @@ export default async function Assessments({ params, searchParams }: { params: Pr
   const side = await loadSelfSide(ctx.admin, ctx.userId, expectedMap(learner.competencies));
   const base = experienceHref("scholar", "my-competencies/assessments");
   const to = (seg: string) => withStudy(experienceHref("scholar", `study/${seg}`), study);
-  const drafts = side.state === "ready" ? side.summaries.filter(i => i.status === "in_progress" && i.role === "self") : [];
+  const drafts = side.state === "ready" ? side.summaries.filter(i => i.status === "in_progress" && isSelfAssessment(i)) : [];
   const done = side.state === "ready" ? side.summaries.filter(i => i.status === "submitted").sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? "")) : [];
   return (
     <>
@@ -107,7 +107,7 @@ export default async function Assessments({ params, searchParams }: { params: Pr
                     <div className="min-w-0">
                       <p className="text-[14.5px] font-semibold text-gray-900">{i.instrumentName}</p>
                       <p className="text-[12.5px] text-gray-600">
-                        {i.submittedAt ? `Submitted ${when(i.submittedAt)}` : "Submitted"}{i.outcomeLabel ? ` · ${i.outcomeLabel}` : ""} · {i.role === "self" ? "Self-reported, not verified" : `Assessor-led${i.assessorName ? ` by ${i.assessorName}` : ""}, not formal verification`}
+                        {i.submittedAt ? `Submitted ${when(i.submittedAt)}` : "Submitted"}{i.outcomeLabel ? ` · ${i.outcomeLabel}` : ""} · {isSelfAssessment(i) ? "Self-reported, not verified" : `Assessor-led${i.assessorName ? ` by ${i.assessorName}` : ""}, not formal verification`}
                       </p>
                     </div>
                     <Link href={`${base}/${i.id}/report`} className={linkBtn}>Review report</Link>

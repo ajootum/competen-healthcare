@@ -7,6 +7,9 @@
 
 /** The delivery mode that makes "Start Self-Assessment" the primary action (owner addendum 4). */
 export const MODE_SELF = "self_assessment";
+/** An instance's own mode, not an authorization role: whether the learner rated themselves (the other values are an assessor or auditor). */
+const INSTANCE_ROLE_SELF = "self";
+export const isSelfAssessment = (i: { role: string }): boolean => i.role === INSTANCE_ROLE_SELF;
 export const MODE_ASSESSOR = "assessor_led";
 export const MODE_AI = "ai_assisted_formative";
 
