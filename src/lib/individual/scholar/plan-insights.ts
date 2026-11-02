@@ -1,4 +1,5 @@
-import { activeWeeksIn, assessmentPerformance, shiftDay, studyDaysInWindow, type SelfReported } from "./learning-definitions";
+import type { Occurrence } from "../learning-plan/types";
+import { activeWeeksIn, assessmentPerformance, localDay, shiftDay, studyDaysInWindow, type SelfReported } from "./learning-definitions";
 
 // ── STUDY INSIGHTS ── PLP-01..04 (owner GO 2 Nov 2026), design "Insights" ─────────────────────────────────────────────
 //
@@ -83,4 +84,118 @@ export function buildInsights(i: InsightInput): Insights {
   if (practice.state === "not_measured" && consistency.state === "measured")
     recs.push({ id: "measure_practice", text: "Answer some practice questions so this page can show how they are going.", basis: "No question marked by the app has been answered yet." });
   return { consistency, practice, retention, selfReported, recommendations: recs.slice(0, 3) };
+}
+
+// ── THE FOUR TILES AND THE SUGGESTED ADJUSTMENTS ── My Plan correction (CE-03), design "Insights" ─────────────────────────
+//
+// Study days, flashcards due, practice answered and plan completed over the last 28 days, then a short list of adjustments the learner can
+// act on. Pure, no AI. A tile is a COUNT or a ratio of what was recorded or planned. "Practice answered" is a count of answers, not a score,
+// so 0 is honest there (captioned "Not measured yet"). "Plan completed" is a ratio and has no figure at all when nothing was planned.
+
+export type PlanCompletion = {
+  /** The learner's own planned study sessions dated in the window, up to today (cancelled ones are not planned). */
+  planned: number;
+  /** Planned sessions the learner marked completed, or that fell on a day with recorded study. */
+  completed: number;
+  /** Of those completed: marked by the learner (self-reported), and shown by a recorded study day. */
+  selfReported: number;
+  recorded: number;
+  /** completed / planned, whole percent. Null when nothing was planned: no figure, never zero. */
+  percent: number | null;
+};
+
+/**
+ * Pure. Planned versus completed over the window ending today. PLANNED = the learner's own study-session entries in the window (the Scholar
+ * plan is computed per request and is not stored, so a past day has no stored plan to count). COMPLETED = such a session the learner marked
+ * completed (their word, counted as self-reported) or one that falls on a study-activity day (recorded). Busy times, placements, exams and
+ * deadlines are never planned study.
+ */
+export function planCompletion(occurrences: readonly Occurrence[], studyDays: readonly string[], today: string, windowDays = INSIGHT_WINDOW_DAYS): PlanCompletion {
+  const from = shiftDay(today, -(Math.max(1, windowDays) - 1));
+  const days = new Set(studyDays);
+  const planned = occurrences.filter(o => o.entryType === "study_session" && o.status !== "cancelled" && o.date >= from && o.date <= today);
+  let selfReported = 0, recorded = 0;
+  for (const o of planned) {
+    if (o.status === "completed" && o.selfReported) selfReported++;
+    else if (days.has(o.date)) recorded++;
+  }
+  const completed = selfReported + recorded;
+  return { planned: planned.length, completed, selfReported, recorded, percent: planned.length ? Math.round((completed * 100) / planned.length) : null };
+}
+
+export type InsightTiles = { windowDays: number; studyDays: number; flashcardsDue: number; practiceAnswered: number; plan: PlanCompletion };
+/** Pure. The four tiles. `studyDays` are the shared study-activity days; practice answered counts every recorded answer in the window. */
+export function buildTiles(i: {
+  studyDays: readonly string[]; today: string; tz?: string; dueCards: number; attempts: readonly { answeredAt: string }[]; occurrences: readonly Occurrence[];
+}): InsightTiles {
+  const from = shiftDay(i.today, -(INSIGHT_WINDOW_DAYS - 1));
+  const inWindow = i.attempts.filter(a => { const d = localDay(a.answeredAt, i.tz ?? "UTC"); return d >= from && d <= i.today; }).length;
+  return {
+    windowDays: INSIGHT_WINDOW_DAYS, studyDays: studyDaysInWindow(i.studyDays, i.today, INSIGHT_WINDOW_DAYS), flashcardsDue: Math.max(0, Math.floor(i.dueCards)),
+    practiceAnswered: inWindow, plan: planCompletion(i.occurrences, i.studyDays, i.today),
+  };
+}
+
+/** The figure and the caption of the Plan completed tile ("—" with no planned session). */
+export function planTile(p: PlanCompletion): { value: string; caption: string } {
+  if (p.planned === 0 || p.percent === null) return { value: "—", caption: "No completed sessions recorded" };
+  return { value: `${p.completed} of ${p.planned}`, caption: `${p.percent}% of planned sessions completed` };
+}
+/** The caption under Practice answered: a count, so 0 stays 0, said as not measured. */
+export const practiceCaption = (n: number) => (n === 0 ? "Not measured yet" : n === 1 ? "Answer recorded" : "Answers recorded");
+
+export type AdjustmentIcon = "cards" | "check" | "calendar" | "restart" | "practice";
+export type AddToPlan =
+  /** Opens the add-activity editor with this filled in. The learner confirms, so nothing is written until they save. */
+  | { kind: "entry"; title: string; date: string; minutes: number }
+  /** Opens the plan settings with this number of days. The learner confirms by saving. */
+  | { kind: "settings"; daysPerWeek: number };
+export type Adjustment = {
+  id: string; icon: AdjustmentIcon; title: string; text: string;
+  /** Changes with the evidence, so a "Not now" holds only until it does. */
+  fingerprint: string;
+  doNow: { href: string } | null;
+  addToPlan: AddToPlan | null;
+};
+export const ADJUSTMENT_DECLINE_PREFIX = "insight:";
+export const adjustmentRef = (id: string) => `${ADJUSTMENT_DECLINE_PREFIX}${id}`;
+export const MAX_ADJUSTMENTS = 4;
+
+/**
+ * Pure. The adjustments worth offering, each with where to do it now and, where it is meaningful, how to add it to the plan: due flashcards go on today,
+ * a knowledge check or a short session is scheduled, a change of frequency opens the settings (the learner saves it). One the learner said "Not now" to
+ * stays hidden until its fingerprint changes. Never more than MAX_ADJUSTMENTS.
+ */
+export function buildAdjustments(i: {
+  insights: Insights; dueCards: number; today: string;
+  hrefs: { flashcards: string; revise: string; mistakes: string; learn: string };
+  settings: { daysPerWeek: number } | null;
+  /** The learner's own calendar (migration 840) exists, so an activity can be added. */
+  canAddEntry: boolean;
+  /** `insight:<id>` -> the fingerprint the learner declined. */
+  declined: ReadonlyMap<string, string | null>;
+}): Adjustment[] {
+  const out: Adjustment[] = [];
+  const tomorrow = shiftDay(i.today, 1);
+  const entry = (title: string, date: string, minutes: number): AddToPlan | null => (i.canAddEntry ? { kind: "entry", title, date, minutes } : null);
+  if (i.dueCards > 0) {
+    out.push({
+      id: "flashcards_due", icon: "cards", title: "Start with your due flashcards", text: `${plural(i.dueCards, "card is", "cards are")} ready for spaced review.`,
+      fingerprint: `due:${i.dueCards}`, doNow: { href: i.hrefs.flashcards }, addToPlan: entry("Review due flashcards", i.today, 10),
+    });
+  }
+  for (const r of i.insights.recommendations) {
+    const fingerprint = `${r.id}|${r.basis}`.slice(0, 200);
+    if (r.id === "restart") out.push({ id: r.id, icon: "restart", title: "Start again with one short session", text: r.basis, fingerprint, doNow: { href: i.hrefs.learn }, addToPlan: entry("Short study session", tomorrow, 15) });
+    else if (r.id === "rhythm") {
+      const days = i.settings ? Math.min(7, i.settings.daysPerWeek + 1) : null;
+      out.push({
+        id: r.id, icon: "calendar", title: "Study on more days", text: `${r.basis} A short session on more days would build a steadier rhythm.`, fingerprint, doNow: { href: i.hrefs.learn },
+        addToPlan: i.settings && days !== null && days > i.settings.daysPerWeek ? { kind: "settings", daysPerWeek: days } : null,
+      });
+    } else if (r.id === "practice") out.push({ id: r.id, icon: "practice", title: "Go over the questions you missed", text: r.basis, fingerprint, doNow: { href: i.hrefs.mistakes }, addToPlan: entry("Go over missed questions", tomorrow, 20) });
+    else if (r.id === "retention") out.push({ id: r.id, icon: "cards", title: "Review cards on the day they are due", text: r.basis, fingerprint, doNow: { href: i.hrefs.flashcards }, addToPlan: null });
+    else if (r.id === "measure_practice") out.push({ id: r.id, icon: "check", title: "Try a knowledge check", text: "There is not enough answered practice to evaluate understanding.", fingerprint, doNow: { href: i.hrefs.revise }, addToPlan: entry("Knowledge check", tomorrow, 20) });
+  }
+  return out.filter(a => i.declined.get(adjustmentRef(a.id)) !== a.fingerprint).slice(0, MAX_ADJUSTMENTS);
 }

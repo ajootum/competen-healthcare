@@ -11,8 +11,9 @@ import type { MissedItem } from "@/lib/individual/scholar/plan-carry";
 import type { ExamOffer } from "@/lib/individual/scholar/plan-calendar";
 import type { ReflectionOffer } from "@/lib/individual/scholar/plan-reflection";
 import { addDay, settingsWithSessionMinutes } from "@/lib/individual/scholar/plan-view";
-import { cardCls, fieldCls, hintCls, labelCls, primaryBtn, secondaryBtn, summaryCls } from "./plan-style";
-import { ErrorLine, PlanDialog, callJson, errorOf } from "./plan-ui";
+import { dayWord, type ComingUpItem, type DoneItem } from "@/lib/individual/scholar/plan-today-view";
+import { cardCls, fieldCls, hintCls, labelCls, linkBtn, primaryBtn, quietBtn, secondaryBtn, summaryCls, tagCls } from "./plan-style";
+import { CheckIcon, ErrorLine, PersonIcon, PlanDialog, SparkleIcon, callJson, errorOf } from "./plan-ui";
 import { PlanSetup } from "./plan-setup";
 
 // MY PLAN -> TODAY (PLP-01..04). ONE next activity, with the reason in the learner's own numbers; "why" is visible, "why now" and "if you
@@ -22,17 +23,26 @@ import { PlanSetup } from "./plan-setup";
 const API = "/api/individual/scholar/plan";
 
 // ── the next activity ──
-export function TodayNextCard({ accent, today, next, alternatives, canDecide, settings, extras, declinedHidden }: {
+export function TodayNextCard({ accent, today, next, alternatives, canDecide, settings, extras, declinedHidden, about, startHref, resume, starting }: {
   accent: string; today: string;
   next: PlanRecommendation | null; alternatives: PlanRecommendation[];
   /** Migration 840 present: Postpone and Not this can be remembered. */
   canDecide: boolean;
-  settings: ScholarPlanSettings | null; extras: boolean; declinedHidden: number;
+  settings: ScholarPlanSettings; extras: boolean; declinedHidden: number;
+  /** What the activity is about (the topic and its material), or null. */
+  about: string | null;
+  /** Where Start opens (the activity's destination, with the connected study session carried along), or null. */
+  startHref: string | null;
+  /** The activity is a lesson or revision session already open: Resume, not Start. */
+  resume: boolean;
+  /** The implicit starting plan stands in: "Adjust plan" is "Personalise". */
+  starting: boolean;
 }) {
   const router = useRouter();
   const uid = useId();
   const [showAlt, setShowAlt] = useState(false);
   const [adjusting, setAdjusting] = useState(false);
+  const [more, setMore] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [said, setSaid] = useState("");
@@ -57,14 +67,15 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
 
   return (
     <section aria-labelledby={`${uid}-h`} className={cardCls} data-testid="plan-next">
-      <h2 id={`${uid}-h`} className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your next step</h2>
+      <div className="flex items-start justify-between gap-3">
+        <h2 id={`${uid}-h`} className="text-[17px] font-bold text-gray-900">Your next study session</h2>
+        {next && <span className={tagCls}>Suggested</span>}
+      </div>
       {next ? (
         <>
-          <p className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-            <span className="min-w-0 break-words text-[22px] font-bold leading-snug text-gray-900">{next.title}</span>
-            {next.minutes !== null && <span className="text-[14px] font-semibold tabular-nums text-gray-700">{next.minutes} min</span>}
-          </p>
-          <p className="mt-2 text-[14.5px] text-gray-800"><span className="font-semibold">Why this: </span>{next.why}</p>
+          <p className="mt-3 min-w-0 break-words text-[20px] font-bold leading-snug text-gray-900 sm:text-[22px]">{next.title}</p>
+          <p className="mt-1 text-[14.5px] text-gray-700">{next.why}</p>
+          {about && <p className="mt-1 text-[13.5px] text-gray-700"><span className="font-semibold">About: </span>{about}</p>}
           <details className="mt-1">
             <summary className={summaryCls}>Why now, and what if you wait</summary>
             <dl className="mt-1 space-y-2 text-[14px] text-gray-800">
@@ -72,12 +83,18 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
               <div><dt className="font-semibold">If you postpone it</dt><dd>{next.ifPostponed}</dd></div>
             </dl>
           </details>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            {next.href && <Link href={next.href} className={primaryBtn} style={{ background: accent }}>Start studying<span className="sr-only">: {next.title}</span></Link>}
-            {canDecide && <button type="button" className={secondaryBtn} disabled={busy} onClick={() => void decide("postpone")}>Postpone<span className="sr-only"> to tomorrow</span></button>}
-            {alternatives.length > 0 && <button type="button" className={secondaryBtn} aria-expanded={showAlt} aria-controls={`${uid}-alt`} onClick={() => setShowAlt(s => !s)}>Something else</button>}
-            {canDecide && <button type="button" className={secondaryBtn} disabled={busy} onClick={() => void decide("decline")}>Not this</button>}
-            <button type="button" className={secondaryBtn} aria-expanded={adjusting} onClick={() => setAdjusting(a => !a)}>Adjust plan</button>
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-[14px] tabular-nums text-gray-700">{next.minutes !== null ? `${next.minutes} minutes` : ""}</p>
+            {startHref && <Link href={startHref} className={primaryBtn} style={{ background: accent }}>{resume ? "Resume" : "Start"}<span className="sr-only">: {next.title}</span></Link>}
+          </div>
+          <div className="mt-3 border-t border-gray-100 pt-2">
+            <button type="button" className={`${quietBtn} md:hidden`} aria-expanded={more} aria-controls={`${uid}-more`} onClick={() => setMore(m => !m)}>{more ? "Fewer options" : "More options"}</button>
+            <div id={`${uid}-more`} className={`${more ? "mt-2 flex" : "hidden"} flex-wrap gap-2 md:flex`}>
+              {canDecide && <button type="button" className={quietBtn} disabled={busy} onClick={() => void decide("postpone")}>Postpone<span className="sr-only"> to tomorrow</span></button>}
+              {alternatives.length > 0 && <button type="button" className={quietBtn} aria-expanded={showAlt} aria-controls={`${uid}-alt`} onClick={() => setShowAlt(s => !s)}>Something else</button>}
+              {canDecide && <button type="button" className={quietBtn} disabled={busy} onClick={() => void decide("decline")}>Not this</button>}
+              <button type="button" className={quietBtn} aria-expanded={adjusting} onClick={() => setAdjusting(a => !a)}>{starting ? "Personalise plan" : "Adjust plan"}</button>
+            </div>
           </div>
           <div className="mt-2 min-h-[1.25rem]" aria-live="polite">{said && <p className="text-[13.5px] font-semibold text-gray-800">{said}</p>}<ErrorLine text={error} /></div>
           {showAlt && (
@@ -95,18 +112,86 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
         </>
       ) : (
         <>
-          <p className="mt-2 text-[16px] font-semibold text-gray-900">Nothing is suggested right now.</p>
-          <p className="mt-1 text-[14px] text-gray-700">{settings ? "Nothing is waiting on you today. You can still learn from your library whenever you like." : "Learn from your library whenever you like. A plan can help you decide what to do next."}</p>
+          <p className="mt-3 text-[16px] font-semibold text-gray-900">Nothing is suggested right now.</p>
+          <p className="mt-1 text-[14px] text-gray-700">Nothing is waiting on you today. You can still learn from your library whenever you like.</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Link href={experienceHref("scholar", "study/learn")} className={primaryBtn} style={{ background: accent }}>Go to Learn</Link>
-            <button type="button" className={secondaryBtn} aria-expanded={adjusting} onClick={() => setAdjusting(a => !a)}>Adjust plan</button>
+            <button type="button" className={quietBtn} aria-expanded={adjusting} onClick={() => setAdjusting(a => !a)}>{starting ? "Personalise plan" : "Adjust plan"}</button>
           </div>
         </>
       )}
       {adjusting && (
         <div className="mt-4 border-t border-gray-100 pt-4">
-          <PlanSetup accent={accent} today={today} initial={settings} extras={extras} onDone={() => setAdjusting(false)} />
+          <PlanSetup accent={accent} today={today} initial={settings} starting={starting} extras={extras} onDone={() => setAdjusting(false)} />
         </div>
+      )}
+    </section>
+  );
+}
+
+// ── the starting plan, said once, with a way to personalise it ──
+export function StartingPlanNote({ accent, today, settings, extras }: { accent: string; today: string; settings: ScholarPlanSettings; extras: boolean }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2" data-testid="plan-starting">
+      <p className="text-[13.5px] text-gray-800"><span className="font-semibold">Starting plan</span> · {settings.sessionMinutes ?? 30} minutes a session, {settings.daysPerWeek} days a week. Nothing is saved until you set your own.</p>
+      <button type="button" className={`${linkBtn} text-[13.5px]`} style={{ color: accent }} onClick={() => setOpen(true)}>Personalise it</button>
+      {open && (
+        <PlanDialog title="Personalise your plan" onClose={() => setOpen(false)} wide>
+          <PlanSetup accent={accent} today={today} initial={settings} starting extras={extras} bare onDone={() => setOpen(false)} />
+        </PlanDialog>
+      )}
+    </div>
+  );
+}
+
+// ── what comes up next: the plan and the learner's own calendar, one list ──
+export function ComingUp({ accent, today, items, calendarHref }: { accent: string; today: string; items: ComingUpItem[]; calendarHref: string }) {
+  return (
+    <section aria-labelledby="plan-up-h" className={cardCls} data-testid="plan-coming-up">
+      <h2 id="plan-up-h" className="text-[16px] font-bold text-gray-900">Coming up</h2>
+      {items.length === 0 ? (
+        <p className="mt-1 text-[14px] text-gray-700">Nothing else is planned yet. Add an activity in your calendar, or come back tomorrow.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-gray-100">
+          {items.map(i => (
+            <li key={i.key} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${i.source === "personal" ? "bg-blue-50 text-blue-900" : "bg-gray-100 text-gray-800"}`}>{i.source === "personal" ? <PersonIcon size={16} /> : <SparkleIcon size={16} />}</span>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-[14.5px] font-semibold text-gray-900">{i.title}</p>
+                <p className="text-[13px] text-gray-700">{i.label} · {dayWord(i.date, today)}{i.when ? ` · ${i.when}` : ""}</p>
+              </div>
+              {i.href
+                ? <Link href={i.href} className={quietBtn}>{i.label === "Cards due" ? "Review" : "Start"}<span className="sr-only">: {i.title}</span></Link>
+                : <Link href={calendarHref} className={quietBtn}>View<span className="sr-only">: {i.title} in your calendar</span></Link>}
+            </li>
+          ))}
+        </ul>
+      )}
+      <Link href={calendarHref} className={`${linkBtn} mt-1 text-[13.5px]`} style={{ color: accent }}>Open the calendar</Link>
+    </section>
+  );
+}
+
+// ── what was done today, so Today visibly updates after the learner studies ──
+export function DoneToday({ items }: { items: DoneItem[] }) {
+  return (
+    <section aria-labelledby="plan-done-h" className={cardCls} data-testid="plan-done-today">
+      <h2 id="plan-done-h" className="text-[16px] font-bold text-gray-900">Done today</h2>
+      {items.length === 0 ? (
+        <p className="mt-1 text-[14px] text-gray-700">Nothing recorded yet today. What you study appears here.</p>
+      ) : (
+        <ul className="mt-2 divide-y divide-gray-100">
+          {items.map(i => (
+            <li key={i.key} className="flex items-start gap-3 py-2 first:pt-0 last:pb-0">
+              <span className="mt-0.5 text-green-800"><CheckIcon size={18} /></span>
+              <div className="min-w-0 flex-1">
+                <p className="break-words text-[14px] font-semibold text-gray-900">{i.href ? <Link href={i.href} className="underline underline-offset-2">{i.title}</Link> : i.title}</p>
+                {i.detail && <p className="text-[12.5px] text-gray-600">{i.detail}{i.basis === "self_reported" ? " (your word, not a record)" : ""}</p>}
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
     </section>
   );

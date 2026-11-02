@@ -11,11 +11,13 @@ import { weakTopics, type MonthlyBreakdown } from "./monthly-review";
 import { listMonthlyReviews, loadMonthlyOverview, monthlyReviewOn } from "./monthly-review-data";
 import { detectCarryOvers, type CarryNote, type MissedItem } from "./plan-carry";
 import { examOffers, planCalendarFrom, type ExamOffer } from "./plan-calendar";
-import { buildInsights, type Insights } from "./plan-insights";
+import { buildAdjustments, buildInsights, buildTiles, type Adjustment, type InsightTiles, type Insights } from "./plan-insights";
+import { buildComingUp, buildDoneToday, planRefOfKey, relatesTo, type ComingUpItem, type DoneItem } from "./plan-today-view";
+import { monthsOfWeek, weekAgenda, type AgendaDay } from "./plan-view";
 import { acceptedMaterialIds, acceptedUnstarted, buildProposal, postponedTopics, proposalDecisions, type MaterialIn, type PlanProposal, type ProposalDecision } from "./plan-proposal";
 import { chooseToday, type PlanRecommendation, type UnfinishedItem } from "./plan-recommend";
 import { isoWeek, reflectionOffer, type ReflectionOffer, type Workload } from "./plan-reflection";
-import { settingsFromRow, sessionMinutesOf } from "./plan-settings";
+import { effectiveSettings, settingsFromRow, sessionMinutesOf } from "./plan-settings";
 import { buildStudyPlan, unstartedMappedSections, type PlanCalendar, type StudyPlanInput, type StudyPlanResult, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
 import {
   calendarSchema, caseDecisionTimes, competencyProgressRows, countDue, evaluationEvidence, getEvaluation, getStudyPlan, learningEventTimes, listLearningSessions, listMaterials,
@@ -41,7 +43,10 @@ export type PlanContext = {
   ok: true;
   today: string; tz: string;
   features: PlanFeatures;
-  settings: ScholarPlanSettings | null;
+  /** The settings the plan runs on: the saved ones, or the implicit starting plan (`starting`). Never null. */
+  settings: ScholarPlanSettings;
+  /** True when nothing is saved and the starting plan stands in. It is never written until the learner saves the setup. */
+  starting: boolean;
   mastery: MasteryResult;
   dueCards: number;
   unstarted: UnstartedSection[];
@@ -93,10 +98,11 @@ export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o:
     const le = await listEntries(admin, userId, "scholar", plusDays(o.today, 60));
     if (le.ok) occurrences = expandEntries(le.data.entries, le.data.exceptions, plusDays(o.today, -90), plusDays(o.today, 60));
   }
+  const eff = effectiveSettings(row.data ? settingsFromRow(row.data) : null);
   return {
     ok: true, today: o.today, tz: o.tz,
     features: { settingsExtras: has840, decisions: has840, learnerCalendar: hasEntries, calendarMoves: has830 },
-    settings: row.data ? settingsFromRow(row.data) : null,
+    settings: eff.settings, starting: eff.starting,
     mastery: mastery.data, dueCards: due, unstarted, accepted, events, occurrences,
     postponed: postponedTopics(events, o.today), calendar: planCalendarFrom(occurrences), materials: mats.data.map(m => ({ id: m.id, title: m.title })),
   };
@@ -130,8 +136,7 @@ export function headingOf(content: string): string | null {
 }
 
 /** The inputs of buildStudyPlan for a day, from the context. */
-export function planInputOf(c: PlanContext, today: string, extra: Partial<StudyPlanInput> = {}): StudyPlanInput | null {
-  if (!c.settings) return null;
+export function planInputOf(c: PlanContext, today: string, extra: Partial<StudyPlanInput> = {}): StudyPlanInput {
   const s = c.settings;
   return {
     plan: { examDate: s.examDate, examLabel: s.examLabel, weeklyMinutes: s.weeklyMinutes, daysPerWeek: s.daysPerWeek, goal: s.goal, priorities: s.priorities },
@@ -141,9 +146,8 @@ export function planInputOf(c: PlanContext, today: string, extra: Partial<StudyP
 
 // ── TODAY ──
 export type TodayNote = { text: string; /** The undo token for an automatic change: POST plan/decision { kind: "auto_adjust", ref, status: "undone" }. */ undo?: { kind: "auto_adjust"; ref: string } };
-/** The plan the study calendar is built from: the saved settings, the evidence, the unstarted sections (accepted materials included), postponed topics and the learner's own calendar. Null with no saved plan. */
-export function calendarPlanOf(c: PlanContext): { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; postponed: ReadonlySet<string>; calendar: PlanCalendar } | null {
-  if (!c.settings) return null;
+/** The plan the study calendar is built from: the saved settings (or the starting plan), the evidence, the unstarted sections (accepted materials included), postponed topics and the learner's own calendar. */
+export function calendarPlanOf(c: PlanContext): { settings: StudyPlanSettings; entries: readonly MasteryEntry[]; unstarted: readonly UnstartedSection[]; postponed: ReadonlySet<string>; calendar: PlanCalendar } {
   const s = c.settings;
   return { settings: { examDate: s.examDate, examLabel: s.examLabel, weeklyMinutes: s.weeklyMinutes, daysPerWeek: s.daysPerWeek, goal: s.goal, priorities: s.priorities }, entries: c.mastery.topics, unstarted: c.unstarted, postponed: c.postponed, calendar: c.calendar };
 }
@@ -157,12 +161,31 @@ export async function loadPlanCalendar(ctx: PlanCtx, policy: IndividualPolicy, o
   return calendar ? { ok: true, calendar, features: c.features } : { ok: false, reason: "unreadable" };
 }
 
+/**
+ * The seven agenda days from `from`, from the SAME month calendar the Calendar view draws, so a move, a postponement or an unavailable day shows the same
+ * in both. Null when the study calendar is off for this learner, or could not be read.
+ */
+export async function loadAgendaDays(ctx: PlanCtx, policy: IndividualPolicy, c: PlanContext, from: string, today: string, count = 7): Promise<AgendaDay[] | null> {
+  if (policy.scholarStudyCalendar !== "on") return null;
+  const views = await Promise.all(monthsOfWeek(from, count).map(month => loadStudyCalendar({ admin: ctx.admin, userId: ctx.userId, policy, month, today, plan: calendarPlanOf(c) })));
+  if (views.some(v => !v)) return null;
+  return weekAgenda(views.flatMap(v => (v ? v.view.days : [])), from, today, count);
+}
+
 export type TodayView = {
   ok: true;
   today: string; tz: string;
+  /** A plan is saved. False: the starting plan stands in (see `starting`). */
   hasPlan: boolean;
-  settings: ScholarPlanSettings | null;
+  starting: boolean;
+  settings: ScholarPlanSettings;
   next: PlanRecommendation | null;
+  /** What the next activity is about ("Renal · from Renal notes"), or null. */
+  nextAbout: string | null;
+  /** After the main card: the next few planned and personal items, from the same days the Calendar shows. */
+  comingUp: ComingUpItem[];
+  /** What was done today, from qualifying records, and the learner's own marks shown apart. */
+  doneToday: DoneItem[];
   alternatives: PlanRecommendation[];
   dueCards: number;
   upcomingMonthlyReview: { month: string; recommendedDate: string; late: boolean; startHref: string } | null;
@@ -200,25 +223,23 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
   const notes: TodayNote[] = [];
   let missed: MissedItem[] = [];
   let carried: CarryNote[] = [];
-  let week: StudyPlanResult | null = null;
   const base = planInputOf(c, today);
-  if (base) {
-    week = buildStudyPlan(base);
-    if (c.features.decisions) {
-      const past = buildStudyPlan({ ...base, today: yesterday });
-      const r = detectCarryOvers({ past, current: week, yesterday, events: c.events });
-      carried = r.carried; missed = r.missed;
-      if (r.excludeRefs.length) week = buildStudyPlan({ ...base, excludeRefs: new Set(r.excludeRefs) });
-      for (const n of carried) {
-        if (!n.recorded) await appendPlanEvent(admin, userId, "scholar", { kind: "auto_adjust", ref: n.key, status: "applied", value: { activityRef: n.ref, title: n.title.slice(0, 120), from: n.from, to: n.to, reason: n.reason.slice(0, 300) } });
-        notes.push({ text: n.reason, undo: { kind: "auto_adjust", ref: n.key } });
-      }
+  let week: StudyPlanResult = buildStudyPlan(base);
+  // A carry-over is recorded once, and only for a plan the learner SAVED: the starting plan never writes anything.
+  if (c.features.decisions && !c.starting) {
+    const past = buildStudyPlan({ ...base, today: yesterday });
+    const r = detectCarryOvers({ past, current: week, yesterday, events: c.events });
+    carried = r.carried; missed = r.missed;
+    if (r.excludeRefs.length) week = buildStudyPlan({ ...base, excludeRefs: new Set(r.excludeRefs) });
+    for (const n of carried) {
+      if (!n.recorded) await appendPlanEvent(admin, userId, "scholar", { kind: "auto_adjust", ref: n.key, status: "applied", value: { activityRef: n.ref, title: n.title.slice(0, 120), from: n.from, to: n.to, reason: n.reason.slice(0, 300) } });
+      notes.push({ text: n.reason, undo: { kind: "auto_adjust", ref: n.key } });
     }
-    for (const m of missed) notes.push({ text: `"${m.title}" from ${m.from} is Missed, not rescheduled. You can reschedule it from the calendar.` });
-    if (c.calendar.blockedDays.includes(today)) notes.push({ text: "Nothing is planned today: you marked it as busy." });
-    for (const t of c.calendar.timedNotes[today] ?? []) notes.push({ text: `Today's study fits ${t}.` });
-    for (const n of week.notes) notes.push({ text: n });
   }
+  for (const m of missed) notes.push({ text: `"${m.title}" from ${m.from} is Missed, not rescheduled. You can reschedule it from the calendar.` });
+  if (c.calendar.blockedDays.includes(today)) notes.push({ text: "Nothing is planned today: you marked it as busy." });
+  for (const t of c.calendar.timedNotes[today] ?? []) notes.push({ text: `Today's study fits ${t}.` });
+  for (const n of week.notes) notes.push({ text: n });
 
   const [ls, rs, mo, reviews] = await Promise.all([
     listLearningSessions(admin, userId, 10), listRevisionSessions(admin, userId, 10),
@@ -237,18 +258,30 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
     ls.ok ? ls.data.filter(s => s.status === "active").map(s => ({ id: s.id, title: s.title, lastActiveAt: s.lastActiveAt })) : [],
     rs.ok ? rs.data.filter(r => r.status === "active").map(r => ({ id: r.id, mode: r.mode, lastActiveAt: r.lastActiveAt, position: r.position, total: r.total })) : [], today,
   );
+  // The Calendar and Today read one plan: an activity the learner moved off today in the Calendar is not suggested here, and one moved onto today appears below.
+  const agenda = await loadAgendaDays(ctx, policy, c, today, today);
+  const planned = new Set((agenda?.find(d => d.date === today)?.items ?? []).flatMap(i => (i.kind === "planned" ? [planRefOfKey(i.key) ?? ""] : [])));
+  // moved off today: an item whose original day was today (from the calendar's own moves), or a plan activity of today the calendar no longer shows (cards due excepted: its count is the calendar's own)
+  const movedOffToday = new Set<string>(agenda
+    ? [
+      ...agenda.flatMap(d => d.items.flatMap(i => (i.kind === "planned" && i.movedFrom === today ? [planRefOfKey(i.key) ?? ""] : []))),
+      ...(week.thisWeek.find(d => d.day === today)?.activities ?? []).map(a => a.ref).filter(r => r !== "revise:due" && !planned.has(r)),
+    ].filter(Boolean)
+    : []);
   const choice = chooseToday({
     today, ruleOrder: policy.scholarPlanRuleOrder, settings: c.settings, plan: week, entries: c.mastery.topics, dueCards: c.dueCards, unfinished, monthlyWeak,
     coverage: c.unstarted.filter(u => (u.materialIds ?? []).length > 0), calendar: c.occurrences, events: c.events, postponed: c.postponed,
-    fallbackMinutes: Math.min(30, Math.max(10, c.settings ? sessionMinutesOf(c.settings) : 25)),
+    moved: movedOffToday, fallbackMinutes: Math.min(30, Math.max(10, sessionMinutesOf(c.settings))),
   });
+  const nextAbout = choice.next ? relatesTo(choice.next, c.mastery.topics, c.materials) : null;
 
   const nudge = mo && !mo.optedOut ? mo.nudges[0] : null;
   const wk = isoWeek(today);
   const refl = latestPerRef(c.events.filter(e => e.kind === "reflection")).get(wk) ?? null;
   const reflWorkload = refl && typeof refl.value.workload === "string" ? (refl.value.workload as Workload) : null;
   return {
-    ok: true, today, tz: c.tz, hasPlan: c.settings !== null, settings: c.settings, next: choice.next, alternatives: choice.alternatives, dueCards: c.dueCards,
+    ok: true, today, tz: c.tz, hasPlan: !c.starting, starting: c.starting, settings: c.settings, next: choice.next, nextAbout, alternatives: choice.alternatives, dueCards: c.dueCards,
+    comingUp: agenda ? buildComingUp(agenda, { today, nextRef: choice.next?.ref ?? null }) : [], doneToday: agenda ? buildDoneToday(agenda, today) : [],
     upcomingMonthlyReview: nudge ? { month: nudge.month, recommendedDate: nudge.recommended, late: nudge.late, startHref: experienceHref("scholar", "study/evaluate") } : null,
     notes, missed, week, examOffers: examOffers(c.occurrences, c.settings, today), personalWeek: c.occurrences.filter(x => x.status !== "cancelled" && x.date >= today && x.date <= plusDays(today, 6)), declinedHidden: choice.declined, features: c.features,
     reflection: {
@@ -259,8 +292,17 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
 }
 
 // ── INSIGHTS ──
-export type InsightsView = { ok: true; today: string; insights: Insights } | NotReady;
-/** Study consistency, practice performance and retention evidence for the learner, each "not measured" without evidence, never zero. */
+export type InsightsView = {
+  ok: true; today: string; insights: Insights;
+  /** The four tiles over the last 28 days. */
+  tiles: InsightTiles;
+  /** What the learner can do about it, each with where to do it now and, where it is meaningful, how to put it in the plan. */
+  adjustments: Adjustment[];
+  settings: ScholarPlanSettings;
+  starting: boolean;
+  features: Pick<PlanFeatures, "settingsExtras" | "decisions" | "learnerCalendar">;
+} | NotReady;
+/** Study consistency, practice performance and retention evidence for the learner, each "not measured" without evidence, never zero; the four tiles and the adjustments. */
 export async function loadInsights(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<InsightsView> {
   const c = await loadPlanContext(ctx, policy, o);
   if (!c.ok) return c;
@@ -273,13 +315,24 @@ export async function loadInsights(ctx: PlanCtx, policy: IndividualPolicy, o: { 
     ...(lessons.ok ? lessons.data.map(at => ({ kind: "lesson" as const, at })) : []), ...(decisions.ok ? decisions.data.map(at => ({ kind: "decision" as const, at })) : []),
     ...d.checks.map(x => ({ kind: "check" as const, at: x.createdAt })),
   ];
+  const studyDays = studyActivityDays(stamps, c.tz);
+  const insights = buildInsights({
+    studyDays, today: c.today,
+    attempts: d.attempts.map(a => ({ marking: a.marking, correct: a.correct, answeredAt: a.answeredAt })), reviews: d.reviews.map(r => ({ quality: r.quality, reviewedAt: r.reviewedAt })),
+    selfReported: c.features.learnerCalendar ? selfReportedStudy(c.occurrences.filter(x => x.date <= c.today)) : null,
+  });
+  const declined = new Map([...latestPerRef(c.events.filter(e => e.kind === "recommendation_declined" && e.ref.startsWith("insight:"))).entries()]
+    .map(([ref, e]) => [ref, typeof e.value.fingerprint === "string" ? e.value.fingerprint : null] as const));
+  const hrefs = {
+    flashcards: experienceHref("scholar", "study/revise/flashcards"), revise: experienceHref("scholar", "study/revise"),
+    mistakes: experienceHref("scholar", "study/revise/mistakes"), learn: experienceHref("scholar", "study/learn"),
+  };
   return {
-    ok: true, today: c.today,
-    insights: buildInsights({
-      studyDays: studyActivityDays(stamps, c.tz), today: c.today,
-      attempts: d.attempts.map(a => ({ marking: a.marking, correct: a.correct, answeredAt: a.answeredAt })), reviews: d.reviews.map(r => ({ quality: r.quality, reviewedAt: r.reviewedAt })),
-      selfReported: c.features.learnerCalendar ? selfReportedStudy(c.occurrences.filter(x => x.date <= c.today)) : null,
-    }),
+    ok: true, today: c.today, insights,
+    tiles: buildTiles({ studyDays, today: c.today, tz: c.tz, dueCards: c.dueCards, attempts: d.attempts, occurrences: c.occurrences }),
+    adjustments: buildAdjustments({ insights, dueCards: c.dueCards, today: c.today, hrefs, settings: c.settings, canAddEntry: c.features.learnerCalendar, declined }),
+    settings: c.settings, starting: c.starting,
+    features: { settingsExtras: c.features.settingsExtras, decisions: c.features.decisions, learnerCalendar: c.features.learnerCalendar },
   };
 }
 

@@ -58,6 +58,8 @@ export type RecommendInput = {
   /** recommendation_declined and topic_postponed events. */
   events: readonly PlanEvent[];
   postponed: ReadonlySet<string>;
+  /** Activity refs the learner moved off today in the Calendar: not suggested for today (they are not declined, and come back on their new day). */
+  moved?: ReadonlySet<string>;
   /** Fallback minutes for an activity when the plan does not give one. */
   fallbackMinutes: number;
 };
@@ -222,6 +224,7 @@ export function chooseToday(i: RecommendInput): TodayChoice {
     for (const c of by[rule]) {
       if (seen.has(c.ref)) continue;
       if (c.topics.some(t => i.postponed.has(t))) continue;
+      if (i.moved?.has(c.ref)) continue;
       if (declined.has(c.ref) && declined.get(c.ref) === c.fingerprint) { skipped++; seen.add(c.ref); continue; }
       seen.add(c.ref);
       list.push(c);

@@ -60,6 +60,17 @@ export function settingsFromRow(r: { examDate: string | null; examLabel: string 
   };
 }
 
+// ── THE STARTING PLAN ── My Plan correction (CE-03) ──────────────────────────────────────────────────────────────────
+// With no saved settings My Plan is still useful from the first visit: it works from this implicit starting plan (learn consistently, 30 minutes a
+// session, 5 days a week). It is NEVER written. Saving the three-question setup replaces it, and nothing is stored until the learner does.
+export const STARTING_PLAN: ScholarPlanSettings = Object.freeze({
+  goalType: "learn", sessionMinutes: 30, daysPerWeek: 5, weeklyMinutes: 150, examDate: null, examLabel: null, goal: null, priorities: Object.freeze([] as string[]) as readonly string[],
+}) as ScholarPlanSettings;
+/** Pure. The settings the planner runs on: the saved ones, else the starting plan (`starting: true`). */
+export function effectiveSettings(saved: ScholarPlanSettings | null): { settings: ScholarPlanSettings; starting: boolean } {
+  return saved ? { settings: saved, starting: false } : { settings: STARTING_PLAN, starting: true };
+}
+
 /** What one session lasts: the stated minutes, else the weekly total over the days. */
 export const sessionMinutesOf = (s: Pick<ScholarPlanSettings, "sessionMinutes" | "weeklyMinutes" | "daysPerWeek">) =>
   s.sessionMinutes ?? Math.max(1, Math.round(s.weeklyMinutes / Math.max(1, s.daysPerWeek)));

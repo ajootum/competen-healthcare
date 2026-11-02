@@ -18,7 +18,7 @@ import { SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { Notice, PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
-import { ProgressWorkspace } from "../_components/progress-view";
+import { LearningActivity, ProgressWorkspace } from "../_components/progress-view";
 import { loadProgress } from "@/lib/individual/scholar/progress-data";
 import type { PeriodKind } from "@/lib/individual/scholar/progress-history";
 import { competencyProgressRows } from "@/lib/individual/scholar/store";
@@ -29,12 +29,14 @@ import { buildCompetencyProgress, type CompetencyProgress, type CompetencyProgre
 import { LAYER_LABEL } from "@/lib/individual/scholar/catalogue";
 import { LayerTag } from "../_components/competency-client";
 import { ContentStatusTag } from "../_components/client";
-import { CHECK_VERDICT_LABEL, NO_APPROVED_COMPETENCIES, NOT_COMPETENCE_LABEL, type CheckVerdict } from "@/lib/individual/scholar/config";
+import { CHECK_VERDICT_LABEL, NO_APPROVED_COMPETENCIES, type CheckVerdict } from "@/lib/individual/scholar/config";
 import { learningActivityByCompetency } from "@/lib/individual/scholar/store";
 import type { CompetencyCoverage } from "@/lib/competency/progress-model";
 import { loadTopicProgress, mergeStudyNext, topicProgressEnabled } from "@/lib/individual/scholar/study-next";
 import { isStudyId } from "@/lib/individual/scholar/study-carry";
 import { StudyNextCard, TopicProgressSection } from "../_components/topic-progress-view";
+import { Fold, NotMeasuredLine } from "../_components/progress-parts";
+import { activitySummary, enoughForTrend, listSummary, practisedDetail, TREND_NEEDS, withoutEngagementInsight, type ActivitySummary } from "@/lib/individual/scholar/progress-simplify";
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
 import { buildStudyPlan, unstartedMappedSections } from "@/lib/individual/scholar/study-plan";
 import { StudyPlanCard } from "../_components/study-plan-card";
@@ -60,7 +62,7 @@ function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] 
   return (
     <section aria-labelledby="topics-h" className="mt-8">
       <h2 id="topics-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By topic</h2>
-      <p className="mt-1 text-[13px] text-gray-600">The topics Scholar found in your notes, and your practice on the sections they appear in. This is practice on your own notes, not a measure of knowledge or competence.</p>
+      <p className="mt-1 text-[13px] text-gray-600">The topics Scholar found in your notes, and your practice on the sections they appear in.</p>
       <div className="mt-3">
         {unreadable ? <Unreadable what="practice by topic" />
           : !topics?.length ? (
@@ -68,7 +70,8 @@ function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] 
               <p>Topics appear once Scholar has looked at a material, which it does with AI help on. Open a material to see what it found.</p>
             </StatePanel>
           ) : (
-            <ul className="divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
+            <Fold summary={listSummary({ one: "topic" }, topics.length, practisedDetail(topics.filter(t => t.answered > 0).length, topics.length))}>
+            <ul className="divide-y divide-gray-200">
               {topics.map(t => (
                 <li key={t.name} className="flex flex-wrap items-baseline justify-between gap-2 p-4">
                   <span className="min-w-0">
@@ -83,6 +86,7 @@ function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] 
                 </li>
               ))}
             </ul>
+            </Fold>
           )}
       </div>
     </section>
@@ -109,7 +113,7 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent, ac
         By competency{learner.programme ? ` · ${learner.programme.label}` : ""}
       </h2>
       <p className="mt-1 text-[13px] text-gray-600">
-        Which competencies of your programme your notes cover, and how you did on practice questions written for each. Practice counts once you have accepted the link from a section to a competency, so suggestions you have not decided on, and rejected links, are not counted. This is practice on your own notes, not an assessment of competence.
+        Which competencies of your programme your notes cover, and how you did on practice questions written for each. Practice counts once you have accepted the link from a section to a competency, so suggestions you have not decided on, and rejected links, are not counted.
       </p>
       <div className="mt-3">
         {!learner.programme ? (
@@ -139,7 +143,8 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent, ac
                   {coverage.gaps.slice(0, 5).map(g => `${g.name}${g.expected ? ` (${g.expected})` : ""}`).join(" · ")}{coverage.gaps.length > 5 ? ` and ${coverage.gaps.length - 5} more` : ""}
                 </p>
               )}
-              <div className="space-y-3">
+              <Fold summary={listSummary({ one: "competency", many: "competencies" }, progress.totals.competencies, `notes linked to ${progress.totals.withNotes}`)}>
+              <div className="space-y-3 p-3">
                 {progress.layers.map(l => (
                   <details key={l.layer} open={l.rows.some(r => r.status !== "no_notes")} className="rounded-2xl border border-gray-200 bg-white">
                     <summary className={`flex cursor-pointer flex-wrap items-center gap-2 p-4 ${focusRing}`}>
@@ -169,7 +174,6 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent, ac
                                 <span>
                                   Learning activity: {activity.get(r.id)!.actions} action{activity.get(r.id)!.actions === 1 ? "" : "s"}
                                   {activity.get(r.id)!.lastVerdict ? ` · last check: ${CHECK_VERDICT_LABEL[activity.get(r.id)!.lastVerdict as CheckVerdict] ?? activity.get(r.id)!.lastVerdict}` : ""}
-                                  <span className="text-gray-500"> · {NOT_COMPETENCE_LABEL}</span>
                                 </span>
                               )}
                             </p>
@@ -180,6 +184,7 @@ function CompetencySection({ learner, progress, coverage, unreadable, accent, ac
                   </details>
                 ))}
               </div>
+              </Fold>
             </>
           )}
       </div>
@@ -297,15 +302,24 @@ export default async function ProgressPage({ params, searchParams }: { params: P
     return s ? `?${s}` : "?";
   };
 
-  const merged = showTopicProgress && tp?.ok && li?.ok ? mergeStudyNext(tp.data.studyNext, li.data.recommendations, 5, study && isStudyId(sp.study) ? sp.study : null) : null;
-  const liShown = li?.ok ? (merged ? { ...li.data, recommendations: merged.rest } : li.data) : null;
+  const merged = showTopicProgress && !myPlan && tp?.ok && li?.ok ? mergeStudyNext(tp.data.studyNext, li.data.recommendations, 5, study && isStudyId(sp.study) ? sp.study : null) : null;
+  // What to do next lives in My Plan when it is on: Learning Intelligence keeps its measures and does not repeat the list.
+  const liBase = li?.ok ? { ...li.data, insights: withoutEngagementInsight(li.data.insights) } : null;
+  const liShown = liBase ? (myPlan ? { ...liBase, recommendations: [] } : merged ? { ...liBase, recommendations: merged.rest } : liBase) : null;
+  // ONE learning-activity block, from the shared definition of a study day (the workspace's engagement, and Learning Intelligence's active weeks).
+  const liEng = li?.ok && li.data.engagement.state === "measured" ? li.data.engagement : null;
+  const learnActivity: ActivitySummary | null = pv?.ok && policy.scholarProgressSections.includes("engagement")
+    ? activitySummary(pv.engagement, liEng ? { activeWeeks: liEng.activeWeeks, weeks: liEng.weeks } : null)
+    : !pv?.ok && liEng
+      ? activitySummary({ windowDays: liEng.windowDays, studyDays: liEng.studyDays, answers: liEng.answered, reviews: liEng.reviews, decisions: null, checks: null, lastStudied: liEng.lastStudied }, { activeWeeks: liEng.activeWeeks, weeks: liEng.weeks })
+      : null;
 
   return (
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("progress").eyebrow} title="Progress" intro={scholarSpace("progress").intro} />
       <StudyNav dueCount={p?.totals.cardsDue ?? null} study={study?.bar ?? null} />
       <Notice>
-        {FORMATIVE_NOTICE} · <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> None of it is added to your Passport or shared with anyone unless you choose an achievement below.
+        {FORMATIVE_NOTICE} · <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> This is observed practice on your own notes, not an assessment of competence and not verified competence: that is decided only by an independently governed assessment. None of it is added to your Passport or shared with anyone unless you choose an achievement below.
       </Notice>
 
       {!rows.ok ? (rows.notProvisioned
@@ -322,7 +336,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             {myPlan ? (
               <Link href={experienceHref("scholar", "study/plan")} data-testid="plan-moved"
                 className={`mb-6 flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-                <span className="text-[14.5px] font-semibold text-gray-900">Your plan and calendar are in My Plan</span>
+                <span className="text-[14.5px] font-semibold text-gray-900">Your plan, calendar and what to study next are in My Plan</span>
                 <span className="text-[13px] font-semibold underline underline-offset-2" style={{ color: x.accent }}>Open My Plan</span>
               </Link>
             ) : (<>
@@ -356,10 +370,11 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             {calendarOn && (calendar
               ? <StudyCalendar view={calendar.view} accent={x.accent} prevHref={calHref(prevMonth(calMonth))} nextHref={calHref(nextMonth(calMonth))} todayHref={calHref(null)} />
               : <div className="mb-6"><Unreadable what="your study calendar" /></div>)}
-            {showTopicProgress && (tp?.ok ? <StudyNextCard items={merged ? merged.items : tp.data.studyNext} accent={x.accent} />
+            {showTopicProgress && !myPlan && (tp?.ok ? <StudyNextCard items={merged ? merged.items : tp.data.studyNext} accent={x.accent} />
               : tp ? <div className="mb-6"><Unreadable what="what to study next" /></div> : null)}
-            {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} />
+            {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} activity={learnActivity} hideNext={myPlan} />
               : pv ? <StatePanel title="Your learning progress could not be read just now"><p>{pv.error} The detail below is still shown.</p></StatePanel> : null}
+            {!pv?.ok && learnActivity && <div className="mb-6"><LearningActivity a={learnActivity} /></div>}
             <dl className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {[
                 { k: "Questions answered", v: `${p.totals.answered} of ${p.totals.questions}` },
@@ -383,28 +398,31 @@ export default async function ProgressPage({ params, searchParams }: { params: P
 
             <section aria-labelledby="accuracy-h" className="mt-8">
               <h2 id="accuracy-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By material</h2>
-              <p className="mt-1 text-[13px] text-gray-600">Practice accuracy is the share of a material&apos;s AI-written practice questions you got right the last time you answered them. It reflects how you did on practice questions from your own notes. It is not a measure of competence or of clinical knowledge.</p>
-              <ul className="mt-3 divide-y divide-gray-200 rounded-2xl border border-gray-200 bg-white">
-                {p.materials.map(m => (
-                  <li key={m.id} className="p-4 sm:p-5">
-                    <div className="flex flex-wrap items-baseline justify-between gap-2">
-                      <Link href={experienceHref("scholar", `study/${m.id}`)} className={`text-[15px] font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{m.title}</Link>
-                      <span className="text-[14px] font-bold tabular-nums" style={{ color: m.latestAccuracy === null ? undefined : x.accent }}>
-                        {m.latestAccuracy === null ? <span className="font-semibold text-gray-500">Not measured yet</span> : `${m.latestAccuracy}% practice accuracy`}
-                      </span>
-                    </div>
-                    {m.latestAccuracy !== null && (
-                      <div className="mt-2 h-2 rounded-full bg-gray-100" role="img" aria-label={`${m.latestAccuracy}% practice accuracy`}>
-                        <div className="h-2 rounded-full" style={{ width: `${m.latestAccuracy}%`, background: x.accent }} />
-                      </div>
-                    )}
-                    <p className="mt-2 text-[12.5px] text-gray-600 tabular-nums">
-                      {m.questions === 0 ? "No questions written yet" : `${m.answered} of ${m.questions} question${m.questions === 1 ? "" : "s"} answered${m.latestCorrect !== null ? `, ${m.latestCorrect} right on the latest try` : ""}`}
-                      {" · "}{m.cardsDue} card{m.cardsDue === 1 ? "" : "s"} due · {m.cardsLongInterval} on long intervals
-                    </p>
-                  </li>
-                ))}
-              </ul>
+              <p className="mt-1 text-[13px] text-gray-600">Practice accuracy is the share of a material&apos;s AI-written practice questions you got right the last time you answered them.</p>
+              <div className="mt-3 space-y-3">
+                {!p.materials.some(m => m.latestAccuracy !== null) && <NotMeasuredLine text="No material has a practice accuracy yet. It appears once you have answered its questions." />}
+                <Fold summary={listSummary({ one: "material" }, p.materials.length, practisedDetail(p.materials.filter(m => m.latestAccuracy !== null).length, p.materials.length))}>
+                  <ul className="divide-y divide-gray-200">
+                    {p.materials.map(m => (
+                      <li key={m.id} className="p-4 sm:p-5">
+                        <div className="flex flex-wrap items-baseline justify-between gap-2">
+                          <Link href={experienceHref("scholar", `study/${m.id}`)} className={`text-[15px] font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{m.title}</Link>
+                          {m.latestAccuracy !== null && <span className="text-[14px] font-bold tabular-nums" style={{ color: x.accent }}>{`${m.latestAccuracy}% practice accuracy`}</span>}
+                        </div>
+                        {m.latestAccuracy !== null && (
+                          <div className="mt-2 h-2 rounded-full bg-gray-100" role="img" aria-label={`${m.latestAccuracy}% practice accuracy`}>
+                            <div className="h-2 rounded-full" style={{ width: `${m.latestAccuracy}%`, background: x.accent }} />
+                          </div>
+                        )}
+                        <p className="mt-2 text-[12.5px] text-gray-600 tabular-nums">
+                          {m.questions === 0 ? "No questions written yet" : `${m.answered} of ${m.questions} question${m.questions === 1 ? "" : "s"} answered${m.latestCorrect !== null ? `, ${m.latestCorrect} right on the latest try` : ""}`}
+                          {" · "}{m.cardsDue} card{m.cardsDue === 1 ? "" : "s"} due · {m.cardsLongInterval} on long intervals
+                        </p>
+                      </li>
+                    ))}
+                  </ul>
+                </Fold>
+              </div>
             </section>
 
             <section aria-labelledby="passport-h" className="mt-8">
@@ -424,6 +442,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 ) : <PassportChoices items={eligible} />}
             </section>
 
+            {enoughForTrend(p.trend.map(w => w.attempts)) ? (
             <section aria-labelledby="trend-h" className="mt-8">
               <h2 id="trend-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Last 8 weeks</h2>
               <p className="mt-1 text-[13px] text-gray-600">Answers given each week, and the share that were right. A week with no answers has no bar.</p>
@@ -450,6 +469,12 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 </tbody>
               </table>
             </section>
+            ) : (
+              <section aria-labelledby="trend-h" className="mt-8">
+                <h2 id="trend-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Last 8 weeks</h2>
+                <div className="mt-2"><NotMeasuredLine text={TREND_NEEDS} /></div>
+              </section>
+            )}
           </>
         )}
     </>

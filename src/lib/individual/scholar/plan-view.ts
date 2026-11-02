@@ -12,6 +12,8 @@ import type { EntryType, GoalType, ScholarPlanSettings } from "../learning-plan/
 export const PLAN_VIEWS = ["today", "calendar", "insights"] as const;
 export type PlanView = (typeof PLAN_VIEWS)[number];
 export const PLAN_VIEW_LABEL: Record<PlanView, string> = { today: "Today", calendar: "Calendar", insights: "Insights" };
+/** The one line under each view's name on the view cards. */
+export const PLAN_VIEW_DESC: Record<PlanView, string> = { today: "What to study next", calendar: "Personal and Scholar plans", insights: "Progress and adjustments" };
 /** ?view=: anything else is Today (the default). */
 export function parsePlanView(q: unknown): PlanView {
   const v = Array.isArray(q) ? q[0] : q;
@@ -67,6 +69,45 @@ export function agendaItemOrder(items: readonly CalendarItem[]): CalendarItem[] 
   return [...items].sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || (a.kind === "personal" ? timeOf(a).localeCompare(timeOf(b)) : 0));
 }
 export type AgendaDay = { date: string; today: boolean; past: boolean; items: CalendarItem[] };
+
+// ── how an agenda row looks ──
+/** Who an agenda row belongs to: the learner's own activity, Scholar's recommendation, a time the learner is unavailable, or something already done. */
+export type AgendaTone = "mine" | "scholar" | "unavailable" | "done";
+/** Pure. The tone of a calendar item: busy and placement entries are "unavailable", other entries "mine", what happened "done", the rest Scholar's. */
+export function agendaTone(item: Pick<CalendarItem, "kind" | "occurrence">): AgendaTone {
+  if (item.kind === "personal") return item.occurrence && (item.occurrence.entryType === "busy" || item.occurrence.entryType === "placement") ? "unavailable" : "mine";
+  if (item.kind === "completed") return "done";
+  return "scholar";
+}
+/** Pure. A day with nothing on it is shown as an open "Available" row, never hidden. */
+export const isAvailableDay = (d: Pick<AgendaDay, "items">): boolean => d.items.length === 0;
+/** Pure. "7:00 PM" from "19:00" (the form saves 24-hour times; the agenda reads them the way the learner says them). Anything else is returned as it came. */
+export function clock12(t: string | null | undefined): string {
+  const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(t ?? "");
+  if (!m) return t ?? "";
+  const h = Number(m[1]);
+  return `${h % 12 === 0 ? 12 : h % 12}:${m[2]} ${h < 12 ? "AM" : "PM"}`;
+}
+/** Pure. "7:00 PM · 30 min", "8:00 AM–4:00 PM", "All day", or "30 min" for an item with no time. */
+export function whenLabel(o: { allDay?: boolean; startTime?: string | null; endTime?: string | null; durationMinutes?: number | null; minutes?: number | null } | null | undefined): string {
+  if (!o) return "";
+  const mins = o.durationMinutes ?? o.minutes ?? null;
+  const t = o.allDay || !o.startTime ? (o.allDay ? "All day" : "") : o.endTime ? `${clock12(o.startTime)}–${clock12(o.endTime)}` : clock12(o.startTime);
+  return [t, mins ? `${mins} min` : ""].filter(Boolean).join(" · ");
+}
+/** Pure. The day number and short weekday of the agenda's date column ("2", "Mon"). */
+export function dayParts(iso: string): { num: string; weekday: string } {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return { num: String(d.getUTCDate()), weekday: d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" }) };
+}
+/** Pure. "2 to 8 Nov 2026" for the seven days of an agenda. */
+export function rangeLabel(first: string, last: string): string {
+  const f = new Date(`${first}T00:00:00Z`), l = new Date(`${last}T00:00:00Z`);
+  const sameMonth = first.slice(0, 7) === last.slice(0, 7);
+  const a = f.toLocaleDateString("en-GB", { day: "numeric", ...(sameMonth ? {} : { month: "short" }), timeZone: "UTC" });
+  const b = l.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  return `${a} to ${b}`;
+}
 /**
  * Pure. The seven days from `from` out of the days of the loaded month views (a week may need two months). A day no loaded month holds
  * is an empty day, never an error. Cancelled entries are never in the calendar's items.
