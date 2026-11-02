@@ -26,6 +26,7 @@
  *   BASE_URL=http://localhost:3100 npx tsx scripts/scholar-preview-harness.ts
  */
 import { readFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { loadEnvConfig } from "@next/env";
 import { createClient } from "@supabase/supabase-js";
 import { createServerClient } from "@supabase/ssr";
@@ -80,6 +81,29 @@ const LEGAL = {
   s: { terms: process.env.INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_TERMS_VERSION ?? "", privacy: process.env.INDIVIDUAL_LEGAL_SCHOLAR_OPERATOR_PRIVACY_VERSION ?? "" },
 };
 
+
+/**
+ * One HTTP request to 127.0.0.1:<port> that KEEPS the Host header. Node's fetch (undici) silently replaces a Host header with the URL's host,
+ * so the dev server saw 127.0.0.1 for every request and the preview-host and main-host checks could not tell the two apart.
+ */
+function hostFetch(port: string, method: string, path: string, headers: Record<string, string>, body?: string): Promise<Response> {
+  return new Promise((resolve, reject) => {
+    const r = httpRequest({ host: "127.0.0.1", port: Number(port), method, path, headers: { ...headers, ...(body !== undefined ? { "Content-Length": String(Buffer.byteLength(body)) } : {}) } }, res => {
+      const chunks: Buffer[] = [];
+      res.on("data", c => chunks.push(c as Buffer));
+      res.on("end", () => {
+        const h = new Headers();
+        for (const [k, v] of Object.entries(res.headers)) { if (Array.isArray(v)) v.forEach(x => h.append(k, x)); else if (v !== undefined) h.set(k, String(v)); }
+        const status = res.statusCode ?? 0;
+        resolve(new Response([204, 205, 304].includes(status) ? null : Buffer.concat(chunks), { status, headers: h }));
+      });
+    });
+    r.on("error", reject);
+    if (body !== undefined) r.write(body);
+    r.end();
+  });
+}
+
 type Jar = Map<string, string>;
 const cookieHeader = (jar: Jar) => [...jar].map(([k, v]) => `${k}=${v}`).join("; ");
 function absorb(jar: Jar, res: Response) {
@@ -116,7 +140,7 @@ async function main() {
     let body: any;
     if (opts.form) { headers["Content-Type"] = "application/x-www-form-urlencoded"; body = new URLSearchParams(opts.form).toString(); }
     else if (opts.body !== undefined) { headers["Content-Type"] = "application/json"; body = JSON.stringify(opts.body); }
-    const res = await fetch(`http://127.0.0.1:${port}${path}`, { method, redirect: "manual", headers, body });
+    const res = await hostFetch(port, method, path, headers, body);
     if (jar) absorb(jar, res);
     const text = res.status === 200 ? (await res.text()).replace(/<!-- -->/g, "").replace(/&#x27;|&#39;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&") : (await res.text().catch(() => ""));
     let json: any = {}; try { json = JSON.parse(text); } catch { /* html */ }
@@ -171,8 +195,19 @@ async function main() {
     if (!office.data) { ok("0. an hq_platform office exists to appoint into", false); return; }
     const appoint = async (person: string, role: string, name: string) => admin.from("ogs_office_appointments").insert({ ...appointmentAuthority(owner),
       office_id: office.data.id, person_id: person, person_name: name, role, status: "active", term_start: new Date(Date.now() - 60_000).toISOString() });
+    // The "other" fixture holds a position WITHOUT the preview right. It must be one that does not need per-appointment capabilities
+    // (scholar_clinical_lead does, and 641 refuses an appointment that names none), so platform_director.
+    // If the position's preview grants have been ENDED on this project (staging runs the 860 rollback test), a holder of the position
+    // cannot pass the capability check, and only an owner can (the owner short-circuit). The holder fixture is then made a platform owner
+    // for the run, so P2-P10 still exercise the route, proxy and pages. The fixture's profile is deleted in cleanup.
+    const liveGrants = await admin.from("hq_position_capability").select("effective_to").eq("position_code", "individual_product_reviewer").eq("capability_code", "hq.individual.scholar.preview");
+    const grantLive = (liveGrants.data ?? []).some((g: any) => !g.effective_to || new Date(g.effective_to).getTime() > Date.now());
+    if (!grantLive) {
+      const asOwner = await admin.from("profiles").update({ platform_roles: ["platform_owner"] }).eq("id", made.holder);
+      console.log(`  NOTE  the position's preview grants are ended on this project: the holder fixture runs as a platform owner (${asOwner.error ? asOwner.error.message : "set"})`);
+    }
     const a1 = await appoint(made.holder, "individual_product_reviewer", "Harness Preview holder");
-    const a2 = await appoint(made.other, "scholar_clinical_lead", "Harness Preview other");
+    const a2 = await appoint(made.other, "platform_director", "Harness Preview other");
     ok("0. the holder is appointed to Individual Product Reviewer (the new position) and the other fixture to a position WITHOUT the preview right",
       !a1.error && !a2.error, `${a1.error?.message ?? ""} ${a2.error?.message ?? ""}`);
 
@@ -211,7 +246,7 @@ async function main() {
     const hqCookiesBefore = cookieHeader(holderJar);
     const p2 = await open(holderJar);
     const ticket = /\/preview\/enter\?t=([0-9a-f-]{36})$/.exec(p2.location)?.[1] ?? "";
-    ok("P2a. a holder gets 303 to the PREVIEW host's /preview/enter with a ticket", p2.status === 303 && p2.location.startsWith(`http://${PREVIEW_HOST}/preview/enter?t=`) && !!ticket, `${p2.status} ${p2.location}`);
+    ok("P2a. a holder gets 303 to the PREVIEW host's /preview/enter with a ticket", p2.status === 303 && p2.location.startsWith(`http://${PREVIEW_HOST}/preview/enter?t=`) && !!ticket, `${p2.status} ${p2.location} ${p2.json?.error ?? ""}`);
     const previewJar: Jar = new Map();
     const enter = await req(PREVIEW_HOST, "GET", `/preview/enter?t=${ticket}`, previewJar);
     const setNames = setCookies(enter.res).map(c => c.split("=")[0]);
@@ -277,7 +312,7 @@ async function main() {
 
     // ── P7 ──
     const nonDemo = await admin.rpc("individual_scholar_preview_designate", { p_actor: owner, p_user: made.real, p_mode: "testing", p_reason: "harness: not a demo account" });
-    const nonOwner = await admin.rpc("individual_scholar_preview_designate", { p_actor: made.holder, p_user: made.real, p_mode: "testing", p_reason: "harness: not an owner" });
+    const nonOwner = await admin.rpc("individual_scholar_preview_designate", { p_actor: made.other, p_user: made.real, p_mode: "testing", p_reason: "harness: not an owner" });
     const wrongMode = await admin.from("individual_scholar_preview_session").insert({ actor_id: made.holder, learner_id: learnerId, mode: "testing", return_origin: "http://localhost:3100" });
     const notDesignated = await admin.from("individual_scholar_preview_session").insert({ actor_id: made.holder, learner_id: made.real, mode: "read_only", return_origin: "http://localhost:3100" });
     const asSelf = await admin.from("individual_scholar_preview_session").insert({ actor_id: learnerId, learner_id: learnerId, mode: "read_only", return_origin: "http://localhost:3100" });
