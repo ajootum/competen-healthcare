@@ -109,3 +109,13 @@ export function assembleDefinition(input: AssembleInput): { content: EditorConte
 export function renumber<T extends { position: number }>(list: T[]): T[] {
   return list.map((x, i) => ({ ...x, position: i + 1 }));
 }
+
+/** The array is the order. Sections and items are renumbered from it, and every item sits under a section that exists. */
+export function normalizeContent(c: EditorContent): EditorContent {
+  const sections = c.sections.map((s, i) => ({ ...s, position: i + 1 }));
+  const first = sections[0]?.stable_key ?? "";
+  const known = new Set(sections.map((s) => s.stable_key));
+  const items = c.items.map((i) => (known.has(i.section_key) ? i : { ...i, section_key: first }));
+  const ordered = sections.flatMap((s) => items.filter((i) => i.section_key === s.stable_key));
+  return { ...c, sections, items: ordered.map((i, n) => ({ ...i, position: n + 1 })) };
+}

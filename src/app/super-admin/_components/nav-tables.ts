@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.3.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.4.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.

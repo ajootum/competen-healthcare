@@ -8,6 +8,8 @@
  *   npx tsx scripts/assessment-core-harness.ts all        static, db, scholar, then the catalogue and its acceptance
  *   npx tsx scripts/assessment-core-harness.ts catalogue  catalogue (894) static checks, DB proofs with planted reds, acceptance
  *   npx tsx scripts/assessment-core-harness.ts catalogue-static   the catalogue static checks only (no database)
+ *   npx tsx scripts/assessment-core-harness.ts studio    Checklist Studio (S2): static gate and literal checks, DB path proofs with planted reds
+ *   npx tsx scripts/assessment-core-harness.ts studio-static   the Studio static checks only (no database)
  *   npx tsx scripts/assessment-core-harness.ts acceptance the three example instruments on STAGING (rolled back)
  *
  * SECTION S1a -- DATABASE (migrations 890, 891, 892)
@@ -383,6 +385,109 @@ async function catalogueAcceptance() {
   }
 }
 
+// ---- studio (Checklist Studio S2, HQ pages and APIs) -----------------------------------------------------------------
+
+const STUDIO_PAGES = resolve(__dirname, "../src/app/super-admin/checklist-studio");
+const STUDIO_API = resolve(__dirname, "../src/app/api/hq/checklist-studio");
+const STUDIO_LIB = resolve(__dirname, "../src/lib/assessment/studio");
+const STUDIO_PROOF = resolve(__dirname, "sql/asmt-studio-proofs.sql");
+const STUDIO_RESULT = "ASMT STUDIO PROOFS";
+
+const studioCode = (src: string) => stripTsComments(src);
+/** A Studio page asks for an assessment capability by literal BEFORE it reads anything. */
+export function pageGateProblem(src: string): string | null {
+  const code = studioCode(src);
+  const at = code.search(/requireHqCapability\(\s*"hq\.assessment\.[a-z_.]+"\s*\)/);
+  if (at < 0) return "no requireHqCapability call with an hq.assessment capability literal";
+  const read = code.search(/\.from\(|\blist[A-Z]\w*\(|\bload[A-Z]\w*\(|\breviewQueue\(|\brecentDesigns\(|\bnameMap\(|\blifecycleData\(/);
+  if (read >= 0 && read < at) return "it reads before the capability check";
+  return null;
+}
+/** A Studio route gates with hqApiGate and an assessment capability before it touches the body or the database. */
+export function routeGateProblem(src: string): string | null {
+  const code = studioCode(src);
+  const handlers = [...code.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g)];
+  if (handlers.length === 0) return "no handler";
+  for (let i = 0; i < handlers.length; i++) {
+    const from = handlers[i].index!;
+    const to = i + 1 < handlers.length ? handlers[i + 1].index! : code.length;
+    const body = code.slice(from, to);
+    const gate = body.search(/hqApiGate\(\s*\[[^\]]*CAP\.(view|author|review|publish)/);
+    if (gate < 0) return `${handlers[i][1]} does not call hqApiGate with an assessment capability`;
+    const use = body.search(/req\.json\(|ctx\.admin|await params/);
+    if (use >= 0 && use < gate) return `${handlers[i][1]} uses the request before the gate`;
+  }
+  return null;
+}
+export const AI_IMPORT = /from\s+["'](@\/lib\/ai[-/"']|@anthropic-ai\/|openai|@\/lib\/copilot|@\/lib\/ai\b)/;
+export const studioLiteralHits = (src: string): string[] => {
+  const hits: string[] = [];
+  studioCode(src).split("hq.quality.clinical.approve").join("").split("\n").forEach((l, i) => { const m = BANNED.exec(l); if (m) hits.push(`line ${i + 1}: ${m[0]}: ${l.trim().slice(0, 80)}`); });
+  return hits;
+};
+
+function studioStatic() {
+  console.log("\nstudio.static  every page and route is gated before it reads, no AI, no domain literal in the Studio library, no capture table read\n");
+  const pages = filesBelow(STUDIO_PAGES).filter((f) => /[\\/]page\.tsx$/.test(f));
+  const routes = filesBelow(STUDIO_API).filter((f) => /[\\/]route\.ts$/.test(f));
+  const lib = filesBelow(STUDIO_LIB);
+  ok("studio.s0", "the walkers found the Studio (a walker that finds none proves nothing)", pages.length >= 12 && routes.length >= 10 && lib.length >= 8, `${pages.length} pages, ${routes.length} routes, ${lib.length} lib files`);
+  const badPages = pages.map((f) => [f, pageGateProblem(readFileSync(f, "utf8"))] as const).filter(([, p]) => p);
+  ok("studio.s1", "every page under checklist-studio calls requireHqCapability with an hq.assessment capability literal before any read", badPages.length === 0, badPages.map(([f, p]) => `${f.split(/[\\/]/).slice(-3).join("/")}: ${p}`).join(" | "));
+  const badRoutes = routes.map((f) => [f, routeGateProblem(readFileSync(f, "utf8"))] as const).filter(([, p]) => p);
+  ok("studio.s2", "every API route under api/hq/checklist-studio gates with hqApiGate and an assessment capability before it reads the body or the database", badRoutes.length === 0, badRoutes.map(([f, p]) => `${f.split(/[\\/]/).slice(-3).join("/")}: ${p}`).join(" | "));
+  const sample = readFileSync(pages[0], "utf8");
+  ok("studio.s1red", "planted: a page whose capability check is removed is caught", pageGateProblem(sample.replace(/requireHqCapability\([^)]*\)/, "Promise.resolve({})")) !== null);
+  ok("studio.s1red2", "planted: a page that reads before the capability check is caught", pageGateProblem('export default async function P() { const x = await listLibrary(a); const ctx = await requireHqCapability("hq.assessment.studio.view"); }') !== null);
+  ok("studio.s1red3", "planted: a page gated on a non-assessment capability is caught", pageGateProblem('export default async function P() { const ctx = await requireHqCapability("hq.platform.users.view"); }') !== null);
+  const rsample = readFileSync(routes[0], "utf8");
+  ok("studio.s2red", "planted: a route without hqApiGate is caught", routeGateProblem(rsample.replace(/hqApiGate\(/g, "somethingElse(")) !== null);
+  ok("studio.s2red2", "planted: a route that reads the body before the gate is caught", routeGateProblem('export async function POST(req: Request) { const b = await req.json(); const ctx = await hqApiGate([CAP.author]); }') !== null);
+  const all = [...pages, ...routes, ...lib];
+  const ai = all.filter((f) => AI_IMPORT.test(studioCode(readFileSync(f, "utf8"))));
+  ok("studio.s3", "no Studio file imports an AI module", ai.length === 0, ai.join(", "));
+  ok("studio.s3red", "planted: an AI import is caught", AI_IMPORT.test('import { ask } from "@/lib/ai-intelligence";') && AI_IMPORT.test('import x from "@anthropic-ai/sdk";'));
+  const lit = lib.flatMap((f) => studioLiteralHits(readFileSync(f, "utf8")).map((h) => `${f.split(/[\\/]/).pop()} ${h}`));
+  ok("studio.s4", "no profession, framework or proficiency word outside comments in src/lib/assessment/studio/** (the adapter folder is exempt by path)", lit.length === 0, lit.slice(0, 3).join(" | "));
+  ok("studio.s4red", "planted: a domain word in Studio source is caught", studioLiteralHits("export const x = 'nursing';").length === 1 && studioLiteralHits("// nursing competency in a comment").length === 0);
+  ok("studio.s4b", "the adapter folder is the only place that names the domain (control: it really does)", filesBelow(resolve(__dirname, "../src/lib/assessment/adapters/scholar")).some((f) => studioLiteralHits(readFileSync(f, "utf8")).length > 0));
+  const forbidden = all.flatMap((f) => tablesNamed(readFileSync(f, "utf8")).filter((t) => CAT_FORBIDDEN_TABLES.includes(t)).map((t) => `${f.split(/[\\/]/).pop()}:${t}`));
+  ok("studio.s5", "no Studio page, route or library file reads an instance, response, evidence, comment, outcome, grant or progression decision table", forbidden.length === 0, forbidden.join(", "));
+  const named = new Set(all.flatMap((f) => tablesNamed(readFileSync(f, "utf8"))));
+  ok("studio.s5b", "the table scan sees the Studio tables (control)", named.has("asmt_instrument_version") && named.has("asmt_item") && named.has("asmt_review_decision"));
+  ok("studio.s5red", "planted: a read of asmt_response from a Studio file is caught", tablesNamed('admin.from("asmt_response").select("id")').some((t) => CAT_FORBIDDEN_TABLES.includes(t)));
+  const w = readFileSync(resolve(STUDIO_LIB, "write.ts"), "utf8");
+  ok("studio.s6", "every writer names the editor (updated_by on child rows, last_edited_by on the version, p_actor on the functions)", /updated_by/.test(w) && /last_edited_by/.test(w) && /p_actor/.test(w));
+}
+
+export const STUDIO_PLANTS: Plant[] = [
+  { name: "lifecycle guard removed", control: "asmt_version_lifecycle_guard on the checklist version",
+    sql: PERMISSIVE_LIFECYCLE, expect: ["S3c", "S4", "S4c", "S4d", "S7", "S10", "S10b", "S10c", "S12b", "S15b"] },
+  { name: "child freeze guard removed", control: "asmt_child_freeze_guard (the editor is recorded here, and content freezes)",
+    sql: [dis("asmt_item", "asmt_item_freeze"), dis("asmt_section", "asmt_section_freeze")].join("\n"), expect: ["S3", "S5c", "S12", "S6b", "S10b"] },
+  { name: "review decision independence removed", control: "asmt_review_decision_sod_guard",
+    sql: dis("asmt_review_decision", "asmt_review_decision_sod"), expect: ["S6", "S6b", "S6c", "S14"] },
+];
+
+async function studioDb() {
+  console.log("\nstudio.db  the Studio database path on STAGING (each run rolls back and keeps nothing)\n");
+  const require = createRequire(resolve(process.cwd(), "package.json"));
+  const { Client } = require("pg");
+  const client = new Client({ connectionString: stagingUrl(), ssl: { rejectUnauthorized: false } });
+  await client.connect();
+  try {
+    const base = await runProofs(client, "", STUDIO_PROOF, STUDIO_RESULT);
+    ok("studio.db.base", `all Studio proofs pass with every control in place (pass=${base.pass} fail=${base.fail})`, base.fail === 0 && base.pass > 0, base.fail < 0 ? base.raw.slice(0, 500) : `failed: ${base.failed.join(" ")}`);
+    for (const p of STUDIO_PLANTS) {
+      const r = await runProofs(client, p.sql, STUDIO_PROOF, STUDIO_RESULT);
+      const missing = p.expect.filter((id) => !r.failed.includes(id));
+      ok("studio.db.red", `planted: ${p.name} -> red on ${p.expect.join(" ")}`, r.fail > 0 && missing.length === 0, r.fail < 0 ? r.raw.slice(0, 300) : `not red: ${missing.join(" ")}; failed was: ${r.failed.join(" ")}`);
+    }
+  } finally {
+    await client.end();
+  }
+}
+
 async function main() {
   const arg = process.argv[2] ?? "static";
   if (arg === "static" || arg === "all") staticSection();
@@ -390,6 +495,9 @@ async function main() {
   if (arg === "scholar" || arg === "all") await scholarSection();
   if (arg === "catalogue" || arg === "all") { catalogueStatic(); await catalogueDb(); }
   if (arg === "catalogue-static") catalogueStatic();
+  if (arg === "studio" || arg === "all") { studioStatic(); await studioDb(); }
+  if (arg === "studio-static") studioStatic();
+  if (arg === "studio-db") await studioDb();
   if (arg === "acceptance" || arg === "catalogue" || arg === "all") await catalogueAcceptance();
   console.log(bad === 0 ? "\n  ALL PASS\n" : `\n  ${bad} FAILURE(S)\n`);
   process.exitCode = bad === 0 ? 0 : 1;
