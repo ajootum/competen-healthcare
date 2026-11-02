@@ -14,7 +14,8 @@
 // ⚠ FORMATIVE SIMULATION. Nothing here is assessment, competence or Passport evidence. AI feedback is labelled.
 
 import { textGroundingViolations } from "@/lib/ai/grounding";
-import { DEFAULT_DIMENSIONS, safetyEvents, validateBlueprint, type Blueprint, type CaseFact, type DecisionPoint, type StageCategory } from "@/lib/cases/blueprint";
+import { DEFAULT_DIMENSIONS, isWritten, safetyEvents, validateBlueprint, type Blueprint, type CaseFact, type DecisionPoint, type StageCategory } from "@/lib/cases/blueprint";
+import { markHandover, parseHandover } from "@/lib/cases/handover";
 import { screenBlueprint } from "@/lib/cases/screen";
 import { CASE_FACT_KINDS, isStageCategory } from "@/lib/cases/categories";
 import { findPatientIdentifiers } from "./extract";
@@ -145,10 +146,22 @@ export function checkPrivateCase(b: Blueprint, grounding: readonly string[], dim
 /** Pure. A choice marked by its key: right only when exactly the key was chosen. A free-text decision is not marked by code. */
 export function markDecision(b: Blueprint, dpId: string, chosen: readonly string[]): { correct: boolean | null; score: number | null } {
   const d = b.decisionPoints.find(x => x.id === dpId);
-  if (!d || d.kind === "free_text") return { correct: null, score: null };
+  if (!d || isWritten(d)) return { correct: null, score: null };
   const key = d.options.filter(o => o.correct).map(o => o.id);
   const hits = chosen.filter(c => key.includes(c)).length, wrong = chosen.length - hits;
   return { correct: hits === key.length && wrong === 0, score: Math.max(0, (hits - wrong) / Math.max(1, key.length)) };
+}
+
+/**
+ * Pure (CE-04). A handover marked by code: each SBAR box written, and the case's expected elements mentioned, as part
+ * marks. Not a choice and not an AI judgement. A text that is not a composed handover is unmarked (never guessed).
+ */
+export function markHandoverAnswer(b: Blueprint, dpId: string, text: string | null | undefined): { correct: boolean | null; score: number | null } {
+  const d = b.decisionPoints.find(x => x.id === dpId);
+  const parts = parseHandover(text);
+  if (!d || d.kind !== "handover" || !parts) return { correct: null, score: null };
+  const m = markHandover(d.handover, parts);
+  return { correct: m.correct, score: m.score };
 }
 
 export type CaseAnswerRecord = { decisionPointId: string; chosen: string[]; text?: string | null; correct: boolean | null; safety: string[]; marking: string };

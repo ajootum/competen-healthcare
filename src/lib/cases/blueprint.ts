@@ -1,6 +1,8 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { createHash } from "node:crypto";
 import { REASONING_CAPS, STAGE_CATEGORIES, STAGE_CATEGORY_LABEL, isStageCategory, type StageCategory } from "./categories";
+import { handoverProblems, handoverResultView, type HandoverSpec } from "./handover";
+import { voiceProblems, type PatientVoice } from "./voice";
 
 export { STAGE_CATEGORIES, STAGE_CATEGORY_LABEL, type StageCategory };
 
@@ -48,7 +50,7 @@ export type CaseOption = { id: string; text: string; correct: boolean; rationale
 export type RubricCriterion = { id: string; criterion: string; weight: number; safetyCritical: boolean; dimension?: string };
 export type DecisionPoint = {
   id: string; stageId: string; prompt: string;
-  kind: "single" | "multiple" | "free_text";
+  kind: "single" | "multiple" | "free_text" | "handover";   // CE-04: a handover is written in four SBAR boxes and marked by code first
   dimension?: string;                      // B7: the reasoning dimension it scores (a library case names one)
   options: CaseOption[];                   // the deterministic key is the options' correct flags
   rationale?: string | null;               // B6: the decision's explanation (S4 holds one per step)
@@ -58,7 +60,10 @@ export type DecisionPoint = {
   rubric?: RubricCriterion[];              // free_text, server-side only
   sourceRefs?: string[];                   // B8: private only -- opaque references to the student's own sections
   askReason?: boolean;                     // optional: after choosing, the learner is asked to explain the choice. Marking stays on the choice.
+  handover?: HandoverSpec | null;          // CE-04, kind "handover": the expected elements and pass mark, server-side only
 };
+/** CE-04: a decision whose answer is written text (a free-text answer or an SBAR handover), not a choice among options. */
+export const isWritten = (d: { kind?: string } | null | undefined): boolean => d?.kind === "free_text" || d?.kind === "handover";
 export type Stage = { id: string; title: string; reveals: string[]; decisionPointIds: string[]; narrativeHint?: string | null; category?: StageCategory | null };
 export type Transition = { from: string; onOptions?: string[]; isDefault?: boolean; to: string; consequenceFactIds: string[] };
 export type SafetyCriterion = { id: string; text: string; decisionPointId: string; mustSelect?: string[]; mustNotSelect?: string[] };
@@ -88,6 +93,8 @@ export type Blueprint = {
   references: { citation: string; url?: string | null }[];
   variation: { rules: { factId: string; values?: string[]; range?: { min: number; max: number } }[] };
   aiBoundary: { patientVoice: boolean; phraseReveals: boolean; explain: boolean };
+  /** CE-04: who the AI voices in "Talk to the patient", and what they know. Used only when aiBoundary.patientVoice is on. Server-side only. */
+  voice?: PatientVoice | null;
   metadata: {
     level: Level; complexity: 1 | 2 | 3 | 4 | 5; risk: Risk;
     professionTermId: string | null; specialtyTermIds: string[];
@@ -177,7 +184,8 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
     if ((profile === "library" || d?.dimension !== undefined) && !dimensions.includes(d?.dimension)) p.push(`decision ${d?.id}: a reasoning dimension (${dimensions.join(", ")})`);
     const opts = arr(d?.options);
     const dpRationale = str(d?.rationale, 2000);
-    if (!["single", "multiple", "free_text"].includes(d?.kind)) p.push(`decision ${d?.id}: kind single, multiple or free_text`);
+    if (!["single", "multiple", "free_text", "handover"].includes(d?.kind)) p.push(`decision ${d?.id}: kind single, multiple, free_text or handover`);
+    if (d?.kind === "handover") p.push(...handoverProblems(d?.handover, d?.id));
     if (d?.kind === "single" && (opts.length < 2 || opts.filter(o => o?.correct === true).length !== 1)) p.push(`decision ${d?.id}: a single choice needs at least two options and exactly one correct`);
     if (d?.kind === "multiple" && (opts.length < 2 || !opts.some(o => o?.correct === true))) p.push(`decision ${d?.id}: at least two options and one correct`);
     if (d?.kind === "free_text" && !str(d?.expectedResponse, 4000)) p.push(`decision ${d?.id}: a free-text decision needs its expected response`);
@@ -193,6 +201,8 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
     if (d?.askReason !== undefined && d?.askReason !== null && typeof d.askReason !== "boolean") p.push(`decision ${d?.id}: askReason is true or false`);
     if (arr(d?.sourceRefs).length && profile === "library") p.push(`decision ${d?.id}: sourceRefs belong to a private case only`);
   }
+  // CE-04: the patient voice is optional. When given it must be sound, and it is used only if aiBoundary.patientVoice is on.
+  if (b.voice !== undefined && b.voice !== null) p.push(...voiceProblems(b.voice, factIds, stageIds));
   // Optional reasoning sections (all optional, unknown shapes refused, never required).
   if (b.differentials !== undefined && b.differentials !== null) {
     if (!Array.isArray(b.differentials) || b.differentials.length > REASONING_CAPS.differentials) p.push(`differentials: a list of up to ${REASONING_CAPS.differentials}`);
@@ -350,8 +360,16 @@ export function visibleFacts(b: Blueprint, s: ViewState): Set<string> {
   return v;
 }
 
+/** Pure (CE-04): the "Talk to the patient" panel is offered only when the case allows the voice AND defines a sound one. */
+export function conversationEnabled(b: Blueprint): boolean {
+  if (b.aiBoundary?.patientVoice !== true || !b.voice) return false;
+  return voiceProblems(b.voice, new Set(b.facts.map(f => f.id)), new Set(b.stages.map(s => s.id))).length === 0;
+}
+
 export type LearnerView = {
   title: string; intro: string | null;
+  /** CE-04: set only when the case has a sound patient voice. Says who is spoken to, nothing of what they know. */
+  talk: { speaker: "patient" | "caregiver" } | null;
   patient: Blueprint["patient"];
   facts: { token: string; label: string; value: string; unit: string | null }[];
   stages: { token: string; title: string; category: StageCategory | null; categoryLabel: string | null; guidance: StageGuidance | null;
@@ -410,13 +428,14 @@ export function learnerView(b: Blueprint, s: ViewState, salt: string, opts: { hi
   const label = (id: string) => b.facts.find(f => f.id === id)?.label ?? "";
   return {
     title: b.title, intro: b.learnerIntro ?? b.patient?.presentingComplaint ?? null, patient: b.patient ?? null,
+    talk: conversationEnabled(b) ? { speaker: b.voice!.speaker } : null,
     facts: b.facts.filter(f => visible.has(f.id)).map(f => ({ token: viewToken(salt, "fact", f.id), label: f.label, value: f.value, unit: f.unit ?? null })),
     stages: b.stages.filter(st => reached.has(st.id)).map(st => ({
       token: viewToken(salt, "stage", st.id), title: st.title,
       category: isStageCategory(st.category) ? st.category : null, categoryLabel: isStageCategory(st.category) ? STAGE_CATEGORY_LABEL[st.category] : null,
       guidance: stageGuidance(b, st, s.reachedStageIds),
       decisionPoints: b.decisionPoints.filter(d => d.stageId === st.id).map(d => ({
-        token: viewToken(salt, "decision", d.id), prompt: d.prompt, kind: d.kind, askReason: d.askReason === true && d.kind !== "free_text",
+        token: viewToken(salt, "decision", d.id), prompt: d.prompt, kind: d.kind, askReason: d.askReason === true && !isWritten(d),
         options: d.options.map(o => ({ token: viewToken(salt, "option", optionKey(d.id, o.id)), text: o.text })),
         canReveal: d.permittedReveals.filter(r => !visible.has(r)).map(r => ({ token: viewToken(salt, "fact", r), label: label(r) })),
         hint: opts.hints ? d.hint ?? null : null,
@@ -426,10 +445,12 @@ export function learnerView(b: Blueprint, s: ViewState, salt: string, opts: { hi
 }
 
 /** Pure (B5): what a learner sees after answering ONE decision -- its explanation, the key, and any safety events. */
-export function answeredView(b: Blueprint, decisionPointId: string, chosen: string[], salt: string) {
+export function answeredView(b: Blueprint, decisionPointId: string, chosen: string[], salt: string, text?: string | null) {
   const d = b.decisionPoints.find(x => x.id === decisionPointId);
   if (!d) return null;
   return {
+    // CE-04: a handover's part marks (which boxes were written, which key points were found or missed), after answering only.
+    ...(d.kind === "handover" ? { handover: handoverResultView(d.handover, text) } : {}),
     token: viewToken(salt, "decision", d.id), dimension: d.dimension, rationale: d.rationale ?? null,
     options: d.options.map(o => ({ token: viewToken(salt, "option", optionKey(d.id, o.id)), correct: o.correct, chosen: chosen.includes(o.id), rationale: o.rationale ?? null })),
     safetyEvents: safetyEvents(b, d.id, chosen).map(c => c.text),

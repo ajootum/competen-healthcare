@@ -33,6 +33,7 @@ const box = "rounded-xl border border-gray-200 bg-white p-4";
 const h2 = "text-[14px] font-bold text-gray-900";
 const small = "text-[12px] text-gray-500";
 const nextId = (prefix: string, used: string[]) => { let n = 1; while (used.includes(`${prefix}${n}`)) n++; return `${prefix}${n}`; };
+const blankVoice = () => ({ speaker: "patient", persona: "", style: "", knowsFactIds: [] as string[], knowsStatements: [] as any[], keyQuestions: [] as any[], notKnownReply: null });
 const lines = (s: string) => s.split("\n").map(x => x.trim()).filter(Boolean);
 
 export function CaseEditor({ versionId, initial, competencies, dimensions, initialProblems, classification }: { versionId: string; initial: any; competencies: Comp[]; dimensions: string[]; initialProblems: string[]; classification: ClassOpts }) {
@@ -151,14 +152,28 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
                 <div key={d.id} className="mt-3 rounded-lg bg-gray-50 p-3">
                   <div className="grid gap-2 sm:grid-cols-3">
                     <label className={`${lbl} sm:col-span-3`}>Decision prompt<textarea rows={2} className={`${input} mt-1 block w-full`} value={d.prompt} onChange={e => up(x => { x.decisionPoints[di].prompt = e.target.value; })} /></label>
-                    <label className={lbl}>Answer form<select className={`${input} mt-1 block w-full`} value={d.kind} onChange={e => up(x => { x.decisionPoints[di].kind = e.target.value; })}><option value="single">One choice</option><option value="multiple">Several choices</option><option value="free_text">Written answer</option></select></label>
+                    <label className={lbl}>Answer form<select className={`${input} mt-1 block w-full`} value={d.kind} onChange={e => up(x => { const dp = x.decisionPoints[di]; dp.kind = e.target.value; if (dp.kind === "handover") { dp.options = []; dp.handover = dp.handover ?? { elements: [] }; } else { delete dp.handover; if (!dp.options?.length) dp.options = [{ id: "o1", text: "", correct: true, rationale: "" }, { id: "o2", text: "", correct: false, rationale: "" }]; } })}><option value="single">One choice</option><option value="multiple">Several choices</option><option value="free_text">Written answer</option><option value="handover">SBAR handover</option></select></label>
                     <label className={lbl}>Reasoning dimension<select className={`${input} mt-1 block w-full`} value={d.dimension ?? ""} onChange={e => up(x => { x.decisionPoints[di].dimension = e.target.value; })}><option value="">Choose</option>{dimensions.map(m => <option key={m} value={m}>{m}</option>)}</select></label>
                     <label className={lbl}>Hint (guided mode)<input className={`${input} mt-1 block w-full`} value={d.hint ?? ""} onChange={e => up(x => { x.decisionPoints[di].hint = e.target.value || null; })} /></label>
-                    {d.kind !== "free_text" && <label className="flex items-end gap-2 pb-1 text-[12.5px] text-gray-700"><input type="checkbox" className="mr-1" checked={d.askReason === true} onChange={e => up(x => { if (e.target.checked) x.decisionPoints[di].askReason = true; else delete x.decisionPoints[di].askReason; })} />Ask the learner to explain their choice (never changes the marking)</label>}
+                    {d.kind !== "free_text" && d.kind !== "handover" && <label className="flex items-end gap-2 pb-1 text-[12.5px] text-gray-700"><input type="checkbox" className="mr-1" checked={d.askReason === true} onChange={e => up(x => { if (e.target.checked) x.decisionPoints[di].askReason = true; else delete x.decisionPoints[di].askReason; })} />Ask the learner to explain their choice (never changes the marking)</label>}
                     <label className={`${lbl} sm:col-span-3`}>Why (the decision&apos;s rationale)<textarea rows={2} className={`${input} mt-1 block w-full`} value={d.rationale ?? ""} onChange={e => up(x => { x.decisionPoints[di].rationale = e.target.value || null; })} /></label>
                   </div>
                   {d.kind === "free_text" ? (
                     <label className={`${lbl} mt-2`}>Expected answer (server-side only)<textarea rows={2} className={`${input} mt-1 block w-full`} value={d.expectedResponse ?? ""} onChange={e => up(x => { x.decisionPoints[di].expectedResponse = e.target.value; })} /></label>
+                  ) : d.kind === "handover" ? (
+                    <div className="mt-2 space-y-2">
+                      <p className={small}>The learner writes a handover in four boxes (Situation, Background, Assessment, Recommendation). It is marked by code: each box written, then the points below mentioned. These points are server-side only.</p>
+                      {(d.handover?.elements ?? []).map((el: any, ei: number) => (
+                        <div key={el.id} className="grid gap-2 sm:grid-cols-6">
+                          <label className={`${lbl} sm:col-span-2`}>Point a good handover mentions<input className={`${input} mt-1 block w-full`} value={el.label} onChange={e => up(x => { x.decisionPoints[di].handover.elements[ei].label = e.target.value; })} /></label>
+                          <label className={lbl}>In which box<select className={`${input} mt-1 block w-full`} value={el.section ?? ""} onChange={e => up(x => { if (e.target.value) x.decisionPoints[di].handover.elements[ei].section = e.target.value; else delete x.decisionPoints[di].handover.elements[ei].section; })}><option value="">Anywhere</option><option value="situation">Situation</option><option value="background">Background</option><option value="assessment">Assessment</option><option value="recommendation">Recommendation</option></select></label>
+                          <label className={`${lbl} sm:col-span-2`}>Words that count (comma-separated)<input className={`${input} mt-1 block w-full`} value={(el.terms ?? []).join(", ")} onChange={e => up(x => { x.decisionPoints[di].handover.elements[ei].terms = e.target.value.split(",").map((t: string) => t.trim()).filter(Boolean); })} /></label>
+                          <div className="flex items-end"><button type="button" className={ghost} aria-label={`Remove point ${ei + 1}`} onClick={() => up(x => { x.decisionPoints[di].handover.elements.splice(ei, 1); })}>Remove</button></div>
+                        </div>
+                      ))}
+                      <button type="button" className={ghost} onClick={() => up(x => { const used = (x.decisionPoints[di].handover?.elements ?? []).map((q: any) => q.id); if (!x.decisionPoints[di].handover) x.decisionPoints[di].handover = { elements: [] }; x.decisionPoints[di].handover.elements.push({ id: nextId("e", used), label: "", terms: [] }); })}>Add a point</button>
+                      <label className={lbl}>Pass mark (percent of the marks, default 70)<input type="number" min={1} max={100} className={`${input} mt-1 block w-24`} value={d.handover?.passMark ? Math.round(d.handover.passMark * 100) : ""} onChange={e => up(x => { if (e.target.value) x.decisionPoints[di].handover.passMark = Math.min(100, Math.max(1, Number(e.target.value))) / 100; else delete x.decisionPoints[di].handover.passMark; })} /></label>
+                    </div>
                   ) : (
                     <div className="mt-2 space-y-2">
                       {d.options.map((o: any, oi: number) => (
@@ -306,6 +321,40 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
             <label className="mr-3"><input type="checkbox" className="mr-1" checked={b.aiBoundary.phraseReveals} onChange={e => up(x => { x.aiBoundary.phraseReveals = e.target.checked; })} />Phrase reveals</label>
             <label><input type="checkbox" className="mr-1" checked={b.aiBoundary.explain} onChange={e => up(x => { x.aiBoundary.explain = e.target.checked; })} />Explain after answering</label>
           </fieldset>
+          {b.aiBoundary.patientVoice && (
+            <fieldset className="rounded-lg border border-gray-200 p-3 text-[12.5px]"><legend className={small}>Talk to the patient: who the AI voices, and what they know (server-side only, approved with this version)</legend>
+              <p className={small}>The learner can type questions and the AI answers in this person&apos;s voice, using only what is listed here and only once the learner has been shown it. It never reveals a finding they have not asked for, a later stage, or the diagnosis. A voice is needed for the panel to appear.</p>
+              <div className="mt-2 grid gap-2 sm:grid-cols-3">
+                <label className={lbl}>Who speaks<select className={`${input} mt-1 block w-full`} value={b.voice?.speaker ?? "patient"} onChange={e => up(x => { x.voice = { ...(x.voice ?? blankVoice()), speaker: e.target.value }; })}><option value="patient">The patient</option><option value="caregiver">A caregiver</option></select></label>
+                <label className={`${lbl} sm:col-span-2`}>How they speak<input className={`${input} mt-1 block w-full`} maxLength={400} value={b.voice?.style ?? ""} onChange={e => up(x => { x.voice = { ...(x.voice ?? blankVoice()), style: e.target.value }; })} /></label>
+                <label className={`${lbl} sm:col-span-3`}>Who they are (persona)<textarea rows={2} className={`${input} mt-1 block w-full`} maxLength={600} value={b.voice?.persona ?? ""} onChange={e => up(x => { x.voice = { ...(x.voice ?? blankVoice()), persona: e.target.value }; })} /></label>
+                <label className={`${lbl} sm:col-span-3`}>Reply when asked something they would not know<input className={`${input} mt-1 block w-full`} maxLength={200} value={b.voice?.notKnownReply ?? ""} onChange={e => up(x => { x.voice = { ...(x.voice ?? blankVoice()), notKnownReply: e.target.value || null }; })} /></label>
+              </div>
+              <fieldset className="mt-2"><legend className={small}>Findings this person can speak to (only once the learner has been shown them)</legend>
+                {b.facts.map((f: any) => <label key={f.id} className="mr-3 inline-block text-[12.5px]"><input type="checkbox" className="mr-1" checked={(b.voice?.knowsFactIds ?? []).includes(f.id)} onChange={e => up(x => { x.voice = { ...(x.voice ?? blankVoice()) }; x.voice.knowsFactIds = toggle(x.voice.knowsFactIds ?? [], f.id, e.target.checked); })} />{f.label || f.id}</label>)}
+              </fieldset>
+              <div className="mt-2 space-y-2"><p className={small}>Other things only this person would say (how they feel, home life), known from the start or from a stage onward</p>
+                {(b.voice?.knowsStatements ?? []).map((s: any, si: number) => (
+                  <div key={s.id} className="grid gap-2 sm:grid-cols-6">
+                    <label className={`${lbl} sm:col-span-4`}>They say<input className={`${input} mt-1 block w-full`} maxLength={300} value={s.text} onChange={e => up(x => { x.voice.knowsStatements[si].text = e.target.value; })} /></label>
+                    <label className={lbl}>Known from<select className={`${input} mt-1 block w-full`} value={s.from} onChange={e => up(x => { x.voice.knowsStatements[si].from = e.target.value; })}><option value="start">The start</option>{b.stages.map((st: any) => <option key={st.id} value={st.id}>{st.title || st.id}</option>)}</select></label>
+                    <div className="flex items-end"><button type="button" className={ghost} aria-label={`Remove statement ${si + 1}`} onClick={() => up(x => { x.voice.knowsStatements.splice(si, 1); })}>Remove</button></div>
+                  </div>
+                ))}
+                <button type="button" className={ghost} onClick={() => up(x => { x.voice = { ...(x.voice ?? blankVoice()) }; x.voice.knowsStatements = [...(x.voice.knowsStatements ?? []), { id: nextId("v", (x.voice.knowsStatements ?? []).map((q: any) => q.id)), text: "", from: "start" }]; })}>Add a statement</button>
+              </div>
+              <div className="mt-2 space-y-2"><p className={small}>Key questions a good history asks (used to review the learner&apos;s questions after the case, by code)</p>
+                {(b.voice?.keyQuestions ?? []).map((k: any, ki: number) => (
+                  <div key={k.id} className="grid gap-2 sm:grid-cols-6">
+                    <label className={`${lbl} sm:col-span-3`}>Question<input className={`${input} mt-1 block w-full`} maxLength={160} value={k.label} onChange={e => up(x => { x.voice.keyQuestions[ki].label = e.target.value; })} /></label>
+                    <label className={`${lbl} sm:col-span-2`}>Words that show it was asked (comma-separated)<input className={`${input} mt-1 block w-full`} value={(k.terms ?? []).join(", ")} onChange={e => up(x => { x.voice.keyQuestions[ki].terms = e.target.value.split(",").map((t: string) => t.trim()).filter(Boolean); })} /></label>
+                    <div className="flex items-end"><button type="button" className={ghost} aria-label={`Remove question ${ki + 1}`} onClick={() => up(x => { x.voice.keyQuestions.splice(ki, 1); })}>Remove</button></div>
+                  </div>
+                ))}
+                <button type="button" className={ghost} onClick={() => up(x => { x.voice = { ...(x.voice ?? blankVoice()) }; x.voice.keyQuestions = [...(x.voice.keyQuestions ?? []), { id: nextId("q", (x.voice.keyQuestions ?? []).map((q: any) => q.id)), label: "", terms: [] }]; })}>Add a key question</button>
+              </div>
+            </fieldset>
+          )}
         </div>
       </section>
     </div>

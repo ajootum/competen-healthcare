@@ -87,10 +87,28 @@ export type ModuleFacts = {
 // SQIE-COMPLETE-01: the two Scholar tables the HQ question catalogue reads in aggregate. They are named in full (not as an
 // `individual_scholar_` family prefix) so that ONLY these two are judged here: a prefix is the cheapest classifier, and a
 // whole-family prefix would surface every Individual read in the closure, which is a separate decision.
-export const PLANE_TABLE_PREFIXES = ["practice_", "mos_", "pd_", "individual_scholar_question", "individual_scholar_attempt"] as const;
+//
+// HQ-USERS-DIRECTORY-01 (owner GO 2 Nov 2026): the users directory and the profile read Individual access, the person's
+// own education and professional LABELS and one HQ table. These are named EXACTLY, with a leading `=`, never as a prefix:
+// `individual_scholar_learner` is a prefix of `individual_scholar_learner_context`, which must NEVER be readable from this
+// plane, so that neighbour family is also governed (prefix `individual_scholar_learner_`) with NO allowlist entry, and any
+// read of it is refused outright. `individual_professional_profile_item` and `_context` are NOT denied here: existing
+// verification and reminder code in the closure reads them today, so denying them is a separate decision. The exact entry
+// for `individual_professional_profile` admits only that table.
+export const PLANE_TABLE_PREFIXES = [
+  "practice_", "mos_", "pd_", "individual_scholar_question", "individual_scholar_attempt",
+  "=individual_membership", "=individual_entitlement", "=individual_live_entitlement",
+  "=individual_invitation", "=individual_live_invitation", "=individual_identity_profile",
+  "=individual_scholar_learner", "=individual_scholar_programme", "=individual_professional_profile",
+  "=hq_account_participation",
+  // the NEIGHBOURS of two exact entries, governed with NO allowlist entry so any read of them is refused outright
+  "individual_scholar_learner_",
+] as const;
 
+/** A prefix entry, or an exact table name when it starts with `=`. */
+const matchesEntry = (table: string, entry: string): boolean => (entry.startsWith("=") ? table === entry.slice(1) : table.startsWith(entry));
 const matchesPrefix = (table: string, prefix: string | readonly string[]): boolean =>
-  typeof prefix === "string" ? table.startsWith(prefix) : prefix.some(p => table.startsWith(p));
+  typeof prefix === "string" ? matchesEntry(table, prefix) : prefix.some(p => matchesEntry(table, p));
 
 // ── THE ANALYSIS ─────────────────────────────────────────────────────────────────────────────────────
 

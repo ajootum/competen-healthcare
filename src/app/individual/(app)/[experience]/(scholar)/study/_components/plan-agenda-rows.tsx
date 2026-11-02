@@ -7,10 +7,12 @@ import { CALENDAR_REACH_DAYS } from "@/lib/individual/scholar/study-calendar-kin
 import type { CalendarItem } from "@/lib/individual/scholar/study-calendar";
 import { addDay, type LinkOption } from "@/lib/individual/scholar/plan-view";
 import { planRefOfKey, startHref } from "@/lib/individual/scholar/plan-today-view";
+import { isPendingItem, type PlanPatch } from "@/lib/individual/scholar/plan-patches";
 import { doneAtOfKey, groupCompleted, groupTitle, isDuePlanItem, rowIconKind, rowSubtitle, rowWhen, type DayRow } from "@/lib/individual/scholar/plan-workspace";
 import { EntryActions } from "./plan-entries";
 import { fieldCls, focusRing, labelCls, menuItemCls, pillOutline, pillPrimary, primaryBtn, secondaryBtn, whenChipCls } from "./plan-style";
 import { ChevronIcon, ClockIcon, ErrorLine, PlanDialog, RowIcon, RowMenu, callJson, errorOf } from "./plan-ui";
+import { usePatchedDay, usePlanUpdates } from "./plan-optimistic";
 
 // MY PLAN -> THE ROWS OF ONE DAY (CE-03 mobile-first), shared by the Calendar's selected-day panel and Today. A row: a round tinted icon, the title,
 // a muted line (what it is and its status), the length in a small clock chip, then ONE main action (Start / Open for Scholar's items, Edit for the
@@ -28,30 +30,25 @@ const timeOf = (at: string) => new Date(at).toLocaleTimeString("en-GB", { hour: 
 
 /** Move a Scholar activity or the monthly review (the existing calendar route), as a small dialog. */
 export function ScholarMove({ item, date, today, accent, onClose }: { item: CalendarItem; date: string; today: string; accent: string; onClose: () => void }) {
-  const router = useRouter();
+  const updates = usePlanUpdates();
   const uid = useId();
   const [to, setTo] = useState(date < today ? today : date);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  async function save(body: unknown) {
-    setBusy(true); setError("");
-    const r = await callJson(CAL_API, "POST", body);
-    setBusy(false);
-    if (!r.ok) { setError(errorOf(r)); return; }
-    onClose(); router.refresh();
+  // The new day is shown at once and the dialog closes; the server is asked as before and a refusal puts the activity back and says why.
+  function save(body: unknown, patch: PlanPatch) {
+    onClose();
+    void updates.commit([patch], () => callJson(CAL_API, "POST", body));
   }
   const e = item.entry!;
   return (
     <PlanDialog title={`Move: ${item.title}`} onClose={onClose}>
-      <form onSubmit={ev => { ev.preventDefault(); void save({ action: "reschedule", kind: e.kind, ref: e.ref, originalDate: e.originalDate, scheduledDate: to }); }}>
+      <form onSubmit={ev => { ev.preventDefault(); save({ action: "reschedule", kind: e.kind, ref: e.ref, originalDate: e.originalDate, scheduledDate: to }, { kind: "move", key: item.key, to }); }}>
         <label htmlFor={`${uid}-d`} className={labelCls}>Move to</label>
         <input id={`${uid}-d`} type="date" className={`${fieldCls} max-w-xs`} value={to} min={today} max={addDay(today, CALENDAR_REACH_DAYS)} required onChange={ev => setTo(ev.target.value)} />
         <p className="mt-1 text-[12.5px] text-gray-600">This moves the plan only. It never changes when a card is due.</p>
-        <div className="mt-3"><ErrorLine text={error} /></div>
         <div className="mt-3 flex flex-wrap gap-2">
-          <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : "Save the new day"}</button>
-          {item.movedFrom && <button type="button" className={secondaryBtn} disabled={busy} onClick={() => void save({ action: "restore", kind: e.kind, ref: e.ref })}>Put back</button>}
-          <button type="button" className={secondaryBtn} disabled={busy} onClick={onClose}>Cancel</button>
+          <button type="submit" className={primaryBtn} style={{ background: accent }}>Save the new day</button>
+          {item.movedFrom && <button type="button" className={secondaryBtn} onClick={() => save({ action: "restore", kind: e.kind, ref: e.ref }, { kind: "move", key: item.key, to: e.originalDate, restore: true })}>Put back</button>}
+          <button type="button" className={secondaryBtn} onClick={onClose}>Cancel</button>
         </div>
       </form>
     </PlanDialog>
@@ -62,9 +59,8 @@ export function ScholarMove({ item, date, today, accent, onClose }: { item: Cale
 function ScholarActions({ item, date, today, accent, studyId, canDecide, elseHref, onError }: {
   item: CalendarItem; date: string; today: string; accent: string; studyId: string | null; canDecide: boolean; elseHref: string; onError: (m: string) => void;
 }) {
-  const router = useRouter();
+  const updates = usePlanUpdates();
   const [moving, setMoving] = useState(false);
-  const [busy, setBusy] = useState(false);
   const planned = item.kind === "planned";
   const canMove = item.movable && !!item.entry;
   const next = addDay(date < today ? today : date, 1);
@@ -73,12 +69,10 @@ function ScholarActions({ item, date, today, accent, studyId, canDecide, elseHre
   const href = startHref(item.href, studyId);
   const open = item.kind === "due_revision" || isDuePlanItem(item);
 
-  async function call(url: string, body: unknown) {
-    setBusy(true); onError("");
-    const r = await callJson(url, "POST", body);
-    setBusy(false);
-    if (!r.ok) { onError(errorOf(r)); return; }
-    router.refresh();
+  // Postponing or setting aside shows at once; the server is asked as before and a refusal puts it back and says why.
+  function call(url: string, body: unknown, patch: PlanPatch) {
+    onError("");
+    void updates.commit([patch], () => callJson(url, "POST", body));
   }
   const e = item.entry;
   const hasMenu = planned || canMove;
@@ -88,9 +82,9 @@ function ScholarActions({ item, date, today, accent, studyId, canDecide, elseHre
       {hasMenu && (
         <RowMenu label={`Change: ${item.title}`} trigger="change">
           {canMove && <button type="button" className={menuItemCls} onClick={() => setMoving(true)}>Move</button>}
-          {canPostpone && e && <button type="button" className={menuItemCls} disabled={busy} onClick={() => void call(CAL_API, { action: "reschedule", kind: e.kind, ref: e.ref, originalDate: e.originalDate, scheduledDate: next })}>Postpone to tomorrow</button>}
+          {canPostpone && e && <button type="button" className={menuItemCls} onClick={() => call(CAL_API, { action: "reschedule", kind: e.kind, ref: e.ref, originalDate: e.originalDate, scheduledDate: next }, { kind: "move", key: item.key, to: next })}>Postpone to tomorrow</button>}
           {planned && <Link href={elseHref} className={menuItemCls}>Something else</Link>}
-          {planned && canDecide && ref && <button type="button" className={menuItemCls} disabled={busy} onClick={() => void call("/api/individual/scholar/plan/decision", { kind: "recommendation_declined", ref })}>Not this</button>}
+          {planned && canDecide && ref && <button type="button" className={menuItemCls} onClick={() => call("/api/individual/scholar/plan/decision", { kind: "recommendation_declined", ref }, { kind: "remove", key: item.key })}>Not this</button>}
         </RowMenu>
       )}
       {moving && <ScholarMove item={item} date={date} today={today} accent={accent} onClose={() => setMoving(false)} />}
@@ -133,7 +127,9 @@ function ItemRow({ item, ctx }: { item: CalendarItem; ctx: RowsContext }) {
   return (
     <li data-kind={item.kind} data-key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-gray-100 py-3 last:border-b-0">
       <RowFrame icon={<RowIcon kind={rowIconKind(item)} />} title={item.title} sub={rowSubtitle(item, ctx.date)} chip={chip} error={error}>
-        {occ ? (
+        {occ && isPendingItem(item) ? (
+          <span className="text-[12.5px] font-semibold text-gray-600" role="status">Saving…</span>
+        ) : occ ? (
           <>
             <EntryActions occ={occ} today={ctx.today} links={ctx.links} accent={ctx.accent} part="edit" />
             <EntryActions occ={occ} today={ctx.today} links={ctx.links} accent={ctx.accent} part="menu" />
@@ -190,6 +186,11 @@ export function AgendaRows({ items, ctx }: { items: readonly CalendarItem[]; ctx
 }
 
 /** Notes the calendar carries, and moves that match no current activity (offered for removal). */
+/** Today's schedule rows: AgendaRows with the learner's unconfirmed changes (a postponement, a move) laid over them. */
+export function LiveAgendaRows({ items, ctx }: { items: readonly CalendarItem[]; ctx: RowsContext }) {
+  return <AgendaRows items={usePatchedDay(ctx.date, items)} ctx={ctx} />;
+}
+
 export function Notes({ notes, unattached }: { notes: string[]; unattached: { ref: string; originalDate: string | null; scheduledDate: string | null }[] }) {
   const router = useRouter();
   const [busy, setBusy] = useState("");

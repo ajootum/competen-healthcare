@@ -6,6 +6,7 @@ import { QUESTION_MAX } from "@/lib/individual/assistant-limits";
 import { AiRefusalNotice, aiActionProps } from "../../../_components/ai/AiAvailability";
 import ClarifyPurpose from "../../../_components/ai/ClarifyPurpose";
 import { clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
+import { DictateButton } from "../../../_components/speech/speech-buttons";
 import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi, type OwnCardTarget } from "../../../_components/ai/PersonalAiAnswer";
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { askRequestBody } from "@/lib/individual/scholar/ask-context";
@@ -53,6 +54,7 @@ export default function AssistantPanel({ experience, accent, unavailable = false
   const off = aiActionProps(unavailable ? { available: false, reason: "unreadable" } : { available: true }, "ai-unavailable");
   const [turns, setTurns] = useState<Turn[]>([]);
   const [depth, setDepth] = useState<PersonalAiDepth>("standard");
+  const questionRef = useRef<HTMLTextAreaElement>(null);
   const seq = useRef(0);
   const abort = useRef<AbortController | null>(null);
   useEffect(() => () => abort.current?.abort(), []);
@@ -115,7 +117,7 @@ export default function AssistantPanel({ experience, accent, unavailable = false
       )}
       <form onSubmit={e => { e.preventDefault(); void ask({ q: question }); }} className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
         <label htmlFor="ind-q" className="text-[14px] font-semibold text-gray-900">Your question</label>
-        <textarea id="ind-q" value={question} onChange={e => setQuestion(e.target.value)} maxLength={QUESTION_MAX} rows={3}
+        <textarea id="ind-q" ref={questionRef} value={question} onChange={e => setQuestion(e.target.value)} maxLength={QUESTION_MAX} rows={3}
           className={`mt-2 w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`}
           placeholder="Ask anything about your learning or development" />
         <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -125,6 +127,7 @@ export default function AssistantPanel({ experience, accent, unavailable = false
             {busy ? (writing ? "Writing…" : "Thinking…") : "Ask"}
           </button>
           {scholar && <DepthControl value={depth} onChange={setDepth} disabled={busy} />}
+          {scholar && <DictateButton inputRef={questionRef} onValue={setQuestion} disabled={busy || unavailable} />}
           <span className="text-[12px] text-gray-500 tabular-nums">{question.length}/{QUESTION_MAX}</span>
         </div>
         {turns.length === 0 && (

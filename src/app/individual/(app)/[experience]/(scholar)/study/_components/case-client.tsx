@@ -16,6 +16,9 @@ import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
+import { CaseConversation, EMPTY_HANDOVER, HandoverBoxes, HandoverResult, handoverReady, type HandoverValue } from "./case-talk-client";
+import type { HandoverResultView } from "@/lib/cases/handover";
+import { DictateButton, ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -198,8 +201,10 @@ export function CaseStart(props: {
 
 // ── PLAY A CASE ──
 
-type Answered = { token: string; options: { token: string; correct: boolean; chosen: boolean; rationale: string | null }[]; rationale: string | null; safetyEvents: string[] } | null;
-type Feedback = { token: string; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[] };
+type Answered = { token: string; options: { token: string; correct: boolean; chosen: boolean; rationale: string | null }[]; rationale: string | null; safetyEvents: string[];
+  /** CE-04: a handover's part marks, after answering. */
+  handover?: HandoverResultView | null } | null;
+type Feedback = { token: string; handover?: HandoverResultView | null; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[] };
 type Debrief = {
   answered: number; of: number; correct: number; dimensions: { dimension: string; answered: number; correct: number; written: number }[];
   safetyEvents: string[]; missedFindings: { label: string }[]; objectives: { text: string }[]; revisit: { decisionPointId: string; chunkIds: string[] }[]; label: string;
@@ -209,6 +214,8 @@ export type Play = {
   kind: "private" | "library"; sessionId: string; status: string; view: LearnerView; answered: string[]; feedback: Feedback[]; debrief: Debrief | null; label: string; materialId?: string; caseId?: string;
   /** The saved "why" per decision token, kept with the answer on the server, so it returns on any device. */
   reasons?: Record<string, string>; closing?: Closing | null;
+  /** CE-04: the labelled AI comment kept beside a handover, by decision token. */
+  handoverNotes?: Record<string, { label: string; text: string }>;
   /** The kept record of a finished attempt (SCHOLAR-CASE-INTEGRITY-01), when there is one. */
   attempt?: Attempt | null;
 };
@@ -222,6 +229,8 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   const [fresh, setFresh] = useState<Record<string, Feedback>>({});
   const [choice, setChoice] = useState<Record<string, string[]>>({});
   const [text, setText] = useState<Record<string, string>>({});
+  // CE-04: the four SBAR boxes of a handover decision, by decision token.
+  const [hv, setHv] = useState<Record<string, HandoverValue>>({});
   // SCHOLAR-LEARN-GAPS-02 item 3: how a written decision was read (display only; it is marked and kept as typed).
   const [spelt, setSpelt] = useState<Record<string, AnswerSpelling>>({});
   // "Explain your choice": typed here and sent with the answer, which keeps it on the server. Where it cannot be kept, this page still holds it for the debrief.
@@ -240,13 +249,14 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   async function answer(decisionToken: string, kind: string) {
     setBusy(decisionToken); setError("");
     const why = (reason[decisionToken] ?? "").trim();
-    const r = await call(`${base}/answer`, kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints, ...spellingField(readSpellingChoice()) }
+    const r = await call(`${base}/answer`, kind === "handover" ? { decisionToken, handover: hv[decisionToken] ?? EMPTY_HANDOVER, hints }
+      : kind === "free_text" ? { decisionToken, text: text[decisionToken] ?? "", hints, ...spellingField(readSpellingChoice()) }
       : { decisionToken, optionTokens: choice[decisionToken] ?? [], hints, ...(why ? { reason: why } : {}) });
     setBusy("");
     if (!r.ok) { setError(r.json.error ?? "Your answer could not be recorded."); return; }
     setFresh(f => ({ ...f, [decisionToken]: r.json.feedback }));
     if (r.json.spelling) setSpelt(s => ({ ...s, [decisionToken]: r.json.spelling }));
-    setPlay(p => ({ ...p, ...r.json.play }));
+    setPlay(p => ({ ...p, ...r.json.play, ...(r.json.handoverNote ? { handoverNotes: { ...(p.handoverNotes ?? {}), [decisionToken]: r.json.handoverNote } } : {}) }));
   }
   const v = play.view;
   return (
@@ -255,6 +265,11 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       <h2 id="case-h" className="mt-1 text-[17px] font-bold text-gray-900">{v.title}</h2>
       {v.intro && <p className="mt-1 text-[14.5px] leading-relaxed text-gray-800">{v.intro}</p>}
       {v.patient && <p className="mt-1 text-[13px] text-gray-600">{[v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(" · ")}</p>}
+
+      {/* CE-06: the case so far (title, introduction, patient, findings), read by the browser's own voice. Never an answer: only what the learner can already see. */}
+      <ReadAloudButton className="mt-2" label="Listen to the case" about="the case so far"
+        text={[v.title, v.intro, v.patient ? [v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(". ") : null,
+          v.facts.length ? "Findings so far. " + v.facts.map(f => `${f.label}: ${f.value}${f.unit ? ` ${f.unit}` : ""}.`).join(" ") : null].filter(Boolean).join("\n\n")} />
 
       <section aria-labelledby="findings-h" className="mt-4 rounded-xl bg-gray-50 p-4">
         <h3 id="findings-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Findings so far</h3>
@@ -265,11 +280,16 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
         )}
       </section>
 
+      {/* SCHOLAR-CE-2026 CE-04: only when the case's version defines a patient or caregiver voice. */}
+      {v.talk && play.status === "active" && <CaseConversation base={base} speaker={v.talk.speaker} active />}
+
       <ol className="mt-4 space-y-4">
         {v.stages.map((st, si) => (
           <li key={st.token} className="rounded-xl border border-gray-200 p-4">
             <p className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: accent }}>Stage {si + 1}{st.categoryLabel ? ` · ${st.categoryLabel}` : ""}</p>
             <h3 className="text-[15px] font-bold text-gray-900">{st.title}</h3>
+            <ReadAloudButton className="mt-1" label="Listen to this stage" about={`stage ${si + 1}`}
+              text={[st.title, ...st.decisionPoints.filter(d => !play.answered.includes(d.token)).map(d => d.prompt)].join("\n\n")} />
             {st.guidance && <StageGuidanceBox g={st.guidance} />}
             {st.decisionPoints.map(d => {
               const fb = feedbackFor(d.token);
@@ -285,10 +305,15 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                     </div>
                   )}
                   {!done ? (
-                    d.kind === "free_text" ? (
+                    d.kind === "handover" ? (
+                      <HandoverBoxes id={`hv-${d.token}`} value={hv[d.token] ?? EMPTY_HANDOVER} onChange={x => setHv(h => ({ ...h, [d.token]: x }))} />
+                    ) : d.kind === "free_text" ? (
+                      <>
                       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reasoning
-                        <textarea rows={3} maxLength={4000} value={text[d.token] ?? ""} onChange={e => setText(t => ({ ...t, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                        <textarea id={`case-text-${d.token}`} rows={3} maxLength={4000} value={text[d.token] ?? ""} onChange={e => setText(t => ({ ...t, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
                       </label>
+                      <DictateButton fieldId={`case-text-${d.token}`} onValue={v => setText(t => ({ ...t, [d.token]: v }))} disabled={!!busy} className="mt-1" />
+                      </>
                     ) : (
                       <fieldset className="mt-2"><legend className="sr-only">{d.kind === "multiple" ? "Choose all that apply" : "Choose one"}</legend>
                         {d.kind === "multiple" && <p className="mb-1 text-[12.5px] text-gray-600">Choose all that apply.</p>}
@@ -307,13 +332,16 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                       </fieldset>
                     )
                   ) : null}
-                  {!done && d.askReason && d.kind !== "free_text" && (
+                  {!done && d.askReason && d.kind !== "free_text" && d.kind !== "handover" && (
+                    <>
                     <label className="mt-2 block text-[13px] font-semibold text-gray-800">Explain your choice <span className="font-normal text-gray-600">(optional: it does not change how the choice is marked)</span>
-                      <textarea rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                      <textarea id={`case-reason-${d.token}`} rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
                     </label>
+                    <DictateButton fieldId={`case-reason-${d.token}`} onValue={v => setReason(r => ({ ...r, [d.token]: v }))} disabled={!!busy} className="mt-1" />
+                    </>
                   )}
                   {!done && play.status === "active" && (
-                    <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
+                    <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "handover" ? !handoverReady(hv[d.token]) : d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
                       {busy === d.token ? "Recording…" : "Decide"}
                     </button>
                   )}
@@ -324,7 +352,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                     </div>
                   )}
                   {done && d.askReason && reason[d.token]?.trim() && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800"><span className="font-semibold">Your reason:</span> {reason[d.token]}</p>}
-                  {done && <DecisionFeedback d={d} fb={fb} materialId={play.materialId} />}
+                  {done && <DecisionFeedback d={d} fb={fb} materialId={play.materialId} note={play.handoverNotes?.[d.token] ?? null} />}
                 </div>
               );
             })}
@@ -333,6 +361,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       </ol>
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {v.talk && play.status !== "active" && <CaseConversation base={base} speaker={v.talk.speaker} active={false} />}
       {play.status !== "active" && play.attempt && <AttemptRecord a={play.attempt} />}
       {play.status !== "active" && <ClosingNotes closing={play.closing ?? null} reasons={reason} view={v} />}
       {play.status !== "active" && <ReflectionCard prompt={play.closing?.reflectionPrompt ?? null} revisit={play.debrief?.revisit ?? []} materialId={play.materialId} />}
@@ -350,7 +379,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   );
 }
 
-function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][number]["decisionPoints"][number]; fb: Feedback | null; materialId?: string }) {
+function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"][number]["decisionPoints"][number]; fb: Feedback | null; materialId?: string; note: { label: string; text: string } | null }) {
   if (!fb?.answered) return (
     <div className="mt-2">
       <p className="text-[13px] text-gray-600">Decision recorded.</p>
@@ -369,7 +398,8 @@ function DecisionFeedback({ d, fb, materialId }: { d: LearnerView["stages"][numb
     <div aria-live="polite" className={`mt-2 rounded-xl border p-3 ${fb.correct === true ? "border-emerald-300 bg-emerald-50" : fb.correct === false ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
       {fb.correct !== undefined && fb.correct !== null && <p className={`text-[14px] font-bold ${fb.correct ? "text-emerald-900" : "text-red-900"}`}>{fb.correct ? "That is what the case calls for." : "Not what the case calls for."}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{fb.markingLabel ?? MARKING_LABEL[marking] ?? "Marked against the case"}.</span></p>
-      {d.kind !== "free_text" && (
+      {d.kind === "handover" && (fb.handover ?? a.handover) && <HandoverResult r={(fb.handover ?? a.handover)!} note={note} />}
+      {d.kind !== "free_text" && d.kind !== "handover" && (
         <ul className="mt-2 space-y-1 text-[13.5px]">
           {a.options.map(o => {
             const text = d.options.find(x => x.token === o.token)?.text ?? "";
@@ -511,8 +541,9 @@ function ReflectionCard({ prompt, revisit, materialId }: { prompt: string | null
       {prompt && <p className="mt-2 text-[14px] text-gray-900">{prompt}</p>}
       <ul className="mt-2 list-disc pl-5 text-[13.5px] text-gray-800">{REFLECTION_PROMPTS.map(p => <li key={p}>{p}</li>)}</ul>
       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reflection
-        <textarea rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
+        <textarea id="case-reflection" rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
       </label>
+      <DictateButton fieldId="case-reflection" onValue={setNote} className="mt-1" />
       {links.length > 0 && materialId && (
         <div className="mt-3 flex flex-wrap gap-2">{links.map(r => <Link key={r.decisionPointId} href={`${studyHref("learn")}?section=${r.chunkIds[0]}`} className={ghost}>Teach me what I missed</Link>)}</div>
       )}

@@ -12,6 +12,7 @@ import { PERSONAL_AI_LABEL, QUESTION_MAX } from "@/lib/individual/scholar/config
 import { askRequestBody, type AskSurface } from "@/lib/individual/scholar/ask-context";
 import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spelling-variant";
 import { SCHOLAR } from "@/lib/individual/experiences";
+import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 import { activeStudyId } from "./study-active";
 
 // "ASK ABOUT THIS" -- SCHOLAR-CE-2026 CE-01. ONE panel, used from Revise feedback, a flashcard, a case debrief, OSCE feedback,
@@ -74,6 +75,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
   const [error, setError] = useState<{ body: unknown } | null>(null);
   const [clarify, setClarify] = useState<{ q: string; followUp?: FollowUp; prompt: ClarifyPrompt } | null>(null);
   const [studyConfirmed, setStudyConfirmed] = useState(false);
+  const questionRef = useRef<HTMLTextAreaElement>(null);
   const seq = useRef(0);
   const abort = useRef<AbortController | null>(null);
   const grounded = (chunkIds?.length ?? 0) > 0 || !!sessionId;
@@ -140,7 +142,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
           </p>
           <form onSubmit={e => { e.preventDefault(); void send(question); }}>
             <label htmlFor={`${uid}-q`} className="text-[13.5px] font-semibold text-gray-900">Your question <span className="font-normal text-gray-600">(change it if you like)</span></label>
-            <textarea id={`${uid}-q`} value={question} onChange={e => setQuestion(e.target.value)} maxLength={QUESTION_MAX} rows={4}
+            <textarea id={`${uid}-q`} ref={questionRef} value={question} onChange={e => setQuestion(e.target.value)} maxLength={QUESTION_MAX} rows={4}
               className={`mt-1 w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[14.5px] text-gray-900 ${focusRing}`} />
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <button type="submit" disabled={busy || !question.trim()}
@@ -148,6 +150,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
                 {busy ? (turns[0]?.streaming ? "Writing…" : "Thinking…") : "Ask"}
               </button>
               <DepthControl value={depth} onChange={setDepth} disabled={busy} />
+              <DictateButton inputRef={questionRef} onValue={setQuestion} disabled={busy} />
             </div>
           </form>
 

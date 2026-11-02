@@ -55,6 +55,15 @@ export type CalendarItem = {
   /** For a personal entry: the occurrence (so the editor can change it). Absent on every other kind. */
   occurrence?: Occurrence | null;
 };
+/** Pure. The calendar row for one of the learner's own occurrences (shared by the calendar and by the page's instant, optimistic updates). */
+export function personalItem(o: Occurrence): CalendarItem {
+  const when = o.allDay ? "All day" : `${o.startTime}${o.endTime ? `\u2013${o.endTime}` : ""}`;
+  const state = o.entryType === "study_session" ? (o.selfReported ? "Marked completed by you (self-reported)" : "Planned by you") : null;
+  return {
+    kind: "personal", key: `entry:${o.key}`, title: o.title, detail: [ENTRY_TYPE_LABEL[o.entryType], when, state].filter(Boolean).join(" \u00b7 "), href: null,
+    minutes: o.durationMinutes, count: null, space: null, movable: false, movedFrom: o.moved ? o.occurrenceDate : null, entry: null, occurrence: o,
+  };
+}
 export type CalendarDay = { date: string; inMonth: boolean; today: boolean; past: boolean; items: CalendarItem[] };
 export type CalendarView = {
   month: string; label: string; prev: string; next: string; today: string;
@@ -225,12 +234,7 @@ export function buildCalendar(input: CalendarInput): CalendarView {
   // ── personal: the learner's own entries, on the date each is on now ──
   for (const o of input.personal ?? []) {
     if (o.status === "cancelled" || o.date < first || o.date > last) continue;
-    const when = o.allDay ? "All day" : `${o.startTime}${o.endTime ? `\u2013${o.endTime}` : ""}`;
-    const state = o.entryType === "study_session" ? (o.selfReported ? "Marked completed by you (self-reported)" : "Planned by you") : null;
-    put(o.date, {
-      kind: "personal", key: `entry:${o.key}`, title: o.title, detail: [ENTRY_TYPE_LABEL[o.entryType], when, state].filter(Boolean).join(" \u00b7 "), href: null,
-      minutes: o.durationMinutes, count: null, space: null, movable: false, movedFrom: o.moved ? o.occurrenceDate : null, entry: null, occurrence: o,
-    });
+    put(o.date, personalItem(o));
   }
 
   // ── the grid: Monday first, whole weeks ──

@@ -493,6 +493,8 @@ export const TEMPLATE_CONTENT_STATUS = "Competen practice template — not clini
 export type OsceTemplate = {
   key: string; title: string; scenario: string; candidateInstructions: string; durationMinutes: number; checklist: OsceItem[];
   profession: string | null; topic: string; bodySystem: string; difficulty: OsceDifficulty; objectives: string[]; expectedActivities: string[]; guidance: OsceGuidance;
+  /** Where the template came from, when it is not the respiratory seed outcomes the first template was written from. */
+  referenceLabel?: string;
 };
 export const OSCE_TEMPLATES: readonly OsceTemplate[] = [
   {
@@ -521,6 +523,33 @@ export const OSCE_TEMPLATES: readonly OsceTemplate[] = [
       assessmentGuidance: "Look for a systematic order, interpretation against the prescribed target rather than a remembered number, and escalation that is timely and structured. Check the detail against your course materials and local policy.",
     },
   },
+  {
+    // SCHOLAR-CE-2026 CE-04: a handover station. Generic: no condition and no profession, so it can be run on any ward scenario the learner brings to mind.
+    key: "sbar-handover",
+    title: "SBAR handover",
+    scenario: "You are looking after an adult on a ward whose condition has worsened over the last hour. You need to hand over to the senior clinician by phone. A simulated colleague is listening and will not prompt you. Imagine the patient's details are in front of you.",
+    candidateInstructions: "Give a structured handover using SBAR. Say who you are and who the patient is, then the Situation, the Background, your Assessment and what you Recommend, including how urgently. Under each heading, write what you would say.",
+    durationMinutes: 6,
+    checklist: [
+      { id: "identify", text: "Identifies themselves, the patient and where the patient is", critical: true },
+      { id: "situation", text: "States the problem and why they are calling now", critical: true },
+      { id: "background", text: "Gives the relevant background briefly", critical: false },
+      { id: "findings", text: "Gives the latest observations and findings with their values", critical: true },
+      { id: "trend", text: "Says how the patient has changed over time", critical: false },
+      { id: "assessment", text: "Says what they think the problem is, or that they are not sure", critical: false },
+      { id: "recommend", text: "Says clearly what they need and how soon", critical: true },
+      { id: "actions", text: "Says what has already been done and what they will do while waiting", critical: false },
+      { id: "readback", text: "Checks that the listener has understood and agrees the next step", critical: false },
+    ],
+    profession: null, topic: "Structured handover (SBAR)", bodySystem: "Communication", difficulty: "introductory",
+    objectives: ["Practise a clear, ordered handover out loud", "Practise saying what is needed and how urgently"],
+    expectedActivities: ["Identifies themselves and the patient", "States the situation", "Gives background", "Gives their assessment with values", "Makes a clear, timed recommendation", "Checks understanding"],
+    guidance: {
+      suggestedResponses: ["Situation first, in one or two sentences, then only the background that matters now", "Real values rather than words such as unwell, then a clear request with a time"],
+      assessmentGuidance: "Look for the four parts in order, values rather than impressions, and a recommendation that says what is needed and how soon. Check the detail against your course materials and local policy.",
+    },
+    referenceLabel: "Competen practice template for structured handover. Not clinically reviewed.",
+  },
 ];
 export const osceTemplate = (key: unknown) => OSCE_TEMPLATES.find(t => t.key === key) ?? null;
 
@@ -533,7 +562,7 @@ export function stationFromTemplate(t: OsceTemplate, sections: readonly string[]
     ...EMPTY_DEFINITION, profession: t.profession, topic: t.topic, bodySystem: t.bodySystem, difficulty: t.difficulty,
     learningOutcomes: [...new Set(t.checklist.map(i => i.outcome).filter((o): o is string => !!o))], objectives: [...t.objectives],
     expectedActivities: [...t.expectedActivities], guidance: { ...t.guidance, suggestedResponses: [...t.guidance.suggestedResponses] },
-    references: [{ kind: "reference", label: "Competen practice template, written from the respiratory seed learning outcomes. Not clinically reviewed." }],
+    references: [{ kind: "reference", label: t.referenceLabel ?? "Competen practice template, written from the respiratory seed learning outcomes. Not clinically reviewed." }],
     libraryResourceId: null, libraryVersionId: null,
   };
 }

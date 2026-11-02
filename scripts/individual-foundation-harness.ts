@@ -587,8 +587,24 @@ function main() {
   ok("14f. the invitation flow does not depend on self-registration: the accept route never reads the join flag",
     !/selfRegistrationEnabled|individual_self_registration/.test(SRC.get(ACCEPT_ROUTE) ?? ""));
 
-  ok("9g. D10: no Individual code persists AI conversation",
-    !FILES.some(f => /from\("[a-z_]*(ai_message|ai_session|conversation)[a-z_]*"\)/.test(SRC.get(f) ?? "")));
+  // SCHOLAR-CE-2026 CE-04 (owner GO 2 Nov 2026): ONE named exception. "Talk to the patient" keeps the turns of a SIMULATED case
+  // conversation (the learner's questions and an AI voicing the case's patient) with the attempt, so the debrief can show them
+  // (migration 880). It is a practice record of that attempt, removed with it, read-own, never fed back into any AI call, and
+  // not the Personal AI assistant's memory, which is what D10 protects. The exception is by exact table name and by exact file:
+  // any other conversation, message or session table, or this table from any other file, still goes red.
+  const D10_CASE_PRACTICE = "individual_scholar_case_conversation", D10_CASE_PRACTICE_FILE = "src/lib/individual/scholar/store.ts";
+  const conversationTables = (s: string) => [...s.matchAll(/from\("([a-z_]*(?:ai_message|ai_session|conversation)[a-z_]*)"\)/g)].map(m => m[1]);
+  ok("9g. D10: no Individual code persists AI conversation (the one named exception is the simulated case-practice record, 9h)",
+    !FILES.some(f => conversationTables(SRC.get(f) ?? "").some(t => t !== D10_CASE_PRACTICE)));
+  ok("9h. D10 exception is narrow: the case-practice table is read and written only by the Scholar store, and no Personal AI route or ask context reads it",
+    FILES.every(f => !conversationTables(SRC.get(f) ?? "").includes(D10_CASE_PRACTICE) || f === D10_CASE_PRACTICE_FILE)
+      && FILES.filter(f => /\/ask|personal-ai|assistant/.test(f)).every(f => !(SRC.get(f) ?? "").includes(D10_CASE_PRACTICE)));
+  // Owner ruling 2 Nov 2026 (CE-04): the store functions that read and write it are reachable only from the Scholar store, the case
+  // conversation module and the attempt record builder, so the turns cannot become Personal AI memory or context for another activity.
+  const D10_FN_FILES = ["src/lib/individual/scholar/store.ts", "src/lib/individual/scholar/case-talk.ts", "src/lib/individual/scholar/case-integrity.ts"];
+  const fnOffenders = FILES.filter(f => /(listCaseConversation|insertCaseConversation)/.test(SRC.get(f) ?? "") && !D10_FN_FILES.includes(f));
+  ok("9i. D10 exception: only the case conversation module and the attempt record builder call the conversation store functions (scope test: case-conversation-scope.test.ts)",
+    fnOffenders.length === 0, fnOffenders.join(", "));
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }

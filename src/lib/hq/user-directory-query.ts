@@ -12,7 +12,9 @@ export const PAGE_SIZE = 25;
 
 export type DirectoryFilters = {
   view: UserView; q: string; role: string; org: string; facility: string;
-  status: string; login: string; product: string; hq: string; page: number;
+  status: string; login: string; product: string; hq: string;
+  /** Access category (hq_account_participation.category): regular, pilot, staff_tester, or unset (no row). */
+  access: string; page: number;
 };
 
 export type FilterableRow = {
@@ -20,6 +22,10 @@ export type FilterableRow = {
   organisationId: string | null; hospitalId: string | null;
   status: AccountStatus; lastSignIn: string | null; products: string[]; hqActive: boolean;
   accountType: AccountType;
+  /** Live Competen Individual experiences (scholar, professional), from the live entitlement rows. */
+  experiences?: string[];
+  /** hq_account_participation.category, or null when the person has no row. */
+  participation?: string | null;
 };
 
 type Params = Record<string, string | string[] | undefined>;
@@ -38,8 +44,9 @@ export function parseDirectoryFilters(p: Params, defaultView: UserView): Directo
     facility: free(one(p, "facility")),
     status: pick(one(p, "status"), ["active", "pending", "suspended"]),
     login: pick(one(p, "login"), ["today", "7d", "30d", "never"]),
-    product: pick(one(p, "product"), ["platform", "enterprise", "practice", "individual", "none"]),
+    product: pick(one(p, "product"), ["platform", "enterprise", "practice", "individual", "scholar", "professional", "none"]),
     hq: pick(one(p, "hq"), ["yes", "no"]),
+    access: pick(one(p, "access"), ["regular", "pilot", "staff_tester", "unset"]),
     // 1-based in the URL, 0-based here.
     page: Number.isFinite(page) && page > 1 ? page - 1 : 0,
   };
@@ -50,7 +57,7 @@ export function toQueryString(f: DirectoryFilters, defaultView: UserView): strin
   const s = new URLSearchParams();
   if (f.view !== defaultView) s.set("view", f.view);
   if (f.q.trim()) s.set("q", f.q.trim());
-  for (const k of ["role", "org", "facility", "status", "login", "product", "hq"] as const) if (f[k] !== "all") s.set(k, f[k]);
+  for (const k of ["role", "org", "facility", "status", "login", "product", "hq", "access"] as const) if (f[k] !== "all") s.set(k, f[k]);
   if (f.page > 0) s.set("page", String(f.page + 1));
   return s.toString();
 }
@@ -71,9 +78,12 @@ export function matchesOtherFilters(u: FilterableRow, f: DirectoryFilters, now: 
     if (f.login === "never" && u.lastSignIn) return false;
   }
   if (f.product === "none" && u.products.length > 0) return false;
-  if (f.product !== "all" && f.product !== "none" && !u.products.includes(f.product)) return false;
+  if (f.product === "scholar" || f.product === "professional") { if (!(u.experiences ?? []).includes(f.product)) return false; }
+  else if (f.product !== "all" && f.product !== "none" && !u.products.includes(f.product)) return false;
   if (f.hq === "yes" && !u.hqActive) return false;
   if (f.hq === "no" && u.hqActive) return false;
+  if (f.access === "unset" && u.participation) return false;
+  if (f.access !== "all" && f.access !== "unset" && u.participation !== f.access) return false;
   return true;
 }
 
@@ -109,4 +119,23 @@ export function queryDirectory<T extends FilterableRow>(all: T[], f: DirectoryFi
   const pages = Math.max(1, Math.ceil(matched.length / size));
   const page = Math.min(f.page, pages - 1);
   return { rows: matched.slice(page * size, (page + 1) * size), total: matched.length, page, pages, viewCounts, matched };
+}
+
+// ── THE OPEN PERSON: ?user=<id> ── the list stays mounted while a profile opens over it ──────────────────────────
+
+const USER_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The person named by ?user=, or null when it is absent or is not an id. The filters ignore this key. */
+export function parseUserParam(p: Params): string | null {
+  const v = one(p, "user");
+  return USER_ID.test(v) ? v.toLowerCase() : null;
+}
+
+/** The directory URL for a query string with a person opened (id) or closed (null). Other keys are kept as given. */
+export function withUserParam(pathname: string, queryString: string, id: string | null): string {
+  const s = new URLSearchParams(queryString);
+  s.delete("user");
+  if (id) s.set("user", id);
+  const qs = s.toString();
+  return qs ? `${pathname}?${qs}` : pathname;
 }

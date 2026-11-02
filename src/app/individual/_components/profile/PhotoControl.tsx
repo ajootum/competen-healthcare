@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { initialsOf } from "@/lib/individual/initials";
 
 // The PRIVATE profile photo -- COMPETEN-INDIVIDUAL-IDENTITY-HUB-01 (590). Shown to the person through their own
 // short-lived link (/api/individual/identity/photo), never a public URL. Uploading checks the type and size here for
@@ -16,7 +17,7 @@ export default function PhotoControl({ name, version, accent, available }: { nam
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  const initials = name.split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]?.toUpperCase()).join("") || "?";
+  const initials = initialsOf({ fullName: name });
 
   async function upload(file: File) {
     if (!TYPES.includes(file.type)) { setMsg({ ok: false, text: "Use a JPEG, PNG or WebP photo." }); return; }
