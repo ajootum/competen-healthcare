@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { isRated, type QuickMark, type RecallMark } from "@/lib/individual/scholar/learn-inline";
 import { PracticeQuestion, ghost, btn, focusRing, lessonFlashcardsHref, req } from "./learn-practice";
 import { carry } from "./study-active";
+import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): SHORT CHECKS INSIDE THE SCROLLING LESSON. Additive: the lesson's Check and
 // Practise actions are unchanged. Nothing here calls AI by itself and nothing is generated on reopen.
@@ -115,6 +116,7 @@ function RecallItem({ card, multi, fresh, saveMissed, ownCards, onRate, register
     <div className="rounded-lg border p-3" style={{ borderColor: "var(--cmp-fc-question-border)" }}>
       {multi && <p className="text-[12px] font-semibold" style={labelStyle}>{card.label}</p>}
       <p className="whitespace-pre-wrap break-words text-[15px] font-semibold">{card.front}</p>
+      <ReadAloudButton text={card.front} about="this question" className="mt-2" />
       {!showAnswer && <button type="button" className={`${ghost} mt-3 ${touch}`} onClick={() => setRevealed(true)}>Show answer</button>}
       {showAnswer && (
         <div className="mt-3 rounded-lg border px-3 py-2.5" style={answerStyle}>

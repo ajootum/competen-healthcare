@@ -16,6 +16,7 @@ import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
+import { DictateButton, ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -256,6 +257,11 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       {v.intro && <p className="mt-1 text-[14.5px] leading-relaxed text-gray-800">{v.intro}</p>}
       {v.patient && <p className="mt-1 text-[13px] text-gray-600">{[v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(" · ")}</p>}
 
+      {/* CE-06: the case so far (title, introduction, patient, findings), read by the browser's own voice. Never an answer: only what the learner can already see. */}
+      <ReadAloudButton className="mt-2" label="Listen to the case" about="the case so far"
+        text={[v.title, v.intro, v.patient ? [v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(". ") : null,
+          v.facts.length ? "Findings so far. " + v.facts.map(f => `${f.label}: ${f.value}${f.unit ? ` ${f.unit}` : ""}.`).join(" ") : null].filter(Boolean).join("\n\n")} />
+
       <section aria-labelledby="findings-h" className="mt-4 rounded-xl bg-gray-50 p-4">
         <h3 id="findings-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Findings so far</h3>
         {v.facts.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">None yet. Ask for what you need to know.</p> : (
@@ -270,6 +276,8 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
           <li key={st.token} className="rounded-xl border border-gray-200 p-4">
             <p className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: accent }}>Stage {si + 1}{st.categoryLabel ? ` · ${st.categoryLabel}` : ""}</p>
             <h3 className="text-[15px] font-bold text-gray-900">{st.title}</h3>
+            <ReadAloudButton className="mt-1" label="Listen to this stage" about={`stage ${si + 1}`}
+              text={[st.title, ...st.decisionPoints.filter(d => !play.answered.includes(d.token)).map(d => d.prompt)].join("\n\n")} />
             {st.guidance && <StageGuidanceBox g={st.guidance} />}
             {st.decisionPoints.map(d => {
               const fb = feedbackFor(d.token);
@@ -286,9 +294,12 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                   )}
                   {!done ? (
                     d.kind === "free_text" ? (
+                      <>
                       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reasoning
-                        <textarea rows={3} maxLength={4000} value={text[d.token] ?? ""} onChange={e => setText(t => ({ ...t, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                        <textarea id={`case-text-${d.token}`} rows={3} maxLength={4000} value={text[d.token] ?? ""} onChange={e => setText(t => ({ ...t, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
                       </label>
+                      <DictateButton fieldId={`case-text-${d.token}`} onValue={v => setText(t => ({ ...t, [d.token]: v }))} disabled={!!busy} className="mt-1" />
+                      </>
                     ) : (
                       <fieldset className="mt-2"><legend className="sr-only">{d.kind === "multiple" ? "Choose all that apply" : "Choose one"}</legend>
                         {d.kind === "multiple" && <p className="mb-1 text-[12.5px] text-gray-600">Choose all that apply.</p>}
@@ -308,9 +319,12 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                     )
                   ) : null}
                   {!done && d.askReason && d.kind !== "free_text" && (
+                    <>
                     <label className="mt-2 block text-[13px] font-semibold text-gray-800">Explain your choice <span className="font-normal text-gray-600">(optional: it does not change how the choice is marked)</span>
-                      <textarea rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
+                      <textarea id={`case-reason-${d.token}`} rows={2} maxLength={1000} value={reason[d.token] ?? ""} onChange={e => setReason(r => ({ ...r, [d.token]: e.target.value }))} className={`${field} mt-1 block w-full`} />
                     </label>
+                    <DictateButton fieldId={`case-reason-${d.token}`} onValue={v => setReason(r => ({ ...r, [d.token]: v }))} disabled={!!busy} className="mt-1" />
+                    </>
                   )}
                   {!done && play.status === "active" && (
                     <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
@@ -511,8 +525,9 @@ function ReflectionCard({ prompt, revisit, materialId }: { prompt: string | null
       {prompt && <p className="mt-2 text-[14px] text-gray-900">{prompt}</p>}
       <ul className="mt-2 list-disc pl-5 text-[13.5px] text-gray-800">{REFLECTION_PROMPTS.map(p => <li key={p}>{p}</li>)}</ul>
       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reflection
-        <textarea rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
+        <textarea id="case-reflection" rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
       </label>
+      <DictateButton fieldId="case-reflection" onValue={setNote} className="mt-1" />
       {links.length > 0 && materialId && (
         <div className="mt-3 flex flex-wrap gap-2">{links.map(r => <Link key={r.decisionPointId} href={`${studyHref("learn")}?section=${r.chunkIds[0]}`} className={ghost}>Teach me what I missed</Link>)}</div>
       )}

@@ -26,6 +26,7 @@ import { SourcePictureButton } from "./learn-visuals";
 import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
+import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -514,8 +515,9 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               {(item.parts ?? []).map((pt, i) => (
                 <li key={i}>
                   <label className="block text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
-                    <textarea rows={2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
+                    <textarea id={`rv-part-${item.id}-${i}`} rows={2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
                   </label>
+                  <DictateButton fieldId={`rv-part-${item.id}-${i}`} onValue={v => setTexts(t => t.map((x, k) => (k === i ? v : x)))} disabled={busy} className="mt-1" />
                 </li>
               ))}
             </ol>
@@ -542,8 +544,9 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
             // SCHOLAR-SQIE-LEARNER-01: a paragraph answer, marked by AI against the item's key points (formative).
             <div>
               <label className="block text-[13px] font-semibold text-gray-800">Your answer
-                <textarea rows={8} maxLength={EXTENDED_RESPONSE_MAX} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full font-normal`} aria-describedby={`ext-${item.id}`} />
+                <textarea id={`rv-ext-${item.id}`} rows={8} maxLength={EXTENDED_RESPONSE_MAX} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full font-normal`} aria-describedby={`ext-${item.id}`} />
               </label>
+              <DictateButton fieldId={`rv-ext-${item.id}`} onValue={setText} disabled={busy} className="mt-1" />
               <p id={`ext-${item.id}`} className="mt-1 text-[12px] text-gray-600">
                 {text.trim() ? text.trim().split(/\s+/).length : 0} words
                 {item.extended ? ` · marked against ${item.extended.points} key points in your notes, up to ${item.extended.marks} practice marks` : ""}. {EXTENDED_LABEL}
@@ -552,9 +555,10 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
           )}
           {item.kind === "short" && (
             <label className="block text-[13px] font-semibold text-gray-800">Your answer
-              <textarea rows={2} maxLength={1000} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full`} />
+              <textarea id={`rv-short-${item.id}`} rows={2} maxLength={1000} value={text} onChange={e => setText(e.target.value)} className={`${field} mt-1 block w-full`} />
             </label>
           )}
+          {item.kind === "short" && <DictateButton fieldId={`rv-short-${item.id}`} onValue={setText} disabled={busy} className="-mt-1" />}
           {item.kind === "match" && (
             <ul className="space-y-2">
               {item.options.map((p, i) => (

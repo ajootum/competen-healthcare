@@ -12,6 +12,7 @@ import { personalItem } from "@/lib/individual/scholar/study-calendar";
 import { fieldCls, hintCls, labelCls, menuItemCls, pillOutline, primaryBtn, secondaryBtn, summaryCls } from "./plan-style";
 import { ErrorLine, PlanDialog, RowMenu, callJson } from "./plan-ui";
 import { usePlanUpdates } from "./plan-optimistic";
+import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 
 // MY PLAN -> THE LEARNER'S OWN CALENDAR ENTRIES (owner GO "My Plan Calendar Enhancement", 2 Nov 2026).
 //
@@ -139,6 +140,7 @@ export function EntryEditor({ mode, today, links, accent, onClose }: { mode: Edi
                 <div>
                   <label htmlFor={`${uid}-desc`} className={labelCls}>Description</label>
                   <textarea id={`${uid}-desc`} className={`${fieldCls} min-h-[72px]`} rows={2} maxLength={2000} value={f.description} onChange={e => set("description", e.target.value)} />
+                  <DictateButton fieldId={`${uid}-desc`} onValue={v => set("description", v)} className="mt-1" />
                 </div>
                 <div>
                   <label htmlFor={`${uid}-link`} className={labelCls}>About a material or topic <span className="font-normal text-gray-600">(optional)</span></label>

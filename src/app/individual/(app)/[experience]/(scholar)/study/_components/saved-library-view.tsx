@@ -28,6 +28,7 @@ import { sourceHref } from "./question-view";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { LibraryNotes, NewNoteForm, StandaloneNote, type ClientNote } from "./library-notes-client";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
+import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 import { savedLessonChunkIds } from "@/lib/individual/scholar/ask-grounding";
 import { AskAbout } from "./ask-panel";
 
@@ -331,6 +332,7 @@ function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> 
   return (
     <>
       <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
+      <ReadAloudButton text={a.content} about="this saved lesson" className="mt-1" />
       <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{a.content}</div>
       <ul className="mt-2 space-y-0.5">
         {a.sources.map((chunkId, i) => (
