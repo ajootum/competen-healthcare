@@ -6,6 +6,7 @@ import { individualShell, gatedMetadata } from "../../_components/shell-context"
 import { SCHOLAR_ICONS } from "@/lib/individual/scholar/brand";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
 import { SidebarNav, BottomNav, AccountMenu, SignOutButton } from "../../_components/ShellNav";
+import { ScholarDrawer } from "../../_components/ScholarDrawer";
 import { readPreviewRender } from "@/lib/individual/preview/headers";
 // HFE-01 D1: AccountMenu is the one account menu on phone and desktop (every destination the bottom bar cannot hold).
 import TermsAcceptance, { type ShownDoc } from "../../_components/TermsAcceptance";
@@ -168,6 +169,8 @@ export default async function ExperienceLayout({ children, params }: {
   // globals.css), its AI help switch at the right of every page heading, and its footer. The structure --
   // header, sidebar, bottom bar -- is the same for both experiences, so the two shells still cannot drift.
   const scholar = experience === "scholar";
+  // Modular restructuring (2 Nov 2026): Scholar's sidebar is the module tree (ScholarSidebar); below md, where it is not drawn, the header's Menu
+  // button opens the same tree in a drawer (ScholarDrawer). The five-tab bottom bar stays. Keep block comments out of this file: the harness's strip().
   const action = scholar ? <AiHelpSwitch admin={shell.ctx.admin} userId={shell.ctx.userId} /> : null;
   // HFE-01 Wave 1: the product's AI standing once per page, so AI actions show their availability before a click.
   const aiP = getAiStanding(shell.ctx.admin, { userId: shell.ctx.userId, product: experience });
@@ -182,12 +185,13 @@ export default async function ExperienceLayout({ children, params }: {
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
       <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
+          {scholar && <ScholarDrawer myPlan={myPlanOn} learning={learning} />}
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
           </Link>
           <div className="ml-auto md:ml-0"><ExperienceSwitcher current={experience} live={live} /></div>
-          {learning && <Link href="/individual/learning" className={`inline-flex min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}
+          {learning && <Link href="/individual/learning" className={`${scholar ? "hidden md:inline-flex" : "inline-flex"} min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}
           <div className="hidden md:flex md:ml-auto items-center gap-2.5 text-[13px]">
             <span className="rounded-full bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-app-text-secondary)] ring-1 ring-[var(--cmp-app-border)]">Individual account</span>
           </div>
@@ -197,7 +201,7 @@ export default async function ExperienceLayout({ children, params }: {
 
       <div className="flex">
         <aside className="hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] w-[236px] shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
-          <SidebarNav experience={experience} learning={learning} />
+          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>
             <p>One account, one Passport.</p>

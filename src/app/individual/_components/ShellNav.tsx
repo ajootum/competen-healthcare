@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { EXPERIENCES, experienceHref, navFor, bottomNavFor, overflowNavFor, type ExperienceKey, type ShellNavItem } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
+import { ScholarSidebar } from "./ScholarSidebar";
 
 // The Individual navigation, generated from the registry (src/lib/individual/experiences.ts) and nothing
 // else: the sidebar from md up, the bottom bar below it. CPR-MOB-001's freeze applies -- ONE md edge,
@@ -24,10 +25,13 @@ function isActive(pathname: string, href: string, isHome: boolean) {
  * experience, so it is one absolute link after the registry's items -- shown only while learning_app is on -- and
  * never an experience module. The bottom bar is not touched (CPR-MOB-001, at most five tabs): on small screens the
  * shell header carries the same link.
+ * Scholar (modular restructuring, 2 Nov 2026) draws its own module tree instead (ScholarSidebar, from scholar/nav.ts), where
+ * Courses & Training covers Competen Learning, so the standalone link is dropped for Scholar only. `myPlan`: My Plan's gate.
  */
-export function SidebarNav({ experience, learning = false }: { experience: ExperienceKey; learning?: boolean }) {
+export function SidebarNav({ experience, learning = false, myPlan = false }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
+  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} />;
   return (
     <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-[7px] px-4 pt-[26px]">
       {navFor(experience).map(item => {
