@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { GenerateResult } from "@/lib/ai/client";
 import { PROMPT_VERSIONS } from "./config";
-import { checkLearnMain, checkTeachAnswer, cumulativePromptVersion, learnInstruction, learnSystem, learnUserPrompt, lessonBriefBlock, runLearn, scholarNamedTerms, type Passage } from "./generation";
+import { checkLearnMain, checkTeachAnswer, cumulativePromptVersion, learnInstruction, learnSystem, learnUserPrompt, lessonBriefBlock, normaliseCitations, runLearn, scholarNamedTerms, type Passage } from "./generation";
 import { DEPTH_REACHED, TAUGHT_HEADER, buildTaughtSoFar, taughtSoFarBlock } from "./learn-context";
 import { artefactKey, headingFamily, lessonOutline, planSteps, sectionProfile, type SectionProfile } from "./learn";
 import { composeTeachAnswer, parseTeachAnswer } from "./teach-format";
@@ -110,6 +110,15 @@ describe("named therapy terms are not test results (the acceptance run's three w
     expect(scholarNamedTerms("the swab was positive")).toMatch(/positive/);
     expect(checkLearnMain("Patients receiving positive pressure ventilation may develop chemosis [S3].", "q", BED_BATH, []).ok).toBe(true);
     expect(checkLearnMain("The culture came back positive [S3].", "q", BED_BATH, []).ok).toBe(false);
+  });
+  it("'again' as the dialogue's once-more passes; 'again' as clinical recurrence is still checked", () => {
+    expect(checkLearnMain("Look again at the timing of the bath [S2].", "q", BED_BATH, []).ok).toBe(true);
+    expect(checkLearnMain("Try again: why does the length of the bath matter? [S2]", "q", BED_BATH, []).ok).toBe(true);
+    expect(checkLearnMain("The instability came back again after the bath [S2].", "q", BED_BATH, []).ok).toBe(false);
+  });
+  it("citations written in one bracket are read as the canonical tags, so their digits are not numbers", () => {
+    expect(normaliseCitations("Grade one needs ointment [S7, S8] and taping [S9; 10] or [S1-S3] or [E2, E3].")).toBe("Grade one needs ointment [S7][S8] and taping [S9][S10] or [S1][S2][S3] or [E2][E3].");
+    expect(normaliseCitations("plain [S7][S8] stays")).toBe("plain [S7][S8] stays");
   });
 });
 

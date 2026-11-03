@@ -712,7 +712,32 @@ export function checkLearnMain(main: string, asked: string, passages: Passage[],
  * own named terms are (grounding.ts NAMED_TERMS); "positive" alone, and every other marker, is checked exactly as before.
  */
 const SCHOLAR_NAMED_TERMS = /\bpositive(?=[\s-]+(?:pressure|end[\s-]*expiratory|airway|inspiratory|expiratory))/gi;
-export const scholarNamedTerms = (prose: string) => prose.replace(SCHOLAR_NAMED_TERMS, "PPV-named");
+/**
+ * "again" is the verifier's recurrence marker (a symptom that came back). In a study companion's reply it is almost always the
+ * dialogue's "once more" (try again, look again, read it again): the acceptance run withheld two Guide me turns and two
+ * clarifications for it. It is excused UNLESS a word of clinical recurrence precedes it within the sentence (the pain came
+ * again, the rash flared again), where it is checked exactly as before.
+ */
+const RECURRENCE_BEFORE_AGAIN = /\b(?:came|come|comes|returned|returns|return|recurred|recur|recurs|happened|happens|occurred|occurs|flared|flares|bled|bleeds|collapsed|deteriorated|relapsed|developed|develops|arrested|rose|fell|dropped|worsened|started|starts)\b[^.!?\n]{0,40}\bagain\b/i;
+export const scholarNamedTerms = (prose: string) => prose.replace(SCHOLAR_NAMED_TERMS, "PPV-named")
+  .replace(/\bagain\b/gi, (m, at: number, s: string) => (RECURRENCE_BEFORE_AGAIN.test(s.slice(Math.max(0, s.lastIndexOf(".", at) + 1), at + m.length)) ? m : "once-more"));
+
+/**
+ * Pure. Citations written as one bracket ("[S7, S8]", "[S7; 8]", "[S7-S9]") become the canonical "[S7][S8]" the parsers and the
+ * grounding check read; left as written, the digits were checked as numbers and the answer withheld ("the number 8, 7, 9").
+ */
+export function normaliseCitations(text: string): string {
+  return text.replace(/\[([SRE])\s*(\d+)((?:\s*[,;/]\s*[SRE]?\s*\d+)+|\s*[-–]\s*[SRE]?\s*\d+)\]/g, (_m, k: string, first: string, rest: string) => {
+    if (/[-–]/.test(rest)) {
+      const to = Number(rest.replace(/[^0-9]/g, ""));
+      const from = Number(first);
+      if (to > from && to - from <= 12) return Array.from({ length: to - from + 1 }, (_, i) => `[${k}${from + i}]`).join("");
+      return `[${k}${first}][${k}${to}]`;
+    }
+    const nums = [first, ...rest.split(/[,;/]/).map(x => x.replace(/[^0-9]/g, "")).filter(Boolean)];
+    return nums.map(n => `[${k}${n}]`).join("");
+  });
+}
 
 /**
  * Pure. SCHOLAR-LEARN-FIX-01 L-B: the notes part of a Teach Me answer, checked PART BY PART, never more loosely:
@@ -906,7 +931,8 @@ export async function runLearn(userId: string, args: {
   // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper on taught ground may declare the passages exhausted instead of restating them.
   const depthReached = args.action === "deeper" && taught ? parseDepthReached(r.text) : null;
   if (depthReached) return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question: null, research: null, depthReached };
-  const { verdict, rest } = args.action === "clarify" || args.action === "teach_back" ? parseVerdict(r.text) : { verdict: null, rest: r.text };
+  // SCHOLAR-CUMULATIVE-TEACHING-01: "[S7, S8]" and "[S7-S9]" become "[S7][S8]..." before anything reads the reply.
+  const { verdict, rest } = args.action === "clarify" || args.action === "teach_back" ? parseVerdict(normaliseCitations(r.text)) : { verdict: null, rest: normaliseCitations(r.text) };
   const split = splitLearnAnswer(rest);
   const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? [])].join("\n");
   const mayBackground = args.background && BACKGROUND_ACTIONS.includes(args.action as LearnAction);

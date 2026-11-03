@@ -54,7 +54,7 @@ export const TAUGHT_BLOCK_MAX = 3200;
 export const PRIOR_CHECKS_MAX = 4;
 const ITEM_MAX = 170;
 /** Per round: what one round contributes to the block. */
-export const ROUND_MAX = { concepts: 7, understanding: 5, examples: 1, questions: 2 } as const;
+export const ROUND_MAX = { concepts: 9, understanding: 8, examples: 1, questions: 2 } as const;
 const OPEN_MAX = 8, LABEL_MAX = 30;
 const PRIOR_LIMITS = { question: 400, answer: 1500, feedback: 3000 } as const;
 const ACTION_WORDS: Record<string, string> = { teach: "Teach me (the lesson)", deeper: "Go deeper", explain: "Explain again", simplify: "Simplify", examples: "Examples", summary: "Summary" };
