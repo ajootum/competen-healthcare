@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
+import { loadHolders, pathwaySummaryByVersion } from "@/lib/assessment/studio/pathway-data";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { discardImport, importChoices, loadImport, registerImport, saveImportDraft } from "@/lib/assessment/import/store";
 import { loadTaxonomy } from "@/lib/assessment/catalogue/classify";
@@ -72,7 +73,12 @@ export async function POST(req: Request, { params }: Params) {
       return refuse(403, "Registering an import needs catalogue management or Checklist authoring, held through an appointment. The upload and its corrections are kept.");
     }
     const r = await registerImport(ctx.admin, ctx.userId, importId);
-    return r.ok ? NextResponse.json({ ok: true, registered: r.registered, warnings: r.warnings }) : refuse(r.status, r.error);
+    if (!r.ok) return refuse(r.status, r.error);
+    // ASMT-PATHWAY-01: each registered draft comes back with its pathway (stage, next action, who can act), for the finish step.
+    const holders = await loadHolders(ctx.admin);
+    const viewer = { actorId: ctx.userId, caps: ctx.capabilities };
+    const pathways = Object.fromEntries((await Promise.all(r.registered.map(async (x) => [x.versionId, await pathwaySummaryByVersion(ctx.admin, "instrument", x.versionId, viewer, holders).catch(() => null)]))).filter(([, p]) => p));
+    return NextResponse.json({ ok: true, registered: r.registered, warnings: r.warnings, pathways });
   } catch (e) {
     return refuse(500, plainError(e));
   }

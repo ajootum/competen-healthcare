@@ -43,7 +43,7 @@ export default async function AssessmentCataloguePage({ searchParams }: { search
     loadTaxonomy(admin),
     loadProductLines(admin),
     loadCollections(admin),
-    query.open ? loadInstrumentDetail(admin, query.open) : Promise.resolve(null),
+    query.open ? loadInstrumentDetail(admin, query.open, { actorId: ctx.userId, caps: ctx.capabilities }) : Promise.resolve(null),
     canManage ? loadReferenceKinds(admin) : Promise.resolve([]),
   ]);
 

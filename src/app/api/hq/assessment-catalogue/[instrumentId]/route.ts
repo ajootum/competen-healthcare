@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { isUuid } from "@/lib/assessment/catalogue/filters";
 import { loadInstrumentDetail } from "@/lib/assessment/catalogue/detail";
 import { classifyInstrument } from "@/lib/assessment/catalogue/classify";
@@ -34,10 +35,10 @@ type Params = { params: Promise<{ instrumentId: string }> };
 export async function GET(_req: Request, { params }: Params) {
   const { instrumentId } = await params;
   if (!isUuid(instrumentId)) return refuse(404, "No such instrument.");
-  const ctx = await hqApiGate(["hq.assessment.catalogue.view"]);
+  const ctx = await withOwnAppointments(await hqApiGate(["hq.assessment.catalogue.view"]));
   if (isHqRefusal(ctx)) return ctx;
   try {
-    const detail = await loadInstrumentDetail(ctx.admin, instrumentId);
+    const detail = await loadInstrumentDetail(ctx.admin, instrumentId, { actorId: ctx.userId, caps: ctx.capabilities });
     return detail ? NextResponse.json({ detail }) : refuse(404, "No such instrument.");
   } catch (e) {
     return refuse(500, plainError(e));

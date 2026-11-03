@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { isUuid } from "@/lib/assessment/catalogue/filters";
 import { loadInstrumentDetail } from "@/lib/assessment/catalogue/detail";
 import { loadTaxonomy } from "@/lib/assessment/catalogue/classify";
@@ -19,11 +20,12 @@ export const metadata: Metadata = { title: "Catalogue instrument" };
 export default async function InstrumentPage({ params }: { params: Promise<{ instrumentId: string }> }) {
   const { instrumentId } = await params;
   if (!isUuid(instrumentId)) notFound();
-  const ctx = await requireHqCapability("hq.assessment.catalogue.view");
+  // withOwnAppointments: the pathway says whether THIS person may take the next step, which an owner holds only through an appointment.
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.catalogue.view"));
   const canManage = ctx.isOwner || ctx.capabilities.includes("hq.assessment.catalogue.manage");
   const canStudio = ctx.isOwner || ctx.capabilities.includes("hq.assessment.studio.view");
   const [detail, taxonomy, collections, referenceKinds] = await Promise.all([
-    loadInstrumentDetail(ctx.admin, instrumentId), loadTaxonomy(ctx.admin), loadCollections(ctx.admin), canManage ? loadReferenceKinds(ctx.admin) : Promise.resolve([]),
+    loadInstrumentDetail(ctx.admin, instrumentId, { actorId: ctx.userId, caps: ctx.capabilities }), loadTaxonomy(ctx.admin), loadCollections(ctx.admin), canManage ? loadReferenceKinds(ctx.admin) : Promise.resolve([]),
   ]);
   if (!detail) notFound();
   return (

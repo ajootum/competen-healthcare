@@ -9,6 +9,7 @@ import type { Collection } from "@/lib/assessment/catalogue/collections";
 import { AVAILABILITY_MODES, MODE_LABEL, RELATION_KINDS, RELATION_LABEL, type AvailabilityMode } from "@/lib/assessment/catalogue/shape";
 import { termPath } from "@/lib/assessment/catalogue/hierarchy";
 import ClassificationFields, { type TermChoice } from "./ClassificationFields";
+import PathwaySummaryCard from "./PathwaySummaryCard";
 import { BASE, Chip, CodeChip, Field, Section, StatusBadge, btnGhost, btnPrimary, callApi, fmtDate, input } from "./ui";
 
 // The instrument, as the drawer and the full page show it. One component, one data read: the page route and the drawer
@@ -45,6 +46,8 @@ export default function InstrumentView({ detail, taxonomy, collections, referenc
   }
 
   const studioHref = `/super-admin/checklist-studio/${detail.id}`;
+  const latestVersion = detail.versions.find(v => v.isLatest) ?? null;
+  const pathwayHref = latestVersion ? `${studioHref}/v/${latestVersion.id}` : studioHref;
   const studioLabel = detail.status === "none" ? "Configure in Checklist Studio" : "Open in Checklist Studio";
   const dims = taxonomy.filter(d => d.isActive || detail.terms.some(t => t.dimensionCode === d.code));
   const termsOf = (dim: string) => detail.terms.filter(t => t.dimensionCode === dim);
@@ -82,6 +85,11 @@ export default function InstrumentView({ detail, taxonomy, collections, referenc
           {layout === "drawer" && <a href={`${BASE}/${detail.id}`} className={btnGhost}>Open full page</a>}
         </div>
         {error && <p role="alert" className="mt-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-900">{error}</p>}
+        {detail.pathway && (
+          <div className="mt-3">
+            <PathwaySummaryCard summary={detail.pathway} studioHref={pathwayHref} canStudio={canStudio} studioLabel={detail.pathway.viewerCanAct && detail.pathway.state !== "published" ? "Take the next step in Checklist Studio" : "Open in Checklist Studio"} />
+          </div>
+        )}
         {editing === "identity" && canManage && (
           <IdentityForm detail={detail} busy={busy} onCancel={() => setEditing(null)}
             onSave={v => act({ action: "identity", ...v }, () => setEditing(null))} />

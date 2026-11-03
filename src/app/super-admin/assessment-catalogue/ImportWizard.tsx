@@ -9,6 +9,8 @@ import type { ImportGroup, RegisteredInstrument, SheetDraft, WorkbookDraft } fro
 import { moveSheet, newGroupFor, readinessProblems } from "@/lib/assessment/import/workbook";
 import ClassificationFields from "./ClassificationFields";
 import ImportCorrect from "./ImportCorrect";
+import PathwaySummaryCard from "./PathwaySummaryCard";
+import type { PathwaySummary } from "@/lib/assessment/studio/pathway";
 import { BASE, Chip, CodeChip, btnGhost, btnPrimary, callApi, input } from "./ui";
 
 /**
@@ -35,7 +37,7 @@ export default function ImportWizard({ families, taxonomy, canAuthor, onClose, o
   const [draft, setDraft] = useState<WorkbookDraft | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ registered: RegisteredInstrument[]; warnings: string[] } | null>(null);
+  const [result, setResult] = useState<{ registered: RegisteredInstrument[]; warnings: string[]; pathways: Record<string, PathwaySummary> } | null>(null);
   const fam = loaded?.families ?? families;
   const tax = loaded?.taxonomy ?? taxonomy;
 
@@ -69,7 +71,7 @@ export default function ImportWizard({ families, taxonomy, canAuthor, onClose, o
     const r = await callApi(`${API}/${loaded.importId}`, { action: "register" });
     setBusy(null);
     if (!r.ok) { setError(r.error); return; }
-    setResult({ registered: (r.json.registered as RegisteredInstrument[]) ?? [], warnings: (r.json.warnings as string[]) ?? [] });
+    setResult({ registered: (r.json.registered as RegisteredInstrument[]) ?? [], warnings: (r.json.warnings as string[]) ?? [], pathways: (r.json.pathways as Record<string, PathwaySummary>) ?? {} });
     router.refresh();
   }
 
@@ -143,12 +145,17 @@ export default function ImportWizard({ families, taxonomy, canAuthor, onClose, o
                   <p className="text-[14px] text-gray-900">{result.registered.length} instrument{result.registered.length === 1 ? "" : "s"} registered as Draft{result.registered.length === 1 ? "" : "s"}. Each has its permanent code, its first version and its imported content, ready to edit in Checklist Studio and to put through review.</p>
                   <ul className="space-y-2">
                     {result.registered.map(r => (
-                      <li key={r.instrumentId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-[13px]">
-                        <span className="flex items-center gap-2"><CodeChip code={r.code} /> <b>{r.title}</b> <Chip tone="neutral">Draft v1</Chip>{r.scaleVersionId && <Chip tone="info">Draft scale</Chip>}</span>
-                        <span className="flex gap-2">
-                          <a className={btnPrimary} href={`/super-admin/checklist-studio/${r.instrumentId}/v/${r.versionId}`}>Open in Checklist Studio</a>
-                          <button type="button" className={btnGhost} onClick={() => { router.push(`${BASE}?i=${r.instrumentId}`, { scroll: false }); onClose(); }}>Catalogue</button>
-                        </span>
+                      <li key={r.instrumentId} className="space-y-2 rounded-lg border border-gray-200 px-3 py-2 text-[13px]">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="flex items-center gap-2"><CodeChip code={r.code} /> <b>{r.title}</b> <Chip tone="neutral">Draft v1</Chip>{r.scaleVersionId && <Chip tone="info">Draft scale</Chip>}</span>
+                          <span className="flex gap-2">
+                            <a className={btnPrimary} href={`/super-admin/checklist-studio/${r.instrumentId}/v/${r.versionId}`}>Open in Checklist Studio</a>
+                            <button type="button" className={btnGhost} onClick={() => { router.push(`${BASE}?i=${r.instrumentId}`, { scroll: false }); onClose(); }}>Catalogue</button>
+                          </span>
+                        </div>
+                        {result.pathways[r.versionId]
+                          ? <PathwaySummaryCard summary={result.pathways[r.versionId]} studioHref={`/super-admin/checklist-studio/${r.instrumentId}/v/${r.versionId}`} studioLabel="Complete it in Checklist Studio" compact />
+                          : <p className="text-[12.5px] text-gray-800" role="status">Your draft is registered. Next: open it in Checklist Studio, complete its content, then Submit for review.</p>}
                       </li>
                     ))}
                   </ul>

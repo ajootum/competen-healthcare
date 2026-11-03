@@ -9,7 +9,7 @@ import { CAP } from "./transitions";
 import { lifecycleData, type LifecycleData } from "./page-data";
 import { nameMap } from "./read";
 import { pathwayOf, summarize, NO_HOLDERS, type PathwayHolder, type PathwayHolders, type PathwayModel, type PathwaySummary } from "./pathway";
-import type { DefinitionKind, LifecycleRow, StudioIssue } from "./types";
+import { VERSION_TABLE, type DefinitionKind, type LifecycleRow, type StudioIssue } from "./types";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -118,4 +118,20 @@ export async function pathwayModel(admin: Admin, o: PathwayOptions): Promise<Pat
 /** The short form for the catalogue drawer, the catalogue page and the import finish step. */
 export async function pathwaySummary(admin: Admin, o: PathwayOptions): Promise<PathwaySummary> {
   return summarize(await pathwayModel(admin, o));
+}
+
+const LIFE = "id, version_no, state, content_hash, authored_by, edited_by, last_edited_by, submitted_by, submitted_at, published_by, published_at, retired_by, retired_at, duplicated_from_version_id, created_at";
+
+/** One version's lifecycle row (plus the checklist's risk, domain-review and delivery-mode columns), or null. */
+export async function loadVersionRow(admin: Admin, kind: DefinitionKind, versionId: string): Promise<(PathwayVersion & { instrument_id?: string }) | null> {
+  const cols = kind === "instrument" ? `${LIFE}, instrument_id, risk, requires_domain_review, delivery_modes` : LIFE;
+  const { data } = await admin.from(VERSION_TABLE[kind]).select(cols).eq("id", versionId).maybeSingle();
+  return (data as any) ?? null;
+}
+
+/** The summary for a version named by id: what the import and template finish steps show for each registered draft. */
+export async function pathwaySummaryByVersion(admin: Admin, kind: DefinitionKind, versionId: string, viewer: { actorId: string; caps: string[] }, holders?: PathwayHolders): Promise<PathwaySummary | null> {
+  const v = await loadVersionRow(admin, kind, versionId);
+  if (!v) return null;
+  return pathwaySummary(admin, { kind, version: v, actorId: viewer.actorId, caps: viewer.caps, holders, instrumentId: v.instrument_id ?? null });
 }
