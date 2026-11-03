@@ -5,6 +5,7 @@ import { CONTEXT_PREAMBLE } from "./learner-context";
 import { VERIFY_FORMATS_DEFAULT } from "./question-formats";
 import { SCENARIO_SCOPE_LINE } from "./scenario";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
+import { CHECK_LABEL } from "./learn-check";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
 import type { CognitiveLevel } from "./question-intel";
 import { citeChunk, findPatientIdentifiers } from "./extract";
@@ -448,7 +449,17 @@ const LEARN_INSTRUCTION: Record<ClassicLearnAction | "check" | "clarify", string
   summary: "MODE: SUMMARISE. List the important learning points of the passages, each line starting '- ' and ending with its citation. Notes only.",
   ask: "MODE: ASK SCHOLAR. Answer the student's question from the passages, citing as you go. If they do not answer it, reply with exactly NOT_IN_NOTES.",
   check: "MODE: CHECK UNDERSTANDING. Write ONE short open question that checks whether the student understood the main idea of the passages -- a question they could answer in a sentence or two from the passages, asking them to explain, not to recall a number. Never ask how many of anything. Reply with exactly one line: 'QUESTION: ' followed by the question. Nothing else.",
-  clarify: "MODE: CLARIFY. You asked the student a check question and they answered. Judge their answer ONLY against the passages. Your first line is exactly one of 'VERDICT: understood', 'VERDICT: partly' or 'VERDICT: not_yet'. Then, briefly and kindly: say what they got right, then correct or complete it from the passages, citing as you go. Do not judge anything the passages do not cover.",
+  // SCHOLAR-UNDERSTANDING-CHECKS-01 (PROMPT_VERSIONS.learnClarify): formative feedback in labelled parts (learn-check.ts), each cited,
+  // so the page can show what was right, what was missing, the misconceptions and a model answer from the notes, part by part.
+  clarify: [
+    "MODE: CLARIFY. You asked the student a check question and they answered in their own words. Judge their answer ONLY against the passages, kindly and specifically: address what THEY wrote, not a general answer. Your first line is exactly one of 'VERDICT: understood', 'VERDICT: partly' or 'VERDICT: not_yet'. Then write exactly these parts, each starting on its own line with its label:",
+    `${CHECK_LABEL.right} one '- ' line per thing their answer got right, each cited. If nothing was right, one gentle line saying so.`,
+    `${CHECK_LABEL.missing} one '- ' line per important point of the passages their answer left out, each cited. If none, write 'Nothing important missing.'`,
+    `${CHECK_LABEL.misconceptions} one '- ' line per mistaken idea or step of reasoning in their answer, saying why it is a natural mistake and correcting it from the passages, each cited. If none, write 'Nothing to correct.'`,
+    `${CHECK_LABEL.keyPoints} the key learning points a complete answer to the check question would give -- a model answer in two to four '- ' lines, each from the passages and cited.`,
+    `${CHECK_LABEL.next} one short suggestion of what to revise or try next, from the passages, cited.`,
+    "Do not judge anything the passages do not cover. Use understood only when the main idea is right with nothing important wrong or missing.",
+  ].join("\n"),
 };
 
 // ── COMPETEN-RESEARCH-01: RESEARCH & EXPLAIN ── a FIFTH kind of content, kept apart ───────────────────────────────
@@ -747,7 +758,7 @@ export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest:
 }
 
 /** SCHOLAR-LEARN-FIX-01 L-B: Teach Me adds its structured-lesson version, so its saved answers key apart from the free-text ones. */
-export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
+export const learnPromptVersion = (action: LearnAction | "check" | "clarify") => `${PROMPT_VERSIONS.learn}:${action}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : action === "clarify" ? `+${PROMPT_VERSIONS.learnClarify}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
 /** SCHOLAR-GUIDED-LEARNING-01: the earlier Teach Me versions whose saved lessons are still opened with no AI call (LEARN_TEACH_LEGACY). */
 export const legacyLearnPromptVersions = (action: LearnAction | "check" | "clarify"): string[] =>
   action === "teach" ? LEARN_TEACH_LEGACY.map(v => `${PROMPT_VERSIONS.learn}:teach+${v}`) : [];
