@@ -10,6 +10,8 @@ import { sourceHref, studyHref } from "./question-view";
 import { SourcePictureButton } from "./learn-visuals";
 import { ReplayCase } from "./case-client";
 import { lessonFlashcardsHref, req } from "./learn-practice";
+import { AskAbout } from "./ask-panel";
+import { carry } from "./study-active";
 
 // SCHOLAR-INDEPENDENT-LEARNING-01 P0: YOUR NOTES, INSIDE THE LESSON. The lesson's own sections as the learner uploaded them
 // (GET learn/sessions/[id]/read?step=: a read of their own chunks, no AI, no allowance), each cited, each an anchor the 790
@@ -17,6 +19,9 @@ import { lessonFlashcardsHref, req } from "./learn-practice";
 // them: the competencies linked to these sections (a link is never practice or competence), what already exists to practise
 // with (opened directly, never regenerated), and the learner's own "Mark as read". AI teaching, where it is on, follows
 // below this panel: the notes come first, AI second. Highlights and notes on this text use the lesson's LibraryNotes (820).
+// P1 (connected activities): every link carries the open study session (study-active carry); Revise opens narrowed to the
+// lesson's own sections (?sections=); "Ask about this" on a section is the CE-01 in-place panel (an AI enhancement that says
+// why when it is not available, and never blocks reading).
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const touch = "pointer-coarse:min-h-[var(--cmp-touch-min)]";
@@ -107,10 +112,11 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                       <p className="whitespace-pre-wrap break-words border-t border-gray-200 px-2.5 py-2 text-[13.5px] leading-relaxed text-gray-800">{s.notes}</p>
                     </details>
                   )}
-                  <p className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
-                    <Link href={sourceHref(s.materialId, s.chunkId)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Open in the material</Link>
+                  <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px]">
+                    <Link href={carry(sourceHref(s.materialId, s.chunkId))} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Open in the material</Link>
                     {s.unit !== "section" && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} />}
-                  </p>
+                    <AskAbout surface="learn" chunkIds={[s.chunkId]} materialId={s.materialId} sessionId={sessionId} step={step} refLabel={`Your notes: ${s.citation}`} label="Ask about this" />
+                  </div>
                 </li>
               ))}
             </ol>
@@ -140,9 +146,9 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                 <>
                   <p className="mt-1 text-[13.5px] text-gray-900">{words}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
-                    {loaded.related.cards > 0 && first && <Link href={lessonFlashcardsHref(first.materialId, first.chunkId)} className={chip}>Review these flashcards</Link>}
-                    {loaded.related.questions > 0 && first && <Link href={`${studyHref("revise")}?material=${encodeURIComponent(first.materialId)}`} className={chip}>Answer these questions</Link>}
-                    {loaded.related.stations.map(st => <Link key={st.id} href={studyHref(`apply/osce/${encodeURIComponent(st.id)}`)} className={chip}>OSCE: {st.title}</Link>)}
+                    {loaded.related.cards > 0 && first && <Link href={carry(lessonFlashcardsHref(first.materialId, first.chunkId))} className={chip}>Review these flashcards</Link>}
+                    {loaded.related.questions > 0 && first && <Link href={carry(`${studyHref("revise")}?material=${encodeURIComponent(first.materialId)}&sections=${encodeURIComponent(loaded.sections.map(x => x.chunkId).join(","))}`)} className={chip}>Answer these questions</Link>}
+                    {loaded.related.stations.map(st => <Link key={st.id} href={carry(studyHref(`apply/osce/${encodeURIComponent(st.id)}`))} className={chip}>OSCE: {st.title}</Link>)}
                   </div>
                   {loaded.related.cases.length > 0 && (
                     <ul className="mt-2 space-y-1 text-[13.5px]">

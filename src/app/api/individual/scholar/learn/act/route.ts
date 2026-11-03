@@ -551,7 +551,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     timing_ms: clock.snapshot(),
   })]);
   if (prepare) return NextResponse.json({ prepared: savedNow === "ok", step, reason: savedNow === "ok" ? null : outcomeCode === "shown" ? "not_saved" : outcomeCode, actionId: ai.actionId });
-  if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
+  if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code }, { status: AI_ERROR[r.error].status });
 
   // ── the record: structure only, and only what was shown ──
   const shown = action === "check" ? !!r.question?.ok : r.check.ok && (!asksQuestion || !!askedQuestion);

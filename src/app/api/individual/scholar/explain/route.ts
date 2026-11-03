@@ -119,7 +119,7 @@ export async function POST(req: Request) {
     supplementary: r.ok && r.supplementary ? (r.supplementary.ok ? "shown" : `withheld:${r.supplementary.reason}`) : null,
     model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
   });
-  if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
+  if (!r.ok) return NextResponse.json({ error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code }, { status: AI_ERROR[r.error].status });
 
   const sources = passages.map((p, i) => ({
     tag: passageTag(i), chunkId: p.chunkId, materialId: p.materialId, materialTitle: p.materialTitle, citation: passageCitation(p), excerpt: p.content.slice(0, 400),

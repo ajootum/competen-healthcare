@@ -158,7 +158,7 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
     if (refused) return json(refused.status, await refused.json());
     if (!r.ok) {
       await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_slide_transcribe", materialId, { asked: pdf.pages, outcome: `error:${r.error}` });
-      return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
+      return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code });
     }
     model = r.model;
     const byPage = new Map(r.pages.map(p => [p.page, p.text]));

@@ -6,6 +6,7 @@ Waves: 1 = CE-01, CE-02, CE-03 · 2 = CE-04, CE-05 · 3 = CE-06 · 4 = CE-07 acc
 
 | ID | Workstream | Status | Last update |
 |---|---|---|---|
+| 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P1: reader links carry the study session; Revise narrowed to the lesson's sections (`?sections=`, sources scope, "Use the whole material"); Ask about this per section; Scholar AI refusals carry codes and the shared copy gains provider_unavailable (no "environment" wording) | branch scholar/independent-learning-p1 (stacked on P0) | CE-01, CE-05, CE-07 |
 | 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P0: the independent lesson reader (original sections inside every Learn lesson, exact-place resume on the original text, Mark as read, linked competencies, existing resources opened directly; mig 920 authored, staging ×2 + VERIFY, not in production) | branch scholar/independent-learning-p0, docs/programme/SCHOLAR-INDEPENDENT-LEARNING-01.md, docs/evidence/SCHOLAR-INDEPENDENT/920-build-record.md | CE-01, CE-02, CE-07 |
 | CE-01 | Seamless, context-aware Personal AI | Implementing | 2 Nov 2026 |
 | CE-02 | AI Notebook and Personal Learning Library | Implementing | 2 Nov 2026 |
@@ -115,7 +116,9 @@ Owner instruction 3 Nov 2026 (cross-cutting over CE-01, CE-02, CE-03, CE-05, CE-
 
 **P0 Implementing (branch `scholar/independent-learning-p0`, 3 Nov 2026)** — not merged, not deployed. The lesson reader: every Learn lesson shows its own sections (original text, headings, speaker notes, citation, AI-read mark, original picture) before any AI teaching (`learn-reader.ts`, `learn-reader.tsx`, `GET learn/sessions/[id]/read`); each section is a 790 anchor so the exact place in the original text is resumed on any device; the learner's own **Mark as read** (migration 920, event action `read`, staging-applied and verified, production pending GO) completes a lesson as AI teaching does; competencies linked to the sections (accepted apart from proposed, never competence); existing flashcards / questions / cases / OSCE stations opened directly, never regenerated. With AI off the session says what works before the reason. Evidence: `docs/evidence/SCHOLAR-INDEPENDENT/`.
 
-**Next**: P1 connected activities and the AI-off copy consistency pass (eight hand-written pages, provider-down reason); P2 rules-based revision priority and assessment-driven recommendations through Individual policy; P3 saved-output reuse and cheaper tiers (CE-07).
+**P1 Implementing (branch `scholar/independent-learning-p1`, stacked on P0, 3 Nov 2026)** — not merged, not deployed: study-session context on every reader link, Revise narrowed to the lesson's sections, Ask about this per section, one AI-off voice (refusal codes + provider_unavailable).
+
+**Next**: P2 rules-based revision priority and assessment-driven recommendations through Individual policy; P3 saved-output reuse and cheaper tiers (CE-07).
 
 ---
 

@@ -68,7 +68,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   if (refused) return refused;
   if (!r.ok) {
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_map", id, { chunk_ids: next.data.map(s => s.ref), outcome: `error:${r.error}` });
-    return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
+    return NextResponse.json({ error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code }, { status: AI_ERROR[r.error].status });
   }
   const saved = await saveAnalysis(ctx.admin, ctx.userId, {
     materialId: id, programmeCode: programme.data?.code ?? null, model: r.model, promptVersion: r.promptVersion,
@@ -118,7 +118,7 @@ async function relink(req: Request, ctx: IndividualContext, id: string) {
   if (refused) return refused;
   if (!r.ok) {
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_map", id, { chunk_ids: batch.map(s => s.ref), relink: true, outcome: `error:${r.error}` });
-    return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
+    return NextResponse.json({ error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code }, { status: AI_ERROR[r.error].status });
   }
   const saved = await saveAnalysis(ctx.admin, ctx.userId, {
     materialId: id, programmeCode: programme.data.code, model: r.model, promptVersion: r.promptVersion,

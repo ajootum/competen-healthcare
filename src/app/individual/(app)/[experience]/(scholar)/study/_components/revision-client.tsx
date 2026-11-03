@@ -65,7 +65,7 @@ export function RevisionStart(props: {
   modes: RevisionMode[]; formats: RevisionFormat[]; quantity: number; difficulty: string; feedback: "immediate" | "end";
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; aiNote: string | null;
   /** PROGRESS-01 P4: a next step opens Revision on its material (and difficulty), with "choose" open. */
-  preset?: { materialId?: string | null; difficulty?: string | null } | null;
+  preset?: { materialId?: string | null; difficulty?: string | null; /** SCHOLAR-INDEPENDENT-LEARNING-01 P1: only these sections of the material (a Learn lesson's), until the learner widens it. */ chunkIds?: readonly string[] | null } | null;
   /** SCHOLAR-SESSION-AI-02: the open study session's focus, chosen in "what to revise" (the learner may change it). */
   scope?: RevisePrefill | null;
 }) {
@@ -78,6 +78,8 @@ export function RevisionStart(props: {
   const [continuity, setContinuity] = useState("");
   const sc = presetMaterial ? null : props.scope ?? null;
   const [open, setOpen] = useState(!!presetMaterial || !!sc);
+  // The lesson's own sections, when Revise was opened from a lesson's notes: the scope is those sections, not the whole material.
+  const [onlySections, setOnlySections] = useState<string[]>(presetMaterial && props.preset?.chunkIds?.length ? [...props.preset.chunkIds] : []);
   const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">(presetMaterial ? "documents" : sc?.kind ?? "library");
   const [chosen, setChosen] = useState<string[]>(presetMaterial ? [presetMaterial] : sc?.kind === "documents" ? sc.materialIds : []);
   const [topic, setTopic] = useState(sc?.kind === "topic" ? sc.topic : "");
@@ -93,7 +95,7 @@ export function RevisionStart(props: {
   const start = useCallback(async (m: RevisionMode, custom: boolean) => {
     setBusy(m); setError(""); setNote(""); setContinuity("");
     const scope = !custom || scopeKind === "library" ? { kind: "library" }
-      : scopeKind === "documents" ? { kind: "documents", materialIds: chosen }
+      : scopeKind === "documents" ? (onlySections.length && chosen.length === 1 && chosen[0] === presetMaterial ? { kind: "sources", materialIds: [], chunkIds: onlySections, topics: [] } : { kind: "documents", materialIds: chosen })
         : scopeKind === "topic" ? { kind: "topic", topic } : { kind: "competency", competencyId: competency };
     const r = await call("/api/individual/scholar/revision/sessions", { mode: m, scope, ...(custom ? { formats, quantity, difficulty, feedback, source } : {}), ...studyField() });
     setBusy("");
@@ -102,7 +104,7 @@ export function RevisionStart(props: {
     if (r.json.session?.id) router.push(carry(revisionHref(r.json.session.id)));
     // A session this environment could not keep (417 absent): run here, for this sitting only.
     else { setNote(r.json.note ?? ""); setUnsaved({ items: r.json.items ?? [], label: r.json.label ?? null }); }
-  }, [router, scopeKind, chosen, topic, competency, formats, quantity, difficulty, feedback, source]);
+  }, [router, scopeKind, chosen, topic, competency, formats, quantity, difficulty, feedback, source, onlySections, presetMaterial]);
 
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
   if (unsaved) return <RevisionRunner session={null} items={unsaved.items} answered={[]} label={unsaved.label} />;
@@ -144,6 +146,10 @@ export function RevisionStart(props: {
                   {k === "library" ? "All my notes" : k === "documents" ? "Chosen materials" : k === "topic" ? "A topic" : "A competency"}</label>
               ))}
             </div>
+            {scopeKind === "documents" && onlySections.length > 0 && chosen.length === 1 && chosen[0] === presetMaterial && (
+              <p className="mt-1 text-[12.5px] text-gray-700">Only the {onlySections.length} {onlySections.length === 1 ? "section" : "sections"} of the lesson you came from.{" "}
+                <button type="button" onClick={() => setOnlySections([])} className={`font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Use the whole material</button></p>
+            )}
             {scopeKind === "documents" && (
               <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
                 {props.materials.map(m => <li key={m.id}><label className="inline-flex items-center gap-1.5 text-[13.5px]"><input type="checkbox" checked={chosen.includes(m.id)} onChange={() => setChosen(c => toggle(c, m.id))} />{m.title}</label></li>)}

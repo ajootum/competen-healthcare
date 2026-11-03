@@ -82,7 +82,7 @@ export async function POST(req: Request) {
   if (!r.ok) {
     await recordScholarOutcome(ctx.admin, ai, { ...outcome, outcome: "error", reasons: [`error_${r.error}`] });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, OPERATION, null, { chunk_id: passage.chunkId, outcome: `error:${r.error}` });
-    return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
+    return NextResponse.json({ error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code }, { status: AI_ERROR[r.error].status });
   }
   const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
   const caseId = r.steps.length ? randomUUID() : null;
