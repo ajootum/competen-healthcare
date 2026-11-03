@@ -87,8 +87,15 @@ The owner's rules, checked one by one against what already runs (no separate ada
 
 No migration. Evidence: vitest `plan-data.test.ts` (startedSections), `policy.test.ts` (the key, its fallback and clamp), plan / policy suites green; tsc clean.
 
-### P3 — AI optimisation (later)
-Saved-output reuse before generation everywhere, less generation, cheaper tiers for low-risk activities (CE-07).
+### P3 — AI optimisation (branch `scholar/independent-learning-p3`, from main c06c1953, owner GO 3 Nov 2026, PR pending)
+
+Measured first (`docs/evidence/SCHOLAR-INDEPENDENT/p3-cost.md`): on staging, evolving scenarios were 59 % of Scholar's AI spend, every `questions`-activity call (scenario, flashcard, mcq, mrq, short, OSCE station) ran on Opus because only Opus is eligible for `questions` at clinical educational, Learn already served 54 of 59 opens from saved teaching, and OSCE stations were never reused.
+
+- **Flashcards are their own AI activity** (`flashcards`): where the published policy defines it, it gets its own tier, routing and eligibility; where it does not, `questions` is used as before (`activityOrFallback`). Never a model name in code.
+- **The tier is configuration**: `scholarAiRunner` asks for the published policy's tier for the activity (`policyTierFor`); the engine's per-risk-tier floor and eligibility gate are untouched, so clinical and reasoning paths cannot be lowered below what the owner published.
+- **OSCE station reuse**: a station already written from the same material and section at the same prompt version is offered again (`findOwnAiStation`) unless the learner asks for a new one.
+- After, on staging: flashcards −57 % a call (Opus → Sonnet, floored by the clinical subject; Haiku for standard-educational notes), a repeated station costs nothing; cumulative teaching A–D unchanged by construction (USD 0.236).
+- Production configuration (owner): the fair-use activity `flashcards`, the routing `scholar.flashcards`, and eligibility rows for it from a model-evaluation decision; optionally Sonnet eligibility for `questions` and the scenario format out of the default revision formats (both findings in the evidence).
 
 ## 5. Owner decisions and blockers
 

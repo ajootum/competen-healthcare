@@ -12,7 +12,7 @@ import { REVIEW_STATE_LABEL, filterCards, recallOf, spacedViews, type CardOrigin
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { cardsOfMaterial, experienceOf, testScopeOf, unfinishedFlashcardSession, type FlashcardExperience } from "@/lib/individual/scholar/flashcard-experience";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
-import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
+import { activityOrFallback, activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
 import StudyNav from "../../_components/StudyNav";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
@@ -120,7 +120,9 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
 
   // Where new cards can come from right now, said plainly (as Revise says it). Stored and library cards always work.
   const status = consent.ok ? consentStatus(consent.data, consentDocuments().published) : null;
-  const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "questions");
+  // P3: the `flashcards` activity where the published policy offers it, else `questions` (the same choice the session route makes).
+  const whole = await getScholarAiStanding(ctx.admin, ctx.userId);
+  const standing = activityState(whole, activityOrFallback(whole, "flashcards", "questions"));
   const aiNote = policy.scholarRevisionGeneration === "saved_only" ? "New cards are not written here: your saved and library cards are used."
     : status !== "on" ? `${status ? aiOffMessage(status) ?? "AI help is off." : "Your AI help setting could not be read just now."} Your saved and library cards are used.`
       : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Your saved and library cards are used.` : null;
