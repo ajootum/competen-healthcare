@@ -271,12 +271,21 @@ export interface QueueItem {
   kind: DefinitionKind; versionId: string; versionNo: number; definitionName: string; code: string;
   submittedBy: string | null; submittedAt: string | null; risk: string | null; requiresDomainReview: boolean; contentHash: string | null;
   governance: number; domain: number; href: string;
+  /** ASMT-PATHWAY-01: the approvals this version needs (by its risk), and everyone involved in it (asmt_version_people). */
+  need: number; involved: string[];
+  /** THIS person's standing on the item: independent of its content, and what they have already decided on this exact content. */
+  viewer: { independent: boolean; decidedGovernance: boolean; decidedDomain: boolean; canGovern: boolean; canDomain: boolean };
 }
 
+/** The versions in review that THIS person may still decide: never one they authored, edited or submitted, nor one they already decided. */
 export async function reviewQueue(admin: Admin, actorId: string, caps: string[]): Promise<QueueItem[]> {
+  return (await reviewOverview(admin, actorId, caps)).filter((q) => q.viewer.independent && ((q.viewer.canGovern && !q.viewer.decidedGovernance) || (q.viewer.canDomain && q.requiresDomainReview && !q.viewer.decidedDomain)));
+}
+
+/** EVERY version in review, with who submitted it, what it still needs and this person's standing on it (ASMT-PATHWAY-01). */
+export async function reviewOverview(admin: Admin, actorId: string, caps: string[]): Promise<QueueItem[]> {
   const out: QueueItem[] = [];
   const need = await requiredApprovals(admin);
-  void need;
   const [ins, sc, rt, lt, pr] = await Promise.all([
     admin.from("asmt_instrument_version").select("id, version_no, instrument_id, submitted_by, submitted_at, risk, requires_domain_review, content_hash").eq("state", "in_review"),
     admin.from("asmt_response_scale_version").select("id, version_no, scale_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
@@ -298,6 +307,7 @@ export async function reviewQueue(admin: Admin, actorId: string, caps: string[])
     for (const v of rows) out.push({
       kind, versionId: v.id, versionNo: v.version_no, definitionName: nm.get(v[parentKey])?.name ?? "", code: nm.get(v[parentKey])?.code ?? "", submittedBy: v.submitted_by, submittedAt: v.submitted_at,
       risk: v.risk ?? null, requiresDomainReview: Boolean(v.requires_domain_review), contentHash: v.content_hash, governance: 0, domain: 0, href: href(v),
+      need: v.risk === "high" ? need.high : need.standard, involved: [], viewer: { independent: true, decidedGovernance: false, decidedDomain: false, canGovern: false, canDomain: false },
     });
   };
   push("instrument", (ins.data ?? []) as any[], "instrument_id", nIns, (v) => `/super-admin/checklist-studio/${v.instrument_id}/v/${v.id}`);
@@ -315,10 +325,9 @@ export async function reviewQueue(admin: Admin, actorId: string, caps: string[])
     const forHash = trail.decisions.filter((d) => d.content_hash === q.contentHash && d.decision === "approved");
     q.governance = new Set(forHash.filter((d) => d.review_kind === "governance").map((d) => d.reviewer_id)).size;
     q.domain = new Set(forHash.filter((d) => d.review_kind === "domain").map((d) => d.reviewer_id)).size;
-    if (people.includes(actorId)) continue;
-    const needsGov = canGovern && !mine.some((d) => d.review_kind === "governance");
-    const needsDom = canDomain && q.requiresDomainReview && !mine.some((d) => d.review_kind === "domain");
-    if (needsGov || needsDom) result.push(q);
+    q.involved = people;
+    q.viewer = { independent: !people.includes(actorId), decidedGovernance: mine.some((d) => d.review_kind === "governance"), decidedDomain: mine.some((d) => d.review_kind === "domain"), canGovern, canDomain };
+    result.push(q);
   }
   return result.sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
 }

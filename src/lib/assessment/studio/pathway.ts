@@ -204,7 +204,6 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
   const stages = stagesOf(i, reviewersEligible, publishers.eligible, blockers);
   const av = i.availability;
   const ap = i.approval;
-  const mine = i.authoredBy.includes(i.actorId) || i.editedBy.includes(i.actorId);
   const holdsAuthor = i.caps.includes(CAP.author);
   const eligibleNames = (g: WhoCanAct) => listNames(g.actors.filter((a) => a.eligible));
 

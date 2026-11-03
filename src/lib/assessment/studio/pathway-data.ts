@@ -2,9 +2,10 @@
 // ASMT-PATHWAY-01 -- the pathway to publication, the SERVER half: who holds each Studio capability through a live
 // appointment (as the Framework Governance Workspace's actorsFor does), and the pathway model of one version from the
 // same lifecycle read every Studio page already makes. Reads: hq_position_capability, hq_position, ogs_office_appointments,
-// profiles (names), asmt_instrument_availability (catalogue availability of a published checklist). Never a capture table.
+// profiles (names); the catalogue availability of a published checklist comes through the catalogue's own loader. Never a capture table.
 import type { createAdminClient } from "@/lib/supabase/server";
 import { activeGrants, appointmentInTerm, narrowToScope } from "@/lib/hq/spaces";
+import { loadAvailability } from "../catalogue/availability";
 import { CAP } from "./transitions";
 import { lifecycleData, type LifecycleData } from "./page-data";
 import { nameMap } from "./read";
@@ -75,6 +76,8 @@ export interface PathwayOptions {
   instrumentId?: string | null;
   /** the version numbers of the definition's other versions, to say which one superseded a retired one */
   versionNos?: Record<string, number>;
+  /** checklists: whether the catalogue already makes it available in a product (the catalogue passes what it read) */
+  catalogueAvailability?: boolean | null;
 }
 
 /** The latest return to draft since the last submission: who returned it and the reason. Pure. */
@@ -101,10 +104,10 @@ export async function pathwayModel(admin: Admin, o: PathwayOptions): Promise<Pat
   }
   const validation = o.validation ?? [];
   const life = o.life ?? await lifecycleData(admin, { kind: o.kind, version: v, actorId: o.actorId, caps: o.caps, validationErrors: validation.length, versionNos: o.versionNos });
-  let catalogueAvailability: boolean | null = null;
-  if (o.kind === "instrument" && v.state === "published" && o.instrumentId) {
-    const { data } = await admin.from("asmt_instrument_availability").select("mode").eq("instrument_id", o.instrumentId);
-    catalogueAvailability = ((data ?? []) as any[]).some((r) => r.mode === "available" || r.mode === "optional");
+  // The catalogue's availability is the catalogue's read (plane boundary AC9): the catalogue passes it in, the Studio asks its loader.
+  let catalogueAvailability: boolean | null = o.catalogueAvailability ?? null;
+  if (catalogueAvailability === null && o.kind === "instrument" && v.state === "published" && o.instrumentId) {
+    catalogueAvailability = (await loadAvailability(admin, o.instrumentId).catch(() => [])).some((a) => a.enabled);
   }
   const supersededBy = v.state === "retired" && o.versionNos ? Math.max(0, ...Object.values(o.versionNos).filter((n) => n > v.version_no)) || null : null;
   return pathwayOf({

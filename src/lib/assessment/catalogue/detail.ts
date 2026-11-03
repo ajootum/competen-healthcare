@@ -94,6 +94,7 @@ export async function loadInstrumentDetail(admin: Admin, id: string, viewer?: Pa
   const who = viewer ?? { actorId: "", caps: [] };
   const pathway = await pathwaySummary(admin, {
     kind: "instrument", version: latest as never, actorId: who.actorId, caps: who.caps, instrumentId: id, versionNos: Object.fromEntries(versionRows.map(v => [v.id, v.version_no])),
+    catalogueAvailability: availability.some(a => a.enabled),
   }).catch(() => null);
 
   return {
