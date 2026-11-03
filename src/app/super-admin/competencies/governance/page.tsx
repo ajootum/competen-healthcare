@@ -25,7 +25,7 @@ function detail(r: IndexRow, s: Stage): string[] {
   switch (s.key) {
     case "preparation": return [m.created ? `Created ${when(m.created)}` : "", c.total ? `${c.total} competencies` : "No competency yet", m.forwarded ? `First put forward ${when(m.forwarded)}` : c.ready ? `${c.ready} not yet put forward` : ""].filter(Boolean);
     case "review": return [`${c.approved} of ${c.total} approved`, c.inReview ? `${c.inReview} awaiting review` : "", c.changes ? `${c.changes} returned for changes` : "", m.approved ? `Completed ${when(m.approved)}` : ""].filter(Boolean);
-    case "readiness": return [s.status === "done" || s.status === "current" ? "All competencies clinically approved" : `${c.total - c.approved} still need approval`, m.submitted && (s.status === "done") ? `Put forward ${when(m.submitted)}${r.pending?.byName ? ` by ${r.pending.byName}` : ""}` : ""].filter(Boolean);
+    case "readiness": return [c.total === 0 ? "No competency to approve" : s.status === "done" || s.status === "current" ? "All competencies clinically approved" : `${c.total - c.approved} still need approval`, m.submitted && (s.status === "done") ? `Put forward ${when(m.submitted)}${r.pending?.byName ? ` by ${r.pending.byName}` : ""}` : ""].filter(Boolean);
     case "decision": return [
       r.pending ? `Request submitted ${when(r.pending.submittedAt)}${r.pending.byName ? ` by ${r.pending.byName}` : ""}` : "",
       r.pending && s.status === "waiting" ? "Waits for clinical review to finish" : "",
