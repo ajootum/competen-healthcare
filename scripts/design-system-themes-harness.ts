@@ -147,6 +147,9 @@ function main() {
   const RAW_HEX = /#[0-9a-fA-F]{6}\b/;
   const hexed = scholarScreens.filter(f => RAW_HEX.test(code(read(f)).replace(/accent="#111827"/g, "")));
   ok("6j. no hard-coded hex colour in Scholar screens or the shared Individual chrome", hexed.length === 0, hexed.join(", "));
+  const assessmentScreens = walk("src/components/assessment");
+  const hexedAssessment = assessmentScreens.filter(f => RAW_HEX.test(code(read(f))));
+  ok("6j2. no hard-coded hex colour in the shared assessment components (theme tokens only)", assessmentScreens.length > 0 && hexedAssessment.length === 0, hexedAssessment.join(", "));
   ok("6k. plant: a hard-coded hex is caught", RAW_HEX.test(code(`<p className="bg-[#e9f7f8]" />`)));
   const nav = code(read("src/app/individual/(app)/[experience]/(scholar)/study/_components/StudyNav.tsx"));
   ok("6l. activity chips are aria-hidden, read the activity tokens, and the tab keeps its text label",

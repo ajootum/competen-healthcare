@@ -189,6 +189,20 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.competency.verification.assess", space: "quality"  },
   // Migration 690: a Competency Programme Lead asks for assessments for the people on their programme. Never decides one.
   { code: "hq.competency.verification.request", space: "quality"  },
+  // Migration 894 (Assessment & Checklist Catalogue). View searches the Holdings registry and reads an instrument's
+  // classification, availability and versions. Manage registers identities, classifies, sets product availability,
+  // relates, references and keeps collections and terms. Neither edits checklist content (Checklist Studio does).
+  { code: "hq.assessment.catalogue.view",     space: "quality"  },
+  { code: "hq.assessment.catalogue.manage",   space: "quality"  },
+  // >>> ASSESSOR-WORKSPACE (Checklist Studio S4) capabilities, migration 890. One block; the Studio slice declares the same six
+  // codes, so a merge keeps ONE copy of each. Assess opens the assessor workspace, assign the coordinator's grants.
+  { code: "hq.assessment.studio.view",        space: "quality"  },
+  { code: "hq.assessment.instrument.author",  space: "quality"  },
+  { code: "hq.assessment.instrument.review",  space: "quality"  },
+  { code: "hq.assessment.instrument.publish", space: "quality"  },
+  { code: "hq.assessment.assessor.assign",    space: "quality"  },
+  { code: "hq.assessment.instrument.assess",  space: "quality"  },
+  // <<< ASSESSOR-WORKSPACE
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);
@@ -276,6 +290,17 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // Migrations 460-464 (COMPETEN-LEARNING-01). The narrower authorities first: the first matching prefix wins, and none
   // of them may inherit author. The Learning review page is the clinical reviewer's, as /super-admin/clinical-review is.
   // Migration 510 (COMPETENCY-01 C5). Two separate doors: the assessor queue must not inherit the Studio, nor the reverse.
+  // Migration 894. The configuration pages (families, terms) are the manager's. The registry itself is the view right.
+  { prefix: "/super-admin/assessment-catalogue/families", capability: "hq.assessment.catalogue.manage" },
+  { prefix: "/super-admin/assessment-catalogue/terms",    capability: "hq.assessment.catalogue.manage" },
+  { prefix: "/super-admin/assessment-catalogue",          capability: "hq.assessment.catalogue.view" },
+  // >>> ASSESSOR-WORKSPACE (Checklist Studio S4). Distinct from the verification assessor below. Grants first: the first match wins.
+  { prefix: "/super-admin/checklist-assessments/grants", capability: "hq.assessment.assessor.assign" },
+  { prefix: "/super-admin/checklist-assessments",        capability: "hq.assessment.instrument.assess" },
+  // <<< ASSESSOR-WORKSPACE
+  // >>> CHECKLIST STUDIO (S2). One right opens every Studio page. Each action inside re-checks its own capability.
+  { prefix: "/super-admin/checklist-studio",              capability: "hq.assessment.studio.view" },
+  // <<< CHECKLIST STUDIO
   { prefix: "/super-admin/competency-assessment", capability: "hq.competency.verification.assess" },
   { prefix: "/super-admin/verification-studio", capability: "hq.competency.verification.manage" },
   // Migration 690: the programme lead door, separate from both.

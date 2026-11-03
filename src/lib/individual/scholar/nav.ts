@@ -53,17 +53,14 @@ const courses: NavModule = {
   ],
 };
 
+// Checklist Studio S3: three leaves. The five older pages (profile, frameworks, gaps, practice, verification) answer as gated redirect stubs, so their
+// paths are `also` segments of the leaf that took over their job, and an old bookmark still highlights the right leaf.
 const competencies: NavModule = {
   key: "competencies", label: "My Competencies", icon: "◈",
   items: [
-    { key: "competencies", label: "Overview", segment: "my-competencies", status: "live" },
-    { key: "competencies-profile", label: "My Competency Profile", segment: "my-competencies/profile", status: "live" },
-    { key: "competencies-frameworks", label: "Competency Frameworks", segment: "my-competencies/frameworks", status: "live" },
-    { key: "competencies-gaps", label: "My Development Gaps", segment: "my-competencies/gaps", status: "live" },
-    { key: "competencies-practice", label: "Practice Assessments", segment: "my-competencies/practice", status: "live" },
-    { key: "competencies-assessments", label: "Competen Assessments", segment: "my-competencies/assessments", status: "future" },
-    { key: "competencies-verification", label: "Competency Verification", segment: "my-competencies/verification", status: "future" },
-    { key: "competencies-evidence", label: "My Evidence", segment: "my-competencies/evidence", status: "live" },
+    { key: "competencies", label: "Overview", segment: "my-competencies", also: ["my-competencies/profile", "my-competencies/frameworks", "my-competencies/gaps"], status: "live" },
+    { key: "competencies-assessments", label: "Assessments", segment: "my-competencies/assessments", also: ["my-competencies/practice"], status: "live" },
+    { key: "competencies-evidence", label: "My Evidence", segment: "my-competencies/evidence", also: ["my-competencies/verification"], status: "live" },
   ],
 };
 

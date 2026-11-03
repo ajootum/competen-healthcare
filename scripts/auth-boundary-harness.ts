@@ -65,6 +65,7 @@ const NOT_A_BOUNDARY: Record<string, string> = {
   requireEdit: "a UI affordance check, not a request boundary",
   requireHqCapabilityOrNull: "a non-throwing variant used for rendering decisions, not entry",
   requireScholarModule: "a narrowing applied AFTER the Individual entitlement gate (experienceModulePage) on Scholar pages: module-level private/pilot/public access from Individual Policy; used by no API route (src/lib/individual/scholar/module-access.ts)",
+  assessmentApiGate: "a narrowing applied AFTER requireIndividualContext(\"scholar\") in every Scholar self-assessment API route (src/app/api/individual/scholar/assessments/**): the learner must see the My Competencies module and the assessment tables must exist, else the same 404; it authenticates no one and the learner id is always the guard's (src/lib/assessment/adapters/scholar/gate.ts)",
 };
 
 type Cat = "guarded" | "public" | "system" | "inline" | "unclassified";

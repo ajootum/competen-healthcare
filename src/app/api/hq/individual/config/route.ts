@@ -67,6 +67,17 @@ export async function POST(req: Request) {
           if (ids.some(id => !ok.has(id))) return refuse(422, `${v.def.label}: only shared, active, published catalogues can be chosen.`);
         }
       }
+      // CHECKLIST STUDIO S3: an instrument list may name only existing instruments -- checked against the library now, and again on every
+      // read (src/lib/assessment/adapters/scholar), where an unpublished or unreadable one offers nothing.
+      if (v.def.kind === "instrument_codes") {
+        const codes = (v.settings.codes as string[]) ?? [];
+        if (codes.length) {
+          const { data, error } = await ctx.admin.from("asmt_instrument").select("code").in("code", codes);
+          if (error) return refuse(503, "The instruments could not be checked just now. Nothing has changed.");
+          const ok = new Set((data ?? []).map((r: { code: string }) => r.code));
+          if (codes.some(c => !ok.has(c))) return refuse(422, `${v.def.label}: only existing instruments can be named.`);
+        }
+      }
       // JOIN-01: programmes offered at join, and programmes given levels, must be active Scholar programme rows
       // (migration 387) -- checked now, and again on every read (src/lib/individual/scholar/context.ts).
       if (v.def.kind === "programmes" || v.def.kind === "levels") {

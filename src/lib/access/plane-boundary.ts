@@ -76,6 +76,11 @@ export type TablePolicy = {
   /** A `{ head: true }` count is permitted: PostgREST returns a number and no rows. */
   count: boolean;
   why: string;
+  /**
+   * When set, the table may be read ONLY by files whose repo-relative path starts with this prefix. A read from anywhere else
+   * is refused even with the right columns. It is how an allowlist entry says WHO may read, not only what.
+   */
+  onlyFrom?: string;
 };
 
 // ── THE ALLOWLIST ────────────────────────────────────────────────────────────────────────────────────
@@ -523,6 +528,70 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
       "entry set the columns are a dead grant and only the head-count is live. They are declared anyway " +
       "because the human surface is the same console; the harness prints them as unread.",
   },
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // THE ASSESSMENT & CHECKLIST CATALOGUE (migration 894, 3 Nov 2026). The Holdings registry of assessment instruments:
+  // identity, classification, relations, availability per product line and collections. It is landlord-owned reference
+  // data. It holds NO learner, patient, respondent, answer, evidence, outcome or progression record, and the catalogue
+  // code is built so that it cannot read one: the capture and progression tables (asmt_instance and its neighbours) are
+  // governed by an exact entry in PLANE_TABLE_PREFIXES with NO allowlist entry, so any read of them from this plane is
+  // refused outright (TABLE_NOT_ALLOWED). Each entry below names its columns and is readable ONLY from
+  // src/lib/assessment/catalogue/** (`onlyFrom`), the one module that owns catalogue reads. A page, a route or another
+  // library that wants one of these tables must add its own entry here, with its own reason.
+  // asmt_instrument_org_scope is governed with no entry: Phase 1 has no screen for it, so nothing may read it yet.
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  ...([
+    ["asmt_catalogue_dimension", ["code", "label", "is_active", "allows_hierarchy", "position"],
+      "the classification axes (method, subject domain, population, setting, level, specialty, keyword): a code, a label and two switches. Configuration, no subject."],
+    ["asmt_catalogue_term", ["id", "dimension_code", "code", "label", "parent_id", "source_kind", "source_ref", "is_active", "position"],
+      "the classification terms: a label and a code on an axis, an optional parent and an optional pointer (kind and id) to the authority a term names, such as a qualification level. The pointer is an id, never the row."],
+    ["asmt_instrument_term", ["instrument_id", "term_id", "is_primary"],
+      "which terms an instrument carries, and the one primary term per axis. Two ids and a flag: it names no person."],
+    ["asmt_instrument_relation", ["instrument_id", "related_instrument_id", "relation", "note"],
+      "instrument to instrument links (related, adapted from, supersedes, companion) with a short note. Between definitions only."],
+    ["asmt_instrument_reference", ["id", "instrument_id", "kind", "ref_table", "ref_id", "ref_code", "ref_label", "ref_version"],
+      "an instrument's references to a standard, framework or policy, by id, code and label. The referenced row is NOT copied here."],
+    ["asmt_instrument_availability", ["instrument_id", "product_line", "mode", "granted_at", "note"],
+      "which product line may discover an instrument (available, optional, unavailable). granted_by (a person id) is deliberately not selected: the screen needs the mode and the date, and the actor is in the append-only event trail."],
+    ["asmt_collection", ["id", "code", "name", "description", "is_active", "owner_scope"],
+      "named lists of instruments. owner_scope says Holdings or a product or organisation owner. The owner id columns are not selected."],
+    ["asmt_collection_member", ["collection_id", "instrument_id", "position"],
+      "which instruments sit in which collection, and in what order."],
+  ] as const).map(([table, columns, what]) => ({
+    table,
+    columns,
+    count: true,
+    onlyFrom: "src/lib/assessment/catalogue/",
+    why: `Assessment & Checklist Catalogue (migration 894), read only from src/lib/assessment/catalogue/**: ${what} Holdings reference data. It contains no learner, patient or assessment record.`,
+  })),
+  // >>> ASSESSOR-WORKSPACE (Checklist Studio S4). The captured assessment data, read ONLY by the assessor workspace library
+  // (`onlyFrom`): a read of the same table from the Studio, the catalogue or any other file is refused even with the right columns.
+  // The assessor library filters every read by the actor (respondent_id, or granted_by for the grants I made) and every read of
+  // answers, evidence, comments or outcomes by an instance it has proved is the actor's. asmt_progression_decision has NO entry here.
+  ...([
+    ["asmt_instance", ["id", "instrument_version_id", "subject_kind", "subject_id", "subject_user_id", "respondent_role", "respondent_id", "respondent_snapshot", "grant_id",
+      "owner_scope", "status", "attestation", "amends_instance_id", "started_at", "submitted_at"],
+      "One use of a published checklist on one person by one respondent. The assessor workspace reads an assessor's OWN instances (respondent_id = the signed in assessor, respondent_role = assessor) to list, open, resume and submit them, and the subject's submitted assessor-evaluated instances (subject_user_id, status submitted) in progression.ts only, to compute a stage on the server without returning them. Columns are identifiers, the status and the frozen authority snapshot (position, capability, appointment, date). Owner columns other than the scope are not selected."],
+    ["asmt_instance_layout", ["instance_id", "layout_version_id", "is_primary"],
+      "Which published layout versions were pinned to an assessor's own instance at its start. Two ids and a flag, read after the instance has been proved to be the assessor's own."],
+    ["asmt_response", ["item_id", "field_key", "value", "revision", "satisfactory"],
+      "The assessor's answers on an instance they own, keyed by item and field, with the revision the autosave compares and the satisfactory flag the database computed. Read after own() has proved the instance is the actor's. progression.ts reads the same columns for the subject's submitted instances to take the lowest rating per group, on the server only."],
+    ["asmt_evidence", ["id", "item_id", "kind", "ref_kind", "ref_id", "note", "created_at"],
+      "Evidence an assessor attached to an instance they own: a note or a reference to a record. storage_path and provenance are NOT selected (there is no upload path here). Read after own() has proved the instance is the actor's."],
+    ["asmt_comment", ["id", "item_id", "kind", "body", "author_id", "created_at"],
+      "Comments, safety concerns, strengths and recommendations an assessor wrote on an instance they own. Read after own() has proved the instance is the actor's."],
+    ["asmt_outcome", ["id", "instance_id", "engine_version", "rules_hash", "outcome_code", "outcome_class", "group_outcomes", "aggregates", "trace", "trace_hash", "backstop_applied", "backstop_detail", "created_at"],
+      "The recorded outcome of an instance the assessor submitted, for the report and the submit response. progression.ts also reads outcome id, code, class, trace and backstop detail of the subject's submitted assessor-evaluated instances to build progression evidence on the server, and returns none of it."],
+    ["asmt_respondent_grant", ["id", "instrument_id", "subject_kind", "subject_id", "subject_user_id", "respondent_id", "respondent_role", "appointment_id", "granted_by", "reason", "valid_from",
+      "valid_until", "accepted_at", "ended_at", "end_reason", "created_at"],
+      "The authority to assess one person with one checklist. An assessor reads the grants made TO them (respondent_id = actor) to see what is waiting, ready or ended, and a coordinator reads the grants they MADE (granted_by = actor). accepted_by and ended_by are not selected. The reason is the coordinator's own text about the grant."],
+  ] as const).map(([table, columns, what]) => ({
+    table,
+    columns,
+    count: false,
+    onlyFrom: "src/lib/assessment/assessor/",
+    why: `ASSESSOR-WORKSPACE (migration 891), read only from src/lib/assessment/assessor/**: ${what}`,
+  })),
+  // <<< ASSESSOR-WORKSPACE
 ];
 
 /**
@@ -735,6 +804,10 @@ export function judge(site: BoundarySite): Verdict {
 
   if (!policy)
     return { ok: false, code: "TABLE_NOT_ALLOWED", detail: `${site.table} is not on the platform-plane allowlist` };
+
+  // 4b. An entry may name the only place it can be read from. Right table, right columns, wrong file: refused.
+  if (policy.onlyFrom && !site.file.startsWith(policy.onlyFrom))
+    return { ok: false, code: "TABLE_NOT_ALLOWED", detail: `${site.table} may be read only from ${policy.onlyFrom}**, not from ${site.file}` };
 
   // 5. `{ head: true }` returns the count and no rows, whatever the select list says. This is what makes
   //    `select("*", { count: "exact", head: true })` acceptable and `select("*")` not.

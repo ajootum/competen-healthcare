@@ -1,4 +1,6 @@
 import { EVIDENCE_LABEL, type IndividualPassport } from "@/lib/individual/passport";
+import type { InstanceSummary } from "@/lib/assessment/adapters/scholar/store";
+import { isSelfAssessment } from "@/lib/assessment/adapters/scholar/vocab";
 import { STUDY_ACHIEVEMENT, studyDetail } from "@/lib/individual/scholar/passport-items";
 import { noProgrammeText } from "@/lib/individual/scholar/classify-view";
 import { NO_APPROVED_COMPETENCIES } from "@/lib/individual/scholar/config";
@@ -80,7 +82,7 @@ export function gapsView(learner: Pick<LearnerLike, "provisioned" | "programme">
 
 // ── EVIDENCE ──
 
-export type EvidenceRow = { key: string; title: string; detail: string; label: string };
+export type EvidenceRow = { key: string; title: string; detail: string; label: string; /** A link to the record itself (the report of an assessment). */ href?: string };
 export type EvidenceSection = {
   id: string; title: string;
   state: "items" | "empty" | "unreadable" | "unavailable";
@@ -143,4 +145,27 @@ export function evidenceView(p: IndividualPassport): EvidenceView {
   const learner = [study, evaluations];
   const settled = (s: EvidenceSection[]) => s.every(x => x.state === "empty" || x.state === "unavailable");
   return { learner, formal, allEmpty: settled(learner) && settled(formal) };
+}
+
+// ── THE ASSESSMENT CLASSES OF MY EVIDENCE ── Checklist Studio S3 ──
+//
+// The learner's own instances, grouped by WHO attested them, never merged with each other or with the Passport's formal records:
+//   Self-assessments (self-reported, not verified)          the learner's own rating of themselves
+//   Assessor-led assessments (not formal verification)      recorded by an authorised assessor the learner accepted
+// Only SUBMITTED instances are evidence. A draft is not. Nothing here is written to the Passport (decision D6).
+
+export const SELF_EVIDENCE_TITLE = "Self-assessments (self-reported, not verified)";
+export const ASSESSOR_EVIDENCE_TITLE = "Assessor-led assessments (not formal verification)";
+
+export function assessmentEvidenceSections(read: InstanceSummary[] | null, reportHref: (id: string) => string): { self: EvidenceSection; assessor: EvidenceSection } {
+  const row = (label: string) => (i: InstanceSummary): EvidenceRow => ({
+    key: i.id, title: i.instrumentName,
+    detail: join(`version ${i.versionNo}`, i.submittedAt && `submitted ${day(i.submittedAt)}`, i.outcomeLabel && `outcome: ${i.outcomeLabel}`, i.assessorName && `assessor: ${i.assessorName}`),
+    label, href: reportHref(i.id),
+  });
+  const submitted = (role: "self" | "assessor") => (read === null ? null : read.filter(i => i.status === "submitted" && (role === "self" ? isSelfAssessment(i) : !isSelfAssessment(i))));
+  return {
+    self: section("self-assessed", SELF_EVIDENCE_TITLE, submitted("self"), "No self-assessments submitted yet. Start one in Assessments.", row(EVIDENCE_LABEL.self_assessed)),
+    assessor: section("assessor-evaluated", ASSESSOR_EVIDENCE_TITLE, submitted("assessor"), "No assessor-led assessments yet.", row(EVIDENCE_LABEL.assessor_evaluated)),
+  };
 }

@@ -1361,7 +1361,7 @@ function main() {
     && catalogueLeaks(plant(CAT, "o: pickOverlay(c.overlays, rank)", "o: c.overlays?.[0] ?? null")).length > 0
     && catalogueLeaks(plant(`${PAGES}/progress/page.tsx`, "const learner = rows.ok", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = rows.ok')).length > 0
     // SCHOLAR-MODULES-01: the walk covers the new modules, and the preview reader is refused anywhere in the Individual application.
-    && catalogueLeaks(plant(`${SCHOLAR_GROUP}/my-competencies/frameworks/page.tsx`, "const learner = await loadLearnerCatalogue", 'const leak = ctx.admin.from("framework_competencies").select("*");\n  const learner = await loadLearnerCatalogue')).length > 0
+    && catalogueLeaks(plant(`${SCHOLAR_GROUP}/my-competencies/frameworks-section.tsx`, "export function FrameworksSection", 'const leak = (a: any) => a.from("framework_competencies").select("*");\nexport function FrameworksSection')).length > 0
     && catalogueLeaks(REAL, new Map([...INDIVIDUAL_APP, [`${SCHOLAR_GROUP}/my-competencies/gaps/page.tsx`, `${INDIVIDUAL_APP.get(`${SCHOLAR_GROUP}/my-competencies/gaps/page.tsx`) ?? ""}\nconst leak = loadCatalogueForPreview;`]])).length > 0
     && catalogueLeaks(REAL, new Map([...INDIVIDUAL_APP, ["src/app/individual/_components/planted.ts", 'import { loadCatalogueForPreview } from "@/lib/competency/foundation";']])).length > 0);
   ok("P22b. ⚠ C7b goes red when a module page takes another segment, enrols, posts, carries a control, reads a table itself or calls an AI",
@@ -1532,6 +1532,159 @@ function main() {
   if (MIG387 && MIG388) ok("P30. ⚠ K10 goes red when the trail loses its cascade allowance, or configuration gains a policy",
     !mig388Shape(MIG388.replace("pg_trigger_depth() > 1", "false"))
     && !mig387Shape(`${MIG387}\ncreate policy x on individual_scholar_programme for select using (true)`));
+
+  // ── S. CHECKLIST STUDIO S3: THE SCHOLAR ASSESSMENT ADAPTER AND ITS SURFACE ────────────────────────────────────
+  // The adapter (src/lib/assessment/adapters/scholar) is the ONLY Scholar code that reads asmt_* rows; every person-table query carries the learner;
+  // a Scholar instance is always self_reported; nothing there verifies, writes the Passport, calls an AI or reads the preview catalogue; every new page
+  // and API passes the module gate (C7c walks the pages), and HQ's offer list fails closed.
+  const ASMT_DIR = "src/lib/assessment/adapters/scholar", READ_DIR = "src/lib/assessment/read", ASSESS_API = `${API}/assessments`;
+  const ASMT: Src = new Map([...walk(ASMT_DIR), ...walk(READ_DIR)].map(f => [f, strip(read(f))]));
+  const ASMT_STORE = `${ASMT_DIR}/store.ts`, ASMT_GATE = `${ASMT_DIR}/gate.ts`;
+  const asmtRoutes = (src: Src) => [...src].filter(([f]) => f.startsWith(`${ASSESS_API}/`) && f.endsWith("/route.ts"));
+  /** S1: every assessment route is the Scholar guard, then the module + readiness gate, then (and only then) anything that reads. */
+  const assessRoutesGated = (src: Src, gate: Src): string[] => {
+    const bad: string[] = [];
+    const routes = asmtRoutes(src);
+    if (routes.length < 7) bad.push(`too few assessment routes (${routes.length})`);
+    for (const [f, t] of routes) {
+      const handlers = [...t.matchAll(/export async function (GET|POST|PUT|PATCH|DELETE)\b/g)].length;
+      const guard = t.indexOf('requireIndividualContext("scholar")'), gateAt = t.indexOf("await assessmentApiGate(ctx)"), refuse = t.indexOf("if (!gate.ok) return gate.res;");
+      if (handlers !== 1 || guard < 0 || gateAt < guard || refuse < gateAt) { bad.push(`${f} (not guard, then gate)`); continue; }
+      const before = t.slice(0, gateAt).replace(/requireIndividualContext\("scholar"\)/, "");
+      if (/ctx\.admin|ctx\.userId/.test(before)) bad.push(`${f} (reads before the gate)`);
+      if (/body\??\.(userId|user_id|subjectUserId|subject_user_id)/.test(t)) bad.push(`${f} (takes the learner from the request)`);
+    }
+    const g = gate.get(ASMT_GATE) ?? "";
+    if (!/scholarModulesFor\(ctx\.admin, ctx\.userId\)\)\.has\("competencies"\)/.test(g)) bad.push("gate: no module check");
+    if (!/await assessmentsReady\(ctx\.admin, ctx\.userId\)/.test(g)) bad.push("gate: no readiness probe");
+    if (!/status: 404/.test(g) || !/\} catch \{ return refuse\(\); \}/.test(g)) bad.push("gate: does not fail closed to 404");
+    return bad;
+  };
+  const NEW_PAGES = ["assessments/page.tsx", "assessments/[instanceId]/page.tsx", "assessments/[instanceId]/report/page.tsx", "assessments/start/[code]/page.tsx", "evidence/page.tsx", "page.tsx"]
+    .map(p => `${SCHOLAR_GROUP}/my-competencies/${p}`);
+  ok("S1. every assessment API takes the Scholar guard, then the module gate and the readiness probe (one 404 for both), before any read; the learner is never a body field; the new pages are walked by C7b and C7c",
+    assessRoutesGated(REAL, ASMT).length === 0 && NEW_PAGES.every(f => REAL.has(f)), assessRoutesGated(REAL, ASMT).join(", "));
+
+  /** S2: every query on a PERSON table in the adapter carries the learner (subject_user_id); nothing else in the Individual app, its libraries or the shared reader reads asmt_*. */
+  const PERSON = /admin\.from\("(asmt_instance|asmt_response|asmt_evidence|asmt_comment|asmt_outcome|asmt_respondent_grant|asmt_progression_decision)"\)/g;
+  const unkeyedAsmt = (src: Src): string[] => {
+    const bad: string[] = [];
+    for (const [f, t] of src) {
+      if (!f.startsWith(ASMT_DIR)) continue;
+      for (const m of t.matchAll(PERSON)) {
+        const rest = t.slice((m.index ?? 0) + m[0].length);
+        const end = rest.search(/;\s*$|admin\.from\(|admin\.rpc\(/m);
+        const stmt = rest.slice(0, end < 0 ? undefined : end);
+        if (!/\.eq\("subject_user_id", userId\)/.test(stmt) && !/subject_user_id: userId/.test(stmt)) bad.push(`${f}@${m.index} ${m[1]}`);
+      }
+    }
+    return bad;
+  };
+  const asmtLeaks = (extra: Src): string[] => {
+    const roots = ["src/app/individual", "src/app/api/individual", "src/lib/individual"];
+    const files = new Map<string, string>(roots.flatMap(r => walk(r)).map(f => [f, strip(read(f))] as [string, string]));
+    for (const [f, t] of extra) files.set(f, t);
+    const bad = [...files].filter(([, t]) => /from\("asmt_/.test(t)).map(([f]) => f);
+    bad.push(...[...ASMT].filter(([f, t]) => f.startsWith(READ_DIR) && /asmt_(instance|response|evidence|comment|outcome|respondent_grant|progression_decision)(?![a-z_])/.test(t)).map(([f]) => `${f} (a person table in the shared reader)`));
+    return bad;
+  };
+  const queryCount = [...(ASMT.get(ASMT_STORE) ?? "").matchAll(PERSON)].length;
+  ok("S2. every query on a person table in the Scholar adapter carries the learner, and no other Scholar code or shared reader reads asmt_* rows",
+    queryCount >= 15 && /admin\.from\("asmt_progression_decision"\)/.test(ASMT.get(`${ASMT_DIR}/progression-read.ts`) ?? "") && unkeyedAsmt(ASMT).length === 0 && asmtLeaks(new Map()).length === 0, `queries=${queryCount} ${unkeyedAsmt(ASMT).join(", ")} ${asmtLeaks(new Map()).join(", ")}`);
+
+  /** S2b: nothing in the Scholar adapter reads the stored working of a decision or an outcome. The one mention is the submit WRITE (outcome payload), removed before looking. */
+  const readsTrace = (src: Src): string[] => {
+    const bad: string[] = [];
+    for (const [f, t] of src) {
+      if (!f.startsWith(ASMT_DIR) || f.endsWith(".test.ts")) continue;
+      const rest = t.replace(/trace: ev\.trace, traceHash: ev\.traceHash/g, "");
+      if (/\btrace(Hash)?\b/i.test(rest)) bad.push(f);
+    }
+    return bad;
+  };
+  ok("S2b. nothing under the Scholar adapter reads a decision's or an outcome's trace (the submit write is the only mention), and the stage reader selects only the decision's own columns",
+    readsTrace(ASMT).length === 0 && /\.select\("id, rule_version_id, state, stage_code, target_stage_code, outstanding, valid_until, computed_at"\)/.test(ASMT.get(`${ASMT_DIR}/progression-read.ts`) ?? ""), readsTrace(ASMT).join(", "));
+
+  /** S3: a Scholar instance is always self-reported; the adapter creates no other record and verifies nothing. */
+  const selfAlways = (src: Src): string[] => {
+    const bad: string[] = [];
+    const t = src.get(ASMT_STORE) ?? "";
+    const inserts = [...t.matchAll(/admin\.from\("asmt_instance"\)\.insert\(\{/g)];
+    if (inserts.length !== 1) bad.push(`instance inserts: ${inserts.length}`);
+    const at = t.indexOf('admin.from("asmt_instance").insert({');
+    const body = at >= 0 ? t.slice(at, t.indexOf(").select", at)) : "";
+    for (const need of ['subject_kind: "person"', "subject_id: userId", "subject_user_id: userId", 'respondent_role: "self"', "respondent_id: userId", "attestation: SELF_ATTESTATION", 'owner_scope: "individual"', "owner_user_id: userId"])
+      if (!body.includes(need)) bad.push(`insert lacks ${need}`);
+    if (!/export const SELF_ATTESTATION = "self_reported" as const;/.test(src.get(`${ASMT_DIR}/vocab.ts`) ?? "")) bad.push("SELF_ATTESTATION is not self_reported");
+    for (const [f, x] of src) if (f.startsWith(ASMT_DIR) && f !== `${ASMT_DIR}/submit-check.ts` && /["'`](assessor_evaluated|auditor_recorded)["'`]/.test(x)) bad.push(`${f} (names another attestation)`);
+    for (const [f, x] of src) if (f.startsWith(ASMT_DIR) && /competency_verification|competency_decisions|individual_scholar_passport_item|individual_passport|passport_item/.test(x)) bad.push(`${f} (verification or Passport write)`);
+    return bad;
+  };
+  ok("S3. a Scholar instance is always self_reported, from the learner to the learner, and the adapter writes no verification and no Passport item",
+    selfAlways(ASMT).length === 0, selfAlways(ASMT).join(", "));
+
+  /** S4: no AI and no preview catalogue in the adapter or the shared reader; the ask panel is used only by the page-level components. */
+  const adapterClean = (src: Src): string[] => [...src].filter(([, t]) => /from "@\/lib\/ai|scholar\/generation|scholarAiRunner|\bgenerate\(|loadCatalogueForPreview|ask-panel|AskAbout/.test(t)).map(([f]) => f);
+  ok("S4. the Scholar adapter and the shared definition reader import no AI, no ask panel and never the preview catalogue reader", adapterClean(ASMT).length === 0, adapterClean(ASMT).join(", "));
+
+  /** S5: nothing is offered unless HQ lists the code: the default list is empty, a start is refused for a code not in it, and the offers narrow to it. */
+  const offerFailsClosed = (src: Src): boolean => {
+    const t = src.get(ASMT_STORE) ?? "";
+    return /\|\| !policyCodes\.includes\(code\)\) return fail\(404/.test(t)
+      && /offerFilter\(\{ policyCodes, versions, grants, now \}\)/.test(t) && /ins\.data\.id\)\s*\.eq\("state", "published"\)/.test(t)
+      && /\(ver\.delivery_modes \?\? \[\]\)\.includes\(MODE_SELF\)/.test(t);
+  };
+  ok("S5. HQ's list of instrument codes fails closed: empty by default, a start for an unlisted code is refused, and only published self-assessment versions are offered",
+    DEFAULT_POLICY.scholarAssessmentInstruments.length === 0 && offerFailsClosed(ASMT));
+
+  // S planted proofs: each control must turn red on a copy with its violation planted.
+  const plantAsmt = (file: string, from: RegExp | string, to: string): Src => {
+    const copy = new Map(ASMT);
+    const before = copy.get(file) ?? "";
+    const after = before.replace(from, to);
+    if (after === before) throw new Error(`plant did not apply in ${file}: ${String(from)}`);
+    copy.set(file, after);
+    return copy;
+  };
+  const ROUTE_SUBMIT = `${ASSESS_API}/instances/[id]/submit/route.ts`, ROUTE_PATCH = `${ASSESS_API}/instances/[id]/responses/route.ts`;
+  ok("P90. ⚠ S1 goes red when an assessment route drops the gate, reads before it, takes the learner from the body, or the gate stops failing closed",
+    assessRoutesGated(REAL, ASMT).length === 0
+    && assessRoutesGated(plant(ROUTE_SUBMIT, "const gate = await assessmentApiGate(ctx);\n  if (!gate.ok) return gate.res;\n", ""), ASMT).length > 0
+    && assessRoutesGated(plant(ROUTE_PATCH, "const gate = await assessmentApiGate(ctx);", "const early = await ctx.admin.from(\"x\").select();\n  const gate = await assessmentApiGate(ctx);"), ASMT).length > 0
+    && assessRoutesGated(plant(ROUTE_PATCH, "const body = await req.json().catch(() => ({}));", "const body = await req.json().catch(() => ({}));\n  const who = body.userId;"), ASMT).length > 0
+    && assessRoutesGated(plant(`${ASSESS_API}/start/route.ts`, 'requireIndividualContext("scholar")', "requireIndividualContext()"), ASMT).length > 0
+    && assessRoutesGated(REAL, plantAsmt(ASMT_GATE, '.has("competencies")', '.has("courses")')).length > 0
+    && assessRoutesGated(REAL, plantAsmt(ASMT_GATE, "if (!(await assessmentsReady(ctx.admin, ctx.userId))) return refuse();", "")).length > 0
+    && assessRoutesGated(REAL, plantAsmt(ASMT_GATE, "} catch { return refuse(); }", "} catch { return { ok: true, policyCodes: [] }; }")).length > 0);
+  ok("P91. ⚠ S2 goes red when a person-table query drops the learner, a page reads asmt_* itself, or the shared reader touches a person table",
+    unkeyedAsmt(ASMT).length === 0
+    && unkeyedAsmt(plantAsmt(ASMT_STORE, ".eq(\"id\", grantId).eq(\"subject_user_id\", userId).is(\"accepted_at\", null)", ".eq(\"id\", grantId).is(\"accepted_at\", null)")).length > 0
+    && unkeyedAsmt(plantAsmt(ASMT_STORE, ".eq(\"instance_id\", instanceId).eq(\"subject_user_id\", userId).order(\"created_at\"),\n      admin.from(\"asmt_comment\")", ".eq(\"instance_id\", instanceId).order(\"created_at\"),\n      admin.from(\"asmt_comment\")")).length > 0
+    && asmtLeaks(new Map([[`${SCHOLAR_GROUP}/my-competencies/page.tsx`, (REAL.get(`${SCHOLAR_GROUP}/my-competencies/page.tsx`) ?? "") + "\nconst leak = (a: any) => a.from(\"asmt_instance\");"]])).length > 0
+    && asmtLeaks(new Map([["src/lib/individual/scholar/planted.ts", "export const x = (a: any) => a.from(\"asmt_response\");"]])).length > 0
+    && asmtLeaks(new Map()).length === 0);
+  ok("P91b. ⚠ S2b goes red when the stage reader selects trace, or any adapter file reads a trace, and S2 goes red when the stage reader drops the learner",
+    readsTrace(ASMT).length === 0
+    && readsTrace(plantAsmt(`${ASMT_DIR}/progression-read.ts`, "outstanding, valid_until, computed_at", "outstanding, trace, valid_until, computed_at")).length > 0
+    && readsTrace(plantAsmt(`${ASMT_DIR}/progression-view.ts`, "export type StageView = {", "export const peek = (d: { trace: unknown }) => d.trace;\nexport type StageView = {")).length > 0
+    && unkeyedAsmt(plantAsmt(`${ASMT_DIR}/progression-read.ts`, '.eq("subject_user_id", userId).order("computed_at", { ascending: false })', '.order("computed_at", { ascending: false })')).length > 0);
+  ok("P92. ⚠ S3 goes red when the adapter starts an assessor instance, drops the self fields, inserts twice, or writes a verification",
+    selfAlways(ASMT).length === 0
+    && selfAlways(plantAsmt(ASMT_STORE, "attestation: SELF_ATTESTATION", "attestation: \"assessor_evaluated\"")).length > 0
+    && selfAlways(plantAsmt(ASMT_STORE, "respondent_role: \"self\", respondent_id: userId", "respondent_role: \"assessor\", respondent_id: userId")).length > 0
+    && selfAlways(plantAsmt(ASMT_STORE, "export async function startFromPage", "async function again(admin: Admin, v: string) { await admin.from(\"asmt_instance\").insert({ instrument_version_id: v }); }\nexport async function startFromPage")).length > 0
+    && selfAlways(plantAsmt(`${ASMT_DIR}/vocab.ts`, "\"self_reported\" as const", "\"assessor_evaluated\" as const")).length > 0
+    && selfAlways(plantAsmt(ASMT_STORE, "export async function startFromPage", "async function v(admin: Admin) { await admin.from(\"competency_verification_decisions\").insert({}); }\nexport async function startFromPage")).length > 0);
+  ok("P93. ⚠ S4 goes red when the adapter imports an AI module, the ask panel or the preview catalogue reader",
+    adapterClean(ASMT).length === 0
+    && adapterClean(plantAsmt(ASMT_STORE, "type Admin = any;", "import { generate } from \"@/lib/ai/gateway\";\ntype Admin = any;")).length > 0
+    && adapterClean(plantAsmt(`${ASMT_DIR}/compare.ts`, "export type Band", "import { loadCatalogueForPreview } from \"@/lib/competency/foundation\";\nexport type Band")).length > 0
+    && adapterClean(plantAsmt(`${ASMT_DIR}/compare.ts`, "export type Band", "import { AskAbout } from \"x/ask-panel\";\nexport type Band")).length > 0);
+  ok("P94. ⚠ S5 goes red when a start no longer checks HQ's list, the offers stop narrowing to it, or an unpublished version is read",
+    offerFailsClosed(ASMT)
+    && !offerFailsClosed(plantAsmt(ASMT_STORE, "|| !policyCodes.includes(code)", ""))
+    && !offerFailsClosed(plantAsmt(ASMT_STORE, "offerFilter({ policyCodes, versions, grants, now })", "offerFilter({ policyCodes: [...policyCodes, ...versions.map(v => v.code)], versions, grants, now })"))
+    && !offerFailsClosed(plantAsmt(ASMT_STORE, ".eq(\"instrument_id\", ins.data.id).eq(\"state\", \"published\")", ".eq(\"instrument_id\", ins.data.id)")));
 
   console.log(`\n${failures.length === 0 ? "ALL GREEN" : "RED"} -- ${pass} passed, ${failures.length} failed`);
   if (failures.length) { failures.forEach(f => console.log(`  FAILED: ${f}`)); process.exit(1); }

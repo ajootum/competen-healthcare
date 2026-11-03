@@ -54,7 +54,7 @@ import type { Standing } from "@/lib/competency/verification-config";
 // its outcome is `competent` and it has not passed its expiry date -- the rule src/app/verify/[token]
 // applies, so the Passport cannot show a person something the verification page would not.
 
-export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed" | "educational_evaluation" | "platform_recorded";
+export type EvidenceClass = "institution_issued" | "institution_verified" | "self_declared" | "source_linked" | "self_directed" | "educational_evaluation" | "platform_recorded" | "self_assessed" | "assessor_evaluated";
 
 export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   institution_issued: "Issued by an organisation",
@@ -65,6 +65,9 @@ export const EVIDENCE_LABEL: Record<EvidenceClass, string> = {
   // PROGRESS-01 P5: an evaluation of the person's own learning (426) they chose to show (427). Formative, never verified.
   educational_evaluation: "Educational evaluation of own learning: formative, not verified",
   platform_recorded: "Issued by Competen Holdings through Competen Learning",
+  // CHECKLIST STUDIO S3 (D6): shown in My Evidence from the learner's own assessment instances. Neither is written to the Passport here.
+  self_assessed: "Self-assessment: self-reported, not verified",
+  assessor_evaluated: "Assessor-led assessment by an authorised assessor: not formal verification",
 };
 
 export type PassportCompetency = {

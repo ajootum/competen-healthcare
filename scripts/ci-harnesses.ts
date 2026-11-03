@@ -192,6 +192,9 @@ const INCLUDED = [
   "pui-components-harness.ts",
   // ADR-008. Reads only src/**, counts in-process, no ambient dependency -- CI-safe by construction.
   "role-authorization-ratchet-harness.ts",
+  // Checklist Studio (assessment engine): no-argument default is the four database-free sections (static, catalogue-static,
+  // studio-static, assessor-static) - source reads and planted-red proofs only; the DB sections need an explicit argument and STAGING_DB_URL.
+  "assessment-core-harness.ts",
   "pui-colour-harness.ts",
   "pui-tokens-harness.ts",
   // COMPETEN-DESIGN-SYSTEM-01 -- four product themes, AA, chrome reads the theme, the login chooser stays presentation
