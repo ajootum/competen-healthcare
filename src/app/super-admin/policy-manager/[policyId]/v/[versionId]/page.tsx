@@ -34,7 +34,7 @@ export default async function PolicyVersionPage({ params }: { params: Promise<{ 
   const base = `/super-admin/policy-manager/${policy.id}/v`;
   return (
     <StudioShell>
-      <PageHead kicker="Competen Holdings, Policy Manager" kicker="Competen Holdings, Policy Manager"
+      <PageHead kicker="Competen Holdings, Policy Manager"
         title={`${v.title} (${policy.code}), version ${v.version_no}`}
         crumbs={[{ href: "/super-admin/policy-manager", label: "Policy Manager" }, { href: `/super-admin/policy-manager/${policy.id}`, label: policy.code }, { label: `v${v.version_no}` }]}
         right={<StateChip state={v.state} />}

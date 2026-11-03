@@ -37,7 +37,7 @@ export default async function PolicyPage({ params }: { params: Promise<{ policyI
   const identityPathway = versions.length ? null : await pathwayModel(ctx.admin, { kind: "policy", version: null, actorId: ctx.userId, caps: ctx.capabilities, holders });
   return (
     <StudioShell>
-      <PageHead kicker="Competen Holdings, Policy Manager" kicker="Competen Holdings, Policy Manager"
+      <PageHead kicker="Competen Holdings, Policy Manager"
         title={`${policy.code}, ${latest?.title ?? policy.title}`}
         crumbs={[{ href: "/super-admin/policy-manager", label: "Policy Manager" }, { label: policy.code }]}
         lede={`${POLICY_TYPE_LABEL[policy.policy_type] ?? policy.policy_type} · ${POLICY_SCOPE_LABEL[policy.scope] ?? policy.scope}${policy.description ? ` · ${policy.description}` : ""}`}
