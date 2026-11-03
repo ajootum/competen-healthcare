@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ROLE_LABEL, type ColumnRole, type DetectedColumn, type SheetDraft, type WorkbookDraft } from "@/lib/assessment/import/types";
+import { USE_LABEL, type ColumnUse, type DetectedColumn, type SheetDraft, type WorkbookDraft } from "@/lib/assessment/import/types";
 import { Chip, input } from "./ui";
 
 /**
@@ -9,7 +9,7 @@ import { Chip, input } from "./ui";
  * judgement is needed (titles, column roles, field labels, scale level names and descriptions, section titles, item
  * prompts, what to include). The detected structure and every unplaced cell stay visible: nothing is discarded quietly.
  */
-const ROLES: ColumnRole[] = ["section", "number", "criterion", "rating", "na", "option", "option_group", "text", "signoff", "ignore", "unknown"];
+const USES: ColumnUse[] = ["section", "number", "criterion", "rating", "na", "option", "option_group", "text", "signoff", "ignore", "unknown"];
 
 export default function ImportCorrect({ draft, onChange }: { draft: WorkbookDraft; onChange: (d: WorkbookDraft) => void }) {
   const names = draft.groups.flatMap(g => g.sheets);
@@ -44,15 +44,15 @@ export default function ImportCorrect({ draft, onChange }: { draft: WorkbookDraf
             <thead><tr className="bg-gray-50 text-left text-[11px] font-bold uppercase tracking-wider text-gray-600"><th className="px-2 py-1.5">Col</th><th className="px-2 py-1.5">Header</th><th className="px-2 py-1.5">Role</th><th className="px-2 py-1.5">Field label</th></tr></thead>
             <tbody>
               {sheet.columns.map(c => (
-                <tr key={`${c.col}-${c.header}`} className={`border-t border-gray-100 ${c.role === "unknown" ? "bg-amber-50" : ""}`}>
+                <tr key={`${c.col}-${c.header}`} className={`border-t border-gray-100 ${c.use === "unknown" ? "bg-amber-50" : ""}`}>
                   <td className="px-2 py-1 font-mono">{c.letter}</td>
-                  <td className="px-2 py-1">{c.header || <span className="text-gray-500">(no header)</span>}{c.value && c.role !== "text" ? <span className="text-gray-600"> = {c.value}</span> : ""}{c.groupHeader ? <span className="text-gray-600"> under {c.groupHeader}</span> : ""}</td>
+                  <td className="px-2 py-1">{c.header || <span className="text-gray-500">(no header)</span>}{c.value && c.use !== "text" ? <span className="text-gray-600"> = {c.value}</span> : ""}{c.groupHeader ? <span className="text-gray-600"> under {c.groupHeader}</span> : ""}</td>
                   <td className="px-2 py-1">
-                    <select aria-label={`Role of column ${c.letter}`} className={`${input} !w-auto`} value={c.role} onChange={e => setColumn(c, { role: e.target.value as ColumnRole, fieldLabel: e.target.value === "text" ? (c.fieldLabel ?? c.header) : c.fieldLabel })}>
-                      {ROLES.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}</option>)}
+                    <select aria-label={`Role of column ${c.letter}`} className={`${input} !w-auto`} value={c.use} onChange={e => setColumn(c, { use: e.target.value as ColumnUse, fieldLabel: e.target.value === "text" ? (c.fieldLabel ?? c.header) : c.fieldLabel })}>
+                      {USES.map(r => <option key={r} value={r}>{USE_LABEL[r]}</option>)}
                     </select>
                   </td>
-                  <td className="px-2 py-1">{c.role === "text" ? <input aria-label={`Field label for column ${c.letter}`} className={input} value={c.fieldLabel ?? c.header} maxLength={120} onChange={e => setColumn(c, { fieldLabel: e.target.value })} /> : <span className="text-gray-500">{"—"}</span>}</td>
+                  <td className="px-2 py-1">{c.use === "text" ? <input aria-label={`Field label for column ${c.letter}`} className={input} value={c.fieldLabel ?? c.header} maxLength={120} onChange={e => setColumn(c, { fieldLabel: e.target.value })} /> : <span className="text-gray-500">{"—"}</span>}</td>
                 </tr>
               ))}
             </tbody>

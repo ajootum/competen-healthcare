@@ -5,7 +5,7 @@
 import { useState } from "react";
 import { Btn, Chip, Check, SelectIn, TextIn } from "@/components/assessment/ui";
 import type { ScaleLevelRow } from "@/lib/assessment/studio/types";
-import type { ExistingMapping } from "@/lib/assessment/studio/stage-mapping";
+import type { ExistingMapping } from "@/lib/assessment/adapters/scholar/stage-mapping";
 import { Notice, Panel, callApi, useAction } from "./studio-ui";
 
 type Target = { id: string; code: string; name: string; versionNo: number; stages: { code: string; label: string; ordinal: number }[] };

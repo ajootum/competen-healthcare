@@ -15,7 +15,7 @@ describe("mergeCorrections", () => {
     const incoming = {
       sheets: [{
         name: sheet1.name, title: "  Nursing Assessment  ",
-        columns: [{ col: 25, header: "Evidence / Comments", role: "ignore" }, { col: 1, header: "Policy Section & Critical Elements", role: "nonsense" }],
+        columns: [{ col: 25, header: "Evidence / Comments", use: "ignore" }, { col: 1, header: "Policy Section & Critical Elements", use: "nonsense" }],
         sections: [{ key: sheet1.sections[0].key, title: "Safety and preparation", include: true }],
         items: [{ key: sheet1.items[0].key, prompt: "Performs hand hygiene", include: false }, { key: "i-9999", prompt: "injected" }],
         scale: { levels: [{ value: "0", label: null, description: "Needs training" }] },
@@ -27,8 +27,8 @@ describe("mergeCorrections", () => {
     const m = mergeCorrections(saved, incoming);
     const s = m.sheets[0];
     expect(s.title).toBe("Nursing Assessment");
-    expect(s.columns.find((c) => c.col === 25)?.role).toBe("ignore");
-    expect(s.columns.find((c) => c.col === 1)?.role).toBe("section");
+    expect(s.columns.find((c) => c.col === 25)?.use).toBe("ignore");
+    expect(s.columns.find((c) => c.col === 1)?.use).toBe("section");
     expect(s.sections[0].title).toBe("Safety and preparation");
     expect(s.items[0]).toMatchObject({ prompt: "Performs hand hygiene", include: false, number: "1", row: 14 });
     expect(s.items).toHaveLength(62);

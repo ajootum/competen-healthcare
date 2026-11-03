@@ -16,7 +16,7 @@
  * A sheet with no criteria table is reported as a record log or unknown, never silently turned into an instrument.
  */
 import {
-  COLUMN_LETTER, type ColumnRole, type DetectedColumn, type DetectedItem, type DetectedLevel, type DetectedOption, type DetectedScale,
+  COLUMN_LETTER, type ColumnUse, type DetectedColumn, type DetectedItem, type DetectedLevel, type DetectedOption, type DetectedScale,
   type DetectedSection, type FieldHint, type GridCell, type ImportFlag, type SheetDraft, type SheetGrid,
 } from "./types";
 
@@ -145,9 +145,9 @@ export function detectSheet(g: SheetGrid): SheetDraft {
 
   // 6. columns
   const columns = classifyColumns(ctx, header);
-  const numberCol = columns.find((c) => c.role === "number")?.col ?? null;
-  const sectionCol = columns.find((c) => c.role === "section")?.col ?? null;
-  let criterionCol = columns.find((c) => c.role === "criterion")?.col ?? null;
+  const numberCol = columns.find((c) => c.use === "number")?.col ?? null;
+  const sectionCol = columns.find((c) => c.use === "section")?.col ?? null;
+  let criterionCol = columns.find((c) => c.use === "criterion")?.col ?? null;
 
   // 4. body
   const bodyStart = header.optionRow !== null ? header.optionRow + 1 : header.row + 1;
@@ -158,7 +158,7 @@ export function detectSheet(g: SheetGrid): SheetDraft {
   let topSection: DetectedSection | null = null;
   let currentSection: DetectedSection | null = null;
   let lastItem: DetectedItem | null = null;
-  const answerCols = new Set(columns.filter((c) => ["rating", "na", "option", "option_group", "text", "signoff"].includes(c.role)).map((c) => c.col));
+  const answerCols = new Set(columns.filter((c) => ["rating", "na", "option", "option_group", "text", "signoff"].includes(c.use)).map((c) => c.col));
   const keyOf = (kind: string, r: number) => `${kind}-${r + 1}`;
 
   // If the header named the criterion column but the body keeps its numbers there, the text is in the next column.
@@ -256,9 +256,9 @@ export function detectSheet(g: SheetGrid): SheetDraft {
   }
 
   // 7. response design
-  const ratingCols = columns.filter((c) => c.role === "rating");
-  const optionCols = columns.filter((c) => c.role === "option");
-  const naCol = columns.find((c) => c.role === "na");
+  const ratingCols = columns.filter((c) => c.use === "rating");
+  const optionCols = columns.filter((c) => c.use === "option");
+  const naCol = columns.find((c) => c.use === "na");
   const response: SheetDraft["response"] = { primary: "none", allowNa: !!naCol || optionCols.some((c) => NA.test(c.value ?? "")), options: [] };
   if (ratingCols.length >= 2) {
     response.primary = "rating_scale";
@@ -277,8 +277,8 @@ export function detectSheet(g: SheetGrid): SheetDraft {
     flag(ctx, "no_response_columns", "No rating or response option columns were recognised. Each item is imported as Yes / No until you choose a response type.");
   }
   if (scale && ratingCols.length < 2) flag(ctx, "scale_without_columns", "A scale block was found but no rating columns. The scale is imported as a draft scale all the same.", undefined, "info");
-  for (const c of columns.filter((x) => x.role === "unknown")) flag(ctx, "unknown_column", `Column ${c.letter} "${c.header}" could not be classified. Choose what it is.`, `column ${c.letter}`);
-  for (const c of columns.filter((x) => x.role === "signoff")) flag(ctx, "signoff_column", `Column ${c.letter} "${c.header}" is a sign-off. The engine records who answered and when, so it is not imported as an item field.`, `column ${c.letter}`, "info");
+  for (const c of columns.filter((x) => x.use === "unknown")) flag(ctx, "unknown_column", `Column ${c.letter} "${c.header}" could not be classified. Choose what it is.`, `column ${c.letter}`);
+  for (const c of columns.filter((x) => x.use === "signoff")) flag(ctx, "signoff_column", `Column ${c.letter} "${c.header}" is a sign-off. The engine records who answered and when, so it is not imported as an item field.`, `column ${c.letter}`, "info");
   if (identifiers.length) flag(ctx, "identifiers", `Form identifiers found: ${identifiers.join(", ")}. These describe the person and occasion of an assessment, which the engine records on each use, so they are kept in the instrument summary and not as items.`, undefined, "info");
   if (unplaced.length) flag(ctx, "unplaced_text", `${unplaced.length} cell${unplaced.length === 1 ? "" : "s"} of text could not be placed in the structure. They are listed under Unplaced text: nothing is discarded.`);
   if (items.some((i) => i.subPoints.length)) flag(ctx, "sub_points", `${items.filter((i) => i.subPoints.length).length} item${items.filter((i) => i.subPoints.length).length === 1 ? " has" : "s have"} sub-points. They are imported as the item's expected performance list.`, undefined, "info");
@@ -369,43 +369,43 @@ function classifyColumns(ctx: Ctx, h: Header): DetectedColumn[] {
   const grouped = new Set(optionCells.map((c) => at(g, h.row, c.origin.c)?.origin.c).filter((x): x is number => x !== undefined));
   for (const c of h.cells.sort((a, b) => a.origin.c - b.origin.c)) {
     const header = c.v;
-    let role: ColumnRole = "unknown";
+    let use: ColumnUse = "unknown";
     let value: string | null = null;
-    if (grouped.has(c.origin.c)) role = "option_group";
-    else if (isInt(c) && run >= 3) { role = "rating"; value = c.v; }
-    else if (NA.test(header)) { role = "na"; value = header; }
-    else if (OPTION.test(header)) { role = "option"; value = header; }
-    else if (H_SIGNOFF.test(header)) role = "signoff";
-    else if (H_NUMBER.test(header)) role = "number";
-    else if (/section|requirement|policy/i.test(header)) role = "section";
-    else if (H_CRITERION.test(header)) role = "criterion";
-    else if (H_TEXT.test(header)) role = "text";
-    else if (H_SECTION.test(header)) role = "section";
-    const hint = role === "text" ? fieldHintFor(header) : null;
-    out.push({ col: c.origin.c, letter: COLUMN_LETTER(c.origin.c), header, role, value, fieldKey: role === "text" ? fieldKeyFrom(header, hint) : null, fieldLabel: role === "text" ? header.replace(/\s*\(.*\)\s*$/, "").trim() || header : null, fieldHint: hint, groupHeader: null });
+    if (grouped.has(c.origin.c)) use = "option_group";
+    else if (isInt(c) && run >= 3) { use = "rating"; value = c.v; }
+    else if (NA.test(header)) { use = "na"; value = header; }
+    else if (OPTION.test(header)) { use = "option"; value = header; }
+    else if (H_SIGNOFF.test(header)) use = "signoff";
+    else if (H_NUMBER.test(header)) use = "number";
+    else if (/section|requirement|policy/i.test(header)) use = "section";
+    else if (H_CRITERION.test(header)) use = "criterion";
+    else if (H_TEXT.test(header)) use = "text";
+    else if (H_SECTION.test(header)) use = "section";
+    const hint = use === "text" ? fieldHintFor(header) : null;
+    out.push({ col: c.origin.c, letter: COLUMN_LETTER(c.origin.c), header, use, value, fieldKey: use === "text" ? fieldKeyFrom(header, hint) : null, fieldLabel: use === "text" ? header.replace(/\s*\(.*\)\s*$/, "").trim() || header : null, fieldHint: hint, groupHeader: null });
   }
   for (const oc of optionCells) {
     const parent = at(g, h.row, oc.origin.c);
     const groupHeader = parent?.v ?? null;
-    const role: ColumnRole = NA.test(oc.v) ? "na" : "option";
-    out.push({ col: oc.origin.c, letter: COLUMN_LETTER(oc.origin.c), header: oc.v, role, value: oc.v, fieldKey: null, fieldLabel: null, fieldHint: null, groupHeader });
+    const use: ColumnUse = NA.test(oc.v) ? "na" : "option";
+    out.push({ col: oc.origin.c, letter: COLUMN_LETTER(oc.origin.c), header: oc.v, use, value: oc.v, fieldKey: null, fieldLabel: null, fieldHint: null, groupHeader });
   }
   // the same field key twice is not allowed on an item
   const seen = new Map<string, number>();
   for (const c of out) if (c.fieldKey) { const n = (seen.get(c.fieldKey) ?? 0) + 1; seen.set(c.fieldKey, n); if (n > 1) c.fieldKey = `${c.fieldKey}_${n}`.slice(0, 40); }
   // criterion: when several columns qualify, keep the first and demote the rest to text
-  const crit = out.filter((c) => c.role === "criterion");
-  for (const c of crit.slice(1)) { c.role = "text"; c.fieldHint = fieldHintFor(c.header); c.fieldKey = fieldKeyFrom(c.header, c.fieldHint); c.fieldLabel = c.header; }
+  const crit = out.filter((c) => c.use === "criterion");
+  for (const c of crit.slice(1)) { c.use = "text"; c.fieldHint = fieldHintFor(c.header); c.fieldKey = fieldKeyFrom(c.header, c.fieldHint); c.fieldLabel = c.header; }
   // number column: the body says where the numbers are
-  if (!out.some((c) => c.role === "number")) {
+  if (!out.some((c) => c.use === "number")) {
     const numberCol = inferNumberColumn(g, h, out);
     if (numberCol !== null) {
       const existing = out.find((c) => c.col === numberCol);
-      if (existing && (existing.role === "section" || existing.role === "criterion" || existing.role === "unknown")) {
-        if (existing.role === "section") flag(ctx, "section_and_number_column", `Column ${existing.letter} "${existing.header}" holds the section headings and the item numbers. Text in it is read as a heading, a number as an item.`, `column ${existing.letter}`, "info");
-        existing.role = "number";
+      if (existing && (existing.use === "section" || existing.use === "criterion" || existing.use === "unknown")) {
+        if (existing.use === "section") flag(ctx, "section_and_number_column", `Column ${existing.letter} "${existing.header}" holds the section headings and the item numbers. Text in it is read as a heading, a number as an item.`, `column ${existing.letter}`, "info");
+        existing.use = "number";
       } else if (!existing) {
-        out.push({ col: numberCol, letter: COLUMN_LETTER(numberCol), header: "", role: "number", value: null, fieldKey: null, fieldLabel: null, fieldHint: null, groupHeader: null });
+        out.push({ col: numberCol, letter: COLUMN_LETTER(numberCol), header: "", use: "number", value: null, fieldKey: null, fieldLabel: null, fieldHint: null, groupHeader: null });
       }
     }
   }
@@ -414,7 +414,7 @@ function classifyColumns(ctx: Ctx, h: Header): DetectedColumn[] {
 
 /** The column, up to the first answer column, with the most integer cells in the body. */
 function inferNumberColumn(g: SheetGrid, h: Header, cols: DetectedColumn[]): number | null {
-  const firstAnswer = Math.min(...cols.filter((c) => ["rating", "na", "option", "option_group", "text", "signoff"].includes(c.role)).map((c) => c.col), g.colCount);
+  const firstAnswer = Math.min(...cols.filter((c) => ["rating", "na", "option", "option_group", "text", "signoff"].includes(c.use)).map((c) => c.col), g.colCount);
   const start = (h.optionRow ?? h.row) + 1;
   const counts = new Map<number, number>();
   for (let r = start; r < g.rowCount; r++) for (let c = 0; c < firstAnswer; c++) { const cell = at(g, r, c); if (own(cell, r) && isInt(cell)) counts.set(c, (counts.get(c) ?? 0) + 1); }

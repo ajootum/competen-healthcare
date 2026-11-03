@@ -24,8 +24,8 @@ export type SheetGrid = {
 export type FlagSeverity = "info" | "warn";
 export type ImportFlag = { code: string; message: string; where?: string; severity: FlagSeverity };
 
-/** What a column of the criteria table is for. "unknown" is a real answer the person is asked to settle. */
-export type ColumnRole = "section" | "number" | "criterion" | "rating" | "na" | "option" | "option_group" | "text" | "signoff" | "ignore" | "unknown";
+/** What a column of the criteria table is used for. "unknown" is a real answer the person is asked to settle. */
+export type ColumnUse = "section" | "number" | "criterion" | "rating" | "na" | "option" | "option_group" | "text" | "signoff" | "ignore" | "unknown";
 
 export type FieldHint = "documented_finding" | "observed_finding" | "discrepancy_action" | "evidence_comments" | null;
 
@@ -33,7 +33,7 @@ export type DetectedColumn = {
   col: number;
   letter: string;
   header: string;
-  role: ColumnRole;
+  use: ColumnUse;
   /** the rating value or the option label for rating / option columns */
   value: string | null;
   /** for text columns: the item field this column becomes */
@@ -129,7 +129,7 @@ export const PARSER_VERSION = 1;
 export const IMPORT_BUCKET = "asmt-imports";
 export const IMPORT_MAX_BYTES = 25 * 1024 * 1024;
 
-export const ROLE_LABEL: Record<ColumnRole, string> = {
+export const USE_LABEL: Record<ColumnUse, string> = {
   section: "Section", number: "Item number", criterion: "Criterion / item text", rating: "Rating value", na: "Not applicable", option: "Response option",
   option_group: "Response group", text: "Free text field", signoff: "Sign-off (recorded, not an item field)", ignore: "Ignore (recorded in the import record)", unknown: "Not yet decided",
 };

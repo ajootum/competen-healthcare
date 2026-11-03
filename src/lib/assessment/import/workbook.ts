@@ -89,7 +89,7 @@ export function readinessProblems(d: WorkbookDraft): string[] {
     if (!g.confirmed) out.push(`Confirm the grouping of "${name}".`);
     const sheets = g.sheets.map((n) => d.sheets.find((s) => s.name === n)).filter((s): s is SheetDraft => !!s);
     if (!sheets.some((s) => s.items.some((i) => i.include))) out.push(`"${name}" has no items to import.`);
-    for (const s of sheets) for (const c of s.columns) if (c.role === "unknown") out.push(`Decide what column ${c.letter} "${c.header}" on sheet "${s.name}" is.`);
+    for (const s of sheets) for (const c of s.columns) if (c.use === "unknown") out.push(`Decide what column ${c.letter} "${c.header}" on sheet "${s.name}" is.`);
   }
   for (const e of d.excluded) if (!e.confirmed) out.push(`Confirm that the sheet "${e.sheet}" is left out (${e.reason}).`);
   return out;

@@ -4,7 +4,7 @@ import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { saveLayoutTemplate, saveProgression, saveRuleTemplate, saveScale, type ScaleSave } from "@/lib/assessment/studio/write";
 import { isUuid, mustHold, refuse } from "@/lib/assessment/studio/api";
-import { createStageMappingDraft, type StageAssignment } from "@/lib/assessment/studio/stage-mapping";
+import { createStageMappingDraft, type StageAssignment } from "@/lib/assessment/adapters/scholar/stage-mapping";
 
 export const dynamic = "force-dynamic";
 

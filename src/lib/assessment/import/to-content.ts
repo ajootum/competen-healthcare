@@ -101,7 +101,7 @@ export function responseDesign(s: SheetDraft): { response_type: ResponseType; co
 export function fieldsFor(columns: DetectedColumn[]): ItemField[] {
   const seen = new Set<string>();
   const out: ItemField[] = [];
-  for (const c of columns.filter((x) => x.role === "text").sort((a, b) => a.col - b.col)) {
+  for (const c of columns.filter((x) => x.use === "text").sort((a, b) => a.col - b.col)) {
     let key = (c.fieldKey ?? slugCode(c.header) ?? "field").slice(0, 40);
     if (!/^[a-z][a-z0-9_]{1,40}$/.test(key) || key === "primary") key = `field_${out.length + 1}`;
     while (seen.has(key)) key = `${key.slice(0, 36)}_${out.length + 1}`;
@@ -112,7 +112,7 @@ export function fieldsFor(columns: DetectedColumn[]): ItemField[] {
 }
 
 export function scalePlan(s: SheetDraft, instrumentTitle: string): ScalePlan {
-  const ratingCols = s.columns.filter((c) => c.role === "rating");
+  const ratingCols = s.columns.filter((c) => c.use === "rating");
   const levels = s.scale
     ? s.scale.levels.map((l, i) => ({ code: slugCode(l.value) || String(i), label: l.label ?? (l.value), description: l.description, ordinal: i, numeric_value: Number.isFinite(Number(l.value)) ? Number(l.value) : null, satisfactory: null }))
     : ratingCols.map((c, i) => ({ code: slugCode(c.value ?? String(i)) || String(i), label: c.value ?? String(i), description: null, ordinal: i, numeric_value: Number.isFinite(Number(c.value)) ? Number(c.value) : null, satisfactory: null }));
@@ -129,9 +129,9 @@ function summaryFor(d: WorkbookDraft, g: ImportGroup, sheets: SheetDraft[], now:
   if (g.description.trim()) parts.push(g.description.trim());
   const ids = [...new Set(sheets.flatMap((s) => s.identifiers))];
   if (ids.length) parts.push(`Form identifiers on the original: ${ids.join(", ")}.`);
-  const signoff = sheets.flatMap((s) => s.columns.filter((c) => c.role === "signoff").map((c) => c.header));
+  const signoff = sheets.flatMap((s) => s.columns.filter((c) => c.use === "signoff").map((c) => c.header));
   if (signoff.length) parts.push(`Sign-off column on the original: ${[...new Set(signoff)].join(", ")}.`);
-  const ignored = sheets.flatMap((s) => s.columns.filter((c) => c.role === "ignore").map((c) => `${c.letter} ${c.header}`));
+  const ignored = sheets.flatMap((s) => s.columns.filter((c) => c.use === "ignore").map((c) => `${c.letter} ${c.header}`));
   if (ignored.length) parts.push(`Columns left out: ${ignored.join(", ")}.`);
   return parts.join(" ").slice(0, 2000);
 }

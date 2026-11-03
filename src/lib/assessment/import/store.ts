@@ -90,9 +90,9 @@ export function mergeCorrections(saved: WorkbookDraft, incoming: any): WorkbookD
     const columns = s.columns.map((c) => {
       const ic = Array.isArray(inc.columns) ? inc.columns.find((x: any) => x?.col === c.col && x?.header === c.header) : null;
       if (!ic) return c;
-      const role = ROLES.has(ic.role) ? ic.role : c.role;
-      const fieldLabel = role === "text" ? text(ic.fieldLabel, 120) || c.fieldLabel || c.header : c.fieldLabel;
-      return { ...c, role, fieldLabel };
+      const use = ROLES.has(ic.use) ? ic.use : c.use;
+      const fieldLabel = use === "text" ? text(ic.fieldLabel, 120) || c.fieldLabel || c.header : c.fieldLabel;
+      return { ...c, use, fieldLabel };
     });
     const sections = s.sections.map((sec) => {
       const is = Array.isArray(inc.sections) ? inc.sections.find((x: any) => x?.key === sec.key) : null;

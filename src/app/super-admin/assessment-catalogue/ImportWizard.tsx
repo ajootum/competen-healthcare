@@ -221,7 +221,7 @@ function SheetCard({ sheet: s, draft, onChange, families }: { sheet: SheetDraft;
       </div>
       {s.kind === "instrument" && (
         <p className="mt-1 text-gray-700">
-          Title <b>{s.title}</b> · {s.sections.filter(x => !x.parentKey).length} sections · {s.items.length} items · {s.response.primary === "rating_scale" ? `rating scale ${s.scale ? `(${s.scale.levels.length} levels)` : ""}` : s.response.primary === "multiple_choice" ? `options ${s.response.options.map(o => o.label).join(" / ")}` : "no response columns"}{s.response.allowNa ? " · NA allowed" : ""} · {s.columns.filter(c => c.role === "text").length} text field{s.columns.filter(c => c.role === "text").length === 1 ? "" : "s"}
+          Title <b>{s.title}</b> · {s.sections.filter(x => !x.parentKey).length} sections · {s.items.length} items · {s.response.primary === "rating_scale" ? `rating scale ${s.scale ? `(${s.scale.levels.length} levels)` : ""}` : s.response.primary === "multiple_choice" ? `options ${s.response.options.map(o => o.label).join(" / ")}` : "no response columns"}{s.response.allowNa ? " · NA allowed" : ""} · {s.columns.filter(c => c.use === "text").length} text field{s.columns.filter(c => c.use === "text").length === 1 ? "" : "s"}
         </p>
       )}
       {s.kind !== "instrument" && s.unplaced.length > 0 && <p className="mt-1 text-gray-700">{s.unplaced.length} cells of text, kept in the record: {s.unplaced.slice(0, 3).map(u => `"${u.text}"`).join(", ")}{s.unplaced.length > 3 ? "…" : ""}</p>}

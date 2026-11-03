@@ -6,7 +6,7 @@ import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadScaleVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
 import { readStageScale } from "@/lib/assessment/adapters/scholar/scales";
-import { listMappingsFor, listPublishedStageScales } from "@/lib/assessment/studio/stage-mapping";
+import { listMappingsFor, listPublishedStageScales } from "@/lib/assessment/adapters/scholar/stage-mapping";
 import { DefScaleEditor } from "../../../_components/DefScaleEditor";
 import { StageMappingPanel } from "../../../_components/StageMappingPanel";
 import { DefTimeline } from "../../../_components/DefShared";

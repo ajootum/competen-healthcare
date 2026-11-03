@@ -62,8 +62,8 @@ describe("sheet 1: assessment with an achievement scale", () => {
     expect(s.response.allowNa).toBe(true);
   });
   it("classifies the columns: section, number, seven rating values, NA, evidence text, sign-off", () => {
-    const roles = Object.fromEntries(s.columns.map((c) => [c.letter, c.role]));
-    expect(roles).toMatchObject({ B: "section", F: "number", R: "rating", X: "rating", Y: "na", Z: "text", AI: "signoff" });
+    const uses = Object.fromEntries(s.columns.map((c) => [c.letter, c.use]));
+    expect(uses).toMatchObject({ B: "section", F: "number", R: "rating", X: "rating", Y: "na", Z: "text", AI: "signoff" });
     expect(s.columns.find((c) => c.letter === "Z")?.fieldKey).toBe("evidence_comments");
   });
   it("records identifiers, the sheet-name title and no unplaced text", () => {
@@ -82,8 +82,8 @@ describe("sheet 2: concurrent audit with documented versus observed findings", (
     expect(s.items).toHaveLength(51);
     expect(s.response.primary).toBe("multiple_choice");
     expect(s.response.options.map((o) => [o.code, o.satisfactory])).toEqual([["yes", true], ["no", false], ["partial", null]]);
-    expect(s.columns.filter((c) => c.role === "text").map((c) => c.fieldKey)).toEqual(["documented_finding", "observed_finding", "discrepancy_action"]);
-    expect(s.columns.find((c) => c.role === "option")?.groupHeader).toMatch(/^Match\?/);
+    expect(s.columns.filter((c) => c.use === "text").map((c) => c.fieldKey)).toEqual(["documented_finding", "observed_finding", "discrepancy_action"]);
+    expect(s.columns.find((c) => c.use === "option")?.groupHeader).toMatch(/^Match\?/);
   });
   it("reads headings in the number column as sections and colon headings as subsections", () => {
     const pat = s.sections.find((x) => x.title === "Initial Impression (PAT)")!;
@@ -101,8 +101,8 @@ describe("sheet 3: retrospective chart audit", () => {
     expect(s.sections).toHaveLength(12);
     expect(s.sections[0].title).toBe("Timing of Assessments");
     expect(s.items.filter((i) => i.sectionKey === s.sections[0].key)).toHaveLength(4);
-    expect(s.columns.find((c) => c.letter === "Q")).toMatchObject({ role: "text", fieldKey: "evidence_comments" });
-    expect(s.columns.find((c) => c.letter === "R")?.role).toBe("signoff");
+    expect(s.columns.find((c) => c.letter === "Q")).toMatchObject({ use: "text", fieldKey: "evidence_comments" });
+    expect(s.columns.find((c) => c.letter === "R")?.use).toBe("signoff");
     expect(s.response.primary).toBe("multiple_choice");
   });
 });
@@ -196,7 +196,7 @@ describe("small helpers", () => {
     expect(fieldKeyFrom("2nd reviewer note", null)).toBe("f_2nd_reviewer_note");
     expect(optionFrom("Non-compliant")).toEqual({ code: "non_compliant", label: "Non-compliant", satisfactory: false });
     expect(titleFromSheetName("3 - Retrospective Chart Audit")).toBe("Retrospective Chart Audit");
-    expect(fieldsFor([{ col: 1, letter: "B", header: "Primary", role: "text", value: null, fieldKey: "primary", fieldLabel: "Primary", fieldHint: null, groupHeader: null }])[0].field_key).toBe("field_1");
+    expect(fieldsFor([{ col: 1, letter: "B", header: "Primary", use: "text", value: null, fieldKey: "primary", fieldLabel: "Primary", fieldHint: null, groupHeader: null }])[0].field_key).toBe("field_1");
   });
   it("gives an empty grid an empty draft", () => {
     const d = detectSheet({ name: "Blank", index: 9, rows: [], rowCount: 0, colCount: 0 });

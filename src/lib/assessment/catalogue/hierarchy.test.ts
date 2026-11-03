@@ -6,7 +6,7 @@ const t = (id: string, label: string, parentId: string | null = null, position =
   ({ id, dimensionCode: "domain", code: id, label, parentId, sourceKind: null, sourceRef: null, isActive: true, position });
 
 const terms: Term[] = [
-  t("cns", "Clinical Nursing Skills", null, 5), t("resp", "Respiratory", null, 10),
+  t("cns", "Core skills", null, 5), t("resp", "Respiratory", null, 10),
   t("pa", "Patient assessment", "cns", 10), t("vs", "Vital signs monitoring", "cns", 20), t("vs-bp", "Blood pressure", "vs", 10),
   t("orphan", "Orphan", "missing", 99),
 ];
@@ -17,7 +17,7 @@ describe("term hierarchy", () => {
   });
   it("walks children and paths", () => {
     expect(childrenOf("cns", terms).map((x) => x.id)).toEqual(["pa", "vs"]);
-    expect(termPath(terms[4], terms)).toEqual(["Clinical Nursing Skills", "Vital signs monitoring", "Blood pressure"]);
+    expect(termPath(terms[4], terms)).toEqual(["Core skills", "Vital signs monitoring", "Blood pressure"]);
     expect(depthOf(terms[4], terms)).toBe(2);
     expect(depthOf(terms[0], terms)).toBe(0);
   });
