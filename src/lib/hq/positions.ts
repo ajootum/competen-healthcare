@@ -169,7 +169,9 @@ export type HqPositionAction =
   | { action: "set_settings"; strict: boolean; multipleAppointments: boolean; reason: string }
   | { action: "set_content_rule"; kind: HqSodContentKind; publisherNotApprover: boolean; reason: string }
   // Migration 641: a position's appointment rules. Unlimited holders unless a maximum is set.
-  | { action: "set_rules"; code: string; maxHolders: number | null; primaryPolicy: HqPrimaryPolicy; scopedAppointments: boolean; productLine: string | null; reason: string };
+  | { action: "set_rules"; code: string; maxHolders: number | null; primaryPolicy: HqPrimaryPolicy; scopedAppointments: boolean; productLine: string | null; reason: string }
+  // Migration 940 (UNIFIED-GOVERNANCE-V1): who a position reports to. null = a root of the organisation.
+  | { action: "set_reports_to"; code: string; reportsTo: string | null; reason: string };
 
 const str = (v: unknown) => (typeof v === "string" ? v.trim() : "");
 const optStr = (v: unknown) => (typeof v === "string" && v.trim() ? v.trim() : null);
@@ -213,7 +215,7 @@ export function parsePositionAction(b: unknown): { ok: true; value: HqPositionAc
       const e = needCode() ?? (action === "grant" ? needCatalogue(capability) : capability ? null : "capability is required.");
       if (e) return { ok: false, error: e };
       return action === "grant"
-        ? { ok: true, value: { action, code, capability, reason, acknowledgeSensitive: o.acknowledge_sensitive === true } }
+        ? { ok: true, value: { action, code, capability, reason, acknowledgeSensitive: o.acknowledge_sensitive === true || o.acknowledgeSensitive === true } }
         : { ok: true, value: { action, code, capability, reason } };
     }
     case "register": {
@@ -251,8 +253,18 @@ export function parsePositionAction(b: unknown): { ok: true; value: HqPositionAc
       if (line !== null && !/^[a-z][a-z0-9_]{1,62}$/.test(line)) return { ok: false, error: "product_line must be a product line code, or empty." };
       return { ok: true, value: { action, code, maxHolders: (max ?? null) as number | null, primaryPolicy: primary as HqPrimaryPolicy, scopedAppointments: o.scoped_appointments, productLine: line, reason } };
     }
+    case "set_reports_to": {
+      const e = needCode();
+      if (e) return { ok: false, error: e };
+      const raw = o.reportsTo !== undefined ? o.reportsTo : o.reports_to;
+      const to = raw === null || raw === undefined ? null : optStr(raw);
+      if (raw !== null && raw !== undefined && typeof raw !== "string") return { ok: false, error: "reportsTo is a position code, or empty for a top-level position." };
+      if (to !== null && !POSITION_CODE_RE.test(to)) return { ok: false, error: "reportsTo must be a position code, or empty for a top-level position." };
+      if (to === code) return { ok: false, error: "A position cannot report to itself." };
+      return { ok: true, value: { action, code, reportsTo: to, reason } };
+    }
     default:
-      return { ok: false, error: "action must be one of create, update, set_active, grant, end_grant, register, set_pair, set_settings, set_content_rule, set_rules." };
+      return { ok: false, error: "action must be one of create, update, set_active, grant, end_grant, register, set_pair, set_settings, set_content_rule, set_rules, set_reports_to." };
   }
 }
 
@@ -270,6 +282,7 @@ export function rpcFor(a: HqPositionAction, actor: { id: string; name: string | 
     case "set_settings": return { fn: "hq_sod_admin_set_settings", args: { ...base, p_strict: a.strict, p_multiple: a.multipleAppointments, p_reason: a.reason } };
     case "set_content_rule": return { fn: "hq_sod_admin_set_content_rule", args: { ...base, p_content_kind: a.kind, p_publisher_not_approver: a.publisherNotApprover, p_reason: a.reason } };
     case "set_rules": return { fn: "hq_position_admin_set_rules", args: { ...base, p_code: a.code, p_max_holders: a.maxHolders, p_primary_policy: a.primaryPolicy, p_scoped_appointments: a.scopedAppointments, p_product_line: a.productLine, p_reason: a.reason } };
+    case "set_reports_to": return { fn: "hq_position_admin_set_reports_to", args: { ...base, p_code: a.code, p_reports_to: a.reportsTo, p_reason: a.reason } };
   }
 }
 
@@ -319,6 +332,8 @@ export type HqPositionAdminView = {
   grants: Read<HqGrantView[]>;
   /** Migration 641: appointment rules and product line. null = not readable (641 absent). */
   rules: (HqAppointmentRules & { productLine: string | null }) | null;
+  /** Migration 940: the position this one reports to (hq_position.code), or null for a top-level position or before 940. */
+  reportsTo: string | null;
 };
 export type HqCatalogueEntry = { code: string; space: HqSpace; applied: boolean; label: string | null; sensitive: HqSensitiveClass | null };
 export type HqPositionBoard = {
@@ -331,7 +346,7 @@ export type HqPositionBoard = {
   sod?: Read<HqSodPolicy>;
 };
 
-type PosRow = { code: string; space: string; name: string | null; description: string | null; is_active: boolean | null; max_holders?: number | null; primary_policy?: string | null; scoped_appointments?: boolean | null; product_line_code?: string | null };
+type PosRow = { code: string; space: string; name: string | null; description: string | null; is_active: boolean | null; max_holders?: number | null; primary_policy?: string | null; scoped_appointments?: boolean | null; product_line_code?: string | null; reports_to?: string | null };
 type GrantRow = { id: string; position_code: string; capability_code: string; source: string | null; effective_from: string | null; effective_to: string | null; grant_reason?: string | null; end_reason?: string | null };
 type CapRow = { code: string; label: string | null };
 
@@ -349,9 +364,13 @@ function rulesOf(p: PosRow): HqPositionAdminView["rules"] {
 /** The positions, with the 641 rule columns when they exist and without them before 641. */
 async function readPositionRows(admin: Admin) {
   const BASE = "code, space, name, description, is_active";
-  const r = await admin.from("hq_position").select(`${BASE}, max_holders, primary_policy, scoped_appointments, product_line_code`).limit(500);
-  if (r.error && /max_holders|primary_policy|scoped_appointments|column/i.test(r.error.message)) return admin.from("hq_position").select(BASE).limit(500);
-  return r;
+  const RULES = "max_holders, primary_policy, scoped_appointments, product_line_code";
+  // Newest shape first (940 reports_to), then 641 rules, then the base: each step down tolerates the column being absent.
+  const r = await admin.from("hq_position").select(`${BASE}, ${RULES}, reports_to`).limit(500);
+  if (!r.error || !/reports_to|max_holders|primary_policy|scoped_appointments|column/i.test(r.error.message)) return r;
+  const r2 = await admin.from("hq_position").select(`${BASE}, ${RULES}`).limit(500);
+  if (r2.error && /max_holders|primary_policy|scoped_appointments|column/i.test(r2.error.message)) return admin.from("hq_position").select(BASE).limit(500);
+  return r2;
 }
 
 /** Live at `now` by the same window rule as activeGrants. Pure. */
@@ -379,6 +398,7 @@ export function buildPositionBoard(
         description: p.description,
         isActive: p.is_active !== false,
         rules: rulesOf(p),
+        reportsTo: p.reports_to ?? null,
         grants: grants.ok
           ? readOk(grants.value.filter(g => g.position_code === p.code).map(g => ({
               id: g.id,

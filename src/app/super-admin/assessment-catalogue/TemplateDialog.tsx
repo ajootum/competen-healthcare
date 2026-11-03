@@ -7,6 +7,8 @@ import type { Family } from "@/lib/assessment/catalogue/families";
 import type { TaxonomyDimension } from "@/lib/assessment/catalogue/classify";
 import type { TemplateChoice } from "@/lib/assessment/catalogue/template";
 import ClassificationFields, { type TermChoice } from "./ClassificationFields";
+import PathwaySummaryCard from "./PathwaySummaryCard";
+import type { PathwaySummary } from "@/lib/assessment/studio/pathway";
 import { BASE, CodeChip, btnGhost, btnPrimary, callApi, input } from "./ui";
 
 // Create from template (registration option 3): a new identity whose first Draft copies a PUBLISHED instrument's content,
@@ -25,7 +27,7 @@ export default function TemplateDialog({ families, taxonomy, canAuthor, onClose,
   const [terms, setTerms] = useState<TermChoice[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [made, setMade] = useState<{ instrumentId: string; code: string; versionId: string; warnings: string[] } | null>(null);
+  const [made, setMade] = useState<{ instrumentId: string; code: string; versionId: string; warnings: string[]; pathway?: PathwaySummary | null } | null>(null);
   const chosen = templates?.find(t => t.versionId === templateId) ?? null;
 
   useEffect(() => {
@@ -46,7 +48,7 @@ export default function TemplateDialog({ families, taxonomy, canAuthor, onClose,
     const r = await callApi("/api/hq/assessment-catalogue/templates", { templateVersionId: templateId, family, name: title, description, terms });
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
-    setMade(r.json as unknown as { instrumentId: string; code: string; versionId: string; warnings: string[] });
+    setMade(r.json as unknown as { instrumentId: string; code: string; versionId: string; warnings: string[]; pathway?: PathwaySummary | null });
     router.refresh();
   }
 
@@ -64,6 +66,9 @@ export default function TemplateDialog({ families, taxonomy, canAuthor, onClose,
           <div className="space-y-3 px-5 py-4">
             <p className="text-[14px] text-gray-900"><CodeChip code={made.code} /> <b>{title}</b> is registered as a Draft, adapted from {chosen?.code}.</p>
             {made.warnings.length > 0 && <ul className="list-disc pl-5 text-[12.5px] text-amber-900">{made.warnings.map(w => <li key={w}>{w}</li>)}</ul>}
+            {made.pathway
+              ? <PathwaySummaryCard summary={made.pathway} studioHref={`/super-admin/checklist-studio/${made.instrumentId}/v/${made.versionId}`} studioLabel="Complete it in Checklist Studio" compact />
+              : <p className="text-[12.5px] text-gray-800" role="status">Your draft is registered. Next: open it in Checklist Studio, complete its content, then Submit for review.</p>}
             <div className="flex flex-wrap gap-2">
               <a className={btnPrimary} href={`/super-admin/checklist-studio/${made.instrumentId}`}>Open in Checklist Studio</a>
               <button type="button" className={btnGhost} onClick={() => { router.push(`${BASE}?i=${made.instrumentId}`, { scroll: false }); onClose(); }}>Show in the catalogue</button>

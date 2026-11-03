@@ -5,12 +5,14 @@ import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadProgressionVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
+import { pathwayModel } from "@/lib/assessment/studio/pathway-data";
 import { recentDesigns } from "@/lib/assessment/studio/designs";
 import { describeTarget, targetLabels } from "@/lib/assessment/adapters/scholar/targets";
 import { readStageScale } from "@/lib/assessment/adapters/scholar/scales";
 import { DefProgressionEditor } from "../../../_components/DefProgressionEditor";
 import { DefTimeline } from "../../../_components/DefShared";
 import { LifecyclePanel } from "../../../_components/LifecyclePanel";
+import { PathwayPanel } from "../../../_components/PathwayPanel";
 import { Notice, PageHead, StateChip, StudioShell } from "../../../_components/studio-ui";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,7 @@ export default async function ProgressionVersionPage({ params }: { params: Promi
     readStageScale(ctx.admin, v.stage_scale_version_id).catch(() => null),
     targetLabels(ctx.admin, [{ kind: v.target_kind, ref: v.target_ref }]),
   ]);
+  const pathway = await pathwayModel(ctx.admin, { kind: "progression", version: v, actorId: ctx.userId, caps: ctx.capabilities, life: lc });
   return (
     <StudioShell wide>
       <PageHead
@@ -36,6 +39,7 @@ export default async function ProgressionVersionPage({ params }: { params: Promi
         lede={`Places people against: ${describeTarget({ kind: v.target_kind, ref: v.target_ref }, labels)}. The target is fixed when a rule set is created.`}
         right={<StateChip state={v.state} />}
       />
+      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/progression/v" />
       {stageScale ? (
         <DefProgressionEditor
           versionId={v.id} initialRules={v.rules ?? {}} initialTests={v.tests ?? []} stageScaleVersionId={v.stage_scale_version_id} stageScale={stageScale}

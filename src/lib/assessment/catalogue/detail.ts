@@ -5,6 +5,8 @@ import { loadInstrumentCollections } from "./collections";
 import { deriveStatus, STATUS_LABEL, versionLabel, type StatusCode } from "./shape";
 import { must, type Admin, type Row } from "./db";
 import { loadImportProvenance, type ImportProvenance } from "../import/provenance";
+import { pathwaySummary } from "../studio/pathway-data";
+import type { PathwaySummary } from "../studio/pathway";
 
 /**
  * One instrument, read for the drawer and the full page. Everything is READ from where it lives and nothing is copied:
@@ -43,9 +45,14 @@ export type InstrumentDetail = {
   versions: VersionSummary[];
   collections: { id: string; code: string; name: string }[];
   events: CatalogueEvent[];
+  /** ASMT-PATHWAY-01: the Studio's pathway to publication for the latest version (or the identity with no version), for the viewer. */
+  pathway: PathwaySummary | null;
 };
 
-export async function loadInstrumentDetail(admin: Admin, id: string): Promise<InstrumentDetail | null> {
+/** Who is looking: their standing on the next step is read off the Studio capabilities they hold. Without it, the pathway is drawn for nobody in particular. */
+export type PathwayViewer = { actorId: string; caps: string[] };
+
+export async function loadInstrumentDetail(admin: Admin, id: string, viewer?: PathwayViewer): Promise<InstrumentDetail | null> {
   const inst = must(await admin.from("asmt_instrument")
     .select("id, code, name, kind, description, family_code, owning_entity, responsible_authority, governance_note, created_at, created_by, import_id, import_sheet")
     .eq("id", id).maybeSingle(), "instrument") as Row | null;
@@ -55,7 +62,7 @@ export async function loadInstrumentDetail(admin: Admin, id: string): Promise<In
     inst.family_code ? admin.from("asmt_instrument_family").select("code, label").eq("code", inst.family_code).maybeSingle() : Promise.resolve({ data: null, error: null }),
     loadTaxonomy(admin),
     admin.from("asmt_instrument_version")
-      .select("id, version_no, state, created_at, submitted_at, published_at, retired_at, effective_from, review_due, delivery_modes, authored_by, published_by")
+      .select("id, version_no, state, created_at, submitted_at, published_at, retired_at, effective_from, review_due, delivery_modes, authored_by, published_by, content_hash, edited_by, last_edited_by, submitted_by, retired_by, duplicated_from_version_id, risk, requires_domain_review")
       .eq("instrument_id", id).order("version_no", { ascending: false }),
     admin.from("asmt_definition_event").select("event, created_at, actor_id, detail").eq("subject_table", "asmt_instrument").eq("subject_id", id)
       .order("created_at", { ascending: false }).limit(25),
@@ -84,6 +91,11 @@ export async function loadInstrumentDetail(admin: Admin, id: string): Promise<In
   const latest = versionRows[0] ?? null;
   const published = versionRows.find(v => v.state === "published") ?? null;
   const status = deriveStatus(latest?.state);
+  const who = viewer ?? { actorId: "", caps: [] };
+  const pathway = await pathwaySummary(admin, {
+    kind: "instrument", version: latest as never, actorId: who.actorId, caps: who.caps, instrumentId: id, versionNos: Object.fromEntries(versionRows.map(v => [v.id, v.version_no])),
+    catalogueAvailability: availability.some(a => a.enabled),
+  }).catch(() => null);
 
   return {
     id: inst.id, code: inst.code, name: inst.name, kind: inst.kind, description: inst.description ?? null,
@@ -104,6 +116,7 @@ export async function loadInstrumentDetail(admin: Admin, id: string): Promise<In
     })),
     collections,
     events: eventRows.map(e => ({ event: e.event, at: e.created_at, actor: nameOf(e.actor_id), detail: (e.detail ?? {}) as Record<string, unknown> })),
+    pathway,
   };
 }
 

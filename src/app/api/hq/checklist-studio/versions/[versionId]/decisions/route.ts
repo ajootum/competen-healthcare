@@ -1,7 +1,7 @@
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
-import { recordDecision } from "@/lib/assessment/studio/write";
+import { approveVersion, recordDecision } from "@/lib/assessment/studio/write";
 import { isUuid, kindOf, mustHold, refuse, respond } from "@/lib/assessment/studio/api";
 
 export const dynamic = "force-dynamic";
@@ -11,6 +11,9 @@ export const dynamic = "force-dynamic";
 // changes needs a reason. The database refuses a reviewer who authored, edited or submitted this version or an earlier one, a decision
 // on a version that is not in review, and a domain decision without the domain review right. The decision names the content hash it
 // was made on, so changing the content later makes it stale.
+// UNIFIED-GOVERNANCE-V1 (owner two-person workflow): { andApprove: true } with decision "approved" records the decision and then
+// marks the version approved in the same interaction when the independent approvals now reach the required number. Two distinct
+// records (the decision row, the approved event); one click. The database refuses the approval when the count is short.
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
   const ctx = await withOwnAppointments(await hqApiGate([CAP.review, CAP.domainReview]));
@@ -23,5 +26,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ version
   if (!["approved", "rejected", "changes_requested"].includes(b?.decision)) return refuse(400, "Choose a decision.");
   const denied = mustHold(ctx, b.reviewKind === "domain" ? CAP.domainReview : CAP.review);
   if (denied) return denied;
-  return respond(await recordDecision(ctx.admin, kind, versionId, ctx.userId, { reviewKind: b.reviewKind, decision: b.decision, rationale: typeof b.rationale === "string" ? b.rationale : null }));
+  const recorded = await recordDecision(ctx.admin, kind, versionId, ctx.userId, { reviewKind: b.reviewKind, decision: b.decision, rationale: typeof b.rationale === "string" ? b.rationale : null });
+  if (!recorded.ok || b?.andApprove !== true || b.decision !== "approved") return respond(recorded);
+  if (!(ctx.capabilities.includes(CAP.review) || ctx.capabilities.includes(CAP.publish))) return respond(recorded, { approved: false, note: "Your decision is recorded. Marking the version approved needs the review or publish capability." });
+  // A checklist that requires a domain review needs a domain decision as well. When this reviewer also holds the domain review
+  // right (spec: "both capabilities and appropriate authority"), the one interaction records that decision too, as its own row.
+  if (kind === "instrument" && b.reviewKind === "governance" && ctx.capabilities.includes(CAP.domainReview)) {
+    const { data: v } = await ctx.admin.from("asmt_instrument_version").select("requires_domain_review").eq("id", versionId).maybeSingle();
+    if (v?.requires_domain_review) await recordDecision(ctx.admin, kind, versionId, ctx.userId, { reviewKind: "domain", decision: "approved", rationale: typeof b.rationale === "string" ? b.rationale : null });
+  }
+  const approved = await approveVersion(ctx.admin, kind, versionId);
+  return respond(recorded, approved.ok ? { approved: true } : { approved: false, note: approved.error });
 }

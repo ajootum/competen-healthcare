@@ -53,7 +53,7 @@ export function LifecyclePanel(p: LifecyclePanelProps) {
   const shownIssues = issues ?? p.report ?? null;
 
   return (
-    <Panel title={`${KIND_LABEL[p.kind]} lifecycle`} right={<StateChip state={p.state} />}>
+    <Panel id="lifecycle" title={`${KIND_LABEL[p.kind]} lifecycle`} right={<StateChip state={p.state} />}>
       <div className="space-y-4">
         <p className="text-sm text-[var(--cmp-app-text-secondary)]">
           Version {p.versionNo}. Draft, then in review, then approved, then published. A published version is frozen: to change it, duplicate it to a new draft.

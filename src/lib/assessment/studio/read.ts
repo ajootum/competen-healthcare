@@ -271,12 +271,21 @@ export interface QueueItem {
   kind: DefinitionKind; versionId: string; versionNo: number; definitionName: string; code: string;
   submittedBy: string | null; submittedAt: string | null; risk: string | null; requiresDomainReview: boolean; contentHash: string | null;
   governance: number; domain: number; href: string;
+  /** ASMT-PATHWAY-01: the approvals this version needs (by its risk), and everyone involved in it (asmt_version_people). */
+  need: number; involved: string[];
+  /** THIS person's standing on the item: independent of its content, and what they have already decided on this exact content. */
+  viewer: { independent: boolean; decidedGovernance: boolean; decidedDomain: boolean; canGovern: boolean; canDomain: boolean };
 }
 
+/** The versions in review that THIS person may still decide: never one they authored, edited or submitted, nor one they already decided. */
 export async function reviewQueue(admin: Admin, actorId: string, caps: string[]): Promise<QueueItem[]> {
+  return (await reviewOverview(admin, actorId, caps)).filter((q) => q.viewer.independent && ((q.viewer.canGovern && !q.viewer.decidedGovernance) || (q.viewer.canDomain && q.requiresDomainReview && !q.viewer.decidedDomain)));
+}
+
+/** EVERY version in review, with who submitted it, what it still needs and this person's standing on it (ASMT-PATHWAY-01). */
+export async function reviewOverview(admin: Admin, actorId: string, caps: string[]): Promise<QueueItem[]> {
   const out: QueueItem[] = [];
   const need = await requiredApprovals(admin);
-  void need;
   const [ins, sc, rt, lt, pr] = await Promise.all([
     admin.from("asmt_instrument_version").select("id, version_no, instrument_id, submitted_by, submitted_at, risk, requires_domain_review, content_hash").eq("state", "in_review"),
     admin.from("asmt_response_scale_version").select("id, version_no, scale_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
@@ -298,6 +307,7 @@ export async function reviewQueue(admin: Admin, actorId: string, caps: string[])
     for (const v of rows) out.push({
       kind, versionId: v.id, versionNo: v.version_no, definitionName: nm.get(v[parentKey])?.name ?? "", code: nm.get(v[parentKey])?.code ?? "", submittedBy: v.submitted_by, submittedAt: v.submitted_at,
       risk: v.risk ?? null, requiresDomainReview: Boolean(v.requires_domain_review), contentHash: v.content_hash, governance: 0, domain: 0, href: href(v),
+      need: v.risk === "high" ? need.high : need.standard, involved: [], viewer: { independent: true, decidedGovernance: false, decidedDomain: false, canGovern: false, canDomain: false },
     });
   };
   push("instrument", (ins.data ?? []) as any[], "instrument_id", nIns, (v) => `/super-admin/checklist-studio/${v.instrument_id}/v/${v.id}`);
@@ -315,10 +325,78 @@ export async function reviewQueue(admin: Admin, actorId: string, caps: string[])
     const forHash = trail.decisions.filter((d) => d.content_hash === q.contentHash && d.decision === "approved");
     q.governance = new Set(forHash.filter((d) => d.review_kind === "governance").map((d) => d.reviewer_id)).size;
     q.domain = new Set(forHash.filter((d) => d.review_kind === "domain").map((d) => d.reviewer_id)).size;
-    if (people.includes(actorId)) continue;
-    const needsGov = canGovern && !mine.some((d) => d.review_kind === "governance");
-    const needsDom = canDomain && q.requiresDomainReview && !mine.some((d) => d.review_kind === "domain");
-    if (needsGov || needsDom) result.push(q);
+    q.involved = people;
+    q.viewer = { independent: !people.includes(actorId), decidedGovernance: mine.some((d) => d.review_kind === "governance"), decidedDomain: mine.some((d) => d.review_kind === "domain"), canGovern, canDomain };
+    result.push(q);
   }
   return result.sort((a, b) => (a.submittedAt ?? "").localeCompare(b.submittedAt ?? ""));
+}
+
+// ---- governed content index and history (UNIFIED-GOVERNANCE-V1 sections 5 and 7) -----------------------------------
+
+export interface GovernedVersionRow {
+  kind: DefinitionKind; versionId: string; /** Same as versionId (alias used by the governance inbox). */ id: string; versionNo: number; definitionId: string; code: string; name: string; state: LifecycleState;
+  authoredBy: string[]; submittedBy: string | null; submittedAt: string | null; publishedBy: string | null; publishedAt: string | null; createdAt: string; href: string;
+}
+
+/** Every version of every definition kind, newest first, with its definition's code and name and the link to its Studio page. */
+export async function listGovernedVersions(admin: Admin, o: { states?: LifecycleState[]; limit?: number } = {}): Promise<GovernedVersionRow[]> {
+  const limit = o.limit ?? 2000;
+  const cols = "id, version_no, state, authored_by, submitted_by, submitted_at, published_by, published_at, created_at";
+  const pull = (table: "asmt_instrument_version" | "asmt_response_scale_version" | "asmt_rule_template_version" | "asmt_layout_template_version" | "asmt_progression_rule_version", parent: string) => {
+    let q = admin.from(table).select(`${cols}, ${parent}`).order("created_at", { ascending: false }).limit(limit);
+    if (o.states?.length) q = q.in("state", o.states);
+    return q;
+  };
+  const [ins, sc, rt, lt, pr] = await Promise.all([
+    pull("asmt_instrument_version", "instrument_id"), pull("asmt_response_scale_version", "scale_id"), pull("asmt_rule_template_version", "template_id"),
+    pull("asmt_layout_template_version", "template_id"), pull("asmt_progression_rule_version", "rule_set_id"),
+  ]);
+  const defs = async (table: "asmt_instrument" | "asmt_response_scale" | "asmt_rule_template" | "asmt_layout_template" | "asmt_progression_rule_set", ids: string[]) => {
+    const u = [...new Set(ids)];
+    if (!u.length) return new Map<string, any>();
+    const { data } = await admin.from(table).select("id, code, name").in("id", u);
+    return new Map(((data ?? []) as any[]).map((d) => [d.id, d]));
+  };
+  const ids = (r: { data: unknown }, key: string) => ((r.data ?? []) as any[]).map((v) => v[key] as string);
+  const [dIns, dSc, dRt, dLt, dPr] = await Promise.all([
+    defs("asmt_instrument", ids(ins, "instrument_id")), defs("asmt_response_scale", ids(sc, "scale_id")), defs("asmt_rule_template", ids(rt, "template_id")),
+    defs("asmt_layout_template", ids(lt, "template_id")), defs("asmt_progression_rule_set", ids(pr, "rule_set_id")),
+  ]);
+  const out: GovernedVersionRow[] = [];
+  const push = (kind: DefinitionKind, res: { data: unknown }, parentKey: string, nm: Map<string, any>, href: (v: any) => string) => {
+    for (const v of (res.data ?? []) as any[]) out.push({
+      kind, versionId: v.id, id: v.id, versionNo: v.version_no, definitionId: v[parentKey], code: nm.get(v[parentKey])?.code ?? "", name: nm.get(v[parentKey])?.name ?? "", state: v.state,
+      authoredBy: Array.isArray(v.authored_by) ? v.authored_by : [], submittedBy: v.submitted_by ?? null, submittedAt: v.submitted_at ?? null,
+      publishedBy: v.published_by ?? null, publishedAt: v.published_at ?? null, createdAt: v.created_at, href: href(v),
+    });
+  };
+  push("instrument", ins, "instrument_id", dIns, (v) => `/super-admin/checklist-studio/${v.instrument_id}/v/${v.id}`);
+  push("scale", sc, "scale_id", dSc, (v) => `/super-admin/checklist-studio/scales/v/${v.id}`);
+  push("rule_template", rt, "template_id", dRt, (v) => `/super-admin/checklist-studio/scoring-templates/v/${v.id}`);
+  push("layout_template", lt, "template_id", dLt, (v) => `/super-admin/checklist-studio/layout-templates/v/${v.id}`);
+  push("progression", pr, "rule_set_id", dPr, (v) => `/super-admin/checklist-studio/progression/v/${v.id}`);
+  return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+export interface DefinitionTrailRow {
+  at: string; kind: "event" | "decision"; label: string; actorId: string | null; versionTable: string; versionId: string; detail: string | null;
+}
+
+/** The newest definition events and review decisions across every kind, newest first. */
+export async function recentDefinitionTrail(admin: Admin, limit = 100): Promise<DefinitionTrailRow[]> {
+  const [e, d] = await Promise.all([
+    admin.from("asmt_definition_event").select("subject_table, subject_id, event, actor_id, reason, detail, created_at").order("created_at", { ascending: false }).limit(limit),
+    admin.from("asmt_review_decision").select("version_table, version_id, review_kind, reviewer_id, decision, rationale, created_at").order("created_at", { ascending: false }).limit(limit),
+  ]);
+  if (e.error || d.error) throw new Error("The definition trail could not be read.");
+  const ev: DefinitionTrailRow[] = ((e.data ?? []) as any[]).map((x) => ({
+    at: x.created_at, kind: "event", label: EVENT_LABEL[x.event] ?? String(x.event).replace(/_/g, " "), actorId: x.actor_id ?? null, versionTable: x.subject_table, versionId: x.subject_id,
+    detail: x.event === "validated" ? `${x.detail?.errors ?? 0} problem(s), ${x.detail?.warnings ?? 0} warning(s)` : x.reason ?? null,
+  }));
+  const dc: DefinitionTrailRow[] = ((d.data ?? []) as any[]).map((x) => ({
+    at: x.created_at, kind: "decision", label: `${x.review_kind === "domain" ? "Domain" : "Governance"} review ${DECISION_LABEL[x.decision] ?? x.decision}`, actorId: x.reviewer_id ?? null,
+    versionTable: x.version_table, versionId: x.version_id, detail: x.rationale ?? null,
+  }));
+  return [...ev, ...dc].sort((a, b) => b.at.localeCompare(a.at)).slice(0, limit);
 }

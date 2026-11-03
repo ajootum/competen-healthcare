@@ -8,6 +8,8 @@ import { ContentTab } from "./ContentTab";
 import { normalizeContent } from "@/lib/assessment/studio/assemble";
 import { LayoutTab, type LayoutOption } from "./LayoutTab";
 import { LifecyclePanel, type LifecyclePanelProps } from "./LifecyclePanel";
+import { PathwayPanel } from "./PathwayPanel";
+import type { PathwayModel } from "@/lib/assessment/studio/pathway";
 import { PreviewPanel } from "./PreviewPanel";
 import { ScoringTab, type RuleTemplateOption } from "./ScoringTab";
 import { SettingsTab, type SettingsTabProps } from "./SettingsTab";
@@ -51,6 +53,9 @@ export interface VersionWorkspaceProps {
   lifecycle: Omit<LifecyclePanelProps, "kind" | "versionId" | "versionNo" | "state" | "versionHrefBase" | "listHref" | "report">;
   timeline: TimelineEntry[];
   title: string;
+  /** ASMT-PATHWAY-01: stage, next action, blockers and who can act, drawn above the tabs so it is seen from every tab. */
+  pathway?: PathwayModel;
+  catalogueHref?: string;
 }
 
 export function VersionWorkspace(p: VersionWorkspaceProps) {
@@ -93,6 +98,10 @@ export function VersionWorkspace(p: VersionWorkspaceProps) {
         </div>
       </div>
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+
+      {p.pathway && (
+        <PathwayPanel model={p.pathway} versionId={p.versionId} editHref={null} catalogueHref={p.catalogueHref ?? null} versionHrefBase={base} onGoToLifecycle={() => setTab("settings")} />
+      )}
 
       <div role="tablist" aria-label="Checklist sections" className="flex flex-wrap gap-1 border-b border-[var(--cmp-app-border)]">
         {TABS.map((t) => (

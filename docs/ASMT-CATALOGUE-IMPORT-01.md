@@ -47,6 +47,10 @@ No new response type, field kind or vocabulary was needed: the existing item, it
 
 Unchanged. An import or a template copy produces a Draft authored by the actor; review, approval, publication, the SoD rules (no self-approval, no self-publication) and versioning are the 890 guard's. An imported scale is a Draft scale that must be published before the instrument can be put forward. Registering content needs the Studio author capability held through an appointment (the routes refuse otherwise and keep the upload and its corrections for an author to register).
 
+### Pathway to publication (ASMT-PATHWAY-01, 3 Nov 2026)
+
+Every Studio version page, the instrument version list, the catalogue drawer and page, and the import and template finish steps now state the stage (Draft → Submitted for review → Approved → Published → Retired), the next action in words, who can act by name from the live appointments with their independence for that content, what blocks it and the fix, and a prompt for the moment (registered, submitted, returned, approved, published). The review queue lists every version in review with who submitted it, what it needs, who can decide it and whether the viewer is independent. Rules: `src/lib/assessment/studio/pathway.ts`; standard and map: `docs/ASMT-PATHWAY-01.md`. No governance change, no migration.
+
 ## Migration 930
 
 `supabase/migrations/930-asmt-catalogue-import-and-hierarchy.sql` — applied twice on staging, rollback rehearsed, re-applied; build record, VERIFY and ROLLBACK in `RELEASE-2026-10-25/PENDING-41`. Production untouched. The import screens refuse with a plain message while the table or bucket is absent.

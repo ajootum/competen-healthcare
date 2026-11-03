@@ -5,12 +5,14 @@ import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadScaleVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
+import { pathwayModel } from "@/lib/assessment/studio/pathway-data";
 import { readStageScale } from "@/lib/assessment/adapters/scholar/scales";
 import { listMappingsFor, listPublishedStageScales } from "@/lib/assessment/adapters/scholar/stage-mapping";
 import { DefScaleEditor } from "../../../_components/DefScaleEditor";
 import { StageMappingPanel } from "../../../_components/StageMappingPanel";
 import { DefTimeline } from "../../../_components/DefShared";
 import { LifecyclePanel } from "../../../_components/LifecyclePanel";
+import { PathwayPanel } from "../../../_components/PathwayPanel";
 import { PageHead, StateChip, StudioShell } from "../../../_components/studio-ui";
 
 export const dynamic = "force-dynamic";
@@ -28,6 +30,7 @@ export default async function ScaleVersionPage({ params }: { params: Promise<{ v
     v.scale_kind === "rating" ? listPublishedStageScales(ctx.admin) : Promise.resolve([]),
     v.scale_kind === "rating" ? listMappingsFor(ctx.admin, v.id) : Promise.resolve([]),
   ]);
+  const pathway = await pathwayModel(ctx.admin, { kind: "scale", version: v, actorId: ctx.userId, caps: ctx.capabilities, life: lc });
   return (
     <StudioShell>
       <PageHead
@@ -36,6 +39,7 @@ export default async function ScaleVersionPage({ params }: { params: Promise<{ v
         lede={v.source_kind ? "Imported from an existing scale. Its levels keep a link to the level they came from." : undefined}
         right={<StateChip state={v.state} />}
       />
+      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/scales/v" />
       <DefScaleEditor
         versionId={v.id} initialLevels={v.levels} initialStates={v.states} description={v.description} scaleKind={v.scale_kind}
         bands={stage?.bands ?? []} stages={stage?.stages ?? []} editable={v.state === "draft" && canAuthor}

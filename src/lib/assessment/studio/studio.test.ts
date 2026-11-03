@@ -127,11 +127,13 @@ describe("transition preconditions", () => {
     expect(availabilities(input({ validationErrors: 2 })).submit.reason).toMatch(/2 validation problems/);
     expect(availabilities(input({ authoredBy: ["x"], involved: ["x"] })).submit.reason).toMatch(/author or editor/);
   });
-  it("an author cannot review or publish what they authored", () => {
+  it("an author cannot review what they authored, but may publish the exact approved version when they hold publish (940)", () => {
     const a = availabilities(input({ state: "in_review", caps: [CAP.review, CAP.publish, CAP.author] }));
     expect(a.reviewGovernance.reason).toMatch(/Not independent/);
+    expect(a.approve.allowed).toBe(false);
     const b = availabilities(input({ state: "approved", caps: [CAP.publish] }));
-    expect(b.publish.reason).toMatch(/Not independent/);
+    expect(b.publish.allowed).toBe(true);
+    expect(availabilities(input({ state: "approved", caps: [CAP.author] })).publish.reason).toMatch(/publish capability/);
   });
   it("an independent reviewer may decide once per exact content, and an independent publisher may publish an approved version", () => {
     const r = input({ state: "in_review", actorId: "rev", caps: [CAP.review], involved: ["me"] });

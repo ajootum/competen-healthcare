@@ -321,6 +321,13 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/learning/certificates", capability: "hq.learning.certificate.issue" },
   { prefix: "/super-admin/learning/access",       capability: "hq.individual.pilot.grant" },
   { prefix: "/super-admin/learning",              capability: "hq.learning.course.author" },
+  // UNIFIED-GOVERNANCE-V1: the consolidated governance surface. The inbox, the controlled-content index and the history
+  // open for every HQ appointee (the pages then show only what the person's own capabilities open); the organisation
+  // area is the positions and appointments administration, the same door as /super-admin/users.
+  { prefix: "/super-admin/governance/inbox",              capability: "hq.platform.home.view" },
+  { prefix: "/super-admin/governance/controlled-content", capability: "hq.platform.home.view" },
+  { prefix: "/super-admin/governance/history",            capability: "hq.platform.home.view" },
+  { prefix: "/super-admin/governance/organisation",       capability: "hq.platform.users.view" },
   { prefix: "/super-admin/governance",            capability: "hq.quality.governance.view" },
   { prefix: "/super-admin/cgr",                   capability: "hq.quality.regulation.view" },
   { prefix: "/super-admin/policy-manager",        capability: "hq.quality.policy.view" },

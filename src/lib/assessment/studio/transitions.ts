@@ -104,9 +104,11 @@ export function availabilities(i: TransitionInput): Availabilities {
     : !ap.governanceMet ? no(`It needs ${ap.need} independent governance approval${ap.need === 1 ? "" : "s"} and has ${ap.governance}.`)
     : !ap.domainMet ? no(`It needs ${ap.need} independent domain approval${ap.need === 1 ? "" : "s"} and has ${ap.domain}.`) : yes;
 
+  // UNIFIED-GOVERNANCE-V1 (migration 940): the author may publish the EXACT independently approved version. Independence
+  // is enforced at the review decision (nobody approves their own work); an approved version carries the hash its
+  // approvals name, and any change clears it. So publication needs the publish capability and the approved state only.
   const publish = i.state !== "approved" ? no("Only an approved version can be published.")
     : !holds(CAP.publish) ? no("Publishing needs the publish capability.")
-    : involved ? no("Not independent. You authored, edited or submitted this version or an earlier one.")
     : i.kind === "instrument" && i.deliveryModes.length === 0 ? no("A checklist cannot be published without a delivery mode.") : yes;
 
   const retire = i.state !== "published" ? no("Only a published version can be retired.")

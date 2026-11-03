@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
+import { pathwaySummaryByVersion } from "@/lib/assessment/studio/pathway-data";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { createFromTemplate, listTemplates } from "@/lib/assessment/catalogue/template";
 import { isUuid } from "@/lib/assessment/catalogue/filters";
@@ -42,7 +43,9 @@ export async function POST(req: Request) {
     : [];
   try {
     const r = await createFromTemplate(ctx.admin, ctx.userId, { templateVersionId: b.templateVersionId, family, name, description: text(b?.description, 2000) || null, terms });
-    return r.ok ? NextResponse.json(r, { status: 201 }) : refuse(r.status, r.error);
+    if (!r.ok) return refuse(r.status, r.error);
+    const pathway = await pathwaySummaryByVersion(ctx.admin, "instrument", r.versionId, { actorId: ctx.userId, caps: ctx.capabilities }).catch(() => null);
+    return NextResponse.json({ ...r, pathway }, { status: 201 });
   } catch (e) {
     return refuse(400, plainError(e));
   }

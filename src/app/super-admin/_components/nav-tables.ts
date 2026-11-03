@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.5.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.6.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -451,6 +451,14 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
   ]},
 
   { key: "governance", label: "Governance & Administration", icon: "🏛️", sections: [
+    // UNIFIED-GOVERNANCE-V1 (owner GO 3 Nov 2026): the four doors every governed item is reached through. One item, one
+    // status, one obvious next action. The specialist studios stay where they are and lead to the same governed item.
+    { key: "governance.unified", group: "Governance", plain: true, items: [
+      { key: "governance.inbox", label: "Governance Inbox", href: "/super-admin/governance/inbox", icon: "📥", keywords: ["my actions", "my governance inbox", "needs my decision", "review and approve", "publish", "tasks"] },
+      { key: "governance.controlled-content", label: "Controlled Content", href: "/super-admin/governance/controlled-content", icon: "🗃️", keywords: ["governed items", "checklists", "frameworks", "status", "next action"] },
+      { key: "governance.organisation", label: "Organisation & Appointments", href: "/super-admin/governance/organisation", icon: "🏢", keywords: ["positions", "hierarchy", "reporting lines", "appointments", "capability profiles", "executive", "management"] },
+      { key: "governance.decisions-history", label: "Governance History", href: "/super-admin/governance/history", icon: "📜", keywords: ["decisions", "approvals", "publications", "audit"] },
+    ]},
     // ⚠ HQ positions: who governs the PLATFORM ITSELF. Appointing stays owner-only (the page's own rule).
     { key: "governance.people", group: "HQ People & Positions", items: [
       { key: "governance.users", label: "Users", href: "/super-admin/users", icon: "👥" },
