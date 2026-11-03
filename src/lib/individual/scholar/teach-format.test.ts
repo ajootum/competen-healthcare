@@ -29,6 +29,7 @@ describe("parseTeachAnswer / composeTeachAnswer", () => {
   it("reads the labelled parts, tolerating markdown and wrapped key points", () => {
     expect(parseTeachAnswer(GOOD)).toEqual({
       overview: "The Model for Improvement gives a team questions to guide a change [S1].",
+      understanding: [],
       points: ["It asks what the team is trying to accomplish [S1].", "A PDSA cycle tests a change on a small scale before it is used more widely [S2]. The team studies the results and acts on what was learned [S2]."],
       example: "A ward team tested a new handover sheet with one nurse on one shift [S2].",
       questions: ["Why is a change tested on a small scale first? [S2]", "What does the Model for Improvement ask a team? [S1]"],

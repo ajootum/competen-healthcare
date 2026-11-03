@@ -66,8 +66,13 @@ const norm = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 
 export type SectionProfile = { heading: string | null; chars: number; content?: string };
 /** A section below this many characters (a title, agenda or divider slide) is not a lesson of its own. */
 export const LESSON_THIN_CHARS = 160;
-/** A lesson holds at most this many sections and characters (one section larger than that is a lesson alone). */
-export const LESSON_MAX_SECTIONS = 10;
+/**
+ * A lesson holds at most this many sections and characters (one section larger than that is a lesson alone).
+ * SCHOLAR-CUMULATIVE-TEACHING-01 (spec s5): 16 sections, from 10. At 10, eight lessons held 80 sections, so a 75-slide deck
+ * was packed nine or ten slides a lesson whatever its headings said: Bed bath (4 slides) was taught with half of Eye care,
+ * the rest of Eye care with Oral care. The character cap still bounds what one lesson teaches.
+ */
+export const LESSON_MAX_SECTIONS = 16;
 export const LESSON_MAX_CHARS = 7200;
 /** A lesson aims at the planned material's size over maxSteps, never below this: a short material is one or two lessons. */
 export const LESSON_MIN_TARGET_CHARS = 1500;
@@ -76,7 +81,30 @@ export const TEACH_THIN_CHARS = 400;
 /** The size assumed for a section whose text was not read (no profile): an ordinary section, never a thin one. */
 const UNREAD_CHARS = 600;
 /** Cutting between two sections costs this times how alike they are (0-1); a lesson's distance from the target size costs its square. */
-const CUT_WEIGHT = 1;
+const CUT_WEIGHT = 1.5;
+/** SCHOLAR-CUMULATIVE-TEACHING-01: two units whose headings open with the same word ("Eye Care", "Eye Care Assessment") are one heading family: cutting between them costs at least this. */
+const FAMILY_LIKENESS = 0.9;
+/** A heading word that at least this share of a material's substantive headings carry ("care" in a nursing deck) says nothing about likeness and is not compared. */
+const COMMON_STEM_SHARE = 0.3;
+const COMMON_STEM_MIN_HEADINGS = 4;
+/** A lesson that begins where a heading family of at least FAMILY_RUN_MIN units begins costs this much less: lessons start where the material's own sections start. */
+const FAMILY_START_BONUS = 0.15;
+const FAMILY_RUN_MIN = 3;
+
+/** Pure. The heading stems common to a material's headings (COMMON_STEM_SHARE of them, at least COMMON_STEM_MIN_HEADINGS): "care", "essential" in a nursing deck. */
+export function commonHeadingStems(headings: readonly (string | null | undefined)[]): Set<string> {
+  const counts = new Map<string, number>();
+  let n = 0;
+  for (const h of headings) {
+    if (!h) continue;
+    n++;
+    for (const w of new Set(stems(h))) counts.set(w, (counts.get(w) ?? 0) + 1);
+  }
+  const out = new Set<string>();
+  if (n < COMMON_STEM_MIN_HEADINGS) return out;
+  for (const [w, c] of counts) if (c >= COMMON_STEM_MIN_HEADINGS && c / n >= COMMON_STEM_SHARE) out.add(w);
+  return out;
+}
 
 const SPEAKER_NOTES = /^speaker notes:?$/i;
 /** Headings that say where you are, not what is taught: never a lesson title. */
@@ -109,15 +137,23 @@ export function stems(text: string): string[] {
   return [...out];
 }
 
-type Unit = { sections: SectionRef[]; chars: number; material: string; head: Set<string>; topic: Set<string> };
+type Unit = { sections: SectionRef[]; chars: number; material: string; head: Set<string>; topic: Set<string>; family: string | null };
 
-/** Pure. How alike two neighbouring units are, 0-1: their headings' word overlap or their topics' Jaccard, whichever is higher. */
+/** Pure. A heading's family: its first content word ("Eye Care Assessment" -> "eye"), or null where there is none. */
+export const headingFamily = (heading: string | null | undefined): string | null => (heading ? stems(heading)[0] ?? null : null);
+
+/**
+ * Pure. How alike two neighbouring units are, 0-1: their headings' word overlap or their topics' Jaccard, whichever is higher.
+ * SCHOLAR-CUMULATIVE-TEACHING-01: units of one heading family ("Eye Care", "Eye Care Assessment", "Eye Care Essential Care") are
+ * at least FAMILY_LIKENESS alike, so the cuts fall where the family changes (Skin tears | Eye care), not inside it.
+ */
 function likeness(a: Unit, b: Unit): number {
   const common = (x: Set<string>, y: Set<string>) => { let n = 0; for (const w of x) if (y.has(w)) n++; return n; };
   const head = a.head.size && b.head.size ? common(a.head, b.head) / Math.min(a.head.size, b.head.size) : 0;
   const both = a.topic.size && b.topic.size ? common(a.topic, b.topic) : 0;
   const topic = both ? both / (a.topic.size + b.topic.size - both) : 0;
-  return Math.max(head, topic);
+  const family = a.family && a.family === b.family ? FAMILY_LIKENESS : 0;
+  return Math.max(head, topic, family);
 }
 
 /**
@@ -137,12 +173,18 @@ export type PlanStepsOptions = { cutWeight?: number; maxSections?: number; maxCh
 export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<string, readonly string[]>, maxSteps: number, profiles: ReadonlyMap<string, SectionProfile> = new Map(), opts: PlanStepsOptions = {}): { steps: LearningStep[]; coverage: { sections: number; of: number } } {
   const max = Math.max(1, Math.floor(maxSteps));
   const cutWeight = opts.cutWeight ?? CUT_WEIGHT, maxSections = opts.maxSections ?? LESSON_MAX_SECTIONS, maxChars = opts.maxChars ?? LESSON_MAX_CHARS;
-  const headStems = (heading: string) => (opts.ignoreStems ? stems(heading).filter(w => !opts.ignoreStems!.has(w)) : stems(heading));
   const charsOf = (s: SectionRef) => profiles.get(s.chunkId)?.chars ?? UNREAD_CHARS;
+  // SCHOLAR-CUMULATIVE-TEACHING-01: a word most of the material's headings carry ("care") no longer makes every pair of
+  // neighbours half alike (Eye care | Oral care cost a cut); the family rule (likeness) still binds a run of one heading.
+  // SCHOLAR-PLAN-UNITS-01's caller may name further stems to ignore (opts.ignoreStems): both sets are left out.
+  const common = commonHeadingStems(sections.filter(s => charsOf(s) >= LESSON_THIN_CHARS).map(s => profiles.get(s.chunkId)?.heading));
+  const headStems = (heading: string) => stems(heading).filter(w => !common.has(w) && !opts.ignoreStems?.has(w));
   const unitOf = (list: SectionRef[]): Unit => ({
     sections: list, chars: list.reduce((t, s) => t + charsOf(s), 0), material: list[0].materialId,
     head: new Set(list.filter(s => charsOf(s) >= LESSON_THIN_CHARS).flatMap(s => headStems(profiles.get(s.chunkId)?.heading ?? ""))),
     topic: new Set(list.flatMap(s => (topics.get(s.chunkId) ?? []).flatMap(stems))),
+    // The family of the unit's substantive heading (a thin lead-in slide's own heading does not name the family).
+    family: headingFamily(list.filter(s => charsOf(s) >= LESSON_THIN_CHARS).map(s => profiles.get(s.chunkId)?.heading).find(Boolean) ?? null),
   });
   // 1. Units: each substantive section with the thin ones just before it; thin ones at a material's end join the last.
   const units: Unit[] = [];
@@ -154,20 +196,25 @@ export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<s
     else units.push(unitOf(pending));
     pending = [];
   };
-  for (const s of sections) {
+  sections.forEach((s, i) => {
     if (pending.length && pending[0].materialId !== s.materialId) settle();
     // A thin section that carries the previous one on (its heading words are all the previous heading's: the last,
     // short slide of "FMEA") joins it; any other thin section (a title, an agenda) leads into what follows.
+    // SCHOLAR-CUMULATIVE-TEACHING-01: a thin slide of its own family that matches neither neighbour ("Skin Tears" after
+    // "Bed Bath", before "Eye Care") stays with the unit before it, where its topic is, instead of leading the next family.
     const prev = units[units.length - 1];
-    const words = headStems(profiles.get(s.chunkId)?.heading ?? "");
+    const heading = profiles.get(s.chunkId)?.heading ?? "";
+    const words = headStems(heading);
     const carries = opts.thinJoin === "any" ? words.some(w => prev?.head.has(w)) : words.every(w => prev?.head.has(w));
-    if (charsOf(s) < LESSON_THIN_CHARS && !pending.length && prev?.material === s.materialId && words.length && carries) {
+    const nextHeading = sections.slice(i + 1).find(x => x.materialId === s.materialId && charsOf(x) >= LESSON_THIN_CHARS);
+    const orphan = () => { const fam = headingFamily(heading); return !!fam && fam !== prev?.family && fam !== headingFamily(nextHeading ? profiles.get(nextHeading.chunkId)?.heading : null); };
+    if (charsOf(s) < LESSON_THIN_CHARS && !pending.length && prev?.material === s.materialId && words.length && (carries || orphan())) {
       units[units.length - 1] = { ...prev, sections: [...prev.sections, s], chars: prev.chars + charsOf(s) };
-      continue;
+      return;
     }
     pending.push(s);
     if (charsOf(s) >= LESSON_THIN_CHARS) { units.push(unitOf(pending)); pending = []; }
-  }
+  });
   settle();
   // 2. Capacity, from the start.
   let n = 0, secs = 0, chars = 0;
@@ -178,7 +225,12 @@ export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<s
   const preC = [0], preS = [0];
   for (let j = 0; j < n; j++) { preC.push(preC[j] + units[j].chars); preS.push(preS[j] + units[j].sections.length); }
   const target = Math.max(LESSON_MIN_TARGET_CHARS, chars / max);
-  const cut = (i: number) => (i <= 0 || units[i].material !== units[i - 1].material ? 0 : cutWeight * likeness(units[i - 1], units[i]));
+  // SCHOLAR-CUMULATIVE-TEACHING-01: a run of one heading family (Eye Care x10) is where a lesson should begin, so a cut there is
+  // rewarded a little; the tie between two zero-cost cuts (Bed bath | Skin tears | Eye care) then falls where the family starts.
+  const runLen: number[] = new Array(n).fill(0);
+  for (let i = n - 1; i >= 0; i--) runLen[i] = units[i].family && i + 1 < n && units[i + 1].family === units[i].family && units[i + 1].material === units[i].material ? runLen[i + 1] + 1 : 1;
+  const startBonus = (i: number) => (i > 0 && units[i].family && units[i].family !== units[i - 1].family && runLen[i] >= FAMILY_RUN_MIN ? FAMILY_START_BONUS : 0);
+  const cut = (i: number) => (i <= 0 || units[i].material !== units[i - 1].material ? 0 : cutWeight * likeness(units[i - 1], units[i]) - startBonus(i));
   const INF = Number.POSITIVE_INFINITY;
   const best: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(max + 1).fill(INF));
   const from: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(max + 1).fill(-1));
@@ -260,12 +312,23 @@ export function lessonOutline(step: LearningStep, topics: ReadonlyMap<string, re
     groups.set(key, g);
   });
   const ranked = [...groups.values()].sort((a, b) => b.chars - a.chars || a.first - b.first);
+  // SCHOLAR-CUMULATIVE-TEACHING-01 (spec s5): the title names the heading FAMILY that carries most of the lesson's text, by its
+  // shortest heading ("Eye care" for a lesson of Eye Care, Eye Care Assessment and Eye Care Essential Care slides), never a
+  // small heading that happened to hold the single longest slide. The other headings still name the objective's "including".
+  const families = new Map<string, { heading: string; chars: number; first: number }>();
+  for (const g of ranked) {
+    const fam = headingFamily(g.heading) ?? g.heading;
+    const f = families.get(fam);
+    if (!f) families.set(fam, { heading: g.heading, chars: g.chars, first: g.first });
+    else { f.chars += g.chars; if (g.heading.length < f.heading.length) f.heading = g.heading; f.first = Math.min(f.first, g.first); }
+  }
+  const top = [...families.values()].sort((a, b) => b.chars - a.chars || a.first - b.first)[0];
   const seen = new Map<string, string>();
   for (const s of step.sections) for (const t of topics.get(s.chunkId) ?? []) if (norm(t) && !seen.has(norm(t))) seen.set(norm(t), t.trim());
   const topicNames = [...seen.values()];
   const content = step.sections.map(s => profiles.get(s.chunkId)?.content ?? "").join("\n");
   let title: string;
-  if (ranked.length) title = clip(sentenceCase(ranked[0].heading, content), TITLE_MAX);
+  if (top) title = clip(sentenceCase(top.heading, content), TITLE_MAX);
   else if (topicNames.length) title = clip(sentenceCase(listOf(topicNames.slice(0, 2)), topicNames.join(" ").toLowerCase()), TITLE_MAX);
   else {
     const first = step.sections[0];
@@ -285,7 +348,7 @@ export function lessonOutline(step: LearningStep, topics: ReadonlyMap<string, re
   const subject = what ? `what ${what[2]} ${what[1].toLowerCase()}` : lowerFirst(title.replace(/[?!]+$/, ""));
   const verb = !what && DESCRIBE_NOUN.test(title) ? "Describe" : "Explain";
   const objective = `${verb} ${subject}${more.length ? `, including ${listOf(more.map(lowerFirst))}` : ""}.`;
-  return { title, objective, focus: [ranked.length ? ranked[0].heading : title, ...more] };
+  return { title, objective, focus: [top ? top.heading : title, ...more] };
 }
 
 /** Pure. A step's name for the student (lessonOutline's title). Callers without profiles get the topics-or-place title. */
@@ -473,10 +536,12 @@ export const isArtefactAction = (a: string): a is (typeof ARTEFACT_ACTIONS)[numb
  * action, the depth, the sections (as a set), the prompt version, and which references (by competency and outcome)
  * it would be given. Anything that would change the answer changes the key.
  */
-export function artefactKey(input: { action: string; depth: string; chunkIds: readonly string[]; promptVersion: string; references: readonly GovernedReference[]; background: boolean; mode?: string }): string {
+export function artefactKey(input: { action: string; depth: string; chunkIds: readonly string[]; promptVersion: string; references: readonly GovernedReference[]; background: boolean; mode?: string;
+  /** SCHOLAR-CUMULATIVE-TEACHING-01: the fingerprint of the taught ground (learn-context.ts taughtHash) an answer builds on, so the same request on new ground is a new answer; absent for a context-free answer, whose key is exactly as before. */
+  context?: string | null }): string {
   const refs = input.references.map(r => `${r.competencyId ?? r.title}|${r.outcome ?? ""}`).sort().join(";");
   // COMPETEN-RESEARCH-01: a library or research answer has its own key; a notes-only key is exactly as before.
-  const basis = [input.action, input.depth, [...input.chunkIds].sort().join(","), input.promptVersion, refs, input.background ? "bg" : "nobg", ...(input.mode && input.mode !== "notes" ? [`mode:${input.mode}`] : [])].join("\n");
+  const basis = [input.action, input.depth, [...input.chunkIds].sort().join(","), input.promptVersion, refs, input.background ? "bg" : "nobg", ...(input.mode && input.mode !== "notes" ? [`mode:${input.mode}`] : []), ...(input.context ? [`ctx:${input.context}`] : [])].join("\n");
   return createHash("sha256").update(basis).digest("hex");
 }
 

@@ -127,10 +127,21 @@ Owner instruction 3 Nov 2026 (cross-cutting over CE-01, CE-02, CE-03, CE-05, CE-
 
 ---
 
+## SCHOLAR-CUMULATIVE-TEACHING-01 — Cumulative teaching intelligence — Implementing
+
+Owner instruction and GO 3 Nov 2026 (cross-cutting over CE-01, CE-02, CE-05, CE-07). Root causes, changes, before/after and decisions: `docs/programme/SCHOLAR-CUMULATIVE-TEACHING-01.md`; evidence `docs/evidence/SCHOLAR-CUMULATIVE-TEACHING-01/`.
+
+**Finding (3 Nov, Bed bath on staging)**: the shallow, repetitive teaching came from the prompts (a 220-word bullet lesson), from every action but Ask being given the passages alone (Go deeper could not know what Teach me had covered), from the saved-answer key (a second Go deeper returned the same saved answer, cached), from the planner's capacity (8 lessons x 10 sections packed the 75-slide deck so Bed bath was taught with half of Eye care), from a grounding false positive ("positive pressure ventilation") and, on staging only, from no model being approved for the explain family. Not from the model.
+
+**Implementing (branch `scholar/cumulative-teaching-01`, 3 Nov 2026)** — not merged, not deployed, no migration: the lesson gains an UNDERSTANDING part and room to teach (teach v3, deeper v2); a concise TAUGHT SO FAR block (`learn-context.ts`, rebuilt per request from saved teaching and the visit's checks, never stored) reaches Go deeper, Explain again, Guide me, Challenge me, Teach back, Explain my mistake and the checks; Go deeper extends (round-keyed, at most three by AI, "depth reached" otherwise); Guide me is a dialogue that answers the attempt; Challenge me demands reasoning and the clarification judges it; an opened lesson restores its saved rounds; lessons follow heading families (section cap 16, family-aware cuts, family titles).
+
+---
+
 ## Increment log
 
 | Date | Increment | Evidence | Workstreams |
 |---|---|---|---|
+| 3 Nov 2026 | SCHOLAR-CUMULATIVE-TEACHING-01 (improvement of the existing Learning Engine, not a new workstream): UNDERSTANDING part in every lesson, TAUGHT SO FAR context for Go deeper / Explain again / Guide me / Challenge me / checks, additive Go deeper rounds with depth reached, Guide me dialogue, reasoning-judged clarification, saved rounds restored on open, heading-family lesson planning; branch scholar/cumulative-teaching-01 | `learn-context.test.ts`, `learn-cumulative.test.ts`; before/after on Bed bath (staging) in docs/evidence/SCHOLAR-CUMULATIVE-TEACHING-01/ | CE-01, CE-02, CE-05, CE-07 |
 | 3 Nov 2026 | My Competencies Explorer (HFE improvement of the existing Overview, not a new workstream): Framework -> Area -> Domain -> Competency in the saved Holdings order via the shared `framework-tree.ts` helper, seven independent progress indicators (accepted mapping = Material linked, never Practised), search/filters/sort, banded rows, detail drawer; branch scholar/competency-explorer-hfe-01 | `competency-explorer.test.ts`, `framework-tree.test.ts`; staging walk (PR) | Scholar competencies (CE-07 HFE) |
 | 2 Nov 2026 | CE-04 built on branch scholar/ce04-conversation-01 (not merged, not live): Talk to the patient (text), SBAR handover task, SBAR OSCE template, mig 880 authored (not applied) | docs/evidence/CASE-CONVERSATION/880-build-record.md | CE-04 |
 | 3 Nov 2026 | Learning units for My Plan (SCHOLAR-PLAN-UNITS-01): proposals grouped into learning units with reading / learning / revision / practice estimates and a review step (merge, split, leave out, put first) before Add to My Plan; no migration | branch scholar/plan-units-01, docs/programme/SCHOLAR-PLAN-UNITS-01.md | CE-03 |

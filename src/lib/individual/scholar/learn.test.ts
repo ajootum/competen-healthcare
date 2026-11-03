@@ -210,7 +210,9 @@ describe("L5: what the policy decides", () => {
     expect(learnSystem("teach", { depth: "standard", background: true, references: true })).toContain(SUPPLEMENTARY_MARKER);
     expect(learnSystem("summary", { depth: "standard", background: true, references: false })).not.toContain(SUPPLEMENTARY_MARKER);
     expect(learnSystem("teach", { depth: "standard", background: false, references: false })).not.toContain(SUPPLEMENTARY_MARKER);
-    expect(learnSystem("teach", { depth: "brief", background: false, references: true })).toMatch(/under 120 words[\s\S]*GOVERNED REFERENCES/);
+    // SCHOLAR-CUMULATIVE-TEACHING-01: a lesson (teach, deeper) has LESSON_WORDS room; Explain and the rest keep DEPTH_WORDS.
+    expect(learnSystem("teach", { depth: "brief", background: false, references: true })).toMatch(/under 240 words[\s\S]*GOVERNED REFERENCES/);
+    expect(learnSystem("explain", { depth: "brief", background: false, references: true })).toMatch(/under 120 words[\s\S]*GOVERNED REFERENCES/);
     expect(learnSystem("check", { depth: "detailed", background: true, references: true })).not.toMatch(/GOVERNED REFERENCES|CHECK THIS/);
   });
   it("offers the policy's actions, in Scholar's order, starting with the student's choice where it is on", () => {
