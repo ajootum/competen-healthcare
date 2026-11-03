@@ -303,22 +303,84 @@ export async function loadGovernanceModel(admin: any, userId: string, frameworkI
   return { framework, domains, counts, components: view.components, me, stages, next, actors: { reviewers, publishers, authors }, history, reviewerNote, clinicalReadable: view.clinicalReadable, viewerId: userId };
 }
 
-/** The index: every shared framework with its counts, for the landing page. */
-export async function loadGovernanceIndex(admin: any, userId: string, me: Me): Promise<{ id: string; code: string | null; name: string; pubStatus: string; total: number; approved: number; inReview: number; ready: number; changes: number; mine: number; pending: boolean }[] | null> {
-  const [view, queue, pending] = await Promise.all([loadAuthoringView(admin) as Promise<AuthoringView | null>, me.canReview ? reviewQueue(admin, userId) : Promise.resolve(null), rows(admin.from("content_approvals").select("framework_id").eq("status", "pending"))]);
+/** One framework on the governance index: its stages as a timeline, with the dates and people the records hold. */
+export type IndexRow = {
+  id: string; code: string | null; name: string; pubStatus: string; version: string;
+  counts: Counts; mine: number;
+  pending: { submittedAt: string | null; byName: string | null } | null;
+  milestones: {
+    created: string | null;
+    /** The earliest content version put forward for clinical review. */
+    forwarded: string | null;
+    /** The latest approval, shown only once every competency is approved. */
+    approved: string | null;
+    /** The latest publication request. */
+    submitted: string | null;
+    /** The latest publication decision (publish or return). */
+    decided: { at: string; byName: string | null; outcome: "published" | "returned" } | null;
+    /** The latest published version. */
+    published: { at: string; version: string | null; byName: string | null } | null;
+  };
+  stages: Stage[];
+};
+
+/** The index: every shared framework with its counts, milestones and pathway, for the landing page. */
+export async function loadGovernanceIndex(admin: any, userId: string, me: Me): Promise<IndexRow[] | null> {
+  const [view, queue, pub] = await Promise.all([
+    loadAuthoringView(admin) as Promise<AuthoringView | null>,
+    me.canReview ? reviewQueue(admin, userId) : Promise.resolve(null),
+    loadPublicationView(admin),
+  ]);
   if (!view) return null;
+  const fwIds = view.frameworks.map(f => f.id);
+  const compIds = view.frameworks.flatMap(f => f.domains.flatMap(d => d.competencies.map(c => c.id)));
+  const versionIds = view.frameworks.flatMap(f => f.domains.flatMap(d => d.competencies.map(c => c.clinical?.versionId).filter((v): v is string => !!v)));
+  const [fwRows, requests, versions, approvals] = await Promise.all([
+    rows(admin.from("frameworks").select("id, created_at").in("id", fwIds)),
+    rows(admin.from("content_approvals").select("framework_id, status, submitted_at, submitted_by_name, reviewed_at, reviewed_by_name").in("framework_id", fwIds).order("submitted_at", { ascending: false }).limit(2000)),
+    compIds.length ? rows(admin.from("clinical_content_version").select("competency_id, created_at").in("competency_id", compIds).limit(10000)) : Promise.resolve([]),
+    versionIds.length ? rows(admin.from("clinical_review_decision").select("version_id, created_at").eq("decision", "approved").in("version_id", versionIds).limit(10000)) : Promise.resolve([]),
+  ]);
+  const createdAt = new Map<string, string>(((fwRows ?? []) as any[]).map(r => [r.id, r.created_at]));
   const mineIds = new Set((queue?.items ?? []).filter(i => i.kind === "competency").map(i => i.competencyId));
-  const pendingIds = new Set((pending ?? []).map((p: any) => p.framework_id));
+  const firstForwarded = new Map<string, string>();
+  for (const v of (versions ?? []) as any[]) { const cur = firstForwarded.get(v.competency_id); if (!cur || v.created_at < cur) firstForwarded.set(v.competency_id, v.created_at); }
+  const lastApproval = new Map<string, string>();
+  for (const a of (approvals ?? []) as any[]) { const cur = lastApproval.get(a.version_id); if (!cur || a.created_at > cur) lastApproval.set(a.version_id, a.created_at); }
+
   return view.frameworks.map(f => {
     const comps = f.domains.flatMap(d => d.competencies);
     const st = comps.map(c => eligibilityOf(c.clinical, f.pubStatus));
+    const n = (s: Eligibility) => st.filter(x => x === s).length;
+    const counts: Counts = { total: comps.length, ready: n("eligible"), inReview: n("in_review"), changes: n("changes_requested"), approved: n("approved"), unreadable: n("unreadable") };
     const editable = EDITABLE.has(f.pubStatus);
+    const reqs = ((requests ?? []) as any[]).filter(r => r.framework_id === f.id);
+    const open = reqs.find(r => r.status === "pending") ?? null;
+    const decidedReq = reqs.find(r => r.status === "approved" || r.status === "rejected") ?? null;
+    const pubRow = pub?.rows.find(r => r.id === f.id) ?? null;
+    const lastVersion = pubRow?.versions.length ? pubRow.versions.reduce((a, b) => (a.publishedAt > b.publishedAt ? a : b)) : null;
+    const allApproved = counts.total > 0 && counts.approved === counts.total;
+    const approvedDates = comps.map(c => c.clinical?.versionId ? lastApproval.get(c.clinical.versionId) ?? null : null);
+    const fw: GovFramework = {
+      id: f.id, code: f.code, name: f.name, pubStatus: f.pubStatus, layer: f.layer, editable, version: pubRow?.version ?? `${f.versionNum}`,
+      approved: counts.approved, total: counts.total, publication: pubRow,
+      pending: open ? { id: "", submittedBy: null, submittedByName: open.submitted_by_name ?? null, submittedAt: open.submitted_at ?? null, note: null } : null,
+      professionTermId: f.professionTermId, specialtyTermId: f.specialtyTermId,
+    };
     return {
-      id: f.id, code: f.code, name: f.name, pubStatus: f.pubStatus, total: comps.length,
-      approved: st.filter(s => s === "approved").length, inReview: st.filter(s => s === "in_review").length, ready: st.filter(s => s === "eligible").length,
-      changes: st.filter(s => s === "changes_requested" || s === "unreadable").length,
+      id: f.id, code: f.code, name: f.name, pubStatus: f.pubStatus, version: fw.version, counts,
       mine: comps.filter((c, i) => (me.canReview && mineIds.has(c.id)) || (me.canAuthor && editable && (st[i] === "eligible" || st[i] === "changes_requested"))).length,
-      pending: pendingIds.has(f.id),
+      pending: open ? { submittedAt: open.submitted_at ?? null, byName: open.submitted_by_name ?? null } : null,
+      milestones: {
+        created: createdAt.get(f.id) ?? null,
+        forwarded: comps.map(c => firstForwarded.get(c.id) ?? null).filter((x): x is string => !!x).sort()[0] ?? null,
+        approved: allApproved && approvedDates.every(Boolean) ? (approvedDates as string[]).sort().at(-1) ?? null : null,
+        submitted: (open ?? decidedReq)?.submitted_at ?? null,
+        decided: decidedReq?.reviewed_at ? { at: decidedReq.reviewed_at, byName: decidedReq.reviewed_by_name ?? null, outcome: decidedReq.status === "approved" ? "published" : "returned" } : null,
+        published: lastVersion ? { at: lastVersion.publishedAt, version: lastVersion.label, byName: lastVersion.by } : null,
+      },
+      // the index cannot know eligibility without the per-framework actor reads, so neither stage is marked blocked here
+      stages: pathwayOf(fw, counts, 1, null),
     };
   });
 }
