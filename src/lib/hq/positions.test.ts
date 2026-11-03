@@ -104,6 +104,41 @@ describe("parsePositionAction", () => {
   });
 });
 
+describe("set_reports_to (940)", () => {
+  const reason = "the owner asked for it";
+  const actor = { id: "u", name: "Owner", trace: "t" };
+  it("accepts a position code, or null for a top-level position", () => {
+    const a = parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: "chief_quality_governance_officer", reason });
+    expect(a.ok && a.value).toEqual({ action: "set_reports_to", code: "quality_manager", reportsTo: "chief_quality_governance_officer", reason });
+    const b = parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: null, reason });
+    expect(b.ok && b.value.action === "set_reports_to" && b.value.reportsTo).toBeNull();
+    const c = parsePositionAction({ action: "set_reports_to", code: "quality_manager", reports_to: "", reason });
+    expect(c.ok && c.value.action === "set_reports_to" && c.value.reportsTo).toBeNull();
+  });
+  it("refuses a short reason, a bad code, a malformed target and a position reporting to itself", () => {
+    expect(parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: null, reason: "no" }).ok).toBe(false);
+    expect(parsePositionAction({ action: "set_reports_to", code: "Quality Manager", reportsTo: null, reason }).ok).toBe(false);
+    expect(parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: "Not A Code", reason }).ok).toBe(false);
+    expect(parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: 7, reason }).ok).toBe(false);
+    expect(parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: "quality_manager", reason }).ok).toBe(false);
+  });
+  it("maps to hq_position_admin_set_reports_to with the session as the actor", () => {
+    const p = parsePositionAction({ action: "set_reports_to", code: "quality_manager", reportsTo: "chief_quality_governance_officer", reason });
+    expect(p.ok).toBe(true);
+    if (p.ok) expect(rpcFor(p.value, actor)).toEqual({
+      fn: "hq_position_admin_set_reports_to",
+      args: { p_actor: "u", p_actor_name: "Owner", p_trace: "t", p_code: "quality_manager", p_reports_to: "chief_quality_governance_officer", p_reason: reason },
+    });
+  });
+  it("carries reports_to onto the board, and null when the column is absent", () => {
+    const caps = readOk([]);
+    const withCol = buildPositionBoard(readOk([{ code: "quality_manager", space: "quality", name: "QM", description: null, is_active: true, reports_to: "chief_quality_governance_officer" }]), readOk([]), caps);
+    const without = buildPositionBoard(readOk([{ code: "quality_manager", space: "quality", name: "QM", description: null, is_active: true }]), readOk([]), caps);
+    expect(withCol.positions.ok && withCol.positions.value[0].reportsTo).toBe("chief_quality_governance_officer");
+    expect(without.positions.ok && without.positions.value[0].reportsTo).toBeNull();
+  });
+});
+
 describe("statusForDbError", () => {
   it("maps the database's refusals", () => {
     expect(statusForDbError("hq_position_admin owner_required: changing HQ positions requires platform ownership").status).toBe(403);

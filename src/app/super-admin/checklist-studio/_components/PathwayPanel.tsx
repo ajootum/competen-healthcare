@@ -40,7 +40,7 @@ export interface PathwayPanelProps {
 
 export function PathwayTracker({ stages, compact = false }: { stages: PathwayStage[]; compact?: boolean }) {
   return (
-    <ol className={`grid gap-2 ${compact ? "grid-cols-5" : "sm:grid-cols-3 lg:grid-cols-5"}`} aria-label="Pathway to publication">
+    <ol className={`grid gap-2 ${compact ? "grid-cols-3" : "sm:grid-cols-3"}`} aria-label="Pathway to publication">
       {stages.map((s, i) => (
         <li key={s.key} className={`rounded-lg border border-[var(--cmp-app-border)] border-l-4 ${compact ? "px-2 py-1" : "p-3"} ${STAGE_TONE[s.status]}`}>
           <p className={`${compact ? "text-[10px]" : "text-[11px]"} font-bold uppercase tracking-wide`}>{i + 1}. {s.label}</p>
@@ -56,12 +56,22 @@ export function PathwayPanel(p: PathwayPanelProps) {
   const { model: m } = p;
   const { busy, msg, run, router } = useAction();
   const [who, setWho] = useState(false);
+  const [changes, setChanges] = useState<string | null>(null);   // the note while asking for changes
   const next = m.next;
   const anchor = p.lifecycleAnchor ?? "lifecycle";
   const transition = (action: string, okText: string) => {
     if (!p.versionId) return;
     void run(action, () => callApi<{ versionId?: string }>(`/api/hq/checklist-studio/versions/${p.versionId}/transition`, "POST", { kind: m.kind, action }), {
       ok: okText, onOk: (d) => { if (action === "duplicate" && d.versionId && p.versionHrefBase) router.push(`${p.versionHrefBase}/${d.versionId}`); },
+    });
+  };
+  // UNIFIED-GOVERNANCE-V1: review and approval in one interaction. The decision is recorded, then the version is marked
+  // approved when the independent approvals reach the required number. A request for changes needs a note.
+  const decide = (decision: "approved" | "changes_requested", rationale: string) => {
+    if (!p.versionId) return;
+    void run("decide", () => callApi<{ approved?: boolean; note?: string }>(`/api/hq/checklist-studio/versions/${p.versionId}/decisions`, "POST", { kind: m.kind, reviewKind: "governance", decision, rationale, andApprove: decision === "approved" }), {
+      ok: decision === "approved" ? "Your approval is recorded." : "Changes requested; the author sees your note.",
+      onOk: (d) => { setChanges(null); if (d.note) router.refresh(); },
     });
   };
   const button = (() => {
@@ -73,7 +83,13 @@ export function PathwayPanel(p: PathwayPanelProps) {
       case "approve": return <Btn kind="primary" disabled={disabled} onClick={() => transition("approve", "Approved.")}>{a.label}</Btn>;
       case "publish": return <Btn kind="primary" disabled={disabled} onClick={() => transition("publish", "Published.")}>{a.label}</Btn>;
       case "duplicate": return <Btn disabled={disabled} onClick={() => transition("duplicate", "A new draft was made.")}>{a.label}</Btn>;
-      case "review": return p.onGoToLifecycle ? <Btn kind="primary" onClick={p.onGoToLifecycle}>{a.label}</Btn> : <a href={`#${anchor}`} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--cmp-theme-accent)] bg-[var(--cmp-theme-accent)] px-3 text-sm font-semibold text-[var(--cmp-theme-on-accent)] hover:bg-[var(--cmp-theme-strong)] pointer-coarse:min-h-[var(--cmp-touch-min)]">{a.label}</a>;
+      case "review": return (
+        <div className="flex flex-wrap items-center gap-2">
+          <Btn kind="primary" disabled={disabled} onClick={() => decide("approved", "")}>{busy === "decide" ? "Recording…" : "Review & approve"}</Btn>
+          <Btn disabled={disabled} onClick={() => setChanges((c) => (c === null ? "" : null))}>Request changes</Btn>
+          {p.onGoToLifecycle ? <Btn kind="ghost" onClick={p.onGoToLifecycle}>Full review panel</Btn> : <a href={`#${anchor}`} className="text-sm font-semibold underline underline-offset-2">Full review panel</a>}
+        </div>
+      );
       case "edit": return a.label === "Return to draft"
         ? <Btn disabled={disabled} onClick={() => transition("return", "Returned to draft.")}>{a.label}</Btn>
         : p.editHref ? <Link href={p.editHref} className="inline-flex min-h-9 items-center justify-center rounded-lg border border-[var(--cmp-app-control-border)] px-3 text-sm font-semibold hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)]">{a.label}</Link> : null;
@@ -95,7 +111,7 @@ export function PathwayPanel(p: PathwayPanelProps) {
   return (
     <section aria-labelledby="pathway-h" className="space-y-3 rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-4" data-testid="pathway-panel">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="pathway-h" className="text-sm font-bold uppercase tracking-[0.1em] text-[var(--cmp-app-text-secondary)]">Pathway to publication{m.versionNo ? `, ${KIND_LABEL[m.kind].toLowerCase()} v${m.versionNo}` : ""}</h2>
+        <h2 id="pathway-h" className="text-sm font-bold uppercase tracking-[0.1em] text-[var(--cmp-app-text-secondary)]">Pathway to publication{m.versionNo ? `, ${KIND_LABEL[m.kind].toLowerCase()} v${m.versionNo}` : ""} <span className="normal-case tracking-normal text-[var(--cmp-app-text)]">· {m.stateLabel}</span></h2>
         <button type="button" onClick={() => setWho((w) => !w)} aria-expanded={who} className="min-h-9 rounded-lg border border-[var(--cmp-app-control-border)] px-3 text-sm font-semibold hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)]">Who can act?</button>
       </div>
 
@@ -113,6 +129,17 @@ export function PathwayPanel(p: PathwayPanelProps) {
         </div>
         {button}
       </div>
+      {changes !== null && next.action?.kind === "review" && (
+        <div className="space-y-2 rounded-lg border border-[var(--cmp-app-border)] p-3" aria-label="Request changes">
+          <label className="flex flex-col gap-1 text-xs font-semibold text-[var(--cmp-app-text-secondary)]">What must change (the author sees this note)
+            <textarea value={changes} onChange={(e) => setChanges(e.target.value)} rows={3} maxLength={4000} className="rounded-lg border border-[var(--cmp-app-control-border)] bg-[var(--cmp-app-surface)] px-3 py-2 text-sm text-[var(--cmp-app-text)]" />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <Btn kind="primary" disabled={busy !== null || changes.trim().length < 3} onClick={() => decide("changes_requested", changes)}>Send back with this note</Btn>
+            <Btn kind="ghost" onClick={() => setChanges(null)}>Cancel</Btn>
+          </div>
+        </div>
+      )}
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
 
       <p role="status" className="rounded-lg border border-[var(--cmp-app-border)] px-3 py-2 text-sm text-[var(--cmp-app-text)]" data-testid="pathway-prompt">{m.prompt.text}</p>

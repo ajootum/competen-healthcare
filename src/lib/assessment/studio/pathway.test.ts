@@ -45,7 +45,8 @@ describe("pathway: the identity before its first version", () => {
     expect(m.prompt.moment).toBe("registered");
     expect(m.prompt.text).toMatch(/registered\. Next: open it in Checklist Studio/);
     expect(m.prompt.text).toContain("Ada Author");
-    expect(statusOf(m).draft).toBe("not_started");
+    expect(statusOf(m).prepare).toBe("not_started");
+    expect(m.stateLabel).toBe("Registered, no version yet");
     const viewer = pathwayOf({ ...base, state: null, versionNo: null, availability: null, approval: null, actorId: VIEWER, caps: [CAP.view] });
     expect(viewer.next.action).toBeNull();
     expect(viewer.next.viewer.canAct).toBe(false);
@@ -56,13 +57,14 @@ describe("pathway: the identity before its first version", () => {
 describe("pathway: draft", () => {
   it("a clean draft: next is Submit v1 for review, the author can act, reviewers are named", () => {
     const m = pathwayOf(build({}));
-    expect(m.current).toBe("draft");
+    expect(m.current).toBe("prepare");
     expect(m.next.headline).toBe("Submit v1 for review.");
     expect(m.next.action).toEqual({ kind: "submit", label: "Submit v1 for review" });
     expect(m.next.viewer.canAct).toBe(true);
     expect(m.next.detail).toContain("Ria Reviewer, Rob Reviewer");
     expect(m.blockers).toEqual([]);
-    expect(statusOf(m)).toEqual({ draft: "current", review: "not_started", approved: "not_started", published: "not_started", retired: "not_started" });
+    expect(statusOf(m)).toEqual({ prepare: "current", review: "not_started", publish: "not_started" });
+    expect(m.stages.map((s) => s.label)).toEqual(["Prepare", "Review & Approve", "Publish"]);
     expect(m.prompt.moment).toBe("draft");
     expect(m.prompt.text).toMatch(/complete its content, then Submit for review/);
   });
@@ -78,7 +80,7 @@ describe("pathway: draft", () => {
       "2 validation problems: No outcomes defined. No default layout.",
     ]);
     expect(m.blockers[1].fix).toMatch(/published response scale/);
-    expect(statusOf(m).draft).toBe("blocked");
+    expect(statusOf(m).prepare).toBe("blocked");
     expect(m.next.headline).toBe("Complete v1, then submit it for review.");
     expect(m.next.action).toEqual({ kind: "edit", label: "Open the content" });
     expect(m.next.viewer.canAct).toBe(false);
@@ -93,7 +95,8 @@ describe("pathway: draft", () => {
     expect(m.prompt.moment).toBe("returned");
     expect(m.prompt.text).toBe('Returned with notes by Ria Reviewer: "Item 3 needs a guidance line.". Edit and resubmit.');
     expect(m.blockers.map((b) => b.fix)).toContain("Address the notes, then submit again.");
-    expect(m.stages.find((s) => s.key === "draft")?.note).toMatch(/Returned to draft by Ria Reviewer/);
+    expect(m.stages.find((s) => s.key === "prepare")?.note).toMatch(/Returned to draft by Ria Reviewer/);
+    expect(m.stateLabel).toBe("Returned for correction");
   });
   it("a viewer who did not author the draft cannot submit and is told why", () => {
     const m = pathwayOf(build({ actor: VIEWER, caps: [CAP.author] }));
@@ -107,7 +110,7 @@ describe("pathway: draft", () => {
     expect(m.prompt.text).toMatch(/^Draft v1 is registered/);
     for (const kind of ["rule_template", "layout_template", "progression"] as const) {
       const k = pathwayOf(build({ kind, deliveryModes: [] }));
-      expect(k.stages.map((s) => s.key)).toEqual(["draft", "review", "approved", "published", "retired"]);
+      expect(k.stages.map((s) => s.key)).toEqual(["prepare", "review", "publish"]);
       expect(k.next.action?.kind).toBe("submit");
     }
   });
@@ -125,7 +128,8 @@ describe("pathway: in review", () => {
     expect(m.prompt.moment).toBe("submitted");
     expect(m.prompt.text).toContain("Submitted by Ada Author. Waiting for a reviewer: Ria Reviewer, Rob Reviewer can approve.");
     expect(m.prompt.text).toContain("You authored this, so another appointee must approve.");
-    expect(statusOf(m)).toMatchObject({ draft: "done", review: "current" });
+    expect(statusOf(m)).toMatchObject({ prepare: "done", review: "current" });
+    expect(m.stateLabel).toBe("Awaiting independent review");
   });
   it("an independent reviewer is offered the decision", () => {
     const m = pathwayOf(build({ state: "in_review", actor: REVIEWER, caps: [CAP.review], involved: [AUTHOR] }));
@@ -141,7 +145,7 @@ describe("pathway: in review", () => {
     expect(who.actors.find((a) => a.personId === REVIEWER)?.conflict).toBe("Already decided on this exact content.");
     expect(who.actors.find((a) => a.personId === REVIEWER2)?.conflict).toMatch(/Not independent/);
     expect(who.eligible).toBe(0);
-    expect(who.note).toMatch(/another appointee must act/);
+    expect(who.note).toMatch(/another independent appointee must act/);
     // one approval of one needed: ready to mark approved
     expect(m.next.headline).toBe("Mark v1 approved.");
   });
@@ -185,22 +189,27 @@ describe("pathway: in review", () => {
 });
 
 describe("pathway: approved", () => {
-  it("ready to publish: the publisher is named and offered the action; the author is refused on independence", () => {
+  it("ready to publish: the publisher is named and offered the action; the AUTHOR who holds publish may publish the exact approved version (940)", () => {
     const pub = pathwayOf(build({ state: "approved", actor: PUBLISHER, caps: [CAP.publish], involved: [AUTHOR], decisions: [decision(REVIEWER, "approved", "h1")] }));
     expect(pub.next.headline).toBe("Publish v1.");
     expect(pub.next.action).toEqual({ kind: "publish", label: "Publish v1" });
     expect(pub.prompt).toEqual({ moment: "approved", text: "Ready to publish: Pat Publisher can publish." });
-    expect(statusOf(pub)).toMatchObject({ draft: "done", review: "done", approved: "current" });
+    expect(statusOf(pub)).toMatchObject({ prepare: "done", review: "done", publish: "current" });
+    expect(pub.stateLabel).toBe("Approved, awaiting publication");
     const author = pathwayOf(build({ state: "approved", caps: [CAP.author, CAP.publish], decisions: [decision(REVIEWER, "approved", "h1")] }));
-    expect(author.next.viewer.canAct).toBe(false);
-    expect(author.next.viewer.reason).toMatch(/another appointee must publish it/);
+    expect(author.next.viewer.canAct).toBe(true);
+    expect(author.next.action).toEqual({ kind: "publish", label: "Publish v1" });
+    expect(author.next.detail).toMatch(/you may publish it even though you authored it/);
+    const authorNoCap = pathwayOf(build({ state: "approved", caps: [CAP.author], decisions: [decision(REVIEWER, "approved", "h1")] }));
+    expect(authorNoCap.next.viewer).toEqual({ canAct: false, reason: "Publishing needs the publish capability." });
   });
-  it("no eligible publisher (the only publisher is involved): approved stage blocked, blocker says appoint another", () => {
+  it("an involved publisher is still eligible to publish (independence lives at the review decision), and nobody appointed blocks the stage", () => {
     const m = pathwayOf(build({ state: "approved", actor: VIEWER, caps: [], involved: [AUTHOR, PUBLISHER], decisions: [decision(REVIEWER, "approved", "h1")] }));
-    expect(statusOf(m).approved).toBe("blocked");
-    expect(m.blockers[0].text).toBe("No eligible independent publisher.");
-    expect(m.blockers[0].fix).toMatch(/another appointee must act/);
-    expect(m.who[0].actors[0].conflict).toMatch(/Not independent/);
+    expect(statusOf(m).publish).toBe("current");
+    expect(m.who[0].actors[0]).toMatchObject({ name: "Pat Publisher", eligible: true, conflict: null });
+    const none = pathwayOf(build({ state: "approved", actor: VIEWER, caps: [], holders: { ...NO_HOLDERS, positions: { author: ["a"], review: ["r"], domainReview: [], publish: ["p"] } }, decisions: [decision(REVIEWER, "approved", "h1")] }));
+    expect(statusOf(none).publish).toBe("blocked");
+    expect(none.blockers[0]).toEqual({ text: "Nobody can publish.", fix: "Nobody is appointed to these positions." });
   });
   it("a checklist approved without a delivery mode cannot be published", () => {
     const m = pathwayOf(build({ state: "approved", actor: PUBLISHER, caps: [CAP.publish], involved: [AUTHOR], deliveryModes: [] }));
@@ -216,7 +225,8 @@ describe("pathway: published and retired", () => {
     expect(m.next.action?.kind).toBe("catalogue");
     expect(m.prompt.moment).toBe("published");
     expect(m.prompt.text).toMatch(/set its product availability in the catalogue/);
-    expect(statusOf(m)).toMatchObject({ approved: "done", published: "current", retired: "not_started" });
+    expect(statusOf(m)).toMatchObject({ prepare: "done", review: "done", publish: "done" });
+    expect(m.stateLabel).toBe("Published");
   });
   it("a published checklist already available, or any other published kind, offers duplicate to an author", () => {
     const m = pathwayOf(build({ state: "published", catalogueAvailability: true }));
@@ -228,8 +238,9 @@ describe("pathway: published and retired", () => {
   });
   it("retired and superseded", () => {
     const m = pathwayOf(build({ state: "retired", supersededBy: 2 }));
-    expect(m.current).toBe("retired");
-    expect(m.stages.at(-1)).toMatchObject({ label: "Superseded", status: "current" });
+    expect(m.current).toBe("publish");
+    expect(m.stages.at(-1)).toMatchObject({ label: "Superseded", status: "done" });
+    expect(m.stateLabel).toBe("Superseded by v2");
     expect(m.prompt.text).toBe("Retired: v2 supersedes it.");
     const plain = pathwayOf(build({ state: "retired" }));
     expect(plain.stages.at(-1)?.label).toBe("Retired");
@@ -238,21 +249,23 @@ describe("pathway: published and retired", () => {
 });
 
 describe("pathway: pieces", () => {
-  it("standingOf: authors have no independence rule; reviewers and publishers do", () => {
-    const i = build({ involved: [AUTHOR, PUBLISHER] });
+  it("standingOf: authors and publishers have no independence rule (940); reviewers do", () => {
+    const i = build({ involved: [AUTHOR, PUBLISHER, REVIEWER] });
     expect(standingOf("author", i).actors[0].eligible).toBe(true);
-    expect(standingOf("publish", i).actors[0]).toMatchObject({ eligible: false, conflict: expect.stringMatching(/Not independent/) });
+    expect(standingOf("publish", i).actors[0]).toMatchObject({ eligible: true, conflict: null });
+    expect(standingOf("review", i).actors[0]).toMatchObject({ eligible: false, conflict: expect.stringMatching(/Not independent/) });
     expect(standingOf("publish", i).capabilityLabel).toBe("the right to publish checklists");
   });
   it("stagesOf and blockersOf agree on a blocked draft", () => {
     const i = build({ deliveryModes: [] });
     const b = blockersOf(i, standingOf("review", i), standingOf("domainReview", i), standingOf("publish", i));
     expect(stagesOf(i, 2, 1, b)[0].status).toBe("blocked");
+    expect(stagesOf(i, 2, 1, b)).toHaveLength(3);
     expect(stagesOf(i, 2, 1, [])[0].status).toBe("current");
   });
   it("summarize carries stage, next, who and prompt for the catalogue", () => {
     const s = summarize(pathwayOf(build({ state: "in_review", actor: VIEWER, caps: [] })));
-    expect(s.stageLabel).toBe("Submitted for review");
+    expect(s.stageLabel).toBe("Awaiting independent review");
     expect(s.who).toEqual(["Ria Reviewer", "Rob Reviewer"]);
     expect(s.headline).toBe("Approve or return v1.");
     expect(s.viewerCanAct).toBe(false);

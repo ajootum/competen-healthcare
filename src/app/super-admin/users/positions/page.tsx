@@ -1,5 +1,6 @@
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadPositionBoard } from "@/lib/hq/positions";
+import Link from "next/link";
 import PositionsBoard from "./PositionsBoard";
 
 /**
@@ -16,12 +17,17 @@ export default async function HqPositionsPage() {
   const ctx = await requireHqCapability("hq.platform.users.view");
   const board = await loadPositionBoard(ctx.admin);
   return (
-    <PositionsBoard
-      board={board}
-      migrationApplied={board.migrationApplied}
-      canAdminister={ctx.isOwner && board.migrationApplied}
-      isOwner={ctx.isOwner}
-      viewerName={ctx.fullName}
-    />
+    <>
+      <p className="mb-3 text-[13px] text-gray-600">
+        Also available as <Link href="/super-admin/governance/organisation" className="font-semibold text-teal-800 hover:underline">Organisation &amp; Appointments</Link>.
+      </p>
+      <PositionsBoard
+        board={board}
+        migrationApplied={board.migrationApplied}
+        canAdminister={ctx.isOwner && board.migrationApplied}
+        isOwner={ctx.isOwner}
+        viewerName={ctx.fullName}
+      />
+    </>
   );
 }

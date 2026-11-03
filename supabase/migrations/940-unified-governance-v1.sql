@@ -342,15 +342,15 @@ $$;
 -- ---- 3. the initial organisation (nobody appointed) -----------------------------------------------------
 
 insert into hq_position (code, space, name, description) values
-  ('chief_executive_officer', 'executive', 'Chief Executive Officer (CEO)',
+  ('chief_executive_officer', 'executive', 'Chief Executive Officer, CEO',
    'Leads Competen Holdings. Holds the standard content-governance profile across every product'),
-  ('chief_technology_product_officer', 'executive', 'Chief Technology and Product Officer (CTPO)',
+  ('chief_technology_product_officer', 'executive', 'Chief Technology and Product Officer, CTPO',
    'Leads platform engineering and product. Holds the standard content-governance profile'),
-  ('chief_clinical_academic_officer', 'executive', 'Chief Clinical and Academic Officer (CCAO)',
+  ('chief_clinical_academic_officer', 'executive', 'Chief Clinical and Academic Officer, CCAO',
    'Leads clinical standards, competency and academic assessment. Holds the standard profile with clinical approval'),
-  ('chief_operations_finance_officer', 'executive', 'Chief Operations and Finance Officer (COFO)',
+  ('chief_operations_finance_officer', 'executive', 'Chief Operations and Finance Officer, COFO',
    'Leads finance, administration, commercial and partnerships. Holds the standard content-governance profile'),
-  ('chief_quality_governance_officer', 'executive', 'Chief Quality and Governance Officer (CQGO)',
+  ('chief_quality_governance_officer', 'executive', 'Chief Quality and Governance Officer, CQGO',
    'Leads quality, risk, governance and compliance. Holds the standard content-governance profile'),
   ('platform_engineering_manager', 'platform', 'Platform Engineering Manager',
    'Reports to the CTPO. Standard profile within the delegated scope of each appointment'),
@@ -389,12 +389,36 @@ update hq_position set scoped_appointments = true
    and scoped_appointments = false
    and not exists (select 1 from ogs_office_appointments a where a.role = hq_position.code and a.status = 'active');
 
--- The standard content-governance profile, granted one by one so a pair blocked on the target database skips
--- that one grant with a notice instead of failing the file.
+-- Every position reaches the HQ landing page (the same plain seed shape as 264 and 890, which the HQ guard harness D6 reads).
+insert into hq_position_capability (position_code, capability_code, source, grant_reason)
+select p.code, c.code, 'position_default', 'UNIFIED-GOVERNANCE-V1 HQ landing page 940'
+from (values
+  ('chief_executive_officer', 'hq.platform.home.view'),
+  ('chief_technology_product_officer', 'hq.platform.home.view'),
+  ('chief_clinical_academic_officer', 'hq.platform.home.view'),
+  ('chief_operations_finance_officer', 'hq.platform.home.view'),
+  ('chief_quality_governance_officer', 'hq.platform.home.view'),
+  ('platform_engineering_manager', 'hq.platform.home.view'),
+  ('product_experience_manager', 'hq.platform.home.view'),
+  ('clinical_standards_competency_manager', 'hq.platform.home.view'),
+  ('academic_assessment_manager', 'hq.platform.home.view'),
+  ('finance_administration_manager', 'hq.platform.home.view'),
+  ('commercial_partnerships_manager', 'hq.platform.home.view'),
+  ('quality_risk_manager', 'hq.platform.home.view'),
+  ('governance_compliance_manager', 'hq.platform.home.view')
+) as c(position_code, code)
+join (select code from hq_position) p on p.code = c.position_code
+where exists (select 1 from hq_capability y where y.code = c.code)
+  and not exists (
+    select 1 from hq_position_capability x
+    where x.position_code = p.code and x.capability_code = c.code
+  );
+
+-- The rest of the standard content-governance profile, granted one by one so a pair blocked on the target database
+-- skips that one grant with a notice instead of failing the file.
 do $$
 declare
   v_profile text[] := array[
-    'hq.platform.home.view',
     'hq.quality.governance.view',
     'hq.assessment.catalogue.view', 'hq.assessment.catalogue.manage',
     'hq.assessment.studio.view', 'hq.assessment.instrument.author', 'hq.assessment.instrument.review', 'hq.assessment.instrument.publish',
@@ -413,7 +437,7 @@ begin
          and not exists (select 1 from hq_position_capability x where x.position_code = v_pos and x.capability_code = v_cap) then
         begin
           insert into hq_position_capability (position_code, capability_code, source, grant_reason)
-          values (v_pos, v_cap, 'position_default', 'UNIFIED-GOVERNANCE-V1 standard content-governance profile (940)');
+          values (v_pos, v_cap, 'position_default', 'UNIFIED-GOVERNANCE-V1 standard content-governance profile, 940');
         exception when others then
           raise notice '940: grant % on % skipped: %', v_cap, v_pos, sqlerrm;
         end;
@@ -426,7 +450,7 @@ begin
          and not exists (select 1 from hq_position_capability x where x.position_code = v_pos and x.capability_code = v_cap) then
         begin
           insert into hq_position_capability (position_code, capability_code, source, grant_reason)
-          values (v_pos, v_cap, 'position_default', 'UNIFIED-GOVERNANCE-V1 clinical approval for the clinical and academic portfolio (940)');
+          values (v_pos, v_cap, 'position_default', 'UNIFIED-GOVERNANCE-V1 clinical approval for the clinical and academic portfolio, 940');
         exception when others then
           raise notice '940: grant % on % skipped: %', v_cap, v_pos, sqlerrm;
         end;

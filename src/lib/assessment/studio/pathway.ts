@@ -11,7 +11,7 @@ import { CAP } from "./transitions";
 import { capabilityLabel } from "./capability-labels";
 import { KIND_LABEL, type DefinitionKind, type LifecycleState, type ReviewDecisionRow, type StudioIssue } from "./types";
 
-export type StageKey = "draft" | "review" | "approved" | "published" | "retired";
+export type StageKey = "prepare" | "review" | "publish";
 export type StageStatus = "done" | "current" | "waiting" | "blocked" | "not_started";
 export interface PathwayStage { key: StageKey; label: string; status: StageStatus; role: string; note: string | null }
 
@@ -58,6 +58,8 @@ export interface PathwayModel {
   state: LifecycleState | null;
   stages: PathwayStage[];
   current: StageKey | "registered";
+  /** The internal state in words, e.g. "Awaiting independent review". */
+  stateLabel: string;
   next: PathwayNext;
   blockers: Blocker[];
   /** The groups that matter for the current step, the responsible one first. */
@@ -95,11 +97,12 @@ export interface PathwayInput {
   names: Record<string, string>;
 }
 
-const ROLE = { author: "Author", review: "Independent reviewer", domainReview: "Independent domain reviewer", publish: "Independent publisher" } as const;
+const ROLE = { author: "Author", review: "Independent reviewer", domainReview: "Independent domain reviewer", publish: "Publisher" } as const;
 const INDEPENDENCE = "Not independent: authored, edited or submitted this version or an earlier one.";
-const STAGE_LABEL: Record<StageKey, string> = { draft: "Draft", review: "Submitted for review", approved: "Approved", published: "Published", retired: "Retired" };
-const STAGE_ROLE: Record<StageKey, string> = { draft: ROLE.author, review: ROLE.review, approved: ROLE.publish, published: "", retired: "" };
-const ORDER: StageKey[] = ["draft", "review", "approved", "published", "retired"];
+const STAGE_LABEL: Record<StageKey, string> = { prepare: "Prepare", review: "Review & Approve", publish: "Publish" };
+const STAGE_ROLE: Record<StageKey, string> = { prepare: ROLE.author, review: ROLE.review, publish: ROLE.publish };
+/** The words of the five internal states, for the catalogue summary. */
+export const STATE_WORDS: Record<LifecycleState, string> = { draft: "Draft", in_review: "Awaiting independent review", approved: "Approved, awaiting publication", published: "Published", retired: "Retired" };
 
 const nameOf = (names: Record<string, string>, id: string | null | undefined) => (id ? names[id] ?? "a person" : "someone");
 const listNames = (xs: { name: string }[]) => xs.map((x) => x.name).join(", ");
@@ -114,7 +117,9 @@ export function standingOf(group: "author" | "review" | "domainReview" | "publis
   const decided = (personId: string, kind: "governance" | "domain") => i.decisions.some((d) => d.reviewer_id === personId && d.review_kind === kind && d.content_hash === i.contentHash && i.contentHash !== null);
   const actors: ActorStanding[] = holders.map((h) => {
     let conflict: string | null = null;
-    if (group !== "author") {
+    // Reviewers must be independent of the content. Publishers need not be (940): the author may publish the exact
+    // independently approved version, because independence was enforced when the approvals were recorded.
+    if (group === "review" || group === "domainReview") {
       if (i.involved.includes(h.personId)) conflict = INDEPENDENCE;
       else if (group === "review" && decided(h.personId, "governance")) conflict = "Already decided on this exact content.";
       else if (group === "domainReview" && decided(h.personId, "domain")) conflict = "Already decided on this exact content.";
@@ -124,42 +129,36 @@ export function standingOf(group: "author" | "review" | "domainReview" | "publis
   const note = !i.holders.readable ? "The appointments could not be read just now."
     : positions.length === 0 ? "No position grants this right yet."
     : holders.length === 0 ? "Nobody is appointed to these positions."
-    : actors.every((a) => !a.eligible) ? "Everyone appointed is involved in this content: another appointee must act." : null;
+    : actors.every((a) => !a.eligible) ? "Everyone appointed is involved in this content: another independent appointee must act." : null;
   return { capability: cap, capabilityLabel: capabilityLabel(cap), role: ROLE[group], positions, actors, eligible: actors.filter((a) => a.eligible).length, note };
 }
 
-/** Pure: the five stages with their status for one version (or none). */
+/**
+ * Pure: the THREE visible stages of the owner's two-person workflow (spec section 3): Prepare, Review & Approve, Publish.
+ * The five internal states stay distinct records (draft, in review, approved, published, retired): approved is the
+ * Publish stage waiting for its action, retired is the Publish stage after its version was replaced or withdrawn.
+ */
 export function stagesOf(i: Pick<PathwayInput, "state" | "versionNo" | "approval" | "requiresDomainReview" | "returned" | "supersededBy" | "submittedBy" | "names" | "authoredBy">, reviewersEligible: number, publishersEligible: number, blockers: Blocker[]): PathwayStage[] {
-  const STATE_STAGE: Record<LifecycleState, StageKey> = { draft: "draft", in_review: "review", approved: "approved", published: "published", retired: "retired" };
-  const idx = i.state ? ORDER.indexOf(STATE_STAGE[i.state]) : -1;
   const ap = i.approval;
-  return ORDER.map((key, k) => {
-    let status: StageStatus = k < idx ? "done" : k === idx ? "current" : "not_started";
-    let note: string | null = null;
-    if (key === "draft") {
-      if (i.state === null) { status = "not_started"; note = "No version yet."; }
-      else if (i.state === "draft") note = i.returned ? `Returned to draft${i.returned.by ? ` by ${nameOf(i.names, i.returned.by)}` : ""}.` : `Authored by ${i.authoredBy.map((a) => nameOf(i.names, a)).join(", ") || "an author"}.`;
-      else status = "done";
-      if (i.state === "draft" && blockers.length) status = "blocked";
-    }
-    if (key === "review") {
-      if (i.state === "in_review") {
-        status = ap?.blocked ? "blocked" : reviewersEligible === 0 ? "blocked" : "current";
-        note = ap ? `Governance approvals ${ap.governance} of ${ap.need}${i.requiresDomainReview ? `, domain ${ap.domain} of ${ap.need}` : ""}.${ap.blocked ? " A reviewer asked for changes or rejected it." : ""}` : null;
-      } else if (idx > 1) { status = "done"; note = ap ? `${plural(ap.governance, "independent approval")} recorded.` : null; }
-      else if (i.state === "draft" && i.returned) note = "Returned with notes.";
-    }
-    if (key === "approved" && i.state === "approved") { status = publishersEligible === 0 ? "blocked" : "current"; note = "Approved on the exact content. Awaiting publication."; }
-    if (key === "published") {
-      if (i.state === "published") note = "In use. Frozen: a change is a new draft.";
-      else if (i.state === "retired") status = "done";
-    }
-    if (key === "retired") {
-      if (i.state === "retired") { status = "current"; note = i.supersededBy ? `Superseded by v${i.supersededBy}.` : "Retired. No longer used for new work."; }
-      else status = "not_started";
-    }
-    return { key, label: key === "retired" && i.supersededBy ? "Superseded" : STAGE_LABEL[key], status, role: STAGE_ROLE[key], note };
-  });
+  const st = i.state;
+  const prepare: PathwayStage = {
+    key: "prepare", label: STAGE_LABEL.prepare, role: STAGE_ROLE.prepare,
+    status: st === null ? "not_started" : st === "draft" ? (blockers.length ? "blocked" : "current") : "done",
+    note: st === null ? "No version yet." : st === "draft" ? (i.returned ? `Returned to draft${i.returned.by ? ` by ${nameOf(i.names, i.returned.by)}` : ""}.` : `Authored by ${i.authoredBy.map((a) => nameOf(i.names, a)).join(", ") || "an author"}.`) : "Submitted for independent review.",
+  };
+  const review: PathwayStage = {
+    key: "review", label: STAGE_LABEL.review, role: STAGE_ROLE.review,
+    status: st === "in_review" ? (ap?.blocked ? "blocked" : reviewersEligible === 0 ? "blocked" : "current") : st === "approved" || st === "published" || st === "retired" ? "done" : "not_started",
+    note: st === "in_review" && ap ? `Governance approvals ${ap.governance} of ${ap.need}${i.requiresDomainReview ? `, domain ${ap.domain} of ${ap.need}` : ""}.${ap.blocked ? " A reviewer asked for changes or rejected it." : ""}`
+      : st === "approved" || st === "published" || st === "retired" ? (ap ? `${plural(ap.governance, "independent approval")} recorded on the exact content.` : null)
+      : st === "draft" && i.returned ? "Returned with notes." : null,
+  };
+  const publish: PathwayStage = {
+    key: "publish", label: st === "retired" ? (i.supersededBy ? "Superseded" : "Retired") : STAGE_LABEL.publish, role: STAGE_ROLE.publish,
+    status: st === "approved" ? (publishersEligible === 0 ? "blocked" : "current") : st === "published" || st === "retired" ? "done" : "not_started",
+    note: st === "approved" ? "Approved on the exact content. Awaiting publication." : st === "published" ? "In use. Frozen: a change is a new draft." : st === "retired" ? (i.supersededBy ? `Superseded by v${i.supersededBy}.` : "Retired. No longer used for new work.") : null,
+  };
+  return [prepare, review, publish];
 }
 
 /** Pure: what stands between this version and its next stage, with the fix. Actor-independent. */
@@ -187,7 +186,7 @@ export function blockersOf(i: PathwayInput, reviewers: WhoCanAct, domainReviewer
   }
   if (i.state === "approved") {
     if (i.kind === "instrument" && i.deliveryModes.length === 0) out.push({ text: "A checklist cannot be published without a delivery mode.", fix: "Return to draft and choose a delivery mode." });
-    if (publishers.eligible === 0) out.push({ text: "No eligible independent publisher.", fix: publishers.note ?? "Everyone who can publish is involved in this content: appoint another publisher." });
+    if (publishers.eligible === 0) out.push({ text: "Nobody can publish.", fix: publishers.note ?? "Appoint a holder of the publish capability." });
   }
   return out;
 }
@@ -212,7 +211,7 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
   if (i.state === null || !av || !ap) {
     const canAct = holdsAuthor;
     return {
-      kind: i.kind, versionNo: null, state: null, stages, current: "registered",
+      kind: i.kind, versionNo: null, state: null, stages, current: "registered", stateLabel: "Registered, no version yet",
       next: {
         headline: `Create the first draft of this ${label.toLowerCase()}.`,
         detail: `It is registered with its permanent code and has no content yet. An author creates version 1 in Checklist Studio, completes it, then submits it for review.`,
@@ -231,7 +230,7 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
     const whoReviews = reviewers.eligible ? ` Reviewers who can approve: ${eligibleNames(reviewers)}.` : reviewers.note ? ` ${reviewers.note}` : "";
     const edit = holdsAuthor && !can && blockers.length > 0;
     return {
-      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "draft",
+      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "prepare", stateLabel: i.returned ? "Returned for correction" : STATE_WORDS.draft,
       next: {
         headline: blockers.length ? `Complete ${v}, then submit it for review.` : `Submit ${v} for review.`,
         detail: blockers.length ? `${plural(blockers.length, "thing")} to settle first (below). Submitting freezes the content and asks an independent reviewer to approve it.` : `Submitting freezes the content and asks an independent reviewer to approve it.${whoReviews}`,
@@ -258,7 +257,7 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
     const domainOn = i.requiresDomainReview && !ap.domainMet ? (domainReviewers.eligible ? ` Domain review: ${eligibleNames(domainReviewers)}.` : ` ${domainReviewers.note ?? "No domain reviewer available."}`) : "";
     const ready = ap.governanceMet && ap.domainMet && !ap.blocked;
     return {
-      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "review",
+      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "review", stateLabel: STATE_WORDS.in_review,
       next: {
         headline: ap.blocked ? `Return ${v} to draft and address the notes.` : ready ? `Mark ${v} approved.` : `Approve or return ${v}.`,
         detail: ap.blocked ? "A reviewer rejected it or asked for changes on this exact content. An author returns it to draft, edits and submits again."
@@ -279,11 +278,11 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
     const can = av.publish.allowed;
     const whoPublishes = publishers.eligible ? `${eligibleNames(publishers)} can publish.` : publishers.note ?? "Nobody can publish yet.";
     return {
-      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "approved",
+      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "publish", stateLabel: STATE_WORDS.approved,
       next: {
-        headline: `Publish ${v}.`, detail: `Approved on the exact content. Publishing makes it the version in use${i.kind === "instrument" ? " and retires the previous published version" : ""}. ${whoPublishes}`,
+        headline: `Publish ${v}.`, detail: `Independently approved on this exact content${i.involved.includes(i.actorId) ? ", so you may publish it even though you authored it" : ""}. Publishing makes it the version in use${i.kind === "instrument" ? " and retires the previous published version" : ""}. ${whoPublishes}`,
         action: can ? { kind: "publish", label: `Publish ${v}` } : null, responsible: ROLE.publish,
-        viewer: { canAct: can, reason: can ? null : i.involved.includes(i.actorId) ? "You authored, edited or submitted this version (or an earlier one), so another appointee must publish it." : av.publish.reason },
+        viewer: { canAct: can, reason: can ? null : av.publish.reason },
       },
       blockers, who: [publishers, reviewers, authors],
       prompt: { moment: "approved", text: `Ready to publish: ${whoPublishes}` },
@@ -297,7 +296,7 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
       : "Published and in use. To change it, duplicate to a new draft and take the new version through review.";
     const catalogue = i.kind === "instrument" && i.catalogueAvailability !== true;
     return {
-      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "published",
+      kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "publish", stateLabel: STATE_WORDS.published,
       next: {
         headline: catalogue ? "Set product availability in the catalogue." : `${v} is published.`,
         detail: text,
@@ -312,7 +311,7 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
   // ---- retired ----------------------------------------------------------------------------------------------------
   const text = i.supersededBy ? `Retired: v${i.supersededBy} supersedes it.` : "Retired. It is kept for the record and no longer used for new work.";
   return {
-    kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "retired",
+    kind: i.kind, versionNo: i.versionNo, state: i.state, stages, current: "publish", stateLabel: i.supersededBy ? `Superseded by v${i.supersededBy}` : STATE_WORDS.retired,
     next: { headline: text, detail: av.duplicate.allowed ? "To start again from this content, duplicate it to a new draft." : "", action: av.duplicate.allowed ? { kind: "duplicate", label: "Duplicate to a new draft" } : null, responsible: "", viewer: { canAct: true, reason: null } },
     blockers, who: [authors], prompt: { moment: "retired", text },
   };
@@ -336,10 +335,9 @@ export interface PathwaySummary {
 }
 
 export function summarize(m: PathwayModel): PathwaySummary {
-  const stage = m.stages.find((s) => s.status === "current" || s.status === "blocked") ?? null;
   const lead = m.who[0];
   return {
-    state: m.state, versionNo: m.versionNo, stageLabel: m.state === null ? "Registered, no version yet" : stage?.label ?? "",
+    state: m.state, versionNo: m.versionNo, stageLabel: m.stateLabel,
     stages: m.stages.map((s) => ({ key: s.key, label: s.label, status: s.status })),
     headline: m.next.headline, detail: m.next.detail, responsible: m.next.responsible,
     who: lead ? lead.actors.filter((a) => a.eligible).map((a) => a.name) : [], whoNote: lead?.note ?? null,

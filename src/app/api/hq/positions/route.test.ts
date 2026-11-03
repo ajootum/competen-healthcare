@@ -65,6 +65,14 @@ describe("POST /api/hq/positions", () => {
     expect(rpcCalls.map(c => c.fn)).toEqual(["hq_position_admin_end_grant"]);
   });
 
+  it("sets a reporting line through the audited function, never from a body-supplied actor", async () => {
+    const r = await post({ action: "set_reports_to", code: "quality_manager", reportsTo: "chief_quality_governance_officer", reason, p_actor: "22222222-2222-4222-8222-222222222222" });
+    expect(r.status).toBe(200);
+    expect(rpcCalls.map(c => c.fn)).toEqual(["hq_position_admin_set_reports_to"]);
+    expect(rpcCalls[0].args).toMatchObject({ p_actor: OWNER, p_code: "quality_manager", p_reports_to: "chief_quality_governance_officer" });
+    expect((await post({ action: "set_reports_to", code: "quality_manager", reportsTo: "quality_manager", reason })).status).toBe(400);
+  });
+
   it("says 'not applied' when migration 500 is absent", async () => {
     rpcResult = { data: null, error: { code: "PGRST202", message: "Could not find the function public.hq_position_admin_create" } };
     const r = await post({ action: "create", code: "competency_author", space: "quality", name: "Competency Author", reason });

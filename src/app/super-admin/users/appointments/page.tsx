@@ -1,7 +1,7 @@
 import { requireHqCapability } from "@/lib/hq/context";
-import { loadHqAppointmentBoard, countHolders, type Read } from "@/lib/hq/appointments";
-import AppointmentsBoard, { type PersonOption } from "./AppointmentsBoard";
-import { loadClassifications, typeCounts, typeOf } from "@/lib/hq/account-classification";
+import Link from "next/link";
+import AppointmentsBoard from "./AppointmentsBoard";
+import { loadAppointmentsData } from "./load-appointments";
 
 /**
  * Competen HQ — Position appointments.
@@ -32,36 +32,23 @@ import { loadClassifications, typeCounts, typeOf } from "@/lib/hq/account-classi
 export default async function HqAppointmentsPage() {
   const ctx = await requireHqCapability("hq.platform.users.view");
 
-  const board = await loadHqAppointmentBoard(ctx.admin);
-
-  // The person picker. ⚠ A FAILED READ IS NOT AN EMPTY LIST: an empty <select> would read as "there is
-  // nobody in this product to appoint", which is a sentence about the data rather than about the query.
-  // ⚠ ONLY REAL PEOPLE ARE OFFERED (owner, 29 Oct 2026). An HQ position is held by a person, so the picker lists
-  // accounts classified Human (migration 650) and nothing else: demo, test, system and unclassified accounts are
-  // left out and counted, never silently dropped. If the classification cannot be read, the picker says so rather
-  // than offer every account.
-  const [{ data: profiles, error: peopleErr }, classes] = await Promise.all([
-    ctx.admin.from("profiles").select("id, full_name, email, role").order("full_name").limit(2000),
-    loadClassifications(ctx.admin),
-  ]);
-  const everyone = ((profiles ?? []) as { id: string; full_name: string | null; email: string | null; role: string | null }[]);
-  const people: Read<PersonOption[]> = peopleErr
-    ? { ok: false, error: peopleErr.message }
-    : !classes.available
-      ? { ok: false, error: "Account classification could not be read, so real people cannot be told apart from demo and test accounts." }
-      : { ok: true, value: everyone.filter(p => typeOf(classes, p.id) === "human").map(p => ({ id: p.id, name: p.full_name, email: p.email, role: p.role })) };
-  const notListed = classes.available && !peopleErr ? typeCounts(everyone.filter(p => typeOf(classes, p.id) !== "human").map(p => p.id), classes) : null;
+  const data = await loadAppointmentsData(ctx);
 
   return (
-    <AppointmentsBoard
-      board={board}
-      people={people}
-      canAppoint={ctx.isOwner}
-      viewerId={ctx.userId}
-      viewerName={ctx.fullName}
-      holdingNow={countHolders(board, h => h.grantsAccess)}
-      onRosterOnly={countHolders(board, h => !h.grantsAccess)}
-      notListed={notListed ? { demo: notListed.demo, test: notListed.test, system: notListed.system, unclassified: notListed.unclassified } : null}
-    />
+    <>
+      <p className="mb-3 text-[13px] text-gray-600">
+        Also available as <Link href="/super-admin/governance/organisation?tab=appointments" className="font-semibold text-teal-800 hover:underline">Organisation &amp; Appointments</Link>.
+      </p>
+      <AppointmentsBoard
+        board={data.board}
+        people={data.people}
+        canAppoint={ctx.isOwner}
+        viewerId={ctx.userId}
+        viewerName={ctx.fullName}
+        holdingNow={data.holdingNow}
+        onRosterOnly={data.onRosterOnly}
+        notListed={data.notListed}
+      />
+    </>
   );
 }

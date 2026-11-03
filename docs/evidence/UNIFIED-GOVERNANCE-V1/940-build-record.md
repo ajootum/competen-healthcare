@@ -5,15 +5,16 @@ Owner spec and GO, 3 Nov 2026 ("Competen Holdings — Unified Governance V1, App
 | State | Status |
 |---|---|
 | 1. Authored | Done (branch `asmt/pathway-01`, worktree competen-asmt-path). House rules ALL CLEAR (4 non-blocking APPLY-WHOLE warnings). |
-| 2. Applied and verified on staging ×2 | **PASS 3 Nov 2026** (this session, staging ezhvpgtcqcdsgylrxgdb via run-staging-sql.mjs): apply #1 committed, apply #2 committed (idempotent), VERIFY 12/12; ROLLBACK rehearsed (committed), the 890 guard restored from 890's own text, VERIFY then errors on the dropped `reports_to` column (expected), re-apply #1 and #2 committed, VERIFY 12/12. Left APPLIED. |
+| 2. Applied and verified on staging ×2 | **PASS 3 Nov 2026** (this session, staging ezhvpgtcqcdsgylrxgdb via run-staging-sql.mjs): apply #1 committed, apply #2 committed (idempotent), VERIFY 12/12; ROLLBACK rehearsed (committed), the 890 guard restored from 890's own text, VERIFY then errors on the dropped `reports_to` column (expected), re-apply #1 and #2 committed, VERIFY 12/12. The file then changed (executive names without parentheses and the landing-page grant as a plain seed so the HQ guard harness D5/D6 read it); staging names were aligned by a one-off UPDATE and the FINAL file (sha below) was applied twice more, VERIFY 12/12. Left APPLIED. One staging-only difference remains: the landing-page grants carry the earlier grant_reason text, which the 500 guard rightly refuses to rewrite. |
 | 3. Merged into main | Not yet. |
 | 4. Applied to production | **Not applied.** Separate owner GO. The owner applies it by hand in the SQL editor. |
 
-**sha256 of the file to stage and to apply:** `6f3f88cc4d825932feaea634062ed291b50848e3e0e5d7c0314a56f02226a637` (LF, ASCII, 440 lines).
+**sha256 of the file to stage and to apply:** `0cfc66f254acb91d8f48ac575cdca27692e80dca986184c790f4e74762661378` (LF, ASCII, 464 lines).
 
 | Companion file | sha256 (first 8) |
 |---|---|
 | VERIFY-940.sql | a0d500f8 |
+| hq-guard-harness (reads the seed) | S4, D5, D6 PASS; G5 is pre-existing on staging (the harness writes a fixture appointment without 641's authorised_by) |
 | ROLLBACK-940.sql | a107e45a |
 
 **Application order and dependencies.** After 930. Needs 264, 040, 500, 640, 641 and 890 (all in production). Additive except the one function replaced whole (asmt_version_lifecycle_guard, see below). Re-running it is a no-op. Appoints nobody, ends no grant, changes no existing appointment, decision or event.

@@ -19,7 +19,7 @@ export default function PathwaySummaryCard({ summary: s, studioHref, studioLabel
   return (
     <div className="rounded-xl border border-teal-200 bg-teal-50/40 p-3" data-testid="pathway-summary">
       <p className="text-[11px] font-bold uppercase tracking-wide text-teal-900">Pathway to publication · {s.stageLabel}</p>
-      <ol className="mt-2 grid grid-cols-5 gap-1" aria-label="Pathway stages">
+      <ol className="mt-2 grid grid-cols-3 gap-1" aria-label="Pathway stages">
         {s.stages.map((st, i) => (
           <li key={st.key} className={`rounded-md border border-l-4 px-1.5 py-1 ${TONE[st.status]}`}>
             <p className="text-[10px] font-bold uppercase leading-tight">{i + 1}. {st.label}</p>
