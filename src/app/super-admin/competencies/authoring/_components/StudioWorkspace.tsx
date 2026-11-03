@@ -118,6 +118,7 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
   const [open, setOpen] = useState<Set<string>>(() => new Set(all.find(x => x.c.id === (initialId ?? all[0]?.c.id))?.d.id ? [all.find(x => x.c.id === (initialId ?? all[0]?.c.id))!.d.id] : []));
   const [q, setQ] = useState("");
   const [picked, setPicked] = useState<Set<string>>(new Set());
+  const [foldedAreas, setFoldedAreas] = useState<Set<string>>(new Set()); // Area headings folded shut (a search shows everything)
   const [mode, setMode] = useState<"tree" | "map">("tree");
   const [showPublished, setShowPublished] = useState(false);
   const revOpen = !!revision?.open;
@@ -131,6 +132,10 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
     const u = new URL(window.location.href); u.searchParams.set("c", id); window.history.replaceState(null, "", u.toString());
   }
   const toggle = (set: Set<string>, id: string) => { const n = new Set(set); if (n.has(id)) n.delete(id); else n.add(id); return n; };
+  // Select all: a competency can be ticked when it matches the search and, with a revision open, is in the revision draft.
+  const selectable = (c: StudioCompetency) => match(c) && !(revOpen && !c.rev);
+  const selectableIds = (comps: readonly StudioCompetency[]) => comps.filter(selectable).map(c => c.id);
+  const allSelectable = all.filter(x => selectable(x.c)).map(x => x.c.id);
 
   // ── reordering ──
   const [saving, setSaving] = useState(false);
@@ -416,6 +421,16 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
                   </button>
                   {reorderLists && rx.buttons(dg, di)}
                 </div>
+                {isOpen && selectableIds(comps).length > 1 && (
+                  <div className="mx-3 mb-1 flex flex-wrap items-center gap-3">
+                    <button type="button" className={`${link} pointer-coarse:min-h-[var(--cmp-touch-min)]`} aria-label={`Select all competencies in ${d.name}`}
+                      onClick={() => setPicked(s => selectAllIn(s, selectableIds(comps)))}>Select all {selectableIds(comps).length}</button>
+                    {selectableIds(comps).some(id => picked.has(id)) && (
+                      <button type="button" className={`${link} pointer-coarse:min-h-[var(--cmp-touch-min)]`} aria-label={`Clear the selection in ${d.name}`}
+                        onClick={() => setPicked(s => { const ids = new Set(selectableIds(comps)); return new Set([...s].filter(id => !ids.has(id))); })}>Clear</button>
+                    )}
+                  </div>
+                )}
                 {isOpen && organiseLists && hasAreas && (
                   <MoveSelect className="mx-3 mb-1" label={`Move ${d.name} to Area…`} busy={busy} options={areaOptions(areaId)}
                     onMove={v => void organiseMove({ action: "set_domain_area", domainId: d.id, areaId: v === "__none" ? null : v })} />
@@ -451,20 +466,23 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
             if (!hasAreas) return <Fragment key="all">{rendered}</Fragment>;
             if (query && rendered.every(x => x === null)) return null;
             const hid = `area-h-${areaId ?? "none"}`;
+            const areaKey = areaId ?? "none";
+            const areaOpen = !!query || !foldedAreas.has(areaKey);
             return (
               <section key={areaId ?? "none"} aria-labelledby={hid} {...(organiseLists ? { "data-drop-area": areaId ?? "none" } : {})} className={`mb-1 ${over === aTag ? overCls : ""}`}>
                 <AreaHeading headingId={hid} name={grp.area?.name ?? "Unassigned"} count={grp.domains.length} busy={busy}
+                  expanded={areaOpen} onToggle={() => setFoldedAreas(s => toggle(s, areaKey))}
                   organise={organiseLists && !!grp.area} rowProps={organiseLists && grp.area ? rx.row(areaGroup, gi) : undefined} grip={organiseLists && grp.area ? rx.grip(areaGroup, gi) : undefined} buttons={organiseLists && grp.area ? rx.buttons(areaGroup, gi) : undefined}
                   onRename={name => act({ action: "rename_area", areaId, name }, `Renamed the Area to ${name}.`, v => ({ ...v, areas: v.areas.map(a => (a.id === areaId ? { ...a, name } : a)) }))}
                   onDelete={() => { if (areaId && window.confirm(`Delete the empty Area ${grp.area!.name}?`)) void act({ action: "delete_area", areaId }, `Deleted the Area ${grp.area!.name}.`, v => ({ ...v, areas: v.areas.filter(a => a.id !== areaId) })); }} />
-                {bulk && grp.domains.length > 0 && (
+                {areaOpen && bulk && grp.domains.length > 0 && (
                   <div className="px-3 pb-1">
                     <button type="button" className={`${link} pointer-coarse:min-h-[var(--cmp-touch-min)]`} disabled={busy} onClick={() => setPickedDomains(selectAllIn(pickedNow, grp.domains.map(d => d.id)))}
                       aria-label={grp.area ? `Select all domains in ${grp.area.name}` : "Select all unassigned domains"}>{grp.area ? "Select all" : "Select all unassigned"}</button>
                   </div>
                 )}
-                {rendered}
-                {!grp.domains.length && <p className="px-3 py-2 text-[12px] text-gray-600">No domain in this Area. {organiseLists ? "Drag a domain here, or use Move to Area on a domain." : ""}</p>}
+                {areaOpen && rendered}
+                {areaOpen && !grp.domains.length && <p className="px-3 py-2 text-[12px] text-gray-600">No domain in this Area. {organiseLists ? "Drag a domain here, or use Move to Area on a domain." : ""}</p>}
               </section>
             );
           })}
@@ -505,6 +523,11 @@ export default function StudioWorkspace({ frameworkId, domains: domainsIn, level
           </p>
           <span className="flex items-center gap-3">
             <span className="text-[12.5px] text-gray-700">{picked.size} selected</span>
+            {allSelectable.length > 0 && picked.size < allSelectable.length && (
+              <button type="button" className={link} aria-label={query ? "Select all competencies shown" : "Select all competencies"}
+                onClick={() => setPicked(s => selectAllIn(s, allSelectable))}>{query ? "Select all shown" : "Select all"}</button>
+            )}
+            {picked.size > 0 && <button type="button" className={link} aria-label="Clear the selection" onClick={() => setPicked(clearSelection())}>Clear</button>}
             <ReviewButton frameworkId={frameworkId} scope={{ kind: "competencies", ids: [...picked] }} revision={revOpen} label="Review selected →" className={link} disabled={!picked.size || !editable} />
           </span>
         </div>
