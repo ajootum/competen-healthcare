@@ -1,5 +1,6 @@
 import { latestPerRef, type PlanEvent } from "../learning-plan/types";
 import type { UnstartedSection } from "./study-plan";
+import { estimateBasis, parseStoredUnits, storedOrdinals, unitTotals, type ProposedUnit, type StoredUnit, type UnitTotals } from "./plan-units";
 
 // ── THE PLAN PROPOSAL ── PLP-01..04 (owner GO 2 Nov 2026), design gaps 5 ─────────────────────────────────────────────
 //
@@ -12,6 +13,13 @@ import type { UnstartedSection } from "./study-plan";
 // (kind proposal, ref the material id). An ACCEPTED material feeds the plan: its unstarted sections, in order, with a topic
 // already planned from an earlier accepted material counted once (all source materials are kept as references).
 //
+// SCHOLAR-PLAN-UNITS-01 (owner, 3 Nov 2026): where the material's text can be read, the proposal is made of LEARNING UNITS
+// (plan-units.ts: contiguous runs of sections that teach one thing, grouped by the Learn planner) with a workload estimated
+// per unit from the text (reading, learning, revision and practice apart) and its basis stated. The learner reviews the
+// units (merge, split, exclude, put first) before they are added. What is accepted is stored WITH the proposal event
+// (value.units, by section ordinals), so My Plan schedules units, not every section. A material whose text could not be
+// read keeps the older section count x minutes estimate.
+//
 // ⚠ A proposal is a suggestion about TIME. It says nothing about how well the learner knows the material.
 
 /** The starting guess when nothing is saved: the same 30 minutes, 5 days a week as My Plan's starting plan (plan-settings.ts STARTING_PLAN). */
@@ -20,11 +28,14 @@ export const REVISION_OFFSETS = [1, 3, 7] as const;
 export type ProposalDecision = "accepted" | "declined" | "deferred";
 export const isProposalDecision = (x: unknown): x is ProposalDecision => x === "accepted" || x === "declined" || x === "deferred";
 
+/** Pure. "2 h 15 min" / "45 min": a workload in few words. */
+export const hoursWords = (m: number): string => { const n = Math.max(0, Math.round(m)); return n < 60 ? `${n} min` : `${Math.floor(n / 60)} h${n % 60 ? ` ${n % 60} min` : ""}`; };
+
 /** The topic key: case, accents and punctuation do not make a different topic. */
 export const topicKey = (t: string) => t.toLowerCase().normalize("NFKD").replace(/[^a-z0-9 ]/g, "").replace(/\s+/g, " ").trim();
 
-export type SectionIn = { chunkId: string; ordinal: number; /** Topics found in the section (the learner's corrections included). */ topics: readonly string[]; started?: boolean; /** The section's own first line (a slide or page heading), used when no topic has been found yet. */ heading?: string | null };
-export type MaterialIn = { materialId: string; title: string; sections: readonly SectionIn[] };
+export type SectionIn = { chunkId: string; ordinal: number; /** Topics found in the section (the learner's corrections included). */ topics: readonly string[]; started?: boolean; /** The section's own first line (a slide or page heading), used when no topic has been found yet. */ heading?: string | null; pageFrom?: number | null; pageTo?: number | null };
+export type MaterialIn = { materialId: string; title: string; sections: readonly SectionIn[]; unit?: "page" | "slide" | "section"; /** The learning units the learner accepted (SCHOLAR-PLAN-UNITS-01), where the acceptance carried them. */ units?: readonly StoredUnit[] | null };
 export type TopicRef = { key: string; label: string; materialIds: string[]; sections: number };
 
 /** The label a section is planned under: its first topic, else "Section n" (n = its place in its material). */
@@ -59,6 +70,11 @@ export type PlanProposal = {
   /** Sections of the material, and how many of them are new to the plan (not a topic an earlier accepted material already plans). */
   sectionCount: number; newSections: number;
   workloadMinutes: number;
+  /** SCHOLAR-PLAN-UNITS-01: the proposed learning units, their totals and the basis of the estimates (null where the text could not be read). */
+  units: ProposedUnit[] | null;
+  totals: UnitTotals | null;
+  basis: string[];
+  unit: "page" | "slide" | "section";
   sessions: { sessionMinutes: number; daysPerWeek: number; sessionsNeeded: number; weeksNeeded: number; usingDefaults: boolean };
   revisionPoints: { afterDays: number; label: string }[];
   topics: TopicRef[];
@@ -77,6 +93,8 @@ export function buildProposal(o: {
   settings: { sessionMinutes: number; daysPerWeek: number } | null;
   sectionMinutes: number;
   firstPlan: boolean;
+  /** The learning units built from the material's text (plan-units-build.ts), or null / empty where it could not be read. */
+  units?: readonly ProposedUnit[] | null;
 }): PlanProposal {
   const have = new Map<string, string[]>();
   for (const t of dedupeTopics(o.earlier)) have.set(t.key, t.materialIds);
@@ -93,21 +111,30 @@ export function buildProposal(o: {
     if (!dup) fresh++;
     sequence.push({ chunkId: s.chunkId, ordinal: s.ordinal, label, minutes: dup ? 0 : o.sectionMinutes, coveredIn: covered });
   });
-  const workloadMinutes = fresh * o.sectionMinutes;
+  const units = o.units?.length ? [...o.units] : null;
+  const totals = units ? unitTotals(units) : null;
+  const unit = o.material.unit ?? "section";
+  const workloadMinutes = totals ? totals.total : fresh * o.sectionMinutes;
   const usingDefaults = !o.settings;
   const { sessionMinutes, daysPerWeek } = o.settings ?? DEFAULT_SESSION;
   const sessionsNeeded = workloadMinutes > 0 ? Math.ceil(workloadMinutes / Math.max(1, sessionMinutes)) : 0;
   const weeksNeeded = sessionsNeeded > 0 ? Math.ceil(sessionsNeeded / Math.max(1, daysPerWeek)) : 0;
   const revisionPoints = REVISION_OFFSETS.map(d => ({ afterDays: d, label: d === 1 ? "Revise the day after you first study a topic" : `Revise ${d} days after you first study a topic` }));
   const topics = dedupeTopics([...o.earlier, o.material]).filter(t => t.materialIds.includes(o.material.materialId));
+  const sessionsPart = `${sessionsNeeded} ${sessionsNeeded === 1 ? "session" : "sessions"} of ${sessionMinutes} minutes${usingDefaults ? " (a starting suggestion: you can change it)" : ""}, about ${weeksNeeded} ${weeksNeeded === 1 ? "week" : "weeks"} at ${daysPerWeek} ${daysPerWeek === 1 ? "day" : "days"} a week.`;
   const summary = o.material.sections.length === 0
     ? "These notes have no sections to plan yet."
-    : fresh === 0
+    : fresh === 0 && !totals
       ? "Everything in these notes is a topic your plan already covers from your other notes."
-      : `${fresh} ${fresh === 1 ? "section" : "sections"} to plan, about ${workloadMinutes} minutes in all: ${sessionsNeeded} ${sessionsNeeded === 1 ? "session" : "sessions"} of ${sessionMinutes} minutes${usingDefaults ? " (a starting suggestion: you can change it)" : ""}, about ${weeksNeeded} ${weeksNeeded === 1 ? "week" : "weeks"} at ${daysPerWeek} ${daysPerWeek === 1 ? "day" : "days"} a week.`;
+      : totals
+        ? `${totals.sections} ${totals.sections === 1 ? "section" : "sections"} grouped into ${totals.planned} learning ${totals.planned === 1 ? "unit" : "units"}, about ${hoursWords(totals.total)} in all (reading ${hoursWords(totals.reading)}, learning ${hoursWords(totals.learning)}, revision ${hoursWords(totals.revision)}, practice ${hoursWords(totals.practice)}): ${sessionsPart}`
+        : `${fresh} ${fresh === 1 ? "section" : "sections"} to plan, about ${workloadMinutes} minutes in all: ${sessionsPart}`;
+  const basis = totals && units
+    ? estimateBasis(totals, { unread: units.reduce((n, u) => n + u.estimate.unread, 0), imageSlides: units.reduce((n, u) => n + u.estimate.imageSlides, 0), unit })
+    : [`${o.sectionMinutes} minutes a section: the text of these notes could not be read, so the time is a fixed allowance set by Competen.`];
   return {
     materialId: o.material.materialId, title: o.material.title, firstPlan: o.firstPlan, sequence, sectionCount: o.material.sections.length, newSections: fresh,
-    workloadMinutes, sessions: { sessionMinutes, daysPerWeek, sessionsNeeded, weeksNeeded, usingDefaults }, revisionPoints, topics, summary,
+    workloadMinutes, units, totals, basis, unit, sessions: { sessionMinutes, daysPerWeek, sessionsNeeded, weeksNeeded, usingDefaults }, revisionPoints, topics, summary,
   };
 }
 
@@ -135,6 +162,25 @@ export function acceptedUnstarted(accepted: readonly MaterialIn[], mapped: reado
   const byTopic = new Map<string, UnstartedSection>();
   for (const m of out) { const k = topicKey(m.label); if (k && !byTopic.has(k)) byTopic.set(k, m); }
   for (const mat of accepted) {
+    // SCHOLAR-PLAN-UNITS-01: an acceptance that carries learning units adds ONE entry per unit the learner kept (the ones put first
+    // before the rest, each in document order), opening all of the unit's sections. A unit every section of which has practice is done.
+    const units = mat.units ? parseStoredUnits({ units: mat.units }) : null;
+    if (units) {
+      const byOrdinal = new Map(mat.sections.map(s => [s.ordinal, s]));
+      const kept = units.filter(u => !u.x);
+      for (const u of [...kept.filter(u => u.p), ...kept.filter(u => !u.p)]) {
+        const secs = storedOrdinals(u).map(n => byOrdinal.get(n)).filter((s): s is SectionIn => !!s);
+        if (!secs.length || secs.every(s => s.started) || secs.every(s => byChunk.has(s.chunkId))) continue;
+        const label = u.t;
+        const k = topicKey(label);
+        const prior = k ? byTopic.get(k) : undefined;
+        if (prior) { prior.materialIds = [...new Set([...(prior.materialIds ?? []), mat.materialId])]; continue; }
+        const unit: UnstartedSection = { chunkId: secs[0].chunkId, label, competencyTitle: null, materialIds: [mat.materialId], kind: "unit", chunkIds: secs.map(s => s.chunkId), sections: secs.length, minutes: u.m ?? null };
+        out.push(unit); secs.forEach(s => byChunk.add(s.chunkId));
+        if (k) byTopic.set(k, unit);
+      }
+      continue;
+    }
     mat.sections.slice().sort((a, b) => a.ordinal - b.ordinal || a.chunkId.localeCompare(b.chunkId)).forEach((s, i) => {
       if (s.started || byChunk.has(s.chunkId)) return;
       const label = sectionLabel(s, i);

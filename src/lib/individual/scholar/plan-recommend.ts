@@ -3,7 +3,7 @@ import { dayNumber } from "../learning-plan/recurrence";
 import { latestPerRef, type Occurrence, type PlanEvent, type PlanItem, type ScholarPlanSettings } from "../learning-plan/types";
 import type { MasteryEntry } from "./mastery";
 import { topicKey } from "./plan-proposal";
-import { acc, learnHref, noun, refKey, reviseHref, topicApply, topicLearn, topicRevise, type PlanSpace, type StudyPlanResult, type UnstartedSection } from "./study-plan";
+import { acc, learnHref, noun, refKey, reviseHref, topicApply, topicLearn, topicRevise, unstartedHref, unstartedReason, type PlanSpace, type StudyPlanResult, type UnstartedSection } from "./study-plan";
 
 // ── THE NEXT-ACTIVITY ENGINE ── PLP-01..04 (owner GO 2 Nov 2026), design gap 6 (Level 2, deterministic) ───────────
 //
@@ -212,10 +212,10 @@ export function candidatesByRule(i: RecommendInput): Record<RuleId, PlanRecommen
   for (const s of i.coverage.slice(0, 3)) {
     out.coverage.push(mk({
       rule: "coverage", space: "learn", ref: `learn:${/^[0-9a-f-]{36}$/i.test(s.chunkId) ? s.chunkId.toLowerCase() : refKey(s.chunkId)}`, title: `Start on ${s.label}`, minutes: minutesFor(`learn:${s.chunkId.toLowerCase()}`),
-      href: learnHref(`section=${s.chunkId}`), topics: [topicKey(s.label), ...(s.materialIds ?? []).map(topicKey)],
-      why: s.competencyTitle ? `This section is linked to ${s.competencyTitle} and is in your plan with no practice yet.` : "This section of your notes is in your plan and has no practice yet.",
+      href: unstartedHref(s), topics: [topicKey(s.label), ...(s.materialIds ?? []).map(topicKey)],
+      why: s.kind === "unit" ? unstartedReason(s).replace(/ has no practice yet/, " is in your plan with no practice yet") : s.competencyTitle ? `This section is linked to ${s.competencyTitle} and is in your plan with no practice yet.` : "This section of your notes is in your plan and has no practice yet.",
       whyNow: "Working through your notes in order keeps the whole plan covered.",
-      ifPostponed: "It stays next in line and the sections after it wait too.",
+      ifPostponed: s.kind === "unit" ? "It stays next in line and the units after it wait too." : "It stays next in line and the sections after it wait too.",
       fingerprint: `coverage:${s.chunkId}`,
     }));
   }

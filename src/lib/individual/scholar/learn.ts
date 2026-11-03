@@ -132,12 +132,16 @@ function likeness(a: Unit, b: Unit): number {
  *      likeness, and each lesson costs its squared distance from the target size (the run's size over maxSteps).
  * Without profiles (text not read) every section counts as an ordinary one with no heading, and topics alone decide.
  */
-export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<string, readonly string[]>, maxSteps: number, profiles: ReadonlyMap<string, SectionProfile> = new Map()): { steps: LearningStep[]; coverage: { sections: number; of: number } } {
+/** SCHOLAR-PLAN-UNITS-01: how a caller may tune the cuts. Learn uses the defaults; My Plan's learning units weigh a cut between alike neighbours more and allow a longer unit. */
+export type PlanStepsOptions = { cutWeight?: number; maxSections?: number; maxChars?: number; /** Heading stems that say nothing here (a word most of the material's headings carry, "care" in a nursing deck): not compared. */ ignoreStems?: ReadonlySet<string>; /** When a thin section carries the previous one on: "all" (every heading word is the previous heading's, Learn's rule) or "any" (one shared word is enough: a chapter's picture slides stay with it). */ thinJoin?: "all" | "any" };
+export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<string, readonly string[]>, maxSteps: number, profiles: ReadonlyMap<string, SectionProfile> = new Map(), opts: PlanStepsOptions = {}): { steps: LearningStep[]; coverage: { sections: number; of: number } } {
   const max = Math.max(1, Math.floor(maxSteps));
+  const cutWeight = opts.cutWeight ?? CUT_WEIGHT, maxSections = opts.maxSections ?? LESSON_MAX_SECTIONS, maxChars = opts.maxChars ?? LESSON_MAX_CHARS;
+  const headStems = (heading: string) => (opts.ignoreStems ? stems(heading).filter(w => !opts.ignoreStems!.has(w)) : stems(heading));
   const charsOf = (s: SectionRef) => profiles.get(s.chunkId)?.chars ?? UNREAD_CHARS;
   const unitOf = (list: SectionRef[]): Unit => ({
     sections: list, chars: list.reduce((t, s) => t + charsOf(s), 0), material: list[0].materialId,
-    head: new Set(list.filter(s => charsOf(s) >= LESSON_THIN_CHARS).flatMap(s => stems(profiles.get(s.chunkId)?.heading ?? ""))),
+    head: new Set(list.filter(s => charsOf(s) >= LESSON_THIN_CHARS).flatMap(s => headStems(profiles.get(s.chunkId)?.heading ?? ""))),
     topic: new Set(list.flatMap(s => (topics.get(s.chunkId) ?? []).flatMap(stems))),
   });
   // 1. Units: each substantive section with the thin ones just before it; thin ones at a material's end join the last.
@@ -155,8 +159,9 @@ export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<s
     // A thin section that carries the previous one on (its heading words are all the previous heading's: the last,
     // short slide of "FMEA") joins it; any other thin section (a title, an agenda) leads into what follows.
     const prev = units[units.length - 1];
-    const words = stems(profiles.get(s.chunkId)?.heading ?? "");
-    if (charsOf(s) < LESSON_THIN_CHARS && !pending.length && prev?.material === s.materialId && words.length && words.every(w => prev.head.has(w))) {
+    const words = headStems(profiles.get(s.chunkId)?.heading ?? "");
+    const carries = opts.thinJoin === "any" ? words.some(w => prev?.head.has(w)) : words.every(w => prev?.head.has(w));
+    if (charsOf(s) < LESSON_THIN_CHARS && !pending.length && prev?.material === s.materialId && words.length && carries) {
       units[units.length - 1] = { ...prev, sections: [...prev.sections, s], chars: prev.chars + charsOf(s) };
       continue;
     }
@@ -166,14 +171,14 @@ export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<s
   settle();
   // 2. Capacity, from the start.
   let n = 0, secs = 0, chars = 0;
-  while (n < units.length && (n === 0 || (secs + units[n].sections.length <= max * LESSON_MAX_SECTIONS && chars + units[n].chars <= max * LESSON_MAX_CHARS))) {
+  while (n < units.length && (n === 0 || (secs + units[n].sections.length <= max * maxSections && chars + units[n].chars <= max * maxChars))) {
     secs += units[n].sections.length; chars += units[n].chars; n++;
   }
   // 3. The cuts. best[i][k]: the least cost of units 0..i-1 as k lessons; from[i][k]: where the last lesson starts.
   const preC = [0], preS = [0];
   for (let j = 0; j < n; j++) { preC.push(preC[j] + units[j].chars); preS.push(preS[j] + units[j].sections.length); }
   const target = Math.max(LESSON_MIN_TARGET_CHARS, chars / max);
-  const cut = (i: number) => (i <= 0 || units[i].material !== units[i - 1].material ? 0 : CUT_WEIGHT * likeness(units[i - 1], units[i]));
+  const cut = (i: number) => (i <= 0 || units[i].material !== units[i - 1].material ? 0 : cutWeight * likeness(units[i - 1], units[i]));
   const INF = Number.POSITIVE_INFINITY;
   const best: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(max + 1).fill(INF));
   const from: number[][] = Array.from({ length: n + 1 }, () => new Array<number>(max + 1).fill(-1));
@@ -181,7 +186,7 @@ export function planSteps(sections: readonly SectionRef[], topics: ReadonlyMap<s
   for (let i = 1; i <= n; i++) {
     for (let a = i - 1; a >= 0; a--) {
       // A lesson is one material, within the size caps (one unit alone always fits). Wider only grows, so stop.
-      if (a < i - 1 && (units[a].material !== units[i - 1].material || preC[i] - preC[a] > LESSON_MAX_CHARS || preS[i] - preS[a] > LESSON_MAX_SECTIONS)) break;
+      if (a < i - 1 && (units[a].material !== units[i - 1].material || preC[i] - preC[a] > maxChars || preS[i] - preS[a] > maxSections)) break;
       const d = (preC[i] - preC[a] - target) / target;
       const own = d * d + cut(a);
       for (let k = 1; k <= max; k++) {
