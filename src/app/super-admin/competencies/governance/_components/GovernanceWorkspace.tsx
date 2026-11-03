@@ -37,9 +37,12 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
   const { framework: fw, domains, counts, me, stages, next, actors, history, components } = model;
   const all = useMemo(() => domains.flatMap(d => d.competencies), [domains]);
   const qc = useMemo(() => queueCounts(domains, me, fw), [domains, me, fw]);
-  const [filter, setFilter] = useState<QueueFilter>((QUEUE_FILTERS.some(f => f.key === initialFilter) ? initialFilter : qc.mine ? "mine" : "all") as QueueFilter);
-  const [active, setActive] = useState<string | null>(initialId ?? all[0]?.id ?? null);
-  const [open, setOpen] = useState<Set<string>>(() => new Set(domains.filter(d => d.competencies.some(c => c.id === (initialId ?? all[0]?.id))).map(d => d.id)));
+  const filter0 = (QUEUE_FILTERS.some(f => f.key === initialFilter) ? initialFilter : qc.mine ? "mine" : "all") as QueueFilter;
+  const [filter, setFilter] = useState<QueueFilter>(filter0);
+  // the first competency of the opening queue is selected, so a queue link lands on something to act on
+  const active0 = initialId ?? (all.find(c => inQueue(c, filter0, me, fw)) ?? all[0])?.id ?? null;
+  const [active, setActive] = useState<string | null>(active0);
+  const [open, setOpen] = useState<Set<string>>(() => new Set(domains.filter(d => d.competencies.some(c => c.id === active0)).map(d => d.id)));
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [reviewMode, setReviewMode] = useState(initialMode && me.canReview);
   const [decided, setDecided] = useState<Set<string>>(new Set());   // versions decided in this visit (the next render drops them from the queue)
@@ -111,7 +114,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
       </header>
 
       {/* 1. the pathway */}
-      <ol className="grid gap-2 md:grid-cols-5" aria-label="Governance pathway">
+      <ol className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5" aria-label="Governance pathway">
         {stages.map((s, i) => (
           <li key={s.key} className={`rounded-xl border-l-4 border border-gray-200 p-3 ${STAGE_TONE[s.status]}`}>
             <p className="text-[11px] font-bold uppercase tracking-wide">{i + 1}. {s.label}</p>
