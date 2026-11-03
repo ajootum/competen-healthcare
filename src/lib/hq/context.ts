@@ -382,3 +382,25 @@ export async function holdsHqCapability(capability: string): Promise<boolean> {
   const res = await resolveHqContext(capability, { enforce: true, probe: true });
   return res.ok;
 }
+
+/**
+ * The page guard for a workspace that serves SEVERAL positions -- FRAMEWORK-GOVERNANCE-WORKSPACE-01: an author, a
+ * clinical reviewer and a publisher all open the same framework page and see only the actions their own capability
+ * allows. Admits a caller holding ANY of the listed capabilities, enforced now (never observe). The capabilities are
+ * probed in order so a refused probe files no observation record; a caller who holds none is refused and recorded
+ * exactly as requireHqCapability(first) would refuse them. The returned context names the capability that admitted
+ * the caller. Pass a literal array declared as a local constant in the page (hq-scan.ts reads it as the union).
+ *
+ * ⚠ ADMISSION IS NOT ACTION. Every write the workspace offers posts to a route gated by its OWN single capability
+ * (/api/hq/clinical-review, /api/hq/competency/authoring, /api/hq/competency/publication), and the database's
+ * independence guards decide each decision. This guard only opens the door to the shared view.
+ */
+export async function requireAnyHqCapability(capabilities: readonly string[]): Promise<HqContext> {
+  for (const capability of capabilities) {
+    const res = await resolveHqContext(capability, { enforce: true, probe: true });
+    if (res.ok) return res.ctx;
+  }
+  const res = await resolveHqContext(capabilities[0] ?? null, { enforce: true });
+  if (!res.ok) redirect(res.redirectTo);
+  return res.ctx;
+}

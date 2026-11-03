@@ -42,6 +42,7 @@ const BOUNDARIES: Record<string, string> = {
   hqApiGate: "HQ plane — capability-gated API entry (src/lib/hq/api-gate.ts)",
   hqOwnerApiGate: "HQ plane — hqApiGate then isOwner, for owner-only writes (src/lib/hq/api-gate.ts, HQ-USERS-A)",
   requireHqCapability: "HQ plane — named capability",
+  requireAnyHqCapability: "HQ plane — any of several named capabilities, enforced (the Framework Governance Workspace, FRAMEWORK-GOVERNANCE-WORKSPACE-01); every write it offers goes through a single-capability route",
   requireHqContext: "HQ plane — governance context",
   requirePracticeContext: "Practice plane — membership, entitlement, capabilities",
   requireEnterpriseContext: "Enterprise plane",

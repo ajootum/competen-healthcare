@@ -122,6 +122,7 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
           <p className="mt-1 flex flex-wrap items-center gap-2 text-[13px] text-gray-600">{meta.join(" · ")} <span className="rounded-md bg-gray-100 px-2 py-0.5 text-[12px] font-semibold text-gray-800">{STATUS[f.pubStatus] ?? f.pubStatus}</span></p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Link href={`/super-admin/competencies/governance/${f.id}`} className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50">Governance workspace</Link>
           <Link href="?view=pack" className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50">Review pack</Link>
           {tab === "competencies" && <Link href="?tab=overview" className="inline-flex items-center rounded-lg border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50">Framework overview</Link>}
           <ReviewButton frameworkId={f.id} scope={{ kind: "framework" }} revision={!!openRev} label={openRev ? "Put forward the revision for review" : "Put forward for review"} disabled={!editable || !comps.length || (revised && !revisionsOn)} />

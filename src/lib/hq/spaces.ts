@@ -247,6 +247,10 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   { prefix: "/super-admin/metadata",              capability: "hq.platform.metadata.view" },
   { prefix: "/super-admin/audit",                 capability: "hq.platform.audit.view" },
   // Migration 465. Authoring first: the first matching prefix wins, and it must not inherit the library view.
+  // FRAMEWORK-GOVERNANCE-WORKSPACE-01: the consolidated governance workspace. The page itself admits an author, a
+  // clinical reviewer OR a publisher (requireAnyHqCapability); the nav and search show it under the author's
+  // capability, and the Clinical Review and Framework Publication pages link to it for the other two.
+  { prefix: "/super-admin/competencies/governance", capability: "hq.quality.competency.author" },
   { prefix: "/super-admin/competencies/authoring", capability: "hq.quality.competency.author" },
   { prefix: "/super-admin/competencies/publication", capability: "hq.quality.competency.publish" },
   // Migration 660 (CFCA-STUDIO-P1). Programme frameworks are curated with the catalogue right. Stages and

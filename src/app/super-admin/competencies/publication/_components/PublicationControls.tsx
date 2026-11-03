@@ -41,14 +41,19 @@ const KINDS = [
   ["revision", "Revision: corrections and wording only"],
 ] as const;
 
-/** Publish or return what was put forward. A republication says what kind of change it is. */
-export function Decide({ frameworkId, firstPublication, version }: { frameworkId: string; firstPublication: boolean; version: string }) {
+/**
+ * Publish or return what was put forward. A republication says what kind of change it is.
+ * FRAMEWORK-GOVERNANCE-WORKSPACE-01 (action-aware): `blocker` names why publication is not available yet (unapproved
+ * competencies, or the viewer's own conflict); Publish is then not drawn and the blocker is, while Return to author stays.
+ */
+export function Decide({ frameworkId, firstPublication, version, blocker = null }: { frameworkId: string; firstPublication: boolean; version: string; blocker?: string | null }) {
   const { busy, msg, send } = useSend();
   const [kind, setKind] = useState("");
   const [note, setNote] = useState("");
   return (
     <form className="mt-2 space-y-2" onSubmit={e => e.preventDefault()}>
-      {!firstPublication && (
+      {blocker && <p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-950"><span className="font-semibold">Publish is not available yet.</span> {blocker}</p>}
+      {!firstPublication && !blocker && (
         <fieldset>
           <legend className={label}>What kind of change is this? (now {version})</legend>
           {KINDS.map(([v, l]) => (
@@ -62,10 +67,12 @@ export function Decide({ frameworkId, firstPublication, version }: { frameworkId
         <textarea className={input} rows={2} maxLength={1000} value={note} onChange={e => setNote(e.target.value)} />
       </label>
       <div className="flex flex-wrap items-center gap-2">
-        <button type="button" className={primary} disabled={busy || (!firstPublication && !kind)}
-          onClick={() => void send({ action: "decide", frameworkId, decision: "publish", changeKind: kind || null, note }, j => `Published as version ${j.version}.${j.warning ? ` ${j.warning}` : ""}`)}>
-          Publish
-        </button>
+        {!blocker && (
+          <button type="button" className={primary} disabled={busy || (!firstPublication && !kind)}
+            onClick={() => void send({ action: "decide", frameworkId, decision: "publish", changeKind: kind || null, note }, j => `Published as version ${j.version}.${j.warning ? ` ${j.warning}` : ""}`)}>
+            Publish
+          </button>
+        )}
         <button type="button" className={ghost} disabled={busy || !note.trim()}
           onClick={() => void send({ action: "decide", frameworkId, decision: "return", note }, () => "Returned to the author with your note.")}>
           Return to author

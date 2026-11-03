@@ -36,7 +36,9 @@ import { HQ_CAPABILITY_CODES } from "@/lib/hq/spaces";
 // `kind: "none"` -- the note above predicts this failure, an assertion in access-scanner-harness pins it,
 // and it happened anyway in the very next change. The lesson is not "remember"; it is that the guard list
 // and the guard must land in the SAME commit.
-const HQ_GUARDS = "requireHqContext|resolveHqContext|requireHqCapability|hqApiGate";
+// requireAnyHqCapability (FRAMEWORK-GOVERNANCE-WORKSPACE-01) admits a holder of ANY listed capability, passed as a local
+// constant array: localCapabilityArrays resolves it to the union, which is this scanner's contract for any-of gates.
+const HQ_GUARDS = "requireHqContext|resolveHqContext|requireHqCapability|requireAnyHqCapability|hqApiGate";
 const HQ_ANY = new RegExp(`(?:${HQ_GUARDS})\\s*\\(`);
 const HQ_CALL = new RegExp(
   `(?:${HQ_GUARDS})\\s*\\(\\s*(?:"([a-z0-9._]+)"|(null)|([A-Z][A-Za-z0-9_]*)\\s*(?:\\.\\s*([A-Za-z0-9_]+))?)?\\s*(?:,[^)]*)?\\)`,
