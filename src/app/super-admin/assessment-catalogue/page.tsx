@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { requireHqCapability } from "@/lib/hq/context";
+import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
+import { CAP } from "@/lib/assessment/studio/transitions";
 import { PAGE_SIZE, parseCatalogueQuery } from "@/lib/assessment/catalogue/filters";
 import { catalogueStats, searchCatalogue, type SearchResult } from "@/lib/assessment/catalogue/search";
 import { loadFamilies } from "@/lib/assessment/catalogue/families";
@@ -23,11 +25,14 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = { title: "Assessment & Checklist Catalogue" };
 
 export default async function AssessmentCataloguePage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
-  const ctx = await requireHqCapability("hq.assessment.catalogue.view");
+  // withOwnAppointments: an owner holds the Studio author capability only through a live appointment, and an import or a
+  // template copy writes a Studio draft, so the register chooser must know whether registering content is possible.
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.catalogue.view"));
   const admin = ctx.admin;
   const query = parseCatalogueQuery(await searchParams);
   const canManage = ctx.isOwner || ctx.capabilities.includes("hq.assessment.catalogue.manage");
   const canStudio = ctx.isOwner || ctx.capabilities.includes("hq.assessment.studio.view");
+  const canAuthor = ctx.capabilities.includes(CAP.author);
 
   const empty: SearchResult = { rows: [], total: 0, page: 1, pageSize: PAGE_SIZE };
   const [stats, result, families, taxonomy, productLines, collections, detail, referenceKinds] = await Promise.all([
@@ -44,7 +49,7 @@ export default async function AssessmentCataloguePage({ searchParams }: { search
   return (
     <CatalogueWorkspace
       query={query} stats={stats} result={result} families={families} taxonomy={taxonomy} productLines={productLines}
-      collections={collections} referenceKinds={referenceKinds} detail={detail} canManage={canManage} canStudio={canStudio}
+      collections={collections} referenceKinds={referenceKinds} detail={detail} canManage={canManage} canStudio={canStudio} canAuthor={canAuthor}
     />
   );
 }

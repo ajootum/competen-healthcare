@@ -563,6 +563,17 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     onlyFrom: "src/lib/assessment/catalogue/",
     why: `Assessment & Checklist Catalogue (migration 894), read only from src/lib/assessment/catalogue/**: ${what} Holdings reference data. It contains no learner, patient or assessment record.`,
   })),
+  // ASMT-CATALOGUE-IMPORT-01 (migration 930). The import record: an uploaded workbook (name, digest, size, storage object), its
+  // status and the extracted draft the person corrected. Readable ONLY from src/lib/assessment/import/** (`onlyFrom`), the module
+  // that owns the import. The draft is the person's own working copy of a workbook they uploaded: criteria text, never a learner,
+  // patient or assessment record. created_by is selected to show who imported, as the catalogue trail does for every event.
+  {
+    table: "asmt_import",
+    columns: ["id", "file_name", "file_sha256", "byte_size", "storage_bucket", "storage_path", "status", "draft", "extracted_at", "registered_at", "created_by", "created_at"],
+    count: false,
+    onlyFrom: "src/lib/assessment/import/",
+    why: "Instrument import (migration 930), read only from src/lib/assessment/import/**: the uploaded workbook's record and the extracted draft the person is correcting. Holdings reference data in the making. It contains no learner, patient or assessment record.",
+  },
   // >>> ASSESSOR-WORKSPACE (Checklist Studio S4). The captured assessment data, read ONLY by the assessor workspace library
   // (`onlyFrom`): a read of the same table from the Studio, the catalogue or any other file is refused even with the right columns.
   // The assessor library filters every read by the actor (respondent_id, or granted_by for the grants I made) and every read of
