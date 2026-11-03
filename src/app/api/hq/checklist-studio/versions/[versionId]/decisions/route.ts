@@ -29,6 +29,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ version
   const recorded = await recordDecision(ctx.admin, kind, versionId, ctx.userId, { reviewKind: b.reviewKind, decision: b.decision, rationale: typeof b.rationale === "string" ? b.rationale : null });
   if (!recorded.ok || b?.andApprove !== true || b.decision !== "approved") return respond(recorded);
   if (!(ctx.capabilities.includes(CAP.review) || ctx.capabilities.includes(CAP.publish))) return respond(recorded, { approved: false, note: "Your decision is recorded. Marking the version approved needs the review or publish capability." });
+  // A checklist that requires a domain review needs a domain decision as well. When this reviewer also holds the domain review
+  // right (spec: "both capabilities and appropriate authority"), the one interaction records that decision too, as its own row.
+  if (kind === "instrument" && b.reviewKind === "governance" && ctx.capabilities.includes(CAP.domainReview)) {
+    const { data: v } = await ctx.admin.from("asmt_instrument_version").select("requires_domain_review").eq("id", versionId).maybeSingle();
+    if (v?.requires_domain_review) await recordDecision(ctx.admin, kind, versionId, ctx.userId, { reviewKind: "domain", decision: "approved", rationale: typeof b.rationale === "string" ? b.rationale : null });
+  }
   const approved = await approveVersion(ctx.admin, kind, versionId);
   return respond(recorded, approved.ok ? { approved: true } : { approved: false, note: approved.error });
 }
