@@ -1502,7 +1502,10 @@ function main() {
   ok("P41. ⚠ K24 goes red when the policy gate goes, an event is recorded before it is shown, or the context becomes grounding",
     !learnBounded(plant(`${API}/learn/act/route.ts`, "if (isLearnAction(action) && !policy.scholarLearningActions.includes(action))", "if (false)"))
     && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")", "if (recorded && sessionId)"))
-    && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text)].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), args.learnerContext ?? \"\"].join(\"\\n\");")));
+    && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? [])].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? []), args.learnerContext ?? \"\"].join(\"\\n\");"))
+    // SCHOLAR-CUMULATIVE-TEACHING-01: the TAUGHT SO FAR block may not ground either, and the route may not feed learnerTexts from anything but the screened prior checks.
+    && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? [])].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? []), taught ?? \"\"].join(\"\\n\");"))
+    && !learnBounded(plant(`${API}/learn/act/route.ts`, "learnerTexts: priorCheckTexts(priorChecks)", "learnerTexts: [learnerContext ?? \"\"]")));
   ok("P40. ⚠ K23 goes red when processing stops deciding the session, or the default jumps to the ceiling",
     !uploadLimitsHold(plant(`${API}/materials/route.ts`, "if (overSession) return refuse(429", "if (false) return refuse(429"))
     && !uploadLimitsHold(new Map([...REAL, [`${LIB}/config.ts`, (REAL.get(`${LIB}/config.ts`) ?? "").replace("export const DEFAULT_UPLOAD_MB = 10;", "export const DEFAULT_UPLOAD_MB = 25;")]])));
