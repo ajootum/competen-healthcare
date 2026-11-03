@@ -24,7 +24,11 @@ begin
   select count(*) into n from information_schema.columns where table_name = 'hq_config' and column_name = 'analytics_pseudonym_salt';
   if n = 1 then pass := pass + 1; else fail := fail + 1; failed := failed || ' V4:salt_column=' || n; end if;
 
-  select analytics_pseudonym_salt into s from hq_config limit 1;
+  begin
+    execute 'select analytics_pseudonym_salt from hq_config limit 1' into s;
+  exception when undefined_column then
+    s := null;
+  end;
   if s is not null and length(s) = 32 then pass := pass + 1; else fail := fail + 1; failed := failed || ' V5:salt_value'; end if;
 
   select count(*) into n from pg_proc where proname like 'scholar_analytics%';

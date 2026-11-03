@@ -143,17 +143,17 @@ export default function EngagementDashboard({ canIdentify, initial, initialError
         <div className="mt-2 overflow-x-auto">
           <table className="w-full min-w-[760px] text-[13px]">
             <thead><tr className="text-left text-[11px] uppercase tracking-wide text-gray-500">
-              <th className="py-1">#</th><th>Learner</th>{named && <th>Status</th>}<th className="text-right">Active days</th><th className="text-right">Sessions</th><th className="text-right">Active time (est.)</th><th className="text-right">Activities</th><th className="text-right">AI requests</th><th className="text-right">AI cost (est.)</th><th>Last active</th>
+              <th className="py-1 pr-2">#</th><th className="pr-3">Learner</th>{named && <th className="pr-3">Status</th>}<th className="px-2 text-right">Active days</th><th className="px-2 text-right">Sessions</th><th className="px-2 text-right">Active time (est.)</th><th className="px-2 text-right">Activities</th><th className="px-2 text-right">AI requests</th><th className="px-2 text-right">AI cost (est.)</th><th className="pl-4">Last active</th>
             </tr></thead>
             <tbody>
               {data?.leaderboard.rows.map((r, i) => (
                 <tr key={r.key} className={`border-t border-gray-100 ${learner === r.key ? "bg-teal-50/60" : ""}`}>
-                  <td className="py-1.5 tabular-nums text-gray-500">{data.leaderboard.page * data.leaderboard.pageSize + i + 1}</td>
-                  <td><button type="button" className="text-left font-semibold text-teal-800 hover:underline pointer-coarse:min-h-[var(--cmp-touch-min)]" aria-pressed={learner === r.key} onClick={() => setLearner(learner === r.key ? null : r.key)}>{r.label}</button>{named && r.name && <span className="block font-mono text-[11px] text-gray-500">{r.key}</span>}</td>
-                  {named && <td className="text-gray-700">{r.status ?? "—"}{r.classification === "unclassified" ? " · unclassified" : ""}</td>}
-                  <td className="text-right tabular-nums">{r.activeDays}</td><td className="text-right tabular-nums">{r.sessions}</td><td className="text-right tabular-nums">{mins(r.activeMinutes)}</td>
-                  <td className="text-right tabular-nums">{r.activities}<span className="text-gray-500"> / {r.completed} done</span></td><td className="text-right tabular-nums">{r.aiRequests}</td><td className="text-right tabular-nums">{money(r.aiCostUsd)}{r.aiSettledUsd ? <span className="block text-[11px] text-gray-500">settled {money(r.aiSettledUsd)}</span> : null}</td>
-                  <td className="whitespace-nowrap text-gray-700">{when(r.lastActive)}</td>
+                  <td className="py-1.5 pr-2 tabular-nums text-gray-500">{data.leaderboard.page * data.leaderboard.pageSize + i + 1}</td>
+                  <td className="pr-3"><button type="button" className="text-left font-semibold text-teal-800 hover:underline pointer-coarse:min-h-[var(--cmp-touch-min)]" aria-pressed={learner === r.key} onClick={() => setLearner(learner === r.key ? null : r.key)}>{r.label}</button>{named && r.name && <span className="block font-mono text-[11px] text-gray-500">{r.key}</span>}</td>
+                  {named && <td className="pr-3 text-gray-700">{r.status ?? "—"}{r.classification === "unclassified" ? " · unclassified" : ""}</td>}
+                  <td className="px-2 text-right tabular-nums">{r.activeDays}</td><td className="px-2 text-right tabular-nums">{r.sessions}</td><td className="px-2 text-right tabular-nums">{mins(r.activeMinutes)}</td>
+                  <td className="px-2 text-right tabular-nums">{r.activities}<span className="text-gray-500"> / {r.completed} done</span></td><td className="px-2 text-right tabular-nums">{r.aiRequests}</td><td className="px-2 text-right tabular-nums">{money(r.aiCostUsd)}{r.aiSettledUsd ? <span className="block text-[11px] text-gray-500">settled {money(r.aiSettledUsd)}</span> : null}</td>
+                  <td className="whitespace-nowrap pl-4 text-gray-700">{when(r.lastActive)}</td>
                 </tr>
               ))}
               {data && !data.leaderboard.rows.length && <tr><td colSpan={10} className="py-3 text-sm text-gray-600">No learner matches.</td></tr>}
