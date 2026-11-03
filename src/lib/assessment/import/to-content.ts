@@ -15,6 +15,8 @@
 import type { EditorContent, EditorItem } from "../studio/types";
 import type { InstrumentSection, ItemField, ResponseType, StateCode } from "../core";
 import type { DetectedColumn, ImportGroup, SheetDraft, WorkbookDraft } from "./types";
+import { toDefinition } from "../studio/assemble";
+import { patchPartialOptions, proposeScoring, type ScoringProposal } from "./scoring";
 
 export type ScalePlan = {
   name: string;
@@ -32,6 +34,8 @@ export type InstrumentPlan = {
   /** how many items need the scale version id patched in before the content is saved */
   ratingItems: number;
   notes: string[];
+  /** proposed scoring rules and tests, deterministic from the sheets, with every assumption as a flag */
+  scoring: ScoringProposal;
 };
 
 const slugCode = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
@@ -82,7 +86,11 @@ export function buildInstrumentPlan(d: WorkbookDraft, g: ImportGroup, newKey: ()
     }
   }
   const summary = summaryFor(d, g, sheets, now);
-  return { title: g.title.trim(), summary, content: { groups: [], sections, items }, scale, ratingItems, notes };
+  // an option with no met or not met meaning (Partial, as the workbook left it) counts as not met, so a percentage can count it
+  const patched = patchPartialOptions({ groups: [], sections, items });
+  const def = toDefinition(patched.content, { versionNo: 1 });
+  const scoring = proposeScoring({ sheets, def, respondentRoles: g.respondentRoles, levels: scale?.levels ?? null });
+  return { title: g.title.trim(), summary, content: patched.content, scale, ratingItems, notes, scoring };
 }
 
 export function responseDesign(s: SheetDraft): { response_type: ResponseType; config: EditorItem["config"] } {

@@ -45,6 +45,10 @@ export interface VersionWorkspaceProps {
   scoringTests: unknown[];
   scoringTemplateId: string | null;
   scoringHash: string | null;
+  /** the import this draft came from, when it was imported (enables "Propose scoring from the source workbook") */
+  importId?: string | null;
+  /** the latest scoring proposal recorded on this version, with its flags */
+  proposal?: import("@/lib/assessment/import/propose").ProposalRecord | null;
   layouts: LayoutOption[];
   defaultLayoutId: string | null;
   allowedLayoutIds: string[];
@@ -116,7 +120,8 @@ export function VersionWorkspace(p: VersionWorkspaceProps) {
         {tab === "content" && <ContentTab versionId={p.versionId} onGroupsPrefilled={prefilled} content={content} setContent={setContent} disabled={!p.canEdit} methods={p.methods} scaleChoices={p.scaleChoices} terms={p.terms} drift={p.drift} canPick={p.canPick} />}
         {tab === "scoring" && (
           <ScoringTab key={p.scoringHash ?? "none"} versionId={p.versionId} versionNo={p.versionNo} instrumentCode={p.instrument.code} content={content} contentDirty={dirty}
-            initialScoring={p.scoring} initialTests={p.scoringTests} templates={p.ruleTemplates} templateId={p.scoringTemplateId} editable={p.canEdit} />
+            initialScoring={p.scoring} initialTests={p.scoringTests} templates={p.ruleTemplates} templateId={p.scoringTemplateId} editable={p.canEdit}
+            importId={p.importId ?? null} proposal={p.proposal ?? null} />
         )}
         {tab === "layout" && (
           <LayoutTab versionId={p.versionId} versionNo={p.versionNo} instrumentCode={p.instrument.code} content={content} layouts={p.layouts} defaultId={p.defaultLayoutId} allowedIds={p.allowedLayoutIds} editable={p.canEdit} />

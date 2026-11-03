@@ -78,6 +78,8 @@ export interface PathwayOptions {
   versionNos?: Record<string, number>;
   /** checklists: whether the catalogue already makes it available in a product (the catalogue passes what it read) */
   catalogueAvailability?: boolean | null;
+  /** checklists: the scoring rules are a proposal from the source workbook the author has not accepted yet */
+  scoringProposed?: boolean;
 }
 
 /** The latest return to draft since the last submission: who returned it and the reason. Pure. */
@@ -114,7 +116,7 @@ export async function pathwayModel(admin: Admin, o: PathwayOptions): Promise<Pat
     kind: o.kind, versionNo: v.version_no, state: v.state, actorId: o.actorId, caps: o.caps, availability: life.availability, approval: life.approval,
     authoredBy: v.authored_by ?? [], editedBy: v.edited_by ?? [], submittedBy: v.submitted_by, involved: life.involved, decisions: life.decisions, contentHash: v.content_hash,
     requiresDomainReview: Boolean(v.requires_domain_review), deliveryModes: v.delivery_modes ?? ["n/a"], validation,
-    returned: latestReturn(life.events, life.decisions), supersededBy, catalogueAvailability, holders, names: life.names,
+    returned: latestReturn(life.events, life.decisions), supersededBy, catalogueAvailability, holders, names: life.names, scoringProposed: Boolean(o.scoringProposed),
   });
 }
 

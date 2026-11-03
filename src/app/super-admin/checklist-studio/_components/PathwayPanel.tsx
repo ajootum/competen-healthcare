@@ -7,6 +7,7 @@ import { useState } from "react";
 import Link from "next/link";
 import type { PathwayModel, PathwayStage } from "@/lib/assessment/studio/pathway";
 import { KIND_LABEL } from "@/lib/assessment/studio/types";
+import { DELIVERY_MODE_SUGGESTIONS } from "@/lib/assessment/studio/vocab";
 import { Btn, Notice, callApi, useAction } from "./studio-ui";
 
 const STAGE_TONE: Record<PathwayStage["status"], string> = {
@@ -59,6 +60,12 @@ export function PathwayPanel(p: PathwayPanelProps) {
   const [changes, setChanges] = useState<string | null>(null);   // the note while asking for changes
   const next = m.next;
   const anchor = p.lifecycleAnchor ?? "lifecycle";
+  // Owner GO 3 Nov 2026: the delivery-mode blocker is settled in one click, through the same settings route as the Settings tab.
+  const chooseDelivery = (code: string) => {
+    if (!p.versionId) return;
+    void run("delivery", () => callApi(`/api/hq/checklist-studio/versions/${p.versionId}/settings`, "PUT", { settings: { delivery_modes: [code] } }), { ok: `Delivery mode set: ${code.replace(/_/g, " ")}.`, onOk: () => router.refresh() });
+  };
+  const deliveryBlocked = m.kind === "instrument" && m.state === "draft" && !!p.versionId && m.blockers.some((b) => /delivery mode/i.test(b.text));
   const transition = (action: string, okText: string) => {
     if (!p.versionId) return;
     void run(action, () => callApi<{ versionId?: string }>(`/api/hq/checklist-studio/versions/${p.versionId}/transition`, "POST", { kind: m.kind, action }), {
@@ -150,6 +157,12 @@ export function PathwayPanel(p: PathwayPanelProps) {
           <ul className="mt-1 space-y-1 text-sm">
             {m.blockers.map((b, i) => <li key={i}><span className="font-semibold">{b.text}</span>{b.fix && <span className="block text-xs text-[var(--cmp-app-text-secondary)]">Fix: {b.fix}</span>}</li>)}
           </ul>
+          {deliveryBlocked && (
+            <div className="mt-2 flex flex-wrap items-center gap-2" aria-label="Choose a delivery mode">
+              <span className="text-xs text-[var(--cmp-app-text-secondary)]">Choose one now:</span>
+              {DELIVERY_MODE_SUGGESTIONS.map((d) => <Btn key={d.code} size="sm" disabled={busy !== null} onClick={() => chooseDelivery(d.code)}>{d.label}</Btn>)}
+            </div>
+          )}
         </div>
       )}
 
