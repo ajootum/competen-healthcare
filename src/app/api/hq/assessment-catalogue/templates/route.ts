@@ -9,24 +9,27 @@ import { plainError } from "@/lib/assessment/catalogue/db";
 export const dynamic = "force-dynamic";
 
 // /api/hq/assessment-catalogue/templates -- Create from template (ASMT-CATALOGUE-IMPORT-01, registration option 3).
-//   GET   hq.assessment.catalogue.manage   instruments with a published version, usable as templates
-//   POST  hq.assessment.catalogue.manage   { templateVersionId, family, name, description?, terms? } registers a new instrument whose
-//         first draft copies the template's published content, settings, scoring, layouts and tags, and records the provenance as an
-//         adapted_from relation. The copy is a Studio draft, so it ALSO needs the Studio author capability.
+//   GET   instruments with a published version, usable as templates
+//   POST  { templateVersionId, family, name, description?, terms? } registers a new instrument whose first draft copies the
+//         template's published content, settings, scoring, layouts and tags, and records the provenance as an adapted_from relation.
+// Both admit a holder of hq.assessment.catalogue.manage OR of the Checklist authoring capability (owner decision 4, 3 Nov 2026),
+// and a platform owner. The copy's author is the person creating it, so independence at review and publication is untouched.
 
 const refuse = (status: number, error: string) => NextResponse.json({ error }, { status });
 const text = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
+const ADMITS = ["hq.assessment.catalogue.manage", CAP.author];
+
 export async function GET() {
-  const ctx = await hqApiGate(["hq.assessment.catalogue.manage"]);
+  const ctx = await hqApiGate(ADMITS);
   if (isHqRefusal(ctx)) return ctx;
   try { return NextResponse.json({ templates: await listTemplates(ctx.admin) }); } catch (e) { return refuse(500, plainError(e)); }
 }
 
 export async function POST(req: Request) {
-  const ctx = await withOwnAppointments(await hqApiGate(["hq.assessment.catalogue.manage"]));
+  const ctx = await withOwnAppointments(await hqApiGate(ADMITS));
   if (isHqRefusal(ctx)) return ctx;
-  if (!ctx.capabilities.includes(CAP.author)) return refuse(403, "Creating from a template writes a Checklist Studio draft, which needs the Checklist authoring capability held through a Studio appointment.");
+  if (!(ctx.isOwner || ctx.capabilities.includes("hq.assessment.catalogue.manage") || ctx.capabilities.includes(CAP.author))) return refuse(403, "Creating from a template needs catalogue management or Checklist authoring, held through an appointment.");
   const b = await req.json().catch(() => ({}));
   if (!isUuid(b?.templateVersionId)) return refuse(400, "Choose a template.");
   const family = text(b?.family, 6).toUpperCase();

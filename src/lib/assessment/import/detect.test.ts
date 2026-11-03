@@ -119,7 +119,7 @@ describe("the fourth sheet is not assumed to be an instrument", () => {
   it("is proposed for exclusion and needs the person's confirmation", () => {
     expect(draft.groups.map((g) => g.sheets)).toEqual([["1 Nursing Assessment Audit"], ["2 Concurrent Nursing Audit"], ["3 Retrospective Chart Audit"]]);
     expect(draft.excluded).toEqual([{ sheet: "Daily Audits", reason: expect.stringMatching(/record or tally/), confirmed: false }]);
-    expect(readinessProblems(draft)).toContain('Confirm that the sheet "Daily Audits" is left out (The sheet looks like a record or tally table, not an instrument with criteria.).');
+    expect(readinessProblems(draft)).toContain('Confirm that the sheet "Daily Audits" is left out (The sheet is a record or tally table, not an instrument with criteria. It stays in the stored workbook.).');
   });
   it("can be moved into a group, or made a group of its own, by the person", () => {
     const moved = moveSheet(draft, "Daily Audits", "g-2");

@@ -120,6 +120,7 @@ export default function ImportWizard({ families, taxonomy, canAuthor, onClose, o
               {draft.excluded.length > 0 && (
                 <section>
                   <h3 className="text-[13px] font-bold uppercase tracking-wide text-gray-700">Left out</h3>
+                  <p className="text-[12px] text-gray-600">A sheet left out is not registered as an instrument. It stays in the stored workbook, the source record of this import, and nothing in it is discarded.</p>
                   <ul className="mt-2 space-y-2">
                     {draft.excluded.map(e => (
                       <li key={e.sheet} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-[13px]">
@@ -171,7 +172,7 @@ export default function ImportWizard({ families, taxonomy, canAuthor, onClose, o
                       <ul className="list-disc pl-5">{problems.map(p => <li key={p}>{p}</li>)}</ul>
                     </div>
                   )}
-                  {!canAuthor && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Registering writes Checklist Studio drafts, which needs the Checklist authoring capability. Your corrections are saved with the import; an author can register it from the same screen.</p>}
+                  {!canAuthor && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Registering needs catalogue management or Checklist authoring. Your corrections are saved with the import.</p>}
                 </>
               )}
             </div>

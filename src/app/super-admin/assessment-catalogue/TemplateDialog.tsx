@@ -71,7 +71,7 @@ export default function TemplateDialog({ families, taxonomy, canAuthor, onClose,
           </div>
         ) : (
           <form className="min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4" onSubmit={e => { e.preventDefault(); void save(); }}>
-            {!canAuthor && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Creating from a template writes a Checklist Studio draft, which needs the Checklist authoring capability. You can look, and an author can create it.</p>}
+            {!canAuthor && <p className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Creating from a template needs catalogue management or Checklist authoring, held through an appointment.</p>}
             <label className="block text-[12.5px] font-semibold text-gray-800">Template (a published instrument)
               <select className={`${input} mt-1`} value={templateId} onChange={e => pick(e.target.value)} required disabled={!templates}>
                 <option value="">{templates === null ? (loadError ?? "Loading…") : templates.length ? "Choose a template" : "No published instrument exists yet"}</option>

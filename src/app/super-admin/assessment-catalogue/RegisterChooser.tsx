@@ -20,8 +20,8 @@ type Mode = "choose" | "new" | "import" | "template";
 
 const OPTIONS: { mode: Mode; title: string; lede: string; needs: string }[] = [
   { mode: "new", title: "Create new", lede: "Register the identity and classification now. Write the sections, items and scoring in Checklist Studio.", needs: "Catalogue management" },
-  { mode: "import", title: "Import existing instrument", lede: "Upload an Excel workbook. Preview what was found, correct it, confirm which sheets belong together, and register editable Drafts.", needs: "Catalogue management, Checklist authoring to register" },
-  { mode: "template", title: "Create from template", lede: "Start from a published instrument. The new Draft copies its content and keeps a link to where it came from.", needs: "Catalogue management, Checklist authoring" },
+  { mode: "import", title: "Import existing instrument", lede: "Upload an Excel workbook. Preview what was found, correct it, confirm which sheets belong together, and register editable Drafts.", needs: "Catalogue management or Checklist authoring" },
+  { mode: "template", title: "Create from template", lede: "Start from a published instrument. The new Draft copies its content and keeps a link to where it came from.", needs: "Catalogue management or Checklist authoring" },
 ];
 
 export default function RegisterChooser({ families, taxonomy, canAuthor, onClose }: { families: Family[]; taxonomy: TaxonomyDimension[]; canAuthor: boolean; onClose: () => void }) {
@@ -54,7 +54,7 @@ export default function RegisterChooser({ families, taxonomy, canAuthor, onClose
             </button>
           ))}
         </div>
-        {!canAuthor && <p className="px-5 pb-4 text-[12px] text-gray-600">You hold catalogue management without Checklist authoring: you can create an identity and prepare an import, and an author registers the imported content.</p>}
+        {!canAuthor && <p className="px-5 pb-4 text-[12px] text-gray-600">Importing and creating from a template need catalogue management or Checklist authoring, held through an appointment.</p>}
       </div>
     </div>
   );

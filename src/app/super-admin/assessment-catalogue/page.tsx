@@ -32,7 +32,8 @@ export default async function AssessmentCataloguePage({ searchParams }: { search
   const query = parseCatalogueQuery(await searchParams);
   const canManage = ctx.isOwner || ctx.capabilities.includes("hq.assessment.catalogue.manage");
   const canStudio = ctx.isOwner || ctx.capabilities.includes("hq.assessment.studio.view");
-  const canAuthor = ctx.capabilities.includes(CAP.author);
+  // Owner decision 4 (3 Nov 2026): a Catalogue Manager or an Instrument Author may import and register draft instruments.
+  const canAuthor = canManage || ctx.capabilities.includes(CAP.author);
 
   const empty: SearchResult = { rows: [], total: 0, page: 1, pageSize: PAGE_SIZE };
   const [stats, result, families, taxonomy, productLines, collections, detail, referenceKinds] = await Promise.all([

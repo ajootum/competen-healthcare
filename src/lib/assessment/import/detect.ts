@@ -33,7 +33,8 @@ const H_NUMBER = /^(no\.?|#|number|s\/?n|sn|item no\.?|ref\.?)$/i;
 const H_TEXT = /evidence|comment|finding|discrepanc|deficienc|action|note|remark|observation|reason|justification/i;
 const ENUMERATOR = /^([a-z]|[ivx]{1,4}|\d{1,2})\s*[).:-]$|^[-*•]$/i;
 
-const isInt = (c: GridCell | null): c is GridCell => !!c && c.n !== null && Number.isInteger(c.n) && c.n >= 0 && c.n <= 999;
+// A boolean, NOT a type predicate: as a predicate its false branch narrowed a GridCell to never (CI tsc, TS2339).
+const isInt = (c: GridCell | null): boolean => !!c && c.n !== null && Number.isInteger(c.n) && c.n >= 0 && c.n <= 999;
 const own = (c: GridCell | null, r: number): c is GridCell => !!c && c.origin.r === r;
 const slug = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").slice(0, 40);
 
@@ -137,7 +138,7 @@ export function detectSheet(g: SheetGrid): SheetDraft {
     const unplaced = nonEmpty.filter((r) => !ctx.consumed.has(r)).flatMap((r) => ownCells(g, r).map((c) => ({ row: r + 1, col: COLUMN_LETTER(c.origin.c), text: c.v })));
     flag(ctx, looksLikeLog ? "record_log" : "no_criteria_table",
       looksLikeLog
-        ? "This sheet looks like a record or tally table (a header of short labels over empty rows), not an instrument with criteria. It is not imported unless you say it is an instrument or part of one."
+        ? "This sheet looks like a record or tally table (a header of short labels over empty rows), not an instrument with criteria. It is a record log: not registered as an instrument unless you say it is one or part of one, kept in the stored workbook, never discarded."
         : "No criteria table was recognised on this sheet (no header row with criteria, rating or response columns). Its text is listed below so nothing is lost.");
     return { ...base, kind: looksLikeLog ? "record_log" : "unknown", title, titleSource, identifiers, instructions, scale, unplaced, flags: ctx.flags };
   }

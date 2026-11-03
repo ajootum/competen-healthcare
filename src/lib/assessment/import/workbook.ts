@@ -44,7 +44,7 @@ export function draftWorkbook(grids: SheetGrid[], meta: { fileName: string; sha2
 
 export function exclusionReason(s: SheetDraft): string {
   if (s.kind === "empty") return "The sheet is empty.";
-  if (s.kind === "record_log") return "The sheet looks like a record or tally table, not an instrument with criteria.";
+  if (s.kind === "record_log") return "The sheet is a record or tally table, not an instrument with criteria. It stays in the stored workbook.";
   return "No criteria table was recognised on the sheet.";
 }
 

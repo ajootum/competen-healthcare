@@ -6,7 +6,9 @@ import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadScaleVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
 import { readStageScale } from "@/lib/assessment/adapters/scholar/scales";
+import { listMappingsFor, listPublishedStageScales } from "@/lib/assessment/studio/stage-mapping";
 import { DefScaleEditor } from "../../../_components/DefScaleEditor";
+import { StageMappingPanel } from "../../../_components/StageMappingPanel";
 import { DefTimeline } from "../../../_components/DefShared";
 import { LifecyclePanel } from "../../../_components/LifecyclePanel";
 import { PageHead, StateChip, StudioShell } from "../../../_components/studio-ui";
@@ -20,9 +22,11 @@ export default async function ScaleVersionPage({ params }: { params: Promise<{ v
   const v = await loadScaleVersion(ctx.admin, versionId);
   if (!v) notFound();
   const canAuthor = ctx.capabilities.includes(CAP.author);
-  const [lc, stage] = await Promise.all([
+  const [lc, stage, stageTargets, mappings] = await Promise.all([
     lifecycleData(ctx.admin, { kind: "scale", version: v, actorId: ctx.userId, caps: ctx.capabilities, validationErrors: 0 }),
     v.scale_kind === "stage" ? readStageScale(ctx.admin, v.id).catch(() => null) : Promise.resolve(null),
+    v.scale_kind === "rating" ? listPublishedStageScales(ctx.admin) : Promise.resolve([]),
+    v.scale_kind === "rating" ? listMappingsFor(ctx.admin, v.id) : Promise.resolve([]),
   ]);
   return (
     <StudioShell>
@@ -36,6 +40,7 @@ export default async function ScaleVersionPage({ params }: { params: Promise<{ v
         versionId={v.id} initialLevels={v.levels} initialStates={v.states} description={v.description} scaleKind={v.scale_kind}
         bands={stage?.bands ?? []} stages={stage?.stages ?? []} editable={v.state === "draft" && canAuthor}
       />
+      {v.scale_kind === "rating" && <StageMappingPanel ratingVersionId={v.id} ratingCode={v.scale_code} levels={v.levels} targets={stageTargets} mappings={mappings} canAuthor={canAuthor} />}
       <LifecyclePanel
         kind="scale" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}
