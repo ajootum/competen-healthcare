@@ -17,7 +17,8 @@ export default function ImportCorrect({ draft, onChange }: { draft: WorkbookDraf
   const [current, setCurrent] = useState(sheets[0]?.name ?? "");
   const sheet = sheets.find(s => s.name === current) ?? sheets[0];
   if (!sheet) return <p className="text-[13px] text-gray-700">No sheet is set to be registered. Go back and choose one.</p>;
-  const update = (patch: Partial<SheetDraft>) => onChange({ ...draft, sheets: draft.sheets.map(s => s.name === sheet.name ? { ...s, ...patch } : s), groups: draft.groups.map(g => g.sheets.includes(sheet.name) ? { ...g, confirmed: false } : g) });
+  // A correction changes what a sheet contains, not which instrument it belongs to: the grouping confirmation stands.
+  const update = (patch: Partial<SheetDraft>) => onChange({ ...draft, sheets: draft.sheets.map(s => s.name === sheet.name ? { ...s, ...patch } : s) });
   const setColumn = (col: DetectedColumn, patch: Partial<DetectedColumn>) => update({ columns: sheet.columns.map(c => c.col === col.col && c.header === col.header ? { ...c, ...patch } : c) });
   const topSections = sheet.sections.filter(s => !s.parentKey);
   const childrenOf = (key: string) => sheet.sections.filter(s => s.parentKey === key);
