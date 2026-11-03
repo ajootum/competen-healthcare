@@ -6,27 +6,25 @@ import { useModalFocus } from "@/components/ui/use-modal-focus";
 import type { Family } from "@/lib/assessment/catalogue/families";
 import type { TaxonomyDimension } from "@/lib/assessment/catalogue/classify";
 import type { SimilarInstrument } from "@/lib/assessment/catalogue/similar";
+import ClassificationFields, { type TermChoice } from "./ClassificationFields";
 import { BASE, CodeChip, btnGhost, btnPrimary, callApi, input } from "./ui";
 
-// Register an instrument: its identity only. Title, family, primary domain, method and a description. The database
-// assigns the next code of the family and creates the master record as a Draft with NO version. A duplicate warning shows
-// before saving and never blocks. Content is written next, in Checklist Studio.
-export default function RegisterDialog({ families, taxonomy, onClose }: { families: Family[]; taxonomy: TaxonomyDimension[]; onClose: () => void }) {
+// Register an instrument: its identity only ("Create new", registration option 1). Title, family, classification and a
+// description. The database assigns the next code of the family and creates the master record as a Draft with NO version.
+// A duplicate warning shows before saving and never blocks. Content is written next, in Checklist Studio.
+export default function RegisterDialog({ families, taxonomy, onClose, onBack }: { families: Family[]; taxonomy: TaxonomyDimension[]; onClose: () => void; onBack?: () => void }) {
   const router = useRouter();
   const panel = useRef<HTMLDivElement>(null);
   useModalFocus(true, panel, onClose);
   const active = families.filter(f => f.isActive);
   const [title, setTitle] = useState("");
   const [family, setFamily] = useState(active[0]?.code ?? "");
-  const [domain, setDomain] = useState("");
-  const [method, setMethod] = useState("");
+  const [terms, setTerms] = useState<TermChoice[]>([]);
   const [description, setDescription] = useState("");
   const [similar, setSimilar] = useState<SimilarInstrument[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shownSimilar = title.trim().length < 3 ? [] : similar;
-  const domains = taxonomy.find(d => d.code === "domain")?.terms.filter(t => t.isActive) ?? [];
-  const methods = taxonomy.find(d => d.code === "method")?.terms.filter(t => t.isActive) ?? [];
 
   // The duplicate check runs after a pause in typing. A late answer for an old title is ignored.
   useEffect(() => {
@@ -41,10 +39,6 @@ export default function RegisterDialog({ families, taxonomy, onClose }: { famili
 
   async function save() {
     setBusy(true); setError(null);
-    const terms = [
-      ...(domain ? [{ termId: domain, isPrimary: true }] : []),
-      ...(method ? [{ termId: method, isPrimary: true }] : []),
-    ];
     const r = await callApi("/api/hq/assessment-catalogue", { family, name: title, description, terms });
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
@@ -55,10 +49,10 @@ export default function RegisterDialog({ families, taxonomy, onClose }: { famili
 
   return (
     <div className="fixed inset-0 z-[60] flex items-center justify-center bg-teal-950/40 p-4">
-      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="reg-title" tabIndex={-1} className="flex max-h-[92vh] w-full max-w-xl flex-col rounded-2xl bg-white shadow-xl">
+      <div ref={panel} role="dialog" aria-modal="true" aria-labelledby="reg-title" tabIndex={-1} className="flex max-h-[92vh] w-full max-w-2xl flex-col rounded-2xl bg-white shadow-xl">
         <div className="flex items-start justify-between gap-3 border-b border-gray-100 px-5 py-4">
           <div>
-            <h2 id="reg-title" className="text-lg font-bold text-gray-900">Register instrument</h2>
+            <h2 id="reg-title" className="text-lg font-bold text-gray-900">Create a new instrument</h2>
             <p className="mt-0.5 text-[12.5px] text-gray-700">Creates the master record as a Draft with its permanent code. No content yet: that is written in Checklist Studio.</p>
           </div>
           <button type="button" className={btnGhost} onClick={onClose} aria-label="Close">{"×"}</button>
@@ -85,28 +79,19 @@ export default function RegisterDialog({ families, taxonomy, onClose }: { famili
             <select className={`${input} mt-1`} value={family} onChange={e => setFamily(e.target.value)} required>
               {active.map(f => <option key={f.code} value={f.code}>{f.label} ({f.code})</option>)}
             </select>
+            <span className="mt-0.5 block text-[11.5px] font-normal text-gray-600">The kind of instrument. It prefixes the permanent code and cannot change afterwards.</span>
           </label>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <label className="block text-[12.5px] font-semibold text-gray-800">Primary domain
-              <select className={`${input} mt-1`} value={domain} onChange={e => setDomain(e.target.value)}>
-                <option value="">Not set</option>
-                {domains.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </label>
-            <label className="block text-[12.5px] font-semibold text-gray-800">Method
-              <select className={`${input} mt-1`} value={method} onChange={e => setMethod(e.target.value)}>
-                <option value="">Not set</option>
-                {methods.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-              </select>
-            </label>
-          </div>
+          <ClassificationFields taxonomy={taxonomy} value={terms} onChange={setTerms} />
           <label className="block text-[12.5px] font-semibold text-gray-800">Description
             <textarea className={`${input} mt-1`} rows={3} value={description} onChange={e => setDescription(e.target.value)} maxLength={2000} />
           </label>
           {error && <p role="alert" className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-900">{error}</p>}
-          <div className="flex justify-end gap-2 border-t border-gray-100 pt-3">
-            <button type="button" className={btnGhost} onClick={onClose}>Cancel</button>
-            <button type="submit" className={btnPrimary} disabled={busy || title.trim().length < 3 || !family}>{busy ? "Registering…" : "Register instrument"}</button>
+          <div className="flex flex-wrap justify-between gap-2 border-t border-gray-100 pt-3">
+            <div>{onBack && <button type="button" className={btnGhost} onClick={onBack}>Back</button>}</div>
+            <div className="flex gap-2">
+              <button type="button" className={btnGhost} onClick={onClose}>Cancel</button>
+              <button type="submit" className={btnPrimary} disabled={busy || title.trim().length < 3 || !family}>{busy ? "Registering…" : "Register instrument"}</button>
+            </div>
           </div>
         </form>
       </div>

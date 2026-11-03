@@ -95,7 +95,7 @@ export async function POST(req: Request) {
   if (!r.ok) {
     await recordScholarOutcome(ctx.admin, ai, { operation, outputKind: "question", outcome: "error", reasons: [`error_${r.error}`], promptVersion });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, `individual_scholar_${kind}`, null, { chunk_id: passage.chunkId, outcome: `error:${r.error}` });
-    return NextResponse.json({ error: AI_ERROR[r.error].error }, { status: AI_ERROR[r.error].status });
+    return NextResponse.json({ error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code }, { status: AI_ERROR[r.error].status });
   }
   // COMPETEN-SCHOLAR-01 S4: the competency the questions practise is the section's leading link (accepted
   // first, never a rejected one). None, or 388 absent: the questions are stored exactly as before.

@@ -34,7 +34,8 @@ import { OPENABLE_ACTIONS } from "./guided-learn";
 import type { QuickMark, RecallMark } from "./learn-inline";
 
 export type LessonState = "outline" | "saved" | "taught" | "checked";
-export type ActivityKind = "read" | "deeper" | "examples" | "practised" | "applied";
+/** `marked` (SCHOLAR-INDEPENDENT-LEARNING-01): the learner's own "Mark as read" on the lesson's original sections (event action read, migration 920). */
+export type ActivityKind = "read" | "deeper" | "examples" | "practised" | "applied" | "marked";
 /**
  * `recalled` / `quickChecked` (SCHOLAR-INLINE-CHECKS-01): the learner's own recall rating on the inline card, and the result of the
  * quick check marked by code. Neither is a score or verified competence (learn-inline.ts).
@@ -261,14 +262,17 @@ export function journeyStep(s: JourneyState, e: JourneyEvent, o: JourneyOptions)
 //   read       any learning event for the lesson except a skip, or the lesson the position stands on
 //   taught     a teach-family event (Teach, Explain, Simplify, Go deeper, Examples, Summarise) for the lesson, OR a
 //              saved teaching artefact for the lesson's own chunk set (any prompt version, depth or mode)
-//   completed  THE COMPLETION RULE: taught AND read, AND -- only where policy scholar_check_behaviour is "prompt"
+//   marked     the learner's own "Mark as read" on the lesson's original sections (event action read, 920): their statement,
+//              no AI. SCHOLAR-INDEPENDENT-LEARNING-01: it stands where "taught" stands in the completion rule, so a
+//              lesson studied from the notes alone completes exactly as one taught by AI does.
+//   completed  THE COMPLETION RULE: (taught OR marked) AND read, AND -- only where policy scholar_check_behaviour is "prompt"
 //              (a check suggested after each step) -- an informal check answered (any verdict). "offer" and "off" ask no check.
 //   assessed   the latest informal check verdict (understood / partly / not yet), else "practised" when questions on
 //              the lesson's own sections have been attempted. LEARNING PROGRESS for the learner, never verified competence.
 
 export type CheckRule = "offer" | "prompt" | "off";
 export type Assessed = "understood" | "partly" | "not_yet" | "practised" | null;
-export type LessonFacts = { read: boolean; taught: boolean; saved: boolean; completed: boolean; assessed: Assessed };
+export type LessonFacts = { read: boolean; taught: boolean; marked: boolean; saved: boolean; completed: boolean; assessed: Assessed };
 /** One lesson's server records (store.ts learnLessonRecords): its newest saved teaching and attempts on its sections. */
 export type LessonRecord = { step: number; saved: { at: string; promptVersion: string; depth: string } | null; attempts: number };
 
@@ -286,9 +290,10 @@ export function lessonFacts(x: {
   const verdict = live.verdict ?? x.verdict ?? null;
   const read = !!x.visited || !!live.read || !!x.shown || actions.some(a => a !== "skip");
   const taught = !!x.saved || !!x.shown || actions.some(a => TEACH_FAMILY.includes(a));
+  const marked = !!live.marked || actions.includes("read");
   const assessed: Assessed = verdict && verdict in VERDICT_LABEL ? verdict as Assessed : (x.attempts ?? 0) > 0 || live.practised ? "practised" : null;
-  const completed = taught && read && !x.recallPending && (x.check === "prompt" ? !!verdict : true);
-  return { read, taught, saved: !!x.saved || !!x.shown, completed, assessed };
+  const completed = (taught || marked) && read && !x.recallPending && (x.check === "prompt" ? !!verdict : true);
+  return { read, taught, marked, saved: !!x.saved || !!x.shown, completed, assessed };
 }
 
 /** Pure. One lesson's facts inside the journey: the server records merged with what this visit did. */
@@ -377,7 +382,7 @@ export function savedJourney(s: JourneyState, now: Date = new Date(), anchor: nu
   return { v: 1, revealedUpTo: s.revealedUpTo, anchor, activities: s.activities.map(a => ({ ...a })), updatedAt: now.toISOString() };
 }
 
-const KINDS: ActivityKind[] = ["read", "deeper", "examples", "practised", "applied"];
+const KINDS: ActivityKind[] = ["read", "deeper", "examples", "practised", "applied", "marked"];
 /** Pure. A stored journey, validated against the session as it is now (fewer lessons -> clamped). Anything odd -> null. */
 export function parseSavedJourney(raw: string | null | undefined, count: number): SavedJourney | null {
   if (!raw || count <= 0) return null;

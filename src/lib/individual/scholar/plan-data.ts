@@ -27,8 +27,7 @@ import { effectiveSettings, settingsFromRow, sessionMinutesOf } from "./plan-set
 import { buildStudyPlan, unstartedMappedSections, type PlanCalendar, type StudyPlanInput, type StudyPlanResult, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
 import {
   calendarSchema, caseDecisionTimes, competencyProgressRows, countDue, evaluationEvidence, getEvaluation, getStudyPlan, learningEventTimes, listLearningSessions, listMaterials,
-  chunkContents, listRevisionSessions, materialQualities, sectionsOf, studyPlanSchema, topicsOfSections, type Admin, type SectionRef,
-} from "./store";
+  chunkContents, listRevisionSessions, materialQualities, sectionsOf, studyPlanSchema, topicsOfSections, type Admin, type SectionRef, learnedChunkIds } from "./store";
 import { experienceHref } from "../experiences";
 import { buildStudyCalendar, entriesHorizon, readStudyCalendar, type CalendarLoad, type CalendarReads } from "./study-calendar-data";
 import type { MasteryEntry } from "./mastery";
@@ -131,7 +130,9 @@ export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o:
 
   // accepted materials feed the plan: their unstarted sections, in the order accepted, a topic counted once
   const sec = await sectionsP;
-  const accepted = sec?.read ? assembleMaterials(sec.ids, mats.data, sec.read, rows.ok ? rows.data : null, storedUnitsOf(events, sec.read.secs)) : [];
+  // P2: a lesson read, opened or taught counts as started (policy scholar_plan_started_signal), not only a question answered.
+  const learned = sec?.read && policy.scholarPlanStartedSignal === "learning" ? await learnedChunkIds(admin, userId, sec.read.secs.map(s => s.chunkId)) : new Set<string>();
+  const accepted = sec?.read ? assembleMaterials(sec.ids, mats.data, sec.read, rows.ok ? rows.data : null, learned, policy.scholarPlanStartedSignal, storedUnitsOf(events, sec.read.secs)) : [];
   const mapped = rows.ok && competencies
     ? unstartedMappedSections({ mappings: rows.data.mappings, concepts: rows.data.concepts, questions: rows.data.questions, attempts: rows.data.attempts, competencies })
     : [];
@@ -149,9 +150,11 @@ export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o:
 }
 
 /** The sections of these materials with their topics and whether each has been practised, as the proposal and the plan read them. */
-export async function materialsIn(admin: Admin, userId: string, ids: readonly string[], mats: readonly { id: string; title: string }[], rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null): Promise<MaterialIn[]> {
+export async function materialsIn(admin: Admin, userId: string, ids: readonly string[], mats: readonly { id: string; title: string }[], rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null, signal: "learning" | "practice" = "practice"): Promise<MaterialIn[]> {
   const read = await readMaterialSections(admin, userId, ids);
-  return read ? assembleMaterials(ids, mats, read, rows) : [];
+  if (!read) return [];
+  const learned = signal === "learning" ? await learnedChunkIds(admin, userId, read.secs.map(s => s.chunkId)) : new Set<string>();
+  return assembleMaterials(ids, mats, read, rows, learned, signal);
 }
 
 type SectionsRead = { secs: readonly SectionRef[]; topics: ReadonlyMap<string, string[]>; headings: ReadonlyMap<string, string> };
@@ -175,9 +178,18 @@ async function readMaterialSections(admin: Admin, userId: string, ids: readonly 
   }
   return { secs: secs.data, topics, headings };
 }
-function assembleMaterials(ids: readonly string[], mats: readonly { id: string; title: string }[], read: SectionsRead, rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null, units?: ReadonlyMap<string, StoredUnit[] | null>): MaterialIn[] {
+/**
+ * SCHOLAR-INDEPENDENT-LEARNING-01 P2. Pure. The sections that count as STARTED for My Plan, under policy scholar_plan_started_signal:
+ *   practice  a question on the section was answered (the earlier rule)
+ *   learning  that, or the section was learned on: a lesson opened, read (the learner's own mark, 920), taught or checked
+ * A started section is not planned again as new. Deterministic, from records Scholar already keeps; no AI.
+ */
+export function startedSections(answered: ReadonlySet<string>, learned: ReadonlySet<string>, signal: "learning" | "practice"): Set<string> {
+  return signal === "learning" ? new Set([...answered, ...learned]) : new Set(answered);
+}
+function assembleMaterials(ids: readonly string[], mats: readonly { id: string; title: string }[], read: SectionsRead, rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null, learned: ReadonlySet<string> = new Set(), signal: "learning" | "practice" = "practice", units?: ReadonlyMap<string, StoredUnit[] | null>): MaterialIn[] {
   const answered = new Set((rows?.attempts ?? []).map(a => a.questionId));
-  const started = new Set((rows?.questions ?? []).filter(q => answered.has(q.id)).map(q => q.chunkId));
+  const started = startedSections(new Set((rows?.questions ?? []).filter(q => answered.has(q.id)).map(q => q.chunkId)), learned, signal);
   return ids.map(id => {
     const secs = read.secs.filter(s => s.materialId === id);
     return {
@@ -469,7 +481,7 @@ export async function loadProposal(ctx: PlanCtx, policy: IndividualPolicy, mater
   const events = evs?.ok ? evs.data : [];
   const decision = proposalDecisions(events).get(materialId) ?? null;
   const earlierIds = acceptedMaterialIds(events).filter(id => id !== materialId && mats.data.some(m => m.id === id));
-  const all = await materialsIn(admin, userId, [materialId, ...earlierIds], mats.data, rows.ok ? rows.data : null);
+  const all = await materialsIn(admin, userId, [materialId, ...earlierIds], mats.data, rows.ok ? rows.data : null, policy.scholarPlanStartedSignal);
   const self = all.find(m => m.materialId === materialId) ?? { materialId, title: mat.title, sections: [] };
   const s = row.data;
   // SCHOLAR-PLAN-UNITS-01: the material's own text (headings, size) and extraction quality make the learning units and their estimates.

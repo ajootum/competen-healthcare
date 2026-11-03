@@ -18,8 +18,9 @@ export interface LifecyclePanelProps {
   requiresDomainReview: boolean;
   decisions: ReviewDecisionRow[];
   names: Record<string, string>;
-  /** where a new draft made by Duplicate is edited */
-  hrefForVersion: (versionId: string) => string;
+  /** where a new draft made by Duplicate is edited: `${versionHrefBase}/${versionId}`. A string, never a function: the
+   *  server pages render this client component, and a function prop crossing that boundary is refused in production. */
+  versionHrefBase: string;
   /** where the definition lists its versions (after a delete) */
   listHref: string;
   /** The latest validation problems, shown beside Submit. */
@@ -41,7 +42,7 @@ export function LifecyclePanel(p: LifecyclePanelProps) {
   const transition = (action: string, okText: string, extra: Record<string, unknown> = {}) =>
     run(action, () => callApi(`${url}/transition`, "POST", { kind: p.kind, action, ...extra }), {
       ok: okText,
-      onOk: (d) => { if (action === "duplicate" && typeof (d as { versionId?: string }).versionId === "string") router.push(p.hrefForVersion((d as { versionId: string }).versionId)); if (action === "delete") router.push(p.listHref); },
+      onOk: (d) => { if (action === "duplicate" && typeof (d as { versionId?: string }).versionId === "string") router.push(`${p.versionHrefBase}/${(d as { versionId: string }).versionId}`); if (action === "delete") router.push(p.listHref); },
       onErr: (e) => { const r = e.data.report as ValidationReport | undefined; if (r) setIssues(r); },
     });
   const decide = (decision: "approved" | "rejected" | "changes_requested") =>

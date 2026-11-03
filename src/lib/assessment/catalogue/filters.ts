@@ -8,12 +8,12 @@
 
 export const PAGE_SIZE = 50;
 
-export const FILTER_KEYS = ["family", "method", "product", "status", "population", "domain", "setting", "level", "owner", "collection"] as const;
+export const FILTER_KEYS = ["family", "method", "product", "status", "population", "domain", "setting", "level", "profession", "specialty", "purpose", "owner", "collection"] as const;
 export type FilterKey = (typeof FILTER_KEYS)[number];
 
 /** The filters shown in the toolbar row, and those behind "More filters". */
 export const PRIMARY_FILTERS: readonly FilterKey[] = ["family", "method", "product", "status"];
-export const MORE_FILTERS: readonly FilterKey[] = ["population", "domain", "level"];
+export const MORE_FILTERS: readonly FilterKey[] = ["domain", "profession", "specialty", "setting", "population", "level", "purpose"];
 
 export const SORT_OPTIONS = [
   { value: "updated_desc", label: "Recently updated" },

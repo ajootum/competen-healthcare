@@ -8,6 +8,7 @@ import {
   type CatalogueQuery, type FilterKey, type SortKey,
 } from "@/lib/assessment/catalogue/filters";
 import { pageCount, showingLabel, type CatalogueRow } from "@/lib/assessment/catalogue/shape";
+import { treeOrder } from "@/lib/assessment/catalogue/hierarchy";
 import type { CatalogueStats, SearchResult } from "@/lib/assessment/catalogue/search";
 import type { Family } from "@/lib/assessment/catalogue/families";
 import type { TaxonomyDimension } from "@/lib/assessment/catalogue/classify";
@@ -16,8 +17,10 @@ import type { InstrumentDetail } from "@/lib/assessment/catalogue/detail";
 import ClassificationGuide from "./ClassificationGuide";
 import InstrumentDrawer from "./InstrumentDrawer";
 import InstrumentView from "./InstrumentView";
-import RegisterDialog from "./RegisterDialog";
+import RegisterChooser from "./RegisterChooser";
 import { BASE, CodeChip, StatusBadge, btnGhost, btnPrimary, callApi, input } from "./ui";
+
+const MORE_LABEL: Record<string, string> = { domain: "Domain", profession: "Profession", specialty: "Specialty", setting: "Context", population: "Population", level: "Level", purpose: "Purpose" };
 
 type Props = {
   query: CatalogueQuery;
@@ -31,6 +34,7 @@ type Props = {
   detail: InstrumentDetail | null;
   canManage: boolean;
   canStudio: boolean;
+  canAuthor: boolean;
 };
 
 export default function CatalogueWorkspace(p: Props) {
@@ -144,9 +148,14 @@ export default function CatalogueWorkspace(p: Props) {
           </div>
           {moreOpen && (
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-gray-100 bg-white p-3">
-              {MORE_FILTERS.map(k => k === "population" ? sel("population", "population", termOptions("population").map(t => ({ value: t.code, label: t.label })), "Population: All")
-                : k === "domain" ? sel("domain", "domain", termOptions("domain").map(t => ({ value: t.code, label: t.label })), "Domain: All")
-                : sel("level", "level", termOptions("level").map(t => ({ value: t.code, label: t.label })), "Level: All"))}
+              {MORE_FILTERS.map(k => {
+                const dim = p.taxonomy.find(d => d.code === k);
+                const label = MORE_LABEL[k] ?? dim?.label ?? k;
+                const opts = k === "domain" || k === "specialty"
+                  ? treeOrder(termOptions(k)).map(({ term, depth }) => ({ value: term.code, label: `${"  ".repeat(depth)}${term.label}` }))
+                  : termOptions(k).map(t => ({ value: t.code, label: t.label }));
+                return sel(k, label.toLowerCase(), opts, `${label}: All`);
+              })}
               {termOptions("level").length === 0 && <span className="text-[12px] text-gray-600">No level terms yet. They are linked from the programme qualification levels in Terms.</span>}
             </div>
           )}
@@ -171,7 +180,7 @@ export default function CatalogueWorkspace(p: Props) {
         </>
       )}
 
-      {registerOpen && <RegisterDialog families={p.families} taxonomy={p.taxonomy} onClose={() => setRegisterOpen(false)} />}
+      {registerOpen && <RegisterChooser families={p.families} taxonomy={p.taxonomy} canAuthor={p.canAuthor} onClose={() => setRegisterOpen(false)} />}
       {p.detail && (
         <InstrumentDrawer onClose={close} label={`${p.detail.code} ${p.detail.name}`}>
           <InstrumentView detail={p.detail} taxonomy={p.taxonomy} collections={p.collections} referenceKinds={p.referenceKinds}

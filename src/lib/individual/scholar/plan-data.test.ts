@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { MasteryEntry } from "./mastery";
+import { startedSections } from "./plan-data";
 
 // loadToday / loadProposal / loadInsights over the real event and entry stores (an in-memory client) and stubbed Scholar reads.
 
@@ -36,7 +37,7 @@ vi.mock("./store", () => ({
   competencyProgressRows: async () => ({ ok: true, data: { mappings: [], concepts: new Map(), questions: [], attempts: [] } }),
   countDue: async () => h.due,
   sectionsOf: async (_a: unknown, _u: string, ids: string[]) => ({ ok: true, data: h.sections.filter(s => ids.includes(s.materialId)) }),
-  topicsOfSections: async () => h.topicOf, chunkContents: async () => [], chunksByIds: async () => ({ ok: true, data: [] }), materialQualities: async () => new Map(),
+  topicsOfSections: async () => h.topicOf, chunkContents: async () => [], chunksByIds: async () => ({ ok: true, data: [] }), materialQualities: async () => new Map(), learnedChunkIds: async () => new Set<string>(),
   listLearningSessions: async () => ({ ok: true, data: [] }), listRevisionSessions: async () => ({ ok: true, data: [] }),
   getEvaluation: async () => ({ ok: true, data: null }),
   evaluationEvidence: async () => ({ ok: true, data: { attempts: [{ marking: "deterministic", correct: true, answeredAt: "2026-11-01T10:00:00Z" }], reviews: [], checks: [], decisions: [] } }),
@@ -290,5 +291,14 @@ describe("loadInsights", () => {
     if (!v.ok) throw new Error("setup");
     expect(v.insights.selfReported).toMatchObject({ sessions: 1, minutes: 45 });
     expect(v.insights.consistency).toMatchObject({ state: "measured", studyDays: 1 });     // only the recorded answer on 1 November
+  });
+});
+
+describe("SCHOLAR-INDEPENDENT-LEARNING-01 P2: what counts as a section started (policy scholar_plan_started_signal)", () => {
+  it("learning: a lesson read, opened or taught counts, as does a question answered; practice: only a question answered", () => {
+    const answered = new Set(["q-section"]), learned = new Set(["read-section", "q-section"]);
+    expect([...startedSections(answered, learned, "learning")].sort()).toEqual(["q-section", "read-section"]);
+    expect([...startedSections(answered, learned, "practice")]).toEqual(["q-section"]);
+    expect(startedSections(new Set(), new Set(), "learning").size).toBe(0);
   });
 });

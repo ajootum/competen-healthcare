@@ -6,6 +6,9 @@ Waves: 1 = CE-01, CE-02, CE-03 · 2 = CE-04, CE-05 · 3 = CE-06 · 4 = CE-07 acc
 
 | ID | Workstream | Status | Last update |
 |---|---|---|---|
+| 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P2: My Plan counts a lesson read, opened or taught as a section started (policy `scholar_plan_started_signal`, default learning; `store.ts learnedChunkIds`, pure `startedSections`); the other adaptation rules audited as existing (table in the programme doc); no migration | branch scholar/independent-learning-p2 (stacked on P1) | CE-03 |
+| 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P1: reader links carry the study session; Revise narrowed to the lesson's sections (`?sections=`, sources scope, "Use the whole material"); Ask about this per section; Scholar AI refusals carry codes and the shared copy gains provider_unavailable (no "environment" wording) | branch scholar/independent-learning-p1 (stacked on P0) | CE-01, CE-05, CE-07 |
+| 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P0: the independent lesson reader (original sections inside every Learn lesson, exact-place resume on the original text, Mark as read, linked competencies, existing resources opened directly; mig 920 authored, staging ×2 + VERIFY, not in production) | branch scholar/independent-learning-p0, docs/programme/SCHOLAR-INDEPENDENT-LEARNING-01.md, docs/evidence/SCHOLAR-INDEPENDENT/920-build-record.md | CE-01, CE-02, CE-07 |
 | CE-01 | Seamless, context-aware Personal AI | Implementing | 2 Nov 2026 |
 | CE-02 | AI Notebook and Personal Learning Library | Implementing | 2 Nov 2026 |
 | CE-03 | Unified My Plan | Deployed | 2 Nov 2026 |
@@ -108,10 +111,27 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 
 ---
 
+## SCHOLAR-INDEPENDENT-LEARNING-01 — AI-independent, AI-enhanced learning engine — Implementing
+
+Owner instruction 3 Nov 2026 (cross-cutting over CE-01, CE-02, CE-03, CE-05, CE-07). Audit, the three learning modes, the unit model and the increment plan: `docs/programme/SCHOLAR-INDEPENDENT-LEARNING-01.md`.
+
+**Audit finding (3 Nov)**: extraction, search, sessions, position/resume, flashcard review and scheduling, code-marked question formats, stored case play and OSCE self-marking, My Plan, progress and evaluation all work without AI; saved explanations, AI cards/questions/cases/stations and mappings are generated once and reused with provenance. The one P0 gap: a Learn lesson with nothing saved and AI off showed only "Learning needs AI help, which is off", the original sections one click away on the material page and never inside the lesson.
+
+**P0 Implementing (branch `scholar/independent-learning-p0`, 3 Nov 2026)** — not merged, not deployed. The lesson reader: every Learn lesson shows its own sections (original text, headings, speaker notes, citation, AI-read mark, original picture) before any AI teaching (`learn-reader.ts`, `learn-reader.tsx`, `GET learn/sessions/[id]/read`); each section is a 790 anchor so the exact place in the original text is resumed on any device; the learner's own **Mark as read** (migration 920, event action `read`, staging-applied and verified, production pending GO) completes a lesson as AI teaching does; competencies linked to the sections (accepted apart from proposed, never competence); existing flashcards / questions / cases / OSCE stations opened directly, never regenerated. With AI off the session says what works before the reason. Evidence: `docs/evidence/SCHOLAR-INDEPENDENT/`.
+
+**P1 Implementing (branch `scholar/independent-learning-p1`, stacked on P0, 3 Nov 2026)** — not merged, not deployed: study-session context on every reader link, Revise narrowed to the lesson's sections, Ask about this per section, one AI-off voice (refusal codes + provider_unavailable).
+
+**P2 Implementing (branch `scholar/independent-learning-p2`, stacked on P1, 3 Nov 2026)** — not merged, not deployed: My Plan treats a lesson read / opened / taught as started (policy `scholar_plan_started_signal`); the remaining adaptation rules were found to exist and are tabled in the programme doc.
+
+**Next**: P2 rules-based revision priority and assessment-driven recommendations through Individual policy; P3 saved-output reuse and cheaper tiers (CE-07).
+
+---
+
 ## Increment log
 
 | Date | Increment | Evidence | Workstreams |
 |---|---|---|---|
+| 3 Nov 2026 | My Competencies Explorer (HFE improvement of the existing Overview, not a new workstream): Framework -> Area -> Domain -> Competency in the saved Holdings order via the shared `framework-tree.ts` helper, seven independent progress indicators (accepted mapping = Material linked, never Practised), search/filters/sort, banded rows, detail drawer; branch scholar/competency-explorer-hfe-01 | `competency-explorer.test.ts`, `framework-tree.test.ts`; staging walk (PR) | Scholar competencies (CE-07 HFE) |
 | 2 Nov 2026 | CE-04 built on branch scholar/ce04-conversation-01 (not merged, not live): Talk to the patient (text), SBAR handover task, SBAR OSCE template, mig 880 authored (not applied) | docs/evidence/CASE-CONVERSATION/880-build-record.md | CE-04 |
 | 3 Nov 2026 | Learning units for My Plan (SCHOLAR-PLAN-UNITS-01): proposals grouped into learning units with reading / learning / revision / practice estimates and a review step (merge, split, leave out, put first) before Add to My Plan; no migration | branch scholar/plan-units-01, docs/programme/SCHOLAR-PLAN-UNITS-01.md | CE-03 |
 | 2 Nov 2026 | My Plan (PLP-01..04 + calendar entries) | PR #225, mig 840, dpl_Di2ecqHj | CE-03 |

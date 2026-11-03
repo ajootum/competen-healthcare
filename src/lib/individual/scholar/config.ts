@@ -128,6 +128,10 @@ export const PROMPT_VERSIONS = {
   // v2 (SCHOLAR-GUIDED-LEARNING-01): no unsupported counts ("two types") unless the passages give them. A saved v1
   // lesson is still opened, with no AI call (LEARN_TEACH_LEGACY): its structure and checks are the same.
   learnTeach: "scholar-learn-teach-v2",
+  // SCHOLAR-UNDERSTANDING-CHECKS-01 (owner, 3 Nov 2026): a clarification (the judgement of a written check answer) is written in
+  // labelled parts after its VERDICT line -- what was right, what was missing, misconceptions, the key learning points (a model
+  // answer from the passages) and what to revise next (learn-check.ts). On top of `learn`; never a saved artefact.
+  learnClarify: "scholar-learn-clarify-v2",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
   evaluate: "scholar-evaluate-v2",

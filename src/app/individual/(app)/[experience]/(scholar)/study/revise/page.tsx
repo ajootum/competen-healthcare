@@ -6,8 +6,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  countDue, dueCards, getAdaptiveSet, getRevisionSession, listAdaptiveExams, listMaterials, listRevisionSessions, listRevisionSets, mistakeToFixCount, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow,
-} from "@/lib/individual/scholar/store";
+  countDue, dueCards, getAdaptiveSet, getRevisionSession, listAdaptiveExams, listMaterials, listRevisionSessions, listRevisionSets, mistakeToFixCount, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow, isUuid } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { answerText, buildRevisionInsights } from "@/lib/individual/scholar/revision";
 import { feedbackView, keptAttemptView, revisionItemView } from "@/lib/individual/scholar/revision-view";
@@ -53,7 +52,7 @@ function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method:
   } catch { return null; }
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string }> }) {
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -225,7 +224,8 @@ export default async function Revise({ params, searchParams }: { params: Promise
           <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
-            preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null } : null}
+            // SCHOLAR-INDEPENDENT-LEARNING-01 P1: from a Learn lesson's notes, only that lesson's sections (the learner may widen it to the material).
+            preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null, chunkIds: (q.sections ?? "").split(",").filter(isUuid).slice(0, 24) } : null}
             scope={q.material ? null : revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
 
           {toFix?.ok && (

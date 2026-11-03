@@ -35,23 +35,26 @@ export async function aiPreflight(ctx: IndividualContext): Promise<NextResponse 
   const consent = await readConsent(ctx.admin, ctx.userId);
   if (!consent.ok) return NextResponse.json({ error: "Your AI consent could not be checked just now, so nothing was sent. Try again shortly." }, { status: 503 });
   const status = consentStatus(consent.data, consentDocuments().published);
-  if (status === "awaiting_legal") return NextResponse.json({ error: CONSENT_AWAITING_LEGAL }, { status: 403 });
-  if (status === "outdated") return NextResponse.json({ error: CONSENT_UPDATED }, { status: 403 });
+  // SCHOLAR-INDEPENDENT-LEARNING-01 P1: every refusal carries a `code` the shared copy reads (ai-availability.ts reasonFromRefusal),
+  // so a page says why in the same words wherever AI is not available. The words here stay for pages that show them raw.
+  if (status === "awaiting_legal") return NextResponse.json({ error: CONSENT_AWAITING_LEGAL, code: "consent_awaiting_legal" }, { status: 403 });
+  if (status === "outdated") return NextResponse.json({ error: CONSENT_UPDATED, code: "consent_outdated" }, { status: 403 });
   if (status !== "on")
-    return NextResponse.json({ error: "Turn on AI processing of your material in My Learning before asking for explanations or questions." }, { status: 403 });
+    return NextResponse.json({ error: "Turn on AI processing of your material in My Learning before asking for explanations or questions.", code: "consent_off" }, { status: 403 });
   // The estate limit (quota.ts, unchanged) and the Individual policy limit, whichever is tighter (CONFIG-002).
   const quota = individualAiQuota(await checkAiQuota(ctx.admin, ctx.userId), await loadIndividualPolicy(ctx.admin), await individualPlanAiLimit(ctx.admin, ctx.userId));
   // Fails CLOSED: an unreadable count is a 503 refusal, never a free pass (individualAiQuota).
   const refusal = await pilotQuotaRefusal(ctx.admin, "scholar", ctx.userId, quota, individualQuotaRefusal(quota, "AI requests"), "AI requests");
   if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
-  if (!aiStatus().configured) return NextResponse.json({ error: "AI is not configured on this environment." }, { status: 503 });
+  if (!aiStatus().configured) return NextResponse.json({ error: AI_ERROR.not_configured.error, code: AI_ERROR.not_configured.code }, { status: AI_ERROR.not_configured.status });
   return null;
 }
 
-export const AI_ERROR: Record<"not_configured" | "refusal" | "failed", { status: number; error: string }> = {
-  not_configured: { status: 503, error: "AI is not configured on this environment." },
-  refusal: { status: 502, error: "The AI declined that request." },
-  failed: { status: 502, error: "The AI could not answer just now. Try again shortly." },
+/** The provider is not set up or did not answer: said in the learner's terms (never "environment"), with a code the shared copy reads. */
+export const AI_ERROR: Record<"not_configured" | "refusal" | "failed", { status: number; error: string; code: string }> = {
+  not_configured: { status: 503, error: "AI help is not available right now, so nothing was sent. Everything you have saved still works.", code: "not_configured" },
+  refusal: { status: 502, error: "The AI declined that request.", code: "refusal" },
+  failed: { status: 502, error: "The AI could not answer just now. Try again shortly. Everything you have saved still works.", code: "failed" },
 };
 
 /** One audit row. Counts and ids only -- never the person's question text or their material. */

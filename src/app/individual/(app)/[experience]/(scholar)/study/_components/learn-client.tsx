@@ -42,11 +42,14 @@ import { AskAbout, type AskAboutProps } from "./ask-panel";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
+import { LessonReader } from "./learn-reader";
+import { WORKS_WITHOUT_AI } from "@/lib/individual/scholar/learn-reader";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
 import { INLINE_DEFAULTS, RECALL_WAIT_REASON, applicationAfter, applyEligible, blockPending, checkBlocks, inlineCheckPlacement, lessonCanContinue, marksFromActivities, quickFromCode, recallContent, recallFromCode, wordCount, type CheckBlock, type InlinePolicy } from "@/lib/individual/scholar/learn-inline";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
 import { ApproachControl, type ApproachMemory, type ApproachResult } from "./learn-approach";
 import { STYLE_DEFAULTS, effectiveStyle, mistakeOffer, moreItems, styleChoices, styleCode, type StylePolicy, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
+import { CHECK_BUTTON, CHECK_FEEDBACK_HEADING, CHECK_NO_AI_WHY, CHECK_PROCESSING, CHECK_SELF_REVIEW_LABEL, CHECK_SELF_REVIEW_NOTE, parseCheckFeedback, referenceAnswer, type CheckNoAiReason } from "@/lib/individual/scholar/learn-check";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -130,6 +133,9 @@ type Recover = { request: RecoveryRequestBody; explain: (rec: { id: string; mode
 /** AI operating modes: a clarify question put to the student instead of a refusal, and the request to resend if it is for study. */
 type Pending = { prompt: ClarifyPrompt; target: "lesson" | "ask" | "assistant"; action?: string; extra?: Record<string, unknown>; asked?: string; question?: string; followUp?: FollowUp; step?: number };
 type Step = SessionView["steps"][number];
+/** SCHOLAR-UNDERSTANDING-CHECKS-01: one open understanding check (learn-check.ts). */
+type CheckState = { step: number; question: string; raw: string | null; answer: string; feedback: Reply | null; cardId: number | null; noAi: CheckNoAiReason | null; reviewing: boolean };
+const openCheck = (step: number, raw: string, answer = ""): CheckState => ({ step, question: questionText(raw), raw, answer, feedback: null, cardId: null, noAi: null, reviewing: false });
 
 /** One request. `signal`: the journey cancels a lesson request it no longer needs (an abort answers { aborted: true }). */
 async function call(url: string, body: unknown, method = "POST", headers: Record<string, string> = {}, signal?: AbortSignal): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -255,7 +261,13 @@ export function LearnWorkspace(props: {
   /** Lessons whose saved teaching is being opened (open:true, never AI). */
   const [opening, setOpening] = useState<Record<number, boolean>>({});
   /** The informal check, answered in its own lesson. `lastCheck`: the latest answered one per lesson (Explain my mistake). */
-  const [check, setCheck] = useState<{ step: number; question: string; answer: string } | null>(null);
+  // SCHOLAR-UNDERSTANDING-CHECKS-01: the check keeps the learner's answer through every outcome. `raw`: the question as the engine
+  // wrote it (its [S n] tags name the sections to review). `feedback`: the judgement shown beneath the answer; `cardId`: that reply's
+  // card in the thread, hidden while the panel shows it and visible as history after Try again / Continue. `noAi`: why no AI judgement
+  // is shown (the self-review takes its place). `reviewing`: Review source is open.
+  const [check, setCheck] = useState<CheckState | null>(null);
+  /** The latest request's error, with the action and lesson it belongs to, so it is shown where the learner is (the check panel). */
+  const [errorAt, setErrorAt] = useState<{ action: string; step: number } | null>(null);
   const [lastCheck, setLastCheck] = useState<Record<number, { question: string; answer: string }>>({});
   const [ask, setAsk] = useState("");
   const [askThread, setAskThread] = useState<Card[]>([]);
@@ -330,6 +342,11 @@ export function LearnWorkspace(props: {
   // lesson's content is on the page (until then the writer reports it, so a write never replaces it with the lesson's top).
   const placerRef = useRef<PlaceScheduler | null>(null);
   const pendingPlace = useRef<{ step: number; place: Place; since: number } | null>(null);
+  // SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes are on the page (their section anchors exist), so a saved place inside
+  // them can be found; and what the last "Mark as read" answered, per lesson.
+  const [readerTick, setReaderTick] = useState(0);
+  const readerLoaded = useCallback(() => setReaderTick(t => t + 1), []);
+  const [markedNote, setMarkedNote] = useState<Record<number, string>>({});
   const sessionRef = useRef(session);
   const practiceRef = useRef(practiceOpen);
   const chooseStyle = useCallback((st: TeachingStyle) => { styleRef.current = st; setStyleChosen(st); if (engaged.current) syncRef.current?.event("activity"); }, []);
@@ -395,13 +412,13 @@ export function LearnWorkspace(props: {
   const act = useCallback(async (action: string, extra: Record<string, unknown> = {}, target: "lesson" | "ask" = "lesson", asked?: string, onStep?: number) => {
     const st = onStep === undefined ? step : session?.steps.find(x => x.step === onStep) ?? null;
     if (!session || !st) return null;
-    setBusy(action); setBusyAt(st.step); setError(""); setPending(null);
+    setBusy(action); setBusyAt(st.step); setError(""); setErrorAt(null); setPending(null);
     const s: LessonSettings = { mode: (extra.mode as LearnMode | undefined) ?? mode, depth };
     const r = await call(ACT_URL, studyBody(bodyFor(st, action, { mode, depth }, extra)));
     setBusy(""); setBusyAt(null);
     const prompt = r.ok ? null : clarifyFrom(r.json);
     if (prompt) { setPending({ prompt, target, action, extra, asked, step: st.step }); return null; }
-    if (!r.ok && !r.json.withheld) { setError(r.json.error ?? "Scholar could not answer just now."); return null; }
+    if (!r.ok && !r.json.withheld) { setError(r.json.error ?? "Scholar could not answer just now."); setErrorAt({ action, step: st.step }); return null; }
     record(st.step, r.json, action, extra, target, asked);
     const i = indexOf(st.step);
     if (target === "lesson") setAnnounce(`Scholar answered in lesson ${i + 1}.`);
@@ -502,6 +519,21 @@ export function LearnWorkspace(props: {
     void teachLesson(stepNo, s);
   }, [session, mode, depth, props.startAction, props.consent, props.actions, indexOf, dispatch, openLesson, teachLesson]);
 
+  // SCHOLAR-INDEPENDENT-LEARNING-01: the learner's own "Mark as read" (PATCH sessions/[id] { move: "read", at }, event action read, 920).
+  // No AI. The mark is a live activity at once (and so in the 790 position); the server says whether it was recorded.
+  const markRead = useCallback(async (stepNo: number) => {
+    const id = sessionRef.current?.id;
+    const i = indexOf(stepNo);
+    if (!id || i < 0) return;
+    engaged.current = true;
+    dispatch({ type: "activity", index: i, kind: "marked" });
+    const r = await call(`/api/individual/scholar/learn/sessions/${encodeURIComponent(id)}`, { move: "read", at: stepNo }, "PATCH");
+    if (r.ok && r.json.recorded === true) {
+      setProgress(p => ({ ...p, [stepNo]: { actions: [...new Set([...(p[stepNo]?.actions ?? []), "read"])], verdict: p[stepNo]?.verdict ?? null } }));
+      setMarkedNote(m => ({ ...m, [stepNo]: "Marked as read. A learning record for you, not an assessment." }));
+    } else setMarkedNote(m => ({ ...m, [stepNo]: "Marked on this device. It could not be recorded in your learning history just now." }));
+  }, [indexOf, dispatch]);
+
   const scrollToLesson = useCallback((stepNo: number) => {
     setTab("lesson");
     const go = () => {
@@ -558,7 +590,7 @@ export function LearnWorkspace(props: {
     window.setTimeout(() => { if (pendingPlace.current?.step === stepNo) applyPlace(); }, 4200);
     return true;
   }, [applyPlace]);
-  useEffect(() => { if (pendingPlace.current) applyPlace(); }, [cards, opening, loading, lessonNote, journey, applyPlace]);
+  useEffect(() => { if (pendingPlace.current) applyPlace(); }, [cards, opening, loading, lessonNote, journey, readerTick, applyPlace]);
 
   // The journey's effects, against the latest callbacks.
   useEffect(() => {
@@ -829,8 +861,8 @@ export function LearnWorkspace(props: {
     if (!r) return;
     // SCHOLAR-EDU-AI-01 s6: no new AI (continuity) keeps what the student typed, so they can try again or carry on.
     if (p.action === "ask") { if (!r.continuity) setAsk(""); }
-    else if (p.action === "check" && r.checkQuestion && p.step !== undefined) setCheck({ step: p.step, question: r.checkQuestion, answer: "" });
-    else if (p.action === "clarify" && !r.error && !r.continuity) setCheck(null);
+    else if (p.action === "check" && r.checkQuestion && p.step !== undefined) setCheck(openCheck(p.step, r.checkQuestion));
+    else if (p.action === "clarify") applyCheckResult(r);
   }
   // SCHOLAR-LEARN-FIX-01 L-B: Check my understanding answers a question the Teach Me answer already wrote and the engine
   // checked (teach-format.ts), when it cites only this lesson's own sections -- the clarification is judged against
@@ -838,22 +870,47 @@ export function LearnWorkspace(props: {
   async function startCheck(st: Step, q?: string) {
     const own = q ?? teachQuestionsOf(st)[0];
     if (own) {
-      setCheck({ step: st.step, question: questionText(own), answer: "" });
+      setCheck(openCheck(st.step, own));
       setTimeout(() => document.getElementById("check-answer")?.focus(), 0);
       return;
     }
     const r = await act("check", {}, "lesson", undefined, st.step);
-    if (r?.checkQuestion) setCheck({ step: st.step, question: r.checkQuestion, answer: "" });
+    if (r?.checkQuestion) setCheck(openCheck(st.step, r.checkQuestion));
   }
   /** An Ask me / Challenge question, answered in the lesson's own check (clarify records the informal verdict). */
-  const checkThis = (st: Step, q: string) => { setCheck({ step: st.step, question: q, answer: "" }); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); };
+  const checkThis = (st: Step, q: string) => { setCheck(openCheck(st.step, q)); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); };
+  // SCHOLAR-UNDERSTANDING-CHECKS-01: EVERY outcome of Check my answer is shown beneath the answer, which is kept:
+  //   a judgement        -> the verdict and its parts (the thread's card is hidden while the panel shows it);
+  //   withheld           -> why, then the self-review (the lesson's key points and the question's sections, no AI);
+  //   no new AI          -> the continuity message, then the self-review;
+  //   a clarify question -> put HERE (ClarifyPurpose in the panel), with the self-review one click away;
+  //   an error           -> the error here, then the self-review.
+  // Nothing clears the box until the learner chooses Try again, Continue learning or Skip.
+  function applyCheckResult(r: Reply | null) {
+    setCheck(c => {
+      if (!c) return c;
+      if (!r) return c; // the clarify question (pending) or an error (errorAt): both render in the panel from their own state
+      const cardId = seq.current; // the card `record` just added for this reply
+      if (r.continuity) return { ...c, feedback: r, cardId, noAi: "continuity" };
+      if (r.withheld) return { ...c, feedback: r, cardId, noAi: "withheld" };
+      return { ...c, feedback: r, cardId, noAi: null };
+    });
+    if (r && !r.error && !r.continuity && !r.withheld && check) setLastCheck(m => ({ ...m, [check.step]: { question: check.question, answer: check.answer.trim() } }));
+  }
   async function submitCheck(e: React.FormEvent) {
     e.preventDefault();
     if (!check?.answer.trim()) return;
     const c = check, answer = c.answer.trim();
     const r = await act("clarify", { checkQuestion: c.question, answer }, "lesson", `Your answer: ${answer}`, c.step);
-    if (r && !r.error && !r.continuity) { setCheck(null); setLastCheck(m => ({ ...m, [c.step]: { question: c.question, answer } })); } // no new AI: the answer stays in the box
+    applyCheckResult(r);
   }
+  /** Try again: the answer stays in the box, the judgement moves to the lesson's thread as a previous check. */
+  const retryCheck = () => { setCheck(c => (c ? { ...c, feedback: null, cardId: null, noAi: null, reviewing: false } : c)); setErrorAt(null); setPending(null); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); };
+  /** Continue learning: the check closes, its judgement stays in the lesson's thread, and the page moves to What next? (the lesson, its sources and the session are unchanged). */
+  const continueAfterCheck = (st: Step) => {
+    setCheck(null); setErrorAt(null); setPending(null);
+    setTimeout(() => (document.getElementById("journey-next-h") ?? document.getElementById(lessonAnchorId(st.step, "act")))?.scrollIntoView({ block: "start", behavior: "smooth" }), 0);
+  };
   async function submitAsk(e: React.FormEvent) {
     e.preventDefault();
     const q = ask.trim();
@@ -961,20 +1018,114 @@ export function LearnWorkspace(props: {
     }));
   };
   // The check, answered where its question is: under the lesson's own question, or (a written check) after the lesson.
-  const checkForm = (inline: boolean) => check && (
-    <form onSubmit={submitCheck} className="mt-2 rounded-xl border border-violet-200 bg-white p-3">
-      {!inline && <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-violet-900">Check your understanding</p>}
-      {!inline && <p className="mt-1 text-[14.5px] font-semibold text-gray-900">{check.question}</p>}
-      <label htmlFor="check-answer" className={`${inline ? "" : "mt-2 "}block text-[12.5px] font-semibold text-gray-700`}>Your answer</label>
-      <textarea id="check-answer" rows={3} maxLength={QUESTION_MAX} value={check.answer} onChange={e => setCheck({ ...check, answer: e.target.value })}
-        className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
-      <p className="mt-1 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !check.answer.trim()}>{busy === "clarify" ? "Checking…" : "Check my answer"}</button>
-        <button type="button" className={ghost} onClick={() => setCheck(null)}>Skip the check</button>
-      </div>
-    </form>
-  );
+  // SCHOLAR-UNDERSTANDING-CHECKS-01: the panel owns the question, the answer (kept), the processing state, the clarify question,
+  // the error, the judgement with its parts, the self-review and Try again | Review source | Continue learning.
+  const checkPanel = (st: Step, inline: boolean) => {
+    if (!check || check.step !== st.step) return null;
+    const c = check;
+    const working = busy === "clarify" && busyAt === c.step;
+    const clarifyHere = pending?.action === "clarify" && pending.target === "lesson" && pending.step === c.step ? pending : null;
+    const errorHere = errorAt?.action === "clarify" && errorAt.step === c.step ? error : "";
+    const unavailable = offReason("clarify");
+    const answered = !!c.feedback || !!errorHere || !!clarifyHere;
+    const fb = c.feedback;
+    const judged = !!fb && !c.noAi && !!fb.answer;
+    const noAi: CheckNoAiReason | null = c.noAi ?? (errorHere ? "error" : clarifyHere ? "clarify" : unavailable ? "unavailable" : null);
+    // The self-review's reference: the saved lesson's key points and the sections the question cites (learn-check.ts, no AI).
+    const teach = lastTeachOf(st);
+    const ref = referenceAnswer({ rawQuestion: c.raw, lessonPoints: teach ? parseTeachAnswer(teach.reply.answer!)?.points ?? [] : [], sources: teach?.reply.sources ?? [] });
+    // The self-review stands in for a judgement that is not shown; beside a judgement, Review source shows only the sources.
+    const showSelfReview = (answered && !!noAi && noAi !== "clarify") || (c.reviewing && !judged);
+    const parts = judged ? parseCheckFeedback(fb!.answer!) : null;
+    const sources = fb?.sources?.length ? fb.sources : teach?.reply.sources ?? [];
+    const bullets = (items: readonly string[]) => <ul className="mt-1 list-disc space-y-1 pl-5">{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>;
+    const part = (k: keyof typeof CHECK_FEEDBACK_HEADING, items: readonly string[]) => items.length > 0 && (
+      <div><h5 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{CHECK_FEEDBACK_HEADING[k]}</h5>{bullets(items)}</div>
+    );
+    return (
+      <form onSubmit={submitCheck} className="mt-2 rounded-xl border border-violet-200 bg-white p-3" aria-busy={working}>
+        {!inline && <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-violet-900">Check your understanding</p>}
+        {!inline && <p className="mt-1 text-[14.5px] font-semibold text-gray-900">{c.question}</p>}
+        <label htmlFor="check-answer" className={`${inline ? "" : "mt-2 "}block text-[12.5px] font-semibold text-gray-700`}>Your answer</label>
+        <textarea id="check-answer" rows={3} maxLength={QUESTION_MAX} value={c.answer} onChange={e => setCheck({ ...c, answer: e.target.value })} readOnly={working || answered}
+          className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${answered ? "bg-gray-50 text-gray-800" : ""} ${focusRing}`} />
+        {!answered && <p className="mt-1 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>}
+        {!answered && unavailable && <p className="mt-1 text-[12.5px] text-gray-700">{aiReasonCopy(unavailable, "scholar").text}</p>}
+        {working && <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-[13px] text-gray-700"><span aria-hidden="true" className="inline-block h-2 w-2 rounded-full motion-safe:animate-pulse" style={{ background: accent }} />{CHECK_PROCESSING}</p>}
+        {!answered && !working && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !c.answer.trim() || !!unavailable}>{CHECK_BUTTON.submit}</button>
+            {unavailable && c.answer.trim() && <button type="button" className={ghost} onClick={() => setCheck({ ...c, reviewing: true, feedback: null })}>{CHECK_SELF_REVIEW_LABEL}</button>}
+            <button type="button" className={ghost} onClick={() => setCheck(null)}>{CHECK_BUTTON.skip}</button>
+          </div>
+        )}
+        {/* The clarify question, HERE where the learner is (it used to render at the top of the lesson card, out of view). */}
+        {clarifyHere && !working && (
+          <div className="mt-3">
+            <p className="text-[13px] text-gray-800">{CHECK_NO_AI_WHY.clarify}</p>
+            <ClarifyPurpose key={clarifyHere.asked ?? "clarify"} clarify={clarifyHere.prompt} busy={!!busy} accent={accent} className="mt-2" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />
+            {!c.reviewing && <button type="button" className={`${ghost} mt-2`} onClick={() => setCheck({ ...c, reviewing: true })}>{CHECK_SELF_REVIEW_LABEL}</button>}
+          </div>
+        )}
+        {errorHere && !working && <p role="alert" className="mt-3 text-[13.5px] font-medium text-red-700">{CHECK_NO_AI_WHY.error} {errorHere}</p>}
+        {fb && c.noAi === "continuity" && <p role="status" className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[13.5px] text-gray-800"><span className="font-semibold">{CHECK_NO_AI_WHY.continuity}</span> {fb.continuity?.message}</p>}
+        {fb && c.noAi === "withheld" && <p role="status" className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-800"><span className="font-semibold">{CHECK_NO_AI_WHY.withheld}</span> {fb.next?.why ?? fb.message}</p>}
+        {/* (b) THE AI JUDGEMENT: the verdict, then its parts, each cited into the learner's own notes. Formative, never competence. */}
+        {judged && (
+          <section aria-label="Feedback on your answer" className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2.5">
+            {fb!.verdict && <p className="text-[14px] text-violet-950"><span className="font-semibold">{fb!.verdict.label}.</span> {fb!.verdict.informal}</p>}
+            <FormativeAiLabel className="mt-1" />
+            <div className="mt-2 space-y-2.5 text-[14px] leading-relaxed text-gray-800">
+              {parts ? (
+                <>
+                  {part("right", parts.right)}
+                  {part("missing", parts.missing)}
+                  {part("misconceptions", parts.misconceptions)}
+                  {part("keyPoints", parts.keyPoints)}
+                  {parts.next && <div><h5 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{CHECK_FEEDBACK_HEADING.next}</h5><p className="mt-1"><Cited text={parts.next} sources={sources} /></p></div>}
+                </>
+              ) : <div className="whitespace-pre-wrap"><Cited text={fb!.answer!} sources={sources} /></div>}
+            </div>
+            {fb!.flags && fb!.flags.length > 0 && <AiFlagList flags={fb!.flags} />}
+            {fb!.provenance && <p className="mt-2 text-[11px] text-gray-400">Model {fb!.provenance.model} · prompt {fb!.provenance.promptVersion}</p>}
+          </section>
+        )}
+        {/* (a) THE SELF-REVIEW, no AI: the lesson's own key points and the sections the question rests on. Never a verdict. */}
+        {showSelfReview && (
+          <section aria-label="Compare with your notes" className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5">
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{CHECK_SELF_REVIEW_LABEL}</p>
+            <p className="mt-1 text-[13px] text-gray-700">{CHECK_SELF_REVIEW_NOTE}</p>
+            {ref.points.length > 0
+              ? <div className="mt-2 text-[14px] leading-relaxed text-gray-800"><h5 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">Key points from your notes</h5>{bullets(ref.points)}</div>
+              : <p className="mt-2 text-[13px] text-gray-700">This lesson has no saved key points yet. Read the sections below and compare your answer with them.</p>}
+          </section>
+        )}
+        {/* Review source: the sections the question rests on, with their excerpts, and a link to each in your notes. */}
+        {answered && c.reviewing && (
+          <section aria-label="Sources for this check" className="mt-3 rounded-lg border border-gray-200 px-3 py-2.5">
+            <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{SOURCE_KIND_LABEL.notes}</p>
+            {ref.sources.length ? (
+              <ul className="mt-1.5 space-y-2">
+                {ref.sources.map(s => (
+                  <li key={s.chunkId} className="text-[13.5px] text-gray-800">
+                    <Link href={sourceHref(s.materialId, s.chunkId)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>[{s.tag}] {s.citation}</Link>
+                    {s.excerpt && <p className="mt-0.5 whitespace-pre-wrap text-[13px] text-gray-700">{s.excerpt}{s.excerpt.length >= 400 ? "…" : ""}</p>}
+                  </li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-[13px] text-gray-700">Open this lesson&apos;s sources from the Sources list.</p>}
+          </section>
+        )}
+        {answered && !working && (
+          <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="After this check">
+            <button type="button" className={ghost} onClick={retryCheck}>{CHECK_BUTTON.again}</button>
+            <button type="button" className={ghost} aria-pressed={c.reviewing} onClick={() => setCheck({ ...c, reviewing: !c.reviewing })}>{CHECK_BUTTON.source}</button>
+            <button type="button" className={btn} style={{ background: accent }} onClick={() => continueAfterCheck(st)}>{CHECK_BUTTON.continue}</button>
+          </div>
+        )}
+      </form>
+    );
+  };
 
   /** One lesson of the journey: its explanation (or a calm placeholder), then its activities, each on demand. */
   const lesson = (st: Step, i: number) => {
@@ -1029,30 +1180,36 @@ export function LearnWorkspace(props: {
     const status = navLessons[i].status.label;
     return (
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
+        {/* SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes first (no AI), with their competencies, what exists to practise with, and Mark as read. */}
+        {session.id && session.recorded && (
+          <LessonReader sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
+            markedNote={markedNote[st.step] ?? null} accent={accent} onLoaded={readerLoaded} onMarkRead={markRead} ownCards={!!props.ownCards && !!first?.materialId} />
+        )}
         {/* Nothing here yet: a calm line and the one way in (the learner's choice). Manual: the starting action, as before. */}
         {/* SCHOLAR-PERSISTENT-LEARNING-01: the one way in -- Review saved lesson (no AI), else Continue / Start learning. */}
         {!hasLesson && !preparing && !lessonMsg && pending?.step !== st.step && (
           opening[st.step] ? <p role="status" className="mt-3 text-[13.5px] text-gray-700">Opening your saved lesson…</p>
             : primaryAction(facts[i], true) === "review" ? <LessonPlaceholder note="You have saved teaching for this lesson. Opening it uses no AI." label={PRIMARY_LABEL.review} onTeach={() => void openLesson(st.step)} />
-            : !props.consent ? <LessonPlaceholder label="" note="Learning needs AI help, which is off." />
+            : !props.consent ? <LessonPlaceholder label="" note="AI teaching is off. Your notes above are this lesson; everything saved still opens." />
             : group.primary ? <LessonPlaceholder note={primaryAction(facts[i], true) === "continue" ? "You started this lesson. Carry on where you left it." : "Not started yet."}
                 label={working(group.primary) ? "Working…" : PRIMARY_LABEL[primaryAction(facts[i], true)]}
                 disabled={busyHere || !canTeach} describedBy={offReason(group.primary) ? "learn-ai-why" : undefined}
                 onTeach={() => (guided ? dispatch({ type: "requestTeach", index: i }) : void act(group.primary!, {}, "lesson", undefined, st.step))} />
               : <LessonPlaceholder label="" note="Ask Scholar anything about this lesson." />
         )}
-        {pending?.target === "lesson" && (pending.step ?? at) === st.step && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}
+        {/* SCHOLAR-UNDERSTANDING-CHECKS-01: a clarify question for an open check is shown in the check panel, where the learner is. */}
+        {pending?.target === "lesson" && (pending.step ?? at) === st.step && !(pending.action === "clarify" && myCheck) && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-4" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}
         <div className="mt-4 space-y-4">
           {recalling[st.step] ? (
             <p role="status" className="flex flex-wrap items-center gap-x-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13.5px] text-gray-800">
               Lesson text hidden while you recall
               <button type="button" onClick={() => setRecalling(m => ({ ...m, [st.step]: false }))} className={`inline-flex min-h-[44px] items-center font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Show it</button>
             </p>
-          ) : thread.map((c, k) => <ReplyCard key={c.id} card={c} labels={props.labels} anchorId={lessonAnchorId(st.step, `a${k}`)} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }, "lesson", undefined, st.step) : undefined}
+          ) : thread.map((c, k) => (c.id === myCheck?.cardId ? null : <ReplyCard key={c.id} card={c} labels={props.labels} anchorId={lessonAnchorId(st.step, `a${k}`)} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }, "lesson", undefined, st.step) : undefined}
             onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c, st)} wider={widerFor(c, st)} expansions={expansionsFor(c, st)}
             onAnswer={canCheck && c === lastTeach ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
-            renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkForm(true) : null) : undefined}
-            ask={lessonAsk(st, session, c.reply)} />)}
+            renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkPanel(st, true) : null) : undefined}
+            ask={lessonAsk(st, session, c.reply)} />))}
           {preparing && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <span aria-hidden="true" className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full motion-safe:animate-pulse" style={{ background: accent }} />
@@ -1070,7 +1227,7 @@ export function LearnWorkspace(props: {
           )}
           {busy && busyAt === st.step && busy !== "ask" && busy !== "clarify" && <p role="status" className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
         </div>
-        {myCheck && !checkInline && <div className="mt-4">{checkForm(false)}</div>}
+        {myCheck && !checkInline && <div className="mt-4">{checkPanel(st, false)}</div>}
         {offerCheck && offReason("check") && <p id={`learn-check-why-${st.step}`} className="mt-2 text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
         {settingsChanged && group.primary && props.consent && (
           <button type="button" className={`${ghost} mt-3`} disabled={busyHere || !!offReason(group.primary)} onClick={() => void teachLesson(st.step, { mode, depth })}>Teach this lesson again with these settings</button>
@@ -1139,7 +1296,7 @@ export function LearnWorkspace(props: {
           {session.coverage && session.coverage.sections < session.coverage.of ? ` Suggested steps cover ${session.coverage.sections} of ${session.coverage.of} sections; ask about any of them.` : ""}
         </p>
       </div>
-      {!props.consent && <p className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">{props.offMessage} <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link></p>}
+      {!props.consent && <p className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">{WORKS_WITHOUT_AI} {props.offMessage} <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link></p>}
       {props.standingMessage && (
         <p className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13.5px] text-sky-950">
           {props.standingMessage} Your saved explanations, questions, cards, cases and progress are all still here. <Link href={experienceHref("scholar", "study/saved")} className={`font-semibold underline ${focusRing}`}>Saved learning</Link>
@@ -1496,6 +1653,20 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  */
 function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
   const parts = action === "teach" ? parseTeachAnswer(text) : null;
+  // SCHOLAR-UNDERSTANDING-CHECKS-01: a clarification in the thread (a previous check) shows its labelled parts (learn-check.ts).
+  const checkParts = action === "clarify" ? parseCheckFeedback(text) : null;
+  if (checkParts) {
+    const sub = "text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600";
+    const list = (k: keyof typeof CHECK_FEEDBACK_HEADING, items: readonly string[]) => items.length > 0 && (
+      <div><h4 className={sub}>{CHECK_FEEDBACK_HEADING[k]}</h4><ul className="mt-1 list-disc space-y-1 pl-5">{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul></div>
+    );
+    return (
+      <div id={idPrefix ? `${idPrefix}-tx` : undefined} className="mt-1 space-y-2.5 break-words text-[14.5px] leading-relaxed text-gray-800">
+        {list("right", checkParts.right)}{list("missing", checkParts.missing)}{list("misconceptions", checkParts.misconceptions)}{list("keyPoints", checkParts.keyPoints)}
+        {checkParts.next && <div><h4 className={sub}>{CHECK_FEEDBACK_HEADING.next}</h4><p className="mt-1"><Cited text={checkParts.next} sources={sources} /></p></div>}
+      </div>
+    );
+  }
   // SCHOLAR-PERSISTENT-LEARNING-01 item 4: PROGRESSIVE -- the start first, the rest one click away (no new AI call).
   if (!parts) {
     const { lead, more } = progressiveSplit(text);

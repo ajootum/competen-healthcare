@@ -36,7 +36,7 @@ export default async function RuleTemplateVersionPage({ params }: { params: Prom
       <LifecyclePanel
         kind="rule_template" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}
-        hrefForVersion={(id) => `/super-admin/checklist-studio/scoring-templates/v/${id}`} listHref="/super-admin/checklist-studio/scoring-templates"
+        versionHrefBase="/super-admin/checklist-studio/scoring-templates/v" listHref="/super-admin/checklist-studio/scoring-templates"
       />
       <DefTimeline timeline={lc.timeline} names={lc.names} />
     </StudioShell>

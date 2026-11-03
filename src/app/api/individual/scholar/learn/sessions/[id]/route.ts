@@ -16,8 +16,11 @@ export const dynamic = "force-dynamic";
 // GET: the student's own session (another person's id answers 404) with its steps and, per step, what was done and
 // the latest informal check outcome -- so they can resume where they left off. PATCH { currentStep?, status?, move? }:
 // go to a step (skip, revisit, reorder by choosing), mark it completed, or record a resume. Structure only.
+// SCHOLAR-INDEPENDENT-LEARNING-01 (migration 920): move "read" is the learner's own mark that they read the lesson's
+// original sections (no AI). While 920 is absent the write is refused by the 414 CHECK and the answer says recorded: false,
+// so the page keeps the mark on the device and in the 790 position only. Never assessment evidence.
 
-const MOVES = ["skip", "revisit", "resume"] as const;
+const MOVES = ["skip", "revisit", "resume", "read"] as const;
 
 export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }> }) {
   const ctx = await requireIndividualContext("scholar");
@@ -59,10 +62,12 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
   if (u !== "ok") return NextResponse.json({ error: "Your session could not be updated just now." }, { status: 500 });
   const move = (MOVES as readonly string[]).includes(body?.move) ? body.move as string : null;
   const policy = await loadIndividualPolicy(ctx.admin);
+  let recorded: boolean | null = null;
   if (move && policy.scholarLearningHistory === "record") {
-    const at = step ?? r.data.session.currentStep;
-    await recordLearningEvent(ctx.admin, ctx.userId, { sessionId: id, step: at, action: move, verdict: null, chunkIds: r.data.steps.find(s => s.step === at)?.sections.map(x => x.chunkId) ?? [] });
+    // `at`: the lesson the move is about (a read mark on a lesson that is not the current one) -- current_step is untouched.
+    const at = Number.isInteger(body?.at) && steps.includes(body.at) ? body.at as number : step ?? r.data.session.currentStep;
+    recorded = (await recordLearningEvent(ctx.admin, ctx.userId, { sessionId: id, step: at, action: move, verdict: null, chunkIds: r.data.steps.find(s => s.step === at)?.sections.map(x => x.chunkId) ?? [] })) === "ok";
   }
-  await audit(ctx, "individual_scholar_learning_moved", "individual_scholar_learning_session", id, { step: step ?? null, status: status ?? null, move });
-  return NextResponse.json({ ok: true });
+  await audit(ctx, "individual_scholar_learning_moved", "individual_scholar_learning_session", id, { step: step ?? null, status: status ?? null, move, recorded });
+  return NextResponse.json({ ok: true, ...(move ? { recorded: recorded === true } : {}) });
 }

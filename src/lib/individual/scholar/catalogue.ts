@@ -44,7 +44,13 @@ export type CatalogueCompetency = {
   /** The catalogue (framework) it belongs to, by name. */
   catalogue: string;
   frameworkId: string;
+  /** The framework's code (e.g. NUR-CCF), where S1 read it. */
+  frameworkCode?: string | null;
   domain: string;
+  /** SCHOLAR-COMPETENCY-EXPLORER-HFE-01: the domain's id and the competency's saved position, so the Explorer can show the framework as Holdings organised it. */
+  domainId?: string | null;
+  sortOrder?: number | null;
+  description?: string | null;
   code: string | null;
   title: string;
   /** What a learner should be able to do, as S1 records it. Empty when none is recorded -- not invented here. */
@@ -95,8 +101,8 @@ export interface CompetencyCatalogue {
 
 /** Shaped like S1's CatalogueCompetency, so the projection below is pure and unit-tested. */
 export type S1Competency = {
-  competencyId: string; code: string | null; title: string; layer: Layer | null;
-  profession: { label: string } | null; catalogue: { id: string; name: string; version?: string }; domain: { name: string }; outcomes: string[];
+  competencyId: string; code: string | null; title: string; layer: Layer | null; description?: string | null; sortOrder?: number | null;
+  profession: { label: string } | null; catalogue: { id: string; name: string; code?: string | null; version?: string }; domain: { id?: string; name: string }; outcomes: string[];
   expectedLevel?: { id?: string; score: number; label: string } | null;
   cpu?: { code: string | null; name: string } | null;
   /** The CKCM practice (S1, #49): the competency's own, or its CPU's. */
@@ -137,7 +143,9 @@ export function projectForProgramme(all: S1Competency[], programme: ProgrammeCon
         c: {
           id: c.competencyId, layer, profession: c.profession?.label ?? programme.profession,
           catalogue: own ? c.catalogue.name : o!.catalogueName, frameworkId: own ? c.catalogue.id : o!.catalogueId,
-          domain: c.domain.name, code: c.code, title: c.title, outcomes: c.outcomes,
+          frameworkCode: own ? c.catalogue.code ?? null : null,
+          domain: c.domain.name, domainId: c.domain.id ?? null, sortOrder: c.sortOrder ?? null, description: c.description ?? null,
+          code: c.code, title: c.title, outcomes: c.outcomes,
           expectedLevel: level ? { score: level.score, label: level.label } : null,
           requirement: o?.requirement ?? "required", targetFrom: (o?.expectedLevel ? "programme" : "competency") as "programme" | "competency",
           expectedLevelId: level?.id ?? null, overlayEntryId: o?.entryId ?? null,
