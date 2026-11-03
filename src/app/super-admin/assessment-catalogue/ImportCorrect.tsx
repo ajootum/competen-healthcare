@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { USE_LABEL, type ColumnUse, type DetectedColumn, type SheetDraft, type WorkbookDraft } from "@/lib/assessment/import/types";
+import { buildInstrumentPlan } from "@/lib/assessment/import/to-content";
+import { proposalSummary } from "@/lib/assessment/import/scoring";
+import { newKey } from "@/lib/assessment/studio/vocab";
 import { Chip, input } from "./ui";
 
 /**
@@ -21,6 +24,8 @@ export default function ImportCorrect({ draft, onChange }: { draft: WorkbookDraf
   const update = (patch: Partial<SheetDraft>) => onChange({ ...draft, sheets: draft.sheets.map(s => s.name === sheet.name ? { ...s, ...patch } : s) });
   const setColumn = (col: DetectedColumn, patch: Partial<DetectedColumn>) => update({ columns: sheet.columns.map(c => c.col === col.col && c.header === col.header ? { ...c, ...patch } : c) });
   const topSections = sheet.sections.filter(s => !s.parentKey);
+  const group = draft.groups.find(g => g.sheets.includes(sheet.name)) ?? null;
+  const scoring = group ? buildInstrumentPlan(draft, group, newKey, new Date().toISOString()).scoring : null;
   const childrenOf = (key: string) => sheet.sections.filter(s => s.parentKey === key);
   const itemsOf = (key: string) => sheet.items.filter(i => i.sectionKey === key);
 
@@ -61,6 +66,14 @@ export default function ImportCorrect({ draft, onChange }: { draft: WorkbookDraf
         <p className="mt-1 text-[12px] text-gray-700">Primary response: <b>{sheet.response.primary === "rating_scale" ? "rating on the imported scale" : sheet.response.primary === "multiple_choice" ? `one of ${sheet.response.options.map(o => o.label).join(" / ")}` : "Yes / No (no response columns were found)"}</b>{sheet.response.allowNa ? ", Not applicable allowed" : ""}.</p>
       </section>
 
+      {scoring && (
+        <section className="rounded-lg border border-amber-200 bg-amber-50/60 p-3">
+          <h3 className="text-[13px] font-bold uppercase tracking-wide text-amber-950">Proposed scoring (from the workbook, review before submitting)</h3>
+          <p className="mt-1 text-[12.5px] text-amber-950">{proposalSummary(scoring)}</p>
+          <ul className="mt-1 list-disc pl-5 text-[12px] text-amber-950">{scoring.flags.map((f, i) => <li key={i} className={f.severity === "info" ? "text-gray-700" : ""}>{f.message}</li>)}</ul>
+          <p className="mt-1 text-[11.5px] text-gray-600">Written into the Draft as ordinary editable rules with saved tests, marked as proposed until the author accepts them in Checklist Studio.</p>
+        </section>
+      )}
       {sheet.scale && (
         <section>
           <h3 className="text-[13px] font-bold uppercase tracking-wide text-gray-700">Rating scale: {sheet.scale.title}</h3>

@@ -248,7 +248,7 @@ export async function loadTrail(admin: Admin, kind: DefinitionKind, versionIds: 
 
 const EVENT_LABEL: Record<string, string> = {
   created: "Created", duplicated: "Duplicated into a new draft", submitted: "Put forward for review", returned: "Returned to draft", approved: "Approved",
-  published: "Published", retired: "Retired", validated: "Validation recorded", catalogue_registered: "Registered in the catalogue",
+  published: "Published", retired: "Retired", validated: "Validation recorded", catalogue_registered: "Registered in the catalogue", scoring_proposed: "Scoring proposed from the source workbook",
 };
 const DECISION_LABEL: Record<string, string> = { approved: "approved", rejected: "rejected", changes_requested: "asked for changes" };
 

@@ -36,7 +36,7 @@ export function validateInstrumentVersion(i: ValidationInput): ValidationReport 
 
   let testSummary: ValidationReport["tests"] = null;
   if (!hasRules(i.scoring)) {
-    errors.push({ code: "no_rules", path: "scoring", message: "Scoring rules are required before this can be put forward. Start from a template or build rules.", source: "scoring" });
+    errors.push({ code: "no_rules", path: "scoring", message: "Scoring rules are required before this can be put forward. Start from a starter rule set, a published template, or the proposal from the source workbook, then adjust them.", source: "scoring" });
   } else {
     const r = validateRules(i.def, i.scoring as unknown as RulesDoc);
     errors.push(...tag(r.errors, "scoring")); warnings.push(...tag(r.warnings, "scoring"));

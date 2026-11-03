@@ -7,6 +7,9 @@ import type { Family } from "@/lib/assessment/catalogue/families";
 import type { TaxonomyDimension } from "@/lib/assessment/catalogue/classify";
 import type { ImportGroup, RegisteredInstrument, SheetDraft, WorkbookDraft } from "@/lib/assessment/import/types";
 import { moveSheet, newGroupFor, readinessProblems } from "@/lib/assessment/import/workbook";
+import { buildInstrumentPlan } from "@/lib/assessment/import/to-content";
+import { proposalSummary } from "@/lib/assessment/import/scoring";
+import { newKey } from "@/lib/assessment/studio/vocab";
 import ClassificationFields from "./ClassificationFields";
 import ImportCorrect from "./ImportCorrect";
 import PathwaySummaryCard from "./PathwaySummaryCard";
@@ -165,12 +168,23 @@ export default function ImportWizard({ families, taxonomy, canAuthor, onClose, o
                 </>
               ) : (
                 <>
-                  <p className="text-[13px] text-gray-700">Registering creates, for each instrument below, the catalogue identity with its permanent code, a Draft version 1 with the sections, items, response fields and (where found) a draft rating scale, all pointing back to the uploaded workbook. Nothing is published: review, approval and publication follow as for any Draft.</p>
+                  <p className="text-[13px] text-gray-700">Registering creates, for each instrument below, the catalogue identity with its permanent code, a Draft version 1 with the sections, items, response fields, (where found) a draft rating scale and a PROPOSED scoring with its saved tests, all pointing back to the uploaded workbook. The proposal is deterministic and every assumption is a flag: accept or change it in Checklist Studio before submitting. Nothing is published: review, approval and publication follow as for any Draft.</p>
                   <ul className="space-y-1 text-[13px]">
                     {draft.groups.map(g => {
                       const sheets = draft.sheets.filter(s => g.sheets.includes(s.name));
                       const items = sheets.reduce((n, s) => n + s.items.filter(i => i.include).length, 0);
-                      return <li key={g.key} className="rounded-lg border border-gray-200 px-3 py-2"><b>{g.title || "(untitled)"}</b> · {g.family ?? "no family"} · {items} items from {g.sheets.join(" + ")}{sheets.some(s => s.response.primary === "rating_scale") ? " · rating scale imported as a draft scale" : ""}</li>;
+                      const scoring = g.confirmed && sheets.length ? buildInstrumentPlan(draft, g, newKey, new Date().toISOString()).scoring : null;
+                      return (
+                        <li key={g.key} className="rounded-lg border border-gray-200 px-3 py-2">
+                          <b>{g.title || "(untitled)"}</b> · {g.family ?? "no family"} · {items} items from {g.sheets.join(" + ")}{sheets.some(s => s.response.primary === "rating_scale") ? " · rating scale imported as a draft scale" : ""}
+                          {scoring && (
+                            <div className="mt-1 rounded-md bg-amber-50 px-2 py-1.5 text-[12px] text-amber-950">
+                              <p><b>Proposed scoring</b> (from the workbook, review before submitting): {proposalSummary(scoring)}</p>
+                              <ul className="mt-0.5 list-disc pl-4">{scoring.flags.filter(f => f.severity === "warn").map((f, i) => <li key={i}>{f.message}</li>)}</ul>
+                            </div>
+                          )}
+                        </li>
+                      );
                     })}
                   </ul>
                   {problems.length > 0 && (

@@ -14,7 +14,8 @@ import { createHash, randomUUID } from "node:crypto";
 import type { createAdminClient } from "@/lib/supabase/server";
 import { loadFamilies } from "../catalogue/families";
 import { loadRegistries } from "../studio/read";
-import { createDefinition, createFirstVersion, saveContent, saveScale, saveSettings } from "../studio/write";
+import { createDefinition, createFirstVersion, saveContent, saveScale, saveScoring, saveSettings } from "../studio/write";
+import { recordProposal } from "./propose";
 import { readWorkbookGrids } from "./grid";
 import { buildInstrumentPlan } from "./to-content";
 import { draftWorkbook, readinessProblems } from "./workbook";
@@ -194,6 +195,16 @@ export async function registerImport(admin: Admin, actorId: string, id: string):
     const content = { ...plan.content, items: plan.content.items.map((it) => (it.response_type === "rating_scale" ? { ...it, scale_version_id: scaleVersionId } : it)) };
     const sc = await saveContent(admin, actorId, v.versionId, content);
     if (!sc.ok) return await stop(`The content of "${plan.title}" could not be written: ${sc.error}`);
+    // proposed scoring (owner GO 3 Nov 2026): ordinary editable rules and tests, marked as proposed until the author accepts them
+    if (plan.scoring.rules) {
+      const ss = await saveScoring(admin, actorId, v.versionId, plan.scoring.rules as unknown as Record<string, unknown>, plan.scoring.tests, null);
+      if (!ss.ok) warnings.push(`The proposed scoring of "${plan.title}" was not saved: ${ss.error}`);
+    }
+    if (plan.scoring.deliveryModes.length) {
+      const dm = await saveSettings(admin, actorId, v.versionId, { delivery_modes: plan.scoring.deliveryModes });
+      if (!dm.ok) warnings.push(`The proposed delivery mode of "${plan.title}" was not saved: ${dm.error}`);
+    }
+    await recordProposal(admin, actorId, v.versionId, { family: plan.scoring.family, flags: plan.scoring.flags, deliveryModes: plan.scoring.deliveryModes, patchedOptions: [], source: "import" });
     await admin.rpc("asmt_catalogue_event", { p_instrument: instrumentId, p_event: "catalogue_imported", p_actor: actorId, p_detail: { import_id: id, sheets: g.sheets, items: content.items.length, sections: content.sections.length, scale_version_id: scaleVersionId, flags: flagsOf(draft as WorkbookDraft, g) } });
     registered.push({ groupKey: g.key, instrumentId, code, versionId: v.versionId, scaleVersionId, title: plan.title });
     await admin.from("asmt_import").update({ draft: { ...draft, registered } }).eq("id", id);
