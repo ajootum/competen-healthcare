@@ -3,7 +3,7 @@ export const maxDuration = 60;
 
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { getMaterial, getPassage, insertOsceStation, isUuid, learnerProgramme, listChunks } from "@/lib/individual/scholar/store";
+import { getMaterial, getPassage, insertOsceStation, isUuid, learnerProgramme, listChunks, findOwnAiStation } from "@/lib/individual/scholar/store";
 import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
@@ -15,8 +15,7 @@ import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { osceGate } from "@/lib/individual/scholar/osce-service";
 import {
   EMPTY_DEFINITION, OSCE_RECOVERY_NOTE, OSCE_WITHHELD, normaliseSections, osceRecoveryRequest, osceTemplate, stationFromCompetency, stationFromLibrary, stationFromTemplate,
-  type OsceStationDraft,
-} from "@/lib/individual/scholar/osce";
+  type OsceStationDraft, OSCE_PROMPT_VERSIONS } from "@/lib/individual/scholar/osce";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -109,6 +108,15 @@ async function fromNotes(ctx: Parameters<typeof aiPreflight>[0], req: Request, b
   if (findPatientIdentifiers(passages.map(p => p.content).join("\n")).length)
     return NextResponse.json({ error: "These notes look as if they identify a patient, so they are not sent to AI. Remove the details and upload them again." }, { status: 422 });
 
+  // SCHOLAR-INDEPENDENT-LEARNING-01 P3: a station already written from these notes at this prompt version is offered again (no AI),
+  // unless the learner asked for a new one (`fresh: true`).
+  if (body?.fresh !== true) {
+    const had = await findOwnAiStation(ctx.admin, ctx.userId, { materialId: material.data.id, chunkId: passages[0].chunkId, promptVersion: OSCE_PROMPT_VERSIONS.station });
+    if (had) {
+      await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_osce_station", had.id, { material_id: material.data.id, chunk_ids: passages.map(p => p.chunkId), outcome: "reused", cached: true });
+      return NextResponse.json({ id: had.id, existing: true, reused: true });
+    }
+  }
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "questions");
   if (!standing.available) return NextResponse.json({ error: `${standing.message ?? "New AI help is not available right now."} The practice template and competency stations need no AI.`, continuity: true }, { status: 409 });
   const pre = await aiPreflight(ctx);

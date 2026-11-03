@@ -3800,6 +3800,20 @@ const listOrNull = (xs: readonly string[]) => (xs.length ? [...xs] : null);
  * One station. A template, or a governed station version, already copied for this learner is returned, not copied twice
  * (720 and 721 unique keys). A governed copy is written exactly as published: the 721 trigger refuses anything else.
  */
+/**
+ * SCHOLAR-INDEPENDENT-LEARNING-01 P3: the caller's own AI-written station from this material and section at this prompt
+ * version, newest first, or null. Read before any generation: the same notes are not written into a station twice.
+ */
+export async function findOwnAiStation(admin: Admin, userId: string, q: { materialId: string; chunkId: string; promptVersion: string }): Promise<{ id: string; title: string } | null> {
+  if (!isUuid(q.materialId) || !isUuid(q.chunkId)) return null;
+  try {
+    const { data, error } = await admin.from("individual_scholar_osce_station").select("id, title").eq("user_id", userId).eq("source", "ai")
+      .eq("material_id", q.materialId).eq("chunk_id", q.chunkId).eq("prompt_version", q.promptVersion).order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (error || !data) return null;
+    return { id: String(data.id), title: String(data.title ?? "") };
+  } catch { return null; }
+}
+
 export async function insertOsceStation(admin: Admin, userId: string, d: OsceStationDraft): Promise<{ ok: true; id: string; existing: boolean } | { ok: false; notProvisioned: boolean }> {
   if (d.templateKey || d.libraryVersionId) {
     const q = admin.from("individual_scholar_osce_station").select("id").eq("user_id", userId);

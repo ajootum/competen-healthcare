@@ -368,7 +368,8 @@ const AI_ROUTES: [string, string, RegExp][] = [
   [`${API}/cases/route.ts`, `scholarAiRunner(ctx, req, "case_steps", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }))`, /runCase\([^)]*ai\.run(?:, \{[^;]*\})?\)/],
   [`${API}/materials/[id]/analyse/route.ts`, `scholarAiRunner(ctx, req, "map", await scholarRisk(ctx.admin, ctx.userId, { passages: next.data.map(s => ({ chunkId: s.ref, content: s.text })) }))`, /runAnalysis\([^)]*ai\.run\)/],
   // REVISION-01: a session's new questions (one id per call, `:g1` ...) and a short answer's AI evaluation.
-  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, \"questions\", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, (?:mode === "flashcards" \? call\.count : )?Math\.max\(call\.count, 3\), ai\.run(?:, \{[^;]*\})?\)/],
+  // SCHOLAR-INDEPENDENT-LEARNING-01 P3: the activity is `flashcards` where the published policy offers it (activityOrFallback), else `questions`.
+  [`${API}/revision/sessions/route.ts`, "scholarAiRunner(ctx, req, activity, await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`)", /runRevisionQuestions\(ctx\.userId, call\.kind, passage, (?:mode === "flashcards" \? call\.count : )?Math\.max\(call\.count, 3\), ai\.run(?:, \{[^;]*\})?\)/],
   [`${API}/revision/answer/route.ts`, "scholarAiRunner(ctx, req, \"evaluate\", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\\n${r.text}`, passages: [passage] }))", /runEvaluate\([^)]*ai\.run\)/],
   // CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on a written decision.
   [`${API}/clinical/cases/route.ts`, "scholarAiRunner(ctx, req, \"case_steps\", await scholarRisk(ctx.admin, ctx.userId, { text: resolved.topic, passages, competencyIds }))", /runCaseBlueprint\([\s\S]*?\}, ai\.run\)/],
@@ -607,7 +608,10 @@ const meteredEverywhere = (src: Src) => {
     && /export function scholarAiRunner\(ctx: IndividualContext, req: Request, activity: ScholarAiActivity, risk: RiskContext, callKey\?: string\)/.test(http)
     && /text: \[input\.text \?\? "", \.\.\.input\.passages\.map\(p => p\.content\)\]/.test(http)
     && /export const scholarRequestId = \(ctx: IndividualContext, req: Request\) => requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http)
-    && /const requestId = callKey \? `\$\{scholarRequestId\(ctx, req\)\}:\$\{callKey\}` : scholarRequestId\(ctx, req\);/.test(http);
+    && /const requestId = callKey \? `\$\{scholarRequestId\(ctx, req\)\}:\$\{callKey\}` : scholarRequestId\(ctx, req\);/.test(http)
+    // P3: the revision route chooses between two approved activity codes only, by the published policy, never a model; the runner takes its tier from the policy.
+    && /const activity: ScholarAiActivity = mode === "flashcards" \? activityOrFallback\(whole, "flashcards", "questions"\) : "questions";/.test(src.get(`${API}/revision/sessions/route.ts`) ?? "")
+    && /const tier = policyTierFor\(await policyP, activity\);/.test(http);
 };
 /**
  * K29 (owner D3, coordinator conditions): Learn's "Continue with your personal assistant" is the ONE Holdings personal
