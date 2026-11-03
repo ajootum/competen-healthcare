@@ -36,7 +36,7 @@ export default async function LayoutTemplateVersionPage({ params }: { params: Pr
       <LifecyclePanel
         kind="layout_template" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}
-        hrefForVersion={(id) => `/super-admin/checklist-studio/layout-templates/v/${id}`} listHref="/super-admin/checklist-studio/layout-templates"
+        versionHrefBase="/super-admin/checklist-studio/layout-templates/v" listHref="/super-admin/checklist-studio/layout-templates"
       />
       <DefTimeline timeline={lc.timeline} names={lc.names} />
     </StudioShell>

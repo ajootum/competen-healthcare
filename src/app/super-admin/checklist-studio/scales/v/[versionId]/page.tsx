@@ -39,7 +39,7 @@ export default async function ScaleVersionPage({ params }: { params: Promise<{ v
       <LifecyclePanel
         kind="scale" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}
-        hrefForVersion={(id) => `/super-admin/checklist-studio/scales/v/${id}`} listHref="/super-admin/checklist-studio/scales"
+        versionHrefBase="/super-admin/checklist-studio/scales/v" listHref="/super-admin/checklist-studio/scales"
       />
       <DefTimeline timeline={lc.timeline} names={lc.names} />
     </StudioShell>
