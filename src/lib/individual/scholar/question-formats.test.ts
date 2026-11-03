@@ -31,7 +31,8 @@ describe("the registry says what the code offered before it existed", () => {
     expect([...ADAPTIVE_FORMATS]).toEqual(["mcq", "mrq", "short", "match", "sequence", "structured"]);
     expect([...LIBRARY_FORMATS]).toEqual(["mcq", "mrq", "short", "cloze", "true_false", "extended", "flashcard", "match", "sequence", "structured"]);
     expect([...BLIND_FORMATS]).toEqual(["true_false", "match", "sequence", "flashcard", "structured", "extended"]);
-    expect([...REVISION_FORMATS_OFF_BY_DEFAULT]).toEqual(["extended"]);
+    // SCHOLAR-AI-COST-CONFIG-01 (owner 3 Nov 2026): the evolving scenario is chosen deliberately, never by default.
+    expect([...REVISION_FORMATS_OFF_BY_DEFAULT].sort()).toEqual(["extended", "scenario"]);
     expect([...SHORT_STORED_FORMATS]).toEqual(["cloze", "true_false", "extended", "scenario"]);
   });
   it("the labels are the labels of before", () => {
@@ -58,10 +59,10 @@ describe("the registry defaults ARE the policy's", () => {
     expect(def.fallback).toEqual(REVISION_FORMATS.filter(onByDefault));
     expect(resolvePolicy([]).scholarRevisionFormats).toEqual(REVISION_FORMATS.filter(onByDefault));
   });
-  it("extended stays off by default, structured stays on, and the scenario is on exactly as structured is", () => {
+  it("extended stays off by default, structured stays on, and the scenario is off by default (SCHOLAR-AI-COST-CONFIG-01: chosen deliberately)", () => {
     expect(onByDefault("extended")).toBe(false);
     expect(onByDefault("structured")).toBe(true);
-    expect(onByDefault("scenario")).toBe(onByDefault("structured"));
+    expect(onByDefault("scenario")).toBe(false);
   });
   it("the blind-check default is unchanged: the scenario and the other formats added since are not in it", () => {
     const def = policyDef("scholar_verify_formats") as unknown as { fallback: string[] };

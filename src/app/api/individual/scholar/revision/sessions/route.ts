@@ -295,8 +295,10 @@ export async function POST(req: Request) {
       // SCHOLAR-INDEPENDENT-LEARNING-01 P3: cards are the `flashcards` activity where the published policy offers it (its own tier, routing and
       // eligibility: a recall card is not a clinical scenario), else `questions` as before. Never a model name in code.
       const whole = await getScholarAiStanding(ctx.admin, ctx.userId);
-      const activity: ScholarAiActivity = mode === "flashcards" ? activityOrFallback(whole, "flashcards", "questions") : "questions";
-      const standing = activityState(whole, activity);
+      const base: ScholarAiActivity = mode === "flashcards" ? activityOrFallback(whole, "flashcards", "questions") : "questions";
+      // SCHOLAR-AI-COST-CONFIG-01: an evolving scenario is complex clinical work: its own activity (`scenarios`, the stronger model by configuration) where the policy offers it.
+      const scenarioActivity: ScholarAiActivity = activityOrFallback(whole, "scenarios", "questions");
+      const standing = activityState(whole, base);
       const pre = standing.available ? await aiPreflight(ctx) : null;
       if (!standing.available) note = `${standing.message ?? "New AI help is not available right now."} This session uses your saved questions.`;
       else if (pre) note = ((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "New questions could not be written just now. This session uses your saved questions.";
@@ -327,6 +329,7 @@ export async function POST(req: Request) {
                 continue;
               }
             }
+            const activity: ScholarAiActivity = call.kind === "scenario" ? scenarioActivity : base;
             const ai = scholarAiRunner(ctx, req, activity, await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
             // SCHOLAR-QUESTION-INTELLIGENCE-01: the section's guidance, the difficulty, and (revision kinds only: an mcq

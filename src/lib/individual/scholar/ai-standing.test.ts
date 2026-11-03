@@ -8,6 +8,7 @@ describe("SCHOLAR-INDEPENDENT-LEARNING-01 P3: the activity and the tier are conf
   it("flashcards is an approved activity code", () => {
     expect(SCHOLAR_AI_ACTIVITIES).toContain("flashcards");
     expect(SCHOLAR_AI_ACTIVITIES).toContain("questions");
+    expect(SCHOLAR_AI_ACTIVITIES).toContain("scenarios");
   });
   it("uses flashcards only where the published policy offers it, else questions as before", () => {
     expect(activityOrFallback(standing({ flashcards: { available: true }, questions: { available: true } }), "flashcards", "questions")).toBe("flashcards");

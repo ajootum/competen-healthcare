@@ -610,7 +610,9 @@ const meteredEverywhere = (src: Src) => {
     && /export const scholarRequestId = \(ctx: IndividualContext, req: Request\) => requestIdFor\(ctx\.userId, req\.headers\.get\("x-request-id"\)\);/.test(http)
     && /const requestId = callKey \? `\$\{scholarRequestId\(ctx, req\)\}:\$\{callKey\}` : scholarRequestId\(ctx, req\);/.test(http)
     // P3: the revision route chooses between two approved activity codes only, by the published policy, never a model; the runner takes its tier from the policy.
-    && /const activity: ScholarAiActivity = mode === "flashcards" \? activityOrFallback\(whole, "flashcards", "questions"\) : "questions";/.test(src.get(`${API}/revision/sessions/route.ts`) ?? "")
+    && /const base: ScholarAiActivity = mode === "flashcards" \? activityOrFallback\(whole, "flashcards", "questions"\) : "questions";/.test(src.get(`${API}/revision/sessions/route.ts`) ?? "")
+    && /const scenarioActivity: ScholarAiActivity = activityOrFallback\(whole, "scenarios", "questions"\);/.test(src.get(`${API}/revision/sessions/route.ts`) ?? "")
+    && /const activity: ScholarAiActivity = call\.kind === "scenario" \? scenarioActivity : base;/.test(src.get(`${API}/revision/sessions/route.ts`) ?? "")
     && /const tier = policyTierFor\(await policyP, activity\);/.test(http);
 };
 /**

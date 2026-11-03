@@ -106,7 +106,7 @@ const ROWS = [
   // (answer.format = 'scenario'): no migration. On by default exactly as structured is (its comparable format); the blind check is not
   // run on it, so it is in no verify list.
   { key: "scenario", label: "Evolving scenario (stage by stage)", description: "A situation that unfolds over two to four stages; each stage reveals more and asks one question.", marking: "code_then_ai", aiMarking: true, aiWritten: true,
-    stored: "short", usesOptions: false, answerFormat: "scenario", revisionDefault: "on", verifyRank: null, verifyDefault: false, adaptive: false, blindRank: null,
+    stored: "short", usesOptions: false, answerFormat: "scenario", revisionDefault: "off", verifyRank: null, verifyDefault: false, adaptive: false, blindRank: null,
     library: null, immediateFeedbackOnly: true, remediation: "card_on_miss",
     modules: { writer: `${S}/generation.ts`, marker: `${S}/scenario.ts`, renderer: "app/individual/(app)/[experience]/(scholar)/study/_components/revision-client.tsx" } },
   // The multiple-choice case set: a Revision/Case question, never a Revision format of its own, but a stored kind the blind check covers.
