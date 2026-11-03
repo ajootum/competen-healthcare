@@ -51,16 +51,17 @@ Unchanged. An import or a template copy produces a Draft authored by the actor; 
 
 `supabase/migrations/930-asmt-catalogue-import-and-hierarchy.sql` — applied twice on staging, rollback rehearsed, re-applied; build record, VERIFY and ROLLBACK in `RELEASE-2026-10-25/PENDING-41`. Production untouched. The import screens refuse with a plain message while the table or bucket is absent.
 
+## Owner decisions (3 Nov 2026, "Assessment Catalogue Import: Owner Decisions and Production GO")
+
+1. **Daily Audits is a record log, not an instrument.** Excluded from registration by default, kept in the stored source workbook, never discarded. The parser already did this (kind `record_log`, proposed exclusion the person confirms); the preview now says so in words.
+2. **Imported scales stay as imported.** An OPTIONAL mapping onto the Competen proficiency staging scale is offered on the rating scale's page in Checklist Studio (`StageMappingPanel`, `src/lib/assessment/studio/stage-mapping.ts`): the person assigns a stage to each level by hand, confirms the review, and a NEW DRAFT stage scale (`<rating code>-STAGES`, stages copied from the chosen published stage scale, bands from the assignments only) goes through independent review and publication. Nothing is inferred from matching numeric values, and the rating scale itself is unchanged. It reuses the 893 band model (`asmt_scholar_stage_band`) the Scholar import already uses.
+3. **Clinical Nursing Skills keeps the seven seeded subdomains**, configurable through Terms. No change.
+4. **Authorised Instrument Authors and Catalogue Managers may both import and register draft instruments.** Done through the existing capabilities, no migration: the import, correction, register and template routes admit a holder of `hq.assessment.catalogue.manage` or of `hq.assessment.instrument.author`. Independence is untouched: the registering person is the Draft's author and can never approve or publish it.
+5. **Production GO given** for 930 after merge (owner applies; agents never touch production).
+
 ## Deliberately not built
 
 - AI-assisted extraction or suggestion. The specification makes AI optional and reviewable; deterministic parsing covers the acceptance workbook and the design leaves room for a reviewable suggestion layer later (the draft already carries flags per sheet).
 - Mapping of an imported scale to the Competen staging (DACUM / Benner) scale. The scale is imported as found; any mapping is an explicit, reviewed step in the Studio (owner decision below).
 - Importing the record sheet ("Daily Audits") as anything. It is proposed for exclusion; the person can still say it is an instrument or part of one (owner decision below).
 - Dimension creation from the terms screen (only hierarchy switch, terms and subterms). An axis is still a migration row.
-
-## Open owner decisions
-
-1. **The `Daily Audits` sheet**: leave it out (the default proposal), import it as a fourth instrument, or treat it as a record log outside the catalogue?
-2. **Imported scales**: should the import offer a reviewed mapping from an imported achievement scale (0–6 with competence levels) to the Competen staging scale, or stay as imported with mapping done case by case in the Studio?
-3. **Seeded subdomains**: keep the seven example subdomains of Clinical Nursing Skills as seeded, or replace with the owner's own list through Terms before production?
-4. **Who registers imports**: the catalogue manager position does not hold Checklist authoring. Should it, or does an author always register (current behaviour)?
