@@ -10,7 +10,8 @@ import StudioWorkspace, { type StudioDomain } from "../_components/StudioWorkspa
 import { SubmitForPublication } from "../../publication/_components/PublicationControls";
 import { ReviewPackView } from "../../_studio/ReviewPackView";
 import { loadFrameworkPack } from "@/lib/competency/review-pack";
-import { applyLayout, sectionOrder, type LayoutTree } from "@/lib/competency/layout-order";
+import { applyLayout, sectionOrder } from "@/lib/competency/layout-order";
+import { toLayoutTree } from "@/lib/competency/framework-tree";
 import { LayoutDraftBanner } from "../_components/LayoutDraftBanner";
 import CompareView from "../_components/CompareView";
 import SheetImport from "../_components/SheetImport";
@@ -79,7 +80,13 @@ export default async function FrameworkStudioPage({ params, searchParams }: { pa
   const domainsLaid: StudioDomain[] = (() => {
     if (!draftApplies) return domains0;
     // sortOrder = the current (already stable) position, so applyLayout keeps the live order wherever the draft is silent.
-    const tree: LayoutTree = { componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components), ...(areasOn ? { areas: (f.areas ?? []).map((a, i) => ({ id: a.id, name: a.name, sortOrder: i })) } : {}), domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, ...(areasOn ? { areaId: d.areaId ?? null } : {}), competencies: d.competencies.map((c, j) => ({ id: c.id, name: c.name, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) })) })) };
+    // The tree is built by the helper the Scholar Explorer shares (framework-tree.ts), so both show one organisation.
+    const tree = toLayoutTree({
+      componentOrder: f.componentOrder ?? null, registry: Object.keys(v.components),
+      ...(areasOn ? { areas: (f.areas ?? []).map((a, i) => ({ id: a.id, name: a.name, sortOrder: i })) } : {}),
+      domains: domains0.map((d, i) => ({ id: d.id, name: d.name, sortOrder: i, ...(areasOn ? { areaId: d.areaId ?? null } : {}) })),
+      competencies: domains0.flatMap(d => d.competencies.map((c, j) => ({ id: c.id, name: c.name, domainId: d.id, sortOrder: j, criteria: c.criteria.map((k, m) => ({ id: k.id!, name: k.text, sortOrder: m, component: k.component })) }))),
+    });
     const a = applyLayout(tree, f.layoutDraft);
     if (areasOn && a.areas) areas = a.areas.map(x => ({ id: x.id, name: x.name }));
     const dById = new Map(domains0.map(d => [d.id, d]));

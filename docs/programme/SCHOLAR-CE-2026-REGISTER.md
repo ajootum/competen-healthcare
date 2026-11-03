@@ -110,6 +110,7 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 
 | Date | Increment | Evidence | Workstreams |
 |---|---|---|---|
+| 3 Nov 2026 | My Competencies Explorer (HFE improvement of the existing Overview, not a new workstream): Framework -> Area -> Domain -> Competency in the saved Holdings order via the shared `framework-tree.ts` helper, seven independent progress indicators (accepted mapping = Material linked, never Practised), search/filters/sort, banded rows, detail drawer; branch scholar/competency-explorer-hfe-01 | `competency-explorer.test.ts`, `framework-tree.test.ts`; staging walk (PR) | Scholar competencies (CE-07 HFE) |
 | 2 Nov 2026 | CE-04 built on branch scholar/ce04-conversation-01 (not merged, not live): Talk to the patient (text), SBAR handover task, SBAR OSCE template, mig 880 authored (not applied) | docs/evidence/CASE-CONVERSATION/880-build-record.md | CE-04 |
 | 2 Nov 2026 | My Plan (PLP-01..04 + calendar entries) | PR #225, mig 840, dpl_Di2ecqHj | CE-03 |
 | 2 Nov 2026 | Lesson visuals + classification + page picker | PR #224, dpl_FXSAcnBP | CE-02 (visual notes), CE-07 |

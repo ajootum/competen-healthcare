@@ -55,7 +55,10 @@ export type CatalogueCompetency = {
   /** The profession the catalogue belongs to (taxonomy kind 'profession'), or null (e.g. foundational). */
   profession: { termId: string; label: string } | null;
   catalogue: { id: string; name: string; code: string | null; version: string };
-  domain: { id: string; name: string };
+  /** sortOrder: the domain's saved position in its framework (SCHOLAR-COMPETENCY-EXPLORER-HFE-01). Absent for a referenced competency's home domain. */
+  domain: { id: string; name: string; sortOrder?: number | null };
+  /** The competency's saved position within its domain (framework_competencies.sort_order). Null when none is saved. */
+  sortOrder?: number | null;
   /** What a person should be able to do. Empty means none recorded -- not "no outcomes exist". */
   outcomes: string[];
   /** The proficiency expected, on the platform scoring scale (scoring_levels), or null if not set. */
@@ -186,7 +189,8 @@ export function assembleCatalogue(r: {
       layer: (COMPETENCY_LAYERS as readonly string[]).includes(f.competency_layer) ? f.competency_layer : null,
       profession: t ? { termId: t.id, label: t.value } : null,
       catalogue: { id: f.id, name: f.name, code: f.code ?? null, version: `${f.version_major ?? 1}.${f.version_minor ?? 0}.${f.version_revision ?? 0}` },
-      domain: { id: d.id, name: d.name },
+      domain: { id: d.id, name: d.name, ...("sort_order" in d ? { sortOrder: d.sort_order ?? null } : {}) },
+      sortOrder: c.sort_order ?? null,
       outcomes: Array.isArray(c.learning_outcomes) ? c.learning_outcomes.filter((o: unknown) => typeof o === "string" && o.trim()) : [],
       expectedLevel: l ? { id: l.id, score: l.score, label: l.label } : null,
       cpu: u ? { id: u.id, code: u.code ?? null, name: u.name } : null,
@@ -297,6 +301,49 @@ async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[],
   const reviews = await loadClinicalReviews(admin, items.map(c => c.competencyId));
   if (reviews === null) return null;
   return withClinicalReview(items, reviews);
+}
+
+// ── THE ORGANISATION OF A PUBLISHED FRAMEWORK ── SCHOLAR-COMPETENCY-EXPLORER-HFE-01 ───────────────────────────────
+//
+// Its Areas (760) and its domains with their Area and saved position, so a learner-facing page can show the framework
+// exactly as Holdings organised it (framework-tree.ts). It reads NO framework row of its own: the frameworks are the
+// catalogues of rows that came through loadIndividualCatalogue above (shared, active, published), so a draft's
+// organisation never reaches a person, and the one gate on frameworks stays the one the harness guards. Before 760 (no
+// framework_areas table, or no area_id column) `areas` is null: there is no Area level to show, which is not a failure.
+
+export type FrameworkStructure = {
+  frameworkId: string;
+  areas: { id: string; name: string; sortOrder: number | null }[] | null;
+  domains: { id: string; name: string; code: string | null; sortOrder: number | null; areaId: string | null }[];
+};
+
+/** `offered`: rows of a published catalogue read (their frameworkId is the catalogue each came through). Nothing else may name a framework here. */
+export async function loadFrameworkStructure(admin: any, offered: readonly { frameworkId: string }[]): Promise<Map<string, FrameworkStructure> | null> {
+  const out = new Map<string, FrameworkStructure>();
+  const ids = [...new Set(offered.map(c => c.frameworkId))];
+  if (!ids.length) return out;
+  try {
+    const d760 = await admin.from("framework_domains").select("id, framework_id, code, name, sort_order, area_id").in("framework_id", ids);
+    let domains: Row[], areas: Row[] | null;
+    if (!d760.error) {
+      domains = d760.data ?? [];
+      const a = await admin.from("framework_areas").select("id, framework_id, name, sort_order").in("framework_id", ids);
+      if (a.error && !NOT_PROVISIONED.has(String(a.error.code ?? ""))) return null;
+      areas = a.error ? null : (a.data ?? []);
+    } else if (NO_COLUMN.has(String(d760.error.code ?? ""))) {
+      const legacy = await rows(admin.from("framework_domains").select("id, framework_id, code, name, sort_order").in("framework_id", ids));
+      if (legacy === null) return null;
+      domains = legacy; areas = null;
+    } else return null;
+    for (const id of ids) {
+      out.set(id, {
+        frameworkId: id,
+        areas: areas === null ? null : areas.filter(a => a.framework_id === id).map(a => ({ id: a.id, name: a.name ?? "", sortOrder: a.sort_order ?? null })),
+        domains: domains.filter(d => d.framework_id === id).map(d => ({ id: d.id, name: d.name ?? "", code: d.code ?? null, sortOrder: d.sort_order ?? null, areaId: areas === null ? null : d.area_id ?? null })),
+      });
+    }
+    return out;
+  } catch { return null; }
 }
 
 /**

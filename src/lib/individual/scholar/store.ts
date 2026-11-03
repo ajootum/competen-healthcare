@@ -2326,6 +2326,52 @@ export async function learningActivityByCompetency(admin: Admin, userId: string)
   return new Map([...out].map(([k, v]) => [k, { actions: v.actions, lastVerdict: v.lastVerdict, lastAt: v.lastAt }]));
 }
 
+/**
+ * SCHOLAR-COMPETENCY-EXPLORER-HFE-01: practice done against each competency OUTSIDE practice questions -- finished OSCE
+ * runs on a station built for it (720) and completed clinical cases mapped to it (435) -- and the learner's Learn
+ * sessions opened on it (414). Counts and the newest moment only, for the Explorer's indicators. PRACTICE, NOT
+ * COMPETENCE. A source whose migration is absent reads as none; a failed read is null (unreadable, never "none").
+ */
+export type PracticeByCompetency = { osceFinished: number; casesCompleted: number; learningSessions: number; lastAt: string | null };
+export async function practiceEvidenceByCompetency(admin: Admin, userId: string): Promise<Map<string, PracticeByCompetency> | null> {
+  const soft = async (q: PromiseLike<{ data: unknown; error: any }>) => { const r = await q; return r.error && isNotProvisioned(r.error) ? { data: [], error: null } : r; };
+  const [osce, sessions, learn] = await Promise.all([
+    soft(admin.from("individual_scholar_osce_attempt").select("station_id, finished_at").eq("user_id", userId).eq("status", "finished").not("finished_at", "is", null).limit(1000)),
+    soft(admin.from("individual_scholar_case_session").select("private_case_id, completed_at").eq("user_id", userId).eq("status", "completed").limit(2000)),
+    soft(admin.from("individual_scholar_learning_session").select("competency_id, last_active_at").eq("user_id", userId).not("competency_id", "is", null).limit(2000)),
+  ]);
+  if (osce.error || sessions.error || learn.error) return null;
+  const out = new Map<string, PracticeByCompetency>();
+  const at = (id: string) => { let v = out.get(id); if (!v) { v = { osceFinished: 0, casesCompleted: 0, learningSessions: 0, lastAt: null }; out.set(id, v); } return v; };
+  const later = (v: PracticeByCompetency, iso: string | null) => { if (iso && (!v.lastAt || iso > v.lastAt)) v.lastAt = iso; };
+  const stationIds = [...new Set(((osce.data ?? []) as any[]).map(r => r.station_id).filter(isUuid))];
+  if (stationIds.length) {
+    const st = await soft(admin.from("individual_scholar_osce_station").select("id, competency_id").eq("user_id", userId).in("id", stationIds.slice(0, 500)));
+    if (st.error) return null;
+    const compOf = new Map(((st.data ?? []) as any[]).map(s => [s.id, s.competency_id]));
+    for (const r of (osce.data ?? []) as any[]) { const c = compOf.get(r.station_id); if (isUuid(c)) { const v = at(c); v.osceFinished++; later(v, r.finished_at ?? null); } }
+  }
+  const caseIds = [...new Set(((sessions.data ?? []) as any[]).map(r => r.private_case_id).filter(isUuid))];
+  if (caseIds.length) {
+    const cc = await soft(admin.from("individual_scholar_case_competency").select("case_id, competency_id").eq("user_id", userId).in("case_id", caseIds.slice(0, 500)));
+    if (cc.error) return null;
+    const compsOf = new Map<string, string[]>();
+    for (const r of (cc.data ?? []) as any[]) compsOf.set(r.case_id, [...(compsOf.get(r.case_id) ?? []), r.competency_id]);
+    for (const r of (sessions.data ?? []) as any[]) for (const c of compsOf.get(r.private_case_id) ?? []) { const v = at(c); v.casesCompleted++; later(v, r.completed_at ?? null); }
+  }
+  for (const r of (learn.data ?? []) as any[]) if (isUuid(r.competency_id)) { const v = at(r.competency_id); v.learningSessions++; later(v, r.last_active_at ?? null); }
+  return out;
+}
+
+/** The titles of the learner's own materials, by id (for "linked materials" in the Explorer drawer). Unreadable: empty, said by the caller as not read. */
+export async function materialTitles(admin: Admin, userId: string, ids: readonly string[]): Promise<Map<string, string> | null> {
+  const want = [...new Set(ids.filter(isUuid))].slice(0, 500);
+  if (!want.length) return new Map();
+  const { data, error } = await admin.from("individual_scholar_material").select("id, title").eq("user_id", userId).in("id", want);
+  if (error) return null;
+  return new Map(((data ?? []) as any[]).map(r => [r.id, r.title ?? "Untitled material"]));
+}
+
 // ── AI-FAIR-USE-01 s8: THE LEARNING ARTEFACT LIBRARY (migration 415) ──────────────────────────────────
 //
 // A saved explanation or summary: the notes part (cited [S n] to its sources in order), the background and flags
