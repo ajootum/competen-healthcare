@@ -682,6 +682,9 @@ const withheldPlain = (src: Src) => {
  *     records an event only for what was SHOWN and only when history is on, and never stores a practice question.
  *   - The student's context is never grounding: runLearn checks the notes part against the passages, the
  *     governed references and what the student typed -- the learner context is not in `asked`.
+ *     SCHOLAR-CUMULATIVE-TEACHING-01: `asked` may also hold the learner's earlier check ANSWERS (learnerTexts), which the
+ *     act route feeds only from priorCheckTexts(priorChecks) -- the learner's own typed text, screened for identifiers with
+ *     the rest -- never the learner context and never the TAUGHT SO FAR block (passed apart, as `taught`).
  */
 const learnBounded = (src: Src) => {
   const act = src.get(`${API}/learn/act/route.ts`) ?? "", gen = src.get(GEN) ?? "", st = src.get(STORE) ?? "";
@@ -693,7 +696,9 @@ const learnBounded = (src: Src) => {
     && /findPatientIdentifiers\(t\)/.test(act)
     && /if \(recorded && sessionId && shown && policy\.scholarLearningHistory === "record"\)/.test(act)
     && !/insertQuestions|individual_scholar_question/.test(act)
-    && /const asked = \[args\.question, \.\.\.args\.history\.map\(t => t\.text\)\]\.join\("\\n"\);/.test(run) && !/asked[^;]*learnerContext/.test(run)
+    && /const asked = \[args\.question, \.\.\.args\.history\.map\(t => t\.text\), \.\.\.\(args\.learnerTexts \?\? \[\]\)\]\.join\("\\n"\);/.test(run)
+    && !/asked[^;]*(learnerContext|taught)/.test(run)
+    && /learnerTexts: priorCheckTexts\(priorChecks\)/.test(act) && /\.\.\.priorCheckTexts\(priorChecks\)\]\.some\(t => t && findPatientIdentifiers\(t\)\.length\)/.test(act)
     && /attribution: \{ scope: "person" \}, operation: research\.length \? LEARN_RESEARCH_OPERATION : "individual_scholar_learn"/.test(run);
 };
 /**
