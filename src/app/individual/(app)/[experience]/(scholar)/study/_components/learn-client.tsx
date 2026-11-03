@@ -42,6 +42,8 @@ import { AskAbout, type AskAboutProps } from "./ask-panel";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
+import { LessonReader } from "./learn-reader";
+import { WORKS_WITHOUT_AI } from "@/lib/individual/scholar/learn-reader";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
 import { INLINE_DEFAULTS, RECALL_WAIT_REASON, applicationAfter, applyEligible, blockPending, checkBlocks, inlineCheckPlacement, lessonCanContinue, marksFromActivities, quickFromCode, recallContent, recallFromCode, wordCount, type CheckBlock, type InlinePolicy } from "@/lib/individual/scholar/learn-inline";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
@@ -340,6 +342,11 @@ export function LearnWorkspace(props: {
   // lesson's content is on the page (until then the writer reports it, so a write never replaces it with the lesson's top).
   const placerRef = useRef<PlaceScheduler | null>(null);
   const pendingPlace = useRef<{ step: number; place: Place; since: number } | null>(null);
+  // SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes are on the page (their section anchors exist), so a saved place inside
+  // them can be found; and what the last "Mark as read" answered, per lesson.
+  const [readerTick, setReaderTick] = useState(0);
+  const readerLoaded = useCallback(() => setReaderTick(t => t + 1), []);
+  const [markedNote, setMarkedNote] = useState<Record<number, string>>({});
   const sessionRef = useRef(session);
   const practiceRef = useRef(practiceOpen);
   const chooseStyle = useCallback((st: TeachingStyle) => { styleRef.current = st; setStyleChosen(st); if (engaged.current) syncRef.current?.event("activity"); }, []);
@@ -512,6 +519,21 @@ export function LearnWorkspace(props: {
     void teachLesson(stepNo, s);
   }, [session, mode, depth, props.startAction, props.consent, props.actions, indexOf, dispatch, openLesson, teachLesson]);
 
+  // SCHOLAR-INDEPENDENT-LEARNING-01: the learner's own "Mark as read" (PATCH sessions/[id] { move: "read", at }, event action read, 920).
+  // No AI. The mark is a live activity at once (and so in the 790 position); the server says whether it was recorded.
+  const markRead = useCallback(async (stepNo: number) => {
+    const id = sessionRef.current?.id;
+    const i = indexOf(stepNo);
+    if (!id || i < 0) return;
+    engaged.current = true;
+    dispatch({ type: "activity", index: i, kind: "marked" });
+    const r = await call(`/api/individual/scholar/learn/sessions/${encodeURIComponent(id)}`, { move: "read", at: stepNo }, "PATCH");
+    if (r.ok && r.json.recorded === true) {
+      setProgress(p => ({ ...p, [stepNo]: { actions: [...new Set([...(p[stepNo]?.actions ?? []), "read"])], verdict: p[stepNo]?.verdict ?? null } }));
+      setMarkedNote(m => ({ ...m, [stepNo]: "Marked as read. A learning record for you, not an assessment." }));
+    } else setMarkedNote(m => ({ ...m, [stepNo]: "Marked on this device. It could not be recorded in your learning history just now." }));
+  }, [indexOf, dispatch]);
+
   const scrollToLesson = useCallback((stepNo: number) => {
     setTab("lesson");
     const go = () => {
@@ -568,7 +590,7 @@ export function LearnWorkspace(props: {
     window.setTimeout(() => { if (pendingPlace.current?.step === stepNo) applyPlace(); }, 4200);
     return true;
   }, [applyPlace]);
-  useEffect(() => { if (pendingPlace.current) applyPlace(); }, [cards, opening, loading, lessonNote, journey, applyPlace]);
+  useEffect(() => { if (pendingPlace.current) applyPlace(); }, [cards, opening, loading, lessonNote, journey, readerTick, applyPlace]);
 
   // The journey's effects, against the latest callbacks.
   useEffect(() => {
@@ -1158,12 +1180,17 @@ export function LearnWorkspace(props: {
     const status = navLessons[i].status.label;
     return (
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
+        {/* SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes first (no AI), with their competencies, what exists to practise with, and Mark as read. */}
+        {session.id && session.recorded && (
+          <LessonReader sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
+            markedNote={markedNote[st.step] ?? null} accent={accent} onLoaded={readerLoaded} onMarkRead={markRead} ownCards={!!props.ownCards && !!first?.materialId} />
+        )}
         {/* Nothing here yet: a calm line and the one way in (the learner's choice). Manual: the starting action, as before. */}
         {/* SCHOLAR-PERSISTENT-LEARNING-01: the one way in -- Review saved lesson (no AI), else Continue / Start learning. */}
         {!hasLesson && !preparing && !lessonMsg && pending?.step !== st.step && (
           opening[st.step] ? <p role="status" className="mt-3 text-[13.5px] text-gray-700">Opening your saved lesson…</p>
             : primaryAction(facts[i], true) === "review" ? <LessonPlaceholder note="You have saved teaching for this lesson. Opening it uses no AI." label={PRIMARY_LABEL.review} onTeach={() => void openLesson(st.step)} />
-            : !props.consent ? <LessonPlaceholder label="" note="Learning needs AI help, which is off." />
+            : !props.consent ? <LessonPlaceholder label="" note="AI teaching is off. Your notes above are this lesson; everything saved still opens." />
             : group.primary ? <LessonPlaceholder note={primaryAction(facts[i], true) === "continue" ? "You started this lesson. Carry on where you left it." : "Not started yet."}
                 label={working(group.primary) ? "Working…" : PRIMARY_LABEL[primaryAction(facts[i], true)]}
                 disabled={busyHere || !canTeach} describedBy={offReason(group.primary) ? "learn-ai-why" : undefined}
@@ -1269,7 +1296,7 @@ export function LearnWorkspace(props: {
           {session.coverage && session.coverage.sections < session.coverage.of ? ` Suggested steps cover ${session.coverage.sections} of ${session.coverage.of} sections; ask about any of them.` : ""}
         </p>
       </div>
-      {!props.consent && <p className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">{props.offMessage} <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link></p>}
+      {!props.consent && <p className="mb-3 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">{WORKS_WITHOUT_AI} {props.offMessage} <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link></p>}
       {props.standingMessage && (
         <p className="mb-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-[13.5px] text-sky-950">
           {props.standingMessage} Your saved explanations, questions, cards, cases and progress are all still here. <Link href={experienceHref("scholar", "study/saved")} className={`font-semibold underline ${focusRing}`}>Saved learning</Link>

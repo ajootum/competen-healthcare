@@ -2771,6 +2771,43 @@ export async function practiceCounts(admin: Admin, userId: string, chunkIds: rea
   return out;
 }
 
+// ── SCHOLAR-INDEPENDENT-LEARNING-01 P1: WHAT ALREADY EXISTS FOR A LESSON'S SECTIONS (reads only, no AI) ──────────────────
+/** One existing resource the reader opens directly: a private case or an OSCE station written from these sections. */
+export type LessonResource = { id: string; title: string };
+export type LessonRelated = {
+  cards: number; questions: number; attempts: number;
+  /** The caller's own private cases written from any of these sections (435 case_source), newest first, at most 5. */
+  cases: LessonResource[];
+  /** The caller's own OSCE stations written from one of these sections (720 chunk_id), newest first, at most 5. [] where 720 is absent. */
+  stations: LessonResource[];
+  /** Saved explanations (current, not superseded) built on these sections, any action. */
+  savedLessons: number;
+};
+/** The caller's existing resources for some sections: counts and the openable cases and stations. Never generates anything. */
+export async function lessonRelated(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<LessonRelated> {
+  const ids = [...new Set(chunkIds.filter(isUuid))].slice(0, 400);
+  const none: LessonRelated = { cards: 0, questions: 0, attempts: 0, cases: [], stations: [], savedLessons: 0 };
+  if (!ids.length) return none;
+  const soft = async (p: PromiseLike<{ data?: unknown; error?: unknown }>): Promise<any[]> => { try { const r = await p; return r && !r.error && Array.isArray(r.data) ? r.data : []; } catch { return []; } };
+  const [counts, caseSrc, stationRows, artefactIds] = await Promise.all([
+    practiceCounts(admin, userId, ids),
+    soft(admin.from("individual_scholar_case_source").select("case_id").eq("user_id", userId).in("chunk_id", ids).limit(500)),
+    soft(admin.from("individual_scholar_osce_station").select("id, title, created_at").eq("user_id", userId).in("chunk_id", ids).order("created_at", { ascending: false }).limit(5)),
+    artefactIdsForChunks(admin, userId, ids, 500),
+  ]);
+  const caseIds = [...new Set(caseSrc.map(r => String(r.case_id)))].slice(0, 50);
+  const caseRows = caseIds.length ? await soft(admin.from("individual_scholar_case").select("id, title, created_at").eq("user_id", userId).in("id", caseIds).order("created_at", { ascending: false }).limit(5)) : [];
+  let savedLessons = 0;
+  if (artefactIds?.length) {
+    const q = admin.from("individual_scholar_artefact").select("id", { count: "exact", head: true }).eq("user_id", userId).in("id", artefactIds.slice(0, 300));
+    const r = await (await librarySchema(admin, userId) ? q.is("superseded_at", null) : q);
+    savedLessons = r.error ? 0 : r.count ?? 0;
+  }
+  let cards = 0, questions = 0, attempts = 0;
+  for (const c of counts.values()) { cards += c.cards; questions += c.questions; attempts += c.attempts; }
+  return { cards, questions, attempts, cases: caseRows.map(r => ({ id: String(r.id), title: String(r.title ?? "Your case") })), stations: stationRows.map(r => ({ id: String(r.id), title: String(r.title ?? "Your station") })), savedLessons };
+}
+
 /** The caller's materials with a finished OSCE attempt on a station built from them (720). Empty where 720 is absent. */
 export async function osceAttemptMaterials(admin: Admin, userId: string): Promise<Set<string>> {
   const { data: at, error } = await admin.from("individual_scholar_osce_attempt").select("station_id").eq("user_id", userId).not("finished_at", "is", null).limit(1000);
