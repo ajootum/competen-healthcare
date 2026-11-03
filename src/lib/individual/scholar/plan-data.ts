@@ -17,6 +17,9 @@ import { monthsOfWeek, weekAgenda, type AgendaDay } from "./plan-view";
 import { mergeDueRevisionDays } from "./plan-workspace";
 import type { CalendarItem } from "./study-calendar";
 import { acceptedMaterialIds, acceptedUnstarted, buildProposal, postponedTopics, proposalDecisions, type MaterialIn, type PlanProposal, type ProposalDecision } from "./plan-proposal";
+import { parseStoredUnits, type StoredUnit } from "./plan-units";
+import { buildUnits } from "./plan-units-build";
+import { sectionProfiles } from "./learn";
 import { chooseToday, type PlanRecommendation, type UnfinishedItem } from "./plan-recommend";
 import { competencyGapsForPlan } from "@/lib/assessment/adapters/scholar/overview-data";
 import { isoWeek, reflectionOffer, type ReflectionOffer, type Workload } from "./plan-reflection";
@@ -24,7 +27,7 @@ import { effectiveSettings, settingsFromRow, sessionMinutesOf } from "./plan-set
 import { buildStudyPlan, unstartedMappedSections, type PlanCalendar, type StudyPlanInput, type StudyPlanResult, type StudyPlanSettings, type UnstartedSection } from "./study-plan";
 import {
   calendarSchema, caseDecisionTimes, competencyProgressRows, countDue, evaluationEvidence, getEvaluation, getStudyPlan, learningEventTimes, listLearningSessions, listMaterials,
-  chunkContents, listRevisionSessions, sectionsOf, studyPlanSchema, topicsOfSections, type Admin, type SectionRef,
+  chunkContents, listRevisionSessions, materialQualities, sectionsOf, studyPlanSchema, topicsOfSections, type Admin, type SectionRef,
 } from "./store";
 import { experienceHref } from "../experiences";
 import { buildStudyCalendar, entriesHorizon, readStudyCalendar, type CalendarLoad, type CalendarReads } from "./study-calendar-data";
@@ -128,7 +131,7 @@ export async function loadPlanContext(ctx: PlanCtx, policy: IndividualPolicy, o:
 
   // accepted materials feed the plan: their unstarted sections, in the order accepted, a topic counted once
   const sec = await sectionsP;
-  const accepted = sec?.read ? assembleMaterials(sec.ids, mats.data, sec.read, rows.ok ? rows.data : null) : [];
+  const accepted = sec?.read ? assembleMaterials(sec.ids, mats.data, sec.read, rows.ok ? rows.data : null, storedUnitsOf(events, sec.read.secs)) : [];
   const mapped = rows.ok && competencies
     ? unstartedMappedSections({ mappings: rows.data.mappings, concepts: rows.data.concepts, questions: rows.data.questions, attempts: rows.data.attempts, competencies })
     : [];
@@ -172,13 +175,30 @@ async function readMaterialSections(admin: Admin, userId: string, ids: readonly 
   }
   return { secs: secs.data, topics, headings };
 }
-function assembleMaterials(ids: readonly string[], mats: readonly { id: string; title: string }[], read: SectionsRead, rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null): MaterialIn[] {
+function assembleMaterials(ids: readonly string[], mats: readonly { id: string; title: string }[], read: SectionsRead, rows: { questions: { id: string; chunkId: string }[]; attempts: { questionId: string }[] } | null, units?: ReadonlyMap<string, StoredUnit[] | null>): MaterialIn[] {
   const answered = new Set((rows?.attempts ?? []).map(a => a.questionId));
   const started = new Set((rows?.questions ?? []).filter(q => answered.has(q.id)).map(q => q.chunkId));
-  return ids.map(id => ({
-    materialId: id, title: mats.find(m => m.id === id)?.title ?? "Your notes",
-    sections: read.secs.filter(s => s.materialId === id).map(s => ({ chunkId: s.chunkId, ordinal: s.ordinal, topics: read.topics.get(s.chunkId) ?? [], started: started.has(s.chunkId), heading: read.headings.get(s.chunkId) ?? null })),
-  }));
+  return ids.map(id => {
+    const secs = read.secs.filter(s => s.materialId === id);
+    return {
+      materialId: id, title: mats.find(m => m.id === id)?.title ?? "Your notes", unit: secs[0]?.unit ?? "section",
+      sections: secs.map(s => ({ chunkId: s.chunkId, ordinal: s.ordinal, topics: read.topics.get(s.chunkId) ?? [], started: started.has(s.chunkId), heading: read.headings.get(s.chunkId) ?? null, pageFrom: s.pageFrom, pageTo: s.pageTo })),
+      units: units?.get(id) ?? null,
+    };
+  });
+}
+/**
+ * SCHOLAR-PLAN-UNITS-01. Pure. The learning units each material's latest ACCEPTED proposal carries (value.units), checked against the
+ * material's own section ordinals. A material accepted without units (an older acceptance, or text that could not be read) maps to null.
+ */
+export function storedUnitsOf(events: readonly PlanEvent[], secs: readonly SectionRef[]): Map<string, StoredUnit[] | null> {
+  const out = new Map<string, StoredUnit[] | null>();
+  for (const [ref, e] of latestPerRef(events.filter(x => x.kind === "proposal"))) {
+    if (e.status !== "accepted") continue;
+    const ordinals = new Set(secs.filter(s => s.materialId === ref).map(s => s.ordinal));
+    out.set(ref, ordinals.size ? parseStoredUnits(e.value, ordinals) : null);
+  }
+  return out;
 }
 
 /** Pure. A section's first line, cleaned of markdown and bullets, up to 80 characters (null when there is none worth showing). */
@@ -452,10 +472,13 @@ export async function loadProposal(ctx: PlanCtx, policy: IndividualPolicy, mater
   const all = await materialsIn(admin, userId, [materialId, ...earlierIds], mats.data, rows.ok ? rows.data : null);
   const self = all.find(m => m.materialId === materialId) ?? { materialId, title: mat.title, sections: [] };
   const s = row.data;
+  // SCHOLAR-PLAN-UNITS-01: the material's own text (headings, size) and extraction quality make the learning units and their estimates.
+  const [profiles, qualities] = await Promise.all([sectionProfiles(admin, userId, self.sections.map(x => x.chunkId)), materialQualities(admin, userId, [materialId])]);
+  const units = profiles.size ? buildUnits({ materialId, title: self.title, unit: self.unit ?? "section", sections: self.sections, profiles, quality: qualities.get(materialId) ?? null }) : null;
   const proposal = buildProposal({
     material: self, earlier: all.filter(m => m.materialId !== materialId),
     settings: s ? { sessionMinutes: s.sessionMinutes ?? Math.max(10, Math.round(s.weeklyMinutes / Math.max(1, s.daysPerWeek))), daysPerWeek: s.daysPerWeek } : null,
-    sectionMinutes: policy.scholarPlanSectionMinutes, firstPlan: s === null && earlierIds.length === 0,
+    sectionMinutes: policy.scholarPlanSectionMinutes, firstPlan: s === null && earlierIds.length === 0, units,
   });
   // A plan exists once settings are saved OR a material has been accepted into it: the next upload is offered as an addition.
   return { ok: true, proposal, decision, hasPlan: s !== null || earlierIds.length > 0, recordable: has840 };

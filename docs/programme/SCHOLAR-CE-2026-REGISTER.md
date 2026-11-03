@@ -72,6 +72,8 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 
 **Limitations**: time zone from network location; day-level (not timed) planning; series date/rule edits not supported; no predictions (PLP-07 deferred); Professional UI later.
 
+**Refinement (3 Nov 2026, SCHOLAR-PLAN-UNITS-01)**: a proposal no longer plans every classified section at a fixed 12 minutes. Sections are grouped into learning units by the Learn lesson planner, each unit estimated from the notes' own text (reading, learning, revision, practice apart, basis shown), and the learner reviews the units (merge, split, leave out, put first) before adding them. Finding and design: `docs/programme/SCHOLAR-PLAN-UNITS-01.md`.
+
 ---
 
 ## CE-04 — Conversational clinical simulation — Gap confirmed
@@ -111,6 +113,7 @@ Baseline: one focused read of main @ f60358d6 plus a read-only production config
 | Date | Increment | Evidence | Workstreams |
 |---|---|---|---|
 | 2 Nov 2026 | CE-04 built on branch scholar/ce04-conversation-01 (not merged, not live): Talk to the patient (text), SBAR handover task, SBAR OSCE template, mig 880 authored (not applied) | docs/evidence/CASE-CONVERSATION/880-build-record.md | CE-04 |
+| 3 Nov 2026 | Learning units for My Plan (SCHOLAR-PLAN-UNITS-01): proposals grouped into learning units with reading / learning / revision / practice estimates and a review step (merge, split, leave out, put first) before Add to My Plan; no migration | branch scholar/plan-units-01, docs/programme/SCHOLAR-PLAN-UNITS-01.md | CE-03 |
 | 2 Nov 2026 | My Plan (PLP-01..04 + calendar entries) | PR #225, mig 840, dpl_Di2ecqHj | CE-03 |
 | 2 Nov 2026 | Lesson visuals + classification + page picker | PR #224, dpl_FXSAcnBP | CE-02 (visual notes), CE-07 |
 | 1 Nov 2026 | Library + Flashcards; Flashcards 3 experiences; inline checks; monthly review + calendar | PRs #218, #220–#222, migs 820, 830 | CE-02, CE-03, CE-05 |

@@ -50,7 +50,24 @@ export type StudyPlanSettings = {
   goal: string | null;
   priorities: readonly string[];
 };
-export type UnstartedSection = { chunkId: string; label: string; competencyTitle?: string | null; materialIds?: readonly string[] };
+export type UnstartedSection = {
+  chunkId: string; label: string; competencyTitle?: string | null; materialIds?: readonly string[];
+  /** SCHOLAR-PLAN-UNITS-01: a learning unit of an accepted material (several sections, opened together), else one section. */
+  kind?: "section" | "unit"; chunkIds?: readonly string[]; sections?: number; minutes?: number | null;
+};
+/** The most sections one Learn link opens (learn.ts MAX_SCOPE_SECTIONS, repeated so this file stays client-safe). */
+const UNIT_LINK_SECTIONS = 24;
+/** Pure. Where "Start on" opens: one section, or all of a unit's sections as chosen sources. */
+export const unstartedHref = (s: Pick<UnstartedSection, "chunkId" | "chunkIds">) =>
+  (s.chunkIds && s.chunkIds.length > 1 ? learnHref(s.chunkIds.slice(0, UNIT_LINK_SECTIONS).map(id => `s=${encodeURIComponent(id)}`).join("&")) : learnHref(`section=${s.chunkId}`));
+/** Pure. Why a unit or section is planned, in the learner's own numbers. */
+export const unstartedReason = (s: UnstartedSection): string => {
+  if (s.kind === "unit") {
+    const size = `${s.sections ?? 1} ${s.sections === 1 ? "section" : "sections"}${s.minutes ? `, about ${s.minutes} minutes in all` : ""}`;
+    return `This learning unit of your notes (${size}) has no practice yet${s.minutes && s.minutes > MAX_ACTIVITY_MINUTES ? ", so it may take more than one session" : ""}.`;
+  }
+  return s.competencyTitle ? `This section of your notes is linked to ${s.competencyTitle} and has no practice yet.` : "This section of your notes has no practice yet.";
+};
 /** The learner's own calendar as the plan reads it (plan-calendar.ts). Dates are YYYY-MM-DD. */
 export type PlanCalendar = {
   /** Days with an all-day busy or placement entry: no study is planned. */
@@ -151,8 +168,8 @@ const reviseTopicItem = (e: MasteryEntry, priority: boolean): Item => ({
   reason: priority ? `You put ${noun(e)} first${e.status === "secure" ? `, and it is going well${acc(e)}, so keep it fresh` : acc(e)}.` : `Keep ${noun(e)} fresh, it is going well${acc(e)}.`,
 });
 const unstartedItem = (s: UnstartedSection): Item => ({
-  space: "learn", title: `Start on ${s.label}`, href: learnHref(`section=${s.chunkId}`), ref: `learn:${chunkKey(s.chunkId)}`, topics: [topicKey(s.label), ...(s.materialIds ?? []).map(topicKey)],
-  reason: s.competencyTitle ? `This section of your notes is linked to ${s.competencyTitle} and has no practice yet.` : "This section of your notes has no practice yet.",
+  space: "learn", title: `Start on ${s.label}`, href: unstartedHref(s), ref: `learn:${chunkKey(s.chunkId)}`, topics: [topicKey(s.label), ...(s.materialIds ?? []).map(topicKey)],
+  reason: unstartedReason(s),
 });
 const mixedItem = (reason: string): Item => ({ space: "revise", title: "Mixed practice across your topics", href: reviseHref(), reason, ref: "revise:mixed" });
 const weakReviewItem = (e: MasteryEntry): Item => ({
@@ -255,7 +272,11 @@ export function buildStudyPlan(input: StudyPlanInput): StudyPlanResult {
     const weeks = daysLeft === null ? SPREAD_WEEKS_NO_DATE : Math.max(1, Math.ceil(daysLeft / 7));
     const share = Math.ceil(input.unstarted.length / weeks);
     for (const s of input.unstarted.slice(0, share)) push(lists.unstarted, unstartedItem(s));
-    if (input.unstarted.length > 0 && weeks > 1) notes.push(`${plural(input.unstarted.length, "section")} of your notes linked to your programme ${input.unstarted.length === 1 ? "has" : "have"} no practice yet. About ${share} ${share === 1 ? "is" : "are"} planned each week over the ${plural(weeks, "week")} ${daysLeft === null ? "ahead" : "before the exam"}.`);
+    if (input.unstarted.length > 0 && weeks > 1) {
+      const units = input.unstarted.filter(s => s.kind === "unit").length;
+      const what = units === input.unstarted.length ? `${plural(units, "learning unit")} of your notes` : units ? `${plural(input.unstarted.length - units, "section")} and ${plural(units, "learning unit")} of your notes` : `${plural(input.unstarted.length, "section")} of your notes linked to your programme`;
+      notes.push(`${what} ${input.unstarted.length === 1 ? "has" : "have"} no practice yet. About ${share} ${share === 1 ? "is" : "are"} planned each week over the ${plural(weeks, "week")} ${daysLeft === null ? "ahead" : "before the exam"}.`);
+    }
     // not-started topics of the notes stand in where the programme maps nothing
     if (input.unstarted.length === 0) for (const e of rest.filter(x => x.status === "not_started").slice(0, 3)) push(lists.unstarted, learnItem(e, false));
   }

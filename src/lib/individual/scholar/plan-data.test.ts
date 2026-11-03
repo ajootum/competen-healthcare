@@ -36,7 +36,7 @@ vi.mock("./store", () => ({
   competencyProgressRows: async () => ({ ok: true, data: { mappings: [], concepts: new Map(), questions: [], attempts: [] } }),
   countDue: async () => h.due,
   sectionsOf: async (_a: unknown, _u: string, ids: string[]) => ({ ok: true, data: h.sections.filter(s => ids.includes(s.materialId)) }),
-  topicsOfSections: async () => h.topicOf, chunkContents: async () => [],
+  topicsOfSections: async () => h.topicOf, chunkContents: async () => [], chunksByIds: async () => ({ ok: true, data: [] }), materialQualities: async () => new Map(),
   listLearningSessions: async () => ({ ok: true, data: [] }), listRevisionSessions: async () => ({ ok: true, data: [] }),
   getEvaluation: async () => ({ ok: true, data: null }),
   evaluationEvidence: async () => ({ ok: true, data: { attempts: [{ marking: "deterministic", correct: true, answeredAt: "2026-11-01T10:00:00Z" }], reviews: [], checks: [], decisions: [] } }),
