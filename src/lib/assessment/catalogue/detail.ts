@@ -4,6 +4,7 @@ import { loadRelations, loadReferences, type InstrumentReference, type RelatedIn
 import { loadInstrumentCollections } from "./collections";
 import { deriveStatus, STATUS_LABEL, versionLabel, type StatusCode } from "./shape";
 import { must, type Admin, type Row } from "./db";
+import { loadImportProvenance, type ImportProvenance } from "../import/provenance";
 
 /**
  * One instrument, read for the drawer and the full page. Everything is READ from where it lives and nothing is copied:
@@ -29,6 +30,9 @@ export type InstrumentDetail = {
   familyCode: string | null; familyLabel: string | null;
   owningEntity: string; responsibleAuthority: string | null; governanceNote: string | null;
   createdAt: string; createdBy: string | null;
+  /** The import this instrument was registered from (migration 930), when it was imported. */
+  importId: string | null; importSheet: string | null;
+  importRecord: ImportProvenance | null;
   status: StatusCode; statusLabel: string; versionNo: number | null; version: string; publishedVersionNo: number | null;
   terms: InstrumentTerm[];
   /** From the published version. Empty when nothing is published. */
@@ -43,7 +47,7 @@ export type InstrumentDetail = {
 
 export async function loadInstrumentDetail(admin: Admin, id: string): Promise<InstrumentDetail | null> {
   const inst = must(await admin.from("asmt_instrument")
-    .select("id, code, name, kind, description, family_code, owning_entity, responsible_authority, governance_note, created_at, created_by")
+    .select("id, code, name, kind, description, family_code, owning_entity, responsible_authority, governance_note, created_at, created_by, import_id, import_sheet")
     .eq("id", id).maybeSingle(), "instrument") as Row | null;
   if (!inst) return null;
 
@@ -59,8 +63,9 @@ export async function loadInstrumentDetail(admin: Admin, id: string): Promise<In
   const versionRows = (must(vers as { data: Row[] | null; error: { message: string } | null }, "versions") ?? []) as Row[];
   const eventRows = (must(events as { data: Row[] | null; error: { message: string } | null }, "events") ?? []) as Row[];
 
-  const [terms, references, relations, availability, collections] = await Promise.all([
+  const [terms, references, relations, availability, collections, importRecord] = await Promise.all([
     loadInstrumentTerms(admin, id, taxonomy), loadReferences(admin, id), loadRelations(admin, id), loadAvailability(admin, id), loadInstrumentCollections(admin, id),
+    inst.import_id ? loadImportProvenance(admin, inst.import_id) : Promise.resolve(null),
   ]);
 
   // Names for the people on the record.
@@ -85,6 +90,7 @@ export async function loadInstrumentDetail(admin: Admin, id: string): Promise<In
     familyCode: inst.family_code ?? null, familyLabel: ((fam as { data: Row | null }).data?.label as string | undefined) ?? null,
     owningEntity: inst.owning_entity ?? "Competen Holdings", responsibleAuthority: inst.responsible_authority ?? null, governanceNote: inst.governance_note ?? null,
     createdAt: inst.created_at, createdBy: nameOf(inst.created_by),
+    importId: inst.import_id ?? null, importSheet: inst.import_sheet ?? null, importRecord,
     status, statusLabel: STATUS_LABEL[status], versionNo: latest?.version_no ?? null, version: versionLabel(latest?.version_no), publishedVersionNo: published?.version_no ?? null,
     terms,
     permittedModes: (published?.delivery_modes as string[] | undefined) ?? [],
@@ -114,6 +120,8 @@ const EVENT_WORDS: Record<string, string> = {
   catalogue_availability: "Product availability changed",
   catalogue_relation: "Relations or references changed",
   catalogue_collection: "Collection membership changed",
+  catalogue_imported: "Content imported from a workbook",
+  catalogue_from_template: "Created from a template",
   created: "Version created",
   duplicated: "Version duplicated to a new draft",
   submitted: "Version put forward for review",

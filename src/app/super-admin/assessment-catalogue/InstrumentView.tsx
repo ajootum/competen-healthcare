@@ -7,6 +7,8 @@ import { eventWords, modeWords } from "@/lib/assessment/catalogue/detail";
 import type { TaxonomyDimension } from "@/lib/assessment/catalogue/classify";
 import type { Collection } from "@/lib/assessment/catalogue/collections";
 import { AVAILABILITY_MODES, MODE_LABEL, RELATION_KINDS, RELATION_LABEL, type AvailabilityMode } from "@/lib/assessment/catalogue/shape";
+import { termPath } from "@/lib/assessment/catalogue/hierarchy";
+import ClassificationFields, { type TermChoice } from "./ClassificationFields";
 import { BASE, Chip, CodeChip, Field, Section, StatusBadge, btnGhost, btnPrimary, callApi, fmtDate, input } from "./ui";
 
 // The instrument, as the drawer and the full page show it. One component, one data read: the page route and the drawer
@@ -48,10 +50,12 @@ export default function InstrumentView({ detail, taxonomy, collections, referenc
   const termsOf = (dim: string) => detail.terms.filter(t => t.dimensionCode === dim);
   const classificationRows: [string, ReactNode][] = [
     ["Family", detail.familyLabel ? `${detail.familyLabel} (${detail.familyCode})` : null],
-    ...dims.filter(d => ["method", "domain", "population", "setting", "level", "specialty"].includes(d.code)).map(d => {
+    ...dims.filter(d => d.code !== "keyword").map(d => {
       const ts = termsOf(d.code);
-      return [d.code === "domain" ? "Subject domain" : d.label, ts.length ? ts.map((t, i) => (
-        <span key={t.termId}>{i > 0 && ", "}{t.label}{t.isPrimary && ts.length > 1 ? " (primary)" : ""}</span>
+      const all = d.terms;
+      const label = (t: typeof ts[number]) => { const term = all.find(x => x.id === t.termId); return term ? termPath(term, all).join(" / ") : t.label; };
+      return [d.code === "domain" ? "Subject domain" : d.code === "level" ? "Qualification applicability" : d.label, ts.length ? ts.map((t, i) => (
+        <span key={t.termId}>{i > 0 && ", "}{label(t)}{t.isPrimary && ts.length > 1 ? " (primary)" : ""}</span>
       )) : null] as [string, ReactNode];
     }),
   ];
@@ -228,6 +232,8 @@ export default function InstrumentView({ detail, taxonomy, collections, referenc
         <Field label="Responsible authority" value={detail.responsibleAuthority} />
         <Field label="Governance note" value={detail.governanceNote} />
         <Field label="Registered" value={`${fmtDate(detail.createdAt)}${detail.createdBy ? ` by ${detail.createdBy}` : ""}`} />
+        {detail.importId && <Field label="Source record" value={<span>Imported from {detail.importRecord ? <b>{detail.importRecord.fileName}</b> : "a workbook"}{detail.importSheet ? ` (sheet ${detail.importSheet})` : ""}{detail.importRecord ? `, sha256 ${detail.importRecord.sha256.slice(0, 12)}…` : ""} · <a className="font-semibold underline" href={`/api/hq/assessment-catalogue/import/${detail.importId}/file`}>download the original</a></span>} />}
+        {detail.relations.some(r => r.direction === "out" && r.relation === "adapted_from") && <Field label="Template" value={detail.relations.filter(r => r.direction === "out" && r.relation === "adapted_from").map(r => `${r.code} ${r.name}${r.note ? ` (${r.note})` : ""}`).join("; ")} />}
         <Field label="Access boundary" value="Catalogue metadata only; no learner or patient assessment records" />
       </Section>
 
@@ -283,47 +289,12 @@ function ClassificationEditor({ detail, taxonomy, busy, onSave, onCancel }: {
   detail: InstrumentDetail; taxonomy: TaxonomyDimension[]; busy: boolean; onCancel: () => void;
   onSave: (terms: { termId: string; isPrimary: boolean }[]) => void;
 }) {
-  const [sel, setSel] = useState<Map<string, boolean>>(() => new Map(detail.terms.map(t => [t.termId, t.isPrimary])));
-  const dimOf = (termId: string) => taxonomy.find(d => d.terms.some(t => t.id === termId))?.code;
-  const togglePrimary = (termId: string) => setSel(prev => {
-    const next = new Map(prev);
-    const dim = dimOf(termId);
-    const was = !!prev.get(termId);
-    for (const [id] of prev) if (dimOf(id) === dim) next.set(id, false);
-    next.set(termId, !was);
-    return next;
-  });
+  const [terms, setTerms] = useState<TermChoice[]>(() => detail.terms.map(t => ({ termId: t.termId, isPrimary: t.isPrimary })));
   return (
-    <div className="space-y-3">
-      {taxonomy.filter(d => d.isActive || [...sel.keys()].some(id => dimOf(id) === d.code)).map(d => {
-        const chosen = d.terms.filter(t => sel.has(t.id));
-        const free = d.terms.filter(t => t.isActive && !sel.has(t.id));
-        return (
-          <fieldset key={d.code} className="rounded-lg border border-gray-200 p-2.5">
-            <legend className="px-1 text-[12px] font-bold text-gray-800">{d.label}</legend>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {chosen.length === 0 && <span className="text-[12px] text-gray-600">None chosen</span>}
-              {chosen.map(t => (
-                <Chip key={t.id} tone={sel.get(t.id) ? "good" : "neutral"}>
-                  {t.label}
-                  <button type="button" aria-pressed={!!sel.get(t.id)} title="Make this the primary term of the axis" className="rounded px-1 text-[11px] font-bold underline"
-                    onClick={() => togglePrimary(t.id)}>{sel.get(t.id) ? "Primary" : "Make primary"}</button>
-                  <button type="button" aria-label={`Remove ${t.label}`} className="rounded px-1 font-bold" onClick={() => setSel(prev => { const n = new Map(prev); n.delete(t.id); return n; })}>{"×"}</button>
-                </Chip>
-              ))}
-              {free.length > 0 && (
-                <select aria-label={`Add a ${d.label} term`} value="" className={`${input} !w-auto`}
-                  onChange={e => { const id = e.target.value; if (id) setSel(prev => new Map(prev).set(id, false)); }}>
-                  <option value="">Add…</option>
-                  {free.map(t => <option key={t.id} value={t.id}>{t.label}</option>)}
-                </select>
-              )}
-            </div>
-          </fieldset>
-        );
-      })}
+    <div className="space-y-3 rounded-lg border border-gray-200 bg-gray-50 p-3">
+      <ClassificationFields taxonomy={taxonomy} value={terms} onChange={setTerms} expanded />
       <div className="flex gap-2">
-        <button type="button" disabled={busy} className={btnPrimary} onClick={() => onSave([...sel.entries()].map(([termId, isPrimary]) => ({ termId, isPrimary })))}>Save classification</button>
+        <button type="button" disabled={busy} className={btnPrimary} onClick={() => onSave(terms)}>Save classification</button>
         <button type="button" className={btnGhost} onClick={onCancel}>Cancel</button>
       </div>
     </div>

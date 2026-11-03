@@ -111,10 +111,12 @@ export const RELATION_KINDS = ["related", "adapted_from", "supersedes", "compani
 
 export const DIMENSION_HELP: Record<string, string> = {
   method: "How the assessment is carried out",
-  domain: "What subject it covers",
+  domain: "What subject it covers. A domain can have subdomains",
   population: "Who or what is assessed",
   setting: "Where it is used",
   level: "The qualification level it applies to",
   specialty: "The specialty it belongs to",
+  profession: "The profession it is written for",
+  purpose: "What it is used for",
   keyword: "Free search words",
 };

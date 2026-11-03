@@ -88,10 +88,11 @@ export async function updateTerm(admin: Admin, termId: string, patch: { label?: 
   mustOk(await admin.from("asmt_catalogue_term").update(row).eq("id", termId), "update term");
 }
 
-export async function updateDimension(admin: Admin, code: string, patch: { label?: string; isActive?: boolean; position?: number }): Promise<void> {
+export async function updateDimension(admin: Admin, code: string, patch: { label?: string; isActive?: boolean; position?: number; allowsHierarchy?: boolean }): Promise<void> {
   const row: Record<string, unknown> = {};
   if (patch.label !== undefined) { if (!patch.label.trim()) throw new Error("A dimension needs a label"); row.label = patch.label.trim(); }
   if (patch.isActive !== undefined) row.is_active = patch.isActive;
+  if (patch.allowsHierarchy !== undefined) row.allows_hierarchy = patch.allowsHierarchy;
   if (patch.position !== undefined) row.position = patch.position;
   if (!Object.keys(row).length) return;
   mustOk(await admin.from("asmt_catalogue_dimension").update(row).eq("code", code), "update dimension");
