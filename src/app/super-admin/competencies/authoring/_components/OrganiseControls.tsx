@@ -42,11 +42,13 @@ export function AddAreaForm({ busy, onCreate }: { busy: boolean; onCreate: (name
  * One Area's heading: its name and domain count, Rename and Delete (empty Areas only), and the Move up / Move down pair.
  * `rowProps` are the reorder row props of the Areas list and `grip` its pointer-drag handle (drag to reorder); `organise` false = a plain heading.
  */
-export function AreaHeading({ name, count, organise, busy, rowProps, grip, buttons, onRename, onDelete, headingId }: {
+export function AreaHeading({ name, count, organise, busy, rowProps, grip, buttons, onRename, onDelete, headingId, expanded, onToggle }: {
   name: string; count: number; organise: boolean; busy: boolean; headingId: string;
   rowProps?: React.HTMLAttributes<HTMLElement> & { draggable?: boolean };
   grip?: React.ReactNode; buttons?: React.ReactNode;
   onRename: (name: string) => Promise<boolean>; onDelete: () => void;
+  /** Collapsible: when onToggle is given the heading folds its domains away (the state lives in the explorer). */
+  expanded?: boolean; onToggle?: () => void;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState(name);
@@ -62,7 +64,16 @@ export function AreaHeading({ name, count, organise, busy, rowProps, grip, butto
         </form>
       ) : (
         <>
-          <h3 id={headingId} className="min-w-[9rem] flex-1 break-words text-[12.5px] font-bold uppercase tracking-[0.1em] text-gray-800">{name} <span className="font-normal normal-case tracking-normal text-gray-500">· {count} {count === 1 ? "domain" : "domains"}</span></h3>
+          <h3 id={headingId} className="min-w-[9rem] flex-1 break-words text-[12.5px] font-bold uppercase tracking-[0.1em] text-gray-800">
+            {onToggle ? (
+              <button type="button" aria-expanded={expanded !== false} onClick={onToggle} className="flex w-full items-center text-left pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                <span aria-hidden className="mr-1.5 inline-block w-3 text-gray-500">{expanded !== false ? "▾" : "▸"}</span>
+                <span>{name} <span className="font-normal normal-case tracking-normal text-gray-500">· {count} {count === 1 ? "domain" : "domains"}</span></span>
+              </button>
+            ) : (
+              <>{name} <span className="font-normal normal-case tracking-normal text-gray-500">· {count} {count === 1 ? "domain" : "domains"}</span></>
+            )}
+          </h3>
           {organise && (
             <span className="flex flex-wrap items-center gap-1">
               <button type="button" className={small} disabled={busy} aria-label={`Rename the Area ${name}`} onClick={() => { setDraft(name); setRenaming(true); }}>Rename</button>
