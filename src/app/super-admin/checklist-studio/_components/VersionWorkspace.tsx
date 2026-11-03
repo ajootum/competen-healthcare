@@ -48,7 +48,7 @@ export interface VersionWorkspaceProps {
   allowedLayoutIds: string[];
   settings: SettingsTabProps;
   report: ValidationReport;
-  lifecycle: Omit<LifecyclePanelProps, "kind" | "versionId" | "versionNo" | "state" | "hrefForVersion" | "listHref" | "report">;
+  lifecycle: Omit<LifecyclePanelProps, "kind" | "versionId" | "versionNo" | "state" | "versionHrefBase" | "listHref" | "report">;
   timeline: TimelineEntry[];
   title: string;
 }
@@ -117,7 +117,7 @@ export function VersionWorkspace(p: VersionWorkspaceProps) {
             <SettingsTab {...p.settings} />
             <LifecyclePanel
               {...p.lifecycle} kind="instrument" versionId={p.versionId} versionNo={p.versionNo} state={p.state} report={p.report}
-              hrefForVersion={(id) => `${base}/${id}`} listHref={`/super-admin/checklist-studio/${p.instrument.id}`}
+              versionHrefBase={base} listHref={`/super-admin/checklist-studio/${p.instrument.id}`}
             />
             <Panel title="History of this version"><DefTimeline timeline={p.timeline} names={p.lifecycle.names} /></Panel>
           </div>
