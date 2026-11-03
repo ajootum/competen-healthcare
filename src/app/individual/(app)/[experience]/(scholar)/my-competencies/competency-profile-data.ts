@@ -48,7 +48,8 @@ export type CompetencyProfileData = {
   unreadable: boolean;
 };
 
-export async function loadCompetencyProfile(admin: Admin, userId: string, today: string, tz: string): Promise<CompetencyProfileData> {
+/** `coverage: false` skips the Learning Intelligence read where the page does not show coverage (the Overview since the Explorer, SCHOLAR-COMPETENCY-EXPLORER-HFE-01). */
+export async function loadCompetencyProfile(admin: Admin, userId: string, today: string, tz: string, opts: { coverage?: boolean } = {}): Promise<CompetencyProfileData> {
   const learner = await loadLearnerCatalogue(admin, userId);
   const offered = await programmesOffered(admin, learner);
   const rows = learner.provisioned && learner.programme && learner.competencies ? await competencyProgressRows(admin, userId) : null;
@@ -61,7 +62,7 @@ export async function loadCompetencyProfile(admin: Admin, userId: string, today:
     : null;
   const unreadable = !!learner.programme && (learner.competencies === null || (rows !== null && !rows.ok));
   const [coverage, activity] = await Promise.all([
-    loadCoverage(admin, userId, learner, today, tz),
+    opts.coverage === false ? Promise.resolve(null) : loadCoverage(admin, userId, learner, today, tz),
     progress ? learningActivityByCompetency(admin, userId) : Promise.resolve(null),
   ]);
   return { learner, offered, progress, coverage, activity, unreadable };
