@@ -14,7 +14,7 @@ export const dynamic = "force-dynamic";
 //   POST  hq.assessment.catalogue.manage  { action, ... }
 //           family_create      { code, label, position? }          the code is permanent (it prefixes every instrument code)
 //           family_update      { code, label?, isActive?, position? }
-//           dimension_update   { code, label?, isActive?, position? }
+//           dimension_update   { code, label?, isActive?, position?, allowsHierarchy? }
 //           term_create        { dimensionCode, label, code?, parentId?, sourceKind?, sourceRef? }
 //           term_update        { termId, label?, isActive?, position?, parentId? }
 //           collection_create  { code, name, description? }
@@ -46,7 +46,7 @@ export async function POST(req: Request) {
     switch (b?.action) {
       case "family_create": await createFamily(ctx.admin, { code: text(b.code, 6), label: text(b.label, 120), position: num(b.position) }); break;
       case "family_update": await updateFamily(ctx.admin, text(b.code, 6).toUpperCase(), { label: b.label === undefined ? undefined : text(b.label, 120), isActive: bool(b.isActive), position: num(b.position) }); break;
-      case "dimension_update": await updateDimension(ctx.admin, text(b.code, 40), { label: b.label === undefined ? undefined : text(b.label, 120), isActive: bool(b.isActive), position: num(b.position) }); break;
+      case "dimension_update": await updateDimension(ctx.admin, text(b.code, 40), { label: b.label === undefined ? undefined : text(b.label, 120), isActive: bool(b.isActive), position: num(b.position), allowsHierarchy: bool(b.allowsHierarchy) }); break;
       case "term_create":
         await createTerm(ctx.admin, {
           dimensionCode: text(b.dimensionCode, 40), label: text(b.label, 120), code: text(b.code, 60) || undefined,

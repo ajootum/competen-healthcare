@@ -110,7 +110,7 @@ export const PLANE_TABLE_PREFIXES = [
   // NO allowlist entry, so any read of them from the landlord plane is refused. The organisation scope table is governed
   // with no entry because Phase 1 has no screen for it.
   "=asmt_catalogue_dimension", "=asmt_catalogue_term", "=asmt_instrument_term", "=asmt_instrument_relation", "=asmt_instrument_reference",
-  "=asmt_instrument_availability", "=asmt_instrument_org_scope", "=asmt_collection", "=asmt_collection_member",
+  "=asmt_instrument_availability", "=asmt_instrument_org_scope", "=asmt_collection", "=asmt_collection_member", "=asmt_import",
   "=asmt_respondent_grant", "=asmt_instance", "=asmt_instance_layout", "=asmt_response", "=asmt_evidence", "=asmt_comment", "=asmt_outcome",
   "=asmt_progression_decision",
   // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910). The learner engagement dashboard reads these Scholar activity tables for

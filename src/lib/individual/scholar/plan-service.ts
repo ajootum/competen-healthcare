@@ -11,10 +11,11 @@ import { examOffers } from "./plan-calendar";
 import { carryKey } from "./plan-carry";
 import { loadInsights, loadProposal, loadToday, type PlanCtx } from "./plan-data";
 import { isProposalDecision, topicKey } from "./plan-proposal";
+import { STORED_UNITS_BASIS, parseStoredUnits } from "./plan-units";
 import { cleanReflection, isoWeek, reflectionOffer } from "./plan-reflection";
 import { cleanPlanSettings, increaseNeedsConfirmation, settingsDiff, settingsFromRow } from "./plan-settings";
 import { audit } from "./http";
-import { clearStudyPlan, getStudyPlan, listMaterials, saveStudyPlan, studyPlanSchema } from "./store";
+import { clearStudyPlan, getStudyPlan, listMaterials, saveStudyPlan, sectionsOf, studyPlanSchema } from "./store";
 import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 
 // ── MY PLAN: THE REQUEST SERVICES ── PLP-01..04 and the My Plan calendar enhancement ───────────────────────────────────
@@ -72,7 +73,18 @@ export async function proposalPostService(ctx: PlanCtx, body: any, headers: Head
   const mats = await listMaterials(ctx.admin, ctx.userId);
   if (!mats.ok) return reason("unreadable");
   if (!mats.data.some(m => m.id === materialId)) return refuse(404, "That material could not be found.");
-  const r = await appendPlanEvent(ctx.admin, ctx.userId, "scholar", { kind: "proposal", ref: materialId, status: decision, value: { at: when(headers, now).today } });
+  // SCHOLAR-PLAN-UNITS-01: an acceptance may carry the learning units the learner reviewed, by section ordinals of THIS material only.
+  let value: Record<string, unknown> = { at: when(headers, now).today };
+  if (decision === "accepted" && body?.units !== undefined) {
+    const secs = await sectionsOf(ctx.admin, ctx.userId, [materialId]);
+    if (!secs.ok) return reason("unreadable");
+    const units = parseStoredUnits({ units: body.units }, new Set(secs.data.map(s => s.ordinal)));
+    if (!units) return refuse(400, "The learning units do not match this material. Reload the page and try again.");
+    if (!units.some(u => !u.x)) return refuse(400, "Keep at least one learning unit, or choose not to plan these notes.");
+    value = { ...value, basis: STORED_UNITS_BASIS, units };
+    if (Buffer.byteLength(JSON.stringify(value), "utf8") > 8000) return refuse(400, "Too many learning units to remember: merge some and try again.");
+  }
+  const r = await appendPlanEvent(ctx.admin, ctx.userId, "scholar", { kind: "proposal", ref: materialId, status: decision, value });
   if (r !== "ok") return r === "not_provisioned" ? refuse(409, "Your answer cannot be remembered here yet.") : refuse(500, "Your answer could not be saved just now. Try again shortly.");
   await audit(asCtx(ctx), "individual_scholar_plan_proposal", "individual_learning_plan_event", materialId, { decision });
   return reply(200, { ok: true, decision });
