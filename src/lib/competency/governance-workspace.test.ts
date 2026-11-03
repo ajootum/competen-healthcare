@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { inQueue, nextActionOf, pathwayOf, queueCounts, reviewOrder, type GovCompetency, type GovDomain, type GovFramework, type Me } from "./governance-workspace";
+﻿import { describe, expect, it } from "vitest";
+import { inQueue, nextActionOf, pathwayOf, queueCounts, reviewOrder, type GovCompetency, type GovDomain, type GovFramework, type Me } from "./governance-rules";
 
 // FRAMEWORK-GOVERNANCE-WORKSPACE-01: the pure rules the page draws from. The acceptance case is NUR-CCF on 3 Nov 2026:
 // version 1.0.0, 42 competencies, 0 approved, a publication request already submitted.
