@@ -39,11 +39,11 @@ export default async function ScaleVersionPage({ params }: { params: Promise<{ v
         lede={v.source_kind ? "Imported from an existing scale. Its levels keep a link to the level they came from." : undefined}
         right={<StateChip state={v.state} />}
       />
+      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/scales/v" />
       <DefScaleEditor
         versionId={v.id} initialLevels={v.levels} initialStates={v.states} description={v.description} scaleKind={v.scale_kind}
         bands={stage?.bands ?? []} stages={stage?.stages ?? []} editable={v.state === "draft" && canAuthor}
       />
-      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/scales/v" />
       {v.scale_kind === "rating" && <StageMappingPanel ratingVersionId={v.id} ratingCode={v.scale_code} levels={v.levels} targets={stageTargets} mappings={mappings} canAuthor={canAuthor} />}
       <LifecyclePanel
         kind="scale" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}

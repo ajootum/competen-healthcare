@@ -35,8 +35,8 @@ export default async function LayoutTemplateVersionPage({ params }: { params: Pr
         crumbs={[{ href: "/super-admin/checklist-studio", label: "Checklist Studio" }, { href: "/super-admin/checklist-studio/layout-templates", label: "Layout templates" }, { label: v.code }]}
         right={<StateChip state={v.state} />}
       />
-      <DefLayoutTemplateEditor versionId={v.id} initialLayout={v.layout ?? {}} presentation={v.presentation ?? "standard_checklist"} description={v.description} designs={designs} editable={editable} />
       <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/layout-templates/v" />
+      <DefLayoutTemplateEditor versionId={v.id} initialLayout={v.layout ?? {}} presentation={v.presentation ?? "standard_checklist"} description={v.description} designs={designs} editable={editable} />
       <LifecyclePanel
         kind="layout_template" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}

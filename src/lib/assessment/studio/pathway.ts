@@ -171,7 +171,8 @@ export function blockersOf(i: PathwayInput, reviewers: WhoCanAct, domainReviewer
     if (i.kind === "instrument" && i.deliveryModes.length === 0) out.push({ text: "No delivery mode chosen.", fix: "Choose at least one delivery mode in Settings & Review." });
     const scaleIssue = i.validation.find((e) => /scale/i.test(e.message) || /scale/i.test(e.path));
     if (scaleIssue) out.push({ text: scaleIssue.message, fix: "Choose a published response scale on each rating item (Content tab), or publish the scale first." });
-    const others = i.validation.filter((e) => e !== scaleIssue);
+    const noModes = i.kind === "instrument" && i.deliveryModes.length === 0;
+    const others = i.validation.filter((e) => e !== scaleIssue && !(noModes && /delivery mode/i.test(e.message)));
     if (others.length) out.push({ text: `${plural(others.length, "validation problem")}: ${others.slice(0, 2).map((e) => e.message).join(" ")}${others.length > 2 ? " …" : ""}`, fix: "Run Validate in Settings & Review and fix each problem." });
     const stale = i.decisions.filter((d) => d.decision === "approved" && d.content_hash !== i.contentHash);
     if (stale.length && !i.returned) out.push({ text: `${plural(stale.length, "earlier approval")} on earlier content no longer count.`, fix: "Submit again: approvals attach to the exact content put forward." });

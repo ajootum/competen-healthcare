@@ -39,6 +39,7 @@ export default async function ProgressionVersionPage({ params }: { params: Promi
         lede={`Places people against: ${describeTarget({ kind: v.target_kind, ref: v.target_ref }, labels)}. The target is fixed when a rule set is created.`}
         right={<StateChip state={v.state} />}
       />
+      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/progression/v" />
       {stageScale ? (
         <DefProgressionEditor
           versionId={v.id} initialRules={v.rules ?? {}} initialTests={v.tests ?? []} stageScaleVersionId={v.stage_scale_version_id} stageScale={stageScale}
@@ -47,7 +48,6 @@ export default async function ProgressionVersionPage({ params }: { params: Promi
       ) : (
         <Notice tone="error">The stage scale this rule set uses could not be read, so the rules cannot be shown.</Notice>
       )}
-      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/progression/v" />
       <LifecyclePanel
         kind="progression" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}

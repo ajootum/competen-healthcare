@@ -35,8 +35,8 @@ export default async function RuleTemplateVersionPage({ params }: { params: Prom
         crumbs={[{ href: "/super-admin/checklist-studio", label: "Checklist Studio" }, { href: "/super-admin/checklist-studio/scoring-templates", label: "Scoring templates" }, { label: v.code }]}
         right={<StateChip state={v.state} />}
       />
-      <DefRuleTemplateEditor versionId={v.id} initialRules={v.rules ?? {}} initialTests={v.tests ?? []} description={v.description} designs={designs} editable={editable} />
       <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/scoring-templates/v" />
+      <DefRuleTemplateEditor versionId={v.id} initialRules={v.rules ?? {}} initialTests={v.tests ?? []} description={v.description} designs={designs} editable={editable} />
       <LifecyclePanel
         kind="rule_template" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}
