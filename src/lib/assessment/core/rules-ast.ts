@@ -61,8 +61,15 @@ export interface Rule {
 export interface AggregateDef { id: string; fn: AggFn; over: Selector; weights: WeightMode }
 export interface GroupRules { group: string; rules: Rule[]; fallback: string }
 
+/**
+ * Which configured scoring profile a rules document came from (a starter the author applied), for the Scoring & Evaluation
+ * panel and the result summaries. Descriptive only: the engine never reads it. Free text, no formula is evaluated.
+ */
+export interface RulesProfile { id: string; label: string; version: string; formula?: string; notes?: string }
+
 export interface RulesDoc {
   schema: typeof RULES_SCHEMA;
+  profile?: RulesProfile;
   outcomes: OutcomeDef[];
   /** Built in, cannot be turned off. Required whenever an item is critical (criticalFail) or mandatory (mandatoryMissing). */
   gates?: { criticalFail?: string; mandatoryMissing?: string };
@@ -87,7 +94,8 @@ export const PRED_ALLOWED: Record<(typeof PRED_KEYS)[number], string[]> = {
   groupOutcome: ["groupOutcome", "is"],
 };
 export const SELECTOR_KEYS = ["scope", "keys", "critical", "mandatory", "methods"] as const;
-export const RULES_TOP_KEYS = ["schema", "outcomes", "gates", "defaults", "aggregates", "groups", "rules", "fallback", "permitOrdinalMean"] as const;
+export const RULES_TOP_KEYS = ["schema", "profile", "outcomes", "gates", "defaults", "aggregates", "groups", "rules", "fallback", "permitOrdinalMean"] as const;
+export const PROFILE_KEYS = ["id", "label", "version", "formula", "notes"] as const;
 export const RULE_KEYS = ["id", "label", "priority", "when", "then", "explain"] as const;
 export const AGGREGATE_KEYS = ["id", "fn", "over", "weights"] as const;
 

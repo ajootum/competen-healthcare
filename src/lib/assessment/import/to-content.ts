@@ -90,7 +90,8 @@ export function buildInstrumentPlan(d: WorkbookDraft, g: ImportGroup, newKey: ()
   const patched = patchPartialOptions({ groups: [], sections, items });
   const def = toDefinition(patched.content, { versionNo: 1 });
   const scoring = proposeScoring({ sheets, def, respondentRoles: g.respondentRoles, levels: scale?.levels ?? null });
-  return { title: g.title.trim(), summary, content: patched.content, scale, ratingItems, notes, scoring };
+  // the profile's content (option values, N/A reason, mandatory, evidence fields) is what the draft receives
+  return { title: g.title.trim(), summary, content: scoring.content ? { ...patched.content, items: scoring.content.items } : patched.content, scale, ratingItems, notes, scoring };
 }
 
 export function responseDesign(s: SheetDraft): { response_type: ResponseType; config: EditorItem["config"] } {

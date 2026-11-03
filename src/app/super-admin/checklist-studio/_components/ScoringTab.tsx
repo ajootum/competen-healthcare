@@ -11,6 +11,8 @@ import { blankRules } from "./DefRuleTemplateEditor";
 import { STARTERS } from "@/lib/assessment/studio/starters";
 import { acceptProposedRules, isProposedRules } from "@/lib/assessment/import/scoring";
 import type { ProposalRecord } from "@/lib/assessment/import/propose";
+import type { ProfileId } from "@/lib/assessment/import/profiles";
+import { ScoringEvaluationPanel } from "./ScoringEvaluationPanel";
 import { IssueList, Notice, Panel, callApi, useAction } from "./studio-ui";
 
 export interface RuleTemplateOption { id: string; label: string }
@@ -43,6 +45,8 @@ export function ScoringTab({ versionId, versionNo, instrumentCode, content, cont
   // Owner GO 3 Nov 2026: the deterministic proposal from the stored source workbook, for a draft imported earlier.
   const propose = () => run("propose", () => callApi<{ flags: { message: string }[] }>(url, "POST", { action: "propose_from_workbook" }),
     { ok: "Scoring was proposed from the source workbook. Read the flags, then accept or change the rules.", onOk: () => router.refresh() });
+  const applyProfile = (profileId: ProfileId) => run("profile", () => callApi<{ flags: { message: string }[] }>(url, "POST", { action: "apply_profile", profileId }),
+    { ok: "The profile was applied to this draft: content settings, rules and tests. Read the flags, then accept or change the rules.", onOk: () => router.refresh() });
   const proposed = isProposedRules(doc);
   const accept = () => { if (!doc) return; setDoc(acceptProposedRules(doc)); setDirty(true); };
   const starterFit = (unfit: string | null) => unfit === null;
@@ -51,6 +55,7 @@ export function ScoringTab({ versionId, versionNo, instrumentCode, content, cont
     <div className="space-y-4">
       {!editable && <Notice>Scoring can be changed only on a draft, by a person who holds the author capability.</Notice>}
       {contentDirty && <Notice tone="warning">The content has unsaved changes. The builder uses them, but the server checks the saved content. Save the content first.</Notice>}
+      <ScoringEvaluationPanel def={def} doc={doc} tests={tests} live={live} editable={editable} busy={busy !== null} onApply={applyProfile} />
       {proposed && doc && (
         <Panel title="Proposed from the source workbook: review before submitting">
           <p className="text-sm">These rules and their saved tests were proposed by the importer from what the sheet holds. Nothing was inferred silently: every assumption is listed. Accept them as your own rules, change them in the builder below, or start again from a starter.</p>

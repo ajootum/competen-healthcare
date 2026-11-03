@@ -155,7 +155,7 @@ describe("the plan for a confirmed group uses the existing Studio model", () => 
     expect(plan.content.items).toHaveLength(62);
     expect(plan.content.sections.filter((s) => !s.parent_section_key)).toHaveLength(13);
     expect(plan.ratingItems).toBe(62);
-    expect(plan.content.items[0]).toMatchObject({ code: "1", prompt: "Ensures Hand hygiene precautions", response_type: "rating_scale", config: { allowedStates: ["not_applicable"] } });
+    expect(plan.content.items[0]).toMatchObject({ code: "1", prompt: "Ensures Hand hygiene precautions", response_type: "rating_scale", mandatory: true, config: { allowedStates: ["not_applicable"], naReasonRequired: true } });
     expect(plan.content.items[0].fields?.map((f) => f.field_key)).toEqual(["evidence_comments"]);
     expect(plan.content.items.find((i) => i.code === "29")?.expected_performance).toHaveLength(4);
     expect(plan.scale?.levels.map((l) => [l.code, l.label, l.numeric_value, l.satisfactory])).toEqual([
@@ -175,7 +175,7 @@ describe("the plan for a confirmed group uses the existing Studio model", () => 
     expect(plan.scale).toBeNull();
     expect(plan.content.items[0]).toMatchObject({ response_type: "multiple_choice", config: { select: "single" } });
     expect((plan.content.items[0].config.options ?? []).map((o) => o.code)).toEqual(["yes", "no", "partial"]);
-    expect(plan.content.items[0].fields?.map((f) => f.field_key)).toEqual(["documented_finding", "observed_finding", "discrepancy_action"]);
+    expect(plan.content.items[0].fields?.map((f) => f.field_key)).toEqual(["documented_finding", "observed_finding", "discrepancy", "action_needed", "explainable_change", "clinical_context"]);
   });
   it("puts two grouped sheets under one top-level section each", () => {
     n = 0;
