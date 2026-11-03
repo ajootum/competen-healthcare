@@ -117,7 +117,9 @@ export const PROMPT_VERSIONS = {
   // v3: Simplify keeps the passages' own names rather than counting them ("two tubes" for "right and left").
   learn: "scholar-learn-v3",
   // SCHOLAR-COMPANION-01 P1: the six teaching actions (ask me, guide, challenge, mistake, teach back, high-yield), learn-teaching.ts.
-  teaching: "scholar-learn-teaching-v1",
+  // v2 (SCHOLAR-CUMULATIVE-TEACHING-01): Guide me responds to the attempt (what is right, the misconception, the next step) and
+  // carries its own turns; Challenge me asks for reasoning on its upper rungs and never repeats a question already asked.
+  teaching: "scholar-learn-teaching-v2",
   // SCHOLAR-SESSION-AI-02 slice C (owner D4): an ask in a connected study session carries the study-session block
   // (study-session-context.ts) beside the learner context. Its own suffix ("scholar-learn-v3:ask+scholar-study-session-v1"),
   // so a request with the block is always told apart from one without; an ask is never a saved artefact.
@@ -127,11 +129,22 @@ export const PROMPT_VERSIONS = {
   // `learn` (generation.ts learnPromptVersion), so a Teach Me answer saved in the old free-text form is never reused.
   // v2 (SCHOLAR-GUIDED-LEARNING-01): no unsupported counts ("two types") unless the passages give them. A saved v1
   // lesson is still opened, with no AI call (LEARN_TEACH_LEGACY): its structure and checks are the same.
-  learnTeach: "scholar-learn-teach-v2",
+  // v3 (SCHOLAR-CUMULATIVE-TEACHING-01, owner GO 3 Nov 2026): the lesson is comprehensive from the first request -- an
+  // UNDERSTANDING part of connected paragraphs (concepts, mechanisms, relationships, application) between the overview and
+  // the key points, questions that ask for explanation or reasoning, and the lesson brief in the prompt. A saved v2 lesson is
+  // still opened with no AI call (LEARN_TEACH_LEGACY).
+  learnTeach: "scholar-learn-teach-v3",
+  // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper is written in the lesson's parts and, given TAUGHT SO FAR, extends the lesson
+  // (or declares the depth reached). A saved context-free "scholar-learn-v3:deeper" is still opened (legacyLearnPromptVersions).
+  learnDeeper: "scholar-learn-deeper-v2",
+  // SCHOLAR-CUMULATIVE-TEACHING-01: the suffix of any answer written with a TAUGHT SO FAR block (learn-context.ts), on top of
+  // the action's own version, so what was taught WITH prior context is never served as a context-free answer and vice versa.
+  cumulative: "scholar-learn-cumulative-v1",
   // SCHOLAR-UNDERSTANDING-CHECKS-01 (owner, 3 Nov 2026): a clarification (the judgement of a written check answer) is written in
   // labelled parts after its VERDICT line -- what was right, what was missing, misconceptions, the key learning points (a model
   // answer from the passages) and what to revise next (learn-check.ts). On top of `learn`; never a saved artefact.
-  learnClarify: "scholar-learn-clarify-v2",
+  // v3 (SCHOLAR-CUMULATIVE-TEACHING-01): a reasoning question is judged as reasoning, and an understood answer is taken a step further.
+  learnClarify: "scholar-learn-clarify-v3",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
   evaluate: "scholar-evaluate-v2",
@@ -187,7 +200,7 @@ export const EXTENDED_RESPONSE_MAX = 3000;
 export const EXTENDED_LABEL = "Extended response: marked by AI against the key points in your notes. Formative practice marks only: not an assessment and not a grade.";
 export const TRUE_FALSE_LABEL = "True or false, written from a sentence in your notes. Marked by code.";
 /** SCHOLAR-GUIDED-LEARNING-01: earlier Teach Me versions whose saved lessons are still opened (same structure and checks). */
-export const LEARN_TEACH_LEGACY: readonly string[] = ["scholar-learn-teach-v1"];
+export const LEARN_TEACH_LEGACY: readonly string[] = ["scholar-learn-teach-v1", "scholar-learn-teach-v2"];
 /** SCHOLAR-CE-2026 CE-05: a scenario has 2 to 4 stages (the same bounds as a structured question's parts), each weighted 1 to 5. */
 export const SCENARIO_STAGES_MIN = 2;
 export const SCENARIO_STAGES_MAX = 4;

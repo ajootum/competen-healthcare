@@ -39,11 +39,12 @@ describe("the teaching actions are wired as Learn actions", () => {
     for (const a of ["mistake", "ask_me", "challenge", "guide", "high_yield", "teach"]) expect(eventVerdict(a, "partly")).toBeNull();
   });
   it("have their own prompt version", () => {
-    expect(learnPromptVersion("ask_me")).toBe("scholar-learn-v3:ask_me+scholar-learn-teaching-v1");
-    expect(learnPromptVersion("teach")).toContain("scholar-learn-teach-v2");
+    expect(learnPromptVersion("ask_me")).toBe("scholar-learn-v3:ask_me+scholar-learn-teaching-v2");
+    expect(learnPromptVersion("teach")).toContain("scholar-learn-teach-v3");
   });
   it("keep their output short, except high-yield which follows the depth mapping", () => {
-    for (const a of ["ask_me", "challenge", "guide", "mistake", "teach_back"] as const) expect(teachingMaxTokens(a, "detailed")).toBeLessThanOrEqual(600);
+    // SCHOLAR-CUMULATIVE-TEACHING-01: a Guide me turn responds to the attempt and then guides, so it has a little more room (650).
+    for (const a of ["ask_me", "challenge", "guide", "mistake", "teach_back"] as const) expect(teachingMaxTokens(a, "detailed")).toBeLessThanOrEqual(650);
     expect(teachingMaxTokens("high_yield", "standard")).toBe(800);
     expect(teachingMaxTokens("high_yield", "detailed")).toBe(1100);
   });
@@ -108,13 +109,22 @@ describe("the prompts", () => {
     expect(teachingPrompt({ action: "teach_back", explanation: "It treats low oxygen" })).toContain("It treats low oxygen");
     expect(teachingPrompt({ action: "guide", hintLevel: 2, attempt: "my try", question: "" })).toContain("my try");
   });
-  it("guide: only a hint, never the full answer, and the learner may choose to be told directly", () => {
+  it("guide: responds to the attempt, never states the conclusion in full, and the learner may choose to be told directly", () => {
     for (const n of [1, 2, 3] as const) {
       const t = teachingInstruction("guide", { hintLevel: n });
-      expect(t).toMatch(/NEVER give the full answer/);
+      // SCHOLAR-CUMULATIVE-TEACHING-01 (teaching v2): a dialogue -- what is right, the misconception corrected from the passages, then the next step and ONE question.
+      expect(t).toMatch(/NEVER state in full the conclusion/);
+      expect(t).toMatch(/mistaken idea[\s\S]*correct it from the passages/);
+      expect(t).toMatch(/End with ONE question/);
       expect(t).toContain("Explain it directly");
       expect(t).toContain(`rung ${n} of 3`);
     }
+    expect(teachingInstruction("guide", { hintLevel: 1, taught: true })).toMatch(/TAUGHT SO FAR/);
+    expect(teachingInstruction("guide", { hintLevel: 1 })).not.toMatch(/TAUGHT SO FAR/);
+    // Challenge me: the upper rungs demand reasoning, and with TAUGHT SO FAR never a question already asked.
+    expect(teachingInstruction("challenge", { level: "reasoning" })).toMatch(/EXPLAIN WHY, COMPARE, JUSTIFY or EVALUATE/);
+    expect(teachingInstruction("challenge", { level: "recall" })).not.toMatch(/JUSTIFY/);
+    expect(teachingInstruction("challenge", { level: "application", taught: true })).toMatch(/DECIDE or PRIORITISE[\s\S]*never ask one of those again/);
     expect(teachingInstruction("guide", { hintLevel: 1 })).toMatch(/RUNG 1, a nudge/);
     expect(teachingInstruction("guide", { hintLevel: 2 })).toMatch(/RUNG 2, a pointer/);
     expect(teachingInstruction("guide", { hintLevel: 3 })).toMatch(/RUNG 3, a near-complete scaffold/);

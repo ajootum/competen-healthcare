@@ -126,6 +126,10 @@ type Reply = {
   savedEarlier?: { label: string; promptVersion: string; depth: string } | null;
   /** Item 8: an Ask question's everyday-word slips corrected on the server (spelling.ts, deterministic); `original` as typed. */
   spelling?: { original: string; display: string; corrections: { from: string; to: string }[] } | null;
+  /** SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper found nothing further of value in the notes (or its round limit): no lesson, the next activity suggested. */
+  depthReached?: { message: string; suggestion: string | null; next: readonly { key: string; label: string }[]; rounds?: number; cap?: boolean } | null;
+  /** SCHOLAR-CUMULATIVE-TEACHING-01: on an open, the lesson's other saved teaching (Go deeper rounds, examples ...), oldest first, no AI. */
+  alsoSaved?: Reply[];
 };
 /** `extra` and `target`: the request as it was made, so "Explain using approved references" can make it again. `step`: the lesson it belongs to. */
 type Card = { id: number; asked?: string; reply: Reply; extra?: Record<string, unknown>; target?: "lesson" | "ask"; step?: number };
@@ -388,23 +392,33 @@ export function LearnWorkspace(props: {
 
   // One request body for every Learn action: the step, its depth and (beyond notes) its Learn-from mode, and the
   // session by id (or, held in the browser, its sections).
+  // SCHOLAR-CUMULATIVE-TEACHING-01: the checks the learner answered in this lesson during this visit (the question, their answer, the
+  // verdict and the clarification), sent with every lesson action but Teach me and Ask so the next teaching responds to them. Held
+  // only in the page's thread; never stored by the server.
+  const priorChecksOf = useCallback((stepNo: number) => (cardsRef.current[stepNo] ?? [])
+    .filter(c => c.reply.action === "clarify" && !c.reply.withheld && !c.reply.continuity && typeof c.extra?.checkQuestion === "string")
+    .slice(-4).map(c => ({ question: String(c.extra!.checkQuestion), answer: typeof c.extra?.answer === "string" ? c.extra.answer : null, verdict: c.reply.verdict?.value ?? null, feedback: c.reply.answer ?? null })), []);
   const bodyFor = useCallback((st: Step, action: string, s: LessonSettings, extra: Record<string, unknown> = {}) => {
     if (!session) return {};
     const scopeIds = session.steps.flatMap(x => x.sections.map(y => y.chunkId));
+    const checks = action !== "teach" && action !== "ask" && action !== "clarify" ? priorChecksOf(st.step) : [];
     return {
       action, step: st.step, depth: s.depth, ...(s.mode !== "notes" && action !== "check" && action !== "clarify" ? { mode: s.mode } : {}), ...extra,
       ...(action === "ask" ? spellingField(spelling) : {}),
+      ...(checks.length ? { priorChecks: checks } : {}),
       ...(session.id ? { sessionId: session.id } : { chunkIds: action === "ask" ? scopeIds : st.sections.map(x => x.chunkId) }),
     };
-  }, [session, spelling]);
+  }, [session, spelling, priorChecksOf]);
   // A reply into its own step's thread (or the Ask thread), and the step's progress. A reply that arrives after the
   // learner moved on still belongs to the step it teaches, so it shows in that lesson (no second AI call).
   const record = useCallback((stepNo: number, json: Record<string, any>, action: string, extra: Record<string, unknown> | undefined, target: "lesson" | "ask", asked?: string) => { // eslint-disable-line @typescript-eslint/no-explicit-any
     const reply = (json.continuity ? { ...json, savedList: json.saved, saved: null, sources: [], references: [] } : json) as Reply;
     const card: Card = { id: ++seq.current, asked, reply, extra, target, step: stepNo };
+    // SCHOLAR-CUMULATIVE-TEACHING-01: an opened lesson brings its other saved teaching (Go deeper rounds, examples), each its own card after it.
+    const more: Card[] = (Array.isArray(json.alsoSaved) ? (json.alsoSaved as Reply[]) : []).filter(s => s && s.answer).map(s => ({ id: ++seq.current, reply: s, extra: {}, target: "lesson" as const, step: stepNo }));
     if (target === "ask") setAskThread(t => [card, ...t]);
-    else setCards(c => ({ ...c, [stepNo]: [...(c[stepNo] ?? []), card] }));
-    if (!json.withheld && !json.continuity) setProgress(p => ({ ...p, [stepNo]: { actions: [...new Set([...(p[stepNo]?.actions ?? []), action])], verdict: json.verdict?.value ?? p[stepNo]?.verdict ?? null } }));
+    else setCards(c => ({ ...c, [stepNo]: [...(c[stepNo] ?? []), card, ...more] }));
+    if (!json.withheld && !json.continuity) setProgress(p => ({ ...p, [stepNo]: { actions: [...new Set([...(p[stepNo]?.actions ?? []), action, ...more.map(m => m.reply.action)])], verdict: json.verdict?.value ?? p[stepNo]?.verdict ?? null } }));
     return reply;
   }, []);
 
@@ -1165,7 +1179,8 @@ export function LearnWorkspace(props: {
     const items: Activity[] = [
       ...(group.primary ? [{ key: "understand", label: "Understand", done: hasLesson, disabled: hasLesson || busyHere || !canTeach,
         onClick: () => dispatch({ type: "requestTeach", index: i }) }] : []),
-      ...(props.actions.includes("deeper") ? [{ key: "deeper", label: working("deeper") ? "Working…" : "Mechanisms", done: !!acts.deeper, disabled: busyHere || !props.consent || !!offReason("deeper"),
+      // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper is a contextual action that may be chosen again: each round extends the last (the server knows the rounds).
+      ...(props.actions.includes("deeper") ? [{ key: "deeper", label: working("deeper") ? "Working…" : acts.deeper ? "Go deeper again" : "Go deeper", done: !!acts.deeper, disabled: busyHere || !props.consent || !!offReason("deeper"),
         describedBy: offReason("deeper") ? "learn-ai-why" : undefined, onClick: () => void act("deeper", {}, "lesson", undefined, st.step) }] : []),
       ...(props.actions.includes("examples") ? [{ key: "examples", label: working("examples") ? "Working…" : "Examples", done: !!acts.examples, disabled: busyHere || !props.consent || !!offReason("examples"),
         describedBy: offReason("examples") ? "learn-ai-why" : undefined, onClick: () => void act("examples", {}, "lesson", undefined, st.step) }] : []),
@@ -1553,6 +1568,17 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
   }
   const name = r.action === "clarify" ? "Clarification" : r.action === "check" ? "Check question" : labels[r.action as LearnAction] ?? r.action;
   if (r.action === "check" && r.checkQuestion) return null; // shown in the check form
+  // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper found nothing further of value in the notes. Said plainly, with what to do instead (existing activities).
+  if (r.depthReached) {
+    return (
+      <article id={anchorId} className={`${anchorId ? "scroll-mt-4 " : ""}rounded-xl border border-sky-200 bg-sky-50/60 p-4`}>
+        <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">{name} · depth reached</p>
+        <p className="mt-1 text-[14px] text-gray-800">{r.depthReached.message}</p>
+        {r.depthReached.suggestion && <p className="mt-1.5 text-[14px] text-gray-900">{r.depthReached.suggestion}</p>}
+        <p className="mt-2 text-[12.5px] text-gray-700">Next: {r.depthReached.next.map(n => n.label).join(" · ")} (the activities below).</p>
+      </article>
+    );
+  }
   const cited = new Set(r.cited ?? []);
   return (
     <article id={anchorId} className={`${anchorId ? "scroll-mt-4 " : ""}rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}>
@@ -1652,7 +1678,8 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  * way each [S n] is a link to its section.
  */
 function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
-  const parts = action === "teach" ? parseTeachAnswer(text) : null;
+  // SCHOLAR-CUMULATIVE-TEACHING-01: a Go deeper written in the lesson's parts (v2) is shown as a lesson too; an older free-text one as written.
+  const parts = action === "teach" || action === "deeper" ? parseTeachAnswer(text) : null;
   // SCHOLAR-UNDERSTANDING-CHECKS-01: a clarification in the thread (a previous check) shows its labelled parts (learn-check.ts).
   const checkParts = action === "clarify" ? parseCheckFeedback(text) : null;
   if (checkParts) {
@@ -1681,6 +1708,12 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
   return (
     <div className="mt-1 space-y-3 break-words text-[14.5px] leading-relaxed text-gray-800">
       {parts.overview && <p id={idPrefix ? `${idPrefix}-ov` : undefined} className="text-[15px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
+      {/* SCHOLAR-CUMULATIVE-TEACHING-01: the teaching itself -- connected paragraphs, shown in full (no click to see the lesson). */}
+      {!!parts.understanding?.length && (
+        <div id={idPrefix ? `${idPrefix}-un` : undefined} className="space-y-2.5">
+          {parts.understanding.map((p, i) => <p key={i}><Cited text={p} sources={sources} /></p>)}
+        </div>
+      )}
       {parts.points.length > 0 && (
         <div id={idPrefix ? `${idPrefix}-kp` : undefined}>
           <h4 className={`${sub} text-gray-600`}>Key points</h4>

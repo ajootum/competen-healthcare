@@ -62,12 +62,15 @@ describe("partial grounding: keep the supported parts", () => {
 });
 
 describe("the teach prompt v2", () => {
-  it("is versioned, tells the model not to count without the notes, and keeps v1 lessons openable", () => {
-    expect(PROMPT_VERSIONS.learnTeach).toBe("scholar-learn-teach-v2");
+  it("is versioned, tells the model not to count without the notes, and keeps v1 and v2 lessons openable", () => {
+    // SCHOLAR-CUMULATIVE-TEACHING-01: v3 (the UNDERSTANDING part); a saved v2 lesson opens with no AI call, like v1.
+    expect(PROMPT_VERSIONS.learnTeach).toBe("scholar-learn-teach-v3");
     expect(learnSystem("teach", { depth: "standard", background: false, references: false })).toMatch(/Never say how many of something there are \('two types'/);
-    expect(LEARN_TEACH_LEGACY).toEqual(["scholar-learn-teach-v1"]);
-    expect(legacyLearnPromptVersions("teach")).toEqual([`${PROMPT_VERSIONS.learn}:teach+scholar-learn-teach-v1`]);
+    expect(LEARN_TEACH_LEGACY).toEqual(["scholar-learn-teach-v1", "scholar-learn-teach-v2"]);
+    expect(legacyLearnPromptVersions("teach")).toEqual([`${PROMPT_VERSIONS.learn}:teach+scholar-learn-teach-v1`, `${PROMPT_VERSIONS.learn}:teach+scholar-learn-teach-v2`]);
     expect(legacyLearnPromptVersions("explain")).toEqual([]);
-    expect(learnPromptVersion("teach")).toBe(`${PROMPT_VERSIONS.learn}:teach+scholar-learn-teach-v2`);
+    expect(legacyLearnPromptVersions("deeper")).toEqual([`${PROMPT_VERSIONS.learn}:deeper`]);
+    expect(learnPromptVersion("teach")).toBe(`${PROMPT_VERSIONS.learn}:teach+scholar-learn-teach-v3`);
+    expect(learnPromptVersion("deeper")).toBe(`${PROMPT_VERSIONS.learn}:deeper+scholar-learn-deeper-v2`);
   });
 });

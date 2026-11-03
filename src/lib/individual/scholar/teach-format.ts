@@ -3,6 +3,10 @@
 //
 // A Teach Me answer (PROMPT_VERSIONS.learnTeach) is written in labelled parts, each line starting with its label:
 //   OVERVIEW:                   what the lesson is about and why it matters, cited
+//   UNDERSTANDING:              SCHOLAR-CUMULATIVE-TEACHING-01 (v3): the teaching itself -- connected paragraphs that develop
+//                               the concepts, mechanisms, relationships and applications, cited; paragraphs are kept apart
+//                               by a blank line. A Go deeper answer (v2) is written in the same parts, so it is shown and
+//                               checked the same way. Absent on a v1/v2 lesson (points only).
 //   KEY POINTS:                 one '- ' line per key idea, each cited
 //   EXAMPLE:                    only where the passages describe a situation; checked on its own and DROPPED if unsupported
 //   CHECK YOUR UNDERSTANDING:   one or two questions, each ending with the [S n] that answers it; each checked, or dropped
@@ -10,9 +14,9 @@
 // the same. An answer saved before the structure (older prompt version) has none of the labels: parseTeachAnswer returns
 // null and the answer is shown as it was written.
 
-export type TeachParts = { overview: string; points: string[]; example: string | null; questions: string[] };
+export type TeachParts = { overview: string; /** v3 (SCHOLAR-CUMULATIVE-TEACHING-01): the teaching paragraphs; absent on a v1/v2 lesson. */ understanding?: string[]; points: string[]; example: string | null; questions: string[] };
 
-export const TEACH_LABEL = { overview: "OVERVIEW:", points: "KEY POINTS:", example: "EXAMPLE:", check: "CHECK YOUR UNDERSTANDING:" } as const;
+export const TEACH_LABEL = { overview: "OVERVIEW:", understanding: "UNDERSTANDING:", points: "KEY POINTS:", example: "EXAMPLE:", check: "CHECK YOUR UNDERSTANDING:" } as const;
 /** At most this many understanding-check questions are kept from one Teach Me answer. */
 export const TEACH_MAX_QUESTIONS = 2;
 
@@ -20,6 +24,7 @@ type Part = keyof typeof TEACH_LABEL;
 // A label at the start of a line, tolerating the markdown a model adds anyway (**, #, >, -) and any case.
 const LABEL_RE: Record<Part, RegExp> = {
   overview: /^[\s*_#>-]*overview\s*:[\s*_]*/i,
+  understanding: /^[\s*_#>-]*understanding\s*:[\s*_]*/i,
   points: /^[\s*_#>-]*key\s+points\s*:[\s*_]*/i,
   example: /^[\s*_#>-]*example\s*:[\s*_]*/i,
   check: /^[\s*_#>-]*check\s+your\s+understanding\s*:[\s*_]*/i,
@@ -30,7 +35,7 @@ const isBullet = (l: string) => /^\s*(?:[-*•]|\d+[.)])\s+/.test(l);
 
 /** Pure. The labelled parts of a Teach Me answer, or null when it carries no OVERVIEW or KEY POINTS label (an older answer). */
 export function parseTeachAnswer(text: string): TeachParts | null {
-  const buckets: Record<Part, string[]> = { overview: [], points: [], example: [], check: [] };
+  const buckets: Record<Part, string[]> = { overview: [], understanding: [], points: [], example: [], check: [] };
   let at: Part | null = null, pre: string[] = [], seen = false;
   for (const line of text.split("\n")) {
     const hit = PARTS.find(p => LABEL_RE[p].test(line));
@@ -48,13 +53,27 @@ export function parseTeachAnswer(text: string): TeachParts | null {
   }
   const example = buckets.example.map(l => l.trim()).filter(Boolean).join(" ") || null;
   const questions = buckets.check.map(bullet).filter(Boolean);
-  return { overview, points: points.filter(Boolean), example, questions };
+  return { overview, understanding: paragraphsOf(buckets.understanding), points: points.filter(Boolean), example, questions };
+}
+
+/** Pure. Lines under UNDERSTANDING as paragraphs: a blank line (or a bullet) starts a new one; wrapped lines join the one before. */
+function paragraphsOf(lines: readonly string[]): string[] {
+  const out: string[] = [];
+  let open = false;
+  for (const raw of lines) {
+    const l = raw.trim();
+    if (!l) { open = false; continue; }
+    if (open && !isBullet(l)) out[out.length - 1] = `${out[out.length - 1]} ${l}`;
+    else { out.push(isBullet(l) ? bullet(l) : l); open = !isBullet(l); }
+  }
+  return out.filter(Boolean);
 }
 
 /** Pure. The canonical text of a Teach Me answer: what is shown, saved and parsed back. Empty parts are left out. */
 export function composeTeachAnswer(p: TeachParts): string {
   const out: string[] = [];
   if (p.overview.trim()) out.push(`${TEACH_LABEL.overview} ${p.overview.trim()}`);
+  if (p.understanding?.length) out.push(`${TEACH_LABEL.understanding}\n${p.understanding.map(x => x.trim()).filter(Boolean).join("\n\n")}`);
   if (p.points.length) out.push(`${TEACH_LABEL.points}\n${p.points.map(x => `- ${x.trim()}`).join("\n")}`);
   if (p.example?.trim()) out.push(`${TEACH_LABEL.example} ${p.example.trim()}`);
   if (p.questions.length) out.push(`${TEACH_LABEL.check}\n${p.questions.map(x => `- ${x.trim()}`).join("\n")}`);

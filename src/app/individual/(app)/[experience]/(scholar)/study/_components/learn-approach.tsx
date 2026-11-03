@@ -40,8 +40,13 @@ export type ApproachResult = { ok: boolean; json: Record<string, any> } | null; 
 type Shown = { approach: Approach; text: string; label?: string | null; verdict?: string | null; question?: string | null; evidence?: string | null; explain?: boolean };
 type Ladder = { understood?: number; partly?: number; not_yet?: number };
 /** What one approach last showed in one lesson, kept by the page so switching away and back costs no AI call. */
-export type ApproachMemory = { shown: Shown | null; level: number; hint: number; ladder: { next: Ladder; atChecks: number } | null };
+/** SCHOLAR-CUMULATIVE-TEACHING-01: Guide me is a dialogue -- its turns (the learner's attempts and Scholar's replies) are kept per lesson and sent with the next attempt. */
+export type GuideTurn = { speaker: "tutor" | "student"; text: string };
+export type ApproachMemory = { shown: Shown | null; level: number; hint: number; ladder: { next: Ladder; atChecks: number } | null; turns?: GuideTurn[] };
 const FRESH: ApproachMemory = { shown: null, level: 1, hint: 1, ladder: null };
+const GUIDE_TURNS_MAX = 6;
+/** A guide turn as shown in the dialogue list: headings and the callout lines taken off, one line. */
+const turnText = (t: string) => t.replace(/^###[^\n]*\n?/gm, "").replace(/^>.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, 400);
 
 const textOf = (j: Record<string, unknown>) => [j.answer, j.text, j.feedback, j.hint].find(v => typeof v === "string" && v.trim()) as string | undefined;
 const num = (v: unknown) => (Array.isArray(v) ? v.length : typeof v === "number" && Number.isFinite(v) ? v : 0);
@@ -109,6 +114,12 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
     if ((approach === "ask_me" || approach === "challenge") && Number.isInteger(r.json.level)) next.level = Number(r.json.level);
     if (approach === "challenge" && r.json.nextLevel && typeof r.json.nextLevel === "object") next.ladder = { next: r.json.nextLevel as Ladder, atChecks: checks };
     if (approach === "guide" && Number.isInteger(r.json.nextHintLevel)) next.hint = Math.max(1, Math.min(3, Number(r.json.nextHintLevel)));
+    // The dialogue so far: this attempt and Scholar's reply join the lesson's guide turns (bounded; the server bounds them again).
+    if (approach === "guide") {
+      const attempt = typeof body.attempt === "string" && body.attempt.trim() ? body.attempt.trim() : null;
+      const reply = textOf(r.json);
+      next.turns = [...(mem("guide").turns ?? []), ...(attempt ? [{ speaker: "student" as const, text: attempt }] : []), ...(reply ? [{ speaker: "tutor" as const, text: reply }] : [])].slice(-GUIDE_TURNS_MAX);
+    }
     remember(key(approach), next);
     if (approach === "teach_back") setTyped("");
   }
@@ -167,11 +178,17 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
       {active === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", { action: "ask_me", level: mem("ask_me").level })} />}
       {active === "high_yield" && <Go label={busy ? "Working…" : "Show the high-yield points"} disabled={busy || disabled} accent={accent} onGo={() => void send("high_yield", { action: "high_yield", depth })} />}
       {(active === "guide" || active === "teach_back") && (
-        <form className="mt-3" onSubmit={e => { e.preventDefault(); if (active === "guide") void send("guide", { action: "guide", hintLevel: mem("guide").hint, ...(typed.trim() ? { attempt: typed.trim().slice(0, 1500) } : {}), ...(lastCheck ? { question: lastCheck.question.slice(0, 600) } : {}) }); else if (typed.trim()) void send("teach_back", { action: "teach_back", explanation: typed.trim() }); }}>
-          <label htmlFor={`${id}-t`} className="block text-[13px] font-semibold text-gray-900">{active === "guide" ? "Your attempt so far (optional)" : "Explain this lesson in your own words"}</label>
+        <form className="mt-3" onSubmit={e => { e.preventDefault(); if (active === "guide") { const turns = mem("guide").turns ?? []; void send("guide", { action: "guide", hintLevel: mem("guide").hint, ...(typed.trim() ? { attempt: typed.trim().slice(0, 1500) } : {}), ...(lastCheck ? { question: lastCheck.question.slice(0, 600) } : {}), ...(turns.length ? { history: turns } : {}) }).then(() => setTyped("")); } else if (typed.trim()) void send("teach_back", { action: "teach_back", explanation: typed.trim() }); }}>
+          {/* SCHOLAR-CUMULATIVE-TEACHING-01: the dialogue so far, so the learner sees what they said and what Scholar answered before the next attempt. */}
+          {active === "guide" && (mem("guide").turns?.length ?? 0) > 1 && (
+            <ol aria-label="Your Guide me conversation so far" className="mb-2 max-h-56 space-y-1.5 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px]">
+              {mem("guide").turns!.slice(0, -1).map((t, i) => <li key={i} className="break-words"><span className="font-semibold text-gray-700">{t.speaker === "student" ? "You: " : "Scholar: "}</span><span className="text-gray-800">{turnText(t.text)}</span></li>)}
+            </ol>
+          )}
+          <label htmlFor={`${id}-t`} className="block text-[13px] font-semibold text-gray-900">{active === "guide" ? ((mem("guide").turns?.length ?? 0) ? "Your answer to Scholar's question" : "Your attempt so far (optional)") : "Explain this lesson in your own words"}</label>
           <textarea id={`${id}-t`} rows={3} maxLength={active === "guide" ? 1500 : 3000} value={typed} onChange={e => setTyped(e.target.value)} className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
           <button type="submit" className={`${btn} mt-2`} style={{ background: accent }} disabled={busy || disabled || (active === "teach_back" && !typed.trim())}>
-            {busy ? "Working…" : active === "guide" ? `Give me hint ${mem("guide").hint} of 3` : "Check my explanation"}
+            {busy ? "Working…" : active === "guide" ? ((mem("guide").turns?.length ?? 0) ? `Continue (guidance ${mem("guide").hint} of 3)` : `Guide me (step ${mem("guide").hint} of 3)`) : "Check my explanation"}
           </button>
         </form>
       )}

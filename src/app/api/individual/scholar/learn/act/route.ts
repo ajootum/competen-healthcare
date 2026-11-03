@@ -15,9 +15,11 @@ import { purposeFrom } from "@/lib/individual/pilot-ai";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
-  RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
-  type Passage, type TutorTurn,
+  RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, cumulativePromptVersion, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
+  type LessonBrief, type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
+import { CONTEXT_ACTIONS, DEEPER_ROUNDS_MAX, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
+import { coversLesson } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope } from "@/lib/individual/scholar/learn-research";
@@ -86,6 +88,14 @@ export const dynamic = "force-dynamic";
 //                      it and nothing is writing it, and only while the standing and allowance allow it. Same metered
 //                      runner and checks; nothing is recorded as learning; the audit row says prepared: true.
 //   CACHE FIRST: a saved Teach Me under an earlier prompt version (LEARN_TEACH_LEGACY) is still served, with no AI call.
+//   SCHOLAR-CUMULATIVE-TEACHING-01 (owner GO, 3 Nov): TAUGHT SO FAR. Every lesson action but Teach me and Ask (learn-context.ts
+//   CONTEXT_ACTIONS) is given a concise block of what this lesson's SAVED teaching already covers and how the learner answered
+//   the checks of this visit (`priorChecks`, bounded, screened, never stored). Go deeper then extends the lesson (its saved key
+//   carries the taught ground's fingerprint, so each round is a new answer and a reopen of the same round is the saved one),
+//   at most DEEPER_ROUNDS_MAX rounds by AI, and may answer "depth reached" (no lesson, the next activity suggested); Explain /
+//   Simplify become Explain again; Guide me carries its own turns (`history`); the checks know what was asked and answered.
+//   An OPEN of a saved lesson also returns the lesson's other saved teaching (alsoSaved: Go deeper rounds, examples ...), oldest
+//   first, so the thread shows what has been covered with no AI call.
 //   SCHOLAR-PERSISTENT-LEARNING-01 (owner, 1 Nov): an OPEN (or a prepare) that the exact key misses falls back to the
 //   newest saved artefact of the same action for this learner, material and the lesson's own chunk set -- any prompt
 //   version, depth or mode (store.ts findSavedLesson) -- labelled savedEarlier when it differs. Never generated. Opening
@@ -153,6 +163,8 @@ export async function POST(req: Request) {
   const treq = isTeachingAction(action) ? parseTeachingRequest(action, body) : null;
   if (treq && !treq.ok) return NextResponse.json({ error: treq.error }, { status: 400 });
   const teachingRequest = treq?.ok ? treq.value : null;
+  // SCHOLAR-CUMULATIVE-TEACHING-01: the checks the learner answered this visit (context for the next request; never stored).
+  const priorChecks = CONTEXT_ACTIONS.includes(action) ? parsePriorChecks(body?.priorChecks) : [];
   // SCHOLAR-PERSISTENT-LEARNING-01 item 8 (Learn side): an Ask question's obvious everyday-word slips, corrected
   // deterministically (spelling.ts, no AI). The question as TYPED is what is screened, stored and shown beside the reading;
   // the search reads both, and the lesson terms and the prompt read the corrected one (re-read below against the
@@ -161,7 +173,7 @@ export async function POST(req: Request) {
   const variant = parseSpellingVariant(body?.spellingVariant);
   let spelt = action === "ask" ? normaliseLearnerText(question, { variant }) : null;
   const searchText = spelt && spelt.display !== question ? `${question} ${spelt.display}` : question;
-  if ([question, spelt?.display ?? "", answer, ...(teachingRequest ? teachingTexts(teachingRequest) : [])].some(t => t && findPatientIdentifiers(t).length))
+  if ([question, spelt?.display ?? "", answer, ...(teachingRequest ? teachingTexts(teachingRequest) : []), ...priorCheckTexts(priorChecks)].some(t => t && findPatientIdentifiers(t).length))
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
 
   // ── the passages: the step's own sections, by the caller's id ──
@@ -218,6 +230,16 @@ export async function POST(req: Request) {
     : lessonOutline({ step, sections: passages.map(p => ({ chunkId: p.chunkId, materialId: p.materialId, ordinal: p.ordinal, pageFrom: p.pageFrom, pageTo: p.pageTo, materialTitle: p.materialTitle, unit: p.unit ?? "page" })) },
       await topicsOfSections(ctx.admin, ctx.userId, passages.map(p => p.chunkId)), new Map(passages.map(p => [p.chunkId, sectionProfile(p.content)])));
   clock.mark("passages_outline");
+  // SCHOLAR-CUMULATIVE-TEACHING-01: what this lesson's saved teaching already covers (store.ts listArtefacts on the lesson's own
+  // sections, kept to artefacts written FOR this lesson: learn-journey.ts coversLesson), with this visit's checks. Read for the
+  // contextual actions and for an open (alsoSaved); Teach me itself and Ask never carry it.
+  const contextual = CONTEXT_ACTIONS.includes(action);
+  const lessonRecords = contextual || open ? await listArtefacts(ctx.admin, ctx.userId, { chunkIds: stepIds, limit: 40 }).then(r => (r.ok ? r.data : []), () => []) : [];
+  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const taughtSoFar: TaughtSoFar | null = contextual ? buildTaughtSoFar(ownRecords, priorChecks, { objective: lesson?.objective ?? null, focus: lesson?.focus ?? null }) : null;
+  const taughtBlock = taughtSoFar ? taughtSoFarBlock(taughtSoFar) : null;
+  /** The lesson brief the prompt reads: its title, objective and its own sections' headings, in order. */
+  const lessonBrief: LessonBrief | null = lesson ? { title: lesson.title, objective: lesson.objective, sections: [...new Set(passages.filter(p => stepIds.includes(p.chunkId)).map(p => sectionProfile(p.content).heading).filter((h): h is string => !!h))] } : null;
   const lessonTerms = action === "ask" ? keyTermsOf(meant) : lesson ? keyTermsOf(lesson.focus.join(" ")).slice(0, 8) : [];
   let grounding: Grounding = groundingOutcome(lessonTerms, passages, policy.scholarRecovery.sufficiency);
   const related = { sameMaterial: 0, otherMaterials: 0 };
@@ -281,9 +303,12 @@ export async function POST(req: Request) {
   const hasHistory = Array.isArray(body?.history) && body.history.length > 0;
   const oneMaterial = new Set(passages.map(p => p.materialId)).size === 1;
   const storable = isArtefactAction(action) && !hasHistory && oneMaterial;
-  const promptVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
+  const baseVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
+  // SCHOLAR-CUMULATIVE-TEACHING-01: an answer built on taught ground carries the cumulative suffix and the ground's fingerprint in its key.
+  const promptVersion = taughtBlock ? cumulativePromptVersion(baseVersion) : baseVersion;
+  const context = taughtBlock && taughtSoFar ? taughtHash(taughtSoFar) : null;
   // SCHOLAR-SQIE-02: an explanation from recovered evidence is never a saved artefact, and never served from one.
-  const key = storable && !recovery ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode }) : null;
+  const key = storable && !recovery ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode, context }) : null;
   // SCHOLAR-GUIDED-LEARNING-01: a lesson saved under an earlier Teach Me version is still this lesson (same structure and
   // checks), so it is served -- reopening never costs AI because the prompt moved on. Looked up only when the current is absent.
   const legacyKeys = key ? legacyLearnPromptVersions(action as LearnAction).map(v => artefactKey({ action, depth, chunkIds: passages!.map(p => p.chunkId),
@@ -316,7 +341,7 @@ export async function POST(req: Request) {
     const restored = restoreResearch(a.refs.filter(r => r?.kind === "external") as unknown as ExternalReference[], split.research, contextOf(withLessonScope({ topics, title: stepTitle, question: action === "ask" ? question : null }, lessonScope)), policy.scholarResearch.relevance);
     const external = restored.references;
     return {
-      action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
+      action: a.action, step, depth: a.depth, label: AI_LABEL, provenance: { model: a.model, promptVersion: a.promptVersion }, kinds: SOURCE_KIND_LABEL,
       sources: src.map(sourceOf),
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
@@ -324,6 +349,9 @@ export async function POST(req: Request) {
       saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
     };
   };
+  // SCHOLAR-CUMULATIVE-TEACHING-01: on an OPEN, the lesson's other saved teaching (Go deeper rounds, examples, explanations), oldest
+  // first, so the thread shows what has already been covered -- read, never generated. At most six; the opened one is not repeated.
+  const alsoSaved = (opened: ArtefactRow) => (open && ownRecords.length ? { alsoSaved: ownRecords.filter(a => a.id !== opened.id && a.action !== opened.action).slice(-6).map(a => savedReply(a, { cached: true })) } : {});
   // SCHOLAR-PERSISTENT-LEARNING-01, THE POSITION RULE: a lesson answered here moves current_step only FORWARD (a reply that
   // lands after the learner went back never pulls it back); moving back is the learner's explicit PATCH sessions/[id].
   const advances = sessionStep === null || step > sessionStep;
@@ -343,7 +371,7 @@ export async function POST(req: Request) {
       if (prepare) return notPrepared("saved", { step });
       await openedSaved(saved);
       served(saved, {});
-      return NextResponse.json(savedReply(saved, { cached: true }));
+      return NextResponse.json(savedReply(saved, { cached: true, ...alsoSaved(saved) }));
     }
   }
   // SCHOLAR-PERSISTENT-LEARNING-01: the exact key missed -- the newest lesson saved for this chunk set, under any version or
@@ -360,7 +388,7 @@ export async function POST(req: Request) {
       const differs = earlier.promptVersion.indexOf(promptVersion) !== 0 || earlier.depth !== depth;
       await openedSaved(earlier);
       served(earlier, { fallback: true });
-      return NextResponse.json(savedReply(earlier, { cached: true, ...(differs ? { savedEarlier: { label: SAVED_EARLIER_LABEL, promptVersion: earlier.promptVersion, depth: earlier.depth } } : {}) }));
+      return NextResponse.json(savedReply(earlier, { cached: true, ...alsoSaved(earlier), ...(differs ? { savedEarlier: { label: SAVED_EARLIER_LABEL, promptVersion: earlier.promptVersion, depth: earlier.depth } } : {}) }));
     }
   }
   if (prepare && !key) return notPrepared("not_storable", { step });
@@ -368,6 +396,16 @@ export async function POST(req: Request) {
   if (open) return NextResponse.json({ action, step, depth, ...lessonFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate" });
   if (prepare && key && (await flightActive(ctx, key))) return notPrepared("in_flight", { step });
 
+  // ── SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper has a round limit by AI (DEEPER_ROUNDS_MAX); beyond it the answer is "depth reached", no call ──
+  const depthReachedReply = (message: string, suggestion: string | null, extra: Record<string, unknown> = {}) => NextResponse.json({
+    action, step, depth, label: AI_LABEL, kinds: SOURCE_KIND_LABEL, ...lessonFields, sources: [], passageIds: passages!.map(p => p.chunkId), references: [],
+    depthReached: { message, suggestion, next: DEPTH_REACHED_NEXT, rounds: taughtSoFar?.rounds.deeper ?? 0 }, ...extra,
+  });
+  if (action === "deeper" && taughtSoFar && (taughtSoFar.rounds.deeper ?? 0) >= DEEPER_ROUNDS_MAX) {
+    const timing = clock.snapshot();
+    later(() => audit(ctx, LEARN_SERVED_ACTION, LEARN_ENTITY, sessionId, { action, step, depth, mode, cached: false, depth_reached: "cap", rounds: taughtSoFar.rounds.deeper, timing_ms: timing }));
+    return depthReachedReply(DEPTH_REACHED_CAP_MESSAGE, null, { cap: true });
+  }
   // ── s7: continuity -- no new AI where the standing (or the allowance) says no; what is saved stays available ──
   const continuity = async (message: string, insufficient: boolean) => {
     const saved = await listArtefacts(ctx.admin, ctx.userId, { chunkIds: passages!.map(p => p.chunkId) });
@@ -424,7 +462,8 @@ export async function POST(req: Request) {
     : null;
   // SCHOLAR-COMPANION-01 P1: High-yield's exam evidence is COUNTED here (no AI) from the learner's own past papers.
   const examEvidence = action === "high_yield" ? await examEvidenceFor(ctx.admin, ctx.userId, lessonTerms) : null;
-  const history: TutorTurn[] = (!teaching && Array.isArray(body?.history) ? body.history : []).slice(-policy.scholarTutorTurns).flatMap((raw: unknown) => {
+  // SCHOLAR-CUMULATIVE-TEACHING-01: Guide me is a dialogue, so it carries its own turns (bounded like Ask's); the other teaching actions do not.
+  const history: TutorTurn[] = ((!teaching || action === "guide") && Array.isArray(body?.history) ? body.history : []).slice(-policy.scholarTutorTurns).flatMap((raw: unknown) => {
     const t = raw as { speaker?: unknown; text?: unknown } | null;
     return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim() ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
@@ -481,13 +520,26 @@ export async function POST(req: Request) {
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   clock.mark("research");
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
-    teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined }, ai.run);
+    teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined,
+    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) }, ai.run);
   clock.mark("generate");
   const refusal = ai.refusal();
   if (refusal) await closeFlight("refused");
   if (refusal && prepare) return notPrepared("unavailable", { step });
   if (refusal?.error === "clarify_purpose") return meteredRefusal(refusal)!;
   if (refusal) { const w = refusalWords(refusal); return continuity(w.message, w.insufficient); }
+  // SCHOLAR-CUMULATIVE-TEACHING-01: the model declared the passages taught in the depth they support. Nothing is saved; the
+  // trail records the outcome (no explanation produced) and the learner is pointed at the next activity.
+  if (r.ok && r.depthReached) {
+    await Promise.all([closeFlight("depth_reached"), recordScholarOutcome(ctx.admin, ai, {
+      operation: `individual_scholar_learn:${action}`, outputKind: "other", promptVersion: r.promptVersion, configVersion: `depth:${depth}`,
+      outcome: "rejected", rejected: 1, reasons: ["depth_reached"],
+    }), audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
+      action_id: ai.actionId, action, step, chunk_ids: passages.map(p => p.chunkId), depth, recorded, outcome: "depth_reached", model: r.model, prompt_version: r.promptVersion,
+      rounds: taughtSoFar?.rounds.deeper ?? 0, cached: false, dedupe_key: key, flight_id: flight?.id ?? null, timing_ms: clock.snapshot(),
+    })]);
+    return depthReachedReply(DEPTH_REACHED_MESSAGE, r.depthReached.suggestion || null, { actionId: ai.actionId });
+  }
   // SCHOLAR-AI-OPT-01: the outcome of this one action, codes only. A check question is not an explanation.
   // COMPETEN-RESEARCH-01: a research answer is its own operation; the notes part and the research part each count.
   let rr = r.ok ? r.research : null;
@@ -535,6 +587,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_learn", sessionId, {
     action_id: ai.actionId, purpose: purposeFrom(body),
     action, step, chunk_ids: passages.map(p => p.chunkId), depth, references: references.length, learner_context: learnerContext !== null, recorded,
+    // SCHOLAR-CUMULATIVE-TEACHING-01: what the request built on (counts only, never the text).
+    taught: taughtSoFar?.taught ? { rounds: taughtSoFar.rounds, concepts: taughtSoFar.concepts.length, responses: taughtSoFar.responses.length, block_chars: taughtBlock?.length ?? 0 } : null, prior_checks: priorChecks.length,
     // SCHOLAR-SESSION-AI-02: which study-session sections reached the prompt (names only, never the text).
     study_context: study ? study.sections : null,
     outcome: outcomeCode,

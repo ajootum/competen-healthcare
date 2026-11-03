@@ -39,7 +39,8 @@ export const meteredActivity = (action: string): string => (isTeachingAction(act
 export const eventVerdict = (action: string, verdict: CheckVerdict | null): CheckVerdict | null => (action === "clarify" || action === "teach_back" ? verdict : null);
 
 /** Output budget: short actions are short; high-yield follows the depth mapping Teach me uses. */
-export const TEACHING_MAX_TOKENS: Record<Exclude<TeachingAction, "high_yield">, number> = { ask_me: 250, challenge: 250, guide: 400, mistake: 600, teach_back: 600 };
+// SCHOLAR-CUMULATIVE-TEACHING-01: a Guide me turn now responds to the attempt before it guides (v2), so it has room for both.
+export const TEACHING_MAX_TOKENS: Record<Exclude<TeachingAction, "high_yield">, number> = { ask_me: 250, challenge: 300, guide: 650, mistake: 600, teach_back: 600 };
 export const teachingMaxTokens = (action: TeachingAction, depth: ExplanationDepth): number =>
   action === "high_yield" ? (depth === "detailed" ? 1100 : 800) : TEACHING_MAX_TOKENS[action];
 
@@ -152,28 +153,42 @@ export function highYieldExamRule(e: ExamEvidence | null): string {
 }
 
 /** Pure. The instruction for one teaching action (the 'MODE:' paragraph). */
-export function teachingInstruction(action: TeachingAction, opts: { level?: CognitiveLevel; hintLevel?: HintLevel; examEvidence?: ExamEvidence | null; depthWords?: number }): string {
+// SCHOLAR-CUMULATIVE-TEACHING-01 (teaching v2): what a TAUGHT SO FAR block adds to a question-asking action.
+const NOT_ASKED_BEFORE = "TAUGHT SO FAR lists the questions already asked and how the student answered: never ask one of those again, build on what they have shown they understand, and aim at what their answers left missing or mistaken.";
+/** The upper rungs ask for reasoning, not harder recall (spec s1 Challenge me). */
+const REASONING_RUNG: Partial<Record<CognitiveLevel, string>> = {
+  application: "The question must require the student to DECIDE or PRIORITISE in the situation and say why, from the passages.",
+  reasoning: "The question must require the student to EXPLAIN WHY, COMPARE, JUSTIFY or EVALUATE, linking at least two ideas of the passages: never a question answered by quoting one line of them.",
+};
+
+/** Pure. The instruction for one teaching action (the 'MODE:' paragraph). `taught`: a TAUGHT SO FAR block is in the prompt. */
+export function teachingInstruction(action: TeachingAction, opts: { level?: CognitiveLevel; hintLevel?: HintLevel; examEvidence?: ExamEvidence | null; depthWords?: number; taught?: boolean }): string {
   const level = opts.level ?? "understanding";
+  const taught = opts.taught ? ` ${NOT_ASKED_BEFORE}` : "";
   switch (action) {
     case "ask_me":
-      return `MODE: ASK ME. Ask the student ONE question about the passages, at the ${LEVEL_LABEL[level]} level: ${LEVEL_ASKS[level]}. ${ONE_QUESTION}`;
+      return `MODE: ASK ME. Ask the student ONE question about the passages, at the ${LEVEL_LABEL[level]} level: ${LEVEL_ASKS[level]}.${taught} ${ONE_QUESTION}`;
     case "challenge":
-      return `MODE: CHALLENGE ME. The student is climbing a ladder of questions (recall, understanding, application, reasoning) and is on the ${LEVEL_LABEL[level]} rung. Ask ONE question about the passages that really sits on that rung: ${LEVEL_ASKS[level]}. ${ONE_QUESTION}`;
+      return `MODE: CHALLENGE ME. The student is climbing a ladder of questions (recall, understanding, application, reasoning) and is on the ${LEVEL_LABEL[level]} rung. Ask ONE question about the passages that really sits on that rung: ${LEVEL_ASKS[level]}. ${REASONING_RUNG[level] ?? ""}${taught} ${ONE_QUESTION}`;
     case "guide": {
       const n = opts.hintLevel ?? 1;
       const rung = n === 1 ? "RUNG 1, a nudge: ask ONE guiding question back, or name what to think about, without naming the answer."
         : n === 2 ? "RUNG 2, a pointer: point to the passage and the concept that matter and what to look for in it, without stating the answer."
           : "RUNG 3, a near-complete scaffold: set out the outline of the reasoning from the passages and leave the final key step for the student to complete, for example 'so the last step is: ...'.";
+      // v2 (SCHOLAR-CUMULATIVE-TEACHING-01): a dialogue that responds to the attempt. A misconception is named and corrected from
+      // the passages before the next step; a right step is confirmed and built on; the full conclusion is still the student's to reach.
       return [
-        `MODE: GUIDE ME. The student wants to work something out for themselves. Give ONLY a hint, at rung ${n} of 3. NEVER give the full answer or state in full the conclusion they should reach, even if their attempt is wrong or they ask for it.`,
-        rung,
-        "If an attempt is given, say in a few words what is on track, then give the hint. Cite at least one passage tag for the passage the hint rests on.",
-        `Reply: a line '### Hint', then the hint (under ${n === 3 ? 110 : 70} words), then a last line in a '> [!MEMORY]' callout telling the student they can choose "Explain it directly" instead.`,
+        `MODE: GUIDE ME. The student is working something out for themselves, in a dialogue with you (OUR CONVERSATION SO FAR, when given). Respond to their ACTUAL attempt, then guide the next step at rung ${n} of 3. NEVER state in full the conclusion they should reach, even if their attempt is wrong or they ask for it; "Explain it directly" is theirs to choose.`,
+        "First, in a sentence or two: what in their attempt is right (confirm it, cited), and any mistaken idea in it -- name it as a natural mistake and correct it from the passages, cited. If their attempt is right as far as it goes, say so and name what it has not yet considered. If an earlier turn already corrected the same idea and the student repeats it, explain it a different way.",
+        `Then the guidance: ${rung}`,
+        "End with ONE question for the student to answer next. Cite at least one passage tag for the passage each step rests on.",
+        `Reply: a line '### Where you are', the response to the attempt, a line '### Next step', the guidance and the question (the whole reply under ${n === 3 ? 170 : 130} words), then a last line in a '> [!MEMORY]' callout telling the student they can choose "Explain it directly" instead.`,
+        ...(opts.taught ? ["TAUGHT SO FAR says what has already been taught and answered: guide towards what the student has not yet shown they understand, and do not re-teach what they have."] : []),
       ].join("\n");
     }
     case "mistake":
       return [
-        "MODE: EXPLAIN MY MISTAKE. The student answered a question and wants to understand what went wrong. Judge their answer ONLY against the passages, kindly and specifically. Reply in exactly these parts:",
+        `MODE: EXPLAIN MY MISTAKE. The student answered a question and wants to understand what went wrong. Judge their answer ONLY against the passages, kindly and specifically.${opts.taught ? " TAUGHT SO FAR says what they were taught and how they answered before: connect the mistake to that teaching, and do not re-explain what they have already shown they understand." : ""} Reply in exactly these parts:`,
         `### ${FEEDBACK_HEADINGS.right}: bullets, each cited. If nothing was right, say so gently in one line.`,
         `### ${FEEDBACK_HEADINGS.misconceptions}: bullets naming each mistaken idea and WHY it is a natural mistake, corrected from the passages, cited. If the answer was fully right, write 'Nothing to correct.'`,
         `### ${FEEDBACK_HEADINGS.why}: the correct idea, from the passages, cited.`,
@@ -182,7 +197,7 @@ export function teachingInstruction(action: TeachingAction, opts: { level?: Cogn
       ].join("\n");
     case "teach_back":
       return [
-        "MODE: TEACH BACK. The student explained the idea to you in their own words. Judge the explanation ONLY against the passages, as a kind and curious listener. Reply in exactly these parts:",
+        `MODE: TEACH BACK. The student explained the idea to you in their own words. Judge the explanation ONLY against the passages, as a kind and curious listener.${opts.taught ? " TAUGHT SO FAR says what they were taught: judge the explanation against that ground, and credit understanding their earlier answers already showed." : ""} Reply in exactly these parts:`,
         `### ${FEEDBACK_HEADINGS.right}: bullets, each cited.`,
         `### ${FEEDBACK_HEADINGS.missing}: bullets of important ideas in the passages the explanation left out, cited. If none, write 'Nothing important missing.'`,
         `### ${FEEDBACK_HEADINGS.misconceptions}: bullets of any mistaken idea, corrected from the passages, cited. If none, write 'None spotted.'`,
