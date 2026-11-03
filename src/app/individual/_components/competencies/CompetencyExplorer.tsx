@@ -144,7 +144,7 @@ function FrameworkExplorer({ framework: f, details, scaleMax, study, assessments
   const toggle = (id: string) => setExpanded(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); return next; });
 
   return (
-    <div className="mt-5">
+    <div className="mt-5" data-framework={f.id}>
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
         <h3 className="text-[15px] font-bold text-gray-900">{f.name}{f.code ? <span className={`ml-2 text-[12.5px] font-semibold ${mutedText}`}>{f.code}{f.version ? ` · version ${f.version}` : ""}</span> : null}</h3>
         <p className={`text-[12.5px] ${mutedText}`}>{f.total} competenc{f.total === 1 ? "y" : "ies"} · {f.areasRead ? `${f.areas.filter(a => !a.unassigned).length} Area${f.areas.filter(a => !a.unassigned).length === 1 ? "" : "s"} · ` : ""}{allDomainIds.length} domain{allDomainIds.length === 1 ? "" : "s"}</p>
@@ -207,7 +207,7 @@ function FrameworkExplorer({ framework: f, details, scaleMax, study, assessments
           <>
             {countRows(current) === 0
               ? <p className={`rounded-xl border border-dashed border-gray-300 bg-white p-4 text-[13.5px] ${mutedText}`}>No competency in {current.name} {filter === "all" ? "yet" : `is ${FILTER_LABEL[filter].toLowerCase()}`}.</p>
-              : <AreaGroup area={current} heading={false} expanded={expanded} toggle={toggle} details={details} scaleMax={scaleMax} study={study} assessmentsBase={assessmentsBase} onOpen={onOpen} />}
+              : <AreaGroup area={current} heading={false} expanded={expanded} toggle={toggle} details={details} scaleMax={scaleMax} study={study} assessmentsBase={assessmentsBase} onOpen={onOpen} forceOpen={filter !== "all"} />}
             {tabs && filter !== "all" && othersMatching > 0 && (
               <p className={`text-[13px] ${mutedText}`}>
                 Also {FILTER_LABEL[filter].toLowerCase()}: {others.filter(a => countRows(a) > 0).map((a, i) => (
