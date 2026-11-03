@@ -9,6 +9,8 @@ import { lifecycleData } from "@/lib/assessment/studio/page-data";
 import { pathwayModel } from "@/lib/assessment/studio/pathway-data";
 import { validateLoaded } from "@/lib/assessment/studio/service";
 import { CRITERION_KIND, criterionDrift, readMappedCriteria } from "@/lib/assessment/adapters/scholar/criteria";
+import { latestProposal } from "@/lib/assessment/import/propose";
+import { isProposedRules } from "@/lib/assessment/import/scoring";
 import { VersionWorkspace } from "../../../_components/VersionWorkspace";
 import { PageHead, StudioShell } from "../../../_components/studio-ui";
 
@@ -44,7 +46,14 @@ export default async function VersionPage({ params }: { params: Promise<{ instru
   const caps = ctx.capabilities;
   const canEdit = version.state === "draft" && caps.includes(CAP.author);
   const life = await lifecycleData(ctx.admin, { kind: "instrument", version, actorId: ctx.userId, caps, validationErrors: report.errors.length });
-  const pathway = await pathwayModel(ctx.admin, { kind: "instrument", version, actorId: ctx.userId, caps, validation: report.errors, life, instrumentId: instrument.id });
+  // an imported draft: its source (for "Propose scoring from the source workbook") and the latest proposal's flags
+  const [importRow, proposal] = await Promise.all([
+    ctx.admin.from("asmt_instrument").select("import_id").eq("id", instrument.id).maybeSingle(),
+    latestProposal(ctx.admin, version.id),
+  ]);
+  const importId = ((importRow.data as { import_id?: string | null } | null)?.import_id ?? null);
+  const scoringProposed = version.state === "draft" && isProposedRules(version.scoring);
+  const pathway = await pathwayModel(ctx.admin, { kind: "instrument", version, actorId: ctx.userId, caps, validation: report.errors, life, instrumentId: instrument.id, scoringProposed });
   const taxonomies = await ctx.admin.from("taxonomies").select("id, label");
   const termRows = await ctx.admin.from("taxonomy_terms").select("id, value, taxonomy_id").order("sort_order");
   const taxName = new Map(((taxonomies.data ?? []) as { id: string; label: string }[]).map((t) => [t.id, t.label]));
@@ -61,6 +70,7 @@ export default async function VersionPage({ params }: { params: Promise<{ instru
         content={content} canEdit={canEdit} canPick={true} methods={registries.methods} scaleChoices={scaleChoices} terms={terms} drift={drift}
         ruleTemplates={ruleTemplates.map((t) => ({ id: t.id, label: `${t.name} v${t.version_no}` }))}
         scoring={version.scoring} scoringTests={version.scoring_tests} scoringTemplateId={version.scoring_template_version_id} scoringHash={version.scoring_hash}
+        importId={importId} proposal={proposal}
         layouts={allLayouts.map((l) => ({ id: l.id, name: `${l.name} v${l.version_no}`, presentation: l.presentation ?? "standard_checklist", layout: (l.layout ?? {}) as Record<string, unknown> }))}
         defaultLayoutId={version.default_layout_version_id} allowedLayoutIds={loaded.allowedLayoutIds}
         settings={{

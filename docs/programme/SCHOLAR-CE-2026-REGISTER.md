@@ -6,6 +6,7 @@ Waves: 1 = CE-01, CE-02, CE-03 · 2 = CE-04, CE-05 · 3 = CE-06 · 4 = CE-07 acc
 
 | ID | Workstream | Status | Last update |
 |---|---|---|---|
+| 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P3: AI cost measured on staging (scenarios 59 %, `questions` Opus-only, Learn 54/59 served from saved); flashcards as their own activity with fallback, the tier taken from the published policy per activity, OSCE station reuse before generation; staging config staged, production config = owner decision | branch scholar/independent-learning-p3, docs/evidence/SCHOLAR-INDEPENDENT/p3-cost.md | CE-07 |
 | 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P2: My Plan counts a lesson read, opened or taught as a section started (policy `scholar_plan_started_signal`, default learning; `store.ts learnedChunkIds`, pure `startedSections`); the other adaptation rules audited as existing (table in the programme doc); no migration | branch scholar/independent-learning-p2 (stacked on P1) | CE-03 |
 | 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P1: reader links carry the study session; Revise narrowed to the lesson's sections (`?sections=`, sources scope, "Use the whole material"); Ask about this per section; Scholar AI refusals carry codes and the shared copy gains provider_unavailable (no "environment" wording) | branch scholar/independent-learning-p1 (stacked on P0) | CE-01, CE-05, CE-07 |
 | 3 Nov 2026 | SCHOLAR-INDEPENDENT-LEARNING-01 P0: the independent lesson reader (original sections inside every Learn lesson, exact-place resume on the original text, Mark as read, linked competencies, existing resources opened directly; mig 920 authored, staging ×2 + VERIFY, not in production) | branch scholar/independent-learning-p0, docs/programme/SCHOLAR-INDEPENDENT-LEARNING-01.md, docs/evidence/SCHOLAR-INDEPENDENT/920-build-record.md | CE-01, CE-02, CE-07 |
@@ -123,7 +124,9 @@ Owner instruction 3 Nov 2026 (cross-cutting over CE-01, CE-02, CE-03, CE-05, CE-
 
 **P2 Implementing (branch `scholar/independent-learning-p2`, stacked on P1, 3 Nov 2026)** — not merged, not deployed: My Plan treats a lesson read / opened / taught as started (policy `scholar_plan_started_signal`); the remaining adaptation rules were found to exist and are tabled in the programme doc.
 
-**Next**: P2 rules-based revision priority and assessment-driven recommendations through Individual policy; P3 saved-output reuse and cheaper tiers (CE-07).
+**P3 Implementing (branch `scholar/independent-learning-p3`, from main c06c1953, 3 Nov 2026)** — not merged, not deployed: flashcards as their own AI activity (fallback to questions), the tier from the published policy per activity, OSCE station reuse before generation; staging config staged; production config and eligibility = owner decisions (p3-cost.md §4).
+
+**Next**: owner decisions on the P3 production configuration (flashcards activity, routing, eligibility; Sonnet for questions; scenario default); production acceptance of P0–P2 with the pilot learner.
 
 ---
 

@@ -93,6 +93,8 @@ export interface PathwayInput {
   supersededBy: number | null;
   /** Checklists only: product availability already set in the catalogue (null = unknown or not a checklist). */
   catalogueAvailability: boolean | null;
+  /** Checklists only: the scoring rules were proposed from the source workbook and the author has not accepted them yet. */
+  scoringProposed?: boolean;
   holders: PathwayHolders;
   names: Record<string, string>;
 }
@@ -168,6 +170,7 @@ export function blockersOf(i: PathwayInput, reviewers: WhoCanAct, domainReviewer
   if (i.state === null) return out;
   if (i.state === "draft") {
     if (i.kind === "instrument" && i.deliveryModes.length === 0) out.push({ text: "No delivery mode chosen.", fix: "Choose at least one delivery mode in Settings & Review." });
+    if (i.kind === "instrument" && i.scoringProposed) out.push({ text: "Scoring rules were proposed from the source workbook and await your confirmation.", fix: "Open Scoring & Rules: read the flags, then accept the proposed rules as your own or change them." });
     const scaleIssue = i.validation.find((e) => /scale/i.test(e.message) || /scale/i.test(e.path));
     if (scaleIssue) out.push({ text: scaleIssue.message, fix: "Choose a published response scale on each rating item (Content tab), or publish the scale first." });
     const noModes = i.kind === "instrument" && i.deliveryModes.length === 0;

@@ -22,7 +22,7 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { parseScope, resolveScope } from "@/lib/individual/scholar/learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
-import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
+import { activityOrFallback, activityState, getScholarAiStanding, type ScholarAiActivity } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
 import { GENERATING_MODES, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
@@ -292,7 +292,11 @@ export async function POST(req: Request) {
   if (pick.shortfall > 0 && GENERATING_MODES.includes(mode) && scopeSections.length && body?.generate !== false) {
     if (policy.scholarRevisionGeneration === "saved_only") note = "New questions are not written here: this session uses your saved questions only.";
     else {
-      const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "questions");
+      // SCHOLAR-INDEPENDENT-LEARNING-01 P3: cards are the `flashcards` activity where the published policy offers it (its own tier, routing and
+      // eligibility: a recall card is not a clinical scenario), else `questions` as before. Never a model name in code.
+      const whole = await getScholarAiStanding(ctx.admin, ctx.userId);
+      const activity: ScholarAiActivity = mode === "flashcards" ? activityOrFallback(whole, "flashcards", "questions") : "questions";
+      const standing = activityState(whole, activity);
       const pre = standing.available ? await aiPreflight(ctx) : null;
       if (!standing.available) note = `${standing.message ?? "New AI help is not available right now."} This session uses your saved questions.`;
       else if (pre) note = ((await pre.clone().json().catch(() => ({}))) as { error?: string }).error ?? "New questions could not be written just now. This session uses your saved questions.";
@@ -323,7 +327,7 @@ export async function POST(req: Request) {
                 continue;
               }
             }
-            const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
+            const ai = scholarAiRunner(ctx, req, activity, await scholarRisk(ctx.admin, ctx.userId, { passages: [passage] }), `g${i}`);
             const competencyId = leadingCompetency(await chunkMappings(ctx.admin, ctx.userId, passage.chunkId));
             // SCHOLAR-QUESTION-INTELLIGENCE-01: the section's guidance, the difficulty, and (revision kinds only: an mcq
             // cannot record a reference) the approved references of mode notes_and_references.

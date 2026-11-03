@@ -5,6 +5,7 @@ import { CAP } from "@/lib/assessment/studio/transitions";
 import { saveScoring } from "@/lib/assessment/studio/write";
 import { copyScoringTemplate, validateInstrument } from "@/lib/assessment/studio/service";
 import { isUuid, mustHold, refuse } from "@/lib/assessment/studio/api";
+import { proposeFromWorkbook } from "@/lib/assessment/import/propose";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,8 @@ export const dynamic = "force-dynamic";
 //        A draft is saved even while it has problems (work in progress is not thrown away) and the engine validation comes back in
 //        the response. Putting the version forward for review is where problems are refused (422).
 //   POST { action: "copy_template", templateVersionId }  copies a PUBLISHED scoring template and re-validates it against this checklist.
+//   POST { action: "propose_from_workbook" }  for a draft imported from a workbook: writes the deterministic proposed rules, tests and
+//        delivery mode from the stored source (owner GO 3 Nov 2026), marked as proposed until the author accepts them. Draft only.
 
 export async function PUT(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
   const ctx = await withOwnAppointments(await hqApiGate([CAP.author]));
@@ -35,6 +38,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ version
   if (denied) return denied;
   const { versionId } = await params;
   const b = await req.json().catch(() => ({}));
+  if (isUuid(versionId) && b?.action === "propose_from_workbook") {
+    const p = await proposeFromWorkbook(ctx.admin, ctx.userId, versionId);
+    return p.ok ? NextResponse.json(p) : NextResponse.json({ error: p.error, flags: p.flags ?? [] }, { status: p.status });
+  }
   if (!isUuid(versionId) || b?.action !== "copy_template" || !isUuid(b?.templateVersionId)) return refuse(400, "Choose a published scoring template.");
   const r = await copyScoringTemplate(ctx.admin, ctx.userId, versionId, b.templateVersionId);
   return r.ok ? NextResponse.json(r) : refuse(r.status, r.error);

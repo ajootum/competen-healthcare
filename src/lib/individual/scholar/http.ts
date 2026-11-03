@@ -16,7 +16,7 @@ import type { ResolvedOwner } from "@/lib/ai/consumption";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import { classifyRisk, riskRank, type RiskContext, type RiskTier } from "@/lib/ai/clinical-risk";
 import { servedTier } from "@/lib/ai/operating-mode";
-import type { ScholarAiActivity } from "./ai-standing";
+import { policyTierFor, type ScholarAiActivity } from "./ai-standing";
 import { studentAiText } from "../ai-availability";
 
 // ── WHAT EVERY SCHOLAR AI ROUTE CHECKS, IN ORDER ── after requireIndividualContext("scholar") ────────────
@@ -126,10 +126,16 @@ export function scholarAiRunner(ctx: IndividualContext, req: Request, activity: 
   // so its cost can be set against what it produced (plat_ai_outcomes). `calls` counts the calls made, by part.
   const actionId = randomUUID();
   const made: Record<string, number> = {};
+  // SCHOLAR-INDEPENDENT-LEARNING-01 P3: the tier a call asks for is the published fair-use policy's tier for its activity
+  // (configuration), read once per runner; the code's own tier stands only where the policy does not define the activity.
+  // The engine still floors a clinical-risk subject by the policy's per-risk-tier model floor and gates every route by
+  // eligibility, so this never lowers a clinical or reasoning path below what the owner published.
+  const policyP = loadProductPolicy(ctx.admin, "scholar").then(p => (p.readable ? p.policy : null)).catch(() => null);
   const run: ScholarAiRun = async (g, part = "main") => {
     if (refused) return { ok: false, error: "failed", detail: "metered" } as GenerateResult;
     made[part] = (made[part] ?? 0) + 1;
-    g = withAction(g, actionId);
+    const tier = policyTierFor(await policyP, activity);
+    g = withAction(tier ? { ...g, tier } : g, actionId);
     const x = await runMeteredAi(ctx.admin, { userId: ctx.userId, product: "scholar", activity, requestId: part === "main" ? requestId : `${requestId}:${part}`, generate: g, risk });
     if (isMeteredRefusal(x)) { refused = x; return { ok: false, error: "failed", detail: "metered" } as GenerateResult; }
     return x;

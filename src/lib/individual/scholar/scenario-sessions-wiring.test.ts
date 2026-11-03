@@ -11,7 +11,8 @@ const route = fs.readFileSync(path.resolve(__dirname, "../../../app/api/individu
 describe("sessions route and scenarios", () => {
   it("the existing source-sufficiency check decides before the AI runner is built, and skips with no call", () => {
     const check = route.indexOf('caseReadiness([passage.content], "case_blueprint")');
-    const runner = route.indexOf('scholarAiRunner(ctx, req, "questions"');
+    // SCHOLAR-INDEPENDENT-LEARNING-01 P3: the activity is chosen by the published policy (flashcards or questions); the order is what matters here.
+    const runner = route.indexOf('scholarAiRunner(ctx, req, activity, await scholarRisk');
     expect(check).toBeGreaterThan(-1);
     expect(runner).toBeGreaterThan(check);
     expect(route).toMatch(/ready\.outcome === "insufficient" \|\| ready\.outcome === "simpler"/);
