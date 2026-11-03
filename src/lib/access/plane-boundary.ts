@@ -592,6 +592,36 @@ export const PRACTICE_ALLOWLIST: readonly TablePolicy[] = [
     why: `ASSESSOR-WORKSPACE (migration 891), read only from src/lib/assessment/assessor/**: ${what}`,
   })),
   // <<< ASSESSOR-WORKSPACE
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910, 3 Nov 2026). The learner engagement dashboard. Read ONLY from
+  // src/lib/hq/scholar-analytics/** (`onlyFrom`), which turns rows into counts, days, estimated minutes and costs; the API
+  // then decides whether a name may leave the server at all. ⚠ NO CONTENT COLUMN IS ADMITTED: no material text, lesson
+  // content, note, answer, response, case narrative, AI prompt or AI answer. Ids, timestamps, statuses, the action name of
+  // a Learn step, the AI gateway's own operation name, token counts and cost estimate. `user_id` is admitted because the
+  // dashboard is per learner by design (pseudonymised on the way out, named only with hq.scholar.analytics.identifiable.read).
+  // ══════════════════════════════════════════════════════════════════════════════════════════════════
+  // The platform-owned tables it also reads (hq_account_classification, plat_ai_requests, ai_usage_ledger, ai_allowance_account)
+  // are not governed by PLANE_TABLE_PREFIXES and so carry no entry: the loader's selects name their columns all the same.
+  ...([
+    ["individual_scholar_material", ["id", "user_id", "created_at"], "that an upload happened and when. Title, file name, storage path and sizes are not selected."],
+    ["individual_scholar_learning_session", ["id", "user_id", "created_at", "last_active_at", "status"], "a Learn session's start, last activity and state. Title, topic, competency and objective text are not selected."],
+    ["individual_scholar_learning_event", ["session_id", "user_id", "action", "created_at"], "the steps of a Learn session (teach, resume, skip...) and their times, for active-time estimation and resume counts. The verdict column is not selected."],
+    ["individual_scholar_artefact", ["id", "user_id", "created_at", "action", "superseded_at"], "that an explanation was saved, of which action, and whether a later version replaced it. The content, background, flags and refs are not selected."],
+    ["individual_scholar_review", ["user_id", "reviewed_at"], "that a flashcard was reviewed and when. The card, the quality grade and the interval are not selected."],
+    ["individual_scholar_revision_session", ["id", "user_id", "created_at", "last_active_at", "completed_at", "status"], "a revision session's start, last activity, completion and state. The set, mode, feedback and position are not selected."],
+    ["individual_scholar_case_session", ["id", "user_id", "created_at", "last_active_at", "completed_at", "status"], "a clinical reasoning case session's start, last activity, completion and state. The case, stages, facts, variation and debrief are not selected."],
+    ["individual_scholar_osce_attempt", ["id", "user_id", "started_at", "finished_at", "duration_seconds", "created_at"], "an OSCE attempt's start, finish and recorded duration. Responses, ticks, score, feedback and gaps are not selected."],
+    ["individual_scholar_evaluation", ["id", "user_id", "created_at"], "that an Evaluate activity happened and when. Kind, scope, criteria, results and evidence are not selected."],
+    ["individual_scholar_study_plan", ["user_id", "updated_at"], "that the person edited their plan and when. Exam date, goal, priorities and minutes are not selected."],
+    ["individual_scholar_calendar_entry", ["user_id", "created_at"], "that a plan item was scheduled and when. Kind, ref, dates and value are not selected."],
+    ["asmt_instance", ["id", "respondent_id", "subject_user_id", "started_at", "submitted_at", "status"], "a competency self-assessment's start and submission (respondent = subject only). Answers, evidence, outcomes and the authority snapshot are not selected."],
+  ] as const).map(([table, columns, what]) => ({
+    table,
+    columns,
+    count: true,
+    onlyFrom: "src/lib/hq/scholar-analytics/",
+    why: `SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910), read only from src/lib/hq/scholar-analytics/**: ${what}`,
+  })),
 ];
 
 /**
@@ -767,8 +797,14 @@ export type Verdict = {
 export const exceptionFor = (site: BoundarySite): UnresolvedException | undefined =>
   UNRESOLVED_EXCEPTIONS.find(e => e.file === site.file && e.arg === site.argText);
 
-export const policyFor = (table: string): TablePolicy | undefined =>
-  PRACTICE_ALLOWLIST.find(p => p.table === table);
+/**
+ * The entry that governs a table. A table may carry one entry per reading module (`onlyFrom`): given the reading file,
+ * the entry whose `onlyFrom` covers it wins, else the first entry, so a second module's read is judged by its own columns
+ * and a read from nowhere declared is still refused by whichever entry comes first (SCHOLAR-ENGAGEMENT-ANALYTICS-01).
+ */
+export const policyFor = (table: string, file?: string): TablePolicy | undefined =>
+  (file ? PRACTICE_ALLOWLIST.find(p => p.table === table && p.onlyFrom && file.startsWith(p.onlyFrom)) : undefined)
+  ?? PRACTICE_ALLOWLIST.find(p => p.table === table);
 
 /**
  * Judge one read against the allowlist. Pure — no filesystem, no source text — so the rule can be
@@ -791,7 +827,7 @@ export function judge(site: BoundarySite): Verdict {
   if (site.select === "unresolved")
     return { ok: false, code: "UNRESOLVED_SELECT", detail: site.unresolved ?? `${site.table}: the select list is not a literal` };
 
-  const policy = policyFor(site.table);
+  const policy = policyFor(site.table, site.file);
 
   // 3. A chain that neither selected nor wrote. Not obviously harmless — it is a query this scanner
   //    could not classify — so it is refused rather than assumed inert.
