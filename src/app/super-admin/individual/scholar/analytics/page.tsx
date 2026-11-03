@@ -22,8 +22,10 @@ export default async function LearnerEngagementPage() {
   const ctx = await requireHqCapability("hq.scholar.analytics.view");
   const caller = { userId: ctx.userId, fullName: ctx.fullName, isOwner: ctx.isOwner, capabilities: ctx.capabilities };
   const first = await buildDashboard(ctx.admin, caller, { range: "30d" });
+  // Not data-wide, and inline-size contained: the leaderboard's wide table scrolls inside its own box instead of pushing
+  // the shell's main column past an 820px tablet (a flex column grows to its content's min-content width otherwise).
   return (
-    <div data-wide className="space-y-4">
+    <div className="min-w-0 space-y-4 [contain:inline-size]">
       <div>
         <div className="flex items-center gap-2 text-xs text-gray-500">
           <Link href="/super-admin/individual" className="hover:text-teal-700">Competen Individual</Link><span>/</span><span className="text-gray-600">Learner Engagement</span>

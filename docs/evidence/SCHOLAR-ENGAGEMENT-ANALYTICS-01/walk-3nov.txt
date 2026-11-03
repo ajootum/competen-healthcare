@@ -1,0 +1,39 @@
+SCHOLAR-ENGAGEMENT-ANALYTICS-01 -- headless staging walk, 3 Nov 2026
+Dev server on the branch (webpack, port 3171) against STAGING (ezhvpgtcqcdsgylrxgdb), signed in as the staging owner
+(credential read from a file, never printed). Chromium 1440x1000, then 820x1180. Screenshots in the session scratchpad
+(eng-01..05). Staging data: 4 live Scholar learners (3 unclassified), the guided-browser harness learner carries the activity.
+
+API /api/hq/individual/scholar-analytics
+PASS  sign-in
+PASS  A1 anonymous answer 200
+PASS  A2 anonymous answer names nobody: no email, no uuid, every row a Learner code  (rows=4)
+PASS  A3 anonymous by default with canIdentify for the owner
+PASS  A4 cards present and consistent
+      cards: learners 4, unclassifiedIncluded 3, dau 1, wau 1, mau 2, newLearners 4, returningLearners 0, activeInRange 2,
+             activities 31, aiCostUsd 2.7376 (est.), aiSettledUsd 0, aiCostPerActiveLearner 1.3688, aiRequests 126 (90 days)
+      limits: metering ledger holds no settled Scholar costs (gateway estimate shown) | counts are one per record
+PASS  A5 Named View: same ranking, names added
+PASS  A6 pseudonyms are stable across ranges (every 7-day key appears in the 90-day set)
+PASS  A7 detail by pseudonym, no identity
+      detail kinds: upload 2/2, learn 2/0, explanation 6/6, flashcards 2/2, revise 12/2, self_assessment 3/2, evaluate 1/1, plan 2/2
+PASS  A8 custom range applies to cards and rows
+PASS  A9 unknown learner key gives no detail
+
+Page /super-admin/individual/scholar/analytics (1440)
+PASS  P1 page renders with the summary cards
+PASS  P2 Anonymous View is the default (pressed)
+PASS  P3 the nav lists Learner Engagement
+PASS  P4 range control updates the caption (7 days)
+PASS  P5 Named View caption says audited
+PASS  P6 learner detail opens in the workspace (summary, by week, progress, by activity, AI, recent 20)
+PASS  P7 custom dates apply (2026-10-01 to 2026-11-03)
+PASS  P8 method and limits are stated on the page
+PASS  no page errors
+
+Tablet 820
+PASS  T1 no horizontal page scroll after the root was made inline-size contained (documentElement scrollWidth 820 = clientWidth 820,
+      main 596 wide, content 548). Before that fix the leaderboard's 760px table pushed the shell's main column to 1066.
+      Note: the shell's own data-wide pages (e.g. /super-admin/ai/analytics) still overflow at 820: pre-existing, not touched.
+
+Not demonstrated live: a non-owner HQ user without the identifiable right (no such appointment exists on staging). The
+refusal path (403 before any read, no name in an anonymous body) is proved by src/app/api/hq/individual/scholar-analytics/route.test.ts.
