@@ -306,9 +306,10 @@ async function readCatalogue(admin: any, allowedFrameworkIds: readonly string[],
 // ── THE ORGANISATION OF A PUBLISHED FRAMEWORK ── SCHOLAR-COMPETENCY-EXPLORER-HFE-01 ───────────────────────────────
 //
 // Its Areas (760) and its domains with their Area and saved position, so a learner-facing page can show the framework
-// exactly as Holdings organised it (framework-tree.ts). Read for SHARED, ACTIVE, PUBLISHED frameworks only: the same
-// rule as the catalogue above, so a draft's organisation never reaches a person. Before 760 (no framework_areas table,
-// or no area_id column) `areas` is null: there is no Area level to show, which is not a failure.
+// exactly as Holdings organised it (framework-tree.ts). It reads NO framework row of its own: the frameworks are the
+// catalogues of rows that came through loadIndividualCatalogue above (shared, active, published), so a draft's
+// organisation never reaches a person, and the one gate on frameworks stays the one the harness guards. Before 760 (no
+// framework_areas table, or no area_id column) `areas` is null: there is no Area level to show, which is not a failure.
 
 export type FrameworkStructure = {
   frameworkId: string;
@@ -316,14 +317,12 @@ export type FrameworkStructure = {
   domains: { id: string; name: string; code: string | null; sortOrder: number | null; areaId: string | null }[];
 };
 
-export async function loadFrameworkStructure(admin: any, frameworkIds: readonly string[]): Promise<Map<string, FrameworkStructure> | null> {
+/** `offered`: rows of a published catalogue read (their frameworkId is the catalogue each came through). Nothing else may name a framework here. */
+export async function loadFrameworkStructure(admin: any, offered: readonly { frameworkId: string }[]): Promise<Map<string, FrameworkStructure> | null> {
   const out = new Map<string, FrameworkStructure>();
-  if (!frameworkIds.length) return out;
+  const ids = [...new Set(offered.map(c => c.frameworkId))];
+  if (!ids.length) return out;
   try {
-    const fws = await rows(admin.from("frameworks").select("id").in("id", [...frameworkIds]).is("hospital_id", null).eq("is_active", true).eq("pub_status", "published"));
-    if (fws === null) return null;
-    const ids: string[] = fws.map((f: Row) => f.id);
-    if (!ids.length) return out;
     const d760 = await admin.from("framework_domains").select("id, framework_id, code, name, sort_order, area_id").in("framework_id", ids);
     let domains: Row[], areas: Row[] | null;
     if (!d760.error) {

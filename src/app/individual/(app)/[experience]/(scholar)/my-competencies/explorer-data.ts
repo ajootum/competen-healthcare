@@ -52,9 +52,9 @@ export type ExplorerData = {
 };
 
 export async function loadExplorerData(admin: Admin, userId: string, catalogue: readonly CatalogueCompetency[], rows: readonly OverviewRow[], activity: ReadonlyMap<string, ActivityFact> | null): Promise<ExplorerData> {
-  const frameworkIds = [...new Set(catalogue.map(c => c.frameworkId))];
+  // The catalogue rows came through loadLearnerCatalogue (published, allowlisted): their frameworks are the only ones whose organisation is read.
   const [structures, practice, progressRows] = await Promise.all([
-    loadFrameworkStructure(admin, frameworkIds).catch(() => null),
+    loadFrameworkStructure(admin, catalogue).catch(() => null),
     practiceEvidenceByCompetency(admin, userId).catch(() => null),
     competencyProgressRows(admin, userId).catch(() => null),
   ]);
