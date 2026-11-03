@@ -14,6 +14,15 @@ export type Admin = ReturnType<typeof createAdminClient>;
 
 export const ASSESS_CAPABILITY = "hq.assessment.instrument.assess";
 export const ASSIGN_CAPABILITY = "hq.assessment.assessor.assign";
+/** ASMT-SCORING-INTEGRATION-01: the HQ workspace records assessor-led AND auditor-recorded work. Migration 891 already models both
+ *  roles (grant role check, instance attestation check); the application no longer hard-codes "assessor". Self-assessment stays in
+ *  the person's own product. */
+export const HQ_RESPONDENT_ROLES = ["assessor", "auditor"] as const;
+export type HqRespondentRole = (typeof HQ_RESPONDENT_ROLES)[number];
+export const isHqRole = (v: unknown): v is HqRespondentRole => typeof v === "string" && (HQ_RESPONDENT_ROLES as readonly string[]).includes(v);
+export const ATTESTATION_OF: Record<HqRespondentRole, string> = { assessor: "assessor_evaluated", auditor: "auditor_recorded" };
+export const ROLE_LABEL: Record<HqRespondentRole, string> = { assessor: "Assessor", auditor: "Auditor" };
+export const ATTESTATION_LABEL: Record<HqRespondentRole, string> = { assessor: "Assessor-evaluated, not formal verification", auditor: "Auditor-recorded, not formal verification" };
 
 /** Shown where the capture tables are not applied on this environment. A page fails closed rather than erroring. */
 export const NOT_SET_UP = "Checklist assessments are not set up on this environment yet (migrations 890 to 892).";

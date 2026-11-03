@@ -33,6 +33,8 @@ export interface AssessorRunnerProps {
   assessorName: string | null;
   authority: string | null;
   methodLabels: Record<string, string>;
+  /** assessor (assessor-led) or auditor (auditor-recorded): changes the attestation wording only */
+  respondentRole?: "assessor" | "auditor";
 }
 
 export function AssessorRunnerClient(p: AssessorRunnerProps) {
@@ -169,8 +171,8 @@ export function AssessorRunnerClient(p: AssessorRunnerProps) {
         def={p.def} layout={p.standardLayout} guidedLayout={p.guidedLayout} responses={responses} onChange={onChange} rules={p.rules}
         mode={mode} onModeChange={setMode} saveStatus={status} breakpoint="auto"
         title={p.title} subtitle={p.subtitle} evidenceCounts={evidenceCounts} methodLabels={p.methodLabels} actions={actions}
-        banner={<p className="rounded-lg border border-[var(--cmp-theme-border)] bg-[var(--cmp-theme-soft)] px-4 py-2 text-sm text-[var(--cmp-theme-ink)]"><span className="font-semibold">Assessor-evaluated, not formal verification.</span> You are assessing {p.subjectName ?? "a person"}{p.authority ? ` as ${p.authority}` : ""}.</p>}
-        subject={<p>Person assessed: <span className="font-semibold">{p.subjectName ?? "Not set"}</span>{p.assessorName ? <> · Assessor: <span className="font-semibold">{p.assessorName}</span></> : null}</p>}
+        banner={<p className="rounded-lg border border-[var(--cmp-theme-border)] bg-[var(--cmp-theme-soft)] px-4 py-2 text-sm text-[var(--cmp-theme-ink)]"><span className="font-semibold">{p.respondentRole === "auditor" ? "Auditor-recorded" : "Assessor-evaluated"}, not formal verification.</span> You are {p.respondentRole === "auditor" ? "auditing the records of" : "assessing"} {p.subjectName ?? "a person"}{p.authority ? ` as ${p.authority}` : ""}.</p>}
+        subject={<p>Person assessed: <span className="font-semibold">{p.subjectName ?? "Not set"}</span>{p.assessorName ? <> · {p.respondentRole === "auditor" ? "Auditor" : "Assessor"}: <span className="font-semibold">{p.assessorName}</span></> : null}</p>}
         renderEvidence={k => <EvidencePanel instanceId={p.instanceId} itemKey={k} evidence={evidence} onAdded={e => setEvidence(x => [...x, e])} />}
         renderComment={k => <CommentPanel instanceId={p.instanceId} itemKey={k} comments={comments} onAdded={c => setComments(x => [...x, c])} />}
       />

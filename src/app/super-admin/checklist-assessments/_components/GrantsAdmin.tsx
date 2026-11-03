@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { Btn, Chip, fieldBase, mutedText, type Tone } from "@/components/assessment/ui";
-import { GRANT_STATE_LABEL, type GrantState } from "@/lib/assessment/assessor/common";
+import { GRANT_STATE_LABEL, ROLE_LABEL, type GrantState, type HqRespondentRole } from "@/lib/assessment/assessor/common";
 import type { AssessableInstrument, GrantView, PersonMatch, RespondentCandidate } from "@/lib/assessment/assessor/grants";
 
 const API = "/api/hq/checklist-assessments/grants";
@@ -23,6 +23,10 @@ async function call<T>(url: string, init?: RequestInit): Promise<{ ok: true; dat
 export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: GrantView[]; instruments: AssessableInstrument[] }) {
   const router = useRouter();
   const [instrumentId, setInstrumentId] = useState(instruments[0]?.instrument_id ?? "");
+  const [role, setRole] = useState<HqRespondentRole>("assessor");
+  const rolesOf = (id: string): HqRespondentRole[] => ((instruments.find(i => i.instrument_id === id)?.respondent_roles ?? []).filter((r): r is HqRespondentRole => r === "assessor" || r === "auditor"));
+  const roles = rolesOf(instrumentId);
+  const roleInUse: HqRespondentRole = roles.includes(role) ? role : (roles[0] ?? "assessor");
   const [email, setEmail] = useState("");
   const [subject, setSubject] = useState<PersonMatch | null>(null);
   const [candidates, setCandidates] = useState<RespondentCandidate[] | null>(null);
@@ -60,7 +64,7 @@ export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: Gra
     if (!subject || !pick) return;
     setBusy(true); setError(null); setDone(null);
     const r = await call<{ id: string }>(API, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({
-      instrumentId, subjectUserId: subject.id, respondentId: pick.person_id, appointmentId: pick.appointment_id, reason, validUntil: validUntil || undefined }) });
+      instrumentId, subjectUserId: subject.id, respondentId: pick.person_id, appointmentId: pick.appointment_id, reason, validUntil: validUntil || undefined, respondentRole: roleInUse }) });
     setBusy(false);
     if (!r.ok) { setError(r.error); return; }
     setDone("The grant was made. It is ready once the person accepts it."); setReason(""); setValidUntil(""); setSubject(null); setEmail(""); setCandidates(null); setRespondent("");
@@ -85,10 +89,18 @@ export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: Gra
           <>
             <label className={`flex flex-col gap-1 text-xs font-semibold ${mutedText}`}>
               <span>Checklist</span>
-              <select value={instrumentId} onChange={e => { setInstrumentId(e.target.value); if (subject) void loadRespondents(e.target.value, subject.id); }} className={fieldBase}>
+              <select value={instrumentId} onChange={e => { setInstrumentId(e.target.value); setRole(rolesOf(e.target.value)[0] ?? "assessor"); if (subject) void loadRespondents(e.target.value, subject.id); }} className={fieldBase}>
                 {instruments.map(i => <option key={i.instrument_id} value={i.instrument_id}>{i.code}, {i.name} (version {i.version_no})</option>)}
               </select>
             </label>
+            {roles.length > 1 ? (
+              <label className={`flex flex-col gap-1 text-xs font-semibold ${mutedText}`}>
+                <span>Recorded by</span>
+                <select value={roleInUse} onChange={e => setRole(e.target.value as HqRespondentRole)} className={fieldBase}>
+                  {roles.map(r => <option key={r} value={r}>{ROLE_LABEL[r]}{r === "assessor" ? " (assessor-led)" : " (auditor-recorded)"}</option>)}
+                </select>
+              </label>
+            ) : roles.length === 1 ? <p className={`text-xs ${mutedText}`}>Recorded by an {ROLE_LABEL[roles[0]].toLowerCase()} ({roles[0] === "assessor" ? "assessor-led" : "auditor-recorded"} delivery).</p> : null}
             <div className="flex flex-wrap items-end gap-2">
               <label className={`flex min-w-[16rem] flex-1 flex-col gap-1 text-xs font-semibold ${mutedText}`}>
                 <span>Email of the person to be assessed</span>
@@ -100,9 +112,9 @@ export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: Gra
             {subject && candidates ? (
               candidates.length === 0 ? <p className="text-sm text-[var(--cmp-text-warning)]">No one currently holds the authority to assess with this checklist.</p> : (
                 <label className={`flex flex-col gap-1 text-xs font-semibold ${mutedText}`}>
-                  <span>Assessor (holds the assess capability by appointment)</span>
+                  <span>{ROLE_LABEL[roleInUse]} (holds the assess capability by appointment)</span>
                   <select value={respondent} onChange={e => setRespondent(e.target.value)} className={fieldBase}>
-                    <option value="">Choose an assessor</option>
+                    <option value="">Choose an {ROLE_LABEL[roleInUse].toLowerCase()}</option>
                     {candidates.map(c => <option key={c.appointment_id} value={c.appointment_id}>{c.name ?? "Unnamed"}, {c.position.replace(/_/g, " ")}</option>)}
                   </select>
                 </label>
@@ -129,7 +141,7 @@ export function GrantsAdmin({ initialGrants, instruments }: { initialGrants: Gra
           <article key={g.id} className={`${card} flex flex-wrap items-center justify-between gap-3`}>
             <div className="min-w-0 text-sm text-[var(--cmp-app-text)]">
               <p className="font-semibold">{g.instrument_name ?? "Checklist"} <span className="font-normal">for {g.subject_name ?? "a person"}</span></p>
-              <p className={`text-xs ${mutedText}`}>Assessor {g.respondent_name ?? "unnamed"}. Made {fmt(g.created_at)}{g.accepted_at ? `, accepted ${fmt(g.accepted_at)}` : ""}{g.valid_until ? `, until ${fmt(g.valid_until)}` : ""}.{g.end_reason ? ` Ended: ${g.end_reason}` : ""}</p>
+              <p className={`text-xs ${mutedText}`}>{g.respondent_role === "auditor" ? "Auditor" : "Assessor"} {g.respondent_name ?? "unnamed"}. Made {fmt(g.created_at)}{g.accepted_at ? `, accepted ${fmt(g.accepted_at)}` : ""}{g.valid_until ? `, until ${fmt(g.valid_until)}` : ""}.{g.end_reason ? ` Ended: ${g.end_reason}` : ""}</p>
             </div>
             <div className="flex items-center gap-2">
               <Chip tone={TONE[g.state]}>{GRANT_STATE_LABEL[g.state]}</Chip>

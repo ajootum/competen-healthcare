@@ -33,6 +33,7 @@ export default async function AssessmentPage({ params }: { params: Promise<{ ins
         standardLayout={loaded.standardLayout} guidedLayout={loaded.guidedLayout}
         initialResponses={loaded.responses} initialRevisions={loaded.revisions} initialEvidence={loaded.evidence} initialComments={loaded.comments}
         title={h.title} subtitle={h.subtitle} subjectName={h.subjectName} assessorName={h.assessorName} authority={h.authority} methodLabels={h.methodLabels}
+        respondentRole={loaded.instance.respondent_role === "auditor" ? "auditor" : "assessor"}
       />
     </div>
   );

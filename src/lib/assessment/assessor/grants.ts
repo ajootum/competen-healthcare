@@ -9,7 +9,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { normaliseLookupEmail, normaliseLookupName, searchPeopleByName } from "@/lib/individual/grants";
 import {
-  type Admin, type GrantRow, type Res, ASSESS_CAPABILITY, NOT_SET_UP, fail, grantState, guardMessage, isMissingRelation, isUuid, okRes, type GrantState,
+  type Admin, type GrantRow, type Res, ASSESS_CAPABILITY, NOT_SET_UP, fail, grantState, guardMessage, isMissingRelation, isUuid, okRes, type GrantState, HQ_RESPONDENT_ROLES, type HqRespondentRole, isHqRole,
 } from "./common";
 
 export interface GrantView extends GrantRow {
@@ -47,7 +47,7 @@ async function decorate(admin: Admin, rows: GrantRow[]): Promise<GrantView[]> {
 
 /** The grants made TO me, all states. */
 export async function listMyGrants(admin: Admin, actor: string): Promise<Res<GrantView[]>> {
-  const { data, error } = await admin.from("asmt_respondent_grant").select("id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at").eq("respondent_id", actor).eq("respondent_role", "assessor").order("created_at", { ascending: false }).limit(200);
+  const { data, error } = await admin.from("asmt_respondent_grant").select("id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at").eq("respondent_id", actor).in("respondent_role", [...HQ_RESPONDENT_ROLES]).order("created_at", { ascending: false }).limit(200);
   if (isMissingRelation(error)) return fail(501, NOT_SET_UP);
   if (error) return fail(503, "Your assessments could not be read just now.");
   return okRes(await decorate(admin, (data ?? []) as GrantRow[]));
@@ -62,12 +62,12 @@ export async function listGrantsIMade(admin: Admin, actor: string): Promise<Res<
 }
 
 // ── the picker data for making a grant ───────────────────────────────────────────────────────────────────────
-export interface AssessableInstrument { instrument_id: string; code: string; name: string; version_no: number; assess_capability: string }
+export interface AssessableInstrument { instrument_id: string; code: string; name: string; version_no: number; assess_capability: string; respondent_roles: string[] }
 
-/** Instruments whose latest published version admits an assessor. */
+/** Instruments whose latest published version admits an assessor or an auditor (HQ-recorded roles). */
 export async function listAssessableInstruments(admin: Admin): Promise<Res<AssessableInstrument[]>> {
-  const { data, error } = await admin.from("asmt_instrument_version").select("instrument_id, version_no, assess_capability")
-    .eq("state", "published").contains("respondent_roles", ["assessor"]).order("version_no", { ascending: false }).limit(500);
+  const { data, error } = await admin.from("asmt_instrument_version").select("instrument_id, version_no, assess_capability, respondent_roles")
+    .eq("state", "published").overlaps("respondent_roles", [...HQ_RESPONDENT_ROLES]).order("version_no", { ascending: false }).limit(500);
   if (error) return fail(503, "The checklists could not be read just now.");
   const latest = new Map<string, any>();
   for (const v of data ?? []) if (!latest.has(v.instrument_id)) latest.set(v.instrument_id, v);
@@ -75,6 +75,7 @@ export async function listAssessableInstruments(admin: Admin): Promise<Res<Asses
   return okRes([...latest.values()].filter(v => ins.has(v.instrument_id)).map(v => ({
     instrument_id: v.instrument_id as string, code: ins.get(v.instrument_id)!.code, name: ins.get(v.instrument_id)!.name,
     version_no: v.version_no as number, assess_capability: (v.assess_capability ?? ASSESS_CAPABILITY) as string,
+    respondent_roles: ((v.respondent_roles ?? []) as string[]).filter(isHqRole),
   })).sort((a, b) => a.name.localeCompare(b.name)));
 }
 
@@ -127,10 +128,12 @@ export async function listRespondentCandidates(admin: Admin, instrumentId: strin
 }
 
 // ── making and ending ────────────────────────────────────────────────────────────────────────────────────────
-export interface NewGrant { instrumentId: unknown; subjectUserId: unknown; respondentId: unknown; appointmentId: unknown; reason: unknown; validUntil?: unknown }
+export interface NewGrant { instrumentId: unknown; subjectUserId: unknown; respondentId: unknown; appointmentId: unknown; reason: unknown; validUntil?: unknown; /** assessor (default) or auditor; the database checks the published version allows it */ respondentRole?: unknown }
 
 export async function createGrant(admin: Admin, actor: string, b: NewGrant): Promise<Res<{ id: string }>> {
   if (!isUuid(b.instrumentId) || !isUuid(b.subjectUserId) || !isUuid(b.respondentId) || !isUuid(b.appointmentId)) return fail(400, "Choose the checklist, the person, the assessor and the appointment.");
+  const role = b.respondentRole === undefined || b.respondentRole === null || b.respondentRole === "" ? "assessor" : b.respondentRole;
+  if (!isHqRole(role)) return fail(400, "The respondent role is assessor or auditor.");
   const reason = typeof b.reason === "string" ? b.reason.trim() : "";
   if (reason.length < 3 || reason.length > 1000) return fail(400, "Give a reason of 3 to 1000 characters.");
   if (b.subjectUserId === actor) return fail(403, "You cannot give authority to assess yourself.");
@@ -144,7 +147,7 @@ export async function createGrant(admin: Admin, actor: string, b: NewGrant): Pro
   }
   const ins = await admin.from("asmt_respondent_grant").insert({
     instrument_id: b.instrumentId, subject_kind: "person", subject_id: b.subjectUserId, subject_user_id: b.subjectUserId,
-    respondent_id: b.respondentId, respondent_role: "assessor", appointment_id: b.appointmentId, granted_by: actor, reason, valid_until: validUntil,
+    respondent_id: b.respondentId, respondent_role: role, appointment_id: b.appointmentId, granted_by: actor, reason, valid_until: validUntil,
   }).select("id").single();
   if (ins.error || !ins.data) return fail(422, guardMessage(ins.error));
   return okRes({ id: ins.data.id as string });
