@@ -2720,6 +2720,30 @@ export async function lessonsForChunks(admin: Admin, userId: string, chunkIds: r
   return [...by.values()];
 }
 
+/**
+ * SCHOLAR-INDEPENDENT-LEARNING-01 P2: the sections the caller has LEARNED on -- any learning event except a skip (a lesson
+ * opened, read (920), taught, checked) names them as a source (414 learning_event_source). Reads only, no AI. Empty where
+ * unreadable (then only answered questions say a section was started).
+ */
+export async function learnedChunkIds(admin: Admin, userId: string, chunkIds: readonly string[]): Promise<Set<string>> {
+  const ids = [...new Set(chunkIds.filter(isUuid))].slice(0, 2000);
+  const out = new Set<string>();
+  if (!ids.length) return out;
+  const byEvent = new Map<string, string[]>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const { data, error } = await admin.from("individual_scholar_learning_event_source").select("event_id, chunk_id").eq("user_id", userId).in("chunk_id", ids.slice(i, i + 200)).limit(10000);
+    if (error) return out;
+    for (const r of (data ?? []) as any[]) { const l = byEvent.get(r.event_id) ?? []; l.push(r.chunk_id); byEvent.set(r.event_id, l); }
+  }
+  const eventIds = [...byEvent.keys()];
+  for (let i = 0; i < eventIds.length; i += 300) {
+    const { data, error } = await admin.from("individual_scholar_learning_event").select("id, action").eq("user_id", userId).in("id", eventIds.slice(i, i + 300)).neq("action", "skip").limit(300);
+    if (error) return out;
+    for (const r of (data ?? []) as any[]) for (const c of byEvent.get(r.id) ?? []) out.add(c);
+  }
+  return out;
+}
+
 /** Some of the caller's sessions by id (a foreign id simply is not found). */
 export async function sessionsByIds(admin: Admin, userId: string, ids: readonly string[]): Promise<LearningSessionRow[]> {
   const keep = [...new Set(ids.filter(isUuid))].slice(0, 200);

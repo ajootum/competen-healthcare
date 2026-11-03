@@ -129,7 +129,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
-  | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection";
+  | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal";
 /** PRIVATE MODULE DEVELOPMENT ACCESS (owner GO 2 Nov 2026): who may see a Scholar module that is still being developed. */
 export type ModuleAccessPolicyKey = "scholar_module_courses_access" | "scholar_module_competencies_access";
 /** CHECKLIST STUDIO S3: which assessment instruments (by permanent code) Scholar offers a learner. Empty by default: nothing is offered. */
@@ -1976,6 +1976,14 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Decisions, reflections, goal type and session minutes need migration 840. Without it My Plan works from the study plan and calendar alone. Default: offered.",
   },
   {
+    key: "scholar_plan_started_signal", kind: "choice", product: "Scholar",
+    label: "My Plan: what counts as a section started",
+    help: "SCHOLAR-INDEPENDENT-LEARNING-01 P2. A section the student has started is not planned again as new. Learning: a lesson the student read (Mark as read), opened or was taught counts, as does a question answered on it. Practice only: only a question answered on it counts (the earlier rule). No AI either way.",
+    options: [{ value: "learning", label: "A lesson read, opened or taught, or a question answered" }, { value: "practice", label: "Only a question answered" }],
+    fallback: "learning",
+    limitReason: "Default: learning. Lesson records need migration 414, and the read mark migration 920.",
+  },
+  {
     key: "scholar_plan_proposal", kind: "choice", product: "Scholar",
     label: "My Plan: propose a plan for each upload",
     help: "Whether the page shown when a student's notes are ready offers a suggested sequence, workload and revision points that the student may accept, change or decline. Learning never waits for the answer.",
@@ -2394,6 +2402,8 @@ export type IndividualPolicy = {
   /** Private module development access: who may see Courses & Training and My Competencies. Closed unless HQ publishes otherwise. */
   scholarModuleAccess: { courses: ModuleAccess; competencies: ModuleAccess };
   scholarPlanProposal: "on" | "off";
+  /** SCHOLAR-INDEPENDENT-LEARNING-01 P2: what counts as a section started for My Plan (a lesson read / opened / taught, or only a question answered). */
+  scholarPlanStartedSignal: "learning" | "practice";
   scholarPlanSectionMinutes: number;
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
   scholarPlanRuleOrder: string[];
@@ -2586,6 +2596,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
       competencies: clampModuleAccess(policyDef("scholar_module_competencies_access") as ModuleAccessPolicy, published.get(policyPath("scholar_module_competencies_access"))),
     },
     scholarPlanProposal: clampChoice(policyDef("scholar_plan_proposal") as ChoicePolicy, published.get(policyPath("scholar_plan_proposal"))) as "on" | "off",
+    scholarPlanStartedSignal: clampChoice(policyDef("scholar_plan_started_signal") as ChoicePolicy, published.get(policyPath("scholar_plan_started_signal"))) as "learning" | "practice",
     scholarPlanSectionMinutes: int("scholar_plan_section_minutes"),
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",

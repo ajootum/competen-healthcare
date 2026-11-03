@@ -109,7 +109,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
       scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
       scholarVisualClassify: "on", scholarVisualTextWords: 40,
-      scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"], scholarAssessmentInstruments: [],
+      scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanStartedSignal: "learning", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"], scholarAssessmentInstruments: [],
       scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
@@ -448,6 +448,8 @@ describe("My Plan policy keys", () => {
   it("switch off, and keep only known rules in the administrator's order", () => {
     expect(p("scholar_my_plan", { value: "off" }).scholarMyPlan).toBe("off");
     expect(p("scholar_plan_proposal", { value: "off" }).scholarPlanProposal).toBe("off");
+    expect(p("scholar_plan_started_signal", { value: "practice" }).scholarPlanStartedSignal).toBe("practice");
+    expect(p("scholar_plan_started_signal", { value: "nonsense" }).scholarPlanStartedSignal).toBe("learning");
     expect(p("scholar_plan_weekly_reflection", { value: "off" }).scholarPlanWeeklyReflection).toBe("off");
     expect(p("scholar_plan_rule_order", { order: ["coverage", "bogus", "gaps", "coverage"] }).scholarPlanRuleOrder).toEqual(["coverage", "gaps"]);
   });
