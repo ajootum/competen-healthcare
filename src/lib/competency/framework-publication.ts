@@ -14,7 +14,7 @@ import { revisionForPublication } from "./framework-revision";
 //   put forward   the Competency Author (hq.quality.competency.author) or, for a catalogue, its curator
 //                 (hq.individual.config.manage). A draft goes into review. A PUBLISHED framework stays published while
 //                 its revision is reviewed, so Scholar and Professional keep the version they consume.
-//   decide        an independent publisher (hq.quality.competency.publish, the Quality Council Member): publish or
+//   decide        a publisher (hq.quality.competency.publish; since 941 the author or submitter may be the publisher): publish or
 //                 return. Never somebody who put it forward, or who authored or curated any of its content.
 //   publish       transitionFramework({ holdings: true }): the 466 guard still refuses unless every owned competency is
 //                 clinically approved (395) at its current content. A republication names a major, minor or revision
@@ -70,11 +70,36 @@ export function contributorsOf(audit: readonly { actor_id: string | null; action
   return [...new Set(audit.filter(a => a.actor_id && !GOVERNANCE.has(a.action)).map(a => a.actor_id as string))];
 }
 
-/** Pure: why this person may not decide this publication, or null. */
-export function publisherConflict(publisherId: string, submitterId: string | null, contributors: readonly string[]): string | null {
-  if (submitterId === publisherId) return "You put this framework forward, so a different publisher must decide it.";
-  if (contributors.includes(publisherId)) return "You authored or curated content in this framework, so a different publisher must decide it.";
+/**
+ * Pure: why this person may not decide this publication, or null.
+ *
+ * UNIFIED-GOVERNANCE-V1 item 6 (owner, 3 Nov 2026; migration 941): the approved two-person principle. Person A authors
+ * (and may put forward) and PUBLISHES the exact independently approved version; Person B reviews and approves. So the
+ * submitter and the contributors are no longer excluded from publishing: independence lives at the clinical review
+ * decision (395/640: nobody approves content they authored, edited or submitted, at its exact version), and 466 refuses
+ * a publication while any competency is not approved at its current content. What stays: the publisher must not be one
+ * of the clinical APPROVERS of the framework's competencies where the content rule publisher_not_approver is on (640),
+ * so that one person never both approves and releases. `submitterId` and `contributors` are kept in the signature for
+ * the callers that still pass them; they no longer decide anything.
+ */
+export function publisherConflict(publisherId: string, submitterId: string | null, contributors: readonly string[], rule?: { approvers: readonly string[]; publisherNotApprover: boolean }): string | null {
+  void submitterId; void contributors;
+  if (rule?.publisherNotApprover && rule.approvers.includes(publisherId)) return "You clinically approved competencies in this framework, and for frameworks the publisher may not be one of the approvers (configured rule), so a different publisher must decide it.";
   return null;
+}
+
+/** The ids of everyone who clinically approved a version of the framework's competencies, from the decision rows. */
+export function approversOf(decisions: readonly { reviewer_id: string | null; decision: string }[]): string[] {
+  return [...new Set(decisions.filter(d => d.reviewer_id && d.decision === "approved").map(d => d.reviewer_id as string))];
+}
+
+/** Whether the publisher-not-approver content rule is on for frameworks (640). A read failure counts as ON: fail closed. */
+export async function publisherNotApproverRule(admin: any): Promise<boolean> {
+  try {
+    const { data, error } = await admin.from("hq_sod_content_rule").select("publisher_not_approver").eq("content_kind", "competency_framework").maybeSingle();
+    if (error) return true;
+    return !!data?.publisher_not_approver;
+  } catch { return true; }
 }
 
 const NOTE_MAX = 1000;
@@ -164,7 +189,14 @@ export async function decidePublication(admin: any, actor: Actor, b: any): Promi
   if (rev) ids.push(...rev.newIds);
   const { data: trail, error: tErr } = await admin.from("audit_log").select("actor_id, action").in("entity_id", ids).limit(5000);
   if (tErr) return { ok: false, status: 503, error: "The authorship trail could not be read, so nothing was decided." };
-  const conflict = publisherConflict(actor.userId, req.submitted_by, contributorsOf(trail ?? []));
+  // 941: the submitter or a contributor may publish the exact independently approved content. The only app-side
+  // conflict left is the configured publisher-not-approver rule, which the database (640) enforces as well.
+  const { data: ccv, error: cErr } = await admin.from("clinical_content_version").select("id").in("competency_id", ids).limit(5000);
+  if (cErr) return { ok: false, status: 503, error: "The approval trail could not be read, so nothing was decided." };
+  const vids = (ccv ?? []).map((v: any) => v.id);
+  const { data: decs, error: dErr } = vids.length ? await admin.from("clinical_review_decision").select("reviewer_id, decision").in("version_id", vids).limit(5000) : { data: [], error: null };
+  if (dErr) return { ok: false, status: 503, error: "The approval trail could not be read, so nothing was decided." };
+  const conflict = publisherConflict(actor.userId, req.submitted_by, contributorsOf(trail ?? []), { approvers: approversOf(decs ?? []), publisherNotApprover: await publisherNotApproverRule(admin) });
   if (conflict) return { ok: false, status: 403, error: conflict };
 
   const reason = note(b?.note);

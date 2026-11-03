@@ -5,7 +5,8 @@
 // publication). It decides nothing: every row links to the governed item, where the same gated route and database
 // guard take the action. A task shows the content, its type, its scope, its status, the required action, the deadline
 // where one is configured, and ONE contextual action. Where the person cannot act, the reason and the position or
-// authority required are said instead of a button.
+// authority required are said instead of a button. Deadlines are optional (owner, 3 Nov): no deadline system exists yet,
+// so a task carries one only when its record does, and nothing about deadlines or overdue work is drawn until one is configured.
 import type { createAdminClient } from "@/lib/supabase/server";
 import { listGovernedVersions, nameMap, reviewOverview, loadTrail, type GovernedVersionRow } from "@/lib/assessment/studio/read";
 import { loadHolders, latestReturn } from "@/lib/assessment/studio/pathway-data";

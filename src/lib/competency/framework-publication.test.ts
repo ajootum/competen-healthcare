@@ -75,9 +75,14 @@ describe("pure rules", () => {
       { actor_id: "a", action: "update_competency" }, { actor_id: "c", action: "catalogue_entry_add" },
       { actor_id: "g", action: "publish" }, { actor_id: "g", action: "approve_content" }, { actor_id: "r", action: "clinical_review_decided" },
     ]).sort()).toEqual(["a", "c"]);
-    expect(publisherConflict("p", "p", [])).toMatch(/put this framework forward/);
-    expect(publisherConflict("p", "s", ["p"])).toMatch(/authored or curated/);
+    // 941 (two-person principle): the submitter and a contributor may publish the exact independently approved version.
+    expect(publisherConflict("p", "p", [])).toBeNull();
+    expect(publisherConflict("p", "s", ["p"])).toBeNull();
     expect(publisherConflict("p", "s", ["a"])).toBeNull();
+    // what stays: the publisher may not be one of the clinical approvers where the content rule is on
+    expect(publisherConflict("p", "s", [], { approvers: ["p"], publisherNotApprover: true })).toMatch(/may not be one of the approvers/);
+    expect(publisherConflict("p", "s", [], { approvers: ["p"], publisherNotApprover: false })).toBeNull();
+    expect(publisherConflict("p", "s", [], { approvers: ["r"], publisherNotApprover: true })).toBeNull();
   });
 });
 
@@ -114,15 +119,23 @@ describe("Holdings publication", () => {
     expect(T.content_approvals[0]).toMatchObject({ status: "approved", reviewed_by: PUBLISHER.userId });
   });
 
-  it("the person who put it forward, or anybody who authored it, cannot publish it", async () => {
+  it("941 two-person principle: the person who put it forward, and an author, may publish the exact independently approved content", async () => {
     await submitForPublication(fake(), PUBLISHER, { frameworkId: FW });
-    expect(await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish" })).toMatchObject({ ok: false, status: 403 });
-    T.content_approvals = []; T.frameworks[0].pub_status = "draft";
-    await submitForPublication(fake(), PUBLISHER, { frameworkId: FW });
-    T.content_approvals[0].submitted_by = "00000000-0000-4000-8000-0000000000c9";
-    expect(await decidePublication(fake(), AUTHOR, { frameworkId: FW, decision: "publish" })).toMatchObject({ ok: false, status: 403, error: expect.stringMatching(/authored or curated/) });
+    expect(await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish" })).toMatchObject({ ok: true, status: "published" });
+    T.content_approvals = []; T.frameworks[0].pub_status = "draft"; T.framework_versions = [];
+    await submitForPublication(fake(), AUTHOR, { frameworkId: FW });
+    expect(await decidePublication(fake(), AUTHOR, { frameworkId: FW, decision: "publish", changeKind: "minor" })).toMatchObject({ ok: true, status: "published" });
+    expect(T.frameworks[0].pub_status).toBe("published");
+  });
+  it("what stays: where the publisher-not-approver rule is on, one of the clinical approvers may not publish (the database refuses too)", async () => {
+    T.hq_sod_content_rule = [{ content_kind: "competency_framework", publisher_not_approver: true }];
+    T.clinical_content_version = [{ id: "ccv-1", competency_id: COMP }];
+    T.clinical_review_decision = [{ version_id: "ccv-1", reviewer_id: PUBLISHER.userId, decision: "approved" }];
+    await submitForPublication(fake(), AUTHOR, { frameworkId: FW });
+    expect(await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish" })).toMatchObject({ ok: false, status: 403, error: expect.stringMatching(/one of the approvers/) });
     expect(T.frameworks[0].pub_status).toBe("in_review");
-    expect(T.framework_versions).toEqual([]);
+    T.hq_sod_content_rule = [{ content_kind: "competency_framework", publisher_not_approver: false }];
+    expect(await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish" })).toMatchObject({ ok: true, status: "published" });
   });
 
   it("466 refusing publication leaves the label, the request and the versions untouched", async () => {
