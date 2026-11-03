@@ -1,4 +1,4 @@
-﻿"use client";
+�"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -59,7 +59,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
     : viewerPublisher?.conflict ? viewerPublisher.conflict : null;
 
   function select(id: string) {
-    setActive(id); setMsg(null); setComment("");
+    setActive(id); setComment("");   // the last decision's message stays until the next decision
     const d = domains.find(x => x.competencies.some(c => c.id === id));
     if (d) setOpen(s => new Set(s).add(d.id));
   }
@@ -99,7 +99,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
         <div>
           <p className="text-[12px] font-bold uppercase tracking-[0.14em] text-teal-800">Governance workspace</p>
           <h1 className="text-[24px] font-bold text-gray-900">{fw.name}</h1>
-          <p className="mt-1 text-[13px] text-gray-600">{fw.code ?? "no code"} Â· version {fw.version} Â· {PUB_STATUS[fw.pubStatus] ?? fw.pubStatus} Â· {counts.approved} of {counts.total} clinically approved</p>
+          <p className="mt-1 text-[13px] text-gray-600">{fw.code ?? "no code"} · version {fw.version} · {PUB_STATUS[fw.pubStatus] ?? fw.pubStatus} · {counts.approved} of {counts.total} clinically approved</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" className={ghost} onClick={() => setPanel(panel === "who" ? null : "who")} aria-expanded={panel === "who"}>Who can act?</button>
@@ -115,9 +115,9 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
         {stages.map((s, i) => (
           <li key={s.key} className={`rounded-xl border-l-4 border border-gray-200 p-3 ${STAGE_TONE[s.status]}`}>
             <p className="text-[11px] font-bold uppercase tracking-wide">{i + 1}. {s.label}</p>
-            <p className="text-[12.5px] font-semibold">{STAGE_WORD[s.status]}{s.role ? ` Â· ${s.role}` : ""}</p>
-            {s.done.map(t => <p key={t} className="mt-1 text-[12px]">âœ“ {t}</p>)}
-            {s.outstanding.map(t => <p key={t} className="mt-1 text-[12px]">â—‹ {t}</p>)}
+            <p className="text-[12.5px] font-semibold">{STAGE_WORD[s.status]}{s.role ? ` · ${s.role}` : ""}</p>
+            {s.done.map(t => <p key={t} className="mt-1 text-[12px]">�S {t}</p>)}
+            {s.outstanding.map(t => <p key={t} className="mt-1 text-[12px]">�9 {t}</p>)}
             {s.next && <p className="mt-1 text-[12px] font-semibold">Next: {s.next}</p>}
           </li>
         ))}
@@ -140,7 +140,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
           {[actors.authors, actors.reviewers, actors.publishers].map(g => (
             <div key={g.capability}>
               <h3 className="text-[13.5px] font-bold text-gray-900">{g.role}</h3>
-              <p className="text-[12px] text-gray-500">Role permission: {g.positions.length ? g.positions.join(", ") : "no position"} Â· {g.eligible} eligible of {g.actors.length} appointed</p>
+              <p className="text-[12px] text-gray-500">Role permission: {g.positions.length ? g.positions.join(", ") : "no position"} · {g.eligible} eligible of {g.actors.length} appointed</p>
               {g.note && <p className="mt-1 text-[12.5px] text-amber-900">{g.note}</p>}
               <ul className="mt-2 space-y-1.5">
                 {g.actors.map(a => (
@@ -161,7 +161,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
           <h3 className="text-[13.5px] font-bold text-gray-900">History</h3>
           {history.length === 0 ? <p className="mt-1 text-[12.5px] text-gray-600">Nothing recorded yet.</p> : (
             <ol className="mt-2 max-h-72 space-y-1 overflow-y-auto text-[12.5px]">
-              {history.map((h, i) => <li key={i} className="flex flex-wrap gap-x-2 border-b border-gray-100 py-1"><span className="w-36 shrink-0 text-gray-500">{day(h.at)}</span><span className="text-gray-900">{h.text}</span>{h.who && <span className="text-gray-500">Â· {h.who}</span>}</li>)}
+              {history.map((h, i) => <li key={i} className="flex flex-wrap gap-x-2 border-b border-gray-100 py-1"><span className="w-36 shrink-0 text-gray-500">{day(h.at)}</span><span className="text-gray-900">{h.text}</span>{h.who && <span className="text-gray-500">· {h.who}</span>}</li>)}
             </ol>
           )}
           <p className="mt-2 text-[12px] text-gray-500">The full audit trail stays on record; this is the governance subset.</p>
@@ -189,7 +189,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
                 {queue.map((c, i) => (
                   <li key={c.id}><button type="button" onClick={() => select(c.id)} aria-current={c.id === active ? "true" : undefined}
                     className={`flex w-full items-start gap-2 px-3 py-2 text-left text-[13px] ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"}`}>
-                    <span className="w-6 shrink-0 text-gray-500">{i + 1}.</span><span><span className="text-gray-900">{c.name}</span><span className="block text-[11.5px] text-gray-500">{c.code ?? ""} Â· {c.domain}</span></span>
+                    <span className="w-6 shrink-0 text-gray-500">{i + 1}.</span><span><span className="text-gray-900">{c.name}</span><span className="block text-[11.5px] text-gray-500">{c.code ?? ""} · {c.domain}</span></span>
                   </button></li>
                 ))}
                 {queue.length === 0 && <li className="px-3 py-3 text-[13px] text-gray-600">Nothing left in your queue.</li>}
@@ -214,14 +214,14 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
                     <div key={d.id}>
                       <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => { const n = new Set(s); if (n.has(d.id)) n.delete(d.id); else n.add(d.id); return n; })}
                         className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] font-semibold text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)]">
-                        <span><span aria-hidden className="mr-1 inline-block w-3 text-gray-500">{isOpen ? "â–¾" : "â–¸"}</span>{d.name}</span><span className="text-[12px] font-normal text-gray-500">{comps.length}</span>
+                        <span><span aria-hidden className="mr-1 inline-block w-3 text-gray-500">{isOpen ? "��" : "��"}</span>{d.name}</span><span className="text-[12px] font-normal text-gray-500">{comps.length}</span>
                       </button>
                       {isOpen && comps.map(c => (
                         <div key={c.id} className={`flex items-start gap-2 px-3 py-1.5 ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"}`}>
                           {(me.canAuthor || me.canReview) && <input type="checkbox" className="mt-1" aria-label={`Select ${c.name}`} checked={picked.has(c.id)} onChange={() => setPicked(s => { const n = new Set(s); if (n.has(c.id)) n.delete(c.id); else n.add(c.id); return n; })} />}
                           <button type="button" onClick={() => select(c.id)} aria-current={c.id === active ? "true" : undefined} className="min-w-0 flex-1 text-left">
                             <span className="block text-[13px] text-gray-900">{c.name}</span>
-                            <span className="block text-[11.5px] text-gray-500">{c.code ?? ""} Â· {c.criteria.length} criteria{c.mine && !approvedByVersion(c) ? " Â· in your queue" : ""}</span>
+                            <span className="block text-[11.5px] text-gray-500">{c.code ?? ""} · {c.criteria.length} criteria{c.mine && !approvedByVersion(c) ? " · in your queue" : ""}</span>
                           </button>
                           <span className={`mt-0.5 shrink-0 rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${STATE_TONE[c.state]}`}>{approvedByVersion(c) ? "Decided" : STATE_SHORT[c.state]}</span>
                         </div>
@@ -272,8 +272,8 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
                   {me.canAuthor && fw.editable && (cur.state === "eligible" || cur.state === "changes_requested") && <ReviewButton frameworkId={fw.id} scope={{ kind: "competencies", ids: [cur.id] }} label="Put forward for clinical review" className={primary} />}
                   {me.canAuthor && fw.editable && <Link href={`/super-admin/competencies/authoring/${fw.id}?tab=competencies&c=${cur.id}`} className={ghost}>Edit in Competency Authoring</Link>}
                   {reviewMode && (<>
-                    <button type="button" className={ghost} disabled={curIdx <= 0} onClick={() => select(queue[curIdx - 1].id)}>â† Previous</button>
-                    <button type="button" className={ghost} disabled={curIdx < 0 || curIdx >= queue.length - 1} onClick={() => select(queue[curIdx + 1].id)}>Next â†’</button>
+                    <button type="button" className={ghost} disabled={curIdx <= 0} onClick={() => select(queue[curIdx - 1].id)}>� � Previous</button>
+                    <button type="button" className={ghost} disabled={curIdx < 0 || curIdx >= queue.length - 1} onClick={() => select(queue[curIdx + 1].id)}>Next � </button>
                     <span className="text-[12.5px] text-gray-500">{curIdx >= 0 ? `${curIdx + 1} of ${queue.length}` : "decided"}</span>
                   </>)}
                 </div>
@@ -288,7 +288,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
       <section id="publication" aria-labelledby="pb-h" className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="pb-h" className="text-[15px] font-bold text-gray-900">Publication readiness</h2>
-          <Link href="/super-admin/competencies/publication" className={link}>Framework Publication page â†’</Link>
+          <Link href="/super-admin/competencies/publication" className={link}>Framework Publication page � </Link>
         </div>
         <div className="mt-2 h-2 rounded-full bg-gray-100" aria-hidden><div className="h-2 rounded-full bg-teal-700" style={{ width: `${counts.total ? (100 * counts.approved) / counts.total : 0}%` }} /></div>
         <p className="mt-2 text-[13px] text-gray-800">
