@@ -1,4 +1,4 @@
-�"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
@@ -116,8 +116,8 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
           <li key={s.key} className={`rounded-xl border-l-4 border border-gray-200 p-3 ${STAGE_TONE[s.status]}`}>
             <p className="text-[11px] font-bold uppercase tracking-wide">{i + 1}. {s.label}</p>
             <p className="text-[12.5px] font-semibold">{STAGE_WORD[s.status]}{s.role ? ` · ${s.role}` : ""}</p>
-            {s.done.map(t => <p key={t} className="mt-1 text-[12px]">�S {t}</p>)}
-            {s.outstanding.map(t => <p key={t} className="mt-1 text-[12px]">�9 {t}</p>)}
+            {s.done.map(t => <p key={t} className="mt-1 text-[12px]">✓ {t}</p>)}
+            {s.outstanding.map(t => <p key={t} className="mt-1 text-[12px]">○ {t}</p>)}
             {s.next && <p className="mt-1 text-[12px] font-semibold">Next: {s.next}</p>}
           </li>
         ))}
@@ -214,7 +214,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
                     <div key={d.id}>
                       <button type="button" aria-expanded={isOpen} onClick={() => setOpen(s => { const n = new Set(s); if (n.has(d.id)) n.delete(d.id); else n.add(d.id); return n; })}
                         className="flex w-full items-center justify-between px-3 py-2 text-left text-[13px] font-semibold text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)]">
-                        <span><span aria-hidden className="mr-1 inline-block w-3 text-gray-500">{isOpen ? "��" : "��"}</span>{d.name}</span><span className="text-[12px] font-normal text-gray-500">{comps.length}</span>
+                        <span><span aria-hidden className="mr-1 inline-block w-3 text-gray-500">{isOpen ? "▾" : "▸"}</span>{d.name}</span><span className="text-[12px] font-normal text-gray-500">{comps.length}</span>
                       </button>
                       {isOpen && comps.map(c => (
                         <div key={c.id} className={`flex items-start gap-2 px-3 py-1.5 ${c.id === active ? "border-l-4 border-teal-700 bg-teal-50/70" : "hover:bg-gray-50"}`}>
@@ -272,8 +272,8 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
                   {me.canAuthor && fw.editable && (cur.state === "eligible" || cur.state === "changes_requested") && <ReviewButton frameworkId={fw.id} scope={{ kind: "competencies", ids: [cur.id] }} label="Put forward for clinical review" className={primary} />}
                   {me.canAuthor && fw.editable && <Link href={`/super-admin/competencies/authoring/${fw.id}?tab=competencies&c=${cur.id}`} className={ghost}>Edit in Competency Authoring</Link>}
                   {reviewMode && (<>
-                    <button type="button" className={ghost} disabled={curIdx <= 0} onClick={() => select(queue[curIdx - 1].id)}>� � Previous</button>
-                    <button type="button" className={ghost} disabled={curIdx < 0 || curIdx >= queue.length - 1} onClick={() => select(queue[curIdx + 1].id)}>Next � </button>
+                    <button type="button" className={ghost} disabled={curIdx <= 0} onClick={() => select(queue[curIdx - 1].id)}>← Previous</button>
+                    <button type="button" className={ghost} disabled={curIdx < 0 || curIdx >= queue.length - 1} onClick={() => select(queue[curIdx + 1].id)}>Next →</button>
                     <span className="text-[12.5px] text-gray-500">{curIdx >= 0 ? `${curIdx + 1} of ${queue.length}` : "decided"}</span>
                   </>)}
                 </div>
@@ -288,7 +288,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
       <section id="publication" aria-labelledby="pb-h" className="rounded-2xl border border-gray-200 bg-white p-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
           <h2 id="pb-h" className="text-[15px] font-bold text-gray-900">Publication readiness</h2>
-          <Link href="/super-admin/competencies/publication" className={link}>Framework Publication page � </Link>
+          <Link href="/super-admin/competencies/publication" className={link}>Framework Publication page →</Link>
         </div>
         <div className="mt-2 h-2 rounded-full bg-gray-100" aria-hidden><div className="h-2 rounded-full bg-teal-700" style={{ width: `${counts.total ? (100 * counts.approved) / counts.total : 0}%` }} /></div>
         <p className="mt-2 text-[13px] text-gray-800">
