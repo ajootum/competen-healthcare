@@ -113,6 +113,16 @@ export const PLANE_TABLE_PREFIXES = [
   "=asmt_instrument_availability", "=asmt_instrument_org_scope", "=asmt_collection", "=asmt_collection_member",
   "=asmt_respondent_grant", "=asmt_instance", "=asmt_instance_layout", "=asmt_response", "=asmt_evidence", "=asmt_comment", "=asmt_outcome",
   "=asmt_progression_decision",
+  // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910). The learner engagement dashboard reads these Scholar activity tables for
+  // ids, timestamps, statuses and counts only, from src/lib/hq/scholar-analytics/ alone (onlyFrom). Named EXACTLY: the
+  // content columns of every one of them (material text, lesson content, notes, answers, case narratives) stay outside this
+  // plane, and `individual_scholar_learning_session` is an exact entry so the learner_ family stays refused.
+  "=individual_scholar_material", "=individual_scholar_learning_session", "=individual_scholar_learning_event", "=individual_scholar_artefact",
+  "=individual_scholar_review", "=individual_scholar_revision_session", "=individual_scholar_case_session", "=individual_scholar_osce_attempt",
+  "=individual_scholar_evaluation", "=individual_scholar_study_plan", "=individual_scholar_calendar_entry",
+  // (hq_account_classification, plat_ai_requests, ai_usage_ledger and ai_allowance_account are platform-owned tables read by
+  // many HQ modules already and stay ungoverned here: the analytics loader selects its narrow columns from them and the
+  // build record names them, but no allowlist entry governs them.)
 ] as const;
 
 /** A prefix entry, or an exact table name when it starts with `=`. */

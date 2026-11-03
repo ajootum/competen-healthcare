@@ -513,8 +513,16 @@ ok("AC9", acSites.length >= 8 && acOutside.length === 0,
   `every reachable read of a catalogue table (${acSites.length} sites) is inside src/lib/assessment/catalogue/**${acOutside.length ? ` -- outside: ${acOutside.map(x => x.file).join(", ")}` : ""}`);
 const acCapture = judged.filter(x => x.table && /^asmt_(instance|instance_layout|response|evidence|comment|outcome|respondent_grant|progression_decision)$/.test(x.table));
 const ASR_DIR = "src/lib/assessment/assessor/";
-const acCaptureOutside = acCapture.filter(x => !x.file.startsWith(ASR_DIR) || x.table === "asmt_progression_decision");
-ok("AC10", acCaptureOutside.length === 0, `no file the landlord plane can reach reads a capture or progression table, except the assessor workspace library, and never a progression decision (${acCaptureOutside.length} found)`);
+// SCHOLAR-ENGAGEMENT-ANALYTICS-01: the engagement loader may read asmt_instance ONLY (self-assessment start and submission, no
+// answer, evidence or outcome), from src/lib/hq/scholar-analytics/** alone. Any other capture table from there is still refused.
+const ENG_DIR = "src/lib/hq/scholar-analytics/";
+const acCaptureOutside = acCapture.filter(x => !(x.file.startsWith(ASR_DIR) || (x.file.startsWith(ENG_DIR) && x.table === "asmt_instance")) || x.table === "asmt_progression_decision");
+ok("AC10", acCaptureOutside.length === 0, `no file the landlord plane can reach reads a capture or progression table, except the assessor workspace library (and asmt_instance from the engagement analytics loader), and never a progression decision (${acCaptureOutside.length} found)`);
+const engOther = extractReads(`export const f = (a: any) => a.from("asmt_response").select("item_id");`, ENG_DIR + "probe.ts")[0];
+ok("AC10b", !!engOther && judge(engOther).code === "TABLE_NOT_ALLOWED" && /only from src\/lib\/assessment\/assessor/.test(judge(engOther).detail),
+  "control: the engagement analytics directory reading an answer table is refused (its asmt_instance entry opens nothing else)");
+const engWide = extractReads(`export const f = (a: any) => a.from("asmt_instance").select("id, respondent_snapshot");`, ENG_DIR + "probe.ts")[0];
+ok("AC10c", !!engWide && judge(engWide).code === "COLUMN_NOT_ALLOWED", "control: the engagement loader widening asmt_instance to the authority snapshot is refused by ITS entry, not the assessor's");
 
 // >>> ASSESSOR-WORKSPACE (Checklist Studio S4) -- the capture tables belong to src/lib/assessment/assessor/** and nowhere else.
 console.log("\n── §AS assessor workspace controls ──────────────────────────────────────────");

@@ -47,6 +47,10 @@ const FILES = {
   // P0 controlled catalogues (migration 394): the second door under /api/hq/individual, same capability.
   catRoute: "src/app/api/hq/individual/catalogues/route.ts",
   catPage: "src/app/super-admin/individual/catalogues/page.tsx",
+  // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910): the engagement door under /api/hq/individual, its own capability.
+  engRoute: "src/app/api/hq/individual/scholar-analytics/route.ts",
+  engPage: "src/app/super-admin/individual/scholar/analytics/page.tsx",
+  engBuilder: "src/lib/hq/scholar-analytics/dashboard.ts",
 } as const;
 type K = keyof typeof FILES;
 
@@ -201,8 +205,31 @@ const checkKnownDoors = (routes: string[]): R => {
     && f !== "src/app/api/hq/individual/verification/route.ts"
     // scholar-preview/ (HQ-SCHOLAR-PREVIEW-01, migration 860) is pinned by scholar-preview-harness S1 and S2: its own capability,
     // hq.individual.scholar.preview, gate first and a same-origin check before any ticket is minted.
-    && f !== "src/app/api/hq/individual/scholar-preview/route.ts");
+    && f !== "src/app/api/hq/individual/scholar-preview/route.ts"
+    // scholar-analytics/ (SCHOLAR-ENGAGEMENT-ANALYTICS-01, migration 910) is pinned by G7 here: its own capability, GET only,
+    // identity decided on the server by the identifiable right, mapped and in the nav.
+    && f !== FILES.engRoute);
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
+};
+
+// ── G7. the engagement analytics door (migration 910) ──
+// The route is hqApiGate(["hq.scholar.analytics.view"]) before any other await and exports GET only. The page is
+// requireHqCapability of the same code first. The builder both doors share decides identity by the identifiable right or
+// ownership and refuses named answers and the testing filter before any read. The route map and the nav declare the page.
+const checkEngagementDoor = (src: Src): R => {
+  const r = code(src, "engRoute"), p = code(src, "engPage"), b = code(src, "engBuilder"), sp = code(src, "spaces"), nav = code(src, "nav");
+  const body = r.slice(r.indexOf("export async function GET"));
+  const gateFirst = body.indexOf("await ") >= 0 && body.indexOf("await ") === body.indexOf(`await hqApiGate(["hq.scholar.analytics.view"])`);
+  const getOnly = /export async function GET/.test(r) && !/export async function (POST|PUT|PATCH|DELETE)/.test(r);
+  const pageFirst = p.indexOf("await ") >= 0 && p.indexOf("await ") === p.indexOf(`await requireHqCapability("hq.scholar.analytics.view")`);
+  const identity = /IDENTIFIABLE = "hq\.scholar\.analytics\.identifiable\.read"/.test(b)
+    && /c\.isOwner \|\| c\.capabilities\.includes\(IDENTIFIABLE\)/.test(b)
+    && b.indexOf("status: 403") >= 0 && b.indexOf("status: 403") < b.indexOf("loadDashboardRows(admin");
+  const mapped = /\{ prefix: "\/super-admin\/individual\/scholar\/analytics",\s*capability: "hq\.scholar\.analytics\.view" \}/.test(sp)
+    && sp.indexOf(`prefix: "/super-admin/individual/scholar/analytics"`) < sp.indexOf(`prefix: "/super-admin/individual/scholar",`)
+    && nav.includes(`href: "/super-admin/individual/scholar/analytics"`);
+  return { ok: gateFirst && getOnly && pageFirst && identity && mapped,
+    detail: `gate first ${gateFirst}, GET only ${getOnly}, page gated first ${pageFirst}, identity on the server ${identity}, mapped before the preview prefix and in the nav ${mapped}` };
 };
 
 // ── A. no activation ──
@@ -237,6 +264,7 @@ function main() {
   run("L1. the reader reads published values only, fails soft and clamps every one", checkReader(RAW));
   run("G5. every route under /api/hq/individual is a pinned grants route, this config route or the catalogue route", checkKnownDoors(listRoutes("src/app/api/hq/individual")));
   run("G6. the controlled-catalogue door: same capability first, POST only, page gated first, mapped, never publishes", checkCatalogueDoor(RAW));
+  run("G7. the engagement analytics door: its own capability first, GET only, page gated first, identity decided on the server, mapped", checkEngagementDoor(RAW));
   run("A1. ⚠ nothing on this surface names individual_app", checkNoActivation(RAW));
 
   console.log("");
@@ -272,6 +300,11 @@ function main() {
   red("G6 on a view right", checkCatalogueDoor(plant("catPage", `requireHqCapability("hq.individual.config.manage")`, `requireHqCapability("hq.learning.competencies.view")`)));
   red("G6 on a publish from this door", checkCatalogueDoor(plant("catRoute", `  if (!result.ok) return refuse(409, result.error);`, `  if (!result.ok) return refuse(409, result.error);\n  await transitionFramework(ctx.admin, fw.id, "publish", actor);`)));
   red("G6 on a missing route-map entry", checkCatalogueDoor(plant("spaces", `  { prefix: "/super-admin/individual/catalogues", capability: "hq.individual.config.manage" },\n`, "")));
+  // the gate strings also appear in the header comments of both files, so the plants name the code lines exactly
+  red("G7 on a route gated by the home right", checkEngagementDoor(plant("engRoute", `const ctx = await hqApiGate(["hq.scholar.analytics.view"]);`, `const ctx = await hqApiGate(["hq.platform.home.view"]);`)));
+  red("G7 on a page gated by the preview right", checkEngagementDoor(plant("engPage", `const ctx = await requireHqCapability("hq.scholar.analytics.view");`, `const ctx = await requireHqCapability("hq.individual.scholar.preview");`)));
+  red("G7 on identity decided by ownership alone", checkEngagementDoor(plant("engBuilder", `c.isOwner || c.capabilities.includes(IDENTIFIABLE)`, `c.isOwner`)));
+  red("G7 on the route-map entry placed after the preview prefix", checkEngagementDoor(plant("spaces", `  { prefix: "/super-admin/individual/scholar/analytics", capability: "hq.scholar.analytics.view" },\n`, "")));
   red("A1 on the route touching the release gate", checkNoActivation(plant("route", "switch (body?.action) {", `await ctx.admin.from("practice_platform_flags").select("enabled");\n  switch (body?.action) {`)));
 
   console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);
