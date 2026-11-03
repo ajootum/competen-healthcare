@@ -34,7 +34,7 @@ export type TransitionOptions = {
 export const isHoldingsGoverned = (fw: { hospital_id?: string | null; competency_layer?: string | null } | null | undefined): boolean =>
   !!fw && fw.hospital_id === null && typeof fw.competency_layer === "string" && fw.competency_layer.length > 0;
 
-export const HOLDINGS_ONLY = "This is a centrally governed competency framework. It is put forward and published in Competen HQ, Competency Frameworks, Framework Publication, by an independent publisher.";
+export const HOLDINGS_ONLY = "This is a centrally governed competency framework. It is put forward and published in Competen HQ, Competency Frameworks, Framework Publication, by a holder of the publish right once every competency is independently approved.";
 
 /** Pure: the governed version label consumers bind to (the same composition as competency/foundation.ts). */
 export const versionLabel = (v: Partial<VersionLabel> | null | undefined) => `${v?.major ?? 1}.${v?.minor ?? 0}.${v?.revision ?? 0}`;
@@ -112,7 +112,7 @@ export async function transitionFramework(
     return { ok: false, code: 403, error: /put the framework forward/i.test(updateErr.message) ? "You put this framework forward, so a different publisher must decide it."
       : /authored or curated/i.test(updateErr.message) ? "You authored or curated content in this framework, so a different publisher must decide it."
       : /clinical approvers/i.test(updateErr.message) ? "For frameworks, the publisher may not be one of the clinical approvers of its competencies."
-      : "The publication must record an independent publisher." };
+      : "The publication must record its publisher." };
   }
   // Migration 466: a shared CFCA framework is published only when every competency it owns is clinically approved (395)
   // at its current content. The database refuses; this says why, in words.

@@ -9,18 +9,19 @@ export const STATE_LABEL: Record<LifecycleState, string> = {
   draft: "Draft", in_review: "In review", approved: "Approved", published: "Published", retired: "Retired",
 };
 
-/** The five version tables that share the lifecycle (890 section 5 and 892). */
-export type DefinitionKind = "instrument" | "scale" | "rule_template" | "layout_template" | "progression";
-export const DEFINITION_KINDS: DefinitionKind[] = ["instrument", "scale", "rule_template", "layout_template", "progression"];
+/** The version tables that share the lifecycle (890 section 5 and 892; 942 adds governed policies as a sixth kind). */
+export type DefinitionKind = "instrument" | "scale" | "rule_template" | "layout_template" | "progression" | "policy";
+export const DEFINITION_KINDS: DefinitionKind[] = ["instrument", "scale", "rule_template", "layout_template", "progression", "policy"];
 export const VERSION_TABLE: Record<DefinitionKind, string> = {
   instrument: "asmt_instrument_version",
   scale: "asmt_response_scale_version",
   rule_template: "asmt_rule_template_version",
   layout_template: "asmt_layout_template_version",
   progression: "asmt_progression_rule_version",
+  policy: "hq_policy_version",
 };
 export const KIND_LABEL: Record<DefinitionKind, string> = {
-  instrument: "Checklist", scale: "Response scale", rule_template: "Scoring template", layout_template: "Layout template", progression: "Progression rule set",
+  instrument: "Checklist", scale: "Response scale", rule_template: "Scoring template", layout_template: "Layout template", progression: "Progression rule set", policy: "Policy",
 };
 export const kindOfTable = (table: string): DefinitionKind | null =>
   (DEFINITION_KINDS.find((k) => VERSION_TABLE[k] === table) ?? null);
@@ -164,6 +165,20 @@ export interface ProgressionVersionView extends LifecycleRow {
   description: string | null;
   rules: Record<string, unknown>;
   tests: unknown[];
+}
+
+/** A governed policy (942): the identity and one version, as the policy pages read them. */
+export interface PolicyRow {
+  id: string; code: string; title: string; policy_type: string; scope: string; description: string | null; is_active: boolean; created_by: string | null; created_at: string;
+}
+export interface PolicyVersionView extends LifecycleRow {
+  policy_id: string;
+  code: string;
+  title: string;
+  summary: string | null;
+  content: string;
+  effective_from: string | null;
+  review_due: string | null;
 }
 
 export interface DefinitionEventRow {

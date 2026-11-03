@@ -4,7 +4,7 @@ import { HQ_CAPABILITY_CODES } from "./spaces";
 
 describe("governance profiles", () => {
   it("keeps clinical approval out of the standard profile", () => {
-    expect(STANDARD_CONTENT_GOVERNANCE).toHaveLength(10);
+    expect(STANDARD_CONTENT_GOVERNANCE).toHaveLength(14);   // 942: the four policy rights joined the profile
     expect(PROFILES.executive.capabilities).not.toContain(CLINICAL_APPROVAL[0]);
     expect(PROFILES.management.capabilities).not.toContain(CLINICAL_APPROVAL[0]);
   });

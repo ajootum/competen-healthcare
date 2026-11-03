@@ -26,7 +26,7 @@ function Task({ t }: { t: InboxTask }) {
           <Link href={t.href} className="mt-1 block text-[15px] font-bold text-gray-900 hover:underline">{t.title}</Link>
           <p className="text-[13px] text-gray-800"><span className="font-semibold">Required:</span> {t.required}</p>
           {t.detail && <p className="text-[12.5px] text-gray-600">{t.detail}</p>}
-          <p className="text-[12px] text-gray-500">Deadline: {t.deadline ? when(t.deadline) : "none configured"}</p>
+          {t.deadline && <p className="text-[12px] text-gray-500">Deadline: {when(t.deadline)}</p>}
           {!t.action && t.reason && <p className="mt-1 text-[12.5px] font-semibold text-amber-900" role="status">{t.reason}</p>}
         </div>
         <div className="flex shrink-0 items-center">
@@ -75,7 +75,7 @@ export default function InboxView({ model, viewerName }: { model: InboxModel; vi
       <Section id="mine" title="My actions" tasks={m.mine} empty="Nothing waits for your action. Items you cannot act on appear below with the reason and who can." />
       <Section id="returned" title="Returned for correction" tasks={m.returned} empty="Nothing has been returned to you." open={m.returned.length > 0} />
       <Section id="progress" title="Items in progress" tasks={m.inProgress} empty="Nothing is in progress elsewhere." open={m.mine.length === 0} />
-      <Section id="overdue" title="Overdue actions" tasks={m.overdue} empty="No deadlines are configured for governed items yet, so nothing is overdue." open={m.overdue.length > 0} />
+      {m.overdue.length > 0 && <Section id="overdue" title="Overdue actions" tasks={m.overdue} empty="" />}
       <Section id="published" title="Recently published" tasks={m.recentlyPublished} empty="Nothing was published in the last 30 days." open={false} />
     </div>
   );

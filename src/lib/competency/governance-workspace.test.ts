@@ -29,7 +29,7 @@ describe("pathway", () => {
   it("all approved with a pending request and no eligible publisher is BLOCKED, not current", () => {
     const s = pathwayOf(fw({ approved: 42 }), { ...counts, inReview: 0, approved: 42 }, 0, 1);
     expect(s[1].status).toBe("done"); expect(s[2].status).toBe("done"); expect(s[3].status).toBe("blocked");
-    expect(s[3].next).toMatch(/Appoint an independent publisher/);
+    expect(s[3].next).toMatch(/Appoint a publisher/);
   });
   it("in review with no eligible reviewer marks review blocked", () => {
     expect(pathwayOf(fw(), counts, 1, 0)[1].status).toBe("blocked");

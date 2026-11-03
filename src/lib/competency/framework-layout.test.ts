@@ -159,11 +159,10 @@ describe("applied at publication, as a revision", () => {
     const r = await decidePublication(fake(), PUBLISHER, { frameworkId: FW, decision: "publish", changeKind: "minor" });
     expect(r).toMatchObject({ ok: true, version: "1.1.0", layoutApplied: true, changeKindForced: false });
   });
-  it("SoD: the person who reordered may not publish it, and nothing is applied", async () => {
+  it("941 two-person principle: the person who reordered may publish the exact approved layout as a revision", async () => {
     T.content_approvals[0].submitted_by = "someone-else";
     const r = await decidePublication(fake(), AUTHOR, { frameworkId: FW, decision: "publish", changeKind: "revision" });
-    expect(r).toMatchObject({ ok: false, status: 403 });
-    expect(sorts()).toEqual([["Alpha", 1], ["Beta", 2]]);
+    expect(r).toMatchObject({ ok: true, layoutApplied: true });
   });
   it("without 752 a pending layout is refused, nothing is written (no non-atomic fallback)", async () => {
     no752 = true;

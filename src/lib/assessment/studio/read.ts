@@ -13,7 +13,7 @@ import type { ResponseScale } from "../core";
 import { assembleDefinition, scaleFromRows } from "./assemble";
 import {
   VERSION_TABLE, type DefinitionEventRow, type DefinitionKind, type InstrumentRow, type InstrumentVersionRow, type LibraryRow,
-  type LifecycleState, type LoadedInstrumentVersion, type ProgressionVersionView, type ReviewDecisionRow, type ScaleVersionView,
+  type LifecycleState, type LoadedInstrumentVersion, type PolicyRow, type PolicyVersionView, type ProgressionVersionView, type ReviewDecisionRow, type ScaleVersionView,
   type TemplateVersionView, type TimelineEntry,
 } from "./types";
 
@@ -286,22 +286,24 @@ export async function reviewQueue(admin: Admin, actorId: string, caps: string[])
 export async function reviewOverview(admin: Admin, actorId: string, caps: string[]): Promise<QueueItem[]> {
   const out: QueueItem[] = [];
   const need = await requiredApprovals(admin);
-  const [ins, sc, rt, lt, pr] = await Promise.all([
+  const [ins, sc, rt, lt, pr, po] = await Promise.all([
     admin.from("asmt_instrument_version").select("id, version_no, instrument_id, submitted_by, submitted_at, risk, requires_domain_review, content_hash").eq("state", "in_review"),
     admin.from("asmt_response_scale_version").select("id, version_no, scale_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
     admin.from("asmt_rule_template_version").select("id, version_no, template_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
     admin.from("asmt_layout_template_version").select("id, version_no, template_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
     admin.from("asmt_progression_rule_version").select("id, version_no, rule_set_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
+    admin.from("hq_policy_version").select("id, version_no, policy_id, submitted_by, submitted_at, content_hash").eq("state", "in_review"),
   ]);
-  const names = async (table: "asmt_instrument" | "asmt_response_scale" | "asmt_rule_template" | "asmt_layout_template" | "asmt_progression_rule_set", ids: string[]) => {
+  const names = async (table: "asmt_instrument" | "asmt_response_scale" | "asmt_rule_template" | "asmt_layout_template" | "asmt_progression_rule_set" | "hq_policy", ids: string[]) => {
     if (!ids.length) return new Map<string, any>();
-    const { data } = await admin.from(table).select("id, code, name").in("id", ids);
+    const { data } = await admin.from(table).select(table === "hq_policy" ? "id, code, name:title" : "id, code, name").in("id", ids);
     return new Map(((data ?? []) as any[]).map((d) => [d.id, d]));
   };
-  const [nIns, nSc, nRt, nLt, nPr] = await Promise.all([
+  const [nIns, nSc, nRt, nLt, nPr, nPo] = await Promise.all([
     names("asmt_instrument", ((ins.data ?? []) as any[]).map((v) => v.instrument_id)), names("asmt_response_scale", ((sc.data ?? []) as any[]).map((v) => v.scale_id)),
     names("asmt_rule_template", ((rt.data ?? []) as any[]).map((v) => v.template_id)), names("asmt_layout_template", ((lt.data ?? []) as any[]).map((v) => v.template_id)),
     names("asmt_progression_rule_set", ((pr.data ?? []) as any[]).map((v) => v.rule_set_id)),
+    names("hq_policy", ((po.data ?? []) as any[]).map((v) => v.policy_id)),
   ]);
   const push = (kind: DefinitionKind, rows: any[], parentKey: string, nm: Map<string, any>, href: (v: any) => string) => {
     for (const v of rows) out.push({
@@ -315,11 +317,13 @@ export async function reviewOverview(admin: Admin, actorId: string, caps: string
   push("rule_template", (rt.data ?? []) as any[], "template_id", nRt, (v) => `/super-admin/checklist-studio/scoring-templates/v/${v.id}`);
   push("layout_template", (lt.data ?? []) as any[], "template_id", nLt, (v) => `/super-admin/checklist-studio/layout-templates/v/${v.id}`);
   push("progression", (pr.data ?? []) as any[], "rule_set_id", nPr, (v) => `/super-admin/checklist-studio/progression/v/${v.id}`);
+  push("policy", (po.data ?? []) as any[], "policy_id", nPo, (v) => `/super-admin/policy-manager/${v.policy_id}/v/${v.id}`);
 
-  const canGovern = caps.includes("hq.assessment.instrument.review");
   const canDomain = caps.includes("hq.quality.clinical.approve");
   const result: QueueItem[] = [];
   for (const q of out) {
+    // 942: the review right is the kind's (policies have their own), as asmt_lifecycle_capability answers in the database.
+    const canGovern = caps.includes(q.kind === "policy" ? "hq.quality.policy.review" : "hq.assessment.instrument.review");
     const [people, trail] = await Promise.all([involvedPeople(admin, q.kind, q.versionId), loadTrail(admin, q.kind, [q.versionId])]);
     const mine = trail.decisions.filter((d) => d.reviewer_id === actorId && d.content_hash === q.contentHash);
     const forHash = trail.decisions.filter((d) => d.content_hash === q.contentHash && d.decision === "approved");
@@ -343,25 +347,25 @@ export interface GovernedVersionRow {
 export async function listGovernedVersions(admin: Admin, o: { states?: LifecycleState[]; limit?: number } = {}): Promise<GovernedVersionRow[]> {
   const limit = o.limit ?? 2000;
   const cols = "id, version_no, state, authored_by, submitted_by, submitted_at, published_by, published_at, created_at";
-  const pull = (table: "asmt_instrument_version" | "asmt_response_scale_version" | "asmt_rule_template_version" | "asmt_layout_template_version" | "asmt_progression_rule_version", parent: string) => {
+  const pull = (table: "asmt_instrument_version" | "asmt_response_scale_version" | "asmt_rule_template_version" | "asmt_layout_template_version" | "asmt_progression_rule_version" | "hq_policy_version", parent: string) => {
     let q = admin.from(table).select(`${cols}, ${parent}`).order("created_at", { ascending: false }).limit(limit);
     if (o.states?.length) q = q.in("state", o.states);
     return q;
   };
-  const [ins, sc, rt, lt, pr] = await Promise.all([
+  const [ins, sc, rt, lt, pr, po] = await Promise.all([
     pull("asmt_instrument_version", "instrument_id"), pull("asmt_response_scale_version", "scale_id"), pull("asmt_rule_template_version", "template_id"),
-    pull("asmt_layout_template_version", "template_id"), pull("asmt_progression_rule_version", "rule_set_id"),
+    pull("asmt_layout_template_version", "template_id"), pull("asmt_progression_rule_version", "rule_set_id"), pull("hq_policy_version", "policy_id"),
   ]);
-  const defs = async (table: "asmt_instrument" | "asmt_response_scale" | "asmt_rule_template" | "asmt_layout_template" | "asmt_progression_rule_set", ids: string[]) => {
+  const defs = async (table: "asmt_instrument" | "asmt_response_scale" | "asmt_rule_template" | "asmt_layout_template" | "asmt_progression_rule_set" | "hq_policy", ids: string[]) => {
     const u = [...new Set(ids)];
     if (!u.length) return new Map<string, any>();
-    const { data } = await admin.from(table).select("id, code, name").in("id", u);
+    const { data } = await admin.from(table).select(table === "hq_policy" ? "id, code, name:title" : "id, code, name").in("id", u);
     return new Map(((data ?? []) as any[]).map((d) => [d.id, d]));
   };
   const ids = (r: { data: unknown }, key: string) => ((r.data ?? []) as any[]).map((v) => v[key] as string);
-  const [dIns, dSc, dRt, dLt, dPr] = await Promise.all([
+  const [dIns, dSc, dRt, dLt, dPr, dPo] = await Promise.all([
     defs("asmt_instrument", ids(ins, "instrument_id")), defs("asmt_response_scale", ids(sc, "scale_id")), defs("asmt_rule_template", ids(rt, "template_id")),
-    defs("asmt_layout_template", ids(lt, "template_id")), defs("asmt_progression_rule_set", ids(pr, "rule_set_id")),
+    defs("asmt_layout_template", ids(lt, "template_id")), defs("asmt_progression_rule_set", ids(pr, "rule_set_id")), defs("hq_policy", ids(po, "policy_id")),
   ]);
   const out: GovernedVersionRow[] = [];
   const push = (kind: DefinitionKind, res: { data: unknown }, parentKey: string, nm: Map<string, any>, href: (v: any) => string) => {
@@ -376,7 +380,40 @@ export async function listGovernedVersions(admin: Admin, o: { states?: Lifecycle
   push("rule_template", rt, "template_id", dRt, (v) => `/super-admin/checklist-studio/scoring-templates/v/${v.id}`);
   push("layout_template", lt, "template_id", dLt, (v) => `/super-admin/checklist-studio/layout-templates/v/${v.id}`);
   push("progression", pr, "rule_set_id", dPr, (v) => `/super-admin/checklist-studio/progression/v/${v.id}`);
+  push("policy", po, "policy_id", dPo, (v) => `/super-admin/policy-manager/${v.policy_id}/v/${v.id}`);
   return out.sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+// ---- governed policies (942) ----------------------------------------------------------------------------------------
+
+const POLICY_VERSION_COLS = `${LIFE}, policy_id, title, summary, content, effective_from, review_due`;
+
+export async function listPolicies(admin: Admin): Promise<(PolicyRow & { latest: PolicyVersionView | null; published: PolicyVersionView | null; versions: number })[]> {
+  const [{ data: ps }, { data: vs }] = await Promise.all([
+    admin.from("hq_policy").select("id, code, title, policy_type, scope, description, is_active, created_by, created_at").order("created_at", { ascending: false }).limit(2000),
+    admin.from("hq_policy_version").select(POLICY_VERSION_COLS).order("version_no", { ascending: false }).limit(10000),
+  ]);
+  const by = new Map<string, any[]>();
+  for (const v of (vs ?? []) as any[]) by.set(v.policy_id, [...(by.get(v.policy_id) ?? []), v]);
+  return ((ps ?? []) as any[]).map((p) => {
+    const list = (by.get(p.id) ?? []).map((v) => ({ ...v, code: p.code }));
+    return { ...p, latest: list[0] ?? null, published: list.find((v) => v.state === "published") ?? null, versions: list.length };
+  });
+}
+
+export async function loadPolicy(admin: Admin, policyId: string): Promise<{ policy: PolicyRow; versions: PolicyVersionView[] } | null> {
+  const { data: p } = await admin.from("hq_policy").select("id, code, title, policy_type, scope, description, is_active, created_by, created_at").eq("id", policyId).maybeSingle();
+  if (!p) return null;
+  const { data: vs } = await admin.from("hq_policy_version").select(POLICY_VERSION_COLS).eq("policy_id", policyId).order("version_no", { ascending: false });
+  return { policy: p as PolicyRow, versions: ((vs ?? []) as any[]).map((v) => ({ ...v, code: (p as any).code })) };
+}
+
+export async function loadPolicyVersion(admin: Admin, versionId: string): Promise<{ policy: PolicyRow; version: PolicyVersionView } | null> {
+  const { data: v } = await admin.from("hq_policy_version").select(POLICY_VERSION_COLS).eq("id", versionId).maybeSingle();
+  if (!v) return null;
+  const { data: p } = await admin.from("hq_policy").select("id, code, title, policy_type, scope, description, is_active, created_by, created_at").eq("id", (v as any).policy_id).maybeSingle();
+  if (!p) return null;
+  return { policy: p as PolicyRow, version: { ...(v as any), code: (p as any).code } };
 }
 
 export interface DefinitionTrailRow {

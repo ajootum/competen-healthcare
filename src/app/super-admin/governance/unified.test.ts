@@ -81,4 +81,18 @@ describe("history", () => {
     expect(plainAction("hq_position_created")).toBe("Position created");
     expect(plainAction("")).toBe("Change");
   });
+  it("lists a document template review as its submission and its decision", () => {
+    const items = buildHistory({
+      documents: [{ id: "r1", submittedAt: "2026-11-03T08:00:00Z", submittedBy: "a", note: "Footer reworded", decidedBy: "b", decision: "changes_requested", decidedAt: "2026-11-03T09:00:00Z", decisionNote: "Fix the title" },
+        { id: "r2", submittedAt: "2026-11-03T10:00:00Z", submittedBy: "a", note: null, decidedBy: null, decision: null, decidedAt: null, decisionNote: null }],
+      names: { a: "Ada", b: "Ben" },
+    });
+    expect(items.map((x) => [x.who, x.what, x.type])).toEqual([
+      ["Ada", "Submitted the document templates for review", "documents"],
+      ["Ben", "Asked for changes to the document templates", "documents"],
+      ["Ada", "Submitted the document templates for review", "documents"],
+    ]);
+    expect(items[1].detail).toBe("Fix the title");
+    expect(filterHistory(items, "documents", "ben")).toHaveLength(1);
+  });
 });

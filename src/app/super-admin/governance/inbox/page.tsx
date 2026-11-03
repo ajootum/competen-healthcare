@@ -12,7 +12,8 @@ export const metadata: Metadata = { title: "Governance Inbox" };
 // appointments hold (withOwnAppointments resolves an owner the same way the database does). Every action is taken on
 // the governed item behind the same gated route and database guard; nothing is decided here.
 export default async function GovernanceInboxPage() {
-  const ctx = await withOwnAppointments(await requireHqCapability("hq.platform.home.view"));
+  // The inbox also lists the Document Template Studio review (item 5), which an owner holds only through an appointment.
+  const ctx = await withOwnAppointments(await requireHqCapability("hq.platform.home.view"), ["hq.individual.config.manage"]);
   const model = await loadInbox(ctx.admin, { userId: ctx.userId, caps: ctx.capabilities, isOwner: ctx.isOwner });
   return <InboxView model={model} viewerName={ctx.fullName} />;
 }

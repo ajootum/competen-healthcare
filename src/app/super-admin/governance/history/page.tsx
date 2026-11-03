@@ -3,6 +3,7 @@ import { requireHqCapability } from "@/lib/hq/context";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { listGovernedVersions, nameMap, recentDefinitionTrail } from "@/lib/assessment/studio/read";
 import { loadClinicalDecisions, loadFrameworkPublications, loadOrganisationChanges } from "@/lib/competency/governance-history";
+import { loadDocumentsReviews } from "@/lib/hq/documents-review";
 import { HISTORY_LIMIT, buildHistory, type HistoryType } from "../unified";
 import HistoryView from "./HistoryView";
 
@@ -21,15 +22,17 @@ export default async function GovernanceHistoryPage() {
   const studioOk = ctx.isOwner || has("hq.assessment.studio.view");
   const clinicalOk = ctx.isOwner || CLINICAL_CAPS.some(has);
   const orgOk = ctx.isOwner || has("hq.platform.users.view");
+  const docsOk = ctx.isOwner || has("hq.individual.config.manage");
 
   const notices: string[] = [];
   const types: HistoryType[] = [];
-  const [trail, versions, clinical, publications, organisation] = await Promise.all([
+  const [trail, versions, clinical, publications, organisation, documents] = await Promise.all([
     studioOk ? recentDefinitionTrail(ctx.admin, HISTORY_LIMIT).catch(() => null) : Promise.resolve(undefined),
     studioOk ? listGovernedVersions(ctx.admin).catch(() => null) : Promise.resolve(undefined),
     clinicalOk ? loadClinicalDecisions(ctx.admin, HISTORY_LIMIT) : Promise.resolve(undefined),
     clinicalOk ? loadFrameworkPublications(ctx.admin, HISTORY_LIMIT) : Promise.resolve(undefined),
     orgOk ? loadOrganisationChanges(ctx.admin, HISTORY_LIMIT) : Promise.resolve(undefined),
+    docsOk ? loadDocumentsReviews(ctx.admin, HISTORY_LIMIT) : Promise.resolve(undefined),
   ]);
 
   if (studioOk) {
@@ -46,10 +49,14 @@ export default async function GovernanceHistoryPage() {
     types.push("organisation");
     if (organisation === null) notices.push("Organisation change history could not be read just now.");
   }
+  if (docsOk) {
+    types.push("documents");
+    if (documents === null) notices.push("Document template review history could not be read just now.");
+  }
 
-  const names = await nameMap(ctx.admin, [...(trail ?? []).map((t) => t.actorId), ...(clinical ?? []).map((c) => c.reviewerId)]);
+  const names = { ...(await nameMap(ctx.admin, [...(trail ?? []).map((t) => t.actorId), ...(clinical ?? []).map((c) => c.reviewerId)])), ...(documents?.names ?? {}) };
   const items = buildHistory({
-    trail: trail ?? [], versions: versions ?? [], clinical: clinical ?? [], publications: publications ?? [], organisation: organisation ?? [], names, limit: HISTORY_LIMIT,
+    trail: trail ?? [], versions: versions ?? [], clinical: clinical ?? [], publications: publications ?? [], organisation: organisation ?? [], documents: documents?.rows ?? [], names, limit: HISTORY_LIMIT,
   });
 
   return <HistoryView items={items} notices={notices} types={types} />;

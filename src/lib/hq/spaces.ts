@@ -209,6 +209,10 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   { code: "hq.assessment.assessor.assign",    space: "quality"  },
   { code: "hq.assessment.instrument.assess",  space: "quality"  },
   // <<< ASSESSOR-WORKSPACE
+  // Migration 942 (UNIFIED-GOVERNANCE-V1 item 5): governed policies on the definition engine. View stays the 264 right.
+  { code: "hq.quality.policy.author",         space: "quality"  },
+  { code: "hq.quality.policy.review",         space: "quality"  },
+  { code: "hq.quality.policy.publish",        space: "quality"  },
 ];
 
 export const HQ_CAPABILITY_CODES = HQ_CAPABILITIES.map(c => c.code);

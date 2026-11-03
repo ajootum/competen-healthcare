@@ -10,6 +10,7 @@
 export const STANDARD_CONTENT_GOVERNANCE: readonly string[] = [
   "hq.platform.home.view",
   "hq.quality.governance.view",
+  "hq.quality.policy.view", "hq.quality.policy.author", "hq.quality.policy.review", "hq.quality.policy.publish",
   "hq.assessment.catalogue.view",
   "hq.assessment.catalogue.manage",
   "hq.assessment.studio.view",

@@ -7,13 +7,13 @@
 // the app while the database would have allowed the write. Non-owners are unchanged: their context already
 // carries the capabilities of their appointments.
 
-import { CAP } from "./transitions";
+import { CAP, POLICY_CAP } from "./transitions";
 
 /** Asks the database whether this person holds the capability through a live appointment. Throws are treated as "no". */
 export type HoldsCapability = (capability: string) => Promise<boolean>;
 
 /** Every capability the Studio, review and assessor-assignment code tests against ctx.capabilities. */
-export const STUDIO_CAPABILITIES: readonly string[] = Object.values(CAP);
+export const STUDIO_CAPABILITIES: readonly string[] = [...Object.values(CAP), ...Object.values(POLICY_CAP)];
 
 /**
  * The capabilities to test. A non-owner: exactly what the HQ context resolved. An owner: ONLY the ones a live

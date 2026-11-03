@@ -75,7 +75,7 @@ export async function publishScope(admin: any, actor: WceActor, scope: WceScope,
     let res = await write(true);
     if (res?.error && /published_by/.test(res.error.message ?? "")) res = await write(false);
     // ⚠ A REFUSED WRITE IS NOT A PUBLICATION. Without this the version and its audit row were recorded anyway.
-    if (res?.error) return { ok: false, status: /self_reduction/.test(res.error.message ?? "") ? 403 : 409, error: (res.error.message ?? "").replace(/^hq_sod \w+: /, "") || "The configuration could not be published. Nothing was published." };
+    if (res?.error) return { ok: false, status: /self_reduction/.test(res.error.message ?? "") ? 403 : 409, error: (res.error.message ?? "").replace(/^hq_sod \w+: /, "").replace(/^hq_config_publish: /, "") || "The configuration could not be published. Nothing was published." };
   }
   const snapshot = (rows ?? []).map((r: any) => ({ config_path: r.config_path, settings: r.draft }));
   const { data: ver } = await admin.from("workspace_config_versions").insert({

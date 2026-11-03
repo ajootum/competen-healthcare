@@ -100,7 +100,7 @@ export function SubmitForPublication({ frameworkId, revision }: { frameworkId: s
   const { busy, msg, send } = useSend();
   const [note, setNote] = useState("");
   return (
-    <form className="mt-2 space-y-2" onSubmit={e => { e.preventDefault(); void send({ action: "submit", frameworkId, note }, () => revision ? "Revision put forward. The published version stays in use until a publisher decides." : "Put forward for publication. An independent publisher decides."); }}>
+    <form className="mt-2 space-y-2" onSubmit={e => { e.preventDefault(); void send({ action: "submit", frameworkId, note }, () => revision ? "Revision put forward. The published version stays in use until a publisher decides." : "Put forward for publication. A publisher decides once every competency is independently approved; that may be you."); }}>
       <label className={label}>Note for the publisher (optional)<textarea className={input} rows={2} maxLength={1000} value={note} onChange={e => setNote(e.target.value)} /></label>
       <div className="flex flex-wrap items-center gap-2"><button className={ghost} disabled={busy}>{revision ? "Put this revision forward for publication" : "Put forward for publication"}</button><Msg msg={msg} /></div>
     </form>

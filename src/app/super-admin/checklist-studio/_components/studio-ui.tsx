@@ -15,7 +15,7 @@ export function StudioShell({ children, wide = false }: { children: ReactNode; w
   );
 }
 
-export function PageHead({ title, lede, crumbs, right }: { title: string; lede?: string; crumbs?: { href?: string; label: string }[]; right?: ReactNode }) {
+export function PageHead({ title, lede, crumbs, right, kicker = "Competen Holdings, Checklist Studio" }: { title: string; lede?: string; crumbs?: { href?: string; label: string }[]; right?: ReactNode; kicker?: string }) {
   return (
     <header className="flex flex-wrap items-start justify-between gap-3">
       <div className="min-w-0">
@@ -29,7 +29,7 @@ export function PageHead({ title, lede, crumbs, right }: { title: string; lede?:
             ))}
           </nav>
         )}
-        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--cmp-theme-ink)]">Competen Holdings, Checklist Studio</p>
+        <p className="text-xs font-bold uppercase tracking-[0.14em] text-[var(--cmp-theme-ink)]">{kicker}</p>
         <h1 className="text-xl font-bold">{title}</h1>
         {lede && <p className="mt-1 max-w-3xl text-sm text-[var(--cmp-app-text-secondary)]">{lede}</p>}
       </div>

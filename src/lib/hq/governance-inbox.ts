@@ -5,14 +5,16 @@
 // publication). It decides nothing: every row links to the governed item, where the same gated route and database
 // guard take the action. A task shows the content, its type, its scope, its status, the required action, the deadline
 // where one is configured, and ONE contextual action. Where the person cannot act, the reason and the position or
-// authority required are said instead of a button.
+// authority required are said instead of a button. Deadlines are optional (owner, 3 Nov): no deadline system exists yet,
+// so a task carries one only when its record does, and nothing about deadlines or overdue work is drawn until one is configured.
 import type { createAdminClient } from "@/lib/supabase/server";
 import { listGovernedVersions, nameMap, reviewOverview, loadTrail, type GovernedVersionRow } from "@/lib/assessment/studio/read";
 import { loadHolders, latestReturn } from "@/lib/assessment/studio/pathway-data";
 import { standingOf } from "@/lib/assessment/studio/pathway";
-import { CAP } from "@/lib/assessment/studio/transitions";
+import { CAP, POLICY_CAP, capabilitiesFor } from "@/lib/assessment/studio/transitions";
 import { KIND_LABEL, STATE_LABEL, type DefinitionKind } from "@/lib/assessment/studio/types";
 import { loadGovernanceIndex, type IndexRow } from "@/lib/competency/governance-workspace";
+import { DOCUMENTS_REVIEW_CAP, DOCUMENTS_REVIEW_HREF, loadDocumentsReviewState } from "@/lib/hq/documents-review";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -71,20 +73,50 @@ export function requiredFor(state: string, versionNo: number): string {
   }
 }
 
+/**
+ * Document Template Studio (Competen Individual): the two-person review of the documents configuration (migration 942). Holders of
+ * hq.individual.config.manage only. An undecided submission by someone else is theirs to review, one they submitted waits for another
+ * holder, an approved draft is any holder's to publish, and a draft returned for changes goes back to its submitter.
+ */
+export async function documentsReviewTasks(admin: Admin, me: InboxViewer): Promise<{ mine: InboxTask[]; inProgress: InboxTask[]; returned: InboxTask[] }> {
+  const out = { mine: [] as InboxTask[], inProgress: [] as InboxTask[], returned: [] as InboxTask[] };
+  if (!me.caps.includes(DOCUMENTS_REVIEW_CAP)) return out;
+  const st = await loadDocumentsReviewState(admin);
+  const r = st.review;
+  if (!st.pending || !r) return out;
+  const base = { title: "Document templates", type: "Document templates", scope: "Competen Individual", deadline: null as string | null, href: DOCUMENTS_REVIEW_HREF };
+  const who = (id: string | null) => (id ? st.names[id] ?? "a colleague" : "a colleague");
+  const submitted = `Submitted by ${who(r.submittedBy)}, ${day(r.submittedAt)}${r.note ? `: "${r.note.slice(0, 160)}"` : ""}.`;
+  if (r.decision === null) {
+    if (r.submittedBy === me.userId) {
+      out.inProgress.push({ ...base, id: `docs:${r.id}`, status: "In review", required: "Waiting for another holder to approve", action: null, reason: "You submitted this draft, so another holder of the Competen Individual policy right must approve it.", detail: submitted, at: r.submittedAt });
+    } else {
+      out.mine.push({ ...base, id: `docs:${r.id}`, status: "In review", required: "Review & approve the document templates, or request changes", action: { kind: "review_approve", label: "Review & approve", href: DOCUMENTS_REVIEW_HREF }, reason: null, detail: submitted, at: r.submittedAt });
+    }
+  } else if (r.decision === "approved") {
+    out.mine.push({ ...base, id: `docs:${r.id}`, status: "Approved", required: "Publish the approved document templates", action: { kind: "publish", label: "Publish", href: DOCUMENTS_REVIEW_HREF }, reason: null, detail: `Approved by ${who(r.decidedBy)}, ${day(r.decidedAt)}${r.submittedBy === me.userId ? ". You submitted it and may publish it" : ""}.`, at: r.decidedAt });
+  } else if (r.submittedBy === me.userId) {
+    out.returned.push({ ...base, id: `docs:${r.id}`, status: "Returned for correction", required: "Revise the draft and submit it again", action: { kind: "revise", label: "Open the Document Template Studio", href: DOCUMENTS_REVIEW_HREF }, reason: null, detail: `Returned by ${who(r.decidedBy)}, ${day(r.decidedAt)}${r.decisionNote ? `: "${r.decisionNote.slice(0, 160)}"` : ""}.`, at: r.decidedAt });
+  }
+  return out;
+}
+
 export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxModel> {
   const notes: string[] = [];
   const caps = me.caps;
-  const holdsStudio = caps.includes(CAP.view) || caps.includes(CAP.author) || caps.includes(CAP.review) || caps.includes(CAP.publish);
+  const holdsStudio = [CAP.view, CAP.author, CAP.review, CAP.publish, POLICY_CAP.view, POLICY_CAP.author, POLICY_CAP.review, POLICY_CAP.publish].some((c) => caps.includes(c));
   const mine: InboxTask[] = [], inProgress: InboxTask[] = [], returned: InboxTask[] = [], recentlyPublished: InboxTask[] = [], overdue: InboxTask[] = [];
 
   // ---- Checklist Studio: every definition kind, by the same readers the Studio uses -----------------------------
   if (holdsStudio) {
     try {
-      const [inReview, versions, holders] = await Promise.all([
+      const [inReview, versions, asmtHolders, policyHolders] = await Promise.all([
         reviewOverview(admin, me.userId, caps),
         listGovernedVersions(admin, { states: ["draft", "approved", "published"], limit: 400 }),
         loadHolders(admin),
+        loadHolders(admin, "policy"),
       ]);
+      const holdersFor = (kind: DefinitionKind) => (kind === "policy" ? policyHolders : asmtHolders);
       const people = await nameMap(admin, [...inReview.map((q) => q.submittedBy), ...versions.flatMap((v) => [...v.authoredBy, v.submittedBy, v.publishedBy])]);
       const who = (id: string | null | undefined) => (id ? people[id] ?? "a person" : "");
 
@@ -96,11 +128,11 @@ export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxMod
         if (q.viewer.independent && (canGov || canDom)) {
           mine.push({ ...base, action: { kind: "review_approve", label: "Review & approve", href: q.href }, reason: null });
         } else {
-          const reviewers = standingOf("review", { holders, involved: q.involved, decisions: [], contentHash: q.contentHash });
+          const reviewers = standingOf("review", { kind: q.kind, holders: holdersFor(q.kind), involved: q.involved, decisions: [], contentHash: q.contentHash });
           const names = reviewers.actors.filter((a) => a.eligible).map((a) => a.name);
           const reason = !q.viewer.independent ? `You authored, edited or submitted this version, so another appointee must approve it.${names.length ? ` Who can: ${names.join(", ")}.` : reviewers.note ? ` ${reviewers.note}` : ""}`
             : q.viewer.decidedGovernance || q.viewer.decidedDomain ? `You have already decided on this exact content.${names.length ? ` Still to decide: ${names.join(", ")}.` : ""}`
-            : `Needs the right to review checklists.${names.length ? ` Who can: ${names.join(", ")}.` : reviewers.note ? ` ${reviewers.note}` : ""}`;
+            : `Needs the right to review ${q.kind === "policy" ? "policies" : "checklists"}.${names.length ? ` Who can: ${names.join(", ")}.` : reviewers.note ? ` ${reviewers.note}` : ""}`;
           inProgress.push({ ...base, action: null, reason });
         }
       }
@@ -110,7 +142,7 @@ export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxMod
       const returnedIds = new Set<string>();
       const returnNote = new Map<string, { by: string | null; note: string | null }>();
       for (const [kind, vs] of byKind) {
-        const drafts = vs.filter((v) => v.state === "draft" && (v.authoredBy.includes(me.userId) || caps.includes(CAP.author)));
+        const drafts = vs.filter((v) => v.state === "draft" && (v.authoredBy.includes(me.userId) || caps.includes(capabilitiesFor(kind).author)));
         if (!drafts.length) continue;
         const trail = await loadTrail(admin, kind, drafts.map((v) => v.id));
         for (const v of drafts) {
@@ -123,26 +155,27 @@ export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxMod
         const title = versionTitle(v);
         const type = KIND_LABEL[v.kind];
         const minesDraft = v.authoredBy.includes(me.userId);
+        const K = capabilitiesFor(v.kind);
         if (v.state === "draft") {
           const r = returnNote.get(v.id);
           const task: InboxTask = {
             id: `asmt:${v.id}`, title, type, scope: HOLDINGS, status: r ? "Returned for correction" : STATE_LABEL.draft, required: requiredFor("draft", v.versionNo),
-            action: minesDraft && caps.includes(CAP.author) ? { kind: r ? "revise" : "complete_submit", label: r ? "Revise and resubmit" : "Open and submit", href: v.href } : null,
-            reason: minesDraft && !caps.includes(CAP.author) ? "You authored this draft but hold no author capability now: an appointment with Checklist authoring is needed to edit or submit it." : !minesDraft ? `Authored by ${v.authoredBy.map(who).filter(Boolean).join(", ") || "an author"}.` : null,
+            action: minesDraft && caps.includes(K.author) ? { kind: r ? "revise" : "complete_submit", label: r ? "Revise and resubmit" : "Open and submit", href: v.href } : null,
+            reason: minesDraft && !caps.includes(K.author) ? "You authored this draft but hold no author capability now: an appointment with the authoring right is needed to edit or submit it." : !minesDraft ? `Authored by ${v.authoredBy.map(who).filter(Boolean).join(", ") || "an author"}.` : null,
             deadline: null, href: v.href, at: v.createdAt,
             detail: r ? `Returned${r.by ? ` by ${who(r.by)}` : ""}${r.note ? `: "${r.note.slice(0, 160)}"` : ""}.` : `Authored by ${v.authoredBy.map(who).filter(Boolean).join(", ") || "an author"}, ${day(v.createdAt)}.`,
           };
           if (r && minesDraft) returned.push(task);
           else if (minesDraft) mine.push(task);
-          else if (caps.includes(CAP.author)) inProgress.push(task);
+          else if (caps.includes(K.author)) inProgress.push(task);
         } else if (v.state === "approved") {
-          const can = caps.includes(CAP.publish);
-          const publishers = standingOf("publish", { holders, involved: [], decisions: [], contentHash: null });
+          const can = caps.includes(K.publish);
+          const publishers = standingOf("publish", { kind: v.kind, holders: holdersFor(v.kind), involved: [], decisions: [], contentHash: null });
           const names = publishers.actors.map((a) => a.name);
           const task: InboxTask = {
             id: `asmt:${v.id}`, title, type, scope: HOLDINGS, status: STATE_LABEL.approved, required: requiredFor("approved", v.versionNo),
             action: can ? { kind: "publish", label: `Publish v${v.versionNo}`, href: v.href } : null,
-            reason: can ? null : `Publishing needs the right to publish checklists.${names.length ? ` Who can: ${names.join(", ")}.` : publishers.note ? ` ${publishers.note}` : ""}`,
+            reason: can ? null : `Publishing needs the right to publish ${v.kind === "policy" ? "policies" : "checklists"}.${names.length ? ` Who can: ${names.join(", ")}.` : publishers.note ? ` ${publishers.note}` : ""}`,
             deadline: null, href: v.href, at: v.submittedAt ?? v.createdAt,
             detail: `Independently approved on the exact content${minesDraft ? ": you authored it and may publish the approved version" : ""}.`,
           };
@@ -191,9 +224,21 @@ export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxMod
     }
   }
 
+  // ---- Document Template Studio: the two-person review of the documents configuration ------------------------------
+  if (caps.includes(DOCUMENTS_REVIEW_CAP)) {
+    try {
+      const d = await documentsReviewTasks(admin, me);
+      mine.push(...d.mine); inProgress.push(...d.inProgress); returned.push(...d.returned);
+    } catch (e: any) {
+      notes.push(`The Document Template Studio review could not be read just now${e?.message ? ` (${String(e.message).slice(0, 120)})` : ""}.`);
+    }
+  }
+
   const held = [
     caps.includes(CAP.author) ? "author checklists" : "", caps.includes(CAP.review) ? "review checklists" : "", caps.includes(CAP.publish) ? "publish checklists" : "",
+    caps.includes(POLICY_CAP.author) ? "author policies" : "", caps.includes(POLICY_CAP.review) ? "review policies" : "", caps.includes(POLICY_CAP.publish) ? "publish policies" : "",
     fwMe.canAuthor ? "author competencies" : "", fwMe.canReview ? "give clinical approval" : "", fwMe.canPublish ? "publish frameworks" : "",
+    caps.includes(DOCUMENTS_REVIEW_CAP) ? "review and publish document templates" : "",
   ].filter(Boolean);
   const standing = held.length ? `Through your appointments you can ${held.join(", ")}.` : me.isOwner
     ? "You are a platform owner with no governance appointment: you can look at everything, and act only through an appointment that holds the capability."
