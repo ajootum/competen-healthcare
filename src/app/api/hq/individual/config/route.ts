@@ -135,7 +135,9 @@ export async function POST(req: Request) {
     case "publish": {
       const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;
       const r = await publishScope(ctx.admin, actor, SCOPE, { label: "Competen Individual policy", note });
-      return r.ok ? NextResponse.json({ ok: true, versionId: r.version_id, policies: r.modules }) : refuse(500, "It could not be published. Nothing has changed.");
+      // 942: a governed path (the documents configuration) is refused by the database until an independent holder approved
+      // exactly this draft. The refusal reaches the person in words, as a 409, instead of a blanket 500.
+      return r.ok ? NextResponse.json({ ok: true, versionId: r.version_id, policies: r.modules }) : refuse(r.status === 409 && /approved|publisher/i.test(r.error) ? 409 : 500, r.status === 409 && /approved|publisher/i.test(r.error) ? r.error : "It could not be published. Nothing has changed.");
     }
     case "rollback": {
       if (typeof body.versionId !== "string" || !body.versionId) return refuse(422, "Choose a version.");

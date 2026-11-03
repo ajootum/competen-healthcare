@@ -8,7 +8,7 @@ import { HISTORY_TYPE_LABEL, filterHistory, type HistoryItem, type HistoryType }
 
 const TYPE_TONE: Record<HistoryType, string> = {
   checklist: "border-teal-300 bg-teal-50 text-teal-900", clinical: "border-violet-300 bg-violet-50 text-violet-900",
-  framework: "border-blue-300 bg-blue-50 text-blue-900", organisation: "border-amber-300 bg-amber-50 text-amber-950",
+  framework: "border-blue-300 bg-blue-50 text-blue-900", organisation: "border-amber-300 bg-amber-50 text-amber-950", documents: "border-gray-400 bg-gray-50 text-gray-900",
 };
 const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const link = "font-semibold text-teal-800 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-teal-700";

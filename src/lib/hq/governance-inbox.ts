@@ -14,6 +14,7 @@ import { standingOf } from "@/lib/assessment/studio/pathway";
 import { CAP, POLICY_CAP, capabilitiesFor } from "@/lib/assessment/studio/transitions";
 import { KIND_LABEL, STATE_LABEL, type DefinitionKind } from "@/lib/assessment/studio/types";
 import { loadGovernanceIndex, type IndexRow } from "@/lib/competency/governance-workspace";
+import { DOCUMENTS_REVIEW_CAP, DOCUMENTS_REVIEW_HREF, loadDocumentsReviewState } from "@/lib/hq/documents-review";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
@@ -70,6 +71,34 @@ export function requiredFor(state: string, versionNo: number): string {
     case "published": return "Create a new version to change it";
     default: return "";
   }
+}
+
+/**
+ * Document Template Studio (Competen Individual): the two-person review of the documents configuration (migration 942). Holders of
+ * hq.individual.config.manage only. An undecided submission by someone else is theirs to review, one they submitted waits for another
+ * holder, an approved draft is any holder's to publish, and a draft returned for changes goes back to its submitter.
+ */
+export async function documentsReviewTasks(admin: Admin, me: InboxViewer): Promise<{ mine: InboxTask[]; inProgress: InboxTask[]; returned: InboxTask[] }> {
+  const out = { mine: [] as InboxTask[], inProgress: [] as InboxTask[], returned: [] as InboxTask[] };
+  if (!me.caps.includes(DOCUMENTS_REVIEW_CAP)) return out;
+  const st = await loadDocumentsReviewState(admin);
+  const r = st.review;
+  if (!st.pending || !r) return out;
+  const base = { title: "Document templates", type: "Document templates", scope: "Competen Individual", deadline: null as string | null, href: DOCUMENTS_REVIEW_HREF };
+  const who = (id: string | null) => (id ? st.names[id] ?? "a colleague" : "a colleague");
+  const submitted = `Submitted by ${who(r.submittedBy)}, ${day(r.submittedAt)}${r.note ? `: "${r.note.slice(0, 160)}"` : ""}.`;
+  if (r.decision === null) {
+    if (r.submittedBy === me.userId) {
+      out.inProgress.push({ ...base, id: `docs:${r.id}`, status: "In review", required: "Waiting for another holder to approve", action: null, reason: "You submitted this draft, so another holder of the Competen Individual policy right must approve it.", detail: submitted, at: r.submittedAt });
+    } else {
+      out.mine.push({ ...base, id: `docs:${r.id}`, status: "In review", required: "Review & approve the document templates, or request changes", action: { kind: "review_approve", label: "Review & approve", href: DOCUMENTS_REVIEW_HREF }, reason: null, detail: submitted, at: r.submittedAt });
+    }
+  } else if (r.decision === "approved") {
+    out.mine.push({ ...base, id: `docs:${r.id}`, status: "Approved", required: "Publish the approved document templates", action: { kind: "publish", label: "Publish", href: DOCUMENTS_REVIEW_HREF }, reason: null, detail: `Approved by ${who(r.decidedBy)}, ${day(r.decidedAt)}${r.submittedBy === me.userId ? ". You submitted it and may publish it" : ""}.`, at: r.decidedAt });
+  } else if (r.submittedBy === me.userId) {
+    out.returned.push({ ...base, id: `docs:${r.id}`, status: "Returned for correction", required: "Revise the draft and submit it again", action: { kind: "revise", label: "Open the Document Template Studio", href: DOCUMENTS_REVIEW_HREF }, reason: null, detail: `Returned by ${who(r.decidedBy)}, ${day(r.decidedAt)}${r.decisionNote ? `: "${r.decisionNote.slice(0, 160)}"` : ""}.`, at: r.decidedAt });
+  }
+  return out;
 }
 
 export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxModel> {
@@ -195,10 +224,21 @@ export async function loadInbox(admin: Admin, me: InboxViewer): Promise<InboxMod
     }
   }
 
+  // ---- Document Template Studio: the two-person review of the documents configuration ------------------------------
+  if (caps.includes(DOCUMENTS_REVIEW_CAP)) {
+    try {
+      const d = await documentsReviewTasks(admin, me);
+      mine.push(...d.mine); inProgress.push(...d.inProgress); returned.push(...d.returned);
+    } catch (e: any) {
+      notes.push(`The Document Template Studio review could not be read just now${e?.message ? ` (${String(e.message).slice(0, 120)})` : ""}.`);
+    }
+  }
+
   const held = [
     caps.includes(CAP.author) ? "author checklists" : "", caps.includes(CAP.review) ? "review checklists" : "", caps.includes(CAP.publish) ? "publish checklists" : "",
     caps.includes(POLICY_CAP.author) ? "author policies" : "", caps.includes(POLICY_CAP.review) ? "review policies" : "", caps.includes(POLICY_CAP.publish) ? "publish policies" : "",
     fwMe.canAuthor ? "author competencies" : "", fwMe.canReview ? "give clinical approval" : "", fwMe.canPublish ? "publish frameworks" : "",
+    caps.includes(DOCUMENTS_REVIEW_CAP) ? "review and publish document templates" : "",
   ].filter(Boolean);
   const standing = held.length ? `Through your appointments you can ${held.join(", ")}.` : me.isOwner
     ? "You are a platform owner with no governance appointment: you can look at everything, and act only through an appointment that holds the capability."

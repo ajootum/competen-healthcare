@@ -109,9 +109,9 @@ export function summaryLine(rows: readonly ControlledRow[]): string {
 
 // ---- governance history ----------------------------------------------------------------------------------------------
 
-export type HistoryType = "checklist" | "clinical" | "framework" | "organisation";
+export type HistoryType = "checklist" | "clinical" | "framework" | "organisation" | "documents";
 export const HISTORY_TYPE_LABEL: Record<HistoryType, string> = {
-  checklist: "Checklist and Studio", clinical: "Clinical review", framework: "Framework publication", organisation: "Organisation",
+  checklist: "Checklist and Studio", clinical: "Clinical review", framework: "Framework publication", organisation: "Organisation", documents: "Document templates",
 };
 
 export interface HistoryItem {
@@ -130,6 +130,12 @@ export interface ClinicalInput { versionId: string; reviewerId: string; decision
 export interface PublicationInput { frameworkId: string; frameworkName: string; versionNum: number; label: string | null; at: string; by: string | null }
 export interface OrganisationInput { id: string; at: string; actor: string | null; action: string; entity: string | null }
 
+/** One hq_config_review row of the Document Template Studio: a submission and, once made, its decision. */
+export interface DocumentsReviewInput {
+  id: string; submittedAt: string; submittedBy: string; note: string | null;
+  decidedBy: string | null; decision: "approved" | "changes_requested" | null; decidedAt: string | null; decisionNote: string | null;
+}
+
 export const HISTORY_LIMIT = 200;
 
 /** "hq_appointment_scope_set" becomes "Appointment scope set". */
@@ -143,7 +149,7 @@ const UNNAMED = "Unnamed person";
 /** One reverse-chronological list from the four sources. A source that could not be read is passed as empty by the caller, which says so. */
 export function buildHistory(src: {
   trail?: readonly TrailInput[]; versions?: readonly GovernedVersionRow[]; clinical?: readonly ClinicalInput[];
-  publications?: readonly PublicationInput[]; organisation?: readonly OrganisationInput[]; names: Record<string, string>; limit?: number;
+  publications?: readonly PublicationInput[]; organisation?: readonly OrganisationInput[]; documents?: readonly DocumentsReviewInput[]; names: Record<string, string>; limit?: number;
 }): HistoryItem[] {
   const byVersion = new Map((src.versions ?? []).map((v) => [v.versionId, v]));
   const out: HistoryItem[] = [];
@@ -169,6 +175,16 @@ export function buildHistory(src: {
   }
   for (const o of src.organisation ?? []) {
     out.push({ id: `o:${o.id}`, at: o.at, type: "organisation", who: o.actor ?? "Not recorded", what: plainAction(o.action), item: o.entity, href: null, detail: null });
+  }
+  const DOCS_HREF = "/super-admin/individual/documents";
+  for (const d of src.documents ?? []) {
+    out.push({ id: `d:${d.id}:submitted`, at: d.submittedAt, type: "documents", who: src.names[d.submittedBy] ?? UNNAMED, what: "Submitted the document templates for review", item: "Document templates, Competen Individual", href: DOCS_HREF, detail: d.note });
+    if (d.decision && d.decidedAt) {
+      out.push({
+        id: `d:${d.id}:decided`, at: d.decidedAt, type: "documents", who: d.decidedBy ? src.names[d.decidedBy] ?? UNNAMED : "Not recorded",
+        what: d.decision === "approved" ? "Approved the document templates" : "Asked for changes to the document templates", item: "Document templates, Competen Individual", href: DOCS_HREF, detail: d.decisionNote,
+      });
+    }
   }
   return out.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id)).slice(0, src.limit ?? HISTORY_LIMIT);
 }
