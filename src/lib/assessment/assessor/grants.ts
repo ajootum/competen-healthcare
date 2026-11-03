@@ -9,7 +9,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { normaliseLookupEmail, normaliseLookupName, searchPeopleByName } from "@/lib/individual/grants";
 import {
-  type Admin, type GrantRow, type Res, ASSESS_CAPABILITY, NOT_SET_UP, fail, grantState, guardMessage, isMissingRelation, isUuid, okRes, type GrantState, HQ_RESPONDENT_ROLES, type HqRespondentRole, isHqRole,
+  type Admin, type GrantRow, type Res, ASSESS_CAPABILITY, NOT_SET_UP, fail, grantState, guardMessage, isMissingRelation, isUuid, okRes, type GrantState, HQ_RESPONDENT_ROLES, isHqRole,
 } from "./common";
 
 export interface GrantView extends GrantRow {
