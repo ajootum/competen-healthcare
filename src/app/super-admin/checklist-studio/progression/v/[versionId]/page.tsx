@@ -6,6 +6,7 @@ import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadProgressionVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
 import { recentDesigns } from "@/lib/assessment/studio/designs";
+import { describeTarget, targetLabels } from "@/lib/assessment/adapters/scholar/targets";
 import { readStageScale } from "@/lib/assessment/adapters/scholar/scales";
 import { DefProgressionEditor } from "../../../_components/DefProgressionEditor";
 import { DefTimeline } from "../../../_components/DefShared";
@@ -21,17 +22,18 @@ export default async function ProgressionVersionPage({ params }: { params: Promi
   const v = await loadProgressionVersion(ctx.admin, versionId);
   if (!v) notFound();
   const canAuthor = ctx.capabilities.includes(CAP.author);
-  const [lc, designs, stageScale] = await Promise.all([
+  const [lc, designs, stageScale, labels] = await Promise.all([
     lifecycleData(ctx.admin, { kind: "progression", version: v, actorId: ctx.userId, caps: ctx.capabilities, validationErrors: 0 }),
     recentDesigns(ctx.admin),
     readStageScale(ctx.admin, v.stage_scale_version_id).catch(() => null),
+    targetLabels(ctx.admin, [{ kind: v.target_kind, ref: v.target_ref }]),
   ]);
   return (
     <StudioShell wide>
       <PageHead
         title={`${v.name} (${v.code}), version ${v.version_no}`}
         crumbs={[{ href: "/super-admin/checklist-studio", label: "Checklist Studio" }, { href: "/super-admin/checklist-studio/progression", label: "Progression rules" }, { label: v.code }]}
-        lede={`Places: ${v.target_kind.replace(/_/g, " ")}.`}
+        lede={`Places people against: ${describeTarget({ kind: v.target_kind, ref: v.target_ref }, labels)}. The target is fixed when a rule set is created.`}
         right={<StateChip state={v.state} />}
       />
       {stageScale ? (

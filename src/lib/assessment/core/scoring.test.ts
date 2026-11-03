@@ -327,11 +327,36 @@ describe("evidence and progress", () => {
   it("progress counts completed, unassessed and critical", () => {
     const p = progress(RESP_ASSESS, { [RA.k1]: L("L4"), [RA.cs1]: L("L1"), [RA.cs2]: { state: "not_observed" } });
     expect(p.total).toBe(5);
-    expect(p.completed).toBe(2);
+    // not observed is an answer (an item the assessor did not see), so it counts as completed even though the rules treat it as missing
+    expect(p.completed).toBe(3);
     expect(p.unassessed).toBe(2);
-    expect(p.incomplete).toBe(1);
+    expect(p.incomplete).toBe(0);
     expect(p.critical).toEqual({ total: 1, failed: 1, unanswered: 0 });
     expect(p.mandatoryMissing).toBe(1);
+  });
+  it("a state answer is completed for progress, and only no answer or not_assessed is unanswered", () => {
+    for (const state of ["unable_to_demonstrate", "not_observed"] as const) {
+      const p = progress(RESP_ASSESS, { [RA.k1]: { state } });
+      expect(p.completed, state).toBe(1);
+      expect(p.unassessed, state).toBe(RESP_ASSESS.items.length - 1);
+    }
+    // unable to determine, on an instrument whose items allow it
+    const u = progress(CHART_AUDIT, { [uid(413)]: { state: "unable_to_determine" }, [rkey(uid(413), "chart_ref")]: { value: "C-1" } });
+    expect(u.completed).toBe(1);
+    const none = progress(RESP_ASSESS, { [RA.k1]: { state: "not_assessed" } });
+    expect(none.completed).toBe(0);
+    expect(none.unassessed).toBe(RESP_ASSESS.items.length);
+    expect(progress(RESP_ASSESS, {}).completed).toBe(0);
+  });
+  it("completed follows the answer but mandatoryMissing keeps mirroring the database", () => {
+    // not observed is treated as missing by the rules: the item counts as completed yet stays a mandatory gap
+    const p = progress(RESP_ASSESS, { [RA.cs2]: { state: "not_observed" } });
+    expect(p.completed).toBe(1);
+    expect(p.mandatoryMissing).toBe(RESP_ASSESS.items.filter((i) => i.mandatory || i.critical).length);
+  });
+  it("an invalid response is still not completed", () => {
+    const p = progress(RESP_ASSESS, { [RA.k1]: { level_code: "NO_SUCH_LEVEL" } });
+    expect(p.completed).toBe(0);
   });
   it("group minimum ordinals feed progression", () => {
     expect(groupMinOrdinals(RESP_ASSESS, respAll("L4", { [RA.cs2]: L("L2") }))).toEqual({ know: 4, skills: 2, applied: 4 });

@@ -4,7 +4,9 @@ import { useState } from "react";
 import { Btn, Labelled, SelectIn, TextIn, fieldBase, touchSm } from "@/components/assessment/ui";
 import { PRESENTATIONS, AVAILABLE_PRESENTATIONS } from "@/lib/assessment/core";
 import { CODE_PATTERN } from "@/lib/assessment/studio/vocab";
+import { TARGET_KIND_INSTRUMENT } from "@/lib/assessment/adapters/scholar/targets";
 import { DefModal, NO_AUTHOR } from "./DefShared";
+import { TargetPicker, type InstrumentOption, type TargetValue } from "./TargetPicker";
 import { Notice, callApi, useAction } from "./studio-ui";
 
 type DefType = "scale" | "rule_template" | "layout_template" | "progression";
@@ -18,27 +20,29 @@ export interface DefCreateProps {
   canAuthor: boolean;
   /** published stage scale versions (progression only) */
   stageScales?: { id: string; label: string }[];
+  /** checklists in the library a progression rule set can target (progression only) */
+  instruments?: InstrumentOption[];
 }
 
 const PRESENTATION_LABEL: Record<string, string> = {
   standard_checklist: "Standard checklist", guided_assessment: "Guided assessment", audit_inspection: "Audit and inspection", assessment_form: "Assessment form", matrix: "Matrix",
 };
 
-export function DefCreate({ type, basePath, canAuthor, stageScales = [] }: DefCreateProps) {
+export function DefCreate({ type, basePath, canAuthor, stageScales = [], instruments = [] }: DefCreateProps) {
   const [open, setOpen] = useState(false);
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [scaleKind, setScaleKind] = useState<"rating" | "stage">("rating");
   const [presentation, setPresentation] = useState("standard_checklist");
-  const [targetKind, setTargetKind] = useState("person_stage");
+  const [target, setTarget] = useState<TargetValue>({ kind: TARGET_KIND_INSTRUMENT, ref: "" });
   const [stage, setStage] = useState("");
   const { busy, msg, run, router } = useAction();
   const upper = code.trim().toUpperCase();
-  const valid = CODE_PATTERN.test(upper) && name.trim().length > 0 && (type !== "progression" || stage !== "");
+  const valid = CODE_PATTERN.test(upper) && name.trim().length > 0 && (type !== "progression" || (stage !== "" && target.ref !== ""));
 
   const save = () => run("create", () => callApi<{ versionId: string }>("/api/hq/checklist-studio/definitions", "POST", {
-    action: "create", type, code: upper, name: name.trim(), description, scaleKind, presentation, targetKind, stageScaleVersionId: stage || undefined,
+    action: "create", type, code: upper, name: name.trim(), description, scaleKind, presentation, targetKind: target.kind, targetRef: target.ref || undefined, stageScaleVersionId: stage || undefined,
   }), { refresh: false, onOk: (d) => router.push(`${basePath}/v/${d.versionId}`) });
 
   return (
@@ -66,7 +70,7 @@ export function DefCreate({ type, basePath, canAuthor, stageScales = [] }: DefCr
             )}
             {type === "progression" && (
               <>
-                <TextIn label="Target kind" value={targetKind} onChange={setTargetKind} hint="What this rule set places, as lower case text." />
+                <TargetPicker instruments={instruments} value={target} onChange={setTarget} />
                 <SelectIn label="Stage scale" value={stage} onChange={setStage} options={[{ value: "", label: "Choose a published stage scale" }, ...stageScales.map((s) => ({ value: s.id, label: s.label }))]}
                   hint={stageScales.length === 0 ? "No published stage scale exists yet. Publish one under Scales first." : undefined} />
               </>

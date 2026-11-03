@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import type { HqContext } from "@/lib/hq/context";
 import { DEFINITION_KINDS, type DefinitionKind } from "./types";
 import type { WriteResult } from "./write";
+import { capabilityLabel } from "./capability-labels";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export const isUuid = (v: unknown): v is string => typeof v === "string" && UUID.test(v);
@@ -17,9 +18,13 @@ export const refuse = (status: number, error: string, extra: Record<string, unkn
  * Returns a refusal response, or null.
  */
 export function mustHold(ctx: HqContext, capability: string): NextResponse | null {
-  return ctx.capabilities.includes(capability)
-    ? null
-    : refuse(403, "This step needs a Checklist Studio appointment that holds the right capability. A platform owner without that appointment can look but not change.");
+  return ctx.capabilities.includes(capability) ? null : refuse(403, refusalText(capability, ctx.isOwner));
+}
+
+/** What a person is told when they lack a Studio capability. Owners get the appointment explanation, everybody else the capability. */
+export function refusalText(capability: string, isOwner: boolean): string {
+  if (isOwner) return "This step needs a Checklist Studio appointment that holds the right capability. A platform owner without that appointment can look but not change.";
+  return `This step needs an appointment that holds ${capabilityLabel(capability)}.`;
 }
 
 export function kindOf(v: unknown): DefinitionKind | null {

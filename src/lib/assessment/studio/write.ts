@@ -77,7 +77,7 @@ export async function createFirstVersion(admin: Admin, actorId: string, instrume
 
 export interface NewDefinition {
   type: "scale" | "rule_template" | "layout_template" | "progression"; code: string; name: string; description?: string | null;
-  scaleKind?: "rating" | "stage"; presentation?: string; targetKind?: string | null; stageScaleVersionId?: string | null;
+  scaleKind?: "rating" | "stage"; presentation?: string; targetKind?: string | null; targetRef?: string | null; stageScaleVersionId?: string | null;
 }
 
 /** A definition and its first draft version. Two plain inserts: the code is chosen by the author, so there is no counter to race on. */
@@ -114,7 +114,7 @@ export async function createDefinition(admin: Admin, actorId: string, n: NewDefi
     }
     case "progression": {
       if (!n.stageScaleVersionId) return fail(400, "A progression rule set needs a stage scale version.");
-      const d = unwrap(await admin.from("asmt_progression_rule_set").insert({ ...base, target_kind: n.targetKind?.trim() || "person_stage" }).select("id").single());
+      const d = unwrap(await admin.from("asmt_progression_rule_set").insert({ ...base, target_kind: n.targetKind?.trim() || "person_stage", target_ref: n.targetRef ?? null }).select("id").single());
       if (d.error || !d.id) return dbFail(d.error);
       defId = d.id;
       ver = unwrap(await admin.from("asmt_progression_rule_version").insert({ rule_set_id: defId, authored_by: [actorId], stage_scale_version_id: n.stageScaleVersionId, description: desc }).select("id").single());

@@ -7,8 +7,10 @@ import { ReorderList } from "@/components/assessment";
 import { normalizeContent } from "@/lib/assessment/studio/assemble";
 import { RESPONSE_TYPE_LABEL, newKey } from "@/lib/assessment/studio/vocab";
 import type { ScaleChoice } from "@/lib/assessment/studio/read";
+import type { PrefilledGroup } from "@/lib/assessment/adapters/scholar/groups";
 import type { EditorContent, EditorItem, InstrumentSection } from "@/lib/assessment/studio/types";
 import { CriterionPicker, type PickResult } from "./CriterionPicker";
+import { PrefillGroups } from "./PrefillGroups";
 import { ItemEditor, type TermOption } from "./ItemEditor";
 import { Notice, Panel } from "./studio-ui";
 
@@ -19,6 +21,9 @@ const blankItem = (sectionKey: string, position: number): EditorItem => ({
 });
 
 export interface ContentTabProps {
+  versionId: string;
+  /** the server has written these groups: the host shows them as saved */
+  onGroupsPrefilled: (groups: PrefilledGroup[]) => void;
   content: EditorContent;
   setContent: (c: EditorContent) => void;
   disabled: boolean;
@@ -29,7 +34,7 @@ export interface ContentTabProps {
   canPick: boolean;
 }
 
-export function ContentTab({ content, setContent, disabled, methods, scaleChoices, terms, drift, canPick }: ContentTabProps) {
+export function ContentTab({ versionId, onGroupsPrefilled, content, setContent, disabled, methods, scaleChoices, terms, drift, canPick }: ContentTabProps) {
   const [open, setOpen] = useState<string | null>(null);
   const [picker, setPicker] = useState(false);
   const commit = (c: EditorContent) => setContent(normalizeContent(c));
@@ -53,7 +58,12 @@ export function ContentTab({ content, setContent, disabled, methods, scaleChoice
     <div className="space-y-4">
       {disabled && <Notice>This version cannot be edited here. Only a draft can, by a person holding the author capability. Duplicate it to a new draft to change it.</Notice>}
 
-      <Panel title="Groups" right={<Btn size="sm" disabled={disabled} onClick={() => commit({ ...content, groups: [...content.groups, { code: `g${content.groups.length + 1}`, label: "New group", weight: 1, position: content.groups.length + 1 }] })}>Add group</Btn>}>
+      <Panel title="Groups" right={(
+        <span className="flex flex-wrap items-center gap-2">
+          {canPick && <PrefillGroups versionId={versionId} disabled={disabled} hasGroups={content.groups.length > 0} onAdded={onGroupsPrefilled} />}
+          <Btn size="sm" disabled={disabled} onClick={() => commit({ ...content, groups: [...content.groups, { code: `g${content.groups.length + 1}`, label: "New group", weight: 1, position: content.groups.length + 1 }] })}>Add group</Btn>
+        </span>
+      )}>
         {content.groups.length === 0 ? <p className="text-sm text-[var(--cmp-app-text-secondary)]">Groups collect items for scoring, for example by skill type. They are optional.</p> : (
           <div className="space-y-2">
             {content.groups.map((g, i) => (

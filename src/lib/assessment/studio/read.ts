@@ -224,9 +224,9 @@ export async function loadScaleVersion(admin: Admin, id: string): Promise<ScaleV
 
 export async function listProgressionVersions(admin: Admin): Promise<ProgressionVersionView[]> {
   const { data: vs } = await admin.from("asmt_progression_rule_version").select(`${LIFE}, rule_set_id, stage_scale_version_id, description, rules, tests`).order("created_at", { ascending: false }).limit(1000);
-  const { data: ds } = await admin.from("asmt_progression_rule_set").select("id, code, name, target_kind");
+  const { data: ds } = await admin.from("asmt_progression_rule_set").select("id, code, name, target_kind, target_ref");
   const defOf = new Map(((ds ?? []) as any[]).map((d) => [d.id, d]));
-  return ((vs ?? []) as any[]).map((v) => ({ ...v, code: defOf.get(v.rule_set_id)?.code ?? "", name: defOf.get(v.rule_set_id)?.name ?? "", target_kind: defOf.get(v.rule_set_id)?.target_kind ?? "" }));
+  return ((vs ?? []) as any[]).map((v) => ({ ...v, code: defOf.get(v.rule_set_id)?.code ?? "", name: defOf.get(v.rule_set_id)?.name ?? "", target_kind: defOf.get(v.rule_set_id)?.target_kind ?? "", target_ref: defOf.get(v.rule_set_id)?.target_ref ?? null }));
 }
 
 export async function loadProgressionVersion(admin: Admin, id: string): Promise<ProgressionVersionView | null> {

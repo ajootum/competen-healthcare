@@ -147,12 +147,25 @@ export interface ItemProgress {
   criticalFailed: boolean;
   primary: FieldEval;
 }
+/**
+ * Has this field been ANSWERED, for the progress indicators? Any valid response counts, including a state such as unable to
+ * determine, unable to demonstrate, not observed or not applicable (with its reason, when the item asks for one): it is an answer.
+ * Only no response, or not_assessed, is unanswered. This is NOT the mandatory test: mandatoryMissing keeps using `answered`, which
+ * mirrors the database (an unable to determine answer treated as missing still leaves a mandatory item open).
+ */
+export function hasAnswered(item: InstrumentItem, fieldKey: string, responses: Responses, ev: FieldEval): boolean {
+  if (ev.answered) return true;
+  const r = responses[rkey(item.stable_key, fieldKey)];
+  if (!ev.hasResponse || !r || ev.state === null || ev.state === "not_assessed") return false;
+  return validateResponse(item, r, fieldKey).ok;
+}
+
 export function itemProgress(item: InstrumentItem, responses: Responses, ctx?: EvalContext, defaults?: Treatment): ItemProgress {
   const primary = evalField(item, PRIMARY, responses, defaults);
-  const missingFields = (item.fields ?? []).filter((f) => f.required && !evalField(item, f.field_key, responses, defaults).answered).map((f) => f.field_key);
+  const missingFields = (item.fields ?? []).filter((f) => f.required && !hasAnswered(item, f.field_key, responses, evalField(item, f.field_key, responses, defaults))).map((f) => f.field_key);
   return {
     key: item.stable_key,
-    complete: primary.answered && missingFields.length === 0,
+    complete: hasAnswered(item, PRIMARY, responses, primary) && missingFields.length === 0,
     unassessed: !primary.hasResponse || primary.state === "not_assessed",
     missingFields,
     missingEvidence: evidenceMissingFor(item, primary, ctx),
@@ -165,7 +178,7 @@ export interface Progress {
   total: number;
   completed: number;
   unassessed: number;
-  /** answered false but not unassessed (for example not observed treated as missing, or a required field missing) */
+  /** not completed and not unassessed (for example a required field missing, or an answer that is not valid yet) */
   incomplete: number;
   critical: { total: number; failed: number; unanswered: number };
   missingEvidence: number;

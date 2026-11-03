@@ -159,6 +159,7 @@ export interface ProgressionVersionView extends LifecycleRow {
   code: string;
   name: string;
   target_kind: string;
+  target_ref: string | null;
   stage_scale_version_id: string;
   description: string | null;
   rules: Record<string, unknown>;

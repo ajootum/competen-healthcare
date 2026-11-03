@@ -248,3 +248,12 @@ describe("header blocks, section tabs, preview, save status", () => {
     expect(screen.getByText("Offline, will retry")).toBeTruthy();
   });
 });
+
+describe("the evidence count follows the host", () => {
+  it("the drawer label updates when the host's evidenceCounts change", () => {
+    const first = render(<Host def={RESP_ASSESS} layout={STANDARD_CHECKLIST_LAYOUT} evidenceCounts={{}} renderEvidence={() => <span>panel</span>} />);
+    expect(within(article(first.container, uid(15))).getByRole("button", { name: "Evidence (0)" })).toBeTruthy();
+    first.rerender(<Host def={RESP_ASSESS} layout={STANDARD_CHECKLIST_LAYOUT} evidenceCounts={{ [uid(15)]: 2 }} renderEvidence={() => <span>panel</span>} />);
+    expect(within(article(first.container, uid(15))).getByRole("button", { name: "Evidence (2)" })).toBeTruthy();
+  });
+});

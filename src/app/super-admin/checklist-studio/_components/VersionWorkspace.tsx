@@ -69,6 +69,12 @@ export function VersionWorkspace(p: VersionWorkspaceProps) {
   }, [dirty]);
 
   const save = () => run("save", () => callApi(`/api/hq/checklist-studio/versions/${p.versionId}/content`, "PUT", { content }), { ok: "Content saved.", onOk: () => setSaved(content) });
+  // The prefill call wrote the groups itself, so they go into both the editor copy and the saved copy: not an unsaved change.
+  const prefilled = (groups: EditorContent["groups"]) => {
+    const merge = (c: EditorContent) => normalizeContent({ ...c, groups: [...c.groups, ...groups.filter((g) => !c.groups.some((x) => x.code === g.code))] });
+    setContent(merge);
+    setSaved(merge);
+  };
   const defaultLayout = p.layouts.find((l) => l.id === p.defaultLayoutId)?.layout ?? null;
 
   return (
@@ -98,7 +104,7 @@ export function VersionWorkspace(p: VersionWorkspaceProps) {
       </div>
 
       <div role="tabpanel" id={`panel-${tab}`} aria-labelledby={`tab-${tab}`}>
-        {tab === "content" && <ContentTab content={content} setContent={setContent} disabled={!p.canEdit} methods={p.methods} scaleChoices={p.scaleChoices} terms={p.terms} drift={p.drift} canPick={p.canPick} />}
+        {tab === "content" && <ContentTab versionId={p.versionId} onGroupsPrefilled={prefilled} content={content} setContent={setContent} disabled={!p.canEdit} methods={p.methods} scaleChoices={p.scaleChoices} terms={p.terms} drift={p.drift} canPick={p.canPick} />}
         {tab === "scoring" && (
           <ScoringTab key={p.scoringHash ?? "none"} versionId={p.versionId} versionNo={p.versionNo} instrumentCode={p.instrument.code} content={content} contentDirty={dirty}
             initialScoring={p.scoring} initialTests={p.scoringTests} templates={p.ruleTemplates} templateId={p.scoringTemplateId} editable={p.canEdit} />

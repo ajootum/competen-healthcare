@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { effectiveCapabilities, STUDIO_CAPABILITIES } from "./capabilities";
 import { CAP } from "./transitions";
+import { refusalText } from "./api";
+import { capabilityLabel } from "./capability-labels";
 
 const holdsOnly = (...held: string[]) => async (c: string) => held.includes(c);
 
@@ -29,5 +31,19 @@ describe("effectiveCapabilities", () => {
   });
   it("covers every Studio capability", () => {
     expect([...STUDIO_CAPABILITIES].sort()).toEqual(Object.values(CAP).sort());
+  });
+});
+
+describe("refusalText", () => {
+  it("owners get the appointment explanation", () => {
+    expect(refusalText(CAP.author, true)).toMatch(/A platform owner without that appointment can look but not change/);
+  });
+  it("everybody else is told which capability the step needs", () => {
+    const t = refusalText(CAP.publish, false);
+    expect(t).toBe("This step needs an appointment that holds the right to publish checklists.");
+    expect(t).not.toMatch(/platform owner/);
+  });
+  it("every Studio capability has a label", () => {
+    for (const c of STUDIO_CAPABILITIES) expect(capabilityLabel(c)).not.toMatch(/^the capability /);
   });
 });
