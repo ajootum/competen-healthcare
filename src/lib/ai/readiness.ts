@@ -29,6 +29,7 @@ export const SCHOLAR_EXPERIENCES: Record<string, string> = {
   questions: "Revise: generate practice questions; Learn: questions",
   // SCHOLAR-INDEPENDENT-LEARNING-01 P3: cards are their own activity where the published policy offers it (else `questions`).
   flashcards: "Revise: write flashcards from your notes (where the policy offers the activity)",
+  scenarios: "Revise: evolving scenarios; Apply: OSCE stations written from your notes (where the policy offers the activity, else as questions)",
   evaluate: "Revise: short-answer feedback; Apply: clinical case feedback",
   case_steps: "Apply: clinical cases",
 };

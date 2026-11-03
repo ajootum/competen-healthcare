@@ -17,12 +17,14 @@ export type { AiActivityState, AiStanding };
 export type AiServiceLevel = AiStanding["level"];
 
 /** Scholar's activity codes (the approved list). The engine refuses an unknown code. */
-export const SCHOLAR_AI_ACTIVITIES = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask", "check", "clarify", "tutor_continue", "map", "questions", "case_steps", "evaluate", "flashcards"] as const;
+export const SCHOLAR_AI_ACTIVITIES = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask", "check", "clarify", "tutor_continue", "map", "questions", "case_steps", "evaluate", "flashcards", "scenarios"] as const;
 export type ScholarAiActivity = (typeof SCHOLAR_AI_ACTIVITIES)[number];
 
 // ── SCHOLAR-INDEPENDENT-LEARNING-01 P3: THE ACTIVITY AND THE TIER ARE CONFIGURATION ─────────────────────────────────────
 //
-// `flashcards` is its own activity code (owner GO 3 Nov 2026, P3): a flashcard is a low-risk recall item, and the published
+// `flashcards` and `scenarios` are their own activity codes (owner decisions 3 Nov 2026, SCHOLAR-AI-COST-CONFIG-01): a flashcard is a
+// low-risk recall item; an evolving scenario or an OSCE station from the notes is complex clinical work that keeps the stronger
+// model (`scenarios`), so ordinary questions (`questions`) can be routed apart from them. A flashcard is a low-risk recall item, and the published
 // fair-use policy, model routing and eligibility rows may give it a cheaper tier and model than `questions` (which also
 // writes evolving scenarios and clinical cases). Nothing is hard-coded: where the published policy does not define
 // `flashcards` yet, the code uses `questions` exactly as before (activityOrFallback), and the tier a call runs on is the

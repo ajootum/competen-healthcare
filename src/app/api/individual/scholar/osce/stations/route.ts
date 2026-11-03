@@ -7,7 +7,7 @@ import { getMaterial, getPassage, insertOsceStation, isUuid, learnerProgramme, l
 import { servableOsceStation } from "@/lib/individual/scholar/library-questions";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
-import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
+import { activityOrFallback, activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { passageCitation, runOsceStation, type Passage } from "@/lib/individual/scholar/generation";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { CONTENT_STATUS_LABEL } from "@/lib/individual/scholar/config";
@@ -117,12 +117,15 @@ async function fromNotes(ctx: Parameters<typeof aiPreflight>[0], req: Request, b
       return NextResponse.json({ id: had.id, existing: true, reused: true });
     }
   }
-  const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "questions");
+  // SCHOLAR-AI-COST-CONFIG-01: a station from the notes is complex clinical work: the `scenarios` activity where the policy offers it, else `questions`.
+  const whole = await getScholarAiStanding(ctx.admin, ctx.userId);
+  const activity = activityOrFallback(whole, "scenarios", "questions");
+  const standing = activityState(whole, activity);
   if (!standing.available) return NextResponse.json({ error: `${standing.message ?? "New AI help is not available right now."} The practice template and competency stations need no AI.`, continuity: true }, { status: 409 });
   const pre = await aiPreflight(ctx);
   if (pre) return pre;
 
-  const ai = scholarAiRunner(ctx, req, "questions", await scholarRisk(ctx.admin, ctx.userId, { text: null, passages }));
+  const ai = scholarAiRunner(ctx, req, activity, await scholarRisk(ctx.admin, ctx.userId, { text: null, passages }));
   const r = await runOsceStation(ctx.userId, { passages, min: policy.checklistMin, max: policy.checklistMax }, ai.run);
   const refusal = ai.refusal();
   if (refusal) return NextResponse.json({ error: `${refusalWords(refusal).message} The practice template and competency stations need no AI.`, continuity: true }, { status: 409 });

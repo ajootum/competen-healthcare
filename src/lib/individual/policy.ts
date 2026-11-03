@@ -1111,7 +1111,7 @@ export const POLICIES: readonly PolicyDef[] = [
     help: "Which question formats Revision may generate and offer. Questions already saved in a format that is switched off are kept, and not offered.",
     options: REVISION_FORMATS.map(v => ({ value: v, label: REVISION_FORMAT_LABEL[v] })),
     fallback: REVISION_FORMATS.filter(f => !REVISION_FORMATS_OFF_BY_DEFAULT.includes(f)),
-    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) is offered only where 710 is applied. An evolving scenario is stored as a short answer (no migration), needs feedback after each answer, and is on by default as structured is. Extended response is marked by AI on every answer, so it is off until ticked. Default: all but extended response. The formats themselves are described in one place (scholar/question-formats.ts).",
+    limitReason: "Only the formats migrations 416 and 710 store. Structured (multi-part) is offered only where 710 is applied. An evolving scenario is stored as a short answer (no migration), needs feedback after each answer, and is OFF by default (SCHOLAR-AI-COST-CONFIG-01, owner 3 Nov 2026: written on the stronger model, so chosen deliberately, never by default). Extended response is marked by AI on every answer, so it is off until ticked. Default: all but extended response and evolving scenario. The formats themselves are described in one place (scholar/question-formats.ts).",
   },
   {
     // SCHOLAR-SQIE-LEARNER-01: the formats whose new questions get a second, blind reader (a model that is not told the key and
