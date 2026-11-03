@@ -44,9 +44,11 @@ export function ScoringTab({ versionId, versionNo, instrumentCode, content, cont
     { ok: "The template was copied into this draft. Check the validation below.", onOk: (d) => { setCopyIssues(d.report.errors); router.refresh(); } });
   // Owner GO 3 Nov 2026: the deterministic proposal from the stored source workbook, for a draft imported earlier.
   const propose = () => run("propose", () => callApi<{ flags: { message: string }[] }>(url, "POST", { action: "propose_from_workbook" }),
-    { ok: "Scoring was proposed from the source workbook. Read the flags, then accept or change the rules.", onOk: () => router.refresh() });
+    { ok: "Scoring was proposed from the source workbook. Read the flags, then accept or change the rules.", onOk: reloadAll });
   const applyProfile = (profileId: ProfileId) => run("profile", () => callApi<{ flags: { message: string }[] }>(url, "POST", { action: "apply_profile", profileId }),
-    { ok: "The profile was applied to this draft: content settings, rules and tests. Read the flags, then accept or change the rules.", onOk: () => router.refresh() });
+    { ok: "The profile was applied to this draft: content settings, rules and tests. Read the flags, then accept or change the rules.", onOk: reloadAll });
+  // content, scoring and settings all changed on the server: every tab's state is re-read from the page, not patched
+  const reloadAll = () => { window.setTimeout(() => window.location.reload(), 600); };
   const proposed = isProposedRules(doc);
   const accept = () => { if (!doc) return; setDoc(acceptProposedRules(doc)); setDirty(true); };
   const starterFit = (unfit: string | null) => unfit === null;
