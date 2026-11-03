@@ -71,8 +71,21 @@ unit and re-cutting a Learn session's lessons are not yet offered (follow-up, it
 - **One AI-off voice**: the Scholar preflight and provider errors (`scholar/http.ts`) now carry a `code` (`consent_off`, `consent_outdated`, `consent_awaiting_legal`, `not_configured`, `failed`), every `AI_ERROR` consumer passes it through, and the shared copy (`ai-availability.ts`) gains `provider_unavailable` ("AI help is not available right now, so nothing was sent. Everything you have saved still works."). The word "environment" is gone from Scholar's AI errors. Professional's own strings (`professional/assistant`, `mappings`, `needs-ai`) are out of scope and listed as a follow-up.
 - Not in P1: Evaluate narrowed to a lesson (Evaluate already reads sessions and attempts by section through the study session), My Plan "Today" entry point (CE-03 owner rebuild).
 
-### P2 — deterministic adaptation (next PR)
-Rules over existing records (incorrect answers raise revision priority, overdue cards return, completed units update My Plan, repeated difficulties flag gaps, existing questions recommended before generation) as Individual policy keys where a rule is tunable; no separate adaptive engine.
+### P2 — deterministic adaptation from existing records (branch `scholar/independent-learning-p2`, stacked on P1, PR pending)
+
+The owner's rules, checked one by one against what already runs (no separate adaptive engine):
+
+| Rule | State | Where | Configurable |
+|---|---|---|---|
+| Incorrect answers raise revision priority | exists | Revise "Weak areas" mode and "Go over what you keep missing" (`revision.ts`, `mistakes.ts`), Progress next-step rules | `scholar_progress_next_rules`, `scholar_revision_modes` |
+| Overdue cards return | exists | SM-2 scheduling (`revision.ts scheduleReview`), "Cards due" on Revise, My Plan `due_revision` rule | `scholar_srs_*`, `scholar_plan_rule_order` |
+| Completed units update My Plan | **gap, closed here** | My Plan counted a section as started only when a question on it was answered (`plan-data.ts assembleMaterials`): a lesson read from the notes alone (P0's Mark as read), opened or taught stayed "unstarted" and was planned again as new. Now `startedSections` (pure) counts any learning event except a skip whose sources name the section (`store.ts learnedChunkIds`, 414 event sources, 920 read marks). | new key `scholar_plan_started_signal`: `learning` (default) or `practice` (the earlier rule) |
+| Repeated difficulties flag gaps | exists | Mistake notebook (`scholar_mistake_notebook`), Insights "What to revise next", flashcard gaps scope | `scholar_mistake_notebook` |
+| Existing questions recommended before generation | exists | Revise sessions read the saved pool and library copies first and generate only for a shortfall (`revision/sessions/route.ts`); adaptive `chooseNext` library → stored → one AI call; P1's narrowed Revise offers the lesson's existing questions first | `scholar_revision_generation = saved_only` stops generation entirely |
+| Cases revisitable | exists | stored cases replay with no AI (`ReplayCase`, `clinical-play.ts`); P0 reader opens them directly | — |
+| Activities update competency-related progress | exists, accepted links only | `competency-progress.ts` counts practice through ACCEPTED section→competency links; mapping never counts as practice; knowledge performance is never verified competence (FORMATIVE_NOTICE) | — |
+
+No migration. Evidence: vitest `plan-data.test.ts` (startedSections), `policy.test.ts` (the key, its fallback and clamp), plan / policy suites green; tsc clean.
 
 ### P3 — AI optimisation (later)
 Saved-output reuse before generation everywhere, less generation, cheaper tiers for low-risk activities (CE-07).
