@@ -20,6 +20,12 @@ Total Scholar: about USD 5.4 in 14 days; **scenarios were 59 % of it**, and ever
 
 **How often a saved output could have answered:** Learn served 59 opens in 14 days, **54 of them cached** (no AI); revision sessions reused 32 saved questions and generated 61 across 29 sessions (59 AI calls). OSCE stations had no reuse at all: every "write a station from my notes" was a new Opus call, even for the same section.
 
+## 1b. Production (read-only through the coordinator, last 30 days, the pilot learner)
+
+93 calls, about **USD 1.37** in all, every row tier `reasoning`. The largest line is **map (material topic and competency classification) on Sonnet: 44 calls, USD 0.46, 34 %**; Learn on Sonnet 17 calls USD 0.19 and on Opus 5 calls USD 0.10; everything else is one or two calls each (case blueprint, exam transcribe, case steps, mcq, structured, research, mrq, flashcard, match, short, sequence and their blind verifies, all on Opus apart from transcribe and research-on-Sonnet). Learn served **43 opens, all 43 from saved teaching**; 3 revision sessions generated 11 items and reused 0 (a new learner with nothing saved yet). Cumulative teaching (#257, live 3 Nov evening) is not in this window.
+
+What it means for this branch: production reuse is already complete where saved output exists; the measurable production saving from P3 is small today (one flashcard call a month) and grows with use; the one production line worth a configuration decision is **map**, which the owner can move to the cheap tier by policy (`map.tier = cheap`, already `minTier: cheap`) once a cheap model is made eligible for `map` at clinical educational by a model-evaluation decision, and which this branch already honours (the runner takes the policy's tier).
+
 ## 2. What changed (this branch)
 
 1. `flashcards` is its own AI activity (code: `SCHOLAR_AI_ACTIVITIES`, the revision session route and the Flashcards page); where the published policy does not define it, `questions` is used exactly as before (`activityOrFallback`).
@@ -42,4 +48,5 @@ Cumulative teaching A–D on Bed bath: **unchanged by construction** — no teac
 
 - **Scenarios** are the cost centre (59 %). "Evolving scenario" is ticked by default in custom revision (`scholar_revision_formats`), and each shortfall writes one on Opus (~USD 0.03 a call, 1.5 calls an action). A policy choice, not code: take it out of the default formats, or keep it.
 - **`questions` on Opus only.** The eligibility rows allow only Opus for `questions` at clinical educational, so mcq, mrq, short and the blind verifies all run on Opus, including the quick session above that spent USD 0.05 to keep nothing. Making Sonnet eligible for `questions` (as it already is for teach, explain, summary, examples, check, ask) would halve that; it needs a model-evaluation decision, not code.
+- **map is production's largest line (34 %)** and runs on Sonnet at the reasoning tier. The policy already allows `minTier: cheap`; setting `map.tier = cheap` and making a cheap model eligible for `map` (model evaluation) would cut it, with no code change on this branch.
 - **Two click-less AI calls** remain: guided auto-teach of the first lesson of a new scope, and the first-open analysis of a material (both consent-gated, metered, cache-first). Recommendation: keep guided auto-teach (it is the learner's chosen mode and serves saved teaching first) and keep the first-open analysis (My Plan and topics depend on it, once per material); make the analysis a button only if the owner wants zero click-less spend.
