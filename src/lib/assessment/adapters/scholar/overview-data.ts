@@ -7,6 +7,7 @@ import type { OfferCard } from "./offer";
 import { buildOverview, unionCompetencies, type ActivityFact, type OverviewCompetency, type ProgressFact, type VerificationFact } from "./competency-overview-model";
 import type { Attempt } from "./history";
 import type { Finding } from "./findings";
+import type { StageView } from "./progression-view";
 
 // ── WHAT THE SCHOLAR PAGES READ OF THE ASSESSMENT SIDE ── Checklist Studio S3 ────────────────────────────────────────
 //
@@ -62,12 +63,14 @@ export async function competenciesWithOwn(admin: Admin, programme: readonly Over
 export function overviewFrom(args: {
   competencies: readonly OverviewCompetency[]; side: Extract<SelfSide, { state: "ready" }> | null;
   progress: ReadonlyMap<string, ProgressFact>; activity: ReadonlyMap<string, ActivityFact> | null; verifications: readonly VerificationFact[] | null;
+  stages?: readonly { view: StageView; competencyIds: readonly string[] }[];
 }) {
   const attempts: ReadonlyMap<string, readonly Attempt[]> = args.side?.history.attempts ?? new Map();
   const findings: ReadonlyMap<string, readonly Finding[]> = args.side?.history.latestFindings ?? new Map();
   return buildOverview({
     competencies: args.competencies, attempts, progress: args.progress, activity: args.activity, verifications: args.verifications,
     startable: args.side?.startable ?? new Map(), findings, scaleMax: args.side?.history.scaleMax ?? null,
+    stages: args.stages,
     openSelf: new Map([...(args.side?.history.selfMapped ?? [])].flatMap(([id, v]) => (v.inProgressId ? [[id, v.inProgressId] as [string, string]] : []))),
   });
 }

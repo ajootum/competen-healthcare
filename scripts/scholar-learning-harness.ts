@@ -1566,7 +1566,7 @@ function main() {
     assessRoutesGated(REAL, ASMT).length === 0 && NEW_PAGES.every(f => REAL.has(f)), assessRoutesGated(REAL, ASMT).join(", "));
 
   /** S2: every query on a PERSON table in the adapter carries the learner (subject_user_id); nothing else in the Individual app, its libraries or the shared reader reads asmt_*. */
-  const PERSON = /admin\.from\("(asmt_instance|asmt_response|asmt_evidence|asmt_comment|asmt_outcome|asmt_respondent_grant)"\)/g;
+  const PERSON = /admin\.from\("(asmt_instance|asmt_response|asmt_evidence|asmt_comment|asmt_outcome|asmt_respondent_grant|asmt_progression_decision)"\)/g;
   const unkeyedAsmt = (src: Src): string[] => {
     const bad: string[] = [];
     for (const [f, t] of src) {
@@ -1590,7 +1590,20 @@ function main() {
   };
   const queryCount = [...(ASMT.get(ASMT_STORE) ?? "").matchAll(PERSON)].length;
   ok("S2. every query on a person table in the Scholar adapter carries the learner, and no other Scholar code or shared reader reads asmt_* rows",
-    queryCount >= 15 && unkeyedAsmt(ASMT).length === 0 && asmtLeaks(new Map()).length === 0, `queries=${queryCount} ${unkeyedAsmt(ASMT).join(", ")} ${asmtLeaks(new Map()).join(", ")}`);
+    queryCount >= 15 && /admin\.from\("asmt_progression_decision"\)/.test(ASMT.get(`${ASMT_DIR}/progression-read.ts`) ?? "") && unkeyedAsmt(ASMT).length === 0 && asmtLeaks(new Map()).length === 0, `queries=${queryCount} ${unkeyedAsmt(ASMT).join(", ")} ${asmtLeaks(new Map()).join(", ")}`);
+
+  /** S2b: nothing in the Scholar adapter reads the stored working of a decision or an outcome. The one mention is the submit WRITE (outcome payload), removed before looking. */
+  const readsTrace = (src: Src): string[] => {
+    const bad: string[] = [];
+    for (const [f, t] of src) {
+      if (!f.startsWith(ASMT_DIR) || f.endsWith(".test.ts")) continue;
+      const rest = t.replace(/trace: ev\.trace, traceHash: ev\.traceHash/g, "");
+      if (/\btrace(Hash)?\b/i.test(rest)) bad.push(f);
+    }
+    return bad;
+  };
+  ok("S2b. nothing under the Scholar adapter reads a decision's or an outcome's trace (the submit write is the only mention), and the stage reader selects only the decision's own columns",
+    readsTrace(ASMT).length === 0 && /\.select\("id, rule_version_id, state, stage_code, target_stage_code, outstanding, valid_until, computed_at"\)/.test(ASMT.get(`${ASMT_DIR}/progression-read.ts`) ?? ""), readsTrace(ASMT).join(", "));
 
   /** S3: a Scholar instance is always self-reported; the adapter creates no other record and verifies nothing. */
   const selfAlways = (src: Src): string[] => {
@@ -1650,6 +1663,11 @@ function main() {
     && asmtLeaks(new Map([[`${SCHOLAR_GROUP}/my-competencies/page.tsx`, (REAL.get(`${SCHOLAR_GROUP}/my-competencies/page.tsx`) ?? "") + "\nconst leak = (a: any) => a.from(\"asmt_instance\");"]])).length > 0
     && asmtLeaks(new Map([["src/lib/individual/scholar/planted.ts", "export const x = (a: any) => a.from(\"asmt_response\");"]])).length > 0
     && asmtLeaks(new Map()).length === 0);
+  ok("P91b. ⚠ S2b goes red when the stage reader selects trace, or any adapter file reads a trace, and S2 goes red when the stage reader drops the learner",
+    readsTrace(ASMT).length === 0
+    && readsTrace(plantAsmt(`${ASMT_DIR}/progression-read.ts`, "outstanding, valid_until, computed_at", "outstanding, trace, valid_until, computed_at")).length > 0
+    && readsTrace(plantAsmt(`${ASMT_DIR}/progression-view.ts`, "export type StageView = {", "export const peek = (d: { trace: unknown }) => d.trace;\nexport type StageView = {")).length > 0
+    && unkeyedAsmt(plantAsmt(`${ASMT_DIR}/progression-read.ts`, '.eq("subject_user_id", userId).order("computed_at", { ascending: false })', '.order("computed_at", { ascending: false })')).length > 0);
   ok("P92. ⚠ S3 goes red when the adapter starts an assessor instance, drops the self fields, inserts twice, or writes a verification",
     selfAlways(ASMT).length === 0
     && selfAlways(plantAsmt(ASMT_STORE, "attestation: SELF_ATTESTATION", "attestation: \"assessor_evaluated\"")).length > 0

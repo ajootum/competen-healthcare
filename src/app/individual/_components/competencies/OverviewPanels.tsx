@@ -9,7 +9,9 @@ import { BAND_LABEL } from "@/lib/assessment/adapters/scholar/compare";
 import { TREND_TEXT } from "@/lib/assessment/adapters/scholar/history";
 import { EXPECTED_NOT_SET, NOT_IN_PROGRAMME_NOTE } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 import { COMPARE_CLASS_LABEL, EVIDENCE_CLASS_LABEL, NO_SELF_RATING, SELF_CLASS_LABEL } from "@/lib/assessment/adapters/scholar/vocab";
+import type { StageView } from "@/lib/assessment/adapters/scholar/progression-view";
 import StartButton from "./StartButton";
+import StageBlock from "./StageBlock";
 import GapActions from "./GapActions";
 
 // MY COMPETENCIES OVERVIEW -- the four classes, side by side on a wide screen and one at a time (a sticky segmented switch) on a narrow one.
@@ -131,8 +133,10 @@ function CompareSection({ row, myPlanOn, study }: { row: OverviewRow; myPlanOn: 
   );
 }
 
-export default function OverviewPanels({ rows, others, scaleMax, myPlanOn, study, topLine, verifiedClass, reportBase }: {
+export default function OverviewPanels({ rows, others, scaleMax, myPlanOn, study, topLine, verifiedClass, reportBase, stageViews = [] }: {
   rows: OverviewRow[]; others: OverviewRow[]; scaleMax: number; myPlanOn: boolean; study: string | null; topLine: string; verifiedClass: "not_yet" | "verified" | "unreadable"; reportBase: string;
+  /** Every evidence-supported stage decision of the learner (one per rule set), for the short block above the rows. */
+  stageViews?: StageView[];
 }) {
   const [view, setView] = useState<View>("self");
   const uid = useId();
@@ -144,6 +148,7 @@ export default function OverviewPanels({ rows, others, scaleMax, myPlanOn, study
         <p className={`text-[12.5px] ${mutedText}`}>{[row.competency.domain, row.competency.framework].filter(Boolean).join(" · ")}{row.competency.expected ? ` · Expected level ${row.competency.expected.score}` : row.competency.inProgramme === false ? ` · ${EXPECTED_NOT_SET}` : ""}</p>
       </div>
       <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">{row.competency.inProgramme === false && <Chip>{NOT_IN_PROGRAMME_NOTE}</Chip>}<Chip tone={row.verification.state === "verified" ? "success" : "neutral"}>{row.verification.line}</Chip>{row.verification.detail && <span className={`text-[12px] ${mutedText}`}>{row.verification.detail}</span>}</p>
+      {row.stages.length > 0 && <div className="mt-3"><StageBlock views={row.stages} compact /></div>}
       <div className="mt-3 grid gap-3 lg:grid-cols-2">
         <div className={view === "self" ? "block" : "hidden lg:block"}><SelfSection row={row} scaleMax={scaleMax} reportHref={reportHref} assessmentsBase={reportBase} /></div>
         <div className={view === "evidence" ? "block" : "hidden lg:block"}><EvidenceSection row={row} study={study} /></div>
@@ -154,6 +159,7 @@ export default function OverviewPanels({ rows, others, scaleMax, myPlanOn, study
   return (
     <div>
       <p role="status" className={`mb-3 rounded-xl border px-3 py-2 text-[13.5px] font-semibold ${verifiedClass === "verified" ? "border-[var(--cmp-app-border)] bg-[var(--cmp-surface-success)] text-[var(--cmp-text-success)]" : "border-[var(--cmp-app-border)] bg-[var(--cmp-surface-neutral)] text-[var(--cmp-text-neutral)]"}`}>{topLine}</p>
+      {stageViews.length > 0 && <div className="mb-3"><StageBlock views={stageViews} showName /></div>}
       <div role="tablist" aria-label="What to look at" className="sticky top-0 z-10 mb-3 flex gap-1 rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-1 lg:hidden">
         {VIEWS.map(v => (
           <button key={v.key} type="button" role="tab" id={`${uid}-${v.key}`} aria-selected={view === v.key} onClick={() => setView(v.key)}

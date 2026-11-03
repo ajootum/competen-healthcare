@@ -4,7 +4,9 @@ import Link from "next/link";
 import { AssessmentReport, type EvidenceRef, type ReportListEntry } from "@/components/assessment";
 import { Chip, focusRing, mutedText } from "@/components/assessment/ui";
 import type { InstrumentDef, Responses, RulesDoc } from "@/lib/assessment/core";
+import type { StageView } from "@/lib/assessment/adapters/scholar/progression-view";
 import GapActions from "./GapActions";
+import StageBlock from "./StageBlock";
 
 // THE REPORT OF ONE ASSESSMENT -- the shared AssessmentReport, with the attestation said beside the outcome and, for the learner's own gaps, what to do
 // next through the functions that already exist (Learn, Revise, Apply, Evaluate, Ask about this, Add to My Plan). A self-assessment is the learner's own
@@ -17,6 +19,8 @@ export default function ReportHost(props: {
   title: string; subtitle: string; metadata: { label: string; value: string | null }[];
   strengths: ReportListEntry[]; gaps: ReportListEntry[]; evidenceRefs: EvidenceRef[]; evidenceCounts: Record<string, number>; generatedAt: string;
   gapActions: GapAction[]; myPlanOn: boolean; study: string | null; listHref: string; showActions: boolean;
+  /** The learner's evidence-supported stage for this assessment's checklist or competencies, when a decision exists. */
+  stageViews?: StageView[];
 }) {
   return (
     <div className="space-y-4">
@@ -27,6 +31,7 @@ export default function ReportHost(props: {
         title={props.title} subtitle={props.subtitle} metadata={props.metadata} strengths={props.strengths} gaps={props.gaps} evidenceRefs={props.evidenceRefs}
         generatedAt={props.generatedAt} showPrintButton
       />
+      {props.stageViews && props.stageViews.length > 0 && <div className="print:hidden"><StageBlock views={props.stageViews} showName /></div>}
       {props.showActions && props.gapActions.length > 0 && (
         <section aria-label="What to do about my gaps" className="rounded-xl border border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)] p-4 print:hidden">
           <div className="flex flex-wrap items-center gap-2"><h2 className="text-base font-semibold text-[var(--cmp-app-text)]">What to do about my gaps</h2><Chip tone="info">Suggestions only</Chip></div>

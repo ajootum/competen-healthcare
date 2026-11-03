@@ -1,6 +1,7 @@
 import { buildHistory, deltaText, type Attempt, type CompetencyHistory } from "./history";
 import { compareBands, differs, evidenceBand, feedbackText, selfBand, type Band, type CompareState, type PracticeEvidence } from "./compare";
 import type { Finding } from "./findings";
+import { viewsForCompetency, type StageView } from "./progression-view";
 import { NOT_VERIFIED_LINE, NO_MAPPED_EVIDENCE, VERIFICATION_UNREADABLE } from "./vocab";
 
 // ── MY COMPETENCIES OVERVIEW: THE VIEW MODEL ── Checklist Studio S3, owner addendum 5 ────────────────────────────────
@@ -51,6 +52,8 @@ export type OverviewInput = {
   scaleMax: number | null;
   /** competency id -> the learner's own open (not yet submitted) self instance, so the row can offer Continue. */
   openSelf?: ReadonlyMap<string, string>;
+  /** The learner's evidence-supported stage decisions with the competencies each speaks about. Absent or empty: no stage is shown. */
+  stages?: readonly { view: StageView; competencyIds: readonly string[] }[];
 };
 
 export type SelfPanel = {
@@ -78,6 +81,8 @@ export type OverviewRow = {
   evidence: EvidencePanel;
   compare: { state: CompareState; selfBand: Band | null; evidenceBand: Band | null; text: string; differs: boolean };
   verification: VerificationPanel;
+  /** The learner's evidence-supported stage for this competency (from assessor-led assessments), kept apart from the self rating, the practice and the verification. */
+  stages: StageView[];
   /** The row has something to show in at least one class (a self rating, an instrument to start, or linked evidence). */
   active: boolean;
 };
@@ -120,10 +125,11 @@ export function buildOverview(input: OverviewInput): { rows: OverviewRow[]; veri
     const eb = evidence.state === "evidence" ? evidenceBand({ latestAccuracy: evidence.accuracy, answered: evidence.answered, sectionsAccepted: evidence.sectionsAccepted }) : null;
     const state = compareBands(sb, eb);
     const verification = verificationPanel(c.id, input.verifications);
+    const stages = viewsForCompetency(input.stages ?? [], c.id);
     return {
       competency: c, self, evidence,
       compare: { state, selfBand: sb, evidenceBand: eb, text: feedbackText(state, c.title), differs: differs(state) },
-      verification, active: !!self || evidence.state === "evidence",
+      verification, stages, active: !!self || evidence.state === "evidence" || stages.length > 0,
     };
   });
   const verifiedCount = input.verifications === null ? null : rows.filter(r => r.verification.state === "verified").length;

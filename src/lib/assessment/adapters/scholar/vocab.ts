@@ -49,3 +49,11 @@ export const GAP_KIND_LABEL = {
   not_answered: NOT_ANSWERED_LABEL,
 } as const;
 export type FindingKind = keyof typeof GAP_KIND_LABEL;
+
+// ── EVIDENCE-SUPPORTED STAGE (progression) ── fixed words. It is worked out from assessor-led assessments only; a self-assessment never changes it. ──
+export const EVIDENCE_SUPPORTED_NOTE = "Evidence-supported, not formally verified";
+export const STAGE_FROM_ASSESSORS = "from assessor-led assessments";
+export const STAGE_UNASSESSED = "No assessor-led evidence yet";
+export const STAGE_NOT_STAGED = "Not staged yet";
+export const STAGE_BLOCK_TITLE = "Evidence-supported stage";
+export const STAGE_STALE_NOTE = "The evidence this rests on is older than the rules window, so a later assessment may change it.";

@@ -10,6 +10,7 @@ import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { Notice, PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import OverviewPanels from "@/app/individual/_components/competencies/OverviewPanels";
 import { competenciesWithOwn, expectedMap, loadSelfSide, overviewFrom, progressFacts, verificationFacts } from "@/lib/assessment/adapters/scholar/overview-data";
+import { loadStageSide } from "@/lib/assessment/adapters/scholar/progression-read";
 import type { ActivityFact, OverviewCompetency } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 import { SELF_CLASS_LABEL } from "@/lib/assessment/adapters/scholar/vocab";
 import { Block, EmptyLine, TextLink } from "../_module/module-parts";
@@ -47,12 +48,14 @@ export default async function MyCompetenciesOverview({ params, searchParams }: {
   const catalogue = d.learner.competencies ?? [];
   // The learner's own self-reported ratings are shown whatever the programme offers: the self side is read for everyone, and its competencies are
   // UNIONED with the programme's (a competency outside the programme carries a neutral note, and no expected level).
-  const side = await loadSelfSide(ctx.admin, ctx.userId, expectedMap(catalogue));
+  const [side, stageSide] = await Promise.all([loadSelfSide(ctx.admin, ctx.userId, expectedMap(catalogue)), loadStageSide(ctx.admin, ctx.userId)]);
+  // The evidence-supported stage (assessor-led evidence, by a published rule set). Unreadable shows nothing: it is never presented as "no stage".
+  const stageEntries = stageSide.state === "ready" ? stageSide.entries : [];
   const programmeCompetencies: OverviewCompetency[] = catalogue.map(c => ({ id: c.id, code: c.code, title: c.title, domain: c.domain, expected: c.expectedLevel, contentStatus: c.contentStatus === "approved" || c.contentStatus === "draft" ? c.contentStatus : "unreviewed" }));
   const activity: ReadonlyMap<string, ActivityFact> | null = d.activity;
   const ready = side.state === "ready" ? side : null;
   const competencies = await competenciesWithOwn(ctx.admin, programmeCompetencies, ready);
-  const model = overviewFrom({ competencies, side: ready, progress: progressFacts(d.progress), activity, verifications: verificationFacts(passport) });
+  const model = overviewFrom({ competencies, side: ready, progress: progressFacts(d.progress), activity, verifications: verificationFacts(passport), stages: stageEntries });
   const rows = model.rows.filter(r => r.active || r.self);
   const others = model.rows.filter(r => !rows.includes(r));
   const framework = frameworksView(d.learner, d.offered);
@@ -73,7 +76,7 @@ export default async function MyCompetenciesOverview({ params, searchParams }: {
                   {side.state === "unreadable" && <Unreadable what="self-assessments" />}
                   {side.state === "not_ready" && <p className="mb-4 rounded-xl border border-dashed border-gray-300 bg-white px-4 py-3 text-[13.5px] text-gray-700">Self-assessments are not available yet. Your learning evidence and verification status are shown below.</p>}
                   <OverviewPanels rows={rows} others={others} scaleMax={ready?.history.scaleMax ?? 6} myPlanOn={planOn} study={study ?? null} topLine={model.topLine}
-                    verifiedClass={model.verifiedCount === null ? "unreadable" : model.verifiedCount === 0 ? "not_yet" : "verified"} reportBase={base} />
+                    verifiedClass={model.verifiedCount === null ? "unreadable" : model.verifiedCount === 0 ? "not_yet" : "verified"} reportBase={base} stageViews={stageEntries.map(e => e.view)} />
                   <p className="mt-4"><TextLink href={base} accent={x.accent}>Go to Assessments</TextLink></p>
                 </>
               )}

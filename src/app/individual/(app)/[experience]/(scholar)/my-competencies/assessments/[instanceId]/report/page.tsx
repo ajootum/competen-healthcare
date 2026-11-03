@@ -8,7 +8,8 @@ import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import ReportHost, { type GapAction } from "@/app/individual/_components/competencies/ReportHost";
 import { evaluate } from "@/lib/assessment/core";
-import { loadInstanceBundle, itemContextsFor, loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
+import { loadInstanceBundle, itemContextsFor, loadCompetencyLabels, loadItemCompetencies } from "@/lib/assessment/adapters/scholar/store";
+import { entriesForReport, loadStageSide } from "@/lib/assessment/adapters/scholar/progression-read";
 import { expectedMap } from "@/lib/assessment/adapters/scholar/overview-data";
 import { findStrengthsAndGaps, findingText } from "@/lib/assessment/adapters/scholar/findings";
 import { ASSESSOR_NOTICE, SELF_ATTESTATION_LABEL, SELF_BANNER, SELF_NOTICE } from "@/lib/assessment/adapters/scholar/vocab";
@@ -49,6 +50,11 @@ export default async function AssessmentReportPage({ params, searchParams }: { p
   const outsideNames = outside.length ? await loadCompetencyLabels(ctx.admin, outside) : new Map();
   const titleOf = (id: string | null) => (id ? learner.competencies?.find(c => c.id === id)?.title ?? outsideNames.get(id)?.title ?? "A competency you rated yourself on" : "This assessment");
   const m = b.loaded.meta;
+  // The learner's evidence-supported stage for this checklist or the competencies it assesses, when a decision exists. Unreadable shows nothing.
+  const stageSide = await loadStageSide(ctx.admin, ctx.userId);
+  const stageViews = stageSide.state === "ready"
+    ? entriesForReport(stageSide.entries, m.instrumentId, [...new Set([...(await loadItemCompetencies(ctx.admin, b.loaded)).values()].map(x => x.competencyId))])
+    : [];
   const counts: Record<string, number> = {};
   for (const e of b.evidence) if (e.itemKey) counts[e.itemKey] = (counts[e.itemKey] ?? 0) + 1;
 
@@ -86,7 +92,7 @@ export default async function AssessmentReportPage({ params, searchParams }: { p
       strengths={strengths.map(f => ({ text: findingText(f), itemKey: f.itemKey }))}
       gaps={gaps.map(f => ({ text: findingText(f), itemKey: f.itemKey }))}
       evidenceRefs={refs} generatedAt={done}
-      gapActions={gapActions} myPlanOn={planOn} study={study ?? null} listHref={base} showActions={isSelf}
+      gapActions={gapActions} myPlanOn={planOn} study={study ?? null} listHref={base} showActions={isSelf} stageViews={stageViews}
     />
   );
 }
