@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { requireHqCapability } from "@/lib/hq/context";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
-import { CAP } from "@/lib/assessment/studio/transitions";
+import { CAP, POLICY_CAP } from "@/lib/assessment/studio/transitions";
 import { nameMap, reviewOverview } from "@/lib/assessment/studio/read";
 import { loadHolders } from "@/lib/assessment/studio/pathway-data";
 import { standingOf } from "@/lib/assessment/studio/pathway";
@@ -17,10 +17,10 @@ export const metadata: Metadata = { title: "Review queue" };
 // The versions in review that THIS person may still decide: never one they authored, edited or submitted, and not one they already decided on.
 export default async function ReviewQueuePage() {
   const ctx = await withOwnAppointments(await requireHqCapability("hq.assessment.studio.view"));
-  const canReview = ctx.capabilities.includes(CAP.review) || ctx.capabilities.includes(CAP.domainReview);
+  const canReview = ctx.capabilities.includes(CAP.review) || ctx.capabilities.includes(CAP.domainReview) || ctx.capabilities.includes(POLICY_CAP.review);
   // ASMT-PATHWAY-01: every version in review is listed, with who submitted it, what it needs, who can decide it, and whether THIS
   // person is independent of it. The ones this person may decide come first. Reading the list needs no capability; deciding does.
-  const [all, holders] = await Promise.all([reviewOverview(ctx.admin, ctx.userId, ctx.capabilities), loadHolders(ctx.admin)]);
+  const [all, holders, policyHolders] = await Promise.all([reviewOverview(ctx.admin, ctx.userId, ctx.capabilities), loadHolders(ctx.admin), loadHolders(ctx.admin, "policy")]);
   const names = await nameMap(ctx.admin, all.map((q) => q.submittedBy));
   const rows: ReviewRow[] = all.map((q) => {
     const mineGov = q.viewer.canGovern && !q.viewer.decidedGovernance;
@@ -31,8 +31,8 @@ export default async function ReviewQueuePage() {
       : !canReview ? "Independent, but you hold neither the review nor the domain review capability."
       : q.viewer.decidedGovernance || q.viewer.decidedDomain ? "Independent. You have already decided on this exact content."
       : q.requiresDomainReview && !q.viewer.canDomain && !mineGov ? "Independent, but this version needs a domain decision and you hold the governance right only." : "Independent, but nothing is left for you to decide here.";
-    const reviewers = standingOf("review", { holders, involved: q.involved, decisions: [], contentHash: q.contentHash });
-    const domain = standingOf("domainReview", { holders, involved: q.involved, decisions: [], contentHash: q.contentHash });
+    const reviewers = standingOf("review", { kind: q.kind, holders: q.kind === "policy" ? policyHolders : holders, involved: q.involved, decisions: [], contentHash: q.contentHash });
+    const domain = standingOf("domainReview", { kind: q.kind, holders: q.kind === "policy" ? policyHolders : holders, involved: q.involved, decisions: [], contentHash: q.contentHash });
     const needs = [
       `${q.need} governance approval${q.need === 1 ? "" : "s"} (has ${q.governance})`,
       q.requiresDomainReview ? `${q.need} domain approval${q.need === 1 ? "" : "s"} (has ${q.domain})` : "",

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
-import { CAP } from "@/lib/assessment/studio/transitions";
+import { CAP, POLICY_CAP, capabilitiesFor } from "@/lib/assessment/studio/transitions";
 import { approveVersion, deleteDraft, duplicateVersion, publishVersion, retireVersion, returnToDraft } from "@/lib/assessment/studio/write";
 import { submitForReview } from "@/lib/assessment/studio/service";
 import { isUuid, kindOf, mustHold, refuse, respond } from "@/lib/assessment/studio/api";
@@ -17,16 +17,17 @@ export const dynamic = "force-dynamic";
 // The gate admits the lowest right and each action re-checks its own. Every refusal of the database comes back in plain words.
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await withOwnAppointments(await hqApiGate([CAP.author, CAP.review, CAP.publish]));
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.author, CAP.review, CAP.publish, POLICY_CAP.author, POLICY_CAP.review, POLICY_CAP.publish]));
   if (isHqRefusal(ctx)) return ctx;
   const { versionId } = await params;
   const b = await req.json().catch(() => ({}));
   const kind = b?.kind === undefined ? "instrument" : kindOf(b.kind);
   if (!isUuid(versionId) || !kind) return refuse(400, "Choose a version.");
   const action = String(b?.action ?? "");
+  const K = capabilitiesFor(kind);   // 942: a policy needs the policy rights, a checklist the assessment ones
   const need: Record<string, string[]> = {
-    submit: [CAP.author], return: [CAP.author], duplicate: [CAP.author], delete: [CAP.author],
-    approve: [CAP.review, CAP.publish], publish: [CAP.publish], retire: [CAP.publish],
+    submit: [K.author], return: [K.author], duplicate: [K.author], delete: [K.author],
+    approve: [K.review, K.publish], publish: [K.publish], retire: [K.publish],
   };
   if (!need[action]) return refuse(400, "Unknown action.");
   if (!need[action].some((c) => ctx.capabilities.includes(c))) return mustHold(ctx, need[action][0]) ?? refuse(403, "Not allowed.");

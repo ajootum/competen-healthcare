@@ -1,6 +1,6 @@
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
-import { CAP } from "@/lib/assessment/studio/transitions";
+import { CAP, POLICY_CAP, capabilitiesFor } from "@/lib/assessment/studio/transitions";
 import { approveVersion, recordDecision } from "@/lib/assessment/studio/write";
 import { isUuid, kindOf, mustHold, refuse, respond } from "@/lib/assessment/studio/api";
 
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // records (the decision row, the approved event); one click. The database refuses the approval when the count is short.
 
 export async function POST(req: Request, { params }: { params: Promise<{ versionId: string }> }) {
-  const ctx = await withOwnAppointments(await hqApiGate([CAP.review, CAP.domainReview]));
+  const ctx = await withOwnAppointments(await hqApiGate([CAP.review, CAP.domainReview, POLICY_CAP.review]));
   if (isHqRefusal(ctx)) return ctx;
   const { versionId } = await params;
   const b = await req.json().catch(() => ({}));
@@ -24,11 +24,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ version
   if (!isUuid(versionId) || !kind) return refuse(400, "Choose a version.");
   if (b?.reviewKind !== "governance" && b?.reviewKind !== "domain") return refuse(400, "Choose the kind of review.");
   if (!["approved", "rejected", "changes_requested"].includes(b?.decision)) return refuse(400, "Choose a decision.");
-  const denied = mustHold(ctx, b.reviewKind === "domain" ? CAP.domainReview : CAP.review);
+  const K = capabilitiesFor(kind);
+  const denied = mustHold(ctx, b.reviewKind === "domain" ? K.domainReview : K.review);
   if (denied) return denied;
   const recorded = await recordDecision(ctx.admin, kind, versionId, ctx.userId, { reviewKind: b.reviewKind, decision: b.decision, rationale: typeof b.rationale === "string" ? b.rationale : null });
   if (!recorded.ok || b?.andApprove !== true || b.decision !== "approved") return respond(recorded);
-  if (!(ctx.capabilities.includes(CAP.review) || ctx.capabilities.includes(CAP.publish))) return respond(recorded, { approved: false, note: "Your decision is recorded. Marking the version approved needs the review or publish capability." });
+  if (!(ctx.capabilities.includes(K.review) || ctx.capabilities.includes(K.publish))) return respond(recorded, { approved: false, note: "Your decision is recorded. Marking the version approved needs the review or publish capability." });
   // A checklist that requires a domain review needs a domain decision as well. When this reviewer also holds the domain review
   // right (spec: "both capabilities and appropriate authority"), the one interaction records that decision too, as its own row.
   if (kind === "instrument" && b.reviewKind === "governance" && ctx.capabilities.includes(CAP.domainReview)) {

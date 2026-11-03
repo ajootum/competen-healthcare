@@ -7,7 +7,7 @@
 // response scale, scoring template, layout template, progression rule set) and the catalogue identity that has no
 // version yet. The pattern is the Framework Governance Workspace's (src/lib/competency/governance-rules.ts).
 import type { ApprovalStatus, Availabilities } from "./transitions";
-import { CAP } from "./transitions";
+import { capabilitiesFor } from "./transitions";
 import { capabilityLabel } from "./capability-labels";
 import { KIND_LABEL, type DefinitionKind, type LifecycleState, type ReviewDecisionRow, type StudioIssue } from "./types";
 
@@ -110,8 +110,8 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const vLabel = (versionNo: number | null) => (versionNo ? `v${versionNo}` : "the draft");
 
 /** Pure: who, of the appointed holders, may act on THIS content under THIS capability. Independence is content-specific. */
-export function standingOf(group: "author" | "review" | "domainReview" | "publish", i: Pick<PathwayInput, "holders" | "involved" | "decisions" | "contentHash">): WhoCanAct {
-  const cap = { author: CAP.author, review: CAP.review, domainReview: CAP.domainReview, publish: CAP.publish }[group];
+export function standingOf(group: "author" | "review" | "domainReview" | "publish", i: Pick<PathwayInput, "kind" | "holders" | "involved" | "decisions" | "contentHash">): WhoCanAct {
+  const cap = capabilitiesFor(i.kind)[group];
   const holders = i.holders[group];
   const positions = i.holders.positions[group];
   const decided = (personId: string, kind: "governance" | "domain") => i.decisions.some((d) => d.reviewer_id === personId && d.review_kind === kind && d.content_hash === i.contentHash && i.contentHash !== null);
@@ -204,7 +204,7 @@ export function pathwayOf(i: PathwayInput): PathwayModel {
   const stages = stagesOf(i, reviewersEligible, publishers.eligible, blockers);
   const av = i.availability;
   const ap = i.approval;
-  const holdsAuthor = i.caps.includes(CAP.author);
+  const holdsAuthor = i.caps.includes(capabilitiesFor(i.kind).author);
   const eligibleNames = (g: WhoCanAct) => listNames(g.actors.filter((a) => a.eligible));
 
   // ---- no version yet: the catalogue identity ---------------------------------------------------------------------

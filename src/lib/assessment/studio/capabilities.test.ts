@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { effectiveCapabilities, STUDIO_CAPABILITIES } from "./capabilities";
-import { CAP } from "./transitions";
+import { POLICY_CAP, CAP } from "./transitions";
 import { refusalText } from "./api";
 import { capabilityLabel } from "./capability-labels";
 
@@ -30,7 +30,7 @@ describe("effectiveCapabilities", () => {
     expect(asked).toBe(0);
   });
   it("covers every Studio capability", () => {
-    expect([...STUDIO_CAPABILITIES].sort()).toEqual(Object.values(CAP).sort());
+    expect([...STUDIO_CAPABILITIES].sort()).toEqual([...Object.values(CAP), ...Object.values(POLICY_CAP)].sort());   // 942: policy rights too
   });
 });
 

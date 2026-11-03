@@ -6,7 +6,7 @@
 import type { createAdminClient } from "@/lib/supabase/server";
 import { activeGrants, appointmentInTerm, narrowToScope } from "@/lib/hq/spaces";
 import { loadAvailability } from "../catalogue/availability";
-import { CAP } from "./transitions";
+import { capabilitiesFor } from "./transitions";
 import { lifecycleData, type LifecycleData } from "./page-data";
 import { nameMap } from "./read";
 import { pathwayOf, summarize, NO_HOLDERS, type PathwayHolder, type PathwayHolders, type PathwayModel, type PathwaySummary } from "./pathway";
@@ -14,15 +14,16 @@ import { VERSION_TABLE, type DefinitionKind, type LifecycleRow, type StudioIssue
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-const GROUPS = { author: CAP.author, review: CAP.review, domainReview: CAP.domainReview, publish: CAP.publish } as const;
-type Group = keyof typeof GROUPS;
+type Group = "author" | "review" | "domainReview" | "publish";
 
 /**
  * The appointed holders of the four Studio capabilities, by name and position, from the live appointments. An owner is
  * not assumed to hold anything: the database wants appointments, so this list says exactly who the database will admit.
  * A read failure comes back as readable: false, said on screen, never as an empty list that looks like "nobody".
  */
-export async function loadHolders(admin: Admin): Promise<PathwayHolders> {
+export async function loadHolders(admin: Admin, kind: DefinitionKind = "instrument"): Promise<PathwayHolders> {
+  const CAP = capabilitiesFor(kind);
+  const GROUPS = { author: CAP.author, review: CAP.review, domainReview: CAP.domainReview, publish: CAP.publish } as const;
   try {
     const caps = Object.values(GROUPS) as string[];
     const grants = await admin.from("hq_position_capability").select("position_code, capability_code, effective_from, effective_to").in("capability_code", caps).limit(1000);
@@ -94,7 +95,7 @@ export function latestReturn(events: { event: string; actor_id: string | null; r
 
 /** The pathway model for one version (or for the identity before its first version). */
 export async function pathwayModel(admin: Admin, o: PathwayOptions): Promise<PathwayModel> {
-  const holders = o.holders ?? await loadHolders(admin);
+  const holders = o.holders ?? await loadHolders(admin, o.kind);
   const v = o.version;
   if (!v) {
     return pathwayOf({

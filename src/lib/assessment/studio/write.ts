@@ -23,7 +23,37 @@ function versionTable(admin: Admin, kind: DefinitionKind) {
     case "rule_template": return admin.from("asmt_rule_template_version");
     case "layout_template": return admin.from("asmt_layout_template_version");
     case "progression": return admin.from("asmt_progression_rule_version");
+    case "policy": return admin.from("hq_policy_version");
   }
+}
+
+// ---- governed policies (942): the identity, its first draft, and a draft's content -----------------------------------
+
+export interface NewPolicy { title: string; policyType: string; scope?: string; description?: string | null; summary?: string | null; content?: string }
+
+/** A governed policy and its first draft. The code is assigned by the database (POL-nnnnnn). */
+export async function createPolicy(admin: Admin, actorId: string, n: NewPolicy): Promise<WriteResult<{ policyId: string; versionId: string; code: string }>> {
+  const title = n.title.trim();
+  if (title.length < 3) return fail(422, "Give the policy a title of at least three characters.");
+  const { data: p, error } = await admin.from("hq_policy").insert({ title, policy_type: n.policyType, scope: n.scope ?? "holdings", description: n.description?.trim() || null, created_by: actorId }).select("id, code").single();
+  if (error) return dbFail(error);
+  const { data: v, error: vErr } = await admin.from("hq_policy_version").insert({ policy_id: (p as any).id, authored_by: [actorId], title, summary: n.summary?.trim() || null, content: n.content ?? "" }).select("id").single();
+  if (vErr) { await admin.from("hq_policy").delete().eq("id", (p as any).id); return dbFail(vErr); }
+  return { ok: true, policyId: (p as any).id, versionId: (v as any).id, code: (p as any).code };
+}
+
+export interface PolicyVersionPatch { title?: string; summary?: string | null; content?: string; effectiveFrom?: string | null; reviewDue?: string | null }
+
+/** Edit a draft policy version. The lifecycle guard refuses anything but a draft and names the editor. */
+export async function savePolicyVersion(admin: Admin, actorId: string, versionId: string, patch: PolicyVersionPatch): Promise<WriteResult> {
+  const row: Record<string, unknown> = { last_edited_by: actorId };
+  if (patch.title !== undefined) { const t = patch.title.trim(); if (t.length < 3) return fail(422, "The title needs at least three characters."); row.title = t; }
+  if (patch.summary !== undefined) row.summary = patch.summary?.trim() || null;
+  if (patch.content !== undefined) row.content = patch.content;
+  if (patch.effectiveFrom !== undefined) row.effective_from = patch.effectiveFrom || null;
+  if (patch.reviewDue !== undefined) row.review_due = patch.reviewDue || null;
+  const { error } = await admin.from("hq_policy_version").update(row).eq("id", versionId).eq("state", "draft");
+  return error ? dbFail(error) : { ok: true };
 }
 
 // ---- creating --------------------------------------------------------------------------------------------------------
