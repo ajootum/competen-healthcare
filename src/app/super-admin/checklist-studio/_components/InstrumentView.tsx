@@ -6,6 +6,8 @@ import { Btn, SelectIn } from "@/components/assessment/ui";
 import { fmtDate, fmtDateTime } from "@/lib/assessment/studio/vocab";
 import type { LifecycleState, TimelineEntry } from "@/lib/assessment/studio/types";
 import { DefTimeline } from "./DefShared";
+import { PathwayPanel } from "./PathwayPanel";
+import type { PathwayModel } from "@/lib/assessment/studio/pathway";
 import { Notice, Panel, StateChip, callApi, td, th, useAction } from "./studio-ui";
 
 interface VersionSummary {
@@ -16,6 +18,8 @@ interface VersionSummary {
 export function InstrumentView(p: {
   instrumentId: string; versions: VersionSummary[]; timeline: TimelineEntry[]; names: Record<string, string>;
   purposes: { code: string; label: string; publishable: boolean }[]; canAuthor: boolean; canPublish: boolean;
+  /** ASMT-PATHWAY-01: the pathway of each version, and of the identity while it has none */
+  pathways?: Record<string, PathwayModel>; identityPathway?: PathwayModel | null; catalogueHref?: string;
 }) {
   const { busy, msg, run, router } = useAction();
   const base = `/super-admin/checklist-studio/${p.instrumentId}/v`;
@@ -25,10 +29,16 @@ export function InstrumentView(p: {
   const publishable = p.purposes.filter((x) => x.publishable);
   const [purpose, setPurpose] = useState(publishable[0]?.code ?? "");
   const first = () => run("first", () => callApi<{ versionId: string }>(`/api/hq/checklist-studio/instruments/${p.instrumentId}`, "POST", { action: "first_version", purpose }), { onOk: (d) => router.push(`${base}/${d.versionId}`) });
+  const latest = p.versions[0] ?? null;
+  const latestPathway = latest ? p.pathways?.[latest.id] ?? null : p.identityPathway ?? null;
 
   return (
     <div className="space-y-5">
       {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
+      {latestPathway && (
+        <PathwayPanel model={latestPathway} versionId={latest?.id ?? null} editHref={latest ? `${base}/${latest.id}` : null} catalogueHref={p.catalogueHref ?? null} versionHrefBase={base}
+          onFirstVersion={!latest && p.canAuthor && purpose ? first : undefined} />
+      )}
       <Panel title="Versions">
         {p.versions.length === 0 ? (
           <div className="space-y-3">
@@ -42,12 +52,13 @@ export function InstrumentView(p: {
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-[var(--cmp-app-border)]">
-              <thead><tr><th className={th}>Version</th><th className={th}>State</th><th className={th}>Purpose</th><th className={th}>Delivery</th><th className={th}>Authored by</th><th className={th}>Published</th><th className={th}><span className="sr-only">Actions</span></th></tr></thead>
+              <thead><tr><th className={th}>Version</th><th className={th}>State</th><th className={th}>Next step</th><th className={th}>Purpose</th><th className={th}>Delivery</th><th className={th}>Authored by</th><th className={th}>Published</th><th className={th}><span className="sr-only">Actions</span></th></tr></thead>
               <tbody className="divide-y divide-[var(--cmp-app-border)]">
                 {p.versions.map((v) => (
                   <tr key={v.id}>
                     <td className={td}><Link href={`${base}/${v.id}`} className="font-semibold text-[var(--cmp-theme-ink)] underline underline-offset-2">v{v.version_no}</Link>{v.risk === "high" && <span className="ml-1 text-xs text-[var(--cmp-text-warning)]">high risk</span>}</td>
                     <td className={td}><StateChip state={v.state} /></td>
+                    <td className={`${td} max-w-xs`}>{p.pathways?.[v.id] ? <><span className="font-semibold">{p.pathways[v.id].next.headline}</span>{p.pathways[v.id].next.responsible && <span className="block text-xs text-[var(--cmp-app-text-secondary)]">{p.pathways[v.id].next.responsible}</span>}</> : ""}</td>
                     <td className={td}>{p.purposes.find((x) => x.code === v.purpose_code)?.label ?? v.purpose_code}</td>
                     <td className={td}>{v.delivery_modes.join(", ") || "none yet"}</td>
                     <td className={td}>{v.authored_by.map((a) => p.names[a] ?? "an author").join(", ")}</td>

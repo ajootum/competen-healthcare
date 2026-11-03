@@ -5,6 +5,9 @@ import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { buildTimeline, loadInstrument, loadRegistries, loadTrail, nameMap } from "@/lib/assessment/studio/read";
 import { isUuid } from "@/lib/assessment/studio/api";
+import { loadHolders, pathwayModel } from "@/lib/assessment/studio/pathway-data";
+import { validateInstrument } from "@/lib/assessment/studio/service";
+import type { PathwayModel } from "@/lib/assessment/studio/pathway";
 import { InstrumentView } from "../_components/InstrumentView";
 import { PageHead, StudioShell } from "../_components/studio-ui";
 
@@ -23,6 +26,15 @@ export default async function InstrumentPage({ params }: { params: Promise<{ ins
   const [trail, registries] = await Promise.all([loadTrail(ctx.admin, "instrument", versions.map((v) => v.id)), loadRegistries(ctx.admin)]);
   const timeline = buildTimeline(trail.events, trail.decisions, Object.fromEntries(versions.map((v) => [v.id, v.version_no])));
   const names = await nameMap(ctx.admin, [...versions.flatMap((v) => [...v.authored_by, v.published_by, v.submitted_by]), ...timeline.map((t) => t.actorId)]);
+  // ASMT-PATHWAY-01: the pathway of every version (the latest draft with its real validation), or of the identity when there is none.
+  const holders = await loadHolders(ctx.admin);
+  const versionNos = Object.fromEntries(versions.map((v) => [v.id, v.version_no]));
+  const latest = versions[0] ?? null;
+  const latestReport = latest && latest.state === "draft" ? (await validateInstrument(ctx.admin, latest.id, null, false))?.report : null;
+  const pathways: Record<string, PathwayModel> = Object.fromEntries(await Promise.all(versions.map(async (v) => [v.id, await pathwayModel(ctx.admin, {
+    kind: "instrument", version: v, actorId: ctx.userId, caps: ctx.capabilities, holders, instrumentId: instrument.id, versionNos, validation: v.id === latest?.id ? latestReport?.errors ?? [] : [],
+  })])));
+  const identityPathway = versions.length ? null : await pathwayModel(ctx.admin, { kind: "instrument", version: null, actorId: ctx.userId, caps: ctx.capabilities, holders });
   return (
     <StudioShell>
       <PageHead
@@ -37,6 +49,7 @@ export default async function InstrumentPage({ params }: { params: Promise<{ ins
           published_at: v.published_at, submitted_at: v.submitted_at, created_at: v.created_at, risk: v.risk,
         }))}
         timeline={timeline} names={names} purposes={registries.purposes} canAuthor={ctx.capabilities.includes(CAP.author)} canPublish={ctx.capabilities.includes(CAP.publish)}
+        pathways={pathways} identityPathway={identityPathway} catalogueHref={`/super-admin/assessment-catalogue/${instrument.id}`}
       />
     </StudioShell>
   );

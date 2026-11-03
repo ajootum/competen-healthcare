@@ -6,6 +6,7 @@ import { CAP } from "@/lib/assessment/studio/transitions";
 import { isUuid } from "@/lib/assessment/studio/api";
 import { listLayoutTemplates, listRuleTemplates, listScaleChoices, loadInstrumentVersion, loadRegistries } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
+import { pathwayModel } from "@/lib/assessment/studio/pathway-data";
 import { validateLoaded } from "@/lib/assessment/studio/service";
 import { CRITERION_KIND, criterionDrift, readMappedCriteria } from "@/lib/assessment/adapters/scholar/criteria";
 import { VersionWorkspace } from "../../../_components/VersionWorkspace";
@@ -43,6 +44,7 @@ export default async function VersionPage({ params }: { params: Promise<{ instru
   const caps = ctx.capabilities;
   const canEdit = version.state === "draft" && caps.includes(CAP.author);
   const life = await lifecycleData(ctx.admin, { kind: "instrument", version, actorId: ctx.userId, caps, validationErrors: report.errors.length });
+  const pathway = await pathwayModel(ctx.admin, { kind: "instrument", version, actorId: ctx.userId, caps, validation: report.errors, life, instrumentId: instrument.id });
   const taxonomies = await ctx.admin.from("taxonomies").select("id, label");
   const termRows = await ctx.admin.from("taxonomy_terms").select("id, value, taxonomy_id").order("sort_order");
   const taxName = new Map(((taxonomies.data ?? []) as { id: string; label: string }[]).map((t) => [t.id, t.label]));
@@ -65,6 +67,7 @@ export default async function VersionPage({ params }: { params: Promise<{ instru
           version, tagTermIds: loaded.tagTermIds, terms, purposes: registries.purposes, methods: registries.methods, editable: canEdit, canValidate: caps.includes(CAP.author), report,
         }}
         report={report} title={version.title ?? instrument.name} timeline={life.timeline}
+        pathway={pathway} catalogueHref={`/super-admin/assessment-catalogue/${instrument.id}`}
         lifecycle={{
           contentHash: version.content_hash, availability: life.availability, approval: life.approval, requiresDomainReview: version.requires_domain_review,
           decisions: life.decisions, names: life.names,

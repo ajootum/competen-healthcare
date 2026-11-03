@@ -5,10 +5,12 @@ import { withOwnAppointments } from "@/lib/assessment/studio/appointed";
 import { CAP } from "@/lib/assessment/studio/transitions";
 import { loadLayoutTemplateVersion } from "@/lib/assessment/studio/read";
 import { lifecycleData } from "@/lib/assessment/studio/page-data";
+import { pathwayModel } from "@/lib/assessment/studio/pathway-data";
 import { recentDesigns } from "@/lib/assessment/studio/designs";
 import { DefLayoutTemplateEditor } from "../../../_components/DefLayoutTemplateEditor";
 import { DefTimeline } from "../../../_components/DefShared";
 import { LifecyclePanel } from "../../../_components/LifecyclePanel";
+import { PathwayPanel } from "../../../_components/PathwayPanel";
 import { PageHead, StateChip, StudioShell } from "../../../_components/studio-ui";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +27,7 @@ export default async function LayoutTemplateVersionPage({ params }: { params: Pr
     lifecycleData(ctx.admin, { kind: "layout_template", version: v, actorId: ctx.userId, caps: ctx.capabilities, validationErrors: 0 }),
     recentDesigns(ctx.admin),
   ]);
+  const pathway = await pathwayModel(ctx.admin, { kind: "layout_template", version: v, actorId: ctx.userId, caps: ctx.capabilities, life: lc });
   return (
     <StudioShell wide>
       <PageHead
@@ -33,6 +36,7 @@ export default async function LayoutTemplateVersionPage({ params }: { params: Pr
         right={<StateChip state={v.state} />}
       />
       <DefLayoutTemplateEditor versionId={v.id} initialLayout={v.layout ?? {}} presentation={v.presentation ?? "standard_checklist"} description={v.description} designs={designs} editable={editable} />
+      <PathwayPanel model={pathway} versionId={v.id} versionHrefBase="/super-admin/checklist-studio/layout-templates/v" />
       <LifecyclePanel
         kind="layout_template" versionId={v.id} versionNo={v.version_no} state={v.state} contentHash={v.content_hash} availability={lc.availability} approval={lc.approval}
         requiresDomainReview={false} decisions={lc.decisions} names={lc.names}
