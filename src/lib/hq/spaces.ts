@@ -84,6 +84,12 @@ export const HQ_CAPABILITIES: { code: string; space: HqSpace }[] = [
   // separate preview host. Read-only by default. Held by the Individual Product Administrator and the Individual Product
   // Reviewer positions, and by the platform owners. It grants no write and no access to any real learner.
   { code: "hq.individual.scholar.preview",    space: "platform"  },
+  // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910): the learner engagement and usage dashboard. `view` opens it in
+  // Anonymous View (pseudonymous rankings, no identity), held by the Individual Product Administrator and Reviewer.
+  // `identifiable.read` is Named View and the identified learner detail: granted to NO position, the owner grants it
+  // through HQ Positions when decided. The API keeps identity on the server unless this is held, and audits each use.
+  { code: "hq.scholar.analytics.view",        space: "platform"  },
+  { code: "hq.scholar.analytics.identifiable.read", space: "platform" },
   { code: "hq.practice.operations.view",      space: "practice"  },
   // ⚠ ADDED BY MIGRATION 273, and this list had to follow it. The DB gained the capability and this
   // catalogue did not, so B1 went red -- which is the drift control working.
@@ -334,6 +340,8 @@ export const HQ_ROUTE_INTENT: { prefix: string; capability: string; exact?: bool
   // EXACT: the screen has no sub-routes, and a sibling Individual HQ page (IND-007 configuration) must not
   // inherit the pilot-grant right by sitting under this prefix -- it declares its own entry.
   // HQ-SCHOLAR-PREVIEW-01: View Scholar (product preview launcher). Its own right. BEFORE the exact /super-admin/individual entry.
+  // SCHOLAR-ENGAGEMENT-ANALYTICS-01: the dashboard sits under the Scholar preview path and must be matched first.
+  { prefix: "/super-admin/individual/scholar/analytics", capability: "hq.scholar.analytics.view" },
   { prefix: "/super-admin/individual/scholar",    capability: "hq.individual.scholar.preview" },
   { prefix: "/super-admin/individual",            capability: "hq.individual.pilot.grant", exact: true },
 

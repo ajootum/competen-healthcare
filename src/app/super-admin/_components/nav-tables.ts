@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.4.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.5.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -127,6 +127,8 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "products.individual.verification", label: "Professional Verification", href: "/super-admin/individual/verification", icon: "✅", flag: "individual" },
       { key: "products.individual.economics", label: "Unit Economics & FX", href: "/super-admin/individual/economics", icon: "💱", keywords: ["fx exposure","exchange rate","currency"], flag: "individual" },
       { key: "products.individual.scholar-preview", label: "View Scholar", href: "/super-admin/individual/scholar", icon: "👁️", keywords: ["scholar preview","product preview","demo learner","demonstration"], flag: "individual" },
+      // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910): adoption, activity, engagement and AI expenditure of genuine learners.
+      { key: "products.individual.scholar-analytics", label: "Learner Engagement", href: "/super-admin/individual/scholar/analytics", icon: "📈", keywords: ["analytics","engagement","usage","active learners","leaderboard","ai expenditure","ai cost","active days","study time"], flag: "individual" },
       { key: "products.individual.course-access", label: "Course Access", href: "/super-admin/learning/access", icon: "🔑", kind: "cross" },
     ]},
     { key: "products.practice", group: "Competen Practice", items: [
