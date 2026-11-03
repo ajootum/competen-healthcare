@@ -323,7 +323,7 @@ export async function answerQuestion(ctx: IndividualContext, req: Request, input
     evidence: { notes: local.passages.length, library: local.library.length, web: web.sources.length }, web: web.state, attempted: !!attemptText,
     outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}`, model: r.ok ? r.model : null,
   });
-  if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
+  if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code });
   // SCHOLAR-SQIE-02: withheld vs answered, counted apart (codes only). The paper answer stays on its own activity.
   const o = answerOutcome(r.check.ok ? null : r.check.reason);
   await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_exam_answer", outputKind: "explanation", outcome: o.outcome, reasons: o.reasons, promptVersion: r.promptVersion });
@@ -358,7 +358,7 @@ export async function followUp(ctx: IndividualContext, req: Request, input: { an
   const refused = meteredRefusal(ai.refusal());
   if (refused) return json(refused.status, await refused.json());
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_exam_follow_up", a.id, { ask_chars: input.ask.length, outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}` });
-  if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
+  if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code });
   if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, answerId: a.id, ask: input.ask, message: r.check.reason === "no_citation" || r.check.reason === "bad_citation" ? "The reply did not cite the evidence correctly, so it was not shown." : r.check.reason === "identifier" ? ANSWER_WITHHELD.identifier : ANSWER_WITHHELD.ungrounded });
   return json(200, { text: r.check.text, cited: r.check.cited });
 }
@@ -388,7 +388,7 @@ export async function revisionGuide(ctx: IndividualContext, req: Request, materi
   const refused = meteredRefusal(ai.refusal());
   if (refused) return json(refused.status, await refused.json());
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_exam_guide", materialId, { questions: qs.length, outcome: r.ok ? (r.check.ok ? "shown" : `withheld:${r.check.reason}`) : `error:${r.error}` });
-  if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
+  if (!r.ok) return json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code });
   if (!r.check.ok) return json(200, { withheld: { reason: r.check.reason }, materialId, message: "The guide included details its evidence does not support, so it was not shown. Try again." });
   const stored = evidence.map(storedEvidence);
   const id = await saveExamAnswer(ctx.admin, ctx.userId, {
@@ -444,7 +444,7 @@ export async function transcribeScannedUpload(ctx: IndividualContext, req: Reque
     const r = await runTranscription(ai.run, ctx.userId, { pdfBase64: pdf, pages: batch });
     const refused = meteredRefusal(ai.refusal());
     if (refused) return json(refused.status, await refused.json());
-    if (!r.ok) return pages.length ? { pages, model } : json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error });
+    if (!r.ok) return pages.length ? { pages, model } : json(AI_ERROR[r.error].status, { error: AI_ERROR[r.error].error, code: AI_ERROR[r.error].code });
     model = r.model;
     if (!r.pages.length) break; // past the last page
     pages.push(...r.pages);

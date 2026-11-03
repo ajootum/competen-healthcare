@@ -63,10 +63,16 @@ describe("HFE-01 Wave 1: AI availability", () => {
     expect(reasonFromRefusal(published)).toBe("activity_unsupported");
     expect(reasonFromRefusal(meteredRefusalBody({ ok: false, error: "allowance_exhausted", standing: standing() }).body)).toBe("allowance_exhausted");
     expect(reasonFromRefusal({ error: "Ask a question" })).toBeNull();
+    // SCHOLAR-INDEPENDENT-LEARNING-01 P1: the Scholar preflight and provider errors carry codes the shared copy reads.
+    expect(reasonFromRefusal({ error: "x", code: "consent_off" })).toBe("consent_off");
+    expect(reasonFromRefusal({ error: "x", code: "consent_outdated" })).toBe("consent_outdated");
+    expect(reasonFromRefusal({ error: "x", code: "not_configured" })).toBe("provider_unavailable");
+    expect(reasonFromRefusal({ error: "x", code: "failed" })).toBe("provider_unavailable");
+    expect(aiReasonCopy("provider_unavailable", "scholar").text).toMatch(/saved still works/);
   });
 
   it("speaks in the person's terms, with a next step only where they can act", () => {
-    const reasons = ["policy_unpublished", "consent_off", "consent_outdated", "consent_awaiting_legal", "allowance_exhausted", "level_insufficient", "activity_unsupported", "not_eligible", "unreadable", "not_entitled"] as const;
+    const reasons = ["policy_unpublished", "consent_off", "consent_outdated", "consent_awaiting_legal", "allowance_exhausted", "level_insufficient", "activity_unsupported", "not_eligible", "unreadable", "not_entitled", "provider_unavailable"] as const;
     for (const r of reasons) {
       const c = aiReasonCopy(r, "professional");
       expect(c.text.length).toBeGreaterThan(20);

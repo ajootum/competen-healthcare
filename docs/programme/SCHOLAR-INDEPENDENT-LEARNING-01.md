@@ -64,8 +64,12 @@ unit and re-cutting a Learn session's lessons are not yet offered (follow-up, it
 - Performance: one read per lesson per visit, and only for the active lesson or one the learner opened (never every lesson of a long session at once).
 - Evidence: `docs/evidence/SCHOLAR-INDEPENDENT/920-build-record.md` (staging ×2, VERIFY, rollback), headless walk 16/16, desktop / tablet / phone screenshots.
 
-### P1 — connected activities (next PR)
-Learn → Revise → Apply → Evaluate → Progress keeping unit, topic, document references, competency focus and study-session context; "Ask about this" from the reader (CE-01); the Revise / Apply entry points narrowed to the lesson's sections.
+### P1 — connected activities and one AI-off voice (branch `scholar/independent-learning-p1`, stacked on P0, PR pending)
+- Every link out of the reader carries the open study session (`study-active carry`): Open in the material, flashcards, questions, OSCE stations, cases.
+- **Revise narrowed to the lesson**: "Answer these questions" opens Revise with `?material=&sections=`; `RevisionStart` then starts a `sources` scope of exactly those sections (the existing `parseScope` / `resolveScope`), says "Only the N sections of the lesson you came from", and offers "Use the whole material". Existing questions on those sections are offered first (the route's saved pool), and the shortfall rules are unchanged.
+- **Ask about this** on every section of the reader: the CE-01 in-place panel grounded on that one section (surface `learn`, the session and step); it says why when AI is not available and never blocks reading.
+- **One AI-off voice**: the Scholar preflight and provider errors (`scholar/http.ts`) now carry a `code` (`consent_off`, `consent_outdated`, `consent_awaiting_legal`, `not_configured`, `failed`), every `AI_ERROR` consumer passes it through, and the shared copy (`ai-availability.ts`) gains `provider_unavailable` ("AI help is not available right now, so nothing was sent. Everything you have saved still works."). The word "environment" is gone from Scholar's AI errors. Professional's own strings (`professional/assistant`, `mappings`, `needs-ai`) are out of scope and listed as a follow-up.
+- Not in P1: Evaluate narrowed to a lesson (Evaluate already reads sessions and attempts by section through the study session), My Plan "Today" entry point (CE-03 owner rebuild).
 
 ### P2 — deterministic adaptation (next PR)
 Rules over existing records (incorrect answers raise revision priority, overdue cards return, completed units update My Plan, repeated difficulties flag gaps, existing questions recommended before generation) as Individual policy keys where a rule is tunable; no separate adaptive engine.

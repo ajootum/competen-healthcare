@@ -24,7 +24,8 @@ export type AiUnavailableReason =
   | "activity_unsupported"    // the published policy does not offer this activity
   | "not_eligible"            // clinical-risk activity with no approved model
   | "unreadable"              // could not be checked just now
-  | "not_entitled";           // needs a subscription (paid contexts only)
+  | "not_entitled"            // needs a subscription (paid contexts only)
+  | "provider_unavailable";   // SCHOLAR-INDEPENDENT-LEARNING-01: the AI provider is not set up or did not answer (http.ts AI_ERROR)
 
 export type AiAvailability = { available: true } | { available: false; reason: AiUnavailableReason };
 export type AiReasonCopy = { text: string; next: { label: string; href: string } | null };
@@ -49,6 +50,9 @@ const CODE_TO_REASON: Record<string, AiUnavailableReason> = {
   policy_unpublished: "policy_unpublished", unknown_activity: "activity_unsupported", allowance_exhausted: "allowance_exhausted",
   level_insufficient: "level_insufficient", not_eligible: "not_eligible", clinical_restricted: "not_eligible", unreadable: "unreadable", not_entitled: "not_entitled",
   pending_reconciliation: "unreadable",
+  // SCHOLAR-INDEPENDENT-LEARNING-01 P1: the Scholar preflight and provider errors (scholar/http.ts) now carry codes too.
+  consent_off: "consent_off", consent_outdated: "consent_outdated", consent_awaiting_legal: "consent_awaiting_legal",
+  not_configured: "provider_unavailable", failed: "provider_unavailable",
 };
 
 /** Pure: the reason behind a failed AI response body (meteredRefusalBody's `code`), or null if it is not an AI refusal. */
@@ -77,6 +81,7 @@ export function aiReasonCopy(reason: AiUnavailableReason, experience: Experience
     case "not_eligible": return { text: experience === "scholar" ? SCHOLAR_EDU_AI.unavailable.general : PROFESSIONAL_NOT_YET, next: null };
     case "unreadable": return { text: "AI help could not be checked just now, so nothing was sent. Try again shortly.", next: null };
     case "not_entitled": return { text: `This needs an active ${product} subscription.`, next: null };
+    case "provider_unavailable": return { text: "AI help is not available right now, so nothing was sent. Everything you have saved still works. Try again later.", next: null };
   }
 }
 
