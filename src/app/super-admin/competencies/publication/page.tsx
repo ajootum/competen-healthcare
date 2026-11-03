@@ -68,7 +68,11 @@ export default async function FrameworkPublicationPage() {
                 {" "}Put forward by {f.pending.submittedByName ?? "an author"} on {day(f.pending.submittedAt)}.
               </p>
               {f.pending.note && <p className="mt-1 text-[12.5px] text-amber-950">“{f.pending.note}”</p>}
-              <Decide frameworkId={f.id} firstPublication={f.publishedCount === 0} version={f.version} />
+              <Decide frameworkId={f.id} firstPublication={f.publishedCount === 0} version={f.version}
+                blocker={f.kind === "framework" && f.clinicallyApproved !== null && f.clinicallyApproved < f.competencies
+                  ? `${f.competencies - f.clinicallyApproved} of ${f.competencies} competencies still need an independent clinical review at their current content. Return to author remains available.`
+                  : f.kind === "framework" && f.clinicallyApproved === null ? "The clinical approval count could not be read just now." : null} />
+              <p className="mt-2 text-[12.5px]"><Link href={`/super-admin/competencies/governance/${f.id}`} className="font-semibold text-teal-800 underline">Open the governance workspace: pathway, who can act, review queue →</Link></p>
             </div>
           ) : (
             <p className="mt-2 text-[12.5px] text-gray-600">Nothing awaiting a decision.</p>

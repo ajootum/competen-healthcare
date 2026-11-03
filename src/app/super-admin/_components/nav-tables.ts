@@ -26,7 +26,7 @@
 
 import { PD_NAV, PD_HOME, PD_EXTERNAL_HREFS } from "./pd-nav";
 
-export const HQ_NAV_REGISTRY_VERSION = "1.4.0";
+export const HQ_NAV_REGISTRY_VERSION = "1.5.0";
 
 /**
  * page: drawn, its home is here. action: drawn, a create/quick action whose home is here.
@@ -191,6 +191,8 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
     // CFCA-STUDIO-P1: the Competency Studio, in the order the work is done -- author the shared catalogue, shape
     // each programme framework over it, set scales, stages and components, review clinically, publish independently.
     { key: "frameworks.home", group: "Competency Studio", plain: true, items: [
+      // FRAMEWORK-GOVERNANCE-WORKSPACE-01: structure, authoring hand-offs, clinical review and publication readiness on one page.
+      { key: "frameworks.governance", label: "Framework Governance", href: "/super-admin/competencies/governance", icon: "🗂️", keywords: ["governance workspace","review queue","needs my action","ready for review","awaiting publication","focused review"] },
       // Migration 465: shared competency authoring (the Competency Author). Approval is Clinical Content Approval.
       { key: "frameworks.authoring", label: "Competency Authoring", href: "/super-admin/competencies/authoring", icon: "✍️", keywords: ["framework library"] },
       // Migration 394: controlled catalogues name shared competencies, never copying them (home: Individual).

@@ -55,6 +55,7 @@ export default async function ClinicalReviewPage({ searchParams }: { searchParam
           needs review again. You cannot review content you wrote, edited or put forward.
         </p>
         {q && q.items.length > 0 && <p className="mt-2"><a href="?view=pack" className="text-[13px] font-semibold text-teal-800 underline">Review pack for paper review (print, PDF or Word) →</a></p>}
+        <p className="mt-1"><a href="/super-admin/competencies/governance" className="text-[13px] font-semibold text-teal-800 underline">Framework governance workspace: pathway, focused review, publication readiness on one page →</a></p>
       </header>
 
       {q === null ? (
