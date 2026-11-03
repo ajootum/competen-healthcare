@@ -27,6 +27,8 @@ export const SCHOLAR_EXPERIENCES: Record<string, string> = {
   tutor_continue: "Learn: tutor conversation",
   map: "Library: map notes to competencies; practice papers: transcription",
   questions: "Revise: generate practice questions; Learn: questions",
+  // SCHOLAR-INDEPENDENT-LEARNING-01 P3: cards are their own activity where the published policy offers it (else `questions`).
+  flashcards: "Revise: write flashcards from your notes (where the policy offers the activity)",
   evaluate: "Revise: short-answer feedback; Apply: clinical case feedback",
   case_steps: "Apply: clinical cases",
 };
