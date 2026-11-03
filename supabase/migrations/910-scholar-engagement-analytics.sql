@@ -30,9 +30,12 @@
 
 insert into hq_capability (code, space, label, description) values
   ('hq.scholar.analytics.view', 'platform', 'Scholar engagement analytics',
-   'Open the Scholar learner engagement and usage dashboard in Anonymous View: pseudonymous rankings, activity, AI expenditure, no learner identity'),
+   'Open the Scholar learner engagement and usage dashboard in Anonymous View: pseudonymous rankings, activity, AI expenditure, no learner identity')
+on conflict (code) do nothing;
+
+insert into hq_capability (code, space, label, description) values
   ('hq.scholar.analytics.identifiable.read', 'platform', 'Scholar engagement analytics, identifiable',
-   'See learner names on the Scholar engagement dashboard (Named View) and open an identified learner detail. Every use is audited')
+   'See learner names on the Scholar engagement dashboard, the Named View, and open an identified learner detail. Every use is audited')
 on conflict (code) do nothing;
 
 insert into hq_position_capability (position_code, capability_code, source)
