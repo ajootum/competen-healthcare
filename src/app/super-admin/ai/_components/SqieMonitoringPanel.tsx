@@ -1,4 +1,5 @@
 import type { SqieSummary } from "@/lib/ai/sqie-monitoring";
+import type { CostFigure, SqieCost } from "@/lib/ai/sqie-cost";
 
 // SCHOLAR QUESTION INTELLIGENCE ENGINE, MEASURED -- SQIE-COMPLETE-01. Per format over the window: what was generated,
 // kept and rejected (and why), how often blind verification failed, latency, cost and cost per accepted question, how the
@@ -13,7 +14,18 @@ const ms = (n: number | null) => (n == null ? NONE : n >= 1000 ? `${(n / 1000).t
 const money = (n: number | null) => (n == null ? NONE : `$${n.toFixed(n < 1 ? 4 : 2)}`);
 const REASON = (r: string) => r.replace(/_/g, " ");
 
-export default function SqieMonitoringPanel({ s }: { s: SqieSummary }) {
+/** SQIE-CLOSE-2026-11 WS-G: one cost figure from the ledger, or why there is none (metering off is no data, never $0). */
+function Cost({ label, f, basis }: { label: string; f: CostFigure; basis?: string }) {
+  return (
+    <div>
+      <dt className="text-gray-600">{label}</dt>
+      <dd className="font-semibold tabular-nums text-gray-900">{f.measured ? `${money(f.per)} (${money(f.usd)} over ${f.n.toLocaleString()})` : <span className="font-normal text-gray-700">{f.reason}</span>}</dd>
+      {f.measured && basis && <dd className="text-[11px] text-gray-500">{basis}</dd>}
+    </div>
+  );
+}
+
+export default function SqieMonitoringPanel({ s, cost }: { s: SqieSummary; cost?: SqieCost }) {
   return (
     <section aria-labelledby="sqie-h" className="space-y-3">
       <div>
@@ -55,6 +67,18 @@ export default function SqieMonitoringPanel({ s }: { s: SqieSummary }) {
           </table>
         )}
       </div>
+      {cost && (
+        <div className={`${card} p-5`}>
+          <h3 className="text-[13px] font-semibold text-gray-900">Cost per evaluated answer and per completed session <span className="text-[10px] font-normal text-gray-500">last {cost.days} days · settled ledger</span></h3>
+          {!cost.meteringOn && <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[12.5px] text-amber-950">Metering off, no data. AI metering is off on this environment, so the ledger records no spend. These figures read not measured, not zero.</p>}
+          <dl className="mt-2 grid grid-cols-1 gap-3 text-[13px] md:grid-cols-2">
+            <Cost label="Per evaluated answer (AI evaluation)" f={cost.perEvaluatedAnswer} />
+            <Cost label="Per completed revision session or adaptive exam" f={cost.perCompletedSession} basis={"basis" in cost.perCompletedSession ? cost.perCompletedSession.basis : undefined} />
+          </dl>
+          {cost.adaptiveCompleted != null && <p className="mt-1 text-[11px] text-gray-500">{cost.adaptiveCompleted} of the completed sessions were adaptive exams.</p>}
+          {cost.truncated && <p role="status" className="text-xs text-amber-800">A source returned its row limit: figures are for the most recent rows only.</p>}
+        </div>
+      )}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <div className={`${card} p-5`}>
           <h3 className="text-[13px] font-semibold text-gray-900">Governed library reuse</h3>

@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { validateStationContent, type GovernedStationContent } from "./osce";
 import { libraryCopyOf, validateLibraryQuestion, type LibraryCopy, type LibraryFormat } from "./library-format";
+import { fitsLearner, metaOf, type LearnerFit, type LibraryMeta } from "./library-meta";
 
 // ── GOVERNED LIBRARY QUESTIONS, REUSED BEFORE ANY ARE WRITTEN ── SCHOLAR-SQIE-CLOSE-01 C (owner, 30 Oct 2026) ──────────
 //
@@ -14,8 +15,10 @@ import { libraryCopyOf, validateLibraryQuestion, type LibraryCopy, type LibraryF
 // superseded or a retired version is never read, and a learner copy of a version that stops being published is no
 // longer offered (store.ts hydrate). Migration 710 makes any other copy unstorable (its guard trigger).
 // ⚠ MATCHED TO THE SECTION. An item is offered for a section only when it teaches a competency the section is linked to
-// with an ACCEPTED link, and -- where the section has topics -- names one of them. Library items record no programme
-// level, so level is not matched (there is nothing recorded to match).
+// with an ACCEPTED link, and -- where the section has topics -- names one of them. SQIE-CLOSE-2026-11 WS-E: an item MAY
+// record its programmes, qualification level and difficulty (library-meta.ts, 995). A known mismatch with the learner's
+// programme or level excludes it (fitsLearner); an item that records none, or a learner whose level is unknown, is matched
+// as before.
 // ⚠ NO STUDENT CONTENT. Nothing here reads or writes anything of a student's into the library (442 makes that
 // unrepresentable). The learner's copy is their own individual_scholar_question row, with its provenance.
 
@@ -28,6 +31,8 @@ export type LibraryQuestion = {
    * exactly what the 800 guard rebuilds. Absent: a 442 single best answer question (the fields above are its copy).
    */
   format?: LibraryFormat; copy?: LibraryCopy;
+  /** SQIE-CLOSE-2026-11 WS-E (995): who the item is written for, and its difficulty. Absent: records none. */
+  meta?: LibraryMeta | null;
 };
 /** A section of the student's notes, as the library is matched to it: its ACCEPTED competency links and its topics. */
 export type LibrarySection = { chunkId: string; competencyIds: string[]; topics: string[] };
@@ -83,10 +88,20 @@ export function pickLibraryQuestions(input: { questions: readonly LibraryQuestio
 export const formatOfLibrary = (q: Pick<LibraryQuestion, "format">): LibraryFormat => q.format ?? "mcq";
 
 /**
+ * Pure. The library questions an exam of these formats may reuse: a library format that IS one of the exam's formats
+ * (mcq, mrq, short, match, sequence, structured -- SQIE-CLOSE-2026-11 WS-F). A cloze, true/false or extended item is
+ * stored as `short` but is not the short answer the exam asked for, and a flashcard is never an exam item, so neither is
+ * reused here (exactly as effectiveKind tells a stored item apart).
+ */
+export function adaptiveLibraryFits<Q extends { format?: LibraryQuestion["format"] }>(library: readonly Q[], formats: readonly string[]): Q[] {
+  return library.filter(q => formats.includes(formatOfLibrary(q)));
+}
+
+/**
  * The published, clinically approved library revision questions teaching any of these competencies. [] when there are
  * none, and when anything cannot be read (442 absent, an error): the session is then made without them, as before.
  */
-export async function loadLibraryQuestions(admin: any, competencyIds: readonly string[]): Promise<LibraryQuestion[]> {
+export async function loadLibraryQuestions(admin: any, competencyIds: readonly string[], learner?: LearnerFit | null): Promise<LibraryQuestion[]> {
   const ids = [...new Set(competencyIds)].slice(0, 100);
   if (!ids.length) return [];
   try {
@@ -102,14 +117,15 @@ export async function loadLibraryQuestions(admin: any, competencyIds: readonly s
     if (resources.error) return [];
     const resource = new Map(((resources.data ?? []) as any[]).map(r => [r.id, r]));
     // SQIE-LIBRARY-EXPANSION-01: every format the one validator accepts (library-format.ts), each with its learner copy.
-    const candidates = (versions.data as any[]).filter(v => resource.has(v.resource_id) && validateLibraryQuestion(v.content).ok && libraryCopyOf(v.content)).slice(0, 50);
+    // WS-E: a known programme or level mismatch is not offered (fitsLearner); unknown on either side is.
+    const candidates = (versions.data as any[]).filter(v => resource.has(v.resource_id) && validateLibraryQuestion(v.content).ok && libraryCopyOf(v.content) && fitsLearner(metaOf(v.content), learner)).slice(0, 50);
     const approved = await approvedVersions(admin, candidates.map(v => v.id));
     return candidates.filter(v => approved.has(v.id)).map(v => {
       const copy = libraryCopyOf(v.content)!;
       return {
         versionId: v.id, resourceId: v.resource_id, versionNo: v.version_no, title: String(resource.get(v.resource_id)!.title ?? ""),
         stem: copy.stem, options: copy.options, correctIndex: copy.correctIndex ?? -1, rationale: copy.rationale,
-        competencyIds: byVersion.get(v.id) ?? [], publishedAt: v.published_at ?? null, format: copy.format, copy,
+        competencyIds: byVersion.get(v.id) ?? [], publishedAt: v.published_at ?? null, format: copy.format, copy, meta: metaOf(v.content),
       };
     });
   } catch {
