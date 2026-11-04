@@ -1,0 +1,25 @@
+PASS signed in as the fixture learner
+PASS a library session starts on the published demo case -- status 200
+PASS CE-04C the play starts at simulated minute 0, labelled as simulation -- {"label":"Simulated time: it moves on with what you do in the case (each decision, each finding you ask for and each que
+PASS CE-04C nothing ahead is sent: no window, no later event, no future value
+PASS CE-04A two questions answered in the patient's voice and listed -- 2 entries
+PASS CE-04A the conversation is labelled as simulated practice
+PASS CE-04C waiting moves the simulated clock on (30 extra minutes) -- minute 44
+PASS CE-04C the events that have happened are listed with their minutes
+PASS CE-04C the respiratory rate has changed and its trend is shown
+PASS CE-04C the timeline revealed a new finding at its minute
+PASS CE-04C the late escalation is flagged in its feedback -- Late escalation. Call for an urgent medical review: done at simulated minute 44, LATE (it was needed by minute 15).
+PASS CE-04B the handover is marked against its rubric with feedback after answering
+PASS debrief has the three lists
+PASS debrief lists the late escalation as unsafe
+PASS debrief is labelled formative, never competence
+PASS debrief credits the handover points found
+PASS mobile 390px: no horizontal scroll -- overflow 0px
+PASS CE-04D the turns are kept with this attempt -- {"session":1,"conversation":2,"attempt":1,"errors":[]}
+PASS CE-04D deleting the attempt erased its turns and kept record (cascade) -- {"session":0,"conversation":0,"attempt":0,"errors":[]}
+PASS CE-05 a revision session of one stored evolving scenario starts -- status 200 
+PASS CE-05 the scenario has at least two stages -- 2 stages
+PASS CE-05 the scenario is labelled as AI-written practice from the learner's notes
+PASS CE-05 the first view carries no later stage, key or accepted answer
+PASS CE-05 stage 2 appears only after stage 1 is answered
+PASS 0 console errors
