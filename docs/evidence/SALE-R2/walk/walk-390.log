@@ -1,0 +1,25 @@
+PASS SALE-08 Revise shows Due for retrieval (scholar_retrieval_schedule on)
+PASS SALE-08 before the delay: "Essential Nursing Care of the Critically Ill" (last practised today) is not due
+PASS simulated delay applied on staging (its answers moved 8 days back)
+PASS SALE-08 after the delay: "Essential Nursing Care of the Critically Ill" is Due for retrieval
+PASS SALE-08 the reason says when it was last practised and why the gap
+PASS SALE-08 the action is a retrieval exercise on its own sections (not only flashcards)
+PASS SALE-08 no percentage or score shown
+INFO due item: Essential Nursing Care of the Critically IllDue since 2026-10-28 · about 5 minLast practised 8 days ago, not recalled well yet, so it comes back after 1 day.Recall it now
+PASS Revise fits 390 px
+PASS SALE-09 a prerequisite review is suggested from the framework link
+PASS SALE-09 the reason names the framework prerequisite and the different questions missed
+PASS SALE-09 it links to the learner's own notes on the prerequisite
+PASS simulated delay undone exactly on staging
+PASS SALE-10 a transfer check is offered on "Quality Improvement Science and Methods" (some understanding shown)
+PASS SALE-10 the transfer check opened as a revision session
+PASS SALE-10 the session says it is a transfer check, and on which topic
+INFO short answer: graded by the learner against the stored answer (It does not), as the revision route asks
+PASS SALE-10 the transfer answer was recorded by the ordinary revision route (200)
+PASS the transfer session fits 390 px
+PASS SALE-10 the learning state's Applying it dimension shows the transfer check
+FAIL SALE-10 the answer is listed as a transfer check in the evidence behind the topic
+PASS never competence: the not-verified-competence note is shown
+PASS Progress fits 390 px
+PASS 0 console errors (0)
+PASS no 5xx (0)

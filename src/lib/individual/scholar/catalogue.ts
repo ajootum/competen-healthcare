@@ -75,6 +75,9 @@ export type CatalogueCompetency = {
   /** The level id of expectedLevel, and the catalogue entry whose overlay set it (HQ preview only). */
   expectedLevelId?: string | null;
   overlayEntryId?: string | null;
+  /** SALE-2026-11 R2 / SALE-09: competencies the framework lists as prerequisites of this one (Holdings-scope competency_dependencies,
+   *  type prerequisite). Absent when none. Only those also in the programme catalogue are ever used. */
+  prerequisites?: string[];
 };
 
 /** A programme as configuration: which catalogues, in which layer. Read by the store from 387. */
@@ -111,6 +114,8 @@ export type S1Competency = {
   statusNote?: string | null;
   /** The programme overlays of the catalogues that name it (S1, migration 660). */
   overlays?: CatalogueOverlay[];
+  /** Holdings-scope links to other competencies of the offered set (S1 links, competency_dependencies). */
+  links?: { prerequisites: readonly string[] };
 };
 
 /** Pure. An unknown or missing status is unreviewed -- never approved by default (S1's own rule). */
@@ -153,6 +158,7 @@ export function projectForProgramme(all: S1Competency[], programme: ProgrammeCon
           cpu: c.cpu ? { code: c.cpu.code, name: c.cpu.name } : null,
           contentStatus: normaliseStatus(c.contentStatus), statusNote: c.statusNote ?? null,
           catalogueVersion: own ? c.catalogue.version ?? null : o!.catalogueVersion,
+          ...(c.links?.prerequisites?.length ? { prerequisites: [...c.links.prerequisites] } : {}),
         },
       };
     })

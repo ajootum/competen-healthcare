@@ -1,0 +1,14 @@
+{
+  "width": 390,
+  "at": "2026-11-04T17:50:30.469Z",
+  "application": "Applying itSome evidence2 application or reasoning tasks done well out of 6. Transfer checks (a question away from the lesson where you learned it): 0 of 1 answered well.",
+  "transferEvidenceLine": "2026-11-04 · practice question (transfer check) · not yet (self-rated)",
+  "log": [
+    "PASS SALE-10 the learning state's Applying it dimension shows the transfer check",
+    "PASS SALE-10 the answer is listed as a transfer check in the evidence behind the topic",
+    "PASS never competence: the not-verified-competence note is shown",
+    "PASS Progress fits 390 px",
+    "PASS 0 console errors (0)",
+    "PASS no 5xx (0)"
+  ]
+}

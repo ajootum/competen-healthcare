@@ -32,7 +32,8 @@ import { loadTopicProgress, mergeStudyNext, topicProgressEnabled } from "@/lib/i
 import { isStudyId } from "@/lib/individual/scholar/study-carry";
 import { StudyNextCard, TopicProgressSection } from "../_components/topic-progress-view";
 import { LearningStateSection } from "../_components/learning-state-view";
-import { loadLearningState, stateThresholds } from "@/lib/individual/scholar/learning-state-data";
+import { loadLearningState, readStateInputs, stateThresholds } from "@/lib/individual/scholar/learning-state-data";
+import { loadRetentionView, withRetrieval } from "@/lib/individual/scholar/retention-data";
 import { ApplicationEvidenceSection } from "../_components/application-evidence-view";
 import { loadApplicationEvidence } from "@/lib/individual/scholar/application-evidence-data";
 import { applicationBySkill } from "@/lib/individual/scholar/application-evidence";
@@ -177,9 +178,15 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   const appOn = policy.scholarApplicationEvidence === "on" && rows.ok;
   const app = appOn ? await loadApplicationEvidence(ctx.admin, ctx.userId).catch(() => null) : null;
   // SALE-2026-11 R1 (SALE-04): the learning state per topic, from the same evidence read (request-cached) plus the learning events. No AI, nothing stored.
-  const ls = policy.scholarLearningState === "on" && rows.ok && p && p.materials.length > 0
-    ? await loadLearningState(ctx.admin, ctx.userId, policy, new Date().toISOString(), { materials: rows.data.materials, concepts: allRows?.ok ? allRows.data.concepts : null, application: app?.ok ? app.data : null }).catch(() => null)
+  // SALE-2026-11 R2: the same join feeds due retrieval (SALE-08), prerequisite reviews (SALE-09) and transfer offers (SALE-10), each behind its own key (default off).
+  const stateSources = rows.ok && p && p.materials.length > 0 ? { materials: rows.data.materials, concepts: allRows?.ok ? allRows.data.concepts : null, application: app?.ok ? app.data : null } : null;
+  const r2On = policy.scholarRetrievalSchedule === "on" || policy.scholarPrerequisiteSuggestions === "on" || policy.scholarTransferChecks === "on";
+  const stateInputs = stateSources && (policy.scholarLearningState === "on" || r2On) ? await readStateInputs(ctx.admin, ctx.userId, policy, new Date().toISOString(), stateSources).catch(() => null) : null;
+  const ls = policy.scholarLearningState === "on" && stateSources
+    ? await loadLearningState(ctx.admin, ctx.userId, policy, new Date().toISOString(), { ...stateSources, inputs: stateInputs?.ok ? stateInputs.data : undefined }).catch(() => null)
     : null;
+  const retention = stateSources && r2On && stateInputs?.ok ? await loadRetentionView(ctx.admin, ctx.userId, policy, new Date().toISOString(), { today, sources: stateSources, inputs: stateInputs.data }) : null;
+  const ownNext = tp?.ok ? withRetrieval(tp.data.studyNext, retention?.schedule ?? null) : [];
   const competencyTitles = new Map((learner?.competencies ?? []).map(c => [c.id, c.code ? `${c.code} ${c.title}` : c.title]));
   // A record may link to a competency outside the learner's programme: it is named from its own label (never left unnamed when readable).
   const outside = app?.ok ? [...new Set(app.data.flatMap(r => r.competencies.map(l => l.competencyId)))].filter(id => !competencyTitles.has(id)).slice(0, 50) : [];
@@ -211,7 +218,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
     return s ? `?${s}` : "?";
   };
 
-  const merged = showTopicProgress && !myPlan && tp?.ok && li?.ok ? mergeStudyNext(tp.data.studyNext, li.data.recommendations, 5, study && isStudyId(sp.study) ? sp.study : null) : null;
+  const merged = showTopicProgress && !myPlan && tp?.ok && li?.ok ? mergeStudyNext(ownNext, li.data.recommendations, 5, study && isStudyId(sp.study) ? sp.study : null) : null;
   // What to do next lives in My Plan when it is on: Learning Intelligence keeps its measures and does not repeat the list.
   const liBase = li?.ok ? { ...li.data, insights: withoutEngagementInsight(li.data.insights) } : null;
   const liShown = liBase ? (myPlan ? { ...liBase, recommendations: [] } : merged ? { ...liBase, recommendations: merged.rest } : liBase) : null;
@@ -279,7 +286,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             {calendarOn && (calendar
               ? <StudyCalendar view={calendar.view} accent={x.accent} prevHref={calHref(prevMonth(calMonth))} nextHref={calHref(nextMonth(calMonth))} todayHref={calHref(null)} />
               : <div className="mb-6"><Unreadable what="your study calendar" /></div>)}
-            {showTopicProgress && !myPlan && (tp?.ok ? <StudyNextCard items={merged ? merged.items : tp.data.studyNext} accent={x.accent} />
+            {showTopicProgress && !myPlan && (tp?.ok ? <StudyNextCard items={merged ? merged.items : ownNext} accent={x.accent} />
               : tp ? <div className="mb-6"><Unreadable what="what to study next" /></div> : null)}
             {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} activity={learnActivity} hideNext={myPlan} />
               : pv ? <StatePanel title="Your learning progress could not be read just now"><p>{pv.error} The detail below is still shown.</p></StatePanel> : null}
@@ -303,7 +310,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
 
             {showTopicProgress && tp?.ok && <TopicProgressSection m={tp.data} />}
             {appOn && <ApplicationEvidenceSection records={app?.ok ? app.data : null} skills={app?.ok ? applicationBySkill(app.data, stateThresholds(policy)) : []} competencyTitle={competencyTitle} />}
-            {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} />}
+            {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} retention={retention} accent={x.accent} />}
 
             {liShown ? <LearningIntelligence li={liShown} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 

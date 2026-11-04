@@ -124,6 +124,9 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SALE-2026-11 R1: the learning state and the adaptive next step on, with transparent thresholds.
       scholarLearningState: "on", scholarLearningStateMinEvidence: 2, scholarLearningStateDistinctQuestions: 2, scholarLearningStateDelayDays: 3, scholarLearningStateStaleDays: 30,
       scholarAdaptiveTeaching: "on", scholarAdaptiveReteachMax: 2, scholarAdaptivePrerequisiteMisses: 3,
+      // SALE-2026-11 R2: retrieval scheduling, prerequisite suggestions and transfer checks OFF until HQ switches them on.
+      scholarRetrievalSchedule: "off", scholarRetrievalMisconceptionPercent: 50, scholarRetrievalExamBufferDays: 2, scholarRetrievalMinutesPerTopic: 5, scholarRetrievalSharePercent: 30,
+      scholarPrerequisiteSuggestions: "off", scholarTransferChecks: "off", scholarTransferQuestions: 2,
       // SALE-2026-11 R4: application evidence (SALE-13) and the three competency views (SALE-14) OFF until HQ switches them on.
       scholarApplicationEvidence: "off", scholarCompetencyEvidenceViews: "off",
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
@@ -528,6 +531,22 @@ it("SALE-2026-11 R1: the learning-state and adaptive-teaching keys default on wi
   expect(p("scholar_learning_state_distinct_questions", 1).scholarLearningStateDistinctQuestions).toBe(2);
   expect(p("scholar_learning_state_delay_days", 7).scholarLearningStateDelayDays).toBe(7);
   expect(p("scholar_adaptive_prerequisite_misses", 1).scholarAdaptivePrerequisiteMisses).toBe(2);
+});
+
+it("SALE-2026-11 R2: retrieval, prerequisite and transfer keys default OFF, with evidence-based numeric defaults that clamp", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({
+    scholarRetrievalSchedule: "off", scholarRetrievalMisconceptionPercent: 50, scholarRetrievalExamBufferDays: 2, scholarRetrievalMinutesPerTopic: 5, scholarRetrievalSharePercent: 30,
+    scholarPrerequisiteSuggestions: "off", scholarTransferChecks: "off", scholarTransferQuestions: 2,
+  });
+  expect(p("scholar_retrieval_schedule", "on").scholarRetrievalSchedule).toBe("on");
+  expect(p("scholar_retrieval_schedule", "maybe").scholarRetrievalSchedule).toBe("off");
+  expect(p("scholar_prerequisite_suggestions", "on").scholarPrerequisiteSuggestions).toBe("on");
+  expect(p("scholar_transfer_checks", "on").scholarTransferChecks).toBe("on");
+  expect(p("scholar_retrieval_misconception_percent", 5).scholarRetrievalMisconceptionPercent).toBe(10);
+  expect(p("scholar_retrieval_share_percent", 250).scholarRetrievalSharePercent).toBe(100);
+  expect(p("scholar_transfer_questions", 9).scholarTransferQuestions).toBe(5);
+  expect(p("scholar_retrieval_exam_buffer_days", 0).scholarRetrievalExamBufferDays).toBe(0);
 });
 
 it("SALE-2026-11 R4: the application-evidence and competency-views keys default off and accept only on or off", () => {

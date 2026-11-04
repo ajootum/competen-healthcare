@@ -25,6 +25,12 @@ import { RevisionRunner, RevisionStart, SavedSets } from "../_components/revisio
 import { ReviseNav, flashcardsHref } from "../_components/revise-nav";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { revisePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
+import { headers } from "next/headers";
+import { learnerToday } from "@/lib/individual/scholar/learning-definitions";
+import { loadRetentionView } from "@/lib/individual/scholar/retention-data";
+import { listTransferChecks } from "@/lib/individual/scholar/store";
+import { TRANSFER_NOTE } from "@/lib/individual/scholar/transfer";
+import { RetentionPanel } from "../_components/retention-panel";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -92,11 +98,15 @@ export default async function Revise({ params, searchParams }: { params: Promise
     // 425, owner decision R4: a short answer held unmarked until the end is answered, and kept on resume. Its grading
     // comes with the end of the session (PATCH complete), never before.
     })).concat(s.data.held.filter(h => byId.has(h.questionId)).map(h => ({ questionId: h.questionId, held: true })));
+    // SALE-2026-11 R2 / SALE-10: a session recorded as a transfer check says so (its topic, and why it is asked).
+    const transfer = navPolicy.scholarTransferChecks === "on" ? await listTransferChecks(ctx.admin, ctx.userId, { sessionId: s.data.session.id }).catch(() => null) : null;
+    const transferTopic = transfer?.ok ? transfer.data[0]?.topic ?? null : null;
     return (
       <>
         {header}
         <RevisionRunner session={{ id: s.data.session.id, mode: s.data.session.mode, feedback: s.data.session.feedback, status: s.data.session.status, total: questions.length, position: s.data.session.position }}
-          items={questions.map(revisionItemView)} answered={answered} evaluation={evaluationIntent(q)} />
+          items={questions.map(revisionItemView)} answered={answered} evaluation={evaluationIntent(q)}
+          label={transferTopic ? `Transfer check on ${transferTopic}. ${TRANSFER_NOTE}` : null} />
       </>
     );
   }
@@ -148,6 +158,8 @@ export default async function Revise({ params, searchParams }: { params: Promise
 
   // SCHOLAR-COMPANION-01 P1: the mistake notebook's entry (database reads only; absent when the policy is off or unreadable).
   const toFix = policy.scholarMistakeNotebook === "on" ? await mistakeToFixCount(ctx.admin, ctx.userId) : null;
+  // SALE-2026-11 R2: due retrieval (SALE-08), prerequisite reviews (SALE-09) and transfer checks (SALE-10). Null while all three keys are off.
+  const retention = await loadRetentionView(ctx.admin, ctx.userId, policy, new Date().toISOString(), { today: learnerToday(await headers()) });
 
   return (
     <>
@@ -221,6 +233,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
         </aside>
         ) }}>
         <div className="space-y-5">
+          {retention && <RetentionPanel v={retention} accent={x.accent} />}
           <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
