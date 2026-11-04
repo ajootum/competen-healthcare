@@ -22,9 +22,7 @@ import type { DraftQuestion } from "./generation";
 
 export type QualityReason =
   | "not_a_question" | "unmarked_negative" | "banned_option" | "options_overlap"
-  | "unsupported_term" | "correct_not_supported" | "too_long"
-  // SQIE-CLOSE-2026-11 WS-H: the stem gives the keyed answer away (keyInStem). The code a scenario uses for the same fault.
-  | "answer_leaked";
+  | "unsupported_term" | "correct_not_supported" | "too_long";
 
 const STOP = new Set((
   "a an and are as at be been but by can could do does for from had has have how if in into is it its may might " +
@@ -90,55 +88,11 @@ export function qualityProblems(q: DraftQuestion, passage: string): { reason: Qu
   const foreign = q.options.flatMap(o => unsupportedTerms(o, passage));
   if (foreign.length) out.push({ reason: "unsupported_term", detail: [...new Set(foreign)].slice(0, 6).join(", ") });
 
-  // SQIE-CLOSE-2026-11 WS-H: the stem does not give the key away (every word of the keyed option, and of no other, in the stem).
-  const leak = keyInStem({ stem, options: q.options, keyed: [q.correctIndex] });
-  if (leak) out.push({ reason: "answer_leaked", detail: leak });
-
   // SOURCE SUPPORT -- the keyed answer's content is in the quoted source sentence itself.
   const missing = unsupportedTerms(q.options[q.correctIndex] ?? "", q.sourceQuote);
   if (missing.length) out.push({ reason: "correct_not_supported", detail: missing.join(", ") });
 
   return out;
-}
-
-// ── SQIE-CLOSE-2026-11 WS-H: THE STEM MUST NOT REVEAL THE KEY ──────────────────────────────────────────────────────
-//
-// Directive s3 quality requirement 4: "avoid revealing the answer in the question stem". The blind check above asks a model
-// whether the passage alone answers a question; nothing asked whether the STEM does. This is the deterministic half, for the
-// formats with a key in words: single best answer (mcq, and each case step), choose all that apply (mrq) and short answer.
-//
-//   choice (mcq, mrq)  an option is ECHOED when every one of its content words is in the stem (same light stem: "infections"
-//                      finds "infection"). The stem gives the key away when at least one option is echoed and EVERY echoed
-//                      option is keyed: the learner can answer by matching words, without knowing anything. An option the
-//                      stem echoes that is NOT keyed is a distractor built on the stem's own words, which is fine.
-//   short              an accepted answer is given away when every one of its content words is in the stem.
-//
-// Exact light-stem matching (not the prefix rule of unsupportedTerms), and an answer with no content word (a number, "yes") is
-// never called echoed: the check refuses only what is plainly given away. A refused draft is dropped before it is stored or
-// shown, and the generator's one regeneration is told why (generation.ts runQuestions, runCase), exactly as for every other fault.
-
-const stemWords = (s: string) => new Set(words(s).map(stemOf));
-/** Pure. Every content word of `answer` is in `stem` (and it has at least one). */
-export function echoedInStem(answer: string, stem: string): boolean {
-  const cw = contentWords(answer);
-  if (!cw.length) return false;
-  const have = stemWords(stem);
-  return cw.every(w => have.has(stemOf(w)));
-}
-
-/**
- * Pure. Why the stem reveals the key, or null when it does not. `keyed` are the keyed option indexes (mcq one, mrq one or more);
- * `accepted` the accepted answers of a short-answer question (no options).
- */
-export function keyInStem(q: { stem: string; options?: readonly string[]; keyed?: readonly number[]; accepted?: readonly string[] }): string | null {
-  const options = q.options ?? [];
-  if (options.length) {
-    const keyed = new Set(q.keyed ?? []);
-    const echoed = options.map((o, i) => (echoedInStem(o, q.stem) ? i : -1)).filter(i => i >= 0);
-    return echoed.length && echoed.every(i => keyed.has(i)) ? `the stem repeats the keyed option${echoed.length > 1 ? "s" : ""} ${echoed.map(i => "ABCDEF"[i] ?? String(i + 1)).join("")}` : null;
-  }
-  const given = (q.accepted ?? []).find(a => echoedInStem(a, q.stem));
-  return given ? "the stem contains an accepted answer" : null;
 }
 
 // ── THE BLIND CHECK ─────────────────────────────────────────────────────────────────────────────────

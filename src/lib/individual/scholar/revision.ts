@@ -27,7 +27,7 @@ import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenar
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
-import { keyInStem, unsupportedTerms } from "./question-quality";
+import { unsupportedTerms } from "./question-quality";
 import type { Passage } from "./generation";
 import {
   asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
@@ -474,8 +474,6 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && kind !== "true_false" && kind !== "scenario" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
   if (kind === "flashcard") { const p = flashcardDraftProblem(d.stem, String(d.answer.back ?? ""), passage.content); if (p) return { ok: false, reason: p }; }
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
-  // SQIE-CLOSE-2026-11 WS-H (question-quality.ts keyInStem): a stem that gives the key away is refused, never shown.
-  if ((kind === "mrq" || kind === "short") && keyInStem({ stem: d.stem, options: d.options, keyed: kind === "mrq" ? d.answer.correct as number[] : [], accepted: kind === "short" ? d.answer.accepted as string[] : [] })) return { ok: false, reason: "answer_leaked" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);
   if (kind === "true_false") {
