@@ -36,7 +36,7 @@ import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type
 import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
 import { newestSavedLesson, type LessonRecord } from "./learn-journey";
 import { baseKey, keysetFilter, orderVersions, pageOf, supersededKey, type Cursor, type NoteInput, type NoteKind, type NoteTarget } from "./saved-library";
-import { correctionFromRow, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
+import { correctionFromRow, provenanceOf, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type CompetencyProvenance, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -4498,8 +4498,12 @@ export async function clearStudyPlan(admin: Admin, userId: string): Promise<"ok"
 
 let position790: boolean | null = null;
 let snapshot791: boolean | null = null;
+/** SQIE WS-D: whether 990 (the snapshot's competency_provenance column, unmarked outcomes) is applied. null: not yet known. */
+let provenance990: boolean | null = null;
 /** Tests only: forget what was detected. */
-export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; };
+export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; provenance990 = null; };
+/** Whether 990 is known to be absent (the provenance lookup is then skipped: nothing would keep it). */
+export const snapshotProvenanceAbsent = () => provenance990 === false || snapshot791 === false;
 const isMissingRpc = (error: any) => isNotProvisioned(error) || String(error?.code ?? "") === "42883";
 
 /** The caller's position in one of their Learn sessions, or null (none yet). notProvisioned where 790 is absent. */
@@ -4543,15 +4547,61 @@ export async function questionContentVersion(admin: Admin, userId: string, quest
   return error || !Number.isInteger(data?.content_version) ? 1 : data.content_version;
 }
 
-/** Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else. */
-export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow): Promise<"ok" | "absent" | "failed"> {
+/**
+ * Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else.
+ * SQIE WS-D (990): the row carries competency_provenance where the snapshot has it. 990 absent (the column unknown): a snapshot
+ * that `needs990` (an understanding check: unmarked is a 990 marking, and today no check keeps a snapshot) is not kept, "absent"
+ * -- exactly as before 990 -- and any other is kept as before, without the provenance.
+ */
+export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow, opts: { needs990?: boolean } = {}): Promise<"ok" | "absent" | "failed"> {
   if (snapshot791 === false) return "absent";
+  if (opts.needs990 && provenance990 === false) return "absent";
   try {
-    const { error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...snapshotInsertRow(s), user_id: userId });
+    const full: Record<string, unknown> = { ...snapshotInsertRow(s), user_id: userId };
+    const { competency_provenance: _p, ...without } = full;
+    void _p;
+    let withProvenance = "competency_provenance" in full && provenance990 !== false;
+    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert(withProvenance ? full : without);
+    if (error && withProvenance && isMissingColumn(error)) {
+      provenance990 = false; withProvenance = false;
+      if (opts.needs990) return "absent";
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert(without));
+    }
     if (error) { if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; } return "failed"; }
     snapshot791 = true;
+    if (withProvenance) provenance990 = true;
     return "ok";
   } catch { return "failed"; }
+}
+
+/**
+ * SQIE WS-D (990). What each competency said when the answer was given: its competency_content_hash (395, 761), its framework
+ * and that framework's version (012). Never throws: a part it cannot read is null (provenanceOf), never guessed.
+ */
+export async function competencyProvenance(admin: Admin, competencyIds: readonly string[]): Promise<CompetencyProvenance[]> {
+  const ids = [...new Set(competencyIds)].filter(isUuid).slice(0, 20);
+  const hashes = new Map<string, string>(), frameworkOf = new Map<string, string>(), versionOf = new Map<string, { major: unknown; minor: unknown; revision: unknown }>();
+  if (!ids.length) return [];
+  try {
+    const [h, c] = await Promise.all([
+      admin.rpc("competency_content_hashes", { p_ids: ids }),
+      admin.from("framework_competencies").select("id, domain_id").in("id", ids),
+    ]);
+    for (const r of (h.error ? [] : h.data ?? []) as any[]) if (typeof r?.competency_id === "string" && typeof r?.content_hash === "string") hashes.set(r.competency_id, r.content_hash);
+    const domainOf = new Map<string, string>(((c.error ? [] : c.data ?? []) as any[]).filter(r => isUuid(r?.domain_id)).map(r => [String(r.id), String(r.domain_id)]));
+    const domainIds = [...new Set(domainOf.values())];
+    if (domainIds.length) {
+      const d = await admin.from("framework_domains").select("id, framework_id").in("id", domainIds);
+      const fwOfDomain = new Map<string, string>(((d.error ? [] : d.data ?? []) as any[]).filter(r => isUuid(r?.framework_id)).map(r => [String(r.id), String(r.framework_id)]));
+      for (const [comp, dom] of domainOf) { const fw = fwOfDomain.get(dom); if (fw) frameworkOf.set(comp, fw); }
+      const fwIds = [...new Set(frameworkOf.values())];
+      if (fwIds.length) {
+        const f = await admin.from("frameworks").select("id, version_major, version_minor, version_revision").in("id", fwIds);
+        for (const r of (f.error ? [] : f.data ?? []) as any[]) versionOf.set(String(r.id), { major: r.version_major, minor: r.version_minor, revision: r.version_revision });
+      }
+    }
+  } catch { /* provenance is never worth a failed answer: what was not read stays null */ }
+  return provenanceOf(ids, { hashes, frameworkOf, versionOf });
 }
 
 /** What the caller's attempts were assessed against, and their corrections (oldest first). Empty where 791 is absent or unreadable. */

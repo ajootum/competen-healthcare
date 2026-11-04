@@ -6,6 +6,7 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { parseTeachAnswer, questionText } from "@/lib/individual/scholar/teach-format";
 import { CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_SCORE, checkResponse, isSelfGrade, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
 import { QUESTION_MAX } from "@/lib/individual/scholar/config";
+import { keepCheckSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 
 export const dynamic = "force-dynamic";
 
@@ -67,11 +68,14 @@ export async function POST(req: Request) {
     materialId: passage.materialId, chunkId: passage.chunkId, stem: question, keyPoints: parts?.points ?? [], modelAnswer: null, sourceQuote: passage.content.slice(0, 1500),
     competencyId: links.find(l => l.accepted)?.competencyId ?? null, model: saved?.model ?? "learner", provider: "scholar", promptVersion: saved?.promptVersion ?? "learner:check",
   });
-  const kept = q ? await recordCheckAttempt(ctx.admin, ctx.userId, {
-    questionId: q.id, contentVersion: q.contentVersion, response: checkResponse({ text: answer, question, selfGrade }),
-    correct: selfGrade === "covered", score: selfGrade ? SELF_GRADE_SCORE[selfGrade] : null, marking: selfGrade ? "self_graded" : "unmarked", evaluator: null, missed: selfGrade === "missed",
-  }) : null;
-  if (!kept) return NextResponse.json({ kept: null, note: CHECK_NOT_SAVED_NOTE, reason: "not_kept" });
+  const attempt = q ? {
+    questionId: q.id, response: checkResponse({ text: answer, question, selfGrade }),
+    correct: selfGrade === "covered", score: selfGrade ? SELF_GRADE_SCORE[selfGrade] : null, marking: selfGrade ? "self_graded" as const : "unmarked" as const,
+  } : null;
+  const kept = q && attempt ? await recordCheckAttempt(ctx.admin, ctx.userId, { ...attempt, contentVersion: q.contentVersion, evaluator: null, missed: selfGrade === "missed" }) : null;
+  if (!kept || !attempt) return NextResponse.json({ kept: null, note: CHECK_NOT_SAVED_NOTE, reason: "not_kept" });
+  // SQIE WS-D (990): the immutable 791 snapshot of this kept answer. Never fails the answer; without 990 nothing is kept, as before.
+  await keepCheckSnapshot(ctx, kept, attempt);
   await recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: "clarify", verdict: null, chunkIds: [passage.chunkId], attemptId: kept.id });
   return NextResponse.json({ kept: { attemptId: kept.id, answeredAt: kept.answeredAt, questionId: q!.id, marking: selfGrade ? "self_graded" : "unmarked", chunkId: passage.chunkId, materialId: passage.materialId }, note: CHECK_SAVED_NOTE });
 }

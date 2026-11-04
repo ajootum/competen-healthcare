@@ -37,6 +37,7 @@ import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { groundingOutcome, keyTermsOf, parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, relatedSections, widerMode, type Grounding, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import type { RecoveryMode } from "@/lib/individual/policy";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { keepCheckSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL,
@@ -640,6 +641,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
       marking: "ai_evaluation", evaluator, missed: r.verdict === "not_yet",
     }) : null;
     keptCheck = kept && q ? { ...kept, questionId: q.id } : null;
+    // SQIE WS-D (990): the immutable 791 snapshot of the judged answer. Never fails the answer; without 990 nothing is kept, as before.
+    if (kept && q && response) await keepCheckSnapshot(ctx, kept, { questionId: q.id, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null, marking: "ai_evaluation" });
   }
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     await Promise.all([
