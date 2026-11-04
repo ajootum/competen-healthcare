@@ -1,0 +1,517 @@
+
+plane-boundary-harness — PLAT-OVERSIGHT-SURVEY-001 §6.2
+
+── Closure ──────────────────────────────────────────────────────────────────
+  entry files                 695   (src/app/super-admin, src/app/api/platform)
+  modules in the bundle       1237
+  modules with callable code  1144
+  type-only edges cut         303   (erased at build; no runtime read)
+  read/parse/resolve errors   0
+  PASS  E1  every file in the closure was read, parsed and every first-party import resolved
+  PASS  B1  ⚠ count control: 695 entry files (floor 340) — a walker that found none would make every assertion below vacuous
+  PASS  B2  ⚠ count control: the import closure reaches 1237 modules (floor 500)
+
+── Practice reads the platform plane can reach ──────────────────────────────
+  files 47 · sites 156
+
+  src/app/api/platform/comments/route.ts   — 0 import hops from an entry point
+      src/app/api/platform/comments/route.ts
+      :46    ?                                hospital_id
+  src/app/super-admin/individual/configuration/page.tsx   — 0 import hops from an entry point
+      src/app/super-admin/individual/configuration/page.tsx
+      :82    individual_scholar_programme     code, label
+  src/app/super-admin/individual/scholar/page.tsx   — 0 import hops from an entry point
+      src/app/super-admin/individual/scholar/page.tsx
+      :53    individual_live_entitlement      user_id, experience_code
+  src/app/super-admin/platform-ops/practice/identifiers/page.tsx   — 0 import hops from an entry point
+      src/app/super-admin/platform-ops/practice/identifiers/page.tsx
+      :40    practice_practitioner_identity   star (head)
+  src/app/super-admin/users/user-detail-load.ts   — 0 import hops from an entry point
+      src/app/super-admin/users/user-detail-load.ts
+      :131   individual_identity_profile      user_id, preferred_name
+      :133   individual_scholar_learner       user_id, programme_code, level_label, institution_label
+      :134   individual_scholar_learner       user_id, programme_code
+      :136   individual_professional_profile  user_id, self_declared_profession, self_declared_registration_body, self_declared_registration_country
+      :139   individual_membership            user_id, status, source, onboarded_at, created_at
+      :141   individual_entitlement           id, user_id, experience_code, status, starts_at, ends_at, source, plan_code, granted_by, created_at
+      :144   individual_entitlement           id, user_id, experience_code, status, starts_at, ends_at, source, granted_by, created_at
+      :148   individual_live_entitlement      id
+      :150   individual_invitation            id, status, invite_scholar, invite_professional, expires_at, entitlement_ends_at, created_at, accepted_at, revoked_at, entitlement_source, prefill
+      :153   individual_invitation            id, status, invite_scholar, invite_professional, expires_at, entitlement_ends_at, created_at, accepted_at, revoked_at
+      :157   individual_live_invitation       id
+      :158   hq_account_participation         user_id, category, cohort_code, valid_until, set_by, reason, updated_at
+      :166   individual_scholar_programme     code, label
+  src/lib/ai/allowance.ts   — 1 import hop from an entry point
+      src/app/super-admin/ai/fair-use/page.tsx
+      src/lib/ai/allowance.ts
+      :97    practice_platform_flags          enabled
+  src/lib/assessment/assessor/grants.ts   — 1 import hop from an entry point
+      src/app/super-admin/checklist-assessments/grants/page.tsx
+      src/lib/assessment/assessor/grants.ts
+      :50    asmt_respondent_grant            id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at
+      :58    asmt_respondent_grant            id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at
+  src/lib/assessment/assessor/instances.ts   — 1 import hop from an entry point
+      src/app/super-admin/checklist-assessments/page.tsx
+      src/lib/assessment/assessor/instances.ts
+      :21    asmt_instance                    id, instrument_version_id, subject_kind, subject_id, subject_user_id, respondent_role, respondent_id, respondent_snapshot, grant_id, owner_scope, status, attestation, amends_instance_id, started_at, submitted_at
+      :34    asmt_instance                    id, status, started_at, submitted_at, grant_id, subject_user_id, instrument_version_id
+      :122   asmt_response                    item_id, field_key, value, revision
+      :128   asmt_evidence                    id, item_id, kind, ref_kind, ref_id, note, created_at
+      :137   asmt_comment                     id, item_id, kind, body, author_id, created_at
+      :143   asmt_outcome                     id, engine_version, rules_hash, outcome_code, outcome_class, group_outcomes, aggregates, trace, trace_hash, backstop_applied, backstop_detail, created_at
+      :151   asmt_instance_layout             layout_version_id, is_primary
+  src/lib/assessment/catalogue/availability.ts   — 1 import hop from an entry point
+      src/app/super-admin/assessment-catalogue/page.tsx
+      src/lib/assessment/catalogue/availability.ts
+      :19    asmt_instrument_availability     instrument_id, product_line, mode, granted_at, note
+  src/lib/assessment/catalogue/classify.ts   — 1 import hop from an entry point
+      src/app/super-admin/assessment-catalogue/page.tsx
+      src/lib/assessment/catalogue/classify.ts
+      :26    asmt_catalogue_dimension         code, label, is_active, allows_hierarchy, position
+      :27    asmt_catalogue_term              id, dimension_code, code, label, parent_id, source_kind, source_ref, is_active, position
+      :38    asmt_instrument_term             instrument_id, term_id, is_primary
+  src/lib/assessment/catalogue/collections.ts   — 1 import hop from an entry point
+      src/app/super-admin/assessment-catalogue/page.tsx
+      src/lib/assessment/catalogue/collections.ts
+      :10    asmt_collection                  id, code, name, description, is_active, owner_scope
+      :13    asmt_collection_member           instrument_id (head)
+      :24    asmt_collection_member           collection_id, instrument_id, position
+      :26    asmt_collection                  id, code, name
+  src/lib/assessment/catalogue/relations.ts   — 1 import hop from an entry point
+      src/app/super-admin/assessment-catalogue/page.tsx
+      src/lib/assessment/catalogue/relations.ts
+      :14    asmt_instrument_relation         instrument_id, related_instrument_id, relation, note
+      :15    asmt_instrument_relation         instrument_id, related_instrument_id, relation, note
+      :39    asmt_instrument_reference        id, instrument_id, kind, ref_table, ref_id, ref_code, ref_label, ref_version
+  src/lib/assessment/import/provenance.ts   — 2 import hops from an entry point
+      src/app/super-admin/assessment-catalogue/InstrumentView.tsx
+      src/lib/assessment/catalogue/detail.ts
+      src/lib/assessment/import/provenance.ts
+      :10    asmt_import                      id, file_name, file_sha256, byte_size, status, extracted_at, registered_at
+  src/lib/assets/registry.ts   — 1 import hop from an entry point
+      src/app/super-admin/studio/assets/browser/page.tsx
+      src/lib/assets/registry.ts
+      :240   ?                                id (head)
+      :241   ?                                id (head)
+  src/lib/cases/policy.ts   — 1 import hop from an entry point
+      src/app/super-admin/cases/page.tsx
+      src/lib/cases/policy.ts
+      :97    practice_platform_flags          enabled
+  src/lib/holdings/unit-economics-load.ts   — 1 import hop from an entry point
+      src/app/super-admin/individual/economics/page.tsx
+      src/lib/holdings/unit-economics-load.ts
+      :79    individual_live_entitlement      user_id, source
+  src/lib/hq/account-participation.ts   — 1 import hop from an entry point
+      src/app/super-admin/individual/configuration/page.tsx
+      src/lib/hq/account-participation.ts
+      :34    hq_account_participation         user_id, category, cohort_code, valid_until
+  src/lib/hq/entitlement.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/practices/page.tsx
+      src/lib/hq/entitlement.ts
+      :164   pd_ops_config                    value_hours
+      :179   practice_entitlement             id, workspace_id, product_code, plan_code, status, starts_at, ends_at, source
+  src/lib/hq/mission-widgets.ts   — 1 import hop from an entry point
+      src/app/super-admin/_mc/ComposedMissionControl.tsx
+      src/lib/hq/mission-widgets.ts
+      :36    practice_workspace               id
+      :112   practice_platform_flags          flag, enabled
+  src/lib/hq/mos-incident.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/health/page.tsx
+      src/lib/hq/mos-incident.ts
+      :124   mos_incident_open                incident_id, title, severity, status, started_at, subject_type, subject_id, subject_label, journey_key, journey_name, component, affected_scope, impact_note, owner_name, evidence_correlation_id, change_ref, detection
+      :152   mos_incident                     incident_id, title, severity, status, started_at, resolved_at, subject_type, journey_key
+      :177   mos_event                        practice_id, outcome
+      :193   mos_incident_event               at, actor_name, from_status, to_status, note
+  src/lib/hq/mos-subject.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/support/affected/page.tsx
+      src/lib/hq/mos-subject.ts
+      :71    mos_subject                      subject_type, subject_id, label, parent_type, parent_id
+  src/lib/hq/mos-support.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/support/affected/page.tsx
+      src/lib/hq/mos-support.ts
+      :210   mos_support_case                 case_id, title, description, practice_id, reporter_name, source, category, product_area, priority, status, owner_name, incident_id, problem_id, duplicate_of, journey_key, created_at, first_response_at, resolved_at, resolution_category
+      :234   mos_problem                      problem_id, title, owner_name, status, priority, pattern_evidence, suspected_cause, confirmed_cause, workaround, target_outcome, journey_key, subject_type, created_at, resolved_at
+      :251   mos_escalation                   escalation_id, trigger, incident_id, case_id, source_name, target_team, reason, requested_action, status, due_at, created_at, resolved_at
+      :272   mos_postmortem                   postmortem_id, incident_id, status, executive_summary, impact, detection, response, root_cause, contributing_factors, open_hypotheses, what_worked, what_did_not, recovery, learning, approved_by, approved_at, created_at
+      :293   mos_corrective_action            action_id, action, source, incident_id, problem_id, postmortem_id, owner_name, priority, due_on, state, blocker, evidence, effectiveness, accepted_by, accepted_rationale, change_ref, completed_at, created_at
+      :323   mos_problem_incident             problem_id, incident_id
+  src/lib/hq/nav-switches.ts   — 1 import hop from an entry point
+      src/app/super-admin/layout.tsx
+      src/lib/hq/nav-switches.ts
+      :35    practice_platform_flags          flag, enabled
+  src/lib/hq/pd-configuration.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/configuration/ai/page.tsx
+      src/lib/hq/pd-configuration.ts
+      :803   practice_identifier_format       key (head)
+      :805   practice_onboarding_step_catalog id (head)
+      :806   practice_plans                   id (head)
+  src/lib/hq/pd-health.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/health/ai/page.tsx
+      src/lib/hq/pd-health.ts
+      :584   mos_journey                      key, name, outcome_req, sort_order
+      :588   mos_journey_event                journey_key, outcome, duration_ms, failure_code
+  src/lib/hq/pd-launch-attestation.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/operations/launch-readiness/page.tsx
+      src/lib/hq/pd-launch-attestation.ts
+      :44    pd_launch_attestation            release_ref, attested_at
+  src/lib/hq/pd-mission.ts   — 1 import hop from an entry point
+      src/app/super-admin/_mc/pd/PdMissionControl.tsx
+      src/lib/hq/pd-mission.ts
+      :279   practice_workspace               id, status, country, timezone, created_at
+      :424   practice_patient                 workspace_id (head)
+      :429   practice_appointment             workspace_id (head)
+      :434   practice_appointment             workspace_id (head)
+      :440   practice_appointment             workspace_id (head)
+      :445   practice_encounter               workspace_id (head)
+  src/lib/hq/pd-practices.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/practices/page.tsx
+      src/lib/hq/pd-practices.ts
+      :264   practice_membership              workspace_id
+      :279   practice_membership              workspace_id (head)
+      :279   practice_patient                 workspace_id (head)
+      :279   practice_appointment             workspace_id (head)
+      :279   practice_encounter               workspace_id (head)
+      :279   practice_invoice                 workspace_id (head)
+      :279   practice_payment                 workspace_id (head)
+      :381   practice_entitlement             workspace_id
+      :385   practice_entitlement             workspace_id
+      :396   practice_entitlement             workspace_id
+      :430   practice_workspace               id (head)
+      :431   practice_workspace               id (head)
+      :432   practice_workspace               id (head)
+      :460   practice_workspace               id, name, type, status, owner_person_id, country, timezone, created_at, updated_at, practice_handle
+      :470   practice_workspace               id, name, type, status, owner_person_id, country, timezone, created_at, updated_at, practice_handle
+      :483   practice_workspace               id, name, type, status, owner_person_id, country, timezone, created_at, updated_at, practice_handle
+      :505   practice_workspace               country
+      :509   pd_practice_activity             practice_id, last_meaningful_activity_at, last_activity_type, activity_window_count, classification, observed_at
+      :512   pd_practice_health               practice_id, health_state, health_reason, observed_at, evidence_ref
+      :518   practice_entitlement             id, workspace_id, product_code, plan_code, status, starts_at, ends_at
+      :691   practice_workspace               id, name, type, status, owner_person_id, country, timezone, created_at, updated_at, practice_handle
+      :733   practice_encounter               workspace_id (head)
+  src/lib/hq/pd-practitioners.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/practitioners/page.tsx
+      src/lib/hq/pd-practitioners.ts
+      :168   practice_membership              workspace_id, user_id, role_code, status, joined_at, created_at
+      :206   practice_workspace               id, name, type, status, country
+      :229   practice_practitioner_identity   user_id, practitioner_number
+      :249   practice_session                 user_id
+      :254   practice_session                 user_id
+  src/lib/hq/pd-provisioning-health.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/operations/provisioning/page.tsx
+      src/lib/hq/pd-provisioning-health.ts
+      :79    pd_ops_config                    config_key, value_hours
+      :161   practice_workspace               id, name
+  src/lib/hq/pd-provisioning.ts   — 1 import hop from an entry point
+      src/app/super-admin/platform-ops/practice/page.tsx
+      src/lib/hq/pd-provisioning.ts
+      :60    practice_plans                   plan_code, name, trial_days, active
+      :61    practice_platform_flags          enabled
+  src/lib/hq/pd-releases.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/releases/capabilities/page.tsx
+      src/lib/hq/pd-releases.ts
+      :1595  practice_plans                   star (head)
+  src/lib/hq/pd-service-health.ts   — 1 import hop from an entry point
+      src/app/super-admin/platform-ops/practice/page.tsx
+      src/lib/hq/pd-service-health.ts
+      :36    practice_platform_flags          flag
+  src/lib/hq/scholar-analytics/load.ts   — 2 import hops from an entry point
+      src/app/super-admin/individual/scholar/analytics/page.tsx
+      src/lib/hq/scholar-analytics/dashboard.ts
+      src/lib/hq/scholar-analytics/load.ts
+      :32    individual_live_entitlement      user_id, experience_code
+      :59    individual_scholar_material      id, user_id, created_at
+      :60    individual_scholar_learning_session id, user_id, created_at, last_active_at, status
+      :61    individual_scholar_learning_event session_id, user_id, action, created_at
+      :62    individual_scholar_artefact      id, user_id, created_at, action, superseded_at
+      :63    individual_scholar_review        user_id, reviewed_at
+      :64    individual_scholar_revision_session id, user_id, created_at, last_active_at, completed_at, status
+      :65    individual_scholar_case_session  id, user_id, created_at, last_active_at, completed_at, status
+      :66    individual_scholar_osce_attempt  id, user_id, started_at, finished_at, duration_seconds, created_at
+      :67    asmt_instance                    id, respondent_id, subject_user_id, started_at, submitted_at, status
+      :68    individual_scholar_evaluation    id, user_id, created_at
+      :69    individual_scholar_study_plan    user_id, updated_at
+      :70    individual_scholar_search_history user_id, query
+      :71    individual_scholar_calendar_entry user_id, created_at
+  src/lib/hq/user-directory.ts   — 1 import hop from an entry point
+      src/app/super-admin/users/load-directory.ts
+      src/lib/hq/user-directory.ts
+      :101   practice_membership              workspace_id, user_id, role_code, status
+      :102   practice_workspace               id, name
+      :103   individual_membership            user_id, status
+      :104   individual_live_entitlement      user_id, experience_code, ends_at
+  src/lib/individual/gate.ts   — 1 import hop from an entry point
+      src/app/super-admin/individual/page.tsx
+      src/lib/individual/gate.ts
+      :32    practice_platform_flags          enabled
+  src/lib/individual/professional/cpd-duplicates.ts   — 3 import hops from an entry point
+      src/app/super-admin/ckp/intelligence/page.tsx
+      src/lib/platform/jobs.ts
+      src/lib/individual/professional/reminders.ts
+      src/lib/individual/professional/cpd-duplicates.ts
+      :99    individual_live_entitlement      user_id
+      :103   individual_membership            user_id
+  src/lib/individual/professional/reminders.ts   — 2 import hops from an entry point
+      src/app/super-admin/ckp/intelligence/page.tsx
+      src/lib/platform/jobs.ts
+      src/lib/individual/professional/reminders.ts
+      :103   individual_live_entitlement      user_id
+      :107   individual_membership            user_id
+      :112   individual_professional_profile  user_id
+      :126   individual_professional_profile  id, user_id, self_declared_registration_body, self_declared_registration_expires_on, registration_reminded_for
+      :150   individual_professional_profile  id [write]
+      :166   individual_professional_profile  id [write]
+  src/lib/individual/programme-admin.ts   — 1 import hop from an entry point
+      src/app/super-admin/individual/programmes/page.tsx
+      src/lib/individual/programme-admin.ts
+      :74    individual_scholar_programme     code, label, profession, country, level, is_active
+  src/lib/individual/programme-framework.ts   — 1 import hop from an entry point
+      src/app/super-admin/competencies/programmes/page.tsx
+      src/lib/individual/programme-framework.ts
+      :60    individual_scholar_programme     code, label, profession, level, is_active, qualification_term_id
+  src/lib/knowledge/governance.ts   — 1 import hop from an entry point
+      src/app/super-admin/research/educator/page.tsx
+      src/lib/knowledge/governance.ts
+      :103   practice_platform_flags          enabled
+  src/lib/learning/policy.ts   — 1 import hop from an entry point
+      src/app/super-admin/learning/access/page.tsx
+      src/lib/learning/policy.ts
+      :98    practice_platform_flags          enabled
+  src/lib/platform/monitoring.ts   — 1 import hop from an entry point
+      src/app/super-admin/platform-ops/monitoring/page.tsx
+      src/lib/platform/monitoring.ts
+      :37    ?                                star (head)
+  src/lib/platform/provisioning.ts   — 1 import hop from an entry point
+      src/app/api/platform/provision/route.ts
+      src/lib/platform/provisioning.ts
+      :40    ?                                none [write]
+  src/lib/practice/identifier-format.ts   — 1 import hop from an entry point
+      src/app/super-admin/platform-ops/practice/identifiers/page.tsx
+      src/lib/practice/identifier-format.ts
+      :112   practice_identifier_format       star
+      :217   practice_identifier_format_history star
+  src/lib/practice/operations.ts   — 1 import hop from an entry point
+      src/app/super-admin/pd/operations/launch-readiness/page.tsx
+      src/lib/practice/operations.ts
+      :62    practice_platform_flags          flag, enabled, note
+      :66    practice_workspace               id, name, type, status, owner_person_id, country, timezone, created_at, updated_at
+      :141   practice_workspace               id
+      :150   practice_membership              workspace_id
+      :150   practice_appointment             workspace_id
+      :150   practice_patient                 workspace_id
+      :150   practice_encounter               workspace_id
+      :150   practice_invoice                 workspace_id
+      :150   practice_payment                 workspace_id
+      :237   practice_role_capabilities       star (head)
+      :238   practice_plans                   star (head)
+      :239   practice_onboarding_step_catalog star (head)
+  src/lib/qie/engines.ts   — 1 import hop from an entry point
+      src/app/super-admin/quality-intelligence/page.tsx
+      src/lib/qie/engines.ts
+      :94    ?                                id
+      :102   ?                                star (head)
+      :104   ?                                star (head)
+      :106   ?                                star (head)
+
+── Bundled but NOT callable from this plane ─────────────────────────────────
+  ⚠ These modules are in the platform bundle and no platform export reaches them. They are
+     NOT judged. Every one of them arrives through a single edge — identifier-format.ts:1
+     `import { audit } from "@/lib/practice/provisioning"` — which is worth knowing.
+  src/lib/ai/allowance.ts  (1 sites: individual_live_entitlement)
+  src/lib/ai/operating-mode.ts  (1 sites: individual_entitlement)
+  src/lib/api-auth.ts  (2 sites: ?)
+  src/lib/assessment/assessor/grants.ts  (2 sites: asmt_respondent_grant)
+  src/lib/assessment/assessor/instances.ts  (12 sites: asmt_respondent_grant, asmt_instance, asmt_instance_layout, asmt_response, asmt_evidence, asmt_comment)
+  src/lib/assessment/catalogue/classify.ts  (3 sites: asmt_catalogue_term, asmt_catalogue_dimension)
+  src/lib/assessment/catalogue/collections.ts  (2 sites: asmt_collection)
+  src/lib/assessment/import/propose.ts  (1 sites: ?)
+  src/lib/assessment/import/store.ts  (10 sites: ?, asmt_import)
+  src/lib/assessment/studio/pathway-data.ts  (1 sites: ?)
+  src/lib/assets/registry.ts  (1 sites: ?)
+  src/lib/commerce/settlement.ts  (6 sites: ?)
+  src/lib/competency/framework-layout.ts  (1 sites: ?)
+  src/lib/hq/entitlement.ts  (2 sites: practice_entitlement)
+  src/lib/hq/mos-subject.ts  (2 sites: mos_subject, mos_subject_type)
+  src/lib/hq/mos-support.ts  (1 sites: mos_support_event)
+  src/lib/hq/pd-launch-attestation.ts  (1 sites: pd_launch_attestation)
+  src/lib/identity/product-resolution.ts  (2 sites: practice_membership, individual_membership)
+  src/lib/individual/access.ts  (2 sites: individual_membership, individual_live_entitlement)
+  src/lib/individual/commerce.ts  (8 sites: practice_platform_flags, individual_entitlement, individual_membership, individual_live_entitlement)
+  src/lib/individual/grants.ts  (20 sites: individual_membership, individual_live_entitlement, individual_entitlement)
+  src/lib/individual/learning-plan/event-store.ts  (1 sites: individual_scholar_study_plan)
+  src/lib/individual/programme-admin.ts  (4 sites: individual_scholar_programme)
+  src/lib/individual/scholar/store.ts  (274 sites: individual_scholar_question, individual_scholar_material, ?, individual_scholar_learning_session, individual_scholar_revision_session, individual_scholar_evaluation, individual_scholar_attempt, individual_scholar_review, individual_scholar_case_session, individual_scholar_programme, individual_scholar_learner, individual_scholar_learner_context, individual_scholar_osce_attempt, individual_scholar_learning_event, individual_scholar_artefact, individual_scholar_study_plan, individual_scholar_attempt_snapshot, individual_scholar_attempt_correction, individual_scholar_calendar_entry, individual_scholar_search_history)
+  src/lib/practice/access.ts  (6 sites: practice_membership, practice_entitlement, practice_role_assignment, practice_onboarding)
+  src/lib/practice/audit.ts  (1 sites: practice_audit_event)
+  src/lib/practice/baseline.ts  (5 sites: practice_configuration, practice_booking_rule, practice_registration_template, practice_message_channel)
+  src/lib/practice/commercial-precedence.ts  (3 sites: practice_workspace, practice_subscription, practice_entitlement)
+  src/lib/practice/entitlement-writer.ts  (3 sites: practice_entitlement)
+  src/lib/practice/identifier-format.ts  (4 sites: practice_practitioner_identity, practice_identifier_format_history, practice_identifier_format)
+  src/lib/practice/messaging.ts  (29 sites: practice_message_channel, practice_patient, practice_patient_consent, practice_message, practice_practitioner_identity, practice_patient_contact, practice_appointment, practice_workspace, practice_otp_challenge)
+  PASS  B3  ⚠ count control: 156 reachable practice read site(s) judged (floor 12)
+  PASS  B4  ⚠ THE CLOSURE CONTROL. `practice_patient` is found — a grep of the entry directories finds it nowhere. If this ever fails, the harness has stopped following imports and every clean run below means nothing
+  PASS  B5  ⚠ the variable-table resolver is live: at least one `.from(<identifier>)` resolved to several real table names
+  PASS  B6  both known practice-reading libraries are still in the reachable closure
+
+── Verdicts ─────────────────────────────────────────────────────────────────
+  REFUSED  src/lib/hq/scholar-analytics/load.ts:70  [TABLE_NOT_ALLOWED] individual_scholar_search_history is not on the platform-plane allowlist
+   122  ALLOWED
+    24  COUNT_ONLY
+     1  TABLE_NOT_ALLOWED
+     9  UNRESOLVED_DECLARED
+  FAIL  A1  ⚠ 1 read(s) cross the plane boundary — listed above
+  PASS  A2  all 5 declared dynamic-table exceptions are still real reads (9 unresolved site(s) in the closure)
+  PASS  A3  0 reachable practice RPC call(s), all declared: (none)
+
+── ⚠ Operator-only routes OUTSIDE the §6.2 entry set (not judged) ───────────
+  src/app/api/v1/practice/entitlement/route.ts
+  src/app/api/v1/practice/flags/route.ts
+  src/app/api/v1/practice/identifier-format/route.ts
+  src/app/api/v1/practice/launch-attestation/route.ts
+  src/app/api/v1/practice/operations/users/route.ts
+  src/app/api/v1/practice/provisioning/individual/route.ts
+  src/app/api/v1/practice/provisioning/[requestId]/route.ts
+  PASS  A6  7 operator-only route(s) live in the practice API tree and are exactly the declared set — the §6.2 rule as written does not reach them
+
+── §P positive controls ─────────────────────────────────────────────────────
+  PASS  P1  the operational columns of practice_workspace still pass — the console keeps working
+  PASS  P2  counting patients by workspace_id still passes
+  PASS  P3  a head-only exact count passes even with select("*"), because PostgREST returns no rows
+  PASS  P4  ⚠ §6.3's proposed audit WRITE is not blocked by this READ rule — recording a trace of the read is the other half of the boundary and this file must not stand in its way
+  PASS  P5  select("*") passes where `*` is declared — the identifier format has no subject
+
+── §C refusal controls ──────────────────────────────────────────────────────
+  PASS  C1  control 1 — a NEW TABLE: a platform module reading practice_problem is refused
+  PASS  C2  practice_audit_event is refused BY NAME (§4.4: its payloads carry clinical detail)
+  PASS  C3  ⚠ control 2 — A WIDENED COLUMN LIST: select("workspace_id, given_name") is refused. This is the feared case and it is a four-word edit
+  PASS  C4  select("*") on a tenancy-only table is refused
+  PASS  C5  ⚠ THE JOIN, IN A STRING: select("id, practice_patient(given_name)") is refused even though .from() says practice_workspace
+  PASS  C6  an unresolvable, UNDECLARED table name FAILS — scan.ts's rule: unknown is never open
+  PASS  C7  …and passes only where a written justification exists, keyed to the file AND the expression — the same expression in another file is still refused
+  PASS  C8  an unresolvable select list FAILS on a known practice table
+  PASS  C16  the ops billing tiles' reads are on the register: tenancy column only, counted never listed
+  PASS  C17  ⚠ an AMOUNT column on either billing table is refused -- a named practitioner's revenue is business intelligence, permanently outside this plane
+  PASS  C9  a chain this scanner cannot classify FAILS rather than being assumed inert
+  PASS  C10  `*` is refused where it is not declared, on the very table whose operational columns P1 allows
+
+── §C extractor controls ────────────────────────────────────────────────────
+  PASS  C11  ⚠ a table held in a PARAMETER, bound from a map at the call site, resolves to practice_patient and its widened column list is refused
+  PASS  C12  ⚠ the embedded join is parsed out of the select STRING and refused
+  PASS  C13  a genuinely dynamic table produces an unresolved site, and an unresolved site is refused
+  PASS  C14  Array.from is not mistaken for a table read
+  PASS  C15  ⚠ each read is tagged with the declaration that owns it — the tag symbol-level reachability turns on
+
+── §AC assessment catalogue controls ────────────────────────────────────────
+  PASS  AC1  the catalogue's real reads (6 in classify.ts) are all inside the allowlist -- the control reads real source
+  PASS  AC2  ⚠ PLANTED: a read of asmt_instance appended to a real catalogue file goes RED (TABLE_NOT_ALLOWED) -- the catalogue cannot read an instance
+  PASS  AC3.asmt_response  asmt_response is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC3.asmt_evidence  asmt_evidence is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC3.asmt_outcome  asmt_outcome is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC3.asmt_comment  asmt_comment is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC3.asmt_respondent_grant  asmt_respondent_grant is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC3.asmt_instance_layout  asmt_instance_layout is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC3.asmt_progression_decision  asmt_progression_decision is refused from the catalogue directory (capture and progression tables have no grant)
+  PASS  AC4  a widened column list on a catalogue table is refused
+  PASS  AC5  the right table with the right columns is refused from any file outside src/lib/assessment/catalogue/** (the grant names WHO may read)
+  PASS  AC6  ...and the same read from the catalogue directory passes (the opposite control)
+  PASS  AC7  asmt_instrument_org_scope has no screen in Phase 1, so no grant: refused
+  PASS  AC8  the Studio's definition tables (asmt_instrument and its versions) are NOT governed here: a separate decision, not widened by this one
+  PASS  AC9  every reachable read of a catalogue table (11 sites) is inside src/lib/assessment/catalogue/**
+  PASS  AC10  no file the landlord plane can reach reads a capture or progression table, except the assessor workspace library (and asmt_instance from the engagement analytics loader), and never a progression decision (0 found)
+  PASS  AC10b  control: the engagement analytics directory reading an answer table is refused (its asmt_instance entry opens nothing else)
+  PASS  AC10c  control: the engagement loader widening asmt_instance to the authority snapshot is refused by ITS entry, not the assessor's
+
+── §AS assessor workspace controls ──────────────────────────────────────────
+  PASS  AS1  every read in the assessor library and its API routes (26 sites, 26 on capture tables, including routes no page reaches) is inside the allowlist
+  PASS  AS1b  no read in the assessor library has a computed table name or select list (a scanner-blind read would be refused anyway)
+  PASS  AS2.studio  ⚠ PLANTED: the right table with allowed columns read from the Studio goes RED -- the grant names WHO may read
+  PASS  AS2.catalogue  ⚠ PLANTED: the right table with allowed columns read from the catalogue goes RED -- the grant names WHO may read
+  PASS  AS2.somewhere  ⚠ PLANTED: the right table with allowed columns read from a page goes RED -- the grant names WHO may read
+  PASS  AS2.other.ts  ⚠ PLANTED: the right table with allowed columns read from another library goes RED -- the grant names WHO may read
+  PASS  AS3  ...and the same read from the assessor library passes (the opposite control)
+  PASS  AS4  asmt_progression_decision has NO allowlist entry: a read of it is refused even from inside the assessor library
+  PASS  AS5  a widened column list (storage_path, provenance) on asmt_evidence is refused even from the assessor library
+  PASS  AS6  select("*") on a capture table is refused even from the assessor library
+
+── The allowlist ────────────────────────────────────────────────────────────
+  practice_platform_flags            flag, enabled, note
+  pd_launch_attestation              release_ref, attested_at
+  pd_ops_config                      config_key, value_hours, description
+  practice_entitlement               id, workspace_id, product_code, plan_code, status, starts_at, ends_at, source
+  practice_workspace                 id, name, type, status, owner_person_id, country, timezone, created_at, updated_at, practice_handle, product_code
+  practice_membership                workspace_id, user_id, role_code, status, joined_at, created_at
+  practice_appointment               workspace_id
+  mos_subject                        every column
+  mos_journey                        every column
+  mos_journey_event                  every column
+  mos_incident                       every column
+  mos_incident_open                  every column
+  mos_incident_event                 every column
+  mos_support_case                   every column
+  mos_problem                        every column
+  mos_problem_incident               every column
+  mos_escalation                     every column
+  mos_postmortem                     every column
+  mos_corrective_action              every column
+  pd_practice_activity               every column
+  pd_practice_health                 every column
+  mos_event                          practice_id, journey_key, event_name, outcome, occurred_at, duration_ms
+  practice_session                   user_id
+  practice_patient                   workspace_id
+  practice_encounter                 workspace_id
+  practice_invoice                   workspace_id
+  practice_payment                   workspace_id
+  practice_role_capabilities         row count only
+  practice_plans                     plan_code, name, trial_days, active
+  practice_onboarding_step_catalog   row count only
+  practice_identifier_format         every column
+  practice_identifier_format_history every column
+  individual_membership              user_id, status, source, onboarded_at, created_at
+  individual_entitlement             id, user_id, experience_code, status, starts_at, ends_at, source, plan_code, granted_by, created_at
+  individual_live_entitlement        id, user_id, experience_code, ends_at, source
+  individual_invitation              id, status, invite_scholar, invite_professional, expires_at, entitlement_ends_at, created_at, accepted_at, revoked_at, entitlement_source, prefill
+  individual_live_invitation         id
+  individual_identity_profile        user_id, preferred_name
+  individual_scholar_learner         user_id, programme_code, level_label, institution_label
+  individual_scholar_programme       every column
+  individual_professional_profile    id, user_id, self_declared_profession, self_declared_registration_body, self_declared_registration_country, self_declared_registration_expires_on, registration_reminded_for
+  hq_account_participation           every column
+  practice_practitioner_identity     practitioner_number, number_format_version, user_id
+  asmt_catalogue_dimension           code, label, is_active, allows_hierarchy, position
+  asmt_catalogue_term                id, dimension_code, code, label, parent_id, source_kind, source_ref, is_active, position
+  asmt_instrument_term               instrument_id, term_id, is_primary
+  asmt_instrument_relation           instrument_id, related_instrument_id, relation, note
+  asmt_instrument_reference          id, instrument_id, kind, ref_table, ref_id, ref_code, ref_label, ref_version
+  asmt_instrument_availability       instrument_id, product_line, mode, granted_at, note
+  asmt_collection                    id, code, name, description, is_active, owner_scope
+  asmt_collection_member             collection_id, instrument_id, position
+  asmt_import                        id, file_name, file_sha256, byte_size, storage_bucket, storage_path, status, draft, extracted_at, registered_at, created_by, created_at
+  asmt_instance                      id, instrument_version_id, subject_kind, subject_id, subject_user_id, respondent_role, respondent_id, respondent_snapshot, grant_id, owner_scope, status, attestation, amends_instance_id, started_at, submitted_at
+  asmt_instance_layout               instance_id, layout_version_id, is_primary
+  asmt_response                      item_id, field_key, value, revision, satisfactory
+  asmt_evidence                      id, item_id, kind, ref_kind, ref_id, note, created_at
+  asmt_comment                       id, item_id, kind, body, author_id, created_at
+  asmt_outcome                       id, instance_id, engine_version, rules_hash, outcome_code, outcome_class, group_outcomes, aggregates, trace, trace_hash, backstop_applied, backstop_detail, created_at
+  asmt_respondent_grant              id, instrument_id, subject_kind, subject_id, subject_user_id, respondent_id, respondent_role, appointment_id, granted_by, reason, valid_from, valid_until, accepted_at, ended_at, end_reason, created_at
+  individual_scholar_material        id, user_id, created_at
+  individual_scholar_learning_session id, user_id, created_at, last_active_at, status
+  individual_scholar_learning_event  session_id, user_id, action, created_at
+  individual_scholar_artefact        id, user_id, created_at, action, superseded_at
+  individual_scholar_review          user_id, reviewed_at
+  individual_scholar_revision_session id, user_id, created_at, last_active_at, completed_at, status
+  individual_scholar_case_session    id, user_id, created_at, last_active_at, completed_at, status
+  individual_scholar_osce_attempt    id, user_id, started_at, finished_at, duration_seconds, created_at
+  individual_scholar_evaluation      id, user_id, created_at
+  individual_scholar_study_plan      user_id, updated_at
+  individual_scholar_calendar_entry  user_id, created_at
+  asmt_instance                      id, respondent_id, subject_user_id, started_at, submitted_at, status
+
+  tables the platform plane reads today: 71
+  PASS  A4  no dead grants AT TABLE GRANULARITY — every allowlisted table is actually read (column-level dead grants are printed below, not asserted)
+  FAIL  A5  every table read is named in the allowlist (the inverse of A1)
+  columns declared but not read within this entry set: pd_ops_config.description, practice_workspace.product_code, mos_event.journey_key, mos_event.event_name, mos_event.occurred_at, mos_event.duration_ms, practice_practitioner_identity.number_format_version, asmt_import.storage_bucket, asmt_import.storage_path, asmt_import.draft, asmt_import.created_by, asmt_import.created_at, asmt_instance_layout.instance_id, asmt_response.satisfactory, asmt_outcome.instance_id
+
+RED  61 passed, 2 failed
+
+FAILURES:
+  A1  ⚠ 1 read(s) cross the plane boundary — listed above
+  A5  every table read is named in the allowlist (the inverse of A1)

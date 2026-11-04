@@ -34,6 +34,8 @@ import { AskAbout } from "./ask-panel";
 // SALE-2026-11 R3 / SALE-12: the active Notebook view (policy scholar_active_notebook, default off).
 import { NotebookView } from "./notebook-view";
 import { workspaceSchema } from "@/lib/individual/scholar/store";
+// SCHOLAR-SEARCH-HISTORY-01: My search history (policy scholar_search_history, default off), its entry here and its capture.
+import { HistoryKeyInput, RecordSearch } from "./search-history-client";
 
 // SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026): THE PERSONAL LIBRARY on Saved learning. A server component: database
 // reads only, keyed on the caller (store.ts), shaped by saved-library.ts. NO AI anywhere: opening a lesson from here is the
@@ -84,6 +86,8 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
   competencies: { id: string; title: string }[] | null; notesOn: boolean;
 }) {
   const notebookOn = policy.scholarActiveNotebook === "on";
+  const historyOn = policy.scholarSearchHistory === "on";
+  const historyKey = typeof params.hk === "string" ? params.hk : null;
   const asked0 = parseLibraryQuery(params);
   // The Notebook view only where HQ offers it; anywhere else the address falls back to the default view.
   const parsed = asked0.view === "notebook" && !notebookOn ? { ...asked0, view: "recent" as const } : asked0;
@@ -114,9 +118,11 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
         <label className="min-w-0 flex-1 basis-[16rem] text-[12.5px] font-semibold text-gray-800">Search your saved lessons, notes, questions and materials
           <input type="search" name="q" defaultValue={q.q} maxLength={200} className={field} placeholder="for example: preload OR afterload" />
         </label>
+        {historyOn && <HistoryKeyInput />}
         <button type="submit" className={ghost}>Search</button>
         {q.q && <Link href={urlWith(q, { q: null })} className={ghost}>Clear search</Link>}
       </form>
+      {historyOn && q.q && <RecordSearch activity="library_search" query={q.q} requestKey={historyKey} resultCount={null} materialId={q.material} />}
 
       {version ? await VersionView({ admin, userId, id: version, titles, policy, notes, q })
         : (
@@ -128,6 +134,10 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
                     className={`inline-flex min-h-[40px] items-center rounded-full border px-3.5 text-[13px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${q.view === v ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}
                     style={q.view === v ? { background: SCHOLAR.accent, borderColor: SCHOLAR.accent } : undefined}>{VIEW_LABEL[v]}</Link>
                 ))}
+                {historyOn && (
+                  <Link href={href("study/saved/searches")} data-testid="library-history-link"
+                    className={`inline-flex min-h-[40px] items-center rounded-full border border-gray-300 bg-white px-3.5 text-[13px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>My search history</Link>
+                )}
               </nav>
             )}
             {(q.view !== "notebook" || !!q.q) && (

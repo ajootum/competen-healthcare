@@ -1,0 +1,67 @@
+INFO before A {"artefacts":14,"current_artefacts":13,"sessions":4,"events":386,"notes":13,"attempts":130,"materials":3,"cards":45,"captured":0,"hidden":0,"hiddenLessons":0,"hiddenTeaching":0} ai=412
+INFO before B {"artefacts":1,"current_artefacts":1,"sessions":1,"events":1,"notes":0,"attempts":7,"materials":2,"cards":6,"captured":0,"hidden":0,"hiddenLessons":0,"hiddenTeaching":0} ai=61
+PASS 1 existing history: A's list total is current saved teaching + lessons + captured (17); heading "EVERYTHING, NEWEST FIRST (17)"
+PASS 1 rows carry saved teaching and lessons (teaching, lesson)
+PASS 1 newest first (every row's time is at or before the one above it)
+PASS 1440 history: no horizontal overflow (scrollWidth 1440 <= viewport 1440)
+INFO 2 link: /individual/scholar/study/saved?version=135e059a-1d44-4b46-b19a-9d6880d21afd
+PASS 2 the saved answer opened as saved (?version=135e059a-1d44-4b46-b19a-9d6880d21afd)
+PASS 2 opening the saved answer made 0 AI calls (ledger + requests for A: 412 -> 412)
+PASS 2 a lesson's saved teaching opened in the library with 0 AI calls (412 -> 412)
+INFO 2 learning events for A across that open: 386 -> 386
+PASS 2 no open link goes into a Learn lesson; only Continue the lesson does
+PASS 3 Learn's search box links to My search history
+PASS 3 a submitted Learn search is kept (one captured row)
+PASS 3 reloading the same results adds nothing (the form's request key, idempotent)
+PASS 3 typing without submitting keeps nothing
+PASS 3 a submitted library search is kept
+PASS 3 an Ask question is kept once; its retry with the same key is the same entry
+PASS 3 an empty query is never kept
+PASS 3 the newest entry is the Ask question, at the top
+INFO 3 first page holds 20 entries
+PASS 3 both searches are in the history
+PASS 4 full-text search finds exactly the three new entries (3)
+PASS 4 matches are marked in the snippet
+PASS 4 the activity filter shows only material searches (1)
+PASS 4 the lesson filter shows A's 4 lessons (none removed from history)
+PASS 4 the material filter (with teaching) shows that material's saved teaching only (8 = 8 - 0 research)
+PASS 4 the topic filter offers "Heart failure 212227"
+PASS 4 the topic filter shows only entries on "Heart failure 212227" (1)
+PASS 4 a date range from tomorrow shows nothing
+PASS 4 a date range of today holds today's entries
+PASS 5 a pinned search shows under Pinned
+PASS 5 a recovered saved teaching can be pinned too
+PASS 5 Save for revision is the library's own bookmark (notes 13 -> 13; an existing bookmark is reused)
+PASS 5 unpinning takes it off Pinned
+PASS 6 removing a search deletes its history row
+PASS 6 a removed lesson leaves the history
+PASS 6 ... and the lesson itself is untouched
+PASS 7 two devices show the same history, in the same order
+PASS 7 a search made on the phone is at the top of the desktop's history
+PASS 390 history: no horizontal overflow (scrollWidth 390 <= viewport 390)
+PASS 820 history: no horizontal overflow (scrollWidth 820 <= viewport 820)
+PASS 8 B's history page holds none of A's entries
+PASS 8 B's history API finds none of A's words
+PASS 8 B cannot pin, remove or hide A's entries (404, 404, 404)
+PASS 8 B naming A's lesson, saved teaching or material keeps none of those references
+PASS 8 B filtering by A's material sees nothing
+PASS 8 A's entries are still there after B's attempts
+PASS 9 B's history before clearing has the expected 4 entries (their lesson and saved teaching unless cleared before, and their searches)
+PASS 9 clearing asks for confirmation first
+PASS 9 Cancel keeps everything
+PASS 9 after confirming, B's history is empty
+PASS 9 B's clear left A's history as it was
+INFO after A {"artefacts":14,"current_artefacts":13,"sessions":4,"events":386,"notes":13,"attempts":130,"materials":3,"cards":45,"captured":3,"hidden":1,"hiddenLessons":1,"hiddenTeaching":0} ai=412
+INFO after B {"artefacts":1,"current_artefacts":1,"sessions":1,"events":1,"notes":0,"attempts":7,"materials":2,"cards":6,"captured":0,"hidden":2,"hiddenLessons":1,"hiddenTeaching":1} ai=61
+PASS 10 artefacts unchanged (A 14 -> 14, B 1 -> 1)
+PASS 10 sessions unchanged (A 4 -> 4, B 1 -> 1)
+PASS 10 events unchanged (A 386 -> 386, B 1 -> 1)
+PASS 10 attempts unchanged (A 130 -> 130, B 7 -> 7)
+PASS 10 materials unchanged (A 3 -> 3, B 2 -> 2)
+PASS 10 cards unchanged (A 45 -> 45, B 6 -> 6)
+PASS 10 notes unchanged but A's one Save for revision bookmark (A 13 -> 13, B 0 -> 0)
+PASS 10 the whole walk made 0 AI calls for either learner
+PASS 10 B's clear marked their 2 recovered records removed, in the history table only
+PASS no application console errors
+PASS no 5xx responses
+ALL PASS -- 59 passed, 0 failed

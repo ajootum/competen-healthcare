@@ -14,6 +14,7 @@ import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spel
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 import { activeStudyId } from "./study-active";
+import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 
 // "ASK ABOUT THIS" -- SCHOLAR-CE-2026 CE-01. ONE panel, used from Revise feedback, a flashcard, a case debrief, OSCE feedback,
 // My Plan's next step and a saved lesson. The learner stays on the page: a side drawer on a wide screen, a bottom sheet on a
@@ -115,14 +116,19 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
       // A failure after text began: the partial text is not an answer and is not kept.
       if (r.error) { setTurns(t => t.filter(x => x.id !== id)); setError({ body: { error: r.error.message } }); return; }
       patch({ a: r.text, streaming: false, sources: r.done?.sources, label: r.done?.label });
-      if (!followUp) setQuestion("");
+      if (!followUp) { setQuestion(""); keep(text); }
       return;
     }
     const prompt = r.status === 409 ? clarifyFrom(r.json) : null;
     if (prompt) { setClarify({ q: text, followUp, prompt }); return; }
     if (!r.ok) { setError({ body: r.json }); return; }
     setTurns(t => [{ id, q: text, a: String(r.json.answer ?? ""), streaming: false, followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources as PersonalAiSourceRef[] : undefined, label: typeof r.json.label === "string" ? r.json.label : undefined }, ...t]);
-    if (!followUp) setQuestion("");
+    if (!followUp) { setQuestion(""); keep(text); }
+  }
+  // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to (never a follow-up, which repeats it) is kept once in the learner's own history:
+  // their words and where they asked, never the reply. The server keeps nothing while HQ has the history off.
+  function keep(text: string) {
+    void recordHistory({ activity: "ask", query: text, sessionId: sessionId ?? null, step: sessionId ? step ?? null : null, materialId: materialId ?? null, chunkId: chunkIds?.[0] ?? null });
   }
 
   return (
@@ -142,7 +148,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700">
             {grounded ? "Your Personal AI is given the sections of your notes linked to this and asked to cite them. The label above each answer says whether it did. " : "No section of your notes is linked to this, so the answer is a general explanation. "}
-            Nothing is saved: the conversation is gone when you leave this page.
+            The answer is not saved: it is gone when you leave this page. Where My search history is offered, your question is kept there, private to you, until you remove it.
           </p>
           <form onSubmit={e => { e.preventDefault(); void send(question); }}>
             <label htmlFor={`${uid}-q`} className="text-[13.5px] font-semibold text-gray-900">Your question <span className="font-normal text-gray-600">(change it if you like)</span></label>

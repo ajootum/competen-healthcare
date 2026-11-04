@@ -120,6 +120,9 @@ export const PLANE_TABLE_PREFIXES = [
   "=individual_scholar_material", "=individual_scholar_learning_session", "=individual_scholar_learning_event", "=individual_scholar_artefact",
   "=individual_scholar_review", "=individual_scholar_revision_session", "=individual_scholar_case_session", "=individual_scholar_osce_attempt",
   "=individual_scholar_evaluation", "=individual_scholar_study_plan", "=individual_scholar_calendar_entry",
+  // SCHOLAR-SEARCH-HISTORY-01 (migration 992). The learner's own search history: their words, pins and removals. Governed with
+  // NO allowlist entry, so ANY read of it from the landlord plane is refused, counts included. It never reaches HQ.
+  "=individual_scholar_search_history",
   // (hq_account_classification, plat_ai_requests, ai_usage_ledger and ai_allowance_account are platform-owned tables read by
   // many HQ modules already and stay ungoverned here: the analytics loader selects its narrow columns from them and the
   // build record names them, but no allowlist entry governs them.)

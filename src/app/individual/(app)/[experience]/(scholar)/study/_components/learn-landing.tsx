@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
+import { HistoryKeyInput } from "./search-history-client";
 import {
   PAGE_SIZE, SEARCH_TABS, SEARCH_TAB_LABEL, shortDate,
   type CompetencyRef, type DocumentHit, type SearchParams, type SearchResult, type SearchTab, type SectionHit, type SessionHit, type TopicHit,
@@ -36,7 +37,8 @@ const studyLink = `${link} inline-flex min-h-[44px] items-center text-[13.5px]`;
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
 /** The universal search (owner s3): "Search my library" is the default and uses no AI; "Teach me this topic" starts Learn. */
-export function LearnSearchBox({ q = "", studyOn = false }: { q?: string; studyOn?: boolean }) {
+/** historyOn: SCHOLAR-SEARCH-HISTORY-01 (policy scholar_search_history): each submit carries a fresh history key, and the box links to My search history. */
+export function LearnSearchBox({ q = "", studyOn = false, historyOn = false }: { q?: string; studyOn?: boolean; historyOn?: boolean }) {
   return (
     <section aria-labelledby="learn-search-h" className={`${card} mb-5`}>
       <form action={LEARN} method="get" role="search">
@@ -45,6 +47,7 @@ export function LearnSearchBox({ q = "", studyOn = false }: { q?: string; studyO
         <input id="learn-q" name="q" type="search" defaultValue={q} maxLength={200} autoComplete="off"
           placeholder="Search your notes, topics, clinical concepts or ask Scholar a question..."
           className={`mt-3 block min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+        {historyOn && <HistoryKeyInput />}
         {studyOn && (
           <div className="mt-3">
             <label htmlFor="learn-obj" className="block text-[13px] font-semibold text-gray-700">What do you want to be able to do? <span className="font-normal text-gray-500">(optional, used by Study this topic)</span></label>
@@ -58,6 +61,12 @@ export function LearnSearchBox({ q = "", studyOn = false }: { q?: string; studyO
           {studyOn && <button type="submit" name="study" value="new" className={ghost}>Study this topic</button>}
         </div>
         <p className="mt-2 text-[12.5px] text-gray-500">Searching uses no AI and works even when AI help is off or your allowance is used up. Teach me starts a lesson from your own notes.</p>
+        {historyOn && (
+          <p className="mt-1.5 text-[13px]">
+            <Link href={experienceHref("scholar", "study/saved/searches")} className={`inline-flex min-h-[40px] items-center font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} data-testid="learn-history-link">My search history</Link>
+            <span className="text-gray-500"> · what you searched and asked before, private to you</span>
+          </p>
+        )}
       </form>
     </section>
   );

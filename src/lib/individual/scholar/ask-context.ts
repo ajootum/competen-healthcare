@@ -14,7 +14,8 @@ import { QUESTION_MAX } from "./config";
 // ⚠ THE SURFACE NEVER LOWERS RISK. It maps onto an EXISTING intent surface (request-intent.ts), which is framing only: it can
 //   never lower real-patient evidence, a configured high-risk rule or the model floor. `refLabel` is framing words too, and is
 //   dropped when it carries a patient-identifier shape.
-// ⚠ NOTHING IS STORED. No context, question or answer is kept by this feature (the stated rule "Nothing is saved").
+// ⚠ NO ANSWER OR CONTEXT IS STORED by this feature. SCHOLAR-SEARCH-HISTORY-01 (policy scholar_search_history, default off) alone keeps the learner's
+// submitted question, in their own private history, through its own route; the panel says so.
 
 export const ASK_SURFACES = ["revise", "flashcards", "case", "osce", "plan", "library", "learn", "personal_ai"] as const;
 export type AskSurface = (typeof ASK_SURFACES)[number];

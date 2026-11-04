@@ -59,6 +59,8 @@ import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, NEED_LABEL, pickDifferentQuestion,
 import { ActionRow, CitationChip, FeedbackParts, InlineNote, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, NotesText, QuestionCard, RefChip, SectionCard, SourceLink, VerdictLine, learnAction, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
 import { shortRef } from "@/lib/individual/scholar/notes-layout";
 import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
+// SCHOLAR-SEARCH-HISTORY-01: an answered Ask Scholar question is kept in the learner's own history (their words and where, never the answer).
+import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -930,7 +932,7 @@ export function LearnWorkspace(props: {
     const r = await act(p.action ?? "", { ...p.extra, purpose: "education" }, p.target, p.asked, p.step);
     if (!r) return;
     // SCHOLAR-EDU-AI-01 s6: no new AI (continuity) keeps what the student typed, so they can try again or carry on.
-    if (p.action === "ask") { if (!r.continuity) setAsk(""); }
+    if (p.action === "ask") { if (!r.continuity) setAsk(""); if (p.asked) keepAsked(p.asked, p.step); }
     else if (p.action === "check" && r.checkQuestion && p.step !== undefined) setCheck(openCheck(p.step, r.checkQuestion));
     else if (p.action === "clarify") applyCheckResult(r);
   }
@@ -1056,6 +1058,12 @@ export function LearnWorkspace(props: {
     patchAdaptive(st.step, { running: false, asked: !!r?.checkQuestion });
     if (r?.checkQuestion) checkThis(st, r.checkQuestion);
   }
+  // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to (even "this isn't in your notes") is one entry in the learner's own history:
+  // their words and where they asked, never the reply. A clarify prompt is no reply yet: it is kept when the learner answers it (answerEducation).
+  function keepAsked(q: string, onStep?: number) {
+    const st = onStep === undefined ? step : session?.steps.find(x => x.step === onStep) ?? step;
+    if (st) void recordHistory({ activity: "ask", query: q, sessionId: session?.id ?? null, step: session?.id ? st.step : null, chunkId: st.sections[0]?.chunkId ?? null });
+  }
   async function submitAsk(e: React.FormEvent) {
     e.preventDefault();
     const q = ask.trim();
@@ -1063,6 +1071,7 @@ export function LearnWorkspace(props: {
     const history = askThread.slice(0, props.maxTurns).reverse().flatMap(c => [{ speaker: "student", text: c.asked ?? "" }, ...(c.reply.answer ? [{ speaker: "tutor", text: c.reply.answer }] : [])]);
     const r = await act("ask", { question: q, history }, "ask", q);
     if (r && !r.continuity) setAsk(""); // no new AI: the question stays in the box
+    if (r) keepAsked(q);
   }
   /** A teaching approach's request, through the same route and body as every Learn action (allowance, grounding, dedupe). */
   const runApproach = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
