@@ -1,0 +1,60 @@
+PASS 1440: no horizontal overflow (scrollWidth 1440 <= viewport 1440)
+PASS 1440: three areas (lessons, lesson, Ask Scholar) shown side by side
+PASS 1440: Teach me section has its heading
+PASS 1440: Check your understanding section has its heading
+PASS 1440: Teaching style section has its heading
+PASS 1440: What next? section has its heading
+PASS 1440: Practise this lesson section has its heading
+PASS 1440: View sources section has its heading
+PASS 1440: the AI-generated / not clinically reviewed badge is still shown
+PASS 1440: the formative check disclaimer is still shown
+INFO 1440: AI explanation beyond your notes block present: 3
+PASS Listen: the control responds (clicked, no error)
+PASS Ask about this: opens its panel
+PASS Teaching style: Guide me becomes selected (aria-checked)
+PASS Teaching style: selected shown by a 2px border and the word Selected (not colour alone) [2px]
+PASS Memory aid: the callout is shown, labelled in words (Guide me reply)
+PASS Memory aid: icon + label + 4px accent rule (bg rgb(253, 240, 244))
+PASS 390 with Memory aid: no horizontal overflow (scrollWidth 390 <= viewport 390) wide: ul.flex min-w-max gap-2 right=480 | li. right=480 | a.inline-flex min-h-[40px] items-center gap-2 rounded-full bor right=480 | span.inline-flex h-7 w-7 items-center justify-center rounded-lg right=402 | svg.[object SVGAnimatedString] right=396
+PASS Teaching style: More opens (aria-expanded) and keeps the other approaches
+PASS Ask Scholar (1440): the question box takes focus beside the lesson and the page does not move (scrollY 11844 -> 11844)
+PASS Answer this: the answer box opens under its question
+PASS Answer this: an outcome is shown (ai-feedback)
+INFO feedback parts shown: WHAT YOU GOT RIGHT | MISCONCEPTIONS OR INCORRECT REASONING | KEY LEARNING POINTS: A MODEL ANSWER FROM YOUR NOTES | WHAT TO REVISE NEXT
+PASS CYU feedback: each part has its heading and an icon
+INFO answered chips after the check: 2
+FAIL Go deeper (What next?): a new teaching round or the depth-reached message appears
+PASS What next: Practise this lesson opens the practice section
+PASS What next: Choose another topic links to the topic chooser
+PASS What next: Previous lesson opens lesson 1 (saved, no AI)
+PASS What next: Next lesson returns to lesson 2 (the learner's click; nothing auto-advances)
+INFO 1440 axe (wcag2a/2aa/21aa, main): 0 rule(s) violated
+PASS 1440: axe colour-contrast none
+INFO 1440-dark axe (wcag2a/2aa/21aa, main): 0 rule(s) violated
+PASS 1440 dark: axe colour-contrast none
+PASS 820: no horizontal overflow (scrollWidth 820 <= viewport 820)
+PASS 820: lessons and Ask Scholar are panels behind tabs
+PASS 820: touch screen emulated (pointer: coarse)
+PASS 820: Ask Scholar from the sticky lesson bar while reading opens as a panel
+PASS 820 Ask Scholar panel: no horizontal overflow (scrollWidth 820 <= viewport 820)
+PASS 820: back to the lesson at the same reading place (scrollY 2818 -> 2818)
+PASS 820: from the tab bar too, the lesson returns to the reading place (scrollY 2818 -> 2818)
+PASS 820: touch targets in the lesson are at least 44px high on a touch screen
+INFO 820 axe (wcag2a/2aa/21aa, main): 0 rule(s) violated
+PASS 820: axe colour-contrast none
+PASS 820 dark: no horizontal overflow (scrollWidth 820 <= viewport 820)
+PASS 390: no horizontal overflow (scrollWidth 390 <= viewport 390) wide: ul.flex min-w-max gap-2 right=480 | li. right=480 | a.inline-flex min-h-[40px] items-center gap-2 rounded-full bor right=480 | span.inline-flex h-7 w-7 items-center justify-center rounded-lg right=402 | svg.[object SVGAnimatedString] right=396
+PASS 390: lessons and Ask Scholar are panels behind tabs
+PASS 390: touch screen emulated (pointer: coarse)
+PASS 390: Ask Scholar from the sticky lesson bar while reading opens as a panel
+PASS 390 Ask Scholar panel: no horizontal overflow (scrollWidth 390 <= viewport 390) wide: ul.flex min-w-max gap-2 right=480 | li. right=480 | a.inline-flex min-h-[40px] items-center gap-2 rounded-full bor right=480 | span.inline-flex h-7 w-7 items-center justify-center rounded-lg right=402 | svg.[object SVGAnimatedString] right=396
+PASS 390: back to the lesson at the same reading place (scrollY 3780 -> 3780)
+PASS 390: from the tab bar too, the lesson returns to the reading place (scrollY 3780 -> 3780)
+PASS 390: touch targets in the lesson are at least 44px high on a touch screen
+INFO 390 axe (wcag2a/2aa/21aa, main): 0 rule(s) violated
+PASS 390: axe colour-contrast none
+PASS 390 dark: no horizontal overflow (scrollWidth 390 <= viewport 390) wide: ul.flex min-w-max gap-2 right=480 | li. right=480 | a.inline-flex min-h-[40px] items-center gap-2 rounded-full bor right=480 | span.inline-flex h-7 w-7 items-center justify-center rounded-lg right=402 | svg.[object SVGAnimatedString] right=396
+PASS 200% zoom (720 CSS px): no horizontal overflow (scrollWidth 720 <= viewport 720)
+INFO console errors: 1 ["1440: Failed to load resource: the server responded with a status of 500 (Internal Server Error)"]
+INFO 5xx responses: 1 ["1440 500 http://127.0.0.1:3187/api/individual/scholar/learn/act"]
+FAIL 0 console errors across the walk

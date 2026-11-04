@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { ResizeHandle } from "@/components/ui/resizable";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { INFORMAL_CHECK_LABEL, LEARN_MODE_LABEL, NOT_IN_NOTES_LABEL, PERSONAL_AI_LABEL, QUESTION_MAX, SOURCE_KIND_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
@@ -54,7 +54,8 @@ import { CHECK_BUTTON, CHECK_FEEDBACK_HEADING, CHECK_NO_AI_WHY, CHECK_PROCESSING
 import { CHECK_MARKING_LABEL, CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_LABEL, SELF_GRADE_SAID, checkOutcomeLabel, isCheckVerdict, placeChecks, type CheckHistoryItem, type CheckPlacement, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
 import { CHECK_VERDICT_LABEL } from "@/lib/individual/scholar/config";
 import { AdaptiveNext, type AdaptiveUi, type AdaptiveView } from "./learn-adaptive";
-import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, pickDifferentQuestion, type StatedConfidence } from "@/lib/individual/scholar/learning-need";
+import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, NEED_LABEL, pickDifferentQuestion, type StatedConfidence } from "@/lib/individual/scholar/learning-need";
+import { CitationChip, FeedbackParts, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, QuestionCard, SourceLink, VerdictLine, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
 import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
@@ -275,6 +276,36 @@ export function LearnWorkspace(props: {
   const mode: LearnMode = pick && modes.includes(pick) ? pick : "notes";
   const setMode = (m: LearnMode) => { setChosen(m); try { window.localStorage.setItem(MODE_KEY, m); } catch { /* not remembered */ } };
   const [tab, setTab] = useState<"lesson" | "sources" | "ask">(props.openAsk ? "ask" : "lesson");
+  // LESSON REDESIGN: below 66rem the lesson, sources and Ask Scholar are panels behind the tabs. Switching panel keeps each
+  // panel's own scroll place, so opening Ask Scholar and coming back returns the learner to where they were reading. Only
+  // while the tabs are shown (the wide layout shows all three at once and is never scrolled by this).
+  const tabRef = useRef(tab);
+  const tabScroll = useRef<Partial<Record<"lesson" | "sources" | "ask", number>>>({});
+  const tabsShown = () => { const bar = document.getElementById("learn-tabs"); return !!bar && bar.offsetParent !== null; };
+  // The lesson's reading place: where the learner last was in the lesson with the tab bar scrolled away (tapping a tab
+  // means scrolling up to it first, so the place at the moment of the tap is not where they were reading).
+  const readingY = useRef<number | null>(null);
+  useEffect(() => {
+    const onReadScroll = () => {
+      if (tabRef.current !== "lesson" || !tabsShown()) return;
+      const bar = document.getElementById("learn-tabs");
+      if (bar && bar.getBoundingClientRect().bottom < 0) readingY.current = window.scrollY;
+    };
+    window.addEventListener("scroll", onReadScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onReadScroll);
+  }, []);
+  const showTab = useCallback((t: "lesson" | "sources" | "ask") => {
+    if (t !== tabRef.current && tabsShown()) tabScroll.current[tabRef.current] = tabRef.current === "lesson" && readingY.current !== null ? readingY.current : window.scrollY;
+    setTab(t);
+  }, []);
+  useLayoutEffect(() => {
+    if (tabRef.current === tab) return;
+    tabRef.current = tab;
+    if (!tabsShown()) return;
+    const y = tabScroll.current[tab];
+    if (y !== undefined) window.scrollTo({ top: y });
+    else { const bar = document.getElementById("learn-tabs"); if (bar && bar.getBoundingClientRect().top < 0) bar.scrollIntoView({ block: "start" }); }
+  }, [tab]);
   // Drag-to-resize (owner, 1 Nov): the lessons+sources column and Ask Scholar, in the three-column layout only. Today's
   // 240px / 300px are the defaults; each side is at least 200px and the lesson keeps 420px (+ the two 20px dividers).
   const [rootEl, setRootEl] = useState<HTMLDivElement | null>(null);
@@ -573,7 +604,7 @@ export function LearnWorkspace(props: {
   }, [indexOf, dispatch]);
 
   const scrollToLesson = useCallback((stepNo: number) => {
-    setTab("lesson");
+    showTab("lesson");
     const go = () => {
       const el = document.getElementById(lessonDomId(stepNo));
       if (!el) return false;
@@ -585,7 +616,7 @@ export function LearnWorkspace(props: {
     };
     // The lesson may only now be revealed: after this render.
     requestAnimationFrame(() => { if (!go()) setTimeout(go, 60); });
-  }, []);
+  }, [showTab]);
 
   // SCHOLAR-LEARN-GAPS-02 item 2: RETURNING TO A SAVED PLACE. The place is the server's when newer than this device's copy
   // (learn-place.ts choosePlace). It is applied once the lesson's saved teaching is on the page (the anchor exists), else after
@@ -708,10 +739,10 @@ export function LearnWorkspace(props: {
   };
   // Item 4: a withheld answer's rephrase -- to Ask, with the student's own question back in the box to change.
   const rephrase = useCallback((q: string) => {
-    setTab("ask");
+    showTab("ask");
     if (q) setAsk(q);
-    setTimeout(() => document.getElementById("ask-q")?.focus(), 0);
-  }, []);
+    setTimeout(() => document.getElementById("ask-q")?.focus({ preventScroll: !tabsShown() }), 0); // wide: the panel is beside the lesson, so the reading place stays
+  }, [showTab]);
 
   // A new scope: start the session; the journey then opens it (guided: teaches its first lesson).
   useEffect(() => {
@@ -1152,13 +1183,12 @@ export function LearnWorkspace(props: {
     const parts = judged ? parseCheckFeedback(fb!.answer!) : null;
     const sources = fb?.sources?.length ? fb.sources : teach?.reply.sources ?? [];
     const bullets = (items: readonly string[]) => <ul className="mt-1 list-disc space-y-1 pl-5">{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>;
-    const part = (k: keyof typeof CHECK_FEEDBACK_HEADING, items: readonly string[]) => items.length > 0 && (
-      <div><h5 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{CHECK_FEEDBACK_HEADING[k]}</h5>{bullets(items)}</div>
-    );
+    // LESSON REDESIGN: inline, the answer opens under its own question (no box in a box); a written check after the lesson is
+    // its own lavender card. The feedback is a separate panel with its parts headed, each with an icon (FeedbackParts).
     return (
-      <form onSubmit={submitCheck} className="mt-2 rounded-xl border border-violet-200 bg-white p-3" aria-busy={working}>
-        {!inline && <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-violet-900">Check your understanding</p>}
-        {!inline && <p className="mt-1 text-[14.5px] font-semibold text-gray-900">{c.question}</p>}
+      <form onSubmit={submitCheck} className={`${learnTone("check")} ${inline ? "mt-3 border-t border-[var(--learn-border)] pt-3" : "cmp-learn-box mt-2 p-4"}`} aria-busy={working}>
+        {!inline && <LearningSectionHead level={4} icon="question" title="Check your understanding" />}
+        {!inline && <p className="mt-2 text-[14.5px] font-semibold text-gray-900">{c.question}</p>}
         <label htmlFor="check-answer" className={`${inline ? "" : "mt-2 "}block text-[12.5px] font-semibold text-gray-700`}>Your answer</label>
         <textarea id="check-answer" rows={3} maxLength={QUESTION_MAX} value={c.answer} onChange={e => setCheck({ ...c, answer: e.target.value })} readOnly={working || answered}
           className={`mt-1 w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${answered ? "bg-gray-50 text-gray-800" : ""} ${focusRing}`} />
@@ -1197,22 +1227,15 @@ export function LearnWorkspace(props: {
         {fb && c.noAi === "withheld" && <p role="status" className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-800"><span className="font-semibold">{CHECK_NO_AI_WHY.withheld}</span> {fb.next?.why ?? fb.message}</p>}
         {/* (b) THE AI JUDGEMENT: the verdict, then its parts, each cited into the learner's own notes. Formative, never competence. */}
         {judged && (
-          <section aria-label="Feedback on your answer" className="mt-3 rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2.5">
-            {fb!.verdict && <p className="text-[14px] text-violet-950"><span className="font-semibold">{fb!.verdict.label}.</span> {fb!.verdict.informal}</p>}
-            <FormativeAiLabel className="mt-1" />
-            <div className="mt-2 space-y-2.5 text-[14px] leading-relaxed text-gray-800">
-              {parts ? (
-                <>
-                  {part("right", parts.right)}
-                  {part("missing", parts.missing)}
-                  {part("misconceptions", parts.misconceptions)}
-                  {part("keyPoints", parts.keyPoints)}
-                  {parts.next && <div><h5 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{CHECK_FEEDBACK_HEADING.next}</h5><p className="mt-1"><Cited text={parts.next} sources={sources} /></p></div>}
-                </>
-              ) : <div className="whitespace-pre-wrap"><Cited text={fb!.answer!} sources={sources} /></div>}
+          <section aria-label="Feedback on your answer" className="mt-3 rounded-xl bg-[var(--learn-surface)] p-3.5 ring-1 ring-[var(--learn-border)]">
+            {fb!.verdict && <VerdictLine value={fb!.verdict.value} label={fb!.verdict.label} informal={fb!.verdict.informal} />}
+            <FormativeAiLabel className="mt-1.5" />
+            <div className="mt-3 text-[14px] leading-relaxed text-gray-800">
+              {parts ? <CheckFeedback parts={parts} sources={sources} level={5} />
+                : <div className="whitespace-pre-wrap"><Cited text={fb!.answer!} sources={sources} /></div>}
             </div>
             {fb!.flags && fb!.flags.length > 0 && <AiFlagList flags={fb!.flags} />}
-            {fb!.provenance && <p className="mt-2 text-[11px] text-gray-400">Model {fb!.provenance.model} · prompt {fb!.provenance.promptVersion}</p>}
+            {fb!.provenance && <p className="mt-2 text-[11.5px] text-gray-600">Model {fb!.provenance.model} · prompt {fb!.provenance.promptVersion}</p>}
             {/* D01: kept, or honestly not (a session the browser holds, history off, or the store refusing). */}
             <p role="status" className="mt-2 text-[12.5px] text-gray-700">{fb!.kept ? CHECK_SAVED_NOTE : session?.id && session.recorded ? CHECK_NOT_SAVED_NOTE : "Not kept: this session is not recorded, so nothing is saved to your learning record."}</p>
           </section>
@@ -1359,6 +1382,7 @@ export function LearnWorkspace(props: {
             onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c, st)} wider={widerFor(c, st)} expansions={expansionsFor(c, st)}
             onAnswer={canCheck && c === lastTeach ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
             renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkPanel(st, true) : null) : undefined}
+            answered={c === lastTeach ? q => { const h = (checks[st.step] ?? []).filter(x => x.question === questionText(q)).at(-1); return h ? checkOutcomeLabel(h, CHECK_VERDICT_LABEL) : null; } : undefined}
             placement={props.checkPlacement ?? "distributed"} ask={lessonAsk(st, session, c.reply)} />))}
           {preparing && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
@@ -1380,8 +1404,8 @@ export function LearnWorkspace(props: {
         {myCheck && !checkInline && <div className="mt-4">{checkPanel(st, false)}</div>}
         {/* SALE-2026-11 R1 (SALE-06/07): the next teaching step after a kept check, with its reason. Skippable; nothing runs by itself. */}
         {adaptiveHere && (
-          <AdaptiveNext ui={adaptiveHere} step={st.step} accent={accent} offReason={adaptiveOff} differentLabel={differentLabel}
-            onRun={() => void runAdaptive(st)} onDifferent={() => void adaptiveDifferent(st)} onSkip={() => closeAdaptive(st.step)} />
+          <div id={`adaptive-next-${st.step}`} className="scroll-mt-4"><AdaptiveNext ui={adaptiveHere} step={st.step} accent={accent} offReason={adaptiveOff} differentLabel={differentLabel}
+            onRun={() => void runAdaptive(st)} onDifferent={() => void adaptiveDifferent(st)} onSkip={() => closeAdaptive(st.step)} /></div>
         )}
         {offerCheck && offReason("check") && <p id={`learn-check-why-${st.step}`} className="mt-2 text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
         {settingsChanged && group.primary && props.consent && (
@@ -1411,14 +1435,11 @@ export function LearnWorkspace(props: {
 
         {/* LEARNING-CLOSE-2026-11 D01 (CYU-04): the lesson's kept checks, revisitable on any device, each attempt its own; Try again reopens the check with the answer. */}
         {(checks[st.step]?.length ?? 0) > 0 && (
-          <details className="group mt-4 rounded-xl border border-gray-200 bg-white">
-            <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-              <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Your previous checks ({checks[st.step].length})
-            </summary>
-            <ul className="divide-y divide-gray-200 border-t border-gray-200 px-3">
+          <LearningDisclosure tone="check" icon="question" title={`Your previous checks (${checks[st.step].length})`} className="mt-4" bodyClassName="py-0">
+            <ul className="divide-y divide-[var(--learn-border)]">
               {checks[st.step].map(h => (
                 <li key={h.attemptId} className="py-3 text-[13.5px]">
-                  <p className="text-[12px] text-gray-500">{new Date(h.answeredAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(h, CHECK_VERDICT_LABEL)}</span> · {CHECK_MARKING_LABEL[h.marking]}</p>
+                  <p className="text-[12px] text-gray-600">{new Date(h.answeredAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(h, CHECK_VERDICT_LABEL)}</span> · {CHECK_MARKING_LABEL[h.marking]}</p>
                   <p className="mt-0.5 break-words font-semibold text-gray-900">{h.question}</p>
                   <p className="mt-0.5 break-words text-gray-800"><span className="font-semibold">You:</span> {h.response.text}</p>
                   {h.response.feedback && <CheckFeedbackList parts={h.response.feedback} sources={lastTeach?.reply.sources ?? []} />}
@@ -1428,29 +1449,29 @@ export function LearnWorkspace(props: {
                 </li>
               ))}
             </ul>
-          </details>
+          </LearningDisclosure>
         )}
         <ActivityRow id={lessonAnchorId(st.step, "act")} label={`Activities for lesson ${i + 1}`} items={items} />
         {session.id && savedHere && <p className="mt-1"><DownloadLink href={lessonExportHref(session.id, st.step)}>Download this lesson (PDF)</DownloadLink></p>}
         {/* SCHOLAR-LIBRARY-01: Add a note, Bookmark lesson, select text then Highlight -- the learner's own words (820), never AI. */}
         {props.notesOn && session.recorded && session.id && (
           <LibraryNotes target={{ targetKind: "lesson", sessionId: session.id, step: st.step, materialId: first?.materialId ?? null, chunkId: first?.chunkId ?? null }}
-            containerId={lessonDomId(st.step)} label="Your notes on this lesson" />
+            containerId={lessonDomId(st.step)} label="Your notes on this lesson" tone="notes" />
         )}
 
         {/* SCHOLAR-LEARN-STYLE-01: ONE teaching-style choice of three (Explain, Guide me, Challenge me), a discreet More menu, and Explain my
             mistake after a wrong check. Every choice is the learner's click and runs the same request as before; Ask Scholar stays in view. */}
-        <div className="mt-3 flex flex-wrap items-start gap-2">
-          <div id={lessonAnchorId(st.step, "style")} className="min-w-0 flex-1 basis-[220px] scroll-mt-4">
+        <div className="mt-4">
+          <div id={lessonAnchorId(st.step, "style")} className="min-w-0 scroll-mt-4">
             <ApproachControl step={st.step} style={style} choices={styleList} more={moreList} mistake={mistake}
               onStyle={x => { chooseStyle(x); if (x === "explain" && hasLesson) scrollToLesson(st.step); }}
               onClassic={a => void act(a, {}, "lesson", undefined, st.step)} working={working}
               onExplain={props.actions.includes("explain") ? () => void act("explain", {}, "lesson", undefined, st.step) : undefined}
               verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
               run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent}
-              memory={styleMem} remember={remember} />
+              memory={styleMem} remember={remember}
+              askAction={group.ask ? <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] gap-1.5 border-[var(--cmp-learn-next-border)] bg-[var(--cmp-app-surface)] text-[var(--cmp-learn-next-ink)] hover:bg-[var(--cmp-learn-next-surface)]`}><LearningIcon name="chat" className="h-4 w-4" />{props.labels.ask}</button> : undefined} />
           </div>
-          {group.ask && <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] border-gray-300 bg-white text-gray-800 hover:bg-gray-50`}>{props.labels.ask}</button>}
         </div>
 
         <div id={lessonAnchorId(st.step, "practice")} className="scroll-mt-4">
@@ -1481,10 +1502,13 @@ export function LearnWorkspace(props: {
       {error && <p role="alert" className="mb-3 text-[13.5px] font-medium text-red-700">{error}</p>}
       <p aria-live="polite" className="sr-only">{announce}</p>
 
-      <div role="tablist" aria-label="Workspace" className="mb-3 flex gap-2 @min-[66rem]:hidden">
+      {/* LESSON REDESIGN: below 66rem of content width, Lessons & sources and Ask Scholar open as panels in place of the lesson
+          (each keeps its scroll place: showTab). The selected tab is filled AND underlined, not colour alone. */}
+      <div id="learn-tabs" role="tablist" aria-label="Workspace" className="mb-3 flex flex-wrap gap-1.5 rounded-2xl border border-gray-200 bg-white p-1.5 @min-[66rem]:hidden">
         {(["lesson", "sources", "ask"] as const).map(t => (
-          <button key={t} role="tab" aria-selected={tab === t} onClick={() => setTab(t)}
-            className={`${chip} ${tab === t ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800"}`}>{t === "lesson" ? "Lesson" : t === "sources" ? "Sources" : "Ask Scholar"}</button>
+          <button key={t} role="tab" aria-selected={tab === t} onClick={() => showTab(t)}
+            className={`inline-flex min-h-[44px] flex-1 basis-[6.5rem] items-center justify-center gap-1.5 rounded-xl px-3 text-[13.5px] font-semibold ${tab === t ? "bg-[var(--cmp-learn-next-ink)] text-[var(--cmp-learn-next-surface)] underline decoration-2 underline-offset-4" : "text-gray-800 hover:bg-gray-50"} ${focusRing}`}>
+            <LearningIcon name={t === "lesson" ? "teach" : t === "sources" ? "list" : "chat"} className="h-4 w-4" />{t === "lesson" ? "Lesson" : t === "sources" ? "Lessons & sources" : "Ask Scholar"}</button>
         ))}
       </div>
 
@@ -1493,25 +1517,26 @@ export function LearnWorkspace(props: {
         style={{ "--l-w": `${cols.start.size ?? 240}px`, "--r-w": `min(${cols.end.size ?? 300}px, max(200px, calc(100cqw - 460px - var(--l-w))))` } as CSSProperties}>
         {/* ── THE NAVIGATOR AND SOURCES: the lessons with their marks, and the current lesson's own sections ── */}
         <aside aria-label="Lessons and sources" className={`${panel("sources")} rounded-2xl border border-gray-200 bg-white p-4 @min-[66rem]:sticky @min-[66rem]:top-4 @min-[66rem]:max-h-[calc(100vh-2rem)] @min-[66rem]:overflow-y-auto`}>
-          <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">Your lessons</p>
-          <p className="mt-0.5 text-[12px] text-gray-600">{read} of {count} read. A learning record for you, not an assessment.</p>
+          {/* LESSON REDESIGN: the lessons first, then the current lesson's sources in their own lavender-grey block. */}
+          <div className="cmp-learn-next"><LearningSectionHead level={3} icon="teach" title="Your lessons" /></div>
+          <p className="mt-1.5 text-[12.5px] text-gray-700"><span className="font-semibold text-gray-900">{read} of {count} read.</span> A learning record for you, not an assessment.</p>
           {oneMaterial && anySaved && <p className="mt-1"><DownloadLink href={materialExportHref(oneMaterial)}>Download all saved lessons (PDF)</DownloadLink></p>}
           <div className="mt-2"><JourneyOutline lessons={navLessons} onJump={select} /></div>
           {step && (
-            <>
-              <p className="mt-4 text-[12px] font-bold uppercase tracking-[0.12em] text-gray-500">This lesson&apos;s sources</p>
-              <ul className="mt-1.5 space-y-1">
+            <div className={`${learnBox("sources")} mt-4 p-3`}>
+              <LearningSectionHead level={3} icon="library" title="This lesson&apos;s sources" />
+              <ul className="mt-2 space-y-1.5">
                 {step.sections.map(x => (
-                  <li key={x.chunkId}><Link href={sourceHref(x.materialId, x.chunkId)} className={`text-[13px] underline underline-offset-2 ${focusRing}`}>{x.citation}</Link>
-                    {aiReadNote.get(x.chunkId) && <span className="block text-[11.5px] leading-snug text-amber-900">{aiReadNote.get(x.chunkId)}</span>}</li>
+                  <li key={x.chunkId}><SourceLink href={sourceHref(x.materialId, x.chunkId)} citation={x.citation}
+                    note={aiReadNote.get(x.chunkId) ? <span className="block text-[11.5px] leading-snug text-amber-900">{aiReadNote.get(x.chunkId)}</span> : null} /></li>
                 ))}
               </ul>
               {/* CLINICAL-REASONING-01 CR1: from Teach Me, a case written from this step's own section. */}
-              <p className="mt-3 text-[12.5px]"><Link href={`/individual/scholar/study/apply?section=${step.sections[0].chunkId}&from=teach`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Practise this in a clinical case</Link></p>
-              <p className="mt-3 text-[12px] text-gray-600">Originals: {[...new Map(step.sections.map(x => [x.materialId, x.materialTitle])).entries()].map(([id, t], i) => (
+              <p className="mt-3 text-[12.5px]"><Link href={`/individual/scholar/study/apply?section=${step.sections[0].chunkId}&from=teach`} className={`cmp-learn-ink font-semibold underline underline-offset-2 ${focusRing}`}>Practise this in a clinical case</Link></p>
+              <p className="mt-2 break-words text-[12px] text-gray-700">Originals: {[...new Map(step.sections.map(x => [x.materialId, x.materialTitle])).entries()].map(([id, t], i) => (
                 <span key={id}>{i ? ", " : ""}<a href={`/api/individual/scholar/materials/${id}`} className={`underline ${focusRing}`}>{t}</a></span>
               ))}</p>
-            </>
+            </div>
           )}
         </aside>
 
@@ -1580,7 +1605,8 @@ export function LearnWorkspace(props: {
               blockedReason={canContinue ? undefined : RECALL_WAIT_REASON} onContinue={continueNext} onPrevious={curIdx > 0 ? previous : undefined} onFinish={() => void finish()} onReview={() => select(0)}
               onDeeper={props.actions.includes("deeper") && props.consent && !offReason("deeper") ? () => void act("deeper", {}, "lesson", undefined, active.step) : undefined}
               onPractise={() => { setPracticeOpen(m => ({ ...m, [active.step]: true })); scrollToLesson(active.step); }}
-              otherTopicHref={experienceHref("scholar", "study/learn")} />
+              otherTopicHref={experienceHref("scholar", "study/learn")}
+              suggestion={adaptive[active.step] ? { label: NEED_LABEL[adaptive[active.step]!.decision.need], why: adaptive[active.step]!.decision.reason, href: `#adaptive-next-${active.step}` } : null} />
           )}
           <LessonList rows={rows.slice(curIdx + 1)} onSelect={select} label="Later lessons" />
 
@@ -1591,13 +1617,18 @@ export function LearnWorkspace(props: {
 
           {/* Below 66rem of content width: the compact sticky navigator; it reflects the ACTIVE lesson. */}
           <JourneyBar lessons={navLessons} current={curIdx} read={read} onJump={select}
-            trailing={!lastLesson ? <button type="button" className={`${btn} px-3`} style={{ background: accent }} onClick={continueNext} disabled={!!busy || !canContinue} title={canContinue ? undefined : RECALL_WAIT_REASON}>Next lesson</button> : null} />
+            trailing={<>
+              {props.actions.includes("ask") && <button type="button" className={`${ghost} gap-1.5 px-3`} onClick={() => rephrase("")} aria-label="Ask Scholar"><LearningIcon name="chat" className="h-4 w-4" /><span aria-hidden="true" className="hidden @min-[30rem]:inline">Ask Scholar</span></button>}
+              {!lastLesson && <button type="button" className={`${btn} px-3`} style={{ background: accent }} onClick={continueNext} disabled={!!busy || !canContinue} title={canContinue ? undefined : RECALL_WAIT_REASON}>Next lesson</button>}
+            </>} />
         </div>
         <ResizeHandle {...cols.end.handleProps} label="Resize the Ask Scholar column" className="hidden @min-[66rem]:block @min-[66rem]:self-stretch" />
         {/* ── THE SCHOLAR ASSISTANT: ask anything about these notes, at any point ── */}
-        <aside aria-labelledby="ask-h" className={`${panel("ask")} rounded-2xl border border-gray-200 bg-white p-4`}>
-          <h3 id="ask-h" className="text-[14px] font-bold text-gray-900">Ask Scholar</h3>
-          <p className="mt-0.5 text-[12.5px] text-gray-600">About anything in this session&apos;s notes. Answers cite the section they came from.</p>
+        {/* LESSON REDESIGN: on the wide layout Ask Scholar stays in view beside the lesson (sticky, its own scroll), so asking
+            never moves the reading place. */}
+        <aside aria-labelledby="ask-h" className={`${panel("ask")} rounded-2xl border border-gray-200 bg-white p-4 @min-[66rem]:sticky @min-[66rem]:top-4 @min-[66rem]:max-h-[calc(100vh-2rem)] @min-[66rem]:overflow-y-auto`}>
+          <div className="cmp-learn-next"><LearningSectionHead level={3} id="ask-h" icon="chat" title="Ask Scholar" /></div>
+          <p className="mt-1.5 text-[12.5px] text-gray-700">About anything in this session&apos;s notes. Answers cite the section they came from.</p>
           {props.actions.includes("ask") ? (
             <form onSubmit={submitAsk} className="mt-2">
               <label htmlFor="ask-q" className="sr-only">Your question</label>
@@ -1706,7 +1737,9 @@ function lessonAsk(st: { step: number; title: string; sections: { chunkId: strin
   };
 }
 
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask, placement }: {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask, placement, answered }: {
+  /** LESSON REDESIGN: a lesson question's answered state (the latest kept attempt's outcome), or null when not answered yet. */
+  answered?: (q: string) => string | null;
   /** The lesson-level "Ask about this" (the lesson thread only; not the short Ask replies or a saved list). */
   ask?: Omit<AskAboutProps, "className">;
   /** LEARNING-CLOSE-2026-11 CYU-01: where a Teach Me lesson's check questions are shown (learn-check-record.ts placeChecks). */
@@ -1748,36 +1781,40 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
     );
   }
   const cited = new Set(r.cited ?? []);
-  return (
-    <article id={anchorId} className={`${anchorId ? "scroll-mt-4 " : ""}rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}>
+  // LESSON REDESIGN: a lesson's teaching is the Teach me card (sage); its end-of-lesson checks are their own card (lavender),
+  // then its sources, the AI background beyond the notes (sky) and the saved line. A check's feedback in the thread is
+  // lavender. Short Ask replies (compact) keep the plain card.
+  const teachCard = !compact && r.action !== "clarify" && !r.verdict;
+  const checkCard = !compact && !teachCard;
+  const head = (
+    <>
       {card.asked && (
         <p className="mb-1 break-words text-[12.5px] text-gray-600"><span className="font-semibold">You:</span> {r.spelling && r.spelling.original === card.asked ? r.spelling.display : card.asked}
           {/* Item 8: the reading Scholar used (spelling.ts, no AI), with what was typed kept beside it. */}
           {r.spelling && r.spelling.original === card.asked && <span className="ml-1 text-[11.5px] text-gray-500">(corrected from &ldquo;{r.spelling.original}&rdquo;)</span>}
         </p>
       )}
-      <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">{name}</p>
+      {teachCard || checkCard
+        ? <LearningSectionHead level={4} icon={teachCard ? "teach" : "question"} title={name} />
+        : <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">{name}</p>}
       {r.withheld ? <Withheld r={r} asked={card.asked} onRephrase={onRephrase} /> : (
         <>
           {r.recovered?.shown && <p className="mt-1.5 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}
-          {r.verdict && (
-            <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] text-violet-950">
-              <span className="font-semibold">{r.verdict.label}.</span> {r.verdict.informal}
-            </p>
-          )}
+          {r.verdict && <div className="mt-2.5"><VerdictLine value={r.verdict.value} label={r.verdict.label} informal={r.verdict.informal} /></div>}
           {r.verdict && (
             <FormativeAiLabel className="mt-1" />
           )}
-          <div className="mt-2"><AiBadge /></div>
-          <p className="mt-2 text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
-          {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). */}
+          <div className={teachCard ? "mt-3" : "mt-2"}><AiBadge /></div>
+          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{SOURCE_KIND_LABEL.notes}</p>
+          {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). LESSON REDESIGN:
+              the listening and asking tools sit on their own row, apart from the reading text. */}
           {r.answer && (
-            <div className="mt-2 flex flex-wrap items-start gap-2">
+            <div role="group" aria-label="Lesson tools" className={`mt-2 flex flex-wrap items-start gap-2 ${teachCard ? "rounded-xl bg-[var(--cmp-app-surface)] p-2 ring-1 ring-[var(--learn-border)]" : ""}`}>
               <ReadAloudButton text={r.answer} about="this lesson" />
               {ask && <AskAbout {...ask} />}
             </div>
           )}
-          {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} placement={placement} />}
+          {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} placement={placement} answered={answered} only={teachCard ? "lesson" : undefined} />}
           {/* SCHOLAR-GUIDED-LEARNING-01: a salvaged lesson -- shown, and said calmly what was left out (a count, never which). */}
           {r.salvage && (
             <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
@@ -1788,16 +1825,22 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           {replyState(r) === "partial" && r.grounding && <NotCovered terms={r.grounding.uncoveredTerms} wider={wider} expansions={expansions} />}
         </>
       )}
+    </>
+  );
+  const endChecks = teachCard && !r.withheld && r.answer
+    ? <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} placement={placement} answered={answered} only="checks" />
+    : null;
+  const tail = (
+    <>
       {r.sources.length > 0 && !r.next && <SourcesDisclosure sources={r.sources.filter((_, i) => !r.answer || cited.has(i + 1))} />}
       {!r.withheld && r.references.length > 0 && r.answer && /\[R\d+\]/.test(r.answer) && (
         <GovernedReferenceList refs={r.references.filter(x => r.answer!.includes(`[${x.tag}]`))} />
       )}
       {r.background && (
         r.background.text ? (
-          <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2">
-            <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-sky-900">{SOURCE_KIND_LABEL.interpretation}</p>
-            <p className="mt-1 text-[13.5px] text-gray-800">{r.background.text}</p>
-          </div>
+          <LearningSection tone="aiBeyond" icon="robot" level={5} ariaLabel="AI explanation beyond your notes" title={SOURCE_KIND_LABEL.interpretation} className="mt-3">
+            <p className="mt-2 text-[14px] leading-relaxed text-gray-800">{r.background.text}</p>
+          </LearningSection>
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
       {r.research && <ResearchBlock x={r.research} />}
@@ -1818,36 +1861,50 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
         </p>
       )}
       {r.savedForLater && <p className="mt-2 text-[12px] text-gray-500">Saved to your learning, so you can come back to it without using AI again.</p>}
-      {r.provenance && <p className="mt-2 text-[11px] text-gray-400">Model {r.provenance.model} · prompt {r.provenance.promptVersion}</p>}
+      {r.provenance && <p className="mt-2 text-[11.5px] text-gray-600">Model {r.provenance.model} · prompt {r.provenance.promptVersion}</p>}
       {!r.withheld && r.answer && r.action !== "check" && !compact && (
         <AiFeedback kind="explanation" target={r.artefactId ? "artefact" : "action"} refId={r.artefactId ?? r.actionId} />
       )}
+    </>
+  );
+  if (teachCard) return (
+    <article id={anchorId} className={anchorId ? "scroll-mt-4" : undefined}>
+      <div className={`${learnBox("teach")} p-4 sm:p-5`}>{head}</div>
+      {endChecks}
+      {tail}
+    </article>
+  );
+  return (
+    <article id={anchorId} className={`${anchorId ? "scroll-mt-4 " : ""}${checkCard ? `${learnBox("check")} p-4` : `rounded-xl border border-gray-200 ${compact ? "p-3" : "p-4"}`}`}>
+      {head}
+      {tail}
     </article>
   );
 }
 
-/** SCHOLAR-LEARN-FIX-01 L-B: an [S n] citation, inline, as a link to that section of the learner's own notes. */
-/** LEARNING-CLOSE-2026-11 D01: a kept check's feedback parts (the same headings as the live panel), each point cited into the notes. */
-function CheckFeedbackList({ parts, sources }: { parts: CheckFeedbackParts; sources: Source[] }) {
-  const sub = "text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-600";
-  const list = (k: keyof typeof CHECK_FEEDBACK_HEADING, items: readonly string[]) => items.length > 0 && (
-    <div><h5 className={sub}>{CHECK_FEEDBACK_HEADING[k]}</h5><ul className="mt-0.5 list-disc space-y-0.5 pl-5">{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul></div>
-  );
-  return (
-    <div className="mt-1.5 space-y-1.5 text-[13px] leading-relaxed text-gray-800">
-      {list("right", parts.right)}{list("missing", parts.missing)}{list("misconceptions", parts.misconceptions)}{list("keyPoints", parts.keyPoints)}
-      {parts.next && <div><h5 className={sub}>{CHECK_FEEDBACK_HEADING.next}</h5><p className="mt-0.5"><Cited text={parts.next} sources={sources} /></p></div>}
-    </div>
-  );
+/**
+ * SCHOLAR LEARNING DESIGN SYSTEM: a check's feedback in its parts (the same headings and order as before: learn-check.ts),
+ * drawn by the shared FeedbackParts -- correct, missing, misconceptions, key points and next action, each with its icon.
+ */
+function CheckFeedback({ parts, sources, level = 5, compact = false }: { parts: CheckFeedbackParts; sources: Source[]; level?: 4 | 5; compact?: boolean }) {
+  const list = (items: readonly string[]) => <ul className={`${compact ? "mt-0.5 space-y-0.5" : "mt-1 space-y-1"} list-disc pl-5`}>{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>;
+  const rows: { kind: FeedbackKind; heading: string; body: React.ReactNode }[] = [
+    ...(["right", "missing", "misconceptions", "keyPoints"] as const).filter(k => parts[k].length > 0).map(k => ({ kind: k, heading: CHECK_FEEDBACK_HEADING[k], body: list(parts[k]) })),
+    ...(parts.next ? [{ kind: "next" as const, heading: CHECK_FEEDBACK_HEADING.next, body: <p className={compact ? "mt-0.5" : "mt-1"}><Cited text={parts.next} sources={sources} /></p> }] : []),
+  ];
+  return <FeedbackParts parts={rows} level={level} compact={compact} />;
 }
 
+/** LEARNING-CLOSE-2026-11 D01: a kept check's feedback parts (the same headings as the live panel), each point cited into the notes. */
+function CheckFeedbackList({ parts, sources }: { parts: CheckFeedbackParts; sources: Source[] }) {
+  return <div className="mt-2 text-[13px] leading-relaxed text-gray-800"><CheckFeedback parts={parts} sources={sources} level={5} compact /></div>;
+}
+
+/** SCHOLAR-LEARN-FIX-01 L-B: an [S n] citation, inline, as a link to that section of the learner's own notes (the shared CitationChip). */
 function CiteLink({ n, sources }: { n: number; sources: Source[] }) {
   const s = sources.find(x => x.tag === `S${n}`);
   if (!s) return <span className="font-mono text-[12.5px]">[S{n}]</span>;
-  return (
-    <Link href={sourceHref(s.materialId, s.chunkId)} title={s.aiRead && s.aiReadNote ? `${s.citation}. ${s.aiReadNote}` : s.citation} aria-label={`Source ${s.tag}: ${s.citation}${s.aiRead && s.aiReadNote ? `. ${s.aiReadNote}` : ""}`}
-      className={`rounded font-mono text-[12.5px] font-bold underline underline-offset-2 pointer-coarse:px-1 pointer-coarse:py-1 ${focusRing}`} style={{ color: accent }}>[{s.tag}]{s.aiRead && <sup aria-hidden="true" className="ml-px text-[9px] font-bold">AI</sup>}</Link>
-  );
+  return <CitationChip tag={s.tag} href={sourceHref(s.materialId, s.chunkId)} label={`${s.citation}${s.aiRead && s.aiReadNote ? `. ${s.aiReadNote}` : ""}`} aiRead={!!s.aiRead} />;
 }
 function Cited({ text, sources }: { text: string; sources: Source[] }) {
   return <>{citationSegments(text).map((x, i) => ("tag" in x ? <CiteLink key={i} n={x.tag} sources={sources} /> : <span key={i}>{x.text}</span>))}</>;
@@ -1859,20 +1916,18 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  * Anything else -- every other action, and a Teach Me answer saved before the structure -- is shown as written. Either
  * way each [S n] is a link to its section.
  */
-function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck, placement = "distributed" }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode; placement?: CheckPlacement }) {
+function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck, placement = "distributed", answered, only }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode; placement?: CheckPlacement;
+  /** LESSON REDESIGN: a question's answered state; and which part to render -- the lesson (without its end checks) or only the end checks (their own card). */
+  answered?: (q: string) => string | null; only?: "lesson" | "checks" }) {
   // SCHOLAR-CUMULATIVE-TEACHING-01: a Go deeper written in the lesson's parts (v2) is shown as a lesson too; an older free-text one as written.
   const parts = action === "teach" || action === "deeper" ? parseTeachAnswer(text) : null;
   // SCHOLAR-UNDERSTANDING-CHECKS-01: a clarification in the thread (a previous check) shows its labelled parts (learn-check.ts).
   const checkParts = action === "clarify" ? parseCheckFeedback(text) : null;
+  if (only === "checks" && (checkParts || !parts)) return null;
   if (checkParts) {
-    const sub = "text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600";
-    const list = (k: keyof typeof CHECK_FEEDBACK_HEADING, items: readonly string[]) => items.length > 0 && (
-      <div><h4 className={sub}>{CHECK_FEEDBACK_HEADING[k]}</h4><ul className="mt-1 list-disc space-y-1 pl-5">{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul></div>
-    );
     return (
-      <div id={idPrefix ? `${idPrefix}-tx` : undefined} className="mt-1 space-y-2.5 break-words text-[14.5px] leading-relaxed text-gray-800">
-        {list("right", checkParts.right)}{list("missing", checkParts.missing)}{list("misconceptions", checkParts.misconceptions)}{list("keyPoints", checkParts.keyPoints)}
-        {checkParts.next && <div><h4 className={sub}>{CHECK_FEEDBACK_HEADING.next}</h4><p className="mt-1"><Cited text={checkParts.next} sources={sources} /></p></div>}
+      <div id={idPrefix ? `${idPrefix}-tx` : undefined} className="mt-2 break-words text-[14.5px] leading-relaxed text-gray-800">
+        <CheckFeedback parts={checkParts} sources={sources} level={4} />
       </div>
     );
   }
@@ -1890,38 +1945,39 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
   // LEARNING-CLOSE-2026-11 CYU-01: the lesson's checks follow its teaching sequence (learn-check-record.ts placeChecks): on a
   // substantial lesson the first comes after the teaching paragraphs, the rest after the lesson; every check is optional.
   const placed = action === "teach" ? placeChecks(parts, { placement }) : { mid: [], end: parts.questions.map((_, i) => i) };
+  // LESSON REDESIGN: the checks are a lavender card -- each question on its own white row with its Answer this; an answered
+  // question also says so (a tick and its last outcome, in words) and its button steps back to outlined; the open answer
+  // and its feedback follow under the question (renderCheck).
   const questionBlock = (idxs: number[], id: string | undefined, note: string | null) => idxs.length > 0 && (
-    <div id={id} className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
-      <h4 className={`${sub} text-violet-900`}>Check your understanding</h4>
-      {note && <p className="mt-0.5 text-[12px] text-gray-600">{note}</p>}
-      <ul className="mt-1 space-y-2">
-        {idxs.map(i => { const q = parts.questions[i]; return (
-          <li key={i} className="flex flex-wrap items-center gap-2">
-            <span className="min-w-0 flex-1"><Cited text={q} sources={sources} /></span>
-            {onAnswer && canAnswer?.(q) && (
-              <button type="button" onClick={() => onAnswer(q)} className={`${chip} border-violet-300 bg-white text-violet-950 hover:bg-violet-50`}>Answer this</button>
-            )}
+    <div id={id} className={`${learnBox("check")} ${note ? "my-4" : "mt-3"} p-4 sm:p-5`}>
+      <LearningSectionHead level={4} icon="question" title="Check your understanding" />
+      {note && <p className="mt-1.5 text-[12.5px] text-gray-700">{note}</p>}
+      <ul className="mt-3 space-y-2.5">
+        {idxs.map(i => { const q = parts.questions[i]; const done = answered?.(q) ?? null; return (
+          <QuestionCard key={i} question={<Cited text={q} sources={sources} />} answered={done}
+            action={onAnswer && canAnswer?.(q) ? { label: "Answer this", onClick: () => onAnswer(q) } : null}>
             {renderCheck && <div className="w-full">{renderCheck(q)}</div>}
-          </li>
+          </QuestionCard>
         ); })}
       </ul>
-      <p className="mt-1.5 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
+      <p className="mt-2.5 text-[12.5px] text-gray-700">{INFORMAL_CHECK_LABEL}</p>
     </div>
   );
+  if (only === "checks") return <>{questionBlock(placed.end, idPrefix ? `${idPrefix}-q` : undefined, null)}</>;
   return (
-    <div className="mt-1 space-y-3 break-words text-[14.5px] leading-relaxed text-gray-800">
-      {parts.overview && <p id={idPrefix ? `${idPrefix}-ov` : undefined} className="text-[15px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
+    <div className="cmp-reading mt-3 break-words text-gray-800">
+      {parts.overview && <p id={idPrefix ? `${idPrefix}-ov` : undefined} className="text-[16px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
       {/* SCHOLAR-CUMULATIVE-TEACHING-01: the teaching itself -- connected paragraphs, shown in full (no click to see the lesson). */}
       {!!parts.understanding?.length && (
-        <div id={idPrefix ? `${idPrefix}-un` : undefined} className="space-y-2.5">
+        <div id={idPrefix ? `${idPrefix}-un` : undefined} className="mt-3">
           {parts.understanding.map((p, i) => <p key={i}><Cited text={p} sources={sources} /></p>)}
         </div>
       )}
       {questionBlock(placed.mid, idPrefix ? `${idPrefix}-qm` : undefined, "A quick check on what you have just read, before the key points. Optional.")}
       {parts.points.length > 0 && (
-        <div id={idPrefix ? `${idPrefix}-kp` : undefined}>
-          <h4 className={`${sub} text-gray-600`}>Key points</h4>
-          <ul className="mt-1 list-disc space-y-1.5 pl-5">{parts.points.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
+        <div id={idPrefix ? `${idPrefix}-kp` : undefined} className="mt-4 rounded-xl bg-[var(--cmp-app-surface)] px-4 py-3 ring-1 ring-[var(--learn-border)]">
+          <h4 className={`${sub} cmp-learn-ink flex items-center gap-2`}><LearningIcon name="list" className="cmp-learn-accent h-4 w-4" />Key points</h4>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5 marker:text-[var(--learn-accent)]">{parts.points.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
         </div>
       )}
       {parts.example && (
@@ -1932,7 +1988,7 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
           </div>
         </ShowMore>
       )}
-      {questionBlock(placed.end, idPrefix ? `${idPrefix}-q` : undefined, null)}
+      {only !== "lesson" && questionBlock(placed.end, idPrefix ? `${idPrefix}-q` : undefined, null)}
     </div>
   );
 }
@@ -1988,21 +2044,18 @@ function ExpansionRow({ expansions }: { expansions: Expansion[] }) {
 function SourcesDisclosure({ sources }: { sources: Source[] }) {
   if (!sources.length) return null;
   return (
-    <details className="group mt-3 rounded-lg border border-gray-200">
-      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>View sources ({sources.length})
-      </summary>
-      <ul className="space-y-2.5 border-t border-gray-200 px-3 py-2.5">
+    <LearningDisclosure tone="sources" icon="library" title={`View sources (${sources.length})`} className="mt-3" bodyClassName="py-3">
+      <ul className="space-y-2.5">
         {sources.map(s => (
-          <li key={s.tag} className="break-words text-[12.5px] text-gray-700">
-            <span className="font-mono font-bold" style={{ color: accent }}>[{s.tag}]</span>{" "}
-            <Link href={sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>{s.citation}</Link>
-            {s.aiRead && s.aiReadNote && <span className="mt-0.5 block rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] text-amber-950">{s.aiReadNote}</span>}
-            {s.excerpt && <p className="mt-1 whitespace-pre-wrap border-l-2 border-gray-200 pl-2 text-[12.5px] leading-relaxed text-gray-700">{s.excerpt}{s.excerpt.length >= 400 ? "…" : ""}</p>}
+          <li key={s.tag}>
+            <SourceLink tag={s.tag} href={sourceHref(s.materialId, s.chunkId)} citation={s.citation}
+              note={s.aiRead && s.aiReadNote ? <span className="mt-0.5 block rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] text-amber-950">{s.aiReadNote}</span> : null}>
+              {s.excerpt && <span className="mt-1 block whitespace-pre-wrap border-l-2 border-gray-200 pl-2 text-[12.5px] leading-relaxed text-gray-700">{s.excerpt}{s.excerpt.length >= 400 ? "…" : ""}</span>}
+            </SourceLink>
           </li>
         ))}
       </ul>
-    </details>
+    </LearningDisclosure>
   );
 }
 

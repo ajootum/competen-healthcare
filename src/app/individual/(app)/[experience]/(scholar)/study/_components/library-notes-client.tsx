@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { noteDatesLabel } from "@/lib/individual/scholar/library-organise";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
+import { LearningIcon } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-LIBRARY-01 (owner, 1 Nov 2026): the learner's OWN notes, bookmark and highlights on one saved teaching or one
 // lesson. Learner-authored, private, never AI: every write goes to api/individual/scholar/library/notes (820), which keys
@@ -33,8 +34,10 @@ async function send(method: string, body?: unknown, query = ""): Promise<{ ok: b
  * Notes for one target. `initial`: notes the server page already read (the library). Without it (Learn), they are read
  * when the learner opens the panel. `label`: the panel's summary line.
  */
-export function LibraryNotes({ target, initial, containerId, label = "Your notes", allowHighlight = true, allowBookmark = true }: {
+export function LibraryNotes({ target, initial, containerId, label = "Your notes", allowHighlight = true, allowBookmark = true, tone }: {
   target: NotesTarget; initial?: ClientNote[]; containerId?: string; label?: string; allowHighlight?: boolean; allowBookmark?: boolean;
+  /** LESSON REDESIGN: the Learn page shows these in the "Your notes" identity (cream); elsewhere they look as before. */
+  tone?: "notes";
 }) {
   const [notes, setNotes] = useState<ClientNote[] | null>(initial ?? null);
   const [open, setOpen] = useState(false);
@@ -81,11 +84,11 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
   const bookmark = list.find(n => n.kind === "bookmark");
   const written = list.filter(n => n.kind !== "bookmark");
   return (
-    <details className="mt-3 rounded-xl border border-gray-200" open={open} onToggle={e => toggled((e.currentTarget as HTMLDetailsElement).open)}>
+    <details className={tone ? "group mt-3 cmp-learn-notes cmp-learn-box" : "mt-3 rounded-xl border border-gray-200"} open={open} onToggle={e => toggled((e.currentTarget as HTMLDetailsElement).open)}>
       <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        {label}{notes !== null && <span className="text-[12px] font-normal text-gray-600">· {written.length}{bookmark ? " · bookmarked" : ""}</span>}
+        {tone && <LearningIcon name="notes" className="cmp-learn-accent h-5 w-5" />}<span className={tone ? "cmp-learn-ink font-bold" : ""}>{label}</span>{notes !== null && <span className="text-[12px] font-normal text-gray-600">· {written.length}{bookmark ? " · bookmarked" : ""}</span>}
       </summary>
-      <div className="border-t border-gray-200 px-3 pb-3 pt-2">
+      <div className={tone ? "rounded-b-2xl border-t border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-3 pb-3 pt-2" : "border-t border-gray-200 px-3 pb-3 pt-2"}>
         <p className="text-[12px] text-gray-600">Written by you, private to you. Never shared, never AI.</p>
         {notes === null ? <p role="status" className="mt-2 text-[13px] text-gray-600">Reading your notes…</p> : (
           <>

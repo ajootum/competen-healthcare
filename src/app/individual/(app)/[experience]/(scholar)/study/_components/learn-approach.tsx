@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { ScholarAnswer } from "@/app/individual/_components/scholar-answer/ScholarAnswer";
 import { aiReasonCopy, type AiUnavailableReason } from "@/lib/individual/ai-availability";
 import { STYLE_LABEL, type FollowOn, type MoreItem, type StyleChoice, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
+import { LearningSectionHead, StyleCard, learnTone, type LearningIconName, type LearningTone } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-LEARN-STYLE-01 (owner GO, Teaching Style and Practice HFE redesign): HOW SCHOLAR TEACHES THIS LESSON.
 // ONE segmented choice of three styles, shown once per lesson (learn-style.ts decides what is shown and what each runs):
@@ -58,11 +59,16 @@ function evidenceLine(e: unknown): string | null {
   return `Drawn from your own exam material: ${p} paper${p === 1 ? "" : "s"}, ${q} question${q === 1 ? "" : "s"}.`;
 }
 const why = (reason: string | null) => (reason ? aiReasonCopy(reason as AiUnavailableReason, "scholar").text : null);
+/** SCHOLAR LEARNING DESIGN SYSTEM: each style's learning tone (tokens.ts learningTone) and icon, drawn by the shared StyleCard. */
+const STYLE_TONE: Partial<Record<TeachingStyle, LearningTone>> = { explain: "explain", guide: "guide", challenge: "challenge" };
+const STYLE_ICON: Partial<Record<TeachingStyle, LearningIconName>> = { explain: "book", guide: "compass", challenge: "bolt" };
 const Check = () => (
   <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>
 );
 
-export function ApproachControl({ step, style, choices, more, mistake, onStyle, onClassic, working, onExplain, run, onQuestion, lastCheck, verdict, checks, depth, disabled, accent, memory, remember }: {
+export function ApproachControl({ step, style, choices, more, mistake, onStyle, onClassic, working, onExplain, run, onQuestion, lastCheck, verdict, checks, depth, disabled, accent, memory, remember, askAction }: {
+  /** LESSON REDESIGN: the page's own Ask Scholar control, shown in this section's header (presentation only). */
+  askAction?: React.ReactNode;
   /** The lesson this control is for (keys its memory). */
   step: number;
   /** The learner's chosen style, and the choices to show (learn-style.ts styleChoices; at most three). */
@@ -147,32 +153,30 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
   const followOns: FollowOn[] = challenge && style === "challenge" && (mem("challenge").shown || over === "ask_me" || over === "teach_back") ? challenge.followOns : [];
   const approachMore = (a: string): a is Approach => a === "high_yield" || a === "ask_me" || a === "teach_back";
   const showStyles = choices.length > 1;
-  if (!showStyles && !more.length && !mistake.show) return null; // nothing beyond the lesson itself is offered
+  if (!showStyles && !more.length && !mistake.show) return askAction ? <div className="flex justify-end">{askAction}</div> : null; // nothing beyond the lesson itself is offered
 
   return (
-    <div className="mt-3 rounded-xl border border-gray-200 px-3 py-3">
+    <div className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
       {showStyles && (
         <>
-          <p id={`${id}-l`} className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">Teaching style</p>
-          <div role="radiogroup" aria-labelledby={`${id}-l`} className="mt-2 grid grid-cols-1 gap-2 @min-[34rem]:grid-cols-3">
+          <div className={learnTone("guide")}><LearningSectionHead level={4} id={`${id}-l`} icon="list" title="Teaching style" trailing={askAction} /></div>
+          {/* LESSON REDESIGN: three selectable cards (shared StyleCard), each in its own tone (Explain green · Guide me blue ·
+              Challenge me violet); the selected state is a 2px edge, the word Selected and a tick, never colour alone. */}
+          <div className="@container mt-3"><div role="radiogroup" aria-labelledby={`${id}-l`} className="grid grid-cols-1 gap-2.5 @min-[34rem]:grid-cols-3">
             {choices.map((c, i) => {
               const on = c.style === style && !c.disabled;
               return (
-                <button key={c.style} ref={el => { radios.current[i] = el; }} type="button" role="radio" aria-checked={on} disabled={c.disabled || (!!busy && !on)}
-                  tabIndex={on || (!choices.some(x => x.style === style && !x.disabled) && i === 0) ? 0 : -1}
-                  aria-describedby={`${id}-d${i}`} onClick={() => choose(c.style)} onKeyDown={e => onKeys(e, i)}
-                  className={`flex min-h-[44px] items-start gap-2 rounded-xl border-2 px-3 py-2 text-left disabled:opacity-60 pointer-coarse:min-h-[var(--cmp-touch-min)] ${on ? "border-gray-900 bg-gray-50" : "border-gray-300 bg-white hover:bg-gray-50"} ${focusRing}`}>
-                  <span aria-hidden={!on} className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center text-gray-900 ${on ? "" : "invisible"}`}>{on && <Check />}</span>
-                  <span className="min-w-0">
-                    <span className="block text-[14px] font-semibold text-gray-900">{c.label}{on && <span className="sr-only"> (selected)</span>}</span>
-                    <span id={`${id}-d${i}`} className="mt-0.5 block text-[12.5px] leading-snug text-gray-700">{c.description}{c.disabled && c.reason ? <span className="mt-1 block text-gray-600">{why(c.reason)}</span> : null}</span>
-                  </span>
-                </button>
+                <StyleCard key={c.style} ref={el => { radios.current[i] = el; }} tone={STYLE_TONE[c.style] ?? "explain"} icon={STYLE_ICON[c.style] ?? "book"}
+                  label={c.label} selected={on} descriptionId={`${id}-d${i}`}
+                  description={<>{c.description}{c.disabled && c.reason ? <span className="mt-1 block text-gray-600">{why(c.reason)}</span> : null}</>}
+                  disabled={c.disabled || (!!busy && !on)} tabIndex={on || (!choices.some(x => x.style === style && !x.disabled) && i === 0) ? 0 : -1}
+                  onClick={() => choose(c.style)} onKeyDown={e => onKeys(e, i)} />
               );
             })}
-          </div>
+          </div></div>
         </>
       )}
+      {!showStyles && askAction && <div className="flex justify-end">{askAction}</div>}
 
       {active === "challenge" && <Go label={busy ? "Writing…" : `Challenge me (level ${challengeLevel()})`} disabled={busy || disabled} accent={accent} onGo={() => { const l = challengeLevel(); patch("challenge", { level: l }); void send("challenge", { action: "challenge", level: l }); }} />}
       {active === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", { action: "ask_me", level: mem("ask_me").level })} />}
@@ -196,8 +200,8 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
       {msg && <p role="status" className="mt-2 text-[13.5px] text-gray-700">{msg}</p>}
       <div aria-live="polite">
         {shown && shown.text && active === shown.approach && (
-          <div className="mt-3 rounded-xl border border-gray-200 bg-white p-3">
-            <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{APPROACH_LABEL[shown.approach]}{shown.label ? ` · ${shown.label}` : ""}</p>
+          <div className={`${learnTone(STYLE_TONE[style] ?? "explain")} mt-3 rounded-xl border border-[var(--learn-border)] bg-[var(--learn-surface)] p-3`}>
+            <p className="cmp-learn-ink text-[11.5px] font-bold uppercase tracking-[0.1em]">{APPROACH_LABEL[shown.approach]}{shown.label ? ` · ${shown.label}` : ""}</p>
             {shown.verdict && <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] font-semibold text-violet-950">{shown.verdict}. An informal check for your own learning.</p>}
             <div className="mt-1.5"><ScholarAnswer text={shown.text} /></div>
             {shown.question && shown.question !== shown.text && <p className="mt-2 break-words text-[14.5px] font-semibold text-gray-900">{shown.question}</p>}

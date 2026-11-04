@@ -24,6 +24,20 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
   }
   const themeRules = [...themes].map(([p, parts]) =>
     [`[data-cmp-theme="${p}"] {`, ...parts.map(part => `  --cmp-theme-${part}: var(--cmp-product-${p}-${part});`), "}"].join("\n"));
+  // SCHOLAR LEARNING DESIGN SYSTEM: one `.cmp-learn-<tone>` rule per learning tone (the --learn-* roles a component reads),
+  // and ONE [data-cmp-scheme="dark"] rule re-pointing each light tone variable at its staged dark twin. Both derived from
+  // the variables (--cmp-learn-<tone>-<role> / --cmp-learn-dark-<tone>-<role>), so neither can drift from the palette.
+  const learn = new Map<string, string[]>();
+  const learnDark: string[] = [];
+  for (const k of Object.keys(vars)) {
+    const d = /^--cmp-learn-dark-([a-z-]+)-(surface|border|accent|ink)$/.exec(k);
+    if (d) { learnDark.push(`  --cmp-learn-${d[1]}-${d[2]}: var(${k});`); continue; }
+    const m = /^--cmp-learn-([a-z-]+)-(surface|border|accent|ink)$/.exec(k);
+    if (m) learn.set(m[1], [...(learn.get(m[1]) ?? []), m[2]]);
+  }
+  const learnRules = [...learn].map(([t, roles]) =>
+    `.cmp-learn-${t} { ${roles.map(r => `--learn-${r}: var(--cmp-learn-${t}-${r});`).join(" ")} }`);
+  const learnDarkRule = learnDark.length ? [`[data-cmp-scheme="dark"] {`, ...learnDark, "}"] : [];
   return [
     START,
     "/* Platform Design System (PUI-001). Do not edit by hand — edit src/lib/design/tokens.ts. */",
@@ -32,6 +46,8 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
     `  --cmp-font-sans: ${fontFamily};`,
     "}",
     ...themeRules,
+    ...learnRules,
+    ...learnDarkRule,
     END,
   ].join("\n");
 }

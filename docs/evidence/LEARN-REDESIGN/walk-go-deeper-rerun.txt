@@ -1,0 +1,3 @@
+PASS Go deeper (What next?): a new teaching round or the depth-reached message appears
+INFO console errors: 0 []; 5xx: 0
+PASS Go deeper re-run: 0 console errors, 0 5xx

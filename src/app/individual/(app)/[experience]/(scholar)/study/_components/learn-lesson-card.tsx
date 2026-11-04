@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
 import { Mark } from "./learn-journey-nav";
+import { ActionBand, LearningIcon, learnBox, learnTone, type BandAction } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-COMPANION-01 P0b: THE PIECES OF THE CONTINUOUS JOURNEY. Presentation only: every button here runs an action
 // learn-client.tsx already has (Teach, Go deeper, Examples, the check, Practise, Apply, Finish); nothing here calls a
@@ -11,7 +12,6 @@ import { Mark } from "./learn-journey-nav";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const chip = `inline-flex items-center justify-center rounded-full border px-3 py-1.5 text-[13px] font-semibold disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
 const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
 
 export const lessonDomId = (step: number) => `lesson-${step}`;
@@ -22,14 +22,21 @@ export function LessonCard({ step, index, count, title, objective, status, accen
   step: number; index: number; count: number; title: string; objective: string; status: string; accent: string; children: ReactNode;
 }) {
   return (
-    <section id={lessonDomId(step)} data-lesson-index={index} aria-labelledby={lessonHeadingId(step)} className="scroll-mt-4 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: accent }}>Lesson {index + 1} of {count}</p>
-        <p className="text-[12px] text-gray-600">{status}</p>
+    // LESSON REDESIGN: the lesson is not one big box around boxes. Its header is a card of its own; its sections follow as
+    // sibling cards, each in its own colour identity (learn-section.tsx).
+    <section id={lessonDomId(step)} data-lesson-index={index} aria-labelledby={lessonHeadingId(step)} className="scroll-mt-4">
+      <div className={`${learnTone("teach")} flex items-start gap-3 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5`}>
+        <span className="cmp-learn-accent hidden h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[var(--learn-surface)] ring-1 ring-[var(--learn-border)] @min-[30rem]:inline-flex"><LearningIcon name="lesson" className="h-6 w-6" /></span>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5">
+            <p className="text-[12px] font-bold uppercase tracking-[0.12em]" style={{ color: accent }}>Lesson {index + 1} of {count}</p>
+            <p className="inline-flex items-center rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-800">{status}</p>
+          </div>
+          <h3 id={lessonHeadingId(step)} tabIndex={-1} className={`mt-0.5 break-words text-[20px] font-bold leading-tight text-gray-900 @min-[40rem]:text-[22px] ${focusRing}`}>{title || `Lesson ${index + 1}`}</h3>
+          {/* SCHOLAR-LEARN-FIX-01 L-B: the lesson's objective (learn.lessonOutline, no AI). A missing one is simply not shown. */}
+          {objective && <p className="mt-1.5 break-words text-[14px] leading-relaxed text-gray-700"><span className="font-semibold text-gray-900">In this lesson: </span>{objective}</p>}
+        </div>
       </div>
-      <h3 id={lessonHeadingId(step)} tabIndex={-1} className={`break-words text-[17px] font-bold text-gray-900 ${focusRing}`}>{title || `Lesson ${index + 1}`}</h3>
-      {/* SCHOLAR-LEARN-FIX-01 L-B: the lesson's objective (learn.lessonOutline, no AI). A missing one is simply not shown. */}
-      {objective && <p className="mt-1 break-words text-[14px] leading-relaxed text-gray-700"><span className="font-semibold text-gray-900">In this lesson: </span>{objective}</p>}
       {children}
     </section>
   );
@@ -50,7 +57,7 @@ export type Activity = { key: string; label: string; onClick?: () => void; href?
 export function ActivityRow({ items, label, id }: { items: Activity[]; label: string; id?: string }) {
   if (!items.length) return null;
   return (
-    <div id={id} role="group" aria-label={label} className="mt-4 flex flex-wrap gap-2 border-t border-gray-100 pt-3">
+    <div id={id} role="group" aria-label={label} className="mt-4 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-3">
       {items.map(a => {
         const text = <>{a.label}{a.done && <span className="sr-only"> (done)</span>}{a.done && <span aria-hidden="true" className="ml-1 text-gray-500">✓</span>}</>;
         const cls = `${chip} ${a.pressed ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`;
@@ -109,41 +116,50 @@ export function LessonList({ rows, onSelect, label }: { rows: LessonRow[]; onSel
  * After the ACTIVE lesson: Previous, and Next lesson (which opens it saved, or in Guided learning teaches it, in one
  * action). Never reached by scrolling alone: moving on is the learner's choice. The last lesson offers Finish instead.
  */
-export function ContinueCard({ accent, next, onContinue, onPrevious, onDeeper, onPractise, otherTopicHref, last, completed, onFinish, onReview, disabled, blockedReason }: {
-  accent: string; next: { number: number; title: string } | null; onContinue: () => void; onPrevious?: () => void; onDeeper?: () => void; onPractise: () => void;
+export function ContinueCard({ next, onContinue, onPrevious, onDeeper, onPractise, otherTopicHref, last, completed, onFinish, onReview, disabled, blockedReason, suggestion }: {
+  /** Kept for callers; the band takes the What next? tone. */
+  accent?: string;
+  next: { number: number; title: string } | null; onContinue: () => void; onPrevious?: () => void; onDeeper?: () => void; onPractise: () => void;
   otherTopicHref: string; last: boolean; completed: boolean; onFinish: () => void; onReview: () => void; disabled?: boolean;
   /** The required recall check is not finished: Next lesson and Finish wait, with this reason beside them. Everything else stays usable. */
   blockedReason?: string;
+  /** SALE-2026-11 R1: the lesson's suggested next step and its stated reason, where one exists. Shown as words and a link to it; never run from here. */
+  suggestion?: { label: string; why: string; href: string } | null;
 }) {
+  // SCHOLAR LEARNING DESIGN SYSTEM: the shared ActionBand -- ONE primary action (filled), the rest secondary (outlined).
+  // Nothing advances by itself: every action is the learner's click.
+  const wait = blockedReason ? "journey-wait-why" : undefined;
+  const primary = !last && next ? { label: `Next lesson: ${next.number}. ${next.title}`, onClick: onContinue, disabled: disabled || !!blockedReason, describedBy: wait }
+    : last && !completed ? { label: "Finish session", onClick: onFinish, disabled: !!blockedReason, describedBy: wait } : null;
+  const secondary: BandAction[] = [
+    ...(onPrevious ? [{ label: "Previous lesson", onClick: onPrevious, disabled }] : []),
+    ...(last ? [{ label: "Review what you covered", onClick: onReview }] : []),
+    ...(onDeeper ? [{ label: "Go deeper", onClick: onDeeper, disabled, icon: "compass" as const }] : []),
+    { label: "Practise this lesson", onClick: onPractise, icon: "cards" },
+    { label: "Choose another topic", href: otherTopicHref, icon: "spark" },
+  ];
   return (
-    <section aria-labelledby="journey-next-h" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-      <h3 id="journey-next-h" className="text-[15px] font-bold text-gray-900">{last ? (completed ? "Session completed" : "You have reached the last lesson") : "What next?"}</h3>
-      {completed && <p className="mt-1 text-[13.5px] text-gray-700">You can still revisit any lesson. Your progress here is a learning record for you, not an assessment.</p>}
+    <ActionBand headingId="journey-next-h" title={last ? (completed ? "Session completed" : "You have reached the last lesson") : "What next?"} primary={primary} secondary={secondary}>
+      {completed && <p className="mt-2 text-[13.5px] text-gray-700">You can still revisit any lesson. Your progress here is a learning record for you, not an assessment.</p>}
+      {suggestion && (
+        <p className="mt-2 break-words text-[13.5px] leading-relaxed text-gray-800">
+          <span className="cmp-learn-ink font-semibold">Suggested for you: {suggestion.label}.</span> {suggestion.why}{" "}
+          <a href={suggestion.href} className={`cmp-learn-ink font-semibold underline underline-offset-2 ${focusRing}`}>See your next step</a>
+        </p>
+      )}
       {blockedReason && <p id="journey-wait-why" role="status" className="mt-2 text-[13.5px] font-semibold text-gray-900">{blockedReason}</p>}
-      <div className="mt-3 flex flex-wrap gap-2">
-        {!last && next && (
-          <button type="button" className={`${btn} max-w-full`} style={{ background: accent }} onClick={onContinue} disabled={disabled || !!blockedReason} aria-describedby={blockedReason ? "journey-wait-why" : undefined}>
-            <span className="min-w-0 break-words">Next lesson: {next.number}. {next.title}</span>
-          </button>
-        )}
-        {onPrevious && <button type="button" className={ghost} onClick={onPrevious} disabled={disabled}>Previous lesson</button>}
-        {last && !completed && <button type="button" className={btn} style={{ background: accent }} onClick={onFinish} disabled={!!blockedReason} aria-describedby={blockedReason ? "journey-wait-why" : undefined}>Finish session</button>}
-        {last && <button type="button" className={ghost} onClick={onReview}>Review what you covered</button>}
-        {onDeeper && <button type="button" className={ghost} onClick={onDeeper} disabled={disabled}>Go deeper</button>}
-        <button type="button" className={ghost} onClick={onPractise}>Practise this lesson</button>
-        <Link href={otherTopicHref} className={ghost}>Choose another topic</Link>
-      </div>
-    </section>
+    </ActionBand>
   );
 }
 
 /** Continue where you stopped: a plain, dismissible line. Choosing it scrolls there; nothing is asked of Scholar. */
 export function ResumeBanner({ lesson, title, onGo, onDismiss }: { lesson: number; title: string; onGo: () => void; onDismiss: () => void }) {
   return (
-    <div role="region" aria-label="Continue where you stopped" className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-sky-200 bg-sky-50 px-4 py-2.5">
-      <p className="min-w-0 flex-1 break-words text-[13.5px] text-sky-950"><span className="font-semibold">Continue where you stopped</span> — Lesson {lesson}{title ? `: ${title}` : ""}</p>
-      <button type="button" className={`${chip} border-sky-300 bg-white text-sky-950 hover:bg-sky-100`} onClick={onGo}>Go to lesson {lesson}</button>
-      <button type="button" className={`${chip} border-transparent bg-transparent text-sky-950 underline underline-offset-2`} onClick={onDismiss}>Dismiss</button>
+    <div role="region" aria-label="Continue where you stopped" className={`${learnBox("next")} mb-3 flex flex-wrap items-center gap-2 px-4 py-2.5`}>
+      <LearningIcon name="arrow" className="cmp-learn-accent h-5 w-5" />
+      <p className="min-w-0 flex-1 break-words text-[13.5px] text-gray-900"><span className="cmp-learn-ink font-semibold">Continue where you stopped</span> — Lesson {lesson}{title ? `: ${title}` : ""}</p>
+      <button type="button" className={`${chip} border-[var(--learn-accent)] bg-[var(--cmp-app-surface)] text-[var(--learn-ink)] hover:bg-[var(--learn-surface)]`} onClick={onGo}>Go to lesson {lesson}</button>
+      <button type="button" className={`${chip} border-transparent bg-transparent text-[var(--learn-ink)] underline underline-offset-2`} onClick={onDismiss}>Dismiss</button>
     </div>
   );
 }
