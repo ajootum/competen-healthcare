@@ -31,6 +31,7 @@ import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, REC
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 import { STUDY_EVENT, carry } from "./study-active";
 import { citationSegments, citedTags, parseTeachAnswer, questionText, replyState, type LearnGrounding } from "@/lib/individual/scholar/teach-format";
+import { draftOwnCard } from "@/lib/individual/scholar/own-card-draft";
 import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi } from "@/app/individual/_components/ai/PersonalAiAnswer";
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav";
@@ -219,7 +220,6 @@ function readPlace(stepNo: number): { anchor: string | null; offset: number | nu
   } catch { return { anchor: null, offset: null }; }
 }
 /** A flashcard's starting words from the lesson's own text: [S n] tags removed, within the card limits. The learner edits them. */
-const plain = (s: string, max: number) => s.replace(/\s*\[[SRE]\d+\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
 
 export function LearnWorkspace(props: {
   initial: SessionView | null; initialProgress: Record<number, { actions: string[]; verdict: string | null }>; start: StartScope | null;
@@ -1330,10 +1330,10 @@ export function LearnWorkspace(props: {
     const adaptiveOff = !adaptiveHere ? null : !props.consent ? (props.offMessage ?? "AI help is off.") : offReason(adaptiveHere.decision.approach) ? aiReasonCopy(offReason(adaptiveHere.decision.approach)!, "scholar").text : null;
     const style = effectiveStyle(styleChosen, styleList);
     const parts = lastTeach ? parseTeachAnswer(lastTeach.reply.answer!) : null;
-    const draft = {
-      front: plain(teachQuestions[0] ? questionText(teachQuestions[0]) : `What are the key points of ${st.title || "this lesson"}?`, 300),
-      back: plain(parts?.points.length ? parts.points.map(p => `- ${p}`).join("\n") : st.objective || "", 600),
-    };
+    // The draft card's front and back must belong together. A check question has no answer in the lesson (only the AI
+    // judgement gives one), so it is never paired with the key points: the front asks for the key points and the back
+    // lists them one per line, cut at a whole point within 600 characters. With no key points, the lesson's objective.
+    const draft = draftOwnCard(st.title, parts?.points ?? [], st.objective);
     const items: Activity[] = [
       ...(group.primary ? [{ key: "understand", label: "Understand", done: hasLesson, disabled: hasLesson || busyHere || !canTeach,
         onClick: () => dispatch({ type: "requestTeach", index: i }) }] : []),
