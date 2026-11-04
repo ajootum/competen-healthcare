@@ -19,10 +19,10 @@
 
 | ID | Programme | Priority | Owner | Status | Blocker | Completed |
 |---|---|---|---|---|---|---|
-| CYU-01 | Learning Engine | P0 | CYU session (local_edea2037) | Implementing | — | — |
-| CYU-02 | Learning Engine | P0 | CYU session | Implementing | — | — |
-| CYU-03 | Learning Engine | P0 | CYU session | Implementing | Migration for D01 storage needs the owner's staging→production path | — |
-| CYU-04 | Learning Engine | P1 | CYU session | Implementing | Depends on CYU-03 | — |
+| CYU-01 | Learning Engine | P0 | CYU session (PR #265) | Ready for review | — | — |
+| CYU-02 | Learning Engine | P0 | CYU session (PR #265) | Ready for review | Other question kinds are not yet offered inside a lesson (scope note) | — |
+| CYU-03 | Learning Engine | P0 | CYU session (PR #265) | Ready for review | Owner GO for migration 950 in production | — |
+| CYU-04 | Learning Engine | P1 | CYU session (PR #265) | Ready for review | — | — |
 | CE-01 | CE | P1 | Engineering (CE) | Live — verification pending | Open children CE-01-1..3 | — |
 | CE-01-1 | CE | P2 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-01-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
@@ -90,39 +90,39 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### CYU-01 — Checks distributed throughout lessons
 - **Programme:** Learning Engine · **Priority:** P0 · **Owner:** CYU session (local_edea2037)
 - **Deliverable:** Meaningful understanding checks at suitable points through each lesson, following the teaching sequence, not only at the end.
-- **Current state:** Increment 1 only: the Check my answer panel always answers beneath the learner's answer (7908ca24, merged in #252). Inline checks exist as policy-placed recall/quick checks (#221, `learn-inline.ts`, `scholar_learn_inline_*`); the engine writes at most two check questions per Teach me answer. Placement across a lesson's units is increment 3 of the series and is not on `main`. In build by the CYU session (coordinator report; no PR yet).
-- **Dependency:** none · **Environment:** development
+- **Current state:** **Built in PR #265 (branch `scholar/cyu-wave1-01`, head 02ec0efa; commits 2037ac45, 02ec0efa), reported by the coordinator 4 Nov. Staging walk evidence in the coordinator folder `LEARNING-CLOSE-WS01-CYU/` (`walk-run.log`, `shots/`): 0 console errors, 0 5xx, every check PASS.** Checks are distributed through the lesson (first check after the teaching and before the key points, a second after the lesson, the mid-lesson check labelled optional). New policy key `scholar_learn_check_placement` (default `distributed`). Earlier state: Increment 1 only: the Check my answer panel always answers beneath the learner's answer (7908ca24, merged in #252). Inline checks exist as policy-placed recall/quick checks (#221, `learn-inline.ts`, `scholar_learn_inline_*`); the engine writes at most two check questions per Teach me answer. Placement across a lesson's units is increment 3 of the series and is not on `main`. In build by the CYU session (coordinator report; no PR yet).
+- **Dependency:** none · **Environment:** staging (PR #265 open; not on main)
 - **Acceptance criteria:** A proportionate number of checks per lesson by length, objectives and complexity; never one per slide; optional; no excessive interruption; answers survive refresh (directive §6.1, §6.2).
-- **Evidence:** `docs/programme/SCHOLAR-UNDERSTANDING-CHECKS-01.md`; PR #252; PR #221; `learn-check.test.ts`.
-- **Status:** Implementing · **Blocker:** — · **Completed:** —
+- **Evidence:** `docs/programme/SCHOLAR-UNDERSTANDING-CHECKS-01.md`; PR #252; PR #221; `learn-check.test.ts`. Walk: CYU-01 order and optional-label checks PASS. PR #265.
+- **Status:** Ready for review · **Blocker:** none; awaits PR review · **Completed:** —
 
 ### CYU-02 — Existing question types integrated
 - **Programme:** Learning Engine · **Priority:** P0 · **Owner:** CYU session
 - **Deliverable:** Checks reuse the governed question and assessment infrastructure, including formats beyond four-option MCQ, with format-specific scoring and feedback. No second question engine.
-- **Current state:** The format registry is a single source (`question-formats.ts`, #236); marking exists for mcq, mrq, match, sequence, true/false, cloze, short, structured, extended and scenario. Learn's check path today is free-text Check my answer plus MCQ practice (`learn-practice.tsx`). Not yet wired to the registry (CYU series increment 4). In build.
-- **Dependency:** CYU-01 · **Environment:** development
+- **Current state:** **Built in PR #265 (branch `scholar/cyu-wave1-01`, head 02ec0efa; commits 2037ac45, 02ec0efa), reported by the coordinator 4 Nov. Staging walk evidence in the coordinator folder `LEARNING-CLOSE-WS01-CYU/` (`walk-run.log`, `shots/`): 0 console errors, 0 5xx, every check PASS.** Checks reuse the existing marking path. **Scope note:** other question kinds are not yet offered inside a lesson, so the acceptance criterion "formats beyond MCQ" is only partly met in this PR. Earlier state: The format registry is a single source (`question-formats.ts`, #236); marking exists for mcq, mrq, match, sequence, true/false, cloze, short, structured, extended and scenario. Learn's check path today is free-text Check my answer plus MCQ practice (`learn-practice.tsx`). Not yet wired to the registry (CYU series increment 4). In build.
+- **Dependency:** CYU-01 · **Environment:** staging (PR #265 open; not on main)
 - **Acceptance criteria:** Short answer, explanation, application, clinical judgement and MCQ checks use existing marking, rubric snapshots and "marked against" provenance; no duplicated engine.
-- **Evidence:** `question-formats.ts`; PR #236; `docs/programme/SCHOLAR-UNDERSTANDING-CHECKS-01.md` "Next increments" item 4.
-- **Status:** Implementing · **Blocker:** — · **Completed:** —
+- **Evidence:** `question-formats.ts`; PR #236; `docs/programme/SCHOLAR-UNDERSTANDING-CHECKS-01.md` "Next increments" item 4. PR #265; scope note from the coordinator.
+- **Status:** Ready for review · **Blocker:** review decides whether the partial format scope is accepted; remaining kinds are not in this PR · **Completed:** —
 
 ### CYU-03 — Responses and feedback persisted
 - **Programme:** Learning Engine · **Priority:** P0 · **Owner:** CYU session
 - **Deliverable:** Store question and version ids, the learner's response (free text included), feedback and explanation, outcome, lesson/section/session/competency references, attempt timestamps and history, AI model and generation metadata (decision D01). Learner-owned record with access control, deletion, retention and interrupted-session recovery. Formative only; never establishes verified competence.
-- **Current state:** Learn today stores nothing the learner types (stated in the checks doc); the `clarify` learning event records only an informal verdict. The existing place for a written answer and its marking is the revision attempt table (416: `response`, `marking`, `evaluator_*`) plus the 791 attempt snapshots. D01 is approved; storage is not built on `main`.
+- **Current state:** **Built in PR #265 (branch `scholar/cyu-wave1-01`, head 02ec0efa; commits 2037ac45, 02ec0efa), reported by the coordinator 4 Nov. Staging walk evidence in the coordinator folder `LEARNING-CLOSE-WS01-CYU/` (`walk-run.log`, `shots/`): 0 console errors, 0 5xx, every check PASS.** Check answers (free text included) and their judgement are kept on the existing 416 attempts through migration 950 (applied and verified on staging; **production needs the owner's GO**); shown again after a reload as "Your previous checks" with outcome, how it was marked and the feedback parts; a self-review path keeps a self-graded answer with no AI. Earlier state: Learn today stores nothing the learner types (stated in the checks doc); the `clarify` learning event records only an informal verdict. The existing place for a written answer and its marking is the revision attempt table (416: `response`, `marking`, `evaluator_*`) plus the 791 attempt snapshots. D01 is approved; storage is not built on `main`.
 - **Dependency:** D01 (approved). A new migration, if needed, follows the CLAUDE.md four-state path; production application needs a separate owner GO.
-- **Environment:** development
+- **Environment:** staging (PR #265 open; not on main)
 - **Acceptance criteria:** Answers and feedback survive refresh, logout and device change (§6.2); attempts remain distinguishable; deletion and retention work; erase-all covers them; no employer-controlled copy (D01).
-- **Evidence:** `docs/programme/SCHOLAR-UNDERSTANDING-CHECKS-01.md`; migration 416, 791 files.
-- **Status:** Implementing · **Blocker:** a new migration cannot reach production without an owner GO · **Completed:** —
+- **Evidence:** `docs/programme/SCHOLAR-UNDERSTANDING-CHECKS-01.md`; migration 416, 791 files. Migration 950 (staging-verified). Walk: kept answer, outcome and feedback parts survive reload PASS.
+- **Status:** Ready for review · **Blocker:** owner GO for migration 950 in production · **Completed:** —
 
 ### CYU-04 — Session, progress and competency integration
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** CYU session
 - **Deliverable:** Results connect to the study session, My Plan and progress, the Library/Notebook, competency evidence views, and Personal AI session context within existing permissions; repeated attempts stay distinguishable.
-- **Current state:** The study-session context block already reads `not_yet` check verdicts (`study-context.ts`); My Plan treats a lesson read/opened/taught as started (#254, `scholar_plan_started_signal`). Nothing reads a stored check response yet because none is stored (CYU-03).
-- **Dependency:** CYU-03 · **Environment:** development
+- **Current state:** **Built in PR #265 (branch `scholar/cyu-wave1-01`, head 02ec0efa; commits 2037ac45, 02ec0efa), reported by the coordinator 4 Nov. Staging walk evidence in the coordinator folder `LEARNING-CLOSE-WS01-CYU/` (`walk-run.log`, `shots/`): 0 console errors, 0 5xx, every check PASS.** Repeated attempts are listed and distinguishable; Try again from the history reopens the check with the answer; Saved learning lists the kept checks; the history fits a 309px viewport. Results are not yet verified against My Plan, competency evidence views or Personal AI context beyond Saved learning. Earlier state: The study-session context block already reads `not_yet` check verdicts (`study-context.ts`); My Plan treats a lesson read/opened/taught as started (#254, `scholar_plan_started_signal`). Nothing reads a stored check response yet because none is stored (CYU-03).
+- **Dependency:** CYU-03 · **Environment:** staging (PR #265 open; not on main)
 - **Acceptance criteria:** §6.1 a learner moves between activities without losing session context; results appear in My Plan, Library and the Personal AI context block; accepted mappings are evidence, never competence.
-- **Evidence:** PR #254; `study-context.ts`.
-- **Status:** Implementing · **Blocker:** CYU-03 · **Completed:** —
+- **Evidence:** PR #254; `study-context.ts`. Walk: both attempts listed and distinguishable, Saved learning lists the kept checks, mobile fit PASS.
+- **Status:** Ready for review · **Blocker:** depends on CYU-03 reaching production (owner GO for 950) · **Completed:** —
 
 ### CE-01 — Seamless, context-aware Personal AI (reconciliation)
 - **Programme:** CE · **Priority:** P1 · **Owner:** Engineering (CE)
@@ -496,4 +496,5 @@ Results of the read-only queries (Q1-Q6), coordinator, 4 Nov 2026:
 | Date | Change |
 |---|---|
 | 4 Nov 2026 | Created from directive §4 and the repository at `e19a363a`; rows added: CE-01-1..3, CE-02-1..2, CE-03, CE-06A-1, LE-05, AI-04, AI-05; no row Complete |
+| 4 Nov 2026 | CYU-01..04 Ready for review: PR #265 (head 02ec0efa), migration 950 staging-verified, production needs owner GO; CYU-02 partial format scope noted |
 | 4 Nov 2026 | Coordinator inputs: GOV-01 decided executive level (Ready for release); GOV-02 stays off until 20 Nov (Blocked by date); GOV-04 added and Complete; REL-01 and REL-02 Live — verification pending (production already has 550 and 610); REL-03 owner actions; CE-05 activation pending; decision register updated; production facts recorded. GOV-04 is the only Complete row. Later 4 Nov: Q1-Q6 results recorded (880 applied with 0 rows, so CE-04D moves to Live — verification pending; flashcards AI package confirmed not applied; metering off; identifiable right ungranted); REL-03 deferred to 18 Nov; GOV-01 grant is to six positions (five 940 executive positions plus chief_executive), Ready for release until the coordinator verifies |
