@@ -40,6 +40,8 @@ function same(a: string, b: string): boolean {
   for (const w of ta) if (tb.has(w)) shared++;
   return shared / (ta.size + tb.size - shared) >= 0.6;
 }
+/** SALE-2026-11 R1 (SALE-05): the same comparison, for the learning-need rules. */
+export const sameMisconception = (a: string, b: string): boolean => same(a, b);
 const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
 /**

@@ -1,0 +1,26 @@
+sign-in attempt 1: ok
+INFO learning state before: 3 topics
+PASS SALE-04 Progress shows What your evidence shows, by topic
+PASS Progress fits 390px with no sideways scroll
+PASS SALE-04 the learning state shows no percentage
+PASS SALE-04 the learning state says it is not verified competence
+PASS SALE-04 the learner can correct the topics behind a topic's evidence
+INFO question 1: Why might a critically ill patient's eyes be at risk even if no one touches them, and what natural mechanism is failing? [S5] [S6]
+INFO after the wrong answer: need=misconception approach=review
+INFO reason shown: You have had 2 corrective steps on this lesson already, so Scholar suggests leaving it for now rather than explaining it again. The missed check is in your revision cards for later.
+PASS SALE-05/06 a wrong answer changes the next teaching action (not the harder question)
+PASS SALE-06 the reason for the next action is shown
+PASS the lesson with the next step fits 390px
+INFO running: Save for review and carry on
+FAIL SALE-07 after the corrective step a different question is offered
+locator.click: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('section[data-adaptive-need]').getByRole('button', { name: /different question|question from an earlier lesson/i }).first()[22m
+
+    at main (C:\Users\elish\Documents\Competen\competen-sale-r1\docs\evidence\SALE-R1\walk\sale-r1-walk.ts:130:22) {
+  log: [
+    "  - waiting for locator('section[data-adaptive-need]').getByRole('button', { name: /different question|question from an earlier lesson/i }).first()"
+  ],
+  name: 'TimeoutError'
+}
+exit 2
