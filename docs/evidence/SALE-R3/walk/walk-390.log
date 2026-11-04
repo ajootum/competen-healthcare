@@ -1,0 +1,28 @@
+sign-in attempt 1: ok
+PASS annotated a saved explanation (note saved on the saved lesson)
+PASS the Notebook view opens from the library
+PASS misconceptions to revisit are shown
+INFO misconceptions listed: 10
+PASS wrote a personal summary (kept as kind summary)
+PASS the summary is in the Notebook, as a summary
+PASS the annotation is in the Notebook
+PASS each keeps its cited source
+INFO related to the annotation: Saved lesson: This lesson covers essential nursing care of the critically ill, with personal hygiene… · Taught from the same section | Saved lesson: You have already covered where care begins with skin and tissue assessment, the grading… · Taught from the same section | Saved lesson: This lesson covers the full chain of essential nursing care for critically ill patients,… · Taught from the same section | Saved lesson: You have already built the chain from skin assessment through bathing and skin tears… · Taught from the same section | Saved lesson: You have already worked through skin and tissue assessment, the bed bath, skin tears,… · Taught from the same section
+PASS related materials offered where they exist (shown)
+PASS the Notebook fits 390px
+PASS make practice offered: "Make practice from these notes (10 sections)"
+INFO practice link /individual/scholar/study/revise?material=5327bda5-add2-4dfd-86c3-b9bec6eca907&sections=0c6f6024-9c2a-4679-9c18-8ad581ee35ef,fe37ddc3-75a8-4803-b103-ec2ee071ca72,ba05492b-3a48-4562-8533-7c2b5f951cba,f8c7921f-8492-404c-8dd7-b17c1ff4549e,20f8dbe8-599f-41dc-8d1b-e820bc039df0,e11edc81-6278-47ad-843d-16626d009eac,04f0d9dc-57f9-42f2-856f-a7f524b7d1f1,fb38d39e-8db4-46c3-9cf5-ec848d31dc55,525b317e-fa30-4f98-8cc2-6af5918f70a2,c862bd96-994a-4a8c-b0ba-92d310879e22&nb=1
+PASS Revise opens on exactly the chosen notes' sections (10)
+PASS Revise offers 'Back to your Notebook'
+PASS the Revise builder is limited to those sections
+PASS Revise fits 390px
+PASS practice from the notes starts (existing revision session, SQIE generation and routing)
+PASS the practice questions (10) are all from the chosen sections
+PASS Back to your Notebook returns to the Notebook
+PASS the lesson opened from a note offers the way back (/individual/scholar/study/saved?version=135e059a-1d44-4b46-b19a-9d6880d21afd&nb=47340827-54)
+PASS and returns to that note in the Notebook
+INFO dev-only CSP report-only notices: 6
+PASS 0 console errors (0)
+PASS no 5xx (0)
+ALL PASS
+exit=0

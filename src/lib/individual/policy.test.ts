@@ -106,6 +106,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarAdaptiveExams: "on", scholarAdaptiveLength: 15, scholarAdaptiveMaxLength: 30, scholarAdaptiveFormats: ["mcq", "mrq", "short", "match", "sequence", "structured"],
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
       scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarLearningLibrary: "on",
+      // SALE-2026-11 R3: next best actions and the active Notebook are new learner features, so off; three suggestions at once.
+      scholarNextBestAction: "off", scholarNextBestActionMax: 3, scholarActiveNotebook: "off",
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
       scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
@@ -122,6 +124,11 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SALE-2026-11 R1: the learning state and the adaptive next step on, with transparent thresholds.
       scholarLearningState: "on", scholarLearningStateMinEvidence: 2, scholarLearningStateDistinctQuestions: 2, scholarLearningStateDelayDays: 3, scholarLearningStateStaleDays: 30,
       scholarAdaptiveTeaching: "on", scholarAdaptiveReteachMax: 2, scholarAdaptivePrerequisiteMisses: 3,
+      // SALE-2026-11 R2: retrieval scheduling, prerequisite suggestions and transfer checks OFF until HQ switches them on.
+      scholarRetrievalSchedule: "off", scholarRetrievalMisconceptionPercent: 50, scholarRetrievalExamBufferDays: 2, scholarRetrievalMinutesPerTopic: 5, scholarRetrievalSharePercent: 30,
+      scholarPrerequisiteSuggestions: "off", scholarTransferChecks: "off", scholarTransferQuestions: 2,
+      // SALE-2026-11 R4: application evidence (SALE-13) and the three competency views (SALE-14) OFF until HQ switches them on.
+      scholarApplicationEvidence: "off", scholarCompetencyEvidenceViews: "off",
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -237,6 +244,15 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
   });
 
 it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only from a published on", () => {    const path = policyPath("scholar_learn_prepare_next");    expect(DEFAULT_POLICY.scholarLearnPrepareNext).toBe(false);    expect(resolvePolicy([{ config_path: path, published: { value: "on" } }]).scholarLearnPrepareNext).toBe(true);    expect(resolvePolicy([{ config_path: path, published: { value: true } }]).scholarLearnPrepareNext).toBe(false);    expect(validateDraft("scholar_learn_prepare_next", "on")).toMatchObject({ ok: true, settings: { value: "on" } });    expect(validateDraft("scholar_learn_prepare_next", "ahead").ok).toBe(false);  });
+  it("SALE-2026-11 R3: next best actions and the active Notebook default off, resolve on only from a published on, and the count clamps", () => {
+    const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+    expect(p("scholar_next_best_action", "on").scholarNextBestAction).toBe("on");
+    expect(p("scholar_next_best_action", true).scholarNextBestAction).toBe("off");
+    expect(p("scholar_active_notebook", "on").scholarActiveNotebook).toBe("on");
+    expect(p("scholar_active_notebook", "yes").scholarActiveNotebook).toBe("off");
+    expect(p("scholar_next_best_action_max", 9).scholarNextBestActionMax).toBe(5);
+    expect(p("scholar_next_best_action_max", 0).scholarNextBestActionMax).toBe(1);
+  });
   it("SCHOLAR-SESSION-AI-02: study sessions default off, resolve on only from a published on, and need 740 too", () => {
     const path = policyPath("scholar_study_sessions");
     expect(DEFAULT_POLICY.scholarStudySessions).toBe(false);
@@ -515,4 +531,29 @@ it("SALE-2026-11 R1: the learning-state and adaptive-teaching keys default on wi
   expect(p("scholar_learning_state_distinct_questions", 1).scholarLearningStateDistinctQuestions).toBe(2);
   expect(p("scholar_learning_state_delay_days", 7).scholarLearningStateDelayDays).toBe(7);
   expect(p("scholar_adaptive_prerequisite_misses", 1).scholarAdaptivePrerequisiteMisses).toBe(2);
+});
+
+it("SALE-2026-11 R2: retrieval, prerequisite and transfer keys default OFF, with evidence-based numeric defaults that clamp", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({
+    scholarRetrievalSchedule: "off", scholarRetrievalMisconceptionPercent: 50, scholarRetrievalExamBufferDays: 2, scholarRetrievalMinutesPerTopic: 5, scholarRetrievalSharePercent: 30,
+    scholarPrerequisiteSuggestions: "off", scholarTransferChecks: "off", scholarTransferQuestions: 2,
+  });
+  expect(p("scholar_retrieval_schedule", "on").scholarRetrievalSchedule).toBe("on");
+  expect(p("scholar_retrieval_schedule", "maybe").scholarRetrievalSchedule).toBe("off");
+  expect(p("scholar_prerequisite_suggestions", "on").scholarPrerequisiteSuggestions).toBe("on");
+  expect(p("scholar_transfer_checks", "on").scholarTransferChecks).toBe("on");
+  expect(p("scholar_retrieval_misconception_percent", 5).scholarRetrievalMisconceptionPercent).toBe(10);
+  expect(p("scholar_retrieval_share_percent", 250).scholarRetrievalSharePercent).toBe(100);
+  expect(p("scholar_transfer_questions", 9).scholarTransferQuestions).toBe(5);
+  expect(p("scholar_retrieval_exam_buffer_days", 0).scholarRetrievalExamBufferDays).toBe(0);
+});
+
+it("SALE-2026-11 R4: the application-evidence and competency-views keys default off and accept only on or off", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({ scholarApplicationEvidence: "off", scholarCompetencyEvidenceViews: "off" });
+  expect(p("scholar_application_evidence", "on").scholarApplicationEvidence).toBe("on");
+  expect(p("scholar_application_evidence", "maybe").scholarApplicationEvidence).toBe("off");
+  expect(p("scholar_competency_evidence_views", "on").scholarCompetencyEvidenceViews).toBe("on");
+  expect(p("scholar_competency_evidence_views", true).scholarCompetencyEvidenceViews).toBe("off");
 });

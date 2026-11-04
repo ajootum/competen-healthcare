@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { noteDatesLabel } from "@/lib/individual/scholar/library-organise";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
+import { LearningIcon } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-LIBRARY-01 (owner, 1 Nov 2026): the learner's OWN notes, bookmark and highlights on one saved teaching or one
 // lesson. Learner-authored, private, never AI: every write goes to api/individual/scholar/library/notes (820), which keys
@@ -17,7 +18,7 @@ const chip = `inline-flex min-h-[36px] items-center justify-center rounded-full 
 const URL_NOTES = "/api/individual/scholar/library/notes";
 const QUOTE_MAX = 500, BODY_MAX = 4000;
 
-export type ClientNote = { id: string; kind: "note" | "bookmark" | "highlight"; body: string | null; quote: string | null; createdAt: string; updatedAt?: string | null; step?: number | null; artefactId?: string | null };
+export type ClientNote = { id: string; kind: "note" | "bookmark" | "highlight" | "summary"; body: string | null; quote: string | null; createdAt: string; updatedAt?: string | null; step?: number | null; artefactId?: string | null };
 export type NotesTarget =
   | { targetKind: "artefact"; artefactId: string; sessionId?: string | null; step?: number | null }
   | { targetKind: "lesson"; sessionId: string; step: number; materialId?: string | null; chunkId?: string | null };
@@ -33,8 +34,10 @@ async function send(method: string, body?: unknown, query = ""): Promise<{ ok: b
  * Notes for one target. `initial`: notes the server page already read (the library). Without it (Learn), they are read
  * when the learner opens the panel. `label`: the panel's summary line.
  */
-export function LibraryNotes({ target, initial, containerId, label = "Your notes", allowHighlight = true, allowBookmark = true }: {
+export function LibraryNotes({ target, initial, containerId, label = "Your notes", allowHighlight = true, allowBookmark = true, tone }: {
   target: NotesTarget; initial?: ClientNote[]; containerId?: string; label?: string; allowHighlight?: boolean; allowBookmark?: boolean;
+  /** LESSON REDESIGN: the Learn page shows these in the "Your notes" identity (cream); elsewhere they look as before. */
+  tone?: "notes";
 }) {
   const [notes, setNotes] = useState<ClientNote[] | null>(initial ?? null);
   const [open, setOpen] = useState(false);
@@ -81,11 +84,11 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
   const bookmark = list.find(n => n.kind === "bookmark");
   const written = list.filter(n => n.kind !== "bookmark");
   return (
-    <details className="mt-3 rounded-xl border border-gray-200" open={open} onToggle={e => toggled((e.currentTarget as HTMLDetailsElement).open)}>
+    <details className={tone ? "group mt-3 cmp-learn-notes cmp-learn-box" : "mt-3 rounded-xl border border-gray-200"} open={open} onToggle={e => toggled((e.currentTarget as HTMLDetailsElement).open)}>
       <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        {label}{notes !== null && <span className="text-[12px] font-normal text-gray-600">· {written.length}{bookmark ? " · bookmarked" : ""}</span>}
+        {tone && <LearningIcon name="notes" className="cmp-learn-accent h-5 w-5" />}<span className={tone ? "cmp-learn-ink font-bold" : ""}>{label}</span>{notes !== null && <span className="text-[12px] font-normal text-gray-600">· {written.length}{bookmark ? " · bookmarked" : ""}</span>}
       </summary>
-      <div className="border-t border-gray-200 px-3 pb-3 pt-2">
+      <div className={tone ? "rounded-b-2xl border-t border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-3 pb-3 pt-2" : "border-t border-gray-200 px-3 pb-3 pt-2"}>
         <p className="text-[12px] text-gray-600">Written by you, private to you. Never shared, never AI.</p>
         {notes === null ? <p role="status" className="mt-2 text-[13px] text-gray-600">Reading your notes…</p> : (
           <>
@@ -127,7 +130,7 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
   const [saving, setSaving] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
-  const needsText = note.kind === "note";
+  const needsText = note.kind === "note" || note.kind === "summary";
   const save = async () => {
     const body = text.trim();
     if (needsText && !body) { setMsg("A note needs some words. Remove it instead if you no longer want it."); return; }
@@ -143,7 +146,7 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
       {note.quote && <p className="break-words border-l-4 border-amber-300 pl-2 italic"><span className="sr-only">You highlighted: </span>{note.quote}</p>}
       {editing ? (
         <div className="mt-1">
-          <label className="block text-[12.5px] font-semibold text-gray-800" htmlFor={`edit-${note.id}`}>{note.kind === "highlight" ? "Your comment on the highlight" : "Edit your note"}</label>
+          <label className="block text-[12.5px] font-semibold text-gray-800" htmlFor={`edit-${note.id}`}>{note.kind === "highlight" ? "Your comment on the highlight" : note.kind === "summary" ? "Edit your summary" : "Edit your note"}</label>
           <textarea id={`edit-${note.id}`} value={text} maxLength={BODY_MAX} rows={3} onChange={e => setText(e.target.value)}
             className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} />
           <DictateButton fieldId={`edit-${note.id}`} onValue={setText} disabled={saving} className="mt-2" />
@@ -155,7 +158,7 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
       ) : note.body && <p className="mt-1 whitespace-pre-wrap break-words">{note.body}</p>}
       {attached && <p className="mt-1 break-words text-[12px] text-gray-600">{attached}</p>}
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-gray-600">
-        <span>{note.kind === "highlight" ? "Highlight" : "Note"} · {noteDatesLabel(note.createdAt, note.updatedAt)}</span>
+        <span>{note.kind === "highlight" ? "Highlight" : note.kind === "summary" ? "Your summary" : "Note"} · {noteDatesLabel(note.createdAt, note.updatedAt)}</span>
         {!editing && <button type="button" className={`${linkBtn} ${focusRing}`} disabled={busy || saving} onClick={() => { setText(note.body ?? ""); setEditing(true); }}>{note.kind === "highlight" && !note.body ? "Add a comment" : "Edit"}<span className="sr-only"> this {note.kind}</span></button>}
         {confirming ? (
           <span role="group" aria-label="Remove this note?" className="inline-flex items-center gap-2">
@@ -195,7 +198,8 @@ type SectionOption = { id: string; label: string };
  * Write a note on a material, and optionally one section of it, from the library page itself. POST the existing notes route (820 material
  * and section targets, no schema change); the sections of the chosen material are read when it is chosen. Learner text, private, never AI.
  */
-export function NewNoteForm({ materials, initialMaterial }: { materials: { id: string; title: string }[]; initialMaterial?: string | null }) {
+/** SALE-2026-11 R3: kind "summary" writes a personal summary (migration 975) with the same form. */
+export function NewNoteForm({ materials, initialMaterial, kind = "note" }: { materials: { id: string; title: string }[]; initialMaterial?: string | null; kind?: "note" | "summary" }) {
   const router = useRouter();
   const [materialId, setMaterialId] = useState(initialMaterial && materials.some(m => m.id === initialMaterial) ? initialMaterial : "");
   const [sections, setSections] = useState<SectionOption[] | null>(null);
@@ -217,15 +221,15 @@ export function NewNoteForm({ materials, initialMaterial }: { materials: { id: s
   const save = async () => {
     setBusy(true); setMsg(null);
     const target = chunkId ? { targetKind: "section", materialId, chunkId } : { targetKind: "material", materialId };
-    const r = await send("POST", { ...target, kind: "note", body: body.trim(), quote: null });
+    const r = await send("POST", { ...target, kind, body: body.trim(), quote: null });
     setBusy(false);
     if (!r.ok) { setMsg(typeof r.json.error === "string" ? r.json.error : "That could not be saved just now."); return; }
-    setBody(""); setMsg("Note saved."); router.refresh();
+    setBody(""); setMsg(kind === "summary" ? "Summary saved." : "Note saved."); router.refresh();
   };
   const field = `mt-1 block w-full min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
   return (
     <details className="mt-3 rounded-2xl border border-gray-200 bg-white">
-      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center px-4 text-[14px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>Write a new note</summary>
+      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center px-4 text-[14px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>{kind === "summary" ? "Write a personal summary" : "Write a new note"}</summary>
       <div className="border-t border-gray-200 px-4 pb-4 pt-2">
         <p className="text-[12px] text-gray-600">On one of your materials, and optionally one section of it. Written by you, private to you. Never shared, never AI.</p>
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
@@ -241,12 +245,12 @@ export function NewNoteForm({ materials, initialMaterial }: { materials: { id: s
             </select>
           </label>
         </div>
-        <label className="mt-2 block text-[12.5px] font-semibold text-gray-800" htmlFor="new-library-note">Your note</label>
-        <textarea id="new-library-note" value={body} maxLength={BODY_MAX} rows={3} onChange={e => setBody(e.target.value)}
-          className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} placeholder="Your own words: what to remember, a question to ask" />
-        <DictateButton fieldId="new-library-note" onValue={setBody} disabled={busy} className="mt-2" />
+        <label className="mt-2 block text-[12.5px] font-semibold text-gray-800" htmlFor={`new-library-${kind}`}>{kind === "summary" ? "Your summary, in your own words" : "Your note"}</label>
+        <textarea id={`new-library-${kind}`} value={body} maxLength={BODY_MAX} rows={3} onChange={e => setBody(e.target.value)}
+          className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} placeholder={kind === "summary" ? "The main points as you understand them" : "Your own words: what to remember, a question to ask"} />
+        <DictateButton fieldId={`new-library-${kind}`} onValue={setBody} disabled={busy} className="mt-2" />
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <button type="button" className={chip} disabled={busy || !materialId || !body.trim()} onClick={() => void save()}>Save note</button>
+          <button type="button" className={chip} disabled={busy || !materialId || !body.trim()} onClick={() => void save()}>{kind === "summary" ? "Save summary" : "Save note"}</button>
           {msg && <span role="status" className="text-[13px] text-gray-800">{msg}</span>}
         </div>
       </div>

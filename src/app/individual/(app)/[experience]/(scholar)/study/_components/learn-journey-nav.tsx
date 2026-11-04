@@ -2,6 +2,7 @@
 
 import { useId, useState } from "react";
 import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
+import { ProgressListItem, ProgressMark, learnTone } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-COMPANION-01 P0b: THE JOURNEY NAVIGATOR. The session's lessons as an outline, each with its learning mark in
 // WORDS and an icon (never colour alone), the current one marked aria-current. Choosing one makes it the ACTIVE lesson
@@ -15,36 +16,19 @@ import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 export type NavLesson = { index: number; title: string; status: LessonStatus; revealed: boolean };
 
+/** The learning mark (shape per state, legible without colour): the shared design-system ProgressMark. */
 export function Mark({ icon }: { icon: LessonStatus["icon"] }) {
-  // Shapes differ, so the mark is legible without colour: a filled dot (current), a filled disc with a tick (completed),
-  // a ring with a tick (checked), a ring with a centre dot (taught), a half disc (read), a dashed ring (not started).
-  return (
-    <svg aria-hidden="true" viewBox="0 0 16 16" className="mt-0.5 h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.6">
-      {icon === "current" && <circle cx="8" cy="8" r="5" fill="currentColor" />}
-      {icon === "completed" && <><circle cx="8" cy="8" r="6.6" fill="currentColor" /><path d="M5 8.2l2 2 4-4.2" stroke="white" /></>}
-      {icon === "checked" && <><circle cx="8" cy="8" r="6.2" /><path d="M5 8.2l2 2 4-4.2" /></>}
-      {icon === "taught" && <><circle cx="8" cy="8" r="6.2" /><circle cx="8" cy="8" r="2.6" fill="currentColor" /></>}
-      {icon === "read" && <><circle cx="8" cy="8" r="6.2" /><path d="M8 1.8a6.2 6.2 0 010 12.4z" fill="currentColor" /></>}
-      {icon === "none" && <circle cx="8" cy="8" r="6.2" strokeDasharray="2.2 2" />}
-    </svg>
-  );
+  return <ProgressMark state={icon} />;
 }
 
 export function JourneyOutline({ lessons, onJump, label = "Lessons" }: { lessons: NavLesson[]; onJump: (index: number) => void; label?: string }) {
   return (
     <nav aria-label={label}>
-      <ol className="space-y-1">
+      {/* SCHOLAR LEARNING DESIGN SYSTEM: each lesson is the shared ProgressListItem -- the current lesson a filled row (and
+          aria-current); completed, in progress and not started differ by the mark's SHAPE and the status in words. */}
+      <ol className={`${learnTone("next")} space-y-1`}>
         {lessons.map(l => (
-          <li key={l.index}>
-            <button type="button" onClick={() => onJump(l.index)} aria-current={l.status.current ? "step" : undefined}
-              className={`flex w-full items-start gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${l.status.current ? "bg-gray-900 text-white" : "text-gray-800 hover:bg-gray-50"} ${focusRing}`}>
-              <Mark icon={l.status.icon} />
-              <span className="min-w-0">
-                <span className="block break-words"><span className="font-semibold">{l.index + 1}.</span> {l.title}</span>
-                <span className={`block text-[12px] ${l.status.current ? "text-gray-300" : "text-gray-600"}`}>{l.status.label}</span>
-              </span>
-            </button>
-          </li>
+          <ProgressListItem key={l.index} number={l.index + 1} title={l.title} stateLabel={l.status.label} state={l.status.icon} current={!!l.status.current} onClick={() => onJump(l.index)} />
         ))}
       </ol>
     </nav>

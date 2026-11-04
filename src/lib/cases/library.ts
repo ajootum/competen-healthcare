@@ -457,3 +457,18 @@ export async function answerInSession(admin: any, userId: string, sessionId: str
   const t = sessionSim(x.b, s, sim);
   return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt, args.text ?? null, t?.escalations.find(e => e.decisionPointId === dpId) ?? null), session: viewOf({ ...x, s }, false, sim) };
 }
+
+
+/**
+ * SALE-2026-11 R4 (SALE-13): the competencies each of these library versions is linked to (case_library_version_competency), ids
+ * only, so Scholar can link a kept library attempt to its competencies. Nothing of the blueprint leaves this module. Unreadable: empty.
+ */
+export async function libraryVersionCompetencies(admin: any, versionIds: readonly string[]): Promise<Map<string, string[]>> {
+  const ids = [...new Set(versionIds)].filter(v => /^[0-9a-f-]{36}$/i.test(v)).slice(0, 50);
+  const out = new Map<string, string[]>();
+  if (!ids.length) return out;
+  const { data, error } = await admin.from("case_library_version_competency").select("version_id, competency_id").in("version_id", ids);
+  if (error) return out;
+  for (const l of (data ?? []) as any[]) out.set(l.version_id, [...(out.get(l.version_id) ?? []), l.competency_id]);
+  return out;
+}

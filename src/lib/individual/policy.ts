@@ -80,9 +80,11 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
   | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
-  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max"
+  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max" | "scholar_next_best_action_max"
   | "scholar_learning_state_min_evidence" | "scholar_learning_state_distinct_questions" | "scholar_learning_state_delay_days" | "scholar_learning_state_stale_days"
-  | "scholar_adaptive_reteach_max" | "scholar_adaptive_prerequisite_misses";
+  | "scholar_adaptive_reteach_max" | "scholar_adaptive_prerequisite_misses"
+  | "scholar_retrieval_misconception_percent" | "scholar_retrieval_exam_buffer_days" | "scholar_retrieval_minutes_per_topic" | "scholar_retrieval_share_percent"
+  | "scholar_transfer_questions";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -127,14 +129,16 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
+  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal"
-  | "scholar_learning_state" | "scholar_adaptive_teaching";
+  | "scholar_learning_state" | "scholar_adaptive_teaching"
+  | "scholar_retrieval_schedule" | "scholar_prerequisite_suggestions" | "scholar_transfer_checks"
+  | "scholar_application_evidence" | "scholar_competency_evidence_views";
 /** PRIVATE MODULE DEVELOPMENT ACCESS (owner GO 2 Nov 2026): who may see a Scholar module that is still being developed. */
 export type ModuleAccessPolicyKey = "scholar_module_courses_access" | "scholar_module_competencies_access";
 /** CHECKLIST STUDIO S3: which assessment instruments (by permanent code) Scholar offers a learner. Empty by default: nothing is offered. */
@@ -1265,6 +1269,30 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Search, notes, kept versions and lesson links need migration 820. Without it, the library still lists and filters saved teaching, and search is a basic match over the newest 500. Default: offered.",
   },
+  // SALE-2026-11 R3 (SALE-11, SALE-12): the learning workspace. New learner features, so OFF until HQ turns them on. No AI, no cost.
+  {
+    key: "scholar_next_best_action", kind: "choice", product: "Scholar",
+    label: "My Plan: next best learning actions",
+    help: "Whether Today in My Plan suggests a few next learning ACTIONS (review a misconception, a short retrieval exercise, apply it in a case, continue an unfinished lesson, revisit a prerequisite), each with a short reason from the learner's own records, goals, exam and placement dates, available time and priorities. Every suggestion can be added to today, snoozed or dismissed, and the choice is recorded. Nothing changes the plan unless the learner adds it.",
+    options: [{ value: "on", label: "Suggest them" }, { value: "off", label: "Do not suggest" }],
+    fallback: "off",
+    limitReason: "Deterministic rules over existing records: no AI. Accept, snooze and dismiss need migration 975 (without it the suggestions are shown read only). Default: off.",
+  },
+  {
+    key: "scholar_next_best_action_max", kind: "int", product: "Scholar", unit: "suggestions",
+    label: "My Plan: next best learning actions shown at once",
+    help: "How many next learning actions Today shows at once, best first.",
+    fallback: 3, min: 1, max: 5,
+    limitReason: "One to five. Default: three.",
+  },
+  {
+    key: "scholar_active_notebook", kind: "choice", product: "Scholar",
+    label: "Library: the active Notebook",
+    help: "Whether the learning library offers the Notebook: the learner's own annotations and personal summaries, past misconceptions to revisit, related materials for each note, practice made from selected notes (through the existing Revise question generation and its routing), and a way back to the Notebook from the lesson or question they open. Learner-owned and private; citations are kept.",
+    options: [{ value: "on", label: "Offer the Notebook" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "Personal summaries need migration 975 (without it the Notebook works without them). Practice uses the existing Revise generation, allowance and model routing unchanged. Default: off.",
+  },
   // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): short checks INSIDE the scrolling lesson. No new stage, engine or AI call: the
   // recall card reads the saved lesson, the quick check reads a stored question (writing one stays the learner's click), the
   // application check is the existing Apply link. Self-rated recall, code-marked checks and verified competence stay distinct.
@@ -2132,6 +2160,86 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Two to ten. Default: three.",
   },
   {
+    // SALE-2026-11 R2 / SALE-08: retrieval scheduled for concepts assessed in lessons, checks, questions and cases (not only flashcards).
+    key: "scholar_retrieval_schedule", kind: "choice", product: "Scholar",
+    label: "Retention: schedule retrieval of what was assessed",
+    help: "Scholar works out, from the learner's own answers, when each topic they were assessed on is due to be recalled again: the shared spaced-repetition rule (SM-2 expanding intervals) over time since practice and recall success, sooner after a repeated misconception, before an exam date, within the study time they set. Shown as Due for retrieval on Revise and in Study next. A suggestion only: nothing is added to the learner's plan.",
+    options: [{ value: "on", label: "Schedule it" }, { value: "off", label: "Do not schedule" }],
+    fallback: "off",
+    limitReason: "Derived each time from existing records, no AI and nothing stored. Default: off until HQ switches it on.",
+  },
+  {
+    key: "scholar_retrieval_misconception_percent", kind: "int", product: "Scholar", unit: "%",
+    label: "Retention: interval after a repeated misconception",
+    help: "When the same misconception came up on different questions of a topic and the latest answer was not right, the next retrieval comes after this share of the usual interval.",
+    fallback: 50, min: 10, max: 100,
+    limitReason: "Ten to 100 per cent. Default: 50 (twice as soon). An uncalibrated starting value: recalibrate with pilot data.",
+  },
+  {
+    key: "scholar_retrieval_exam_buffer_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Retention: days before the exam by which a topic is recalled",
+    help: "With an exam date in the learner's plan, a topic whose next retrieval would fall after the exam is brought forward to this many days before it.",
+    fallback: 2, min: 0, max: 14,
+    limitReason: "Zero to fourteen days. Default: two.",
+  },
+  {
+    key: "scholar_retrieval_minutes_per_topic", kind: "int", product: "Scholar", unit: "minutes",
+    label: "Retention: minutes one topic's retrieval takes",
+    help: "A short retrieval exercise on one topic (a few questions or cards). Used to say how long it takes and how many fit a study session.",
+    fallback: 5, min: 2, max: 30,
+    limitReason: "Two to thirty minutes. Default: five.",
+  },
+  {
+    key: "scholar_retrieval_share_percent", kind: "int", product: "Scholar", unit: "%",
+    label: "Retention: share of a study session for retrieval",
+    help: "How much of one study session (the learner's own session length, or 30 minutes with none set) due retrieval may fill. What does not fit is shown for a later study day, spaced by the days a week the learner set.",
+    fallback: 30, min: 10, max: 100,
+    limitReason: "Ten to 100 per cent. Default: 30.",
+  },
+  {
+    // SALE-2026-11 R2 / SALE-09: prerequisite-aware suggestions from approved framework prerequisite links and accepted section mappings.
+    key: "scholar_prerequisite_suggestions", kind: "choice", product: "Scholar",
+    label: "Retention: suggest a prerequisite review where justified",
+    help: "When a learner has missed several different questions on a topic, and the published framework lists a prerequisite for a competency their notes on it are linked to, Scholar suggests a focused review of their own notes on that prerequisite, with the reason. Not suggested where a repeated misconception explains the difficulty better, or where their answers already show the prerequisite. Without a framework link, the lesson's earlier-lesson rule (R1) applies as before.",
+    options: [{ value: "on", label: "Suggest it" }, { value: "off", label: "Do not suggest" }],
+    fallback: "off",
+    limitReason: "Only Holdings-scope prerequisite links within the learner's offered catalogue, and their accepted section links. Default: off until HQ switches it on.",
+  },
+  {
+    // SALE-2026-11 R2 / SALE-10: a transfer check -- a different question outside the lesson where the concept was taught.
+    key: "scholar_transfer_checks", kind: "choice", product: "Scholar",
+    label: "Retention: offer transfer checks",
+    help: "Once a learner has some evidence of understanding a topic, Scholar offers a short check on a question from outside the lesson where they learned it: an approved library question first, then one of their saved questions from other notes or sections, and only then a new question written through the existing revision route (same gate, allowance and model routing). The answer is recorded as transfer evidence in the topic's Applying it evidence. Formative only.",
+    options: [{ value: "on", label: "Offer them" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "No new question bank and no new model routing. Default: off until HQ switches it on.",
+  },
+  {
+    key: "scholar_transfer_questions", kind: "int", product: "Scholar", unit: "questions",
+    label: "Retention: questions in one transfer check",
+    help: "How many questions one transfer check asks.",
+    fallback: 2, min: 1, max: 5,
+    limitReason: "One to five. Default: two.",
+  },
+  {
+    // SALE-2026-11 R4 (SALE-13): case, OSCE and simulation results as APPLICATION evidence on Progress. No migration. Off until HQ switches it on.
+    key: "scholar_application_evidence", kind: "choice", product: "Scholar",
+    label: "Progress: applying what you learned (cases, OSCE, simulation)",
+    help: "Whether Progress shows completed clinical cases and OSCE practice as application evidence, by skill (clinical reasoning, prioritisation, interpreting findings, reassessing an evolving patient, structured handover, recognising deterioration, practical simulation), each linked to the competency and learning objective it was made for, with the framework version and whether that mapping was published. Cases made from the learner's notes also count towards Applying it in the learning state. When on, a completed case also keeps the competency provenance it was played against. Words only, never a score, never verified competence or a competency stage.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Derived from records that already exist. Off until HQ switches it on.",
+  },
+  {
+    // SALE-2026-11 R4 (SALE-14): the three separate views on My Competencies. No migration. Off until HQ switches it on.
+    key: "scholar_competency_evidence_views", kind: "choice", product: "Scholar",
+    label: "My Competencies: self-assessment, learning evidence and verified competence as three views",
+    help: "Whether My Competencies shows three separate views: what the learner believes they can do (their self-assessment), what their learning records show (each record with the competency, framework version and mapping status; a draft mapping is labelled and never counted as validated evidence) and what an authorised verification has established. Formative results never feed the verified view and never set a competency stage.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Read only, from records that already exist. Off until HQ switches it on.",
+  },
+  {
     key: "scholar_plan_rule_order", kind: "sequence", product: "Scholar",
     label: "My Plan: what comes first",
     help: "The order the planning rules are applied in when choosing the next activity. Revision that is due, topics showing gaps, unfinished lessons, the exam date, a deadline the student put in their calendar, consolidating what was recently studied, and covering all accepted notes. Rules left out are not used.",
@@ -2423,6 +2531,10 @@ export type IndividualPolicy = {
   scholarMistakeNotebook: "on" | "off";
   /** SCHOLAR-LIBRARY-01. */
   scholarLearningLibrary: "on" | "off";
+  /** SALE-2026-11 R3: next best learning actions in My Plan (SALE-11) and the active Notebook (SALE-12). Default off. */
+  scholarNextBestAction: "on" | "off";
+  scholarNextBestActionMax: number;
+  scholarActiveNotebook: "on" | "off";
   /** SCHOLAR-INLINE-CHECKS-01: checks inside the scrolling lesson. */
   scholarLearnInlineRecall: "on" | "off";
   scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
@@ -2561,6 +2673,18 @@ export type IndividualPolicy = {
   scholarAdaptiveTeaching: "on" | "off";
   scholarAdaptiveReteachMax: number;
   scholarAdaptivePrerequisiteMisses: number;
+  /** SALE-2026-11 R2: retrieval scheduling (SALE-08), prerequisite suggestions (SALE-09) and transfer checks (SALE-10). Learner features off by default. */
+  scholarRetrievalSchedule: "on" | "off";
+  scholarRetrievalMisconceptionPercent: number;
+  scholarRetrievalExamBufferDays: number;
+  scholarRetrievalMinutesPerTopic: number;
+  scholarRetrievalSharePercent: number;
+  scholarPrerequisiteSuggestions: "on" | "off";
+  scholarTransferChecks: "on" | "off";
+  scholarTransferQuestions: number;
+  /** SALE-2026-11 R4: application evidence on Progress (SALE-13) and the three competency views on My Competencies (SALE-14). Both off by default. */
+  scholarApplicationEvidence: "on" | "off";
+  scholarCompetencyEvidenceViews: "on" | "off";
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
   scholarPlanRuleOrder: string[];
   scholarPlanWeeklyReflection: "on" | "off";
@@ -2662,6 +2786,9 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
     scholarMistakeNotebook: clampChoice(policyDef("scholar_mistake_notebook") as ChoicePolicy, published.get(policyPath("scholar_mistake_notebook"))) as "on" | "off",
     scholarLearningLibrary: clampChoice(policyDef("scholar_learning_library") as ChoicePolicy, published.get(policyPath("scholar_learning_library"))) as "on" | "off",
+    scholarNextBestAction: clampChoice(policyDef("scholar_next_best_action") as ChoicePolicy, published.get(policyPath("scholar_next_best_action"))) as "on" | "off",
+    scholarNextBestActionMax: int("scholar_next_best_action_max"),
+    scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
     scholarLearnInlineRecall: clampChoice(policyDef("scholar_learn_inline_recall") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall"))) as "on" | "off",
     scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
     scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),
@@ -2769,6 +2896,16 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarAdaptiveTeaching: clampChoice(policyDef("scholar_adaptive_teaching") as ChoicePolicy, published.get(policyPath("scholar_adaptive_teaching"))) as "on" | "off",
     scholarAdaptiveReteachMax: int("scholar_adaptive_reteach_max"),
     scholarAdaptivePrerequisiteMisses: int("scholar_adaptive_prerequisite_misses"),
+    scholarRetrievalSchedule: clampChoice(policyDef("scholar_retrieval_schedule") as ChoicePolicy, published.get(policyPath("scholar_retrieval_schedule"))) as "on" | "off",
+    scholarRetrievalMisconceptionPercent: int("scholar_retrieval_misconception_percent"),
+    scholarRetrievalExamBufferDays: int("scholar_retrieval_exam_buffer_days"),
+    scholarRetrievalMinutesPerTopic: int("scholar_retrieval_minutes_per_topic"),
+    scholarRetrievalSharePercent: int("scholar_retrieval_share_percent"),
+    scholarPrerequisiteSuggestions: clampChoice(policyDef("scholar_prerequisite_suggestions") as ChoicePolicy, published.get(policyPath("scholar_prerequisite_suggestions"))) as "on" | "off",
+    scholarTransferChecks: clampChoice(policyDef("scholar_transfer_checks") as ChoicePolicy, published.get(policyPath("scholar_transfer_checks"))) as "on" | "off",
+    scholarTransferQuestions: int("scholar_transfer_questions"),
+    scholarApplicationEvidence: clampChoice(policyDef("scholar_application_evidence") as ChoicePolicy, published.get(policyPath("scholar_application_evidence"))) as "on" | "off",
+    scholarCompetencyEvidenceViews: clampChoice(policyDef("scholar_competency_evidence_views") as ChoicePolicy, published.get(policyPath("scholar_competency_evidence_views"))) as "on" | "off",
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
     scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),

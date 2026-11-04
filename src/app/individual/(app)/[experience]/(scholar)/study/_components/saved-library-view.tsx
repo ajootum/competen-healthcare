@@ -31,6 +31,9 @@ import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 import { savedLessonChunkIds } from "@/lib/individual/scholar/ask-grounding";
 import { AskAbout } from "./ask-panel";
+// SALE-2026-11 R3 / SALE-12: the active Notebook view (policy scholar_active_notebook, default off).
+import { NotebookView } from "./notebook-view";
+import { workspaceSchema } from "@/lib/individual/scholar/store";
 
 // SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026): THE PERSONAL LIBRARY on Saved learning. A server component: database
 // reads only, keyed on the caller (store.ts), shaped by saved-library.ts. NO AI anywhere: opening a lesson from here is the
@@ -80,7 +83,10 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
   admin: Admin; userId: string; params: Params; policy: IndividualPolicy; materials: { id: string; title: string; mime?: string | null }[];
   competencies: { id: string; title: string }[] | null; notesOn: boolean;
 }) {
-  const parsed = parseLibraryQuery(params);
+  const notebookOn = policy.scholarActiveNotebook === "on";
+  const asked0 = parseLibraryQuery(params);
+  // The Notebook view only where HQ offers it; anywhere else the address falls back to the default view.
+  const parsed = asked0.view === "notebook" && !notebookOn ? { ...asked0, view: "recent" as const } : asked0;
   const v820 = await librarySchema(admin, userId);
   const notes = notesOn && v820;
   const titles = new Map(materials.map(m => [m.id, m.title]));
@@ -117,19 +123,24 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
           <>
             {!q.q && (
               <nav aria-label="Library views" className="mt-4 flex flex-wrap gap-2">
-                {LIBRARY_VIEWS.map(v => (
+                {LIBRARY_VIEWS.filter(v => v !== "notebook" || (notebookOn && notes)).map(v => (
                   <Link key={v} href={urlWith(q, { view: v === "recent" ? null : v })} aria-current={q.view === v ? "page" : undefined}
                     className={`inline-flex min-h-[40px] items-center rounded-full border px-3.5 text-[13px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${q.view === v ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`}
                     style={q.view === v ? { background: SCHOLAR.accent, borderColor: SCHOLAR.accent } : undefined}>{VIEW_LABEL[v]}</Link>
                 ))}
               </nav>
             )}
-            <FilterPanel q={q} materials={materials} topics={topicList} sessions={sessionOptions} competencies={competencies} statuses={v820 ? LIBRARY_STATUSES : ["any"]} count={chips.length} />
-            <FilterChips q={q} chips={chips} />
+            {(q.view !== "notebook" || !!q.q) && (
+              <>
+                <FilterPanel q={q} materials={materials} topics={topicList} sessions={sessionOptions} competencies={competencies} statuses={v820 ? LIBRARY_STATUSES : ["any"]} count={chips.length} />
+                <FilterChips q={q} chips={chips} />
+              </>
+            )}
             {q.q ? await SearchView({ admin, userId, q, v820, titles, names, topicRows })
               : q.view === "recent" ? await RecentView({ admin, userId, q, titles, policy, notes, topicRows })
                 : q.view === "revision" ? await RevisionView({ admin, userId, q, titles, notes, v820, topicRows })
                   : q.view === "notes" ? await NotesView({ admin, userId, q, titles, names, notes, v820, topicRows, materials })
+                    : q.view === "notebook" ? (notes ? await NotebookView({ admin, userId, materials, summariesOn: await workspaceSchema(admin) }) : <Empty>The Notebook is not available here yet.</Empty>)
                     : await SessionView({ admin, userId, q, status: q.view === "continue" ? "active" : "completed" })}
           </>
         )}

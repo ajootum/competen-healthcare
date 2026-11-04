@@ -1,0 +1,31 @@
+INFO signed in at 1280px
+INFO competency: the first one the learner self-rated (found)
+INFO station route: 200 station made from the practice template
+PASS an OSCE station was made and a competency to link it to was found
+INFO setup: linked NUR-CCF-001
+INFO start: 200
+INFO marked 10 checklist items
+PASS the OSCE run was finished and marked
+PASS Progress shows 'Applying what you learned' (key on in staging)
+INFO skills: practical=thin
+PASS at least one application skill is shown with an evidence word
+PASS no percentage in the application section
+PASS the finished OSCE run is listed as an application record
+INFO record: Respiratory assessment and escalation OSCE practice · 2026-11-04 Overall: done well · Practical simulation (OSCE): done well NUR-CCF-001 Respiratory Assessment (outside your current programme) · framework version 1.0.0 as it is now (draft mapping, publication pending: not validated competency evidence); not recorded when this was doneDraft mapping
+PASS the record links to a competency with a mapping status (draft)
+PASS the record names the framework version
+PASS the section says it is not verified competence
+PASS Progress fits 1280px
+PASS My Competencies shows the three views (key on in staging)
+PASS three separate views in order: view-self, view-learning, view-verified
+PASS the OSCE run appears under Learning evidence for its competency
+INFO learning evidence rows: 8 OSCE, 2 question
+PASS learning evidence rows show the framework version and mapping status
+INFO verified view: 3.Verified competence: what an authorised verification established Only an authorised verification process sets this. Practice results, self-assessments and learning evidence never do, and none of them sets a competency stage. No competency is verified yet.
+PASS the verified view lists no case, question or OSCE result
+PASS the verified view says only an authorised verification sets it
+PASS no stage is shown in the three views
+PASS My Competencies fits 1280px
+INFO report-only CSP notices excluded: 7
+PASS 0 console errors
+PASS no 5xx
