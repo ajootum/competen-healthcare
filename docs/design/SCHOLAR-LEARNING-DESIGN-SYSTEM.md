@@ -155,6 +155,16 @@ When you adopt:
 2. Run the page's own harness and vitest.
 3. Add the page to this list.
 
+### 6.1 Adopted so far
+
+| Stage | Since | What it uses |
+|---|---|---|
+| **Learn** | v1 (PR #281) | Every component; the first consumer. |
+| **Apply** | DS rollout 1 | The case start and case player in the `practice` tone (`LearningSectionHead`, white inner cards with one ring, one filled primary in the tone's ink); the decision verdict as a shape and words, never a red or green box; `FeedbackParts` for the debrief; `LearningCallout` (`caution`, safety emphasis) for every safety-critical point; "Your cases" in `next`; the case-library offer and the clinically approved cases in `sources`. |
+| **Evaluate** | DS rollout 1 | Dimension cards in `check`; confidence in `record`; the competency framework view in `sources`; "What to do next" in `next`; "What this evaluation cannot say" and "Verified clinical competence: not assessed here" in `summary`. Bands are words with a shape (strong: a tick in `check`; developing and needs work: the revision amber), never red or green. |
+
+Still to adopt: Revise (once SALE R2, PR #283, is merged), Progress (next: SALE R4 is merged), My Plan, Saved learning / Library, and the papers, OSCE and monthly-review panels shared by Apply and Evaluate.
+
 ## 7. Change control
 
 - **Tones:** a new tone or a changed value is a change to `tokens.ts`. Regenerate it with `npx tsx scripts/gen-design-tokens.ts`; `scholar-learning-tokens.test.ts` must stay green.
