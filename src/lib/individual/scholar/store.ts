@@ -36,7 +36,8 @@ import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type
 import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
 import { newestSavedLesson, type LessonRecord } from "./learn-journey";
 import { baseKey, keysetFilter, orderVersions, pageOf, supersededKey, type Cursor, type NoteInput, type NoteKind, type NoteTarget } from "./saved-library";
-import { correctionFromRow, provenance990Keys, provenanceOf, snapshotFromRow, snapshotInsertRow, withMappingStatus, type AttemptIntegrity, type CompetencyProvenance, type MappingStatus, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
+import { readFrameworkProvenance } from "@/lib/competency/framework-provenance";
+import { correctionFromRow, provenance990Keys, provenanceOf, snapshotFromRow, snapshotInsertRow, withMappingStatus, type AttemptIntegrity, type CompetencyProvenance, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -4565,16 +4566,16 @@ export async function insertAttemptSnapshot(admin: Admin, userId: string, s: Att
     const { competency_provenance: _p, ...without } = full;
     void _p;
     let withProvenance = "competency_provenance" in full && provenance990 !== false;
-    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert(withProvenance ? full : without);
+    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...(withProvenance ? full : without), user_id: userId });
     const has991Keys = withProvenance && Array.isArray(full.competency_provenance) && (full.competency_provenance as Record<string, unknown>[]).some(p => "mapping_status" in p || "objective" in p);
     if (error && has991Keys && String((error as any)?.code ?? "") === "23514" && /provenance_check/.test(String((error as any)?.message ?? ""))) {
       provenance991 = false;
-      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...full, competency_provenance: provenance990Keys(full.competency_provenance as CompetencyProvenance[]) }));
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...full, competency_provenance: provenance990Keys(full.competency_provenance as CompetencyProvenance[]), user_id: userId }));
     } else if (!error && has991Keys) provenance991 = true;
     if (error && withProvenance && isMissingColumn(error)) {
       provenance990 = false; withProvenance = false;
       if (opts.needs990) return "absent";
-      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert(without));
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...without, user_id: userId }));
     }
     if (error) { if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; } return "failed"; }
     snapshot791 = true;
@@ -4589,33 +4590,10 @@ export async function insertAttemptSnapshot(admin: Admin, userId: string, s: Att
  */
 export async function competencyProvenance(admin: Admin, competencyIds: readonly string[]): Promise<CompetencyProvenance[]> {
   const ids = [...new Set(competencyIds)].filter(isUuid).slice(0, 20);
-  const hashes = new Map<string, string>(), frameworkOf = new Map<string, string>(), versionOf = new Map<string, { major: unknown; minor: unknown; revision: unknown }>();
-  const statusOf = new Map<string, MappingStatus>();
   if (!ids.length) return [];
-  try {
-    const [h, c] = await Promise.all([
-      admin.rpc("competency_content_hashes", { p_ids: ids }),
-      admin.from("framework_competencies").select("id, domain_id").in("id", ids),
-    ]);
-    for (const r of (h.error ? [] : h.data ?? []) as any[]) if (typeof r?.competency_id === "string" && typeof r?.content_hash === "string") hashes.set(r.competency_id, r.content_hash);
-    const domainOf = new Map<string, string>(((c.error ? [] : c.data ?? []) as any[]).filter(r => isUuid(r?.domain_id)).map(r => [String(r.id), String(r.domain_id)]));
-    const domainIds = [...new Set(domainOf.values())];
-    if (domainIds.length) {
-      const d = await admin.from("framework_domains").select("id, framework_id").in("id", domainIds);
-      const fwOfDomain = new Map<string, string>(((d.error ? [] : d.data ?? []) as any[]).filter(r => isUuid(r?.framework_id)).map(r => [String(r.id), String(r.framework_id)]));
-      for (const [comp, dom] of domainOf) { const fw = fwOfDomain.get(dom); if (fw) frameworkOf.set(comp, fw); }
-      const fwIds = [...new Set(frameworkOf.values())];
-      if (fwIds.length) {
-        const f = await admin.from("frameworks").select("id, version_major, version_minor, version_revision, pub_status").in("id", fwIds);
-        for (const r of (f.error ? [] : f.data ?? []) as any[]) {
-          versionOf.set(String(r.id), { major: r.version_major, minor: r.version_minor, revision: r.version_revision });
-          // Owner decision 3 (991): published, or draft (publication pending: never validated evidence). Unreadable stays null.
-          if (typeof r.pub_status === "string") statusOf.set(String(r.id), r.pub_status === "published" ? "published" : "draft");
-        }
-      }
-    }
-  } catch { /* provenance is never worth a failed answer: what was not read stays null */ }
-  return withMappingStatus(provenanceOf(ids, { hashes, frameworkOf, versionOf }), statusOf);
+  // The framework tables are read in the competency layer (Scholar reads competencies only through the catalogue, harness K2).
+  const read = await readFrameworkProvenance(admin, ids);
+  return withMappingStatus(provenanceOf(ids, read), read.statusOf);
 }
 
 /** What the caller's attempts were assessed against, and their corrections (oldest first). Empty where 791 is absent or unreadable. */
