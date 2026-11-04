@@ -387,7 +387,7 @@ const libraryPlayShared = (src: Src) => {
   const reads = [...src].flatMap(([f, s]) => [...s.matchAll(/\.from\("case_library_session"\)([^;]*)/g)].map(m => ({ f, rest: m[1] })));
   const r = src.get(CLIN_ROUTES) ?? "";
   return writes.length === 0 && reads.every(x => x.f === STORE && /^\.select\("id, status, started_at, completed_at, version_id"\)\.eq\("user_id", userId\)/.test(x.rest))
-    && /from "@\/lib\/cases\/library"/.test(r) && /await answerInSession\(admin, userId, id, args\)/.test(r) && /await revealInSession\(admin, userId, id, factToken\)/.test(r)
+    && /from "@\/lib\/cases\/library"/.test(r) && /await answerInSession\(admin, userId, id, args(?:, sim)?\)/.test(r) && /await revealInSession\(admin, userId, id, factToken(?:, sim)?\)/.test(r)
     && /startCaseSession\(ctx\.admin, ctx\.userId, body\.versionId/.test(src.get(`${API}/clinical/sessions/route.ts`) ?? "");
 };
 /**
@@ -1468,7 +1468,7 @@ function main() {
     // SCHOLAR-FLASHCARDS-01: and when studying a deck of stored cards calls AI.
     && !reuseFirst(plant(`${API}/revision/sessions/route.ts`, "    if (deck?.id) await touchFlashcardDeck(ctx.admin, ctx.userId, deck.id);", "    if (deck?.id) await touchFlashcardDeck(ctx.admin, ctx.userId, deck.id);\n    await aiPreflight(ctx);")));
   ok("P51. ⚠ K33 goes red when Scholar writes a library session itself",
-    !libraryPlayShared(plant(CLIN_ROUTES, "  const r = await answerInSession(admin, userId, id, args);", "  await admin.from(\"case_library_session\").update({ status: \"completed\" }).eq(\"id\", id);\n  const r = await answerInSession(admin, userId, id, args);")));
+    !libraryPlayShared(plant(CLIN_ROUTES, "  const r = await answerInSession(admin, userId, id, args, sim);", "  await admin.from(\"case_library_session\").update({ status: \"completed\" }).eq(\"id\", id);\n  const r = await answerInSession(admin, userId, id, args, sim);")));
   ok("P52. ⚠ K34 goes red when a route sends the blueprint, or the client imports the engine's values",
     !caseBrowserBoundary(plant(`${API}/clinical/cases/route.ts`, "return NextResponse.json({ caseId: made.id, play });", "return NextResponse.json({ caseId: made.id, play, blueprint: r.blueprint });"))
     && !caseBrowserBoundary(plant(CASE_CLIENT, "import type { LearnerView } from \"@/lib/cases/blueprint\";", "import { learnerView, type LearnerView } from \"@/lib/cases/blueprint\";")));

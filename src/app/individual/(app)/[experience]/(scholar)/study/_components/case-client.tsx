@@ -203,7 +203,11 @@ export function CaseStart(props: {
 
 type Answered = { token: string; options: { token: string; correct: boolean; chosen: boolean; rationale: string | null }[]; rationale: string | null; safetyEvents: string[];
   /** CE-04: a handover's part marks, after answering. */
-  handover?: HandoverResultView | null } | null;
+  handover?: HandoverResultView | null;
+  /** CE-04C: where this answer escalated, when (simulated minute) and whether that was in time. */
+  escalation?: { timeliness: "on_time" | "late" | "missed" | "pending"; minute: number | null; closesAt: number; text: string } | null } | null;
+/** CE-04: the code-built debrief of a finished case (cases/debrief.ts). */
+type Review = { label: string; wentWell: string[]; missed: string[]; unsafe: string[] };
 type Feedback = { token: string; handover?: HandoverResultView | null; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[];
   /** SQIE-CLOSE-2026-11 WS-C: the learner's reason for a choice, scored against the decision's weighted criteria (formative AI evaluation). */
   reasonFeedback?: { text: string; label: string; marks: { awarded: number; total: number; outcome: string } | null } | null };
@@ -220,6 +224,10 @@ export type Play = {
   handoverNotes?: Record<string, { label: string; text: string }>;
   /** The kept record of a finished attempt (SCHOLAR-CASE-INTEGRITY-01), when there is one. */
   attempt?: Attempt | null;
+  /** CE-04, after the case and when HQ has it on: what went well, what was missed, what was unsafe. */
+  review?: Review | null;
+  /** D05: whether HQ lets the learner delete this attempt (with its conversation and kept record). */
+  canDelete?: boolean;
 };
 type Attempt = {
   keptAt: string; completedAt: string; label: string; changed: boolean;
@@ -239,7 +247,17 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   const [reason, setReason] = useState<Record<string, string>>(initial.reasons ?? {});
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
+  const [deleted, setDeleted] = useState(false);
   const base = `/api/individual/scholar/clinical/sessions/${play.kind}/${play.sessionId}`;
+  // D05: delete this attempt, with its simulated conversation and its kept record. Asked first, because it cannot be undone.
+  async function removeAttempt() {
+    if (!window.confirm("Delete this attempt? Its answers, the conversation with the patient and the kept record are removed for good. The case itself stays.")) return;
+    setBusy("delete"); setError("");
+    const r = await call(base, undefined, "DELETE");
+    setBusy("");
+    if (!r.ok) { setError(r.json.error ?? "The attempt could not be deleted."); return; }
+    setDeleted(true);
+  }
   const feedbackFor = (token: string) => fresh[token] ?? play.feedback.find(f => f.token === token) ?? null;
   async function reveal(factToken: string) {
     setBusy(factToken); setError("");
@@ -261,6 +279,13 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
     setPlay(p => ({ ...p, ...r.json.play, ...(r.json.handoverNote ? { handoverNotes: { ...(p.handoverNotes ?? {}), [decisionToken]: r.json.handoverNote } } : {}) }));
   }
   const v = play.view;
+  if (deleted) return (
+    <section aria-live="polite" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+      <h2 className="text-[16px] font-bold text-gray-900">Attempt deleted</h2>
+      <p className="mt-1 text-[14px] text-gray-800">The attempt, its conversation with the patient and its kept record have been removed.</p>
+      <Link href={studyHref("apply")} className={`${ghost} mt-3`}>Try another case</Link>
+    </section>
+  );
   return (
     <article aria-labelledby="case-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
       <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-500">{play.label}</p>
@@ -273,11 +298,19 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
         text={[v.title, v.intro, v.patient ? [v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(". ") : null,
           v.facts.length ? "Findings so far. " + v.facts.map(f => `${f.label}: ${f.value}${f.unit ? ` ${f.unit}` : ""}.`).join(" ") : null].filter(Boolean).join("\n\n")} />
 
+      {/* CE-04C: the simulated minute and what has happened so far. Nothing ahead is ever sent. */}
+      {v.sim && <SimClock sim={v.sim} />}
+
       <section aria-labelledby="findings-h" className="mt-4 rounded-xl bg-gray-50 p-4">
         <h3 id="findings-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Findings so far</h3>
         {v.facts.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">None yet. Ask for what you need to know.</p> : (
           <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
-            {v.facts.map(f => <div key={f.token} className="flex gap-2 text-[14px]"><dt className="font-semibold text-gray-800">{f.label}:</dt><dd className="text-gray-900">{f.value}{f.unit ? ` ${f.unit}` : ""}</dd></div>)}
+            {v.facts.map(f => (
+              <div key={f.token} className="text-[14px]">
+                <div className="flex flex-wrap gap-x-2"><dt className="font-semibold text-gray-800">{f.label}:</dt><dd className="text-gray-900">{f.value}{f.unit ? ` ${f.unit}` : ""}{f.trend?.length ? <span className="ml-1 rounded bg-amber-100 px-1.5 text-[11.5px] font-bold text-amber-900">changed</span> : null}</dd></div>
+                {f.trend?.length ? <dd className="text-[12.5px] text-gray-700">Earlier: {f.trend.map(t => `${t.value}${f.unit ? ` ${f.unit}` : ""} (minute ${t.at})`).join(", then ")}</dd> : null}
+              </div>
+            ))}
           </dl>
         )}
       </section>
@@ -363,6 +396,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       </ol>
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {play.status !== "active" && play.review && <CaseReviewBox r={play.review} />}
       {v.talk && play.status !== "active" && <CaseConversation base={base} speaker={v.talk.speaker} active={false} />}
       {play.status !== "active" && play.attempt && <AttemptRecord a={play.attempt} />}
       {play.status !== "active" && <ClosingNotes closing={play.closing ?? null} reasons={reason} view={v} />}
@@ -376,6 +410,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       <nav aria-label="What next" className="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
         <Link href={studyHref("apply")} className={ghost}>Try another case</Link>
         <Link href={studyHref("revise")} className={ghost}>Revise related knowledge</Link>
+        {play.canDelete && <button type="button" className={`${ghost} text-red-800`} disabled={!!busy} onClick={removeAttempt}>{busy === "delete" ? "Deleting…" : "Delete this attempt"}</button>}
       </nav>
     </article>
   );
@@ -400,6 +435,11 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
     <div aria-live="polite" className={`mt-2 rounded-xl border p-3 ${fb.correct === true ? "border-emerald-300 bg-emerald-50" : fb.correct === false ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
       {fb.correct !== undefined && fb.correct !== null && <p className={`text-[14px] font-bold ${fb.correct ? "text-emerald-900" : "text-red-900"}`}>{fb.correct ? "That is what the case calls for." : "Not what the case calls for."}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{fb.markingLabel ?? MARKING_LABEL[marking] ?? "Marked against the case"}.</span></p>
+      {a.escalation && (
+        <p role={a.escalation.timeliness === "late" ? "alert" : undefined} className={`mt-2 rounded-lg px-3 py-1.5 text-[13.5px] font-semibold ${a.escalation.timeliness === "on_time" ? "bg-emerald-100 text-emerald-950" : "bg-red-100 text-red-950"}`}>
+          {a.escalation.timeliness === "late" ? "Late escalation. " : ""}{a.escalation.text}
+        </p>
+      )}
       {d.kind === "handover" && (fb.handover ?? a.handover) && <HandoverResult r={(fb.handover ?? a.handover)!} note={note} />}
       {d.kind !== "free_text" && d.kind !== "handover" && (
         <ul className="mt-2 space-y-1 text-[13.5px]">
@@ -466,6 +506,40 @@ function AttemptRecord({ a }: { a: Attempt }) {
           </ul>
         </div>
       )}
+    </section>
+  );
+}
+
+/** CE-04C: the simulated clock, labelled as simulation. Only the minute now and the events already passed. */
+function SimClock({ sim }: { sim: NonNullable<LearnerView["sim"]> }) {
+  return (
+    <section aria-labelledby="sim-h" className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
+      <h3 id="sim-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-sky-900">Simulated time: minute <span className="tabular-nums">{sim.minute}</span></h3>
+      <p className="mt-1 text-[12.5px] text-sky-950">{sim.label}</p>
+      {sim.happened.length > 0 && (
+        <ol aria-label="What has happened" className="mt-2 space-y-1 text-[13.5px] text-gray-900">
+          {sim.happened.map(e => <li key={`${e.at}-${e.label}`}><span className="font-semibold tabular-nums">Minute {e.at}:</span> {e.label}</li>)}
+        </ol>
+      )}
+    </section>
+  );
+}
+
+/** CE-04: the debrief in three lists, built by code from the attempt. Formative, labelled so. */
+function CaseReviewBox({ r }: { r: Review }) {
+  const list = (title: string, items: string[], tone: string, empty: string) => (
+    <div className="mt-3">
+      <p className={`text-[12.5px] font-bold ${tone}`}>{title}</p>
+      {items.length ? <ul className="list-disc pl-5 text-[13.5px] text-gray-900">{items.map(x => <li key={x}>{x}</li>)}</ul> : <p className="text-[13px] text-gray-600">{empty}</p>}
+    </div>
+  );
+  return (
+    <section aria-labelledby="review-h" className="mt-5 rounded-xl border border-gray-200 p-4">
+      <h3 id="review-h" className="text-[15px] font-bold text-gray-900">Debrief</h3>
+      <p className="text-[12px] text-gray-600">{r.label}</p>
+      {list("What went well", r.wentWell, "text-emerald-900", "Nothing the case checks for went as expected this time.")}
+      {list("What was missed", r.missed, "text-amber-900", "Nothing the case checks for was missed.")}
+      {list("What was unsafe", r.unsafe, "text-red-900", "Nothing unsafe was recorded.")}
     </section>
   );
 }

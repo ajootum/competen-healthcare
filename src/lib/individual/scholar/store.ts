@@ -1483,6 +1483,16 @@ export async function insertCaseAnswer(admin: Admin, userId: string, sessionId: 
 }
 
 /** Where a private session is: stages reached, facts revealed, the current stage, finished with its debrief. */
+/**
+ * D05 (LEARNING-CLOSE-2026-11 CE-04D): delete one of the caller's own private case sessions (an attempt). The database cascades
+ * its answers and reasons (435/810), its simulated conversation (880) and its kept attempt record (810). The case stays.
+ */
+export async function deletePrivateCaseSession(admin: Admin, userId: string, id: string): Promise<"deleted" | "not_found" | "failed"> {
+  const { data, error } = await admin.from("individual_scholar_case_session").delete().eq("user_id", userId).eq("id", id).select("id");
+  if (error) return "failed";
+  return data?.length ? "deleted" : "not_found";
+}
+
 export async function updatePrivateCaseSession(admin: Admin, userId: string, id: string, patch: { reached?: string[]; revealed?: string[]; current?: string | null; completed?: boolean; debrief?: unknown }): Promise<boolean> {
   const now = new Date().toISOString();
   const { error } = await admin.from("individual_scholar_case_session").update({

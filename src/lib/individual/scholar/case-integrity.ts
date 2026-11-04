@@ -23,6 +23,10 @@ import {
   getCaseAttemptSnapshot, getPrivateCase, getPrivateCaseSession, insertCaseAttemptCorrection, insertCaseAttemptSnapshot, listCaseConversation,
   type CaseAttemptCorrectionRow, type CaseAttemptSnapshotRow, type ConversationEntry,
 } from "./store";
+import { TIMELINE_LABEL, escalationOutcomes, simClock, type EscalationOutcome } from "@/lib/cases/timeline";
+import { caseReview, type CaseReview } from "@/lib/cases/debrief";
+import { reviewQuestions } from "@/lib/cases/conversation";
+import { loadIndividualPolicy } from "../policy";
 
 export const CASE_ATTEMPT_RECORD_VERSION = 1;
 export const CASE_ATTEMPT_FORMATIVE_LABEL = "Formative practice record: not an assessment, and not evidence of clinical competence.";
@@ -42,6 +46,8 @@ export type AttemptInput = {
   aiDebrief: { text: string; model: string | null } | null;
   /** CE-04 (880): the Talk to the patient turns, in order. Simulated speech, kept for the debrief. Absent where there was none or 880 is absent. */
   conversation?: { stageId: string; question: string; reply: string }[];
+  /** CE-04 (LEARNING-CLOSE-2026-11): what HQ policy had on when the attempt was kept. The timeline applies to a library play only. */
+  sim?: { timeline: boolean; review: boolean };
 };
 export type AttemptDecision = {
   id: string; stageId: string; kind: string; dimension: string | null; prompt: string;
@@ -58,6 +64,10 @@ export type AttemptRecord = {
   /** CE-04: what was said to the simulated patient and what the AI voiced in reply. Simulated and formative. */
   conversation?: { label: string; turns: { stageId: string; stageTitle: string; question: string; reply: string }[] };
   aiDebrief: { label: string; text: string; model: string | null } | null;
+  /** CE-04C: the simulated minute the case ended at and each escalation window's recognition and timeliness (formative). */
+  simulation?: { label: string; minute: number; escalations: EscalationOutcome[] };
+  /** CE-04: what went well, what was missed, what was unsafe (code, formative). */
+  review?: CaseReview;
   completion: { state: "completed"; answered: number; of: number };
   label: string;
 };
@@ -94,6 +104,14 @@ export function buildCaseAttemptRecord(x: AttemptInput): { record: AttemptRecord
   });
   const full = caseDebrief(b, x.answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen, text: a.text, correct: a.correct, safety: a.safety, marking: a.marking })), x.revealed, x.reached);
   const { objectives: _o, ...debrief } = full; void _o;
+  // CE-04C and the review: deterministic from the same record, so the kept attempt shows exactly what the play showed.
+  const clockInput = { answers: x.answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen })), revealed: x.revealed, turns: (x.conversation ?? []).map(t => ({ stageId: t.stageId })) };
+  const clock = x.kind === "library" && x.sim?.timeline && b.timeline ? simClock(b, clockInput) : null;
+  const escalations = clock ? escalationOutcomes(b, clockInput, clock, true) : null;
+  const review = x.sim?.review ? caseReview(b, {
+    answers: x.answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen, text: a.text })), revealed: x.revealed, reached: x.reached, escalations,
+    questions: b.voice && x.conversation?.length ? reviewQuestions(b, x.conversation.map(t => t.question)) : null,
+  }) : null;
   const rubric: AttemptRubric = {
     decisions: b.decisionPoints.filter(d => by.has(d.id)).map(d => ({
       id: d.id, key: d.options.filter(o => o.correct).map(o => o.id), rationale: d.rationale ?? null, expectedResponse: d.expectedResponse ?? null,
@@ -112,6 +130,8 @@ export function buildCaseAttemptRecord(x: AttemptInput): { record: AttemptRecord
     decisions: decisions(limits), debrief,
     ...(x.conversation?.length ? { conversation: { label: CASE_CONVERSATION_LABEL, turns: x.conversation.slice(0, turns).map(t => ({ stageId: t.stageId, stageTitle: b.stages.find(s => s.id === t.stageId)?.title ?? t.stageId, question: cut(t.question, 400) ?? "", reply: cut(t.reply, 600) ?? "" })) } } : {}),
     aiDebrief: x.aiDebrief ? { label: CASE_AI_FEEDBACK_LABEL, text: cut(x.aiDebrief.text, limits.ai) ?? "", model: x.aiDebrief.model } : null,
+    ...(clock && escalations ? { simulation: { label: TIMELINE_LABEL, minute: clock.now, escalations } } : {}),
+    ...(review ? { review } : {}),
     completion: { state: "completed", answered: x.answers.length, of: b.decisionPoints.length },
     label: CASE_ATTEMPT_FORMATIVE_LABEL,
   });
@@ -172,6 +192,8 @@ async function attemptSource(admin: any, userId: string, kind: "private" | "libr
   try { const said = await listCaseConversation(admin, userId, kind, sessionId); if (said.ok) entries = said.data; } catch { /* the conversation is optional: the attempt is kept without it */ }
   const conversation = entries.filter(e => e.kind === "turn" && e.stageId).map(e => ({ stageId: e.stageId!, question: e.question ?? "", reply: e.reply }));
   const handoverNote = (dpId: string) => { const n = entries.find(e => e.kind === "handover_note" && e.decisionPointId === dpId); return n ? { text: n.reply, model: n.model } : null; };
+  let sim = { timeline: false, review: false };
+  try { const p = await loadIndividualPolicy(admin); sim = { timeline: kind === "library" && p.scholarCaseDeterioration === "on", review: p.scholarCaseDebriefReview === "on" }; } catch { /* the defaults: off */ }
   if (kind === "private") {
     const s = await getPrivateCaseSession(admin, userId, sessionId);
     const c = s ? await getPrivateCase(admin, userId, s.session.caseId) : null;
@@ -184,7 +206,7 @@ async function attemptSource(admin: any, userId: string, kind: "private" | "libr
           decisionPointId: a.decisionPointId, chosen: a.chosen, text: a.reasoning, reason: a.reason ?? null, marking: a.marking, correct: a.correct, score: a.score,
           safety: a.safety, aiFeedback: a.aiFeedback ? { text: a.aiFeedback, model: a.evaluatorModel } : handoverNote(a.decisionPointId), at: a.createdAt,
         })),
-        aiDebrief: null, conversation,
+        aiDebrief: null, conversation, sim,
       },
     };
   }
@@ -211,7 +233,7 @@ async function attemptSource(admin: any, userId: string, kind: "private" | "libr
           safety: written ? [] : brokenSafety(b, a.decisionPointId, a.chosen ?? []), aiFeedback: fb ? { text: fb.text, model: fb.model } : handoverNote(a.decisionPointId), at: a.at ?? null,
         };
       }),
-      aiDebrief: l.debrief ? { text: l.debrief.text, model: l.debrief.model } : null, conversation,
+      aiDebrief: l.debrief ? { text: l.debrief.text, model: l.debrief.model } : null, conversation, sim,
     },
   };
 }

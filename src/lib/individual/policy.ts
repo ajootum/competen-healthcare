@@ -118,7 +118,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
   | "scholar_calculation_tolerances" | "scholar_clinical_scoring_caps"
-  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_case_conversation" | "scholar_case_conversation_turns" | "scholar_evaluation_recommendations"
+  | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_case_conversation" | "scholar_case_conversation_turns"
+  | "scholar_case_deterioration" | "scholar_case_debrief_review" | "scholar_case_attempt_delete" | "scholar_evaluation_recommendations"
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
@@ -1784,6 +1785,33 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "20",
     limitReason: "Only 10, 15, 20, 30 or 40. Default 20.",
   },
+  {
+    // LEARNING-CLOSE-2026-11 CE-04C (SALE-13). No migration. Off until HQ switches it on.
+    key: "scholar_case_deterioration", kind: "choice", product: "Scholar",
+    label: "Deterioration timeline in library cases",
+    help: "Whether a library case whose approved version defines a deterioration timeline plays it: the patient's observations change as simulated time passes, time moves on only with what the student does (each decision, each finding asked for, each question to the patient), and escalation is scored for recognition and timeliness. Everything in the timeline is written by the case author and clinically approved with the version; nothing is invented by AI and nothing runs on a real clock. Practice marks only, never verified competence.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Off until HQ switches it on. Only approved library cases that define a timeline are affected; a student's own case never has one.",
+  },
+  {
+    // LEARNING-CLOSE-2026-11 CE-04 debrief (SALE-13). No migration. Off until HQ switches it on.
+    key: "scholar_case_debrief_review", kind: "choice", product: "Scholar",
+    label: "Case debrief: what went well, what was missed, what was unsafe",
+    help: "Whether a finished case shows a debrief in three lists, worked out by code from the attempt: the decisions, the safety criteria, the handover marks, the findings never asked for, the escalation windows and the key questions to the patient. No AI. It is labelled as practice feedback and is never verified competence.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Off until HQ switches it on.",
+  },
+  {
+    // LEARNING-CLOSE-2026-11 D05 (CE-04D). No migration: deleting the session cascades its answers, conversation (880) and kept record (810).
+    key: "scholar_case_attempt_delete", kind: "choice", product: "Scholar",
+    label: "Students may delete a case attempt",
+    help: "Whether a student may delete one of their own case attempts. Deleting it removes the attempt with its answers, its simulated conversation and its kept record, as decision D05 requires. The case itself is not deleted.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Off until HQ switches it on (and any retention rule for simulation records is decided).",
+  },
   // ── EVALUATION-01 (Stage 6): how an evaluation reads and interprets evidence. A band describes, it never
   // certifies: there is no pass mark, and no setting can make an evaluation verified competence. ──
   {
@@ -2440,6 +2468,12 @@ export type IndividualPolicy = {
   /** SCHOLAR-CE-2026 CE-04. Whether a case with a patient voice offers Talk to the patient (needs 880), and the questions allowed per stage. */
   scholarCaseConversation: "on" | "off";
   scholarCaseConversationTurns: 10 | 15 | 20 | 30 | 40;
+  /** CE-04C: library cases play their approved deterioration timeline. Default off. */
+  scholarCaseDeterioration: "on" | "off";
+  /** CE-04: the went well / missed / unsafe debrief on a finished case. Default off. */
+  scholarCaseDebriefReview: "on" | "off";
+  /** D05: a student may delete their own case attempt (cascades the conversation and kept record). Default off. */
+  scholarCaseAttemptDelete: "on" | "off";
   /** EVALUATION-01 (Stage 6). */
   scholarEvaluationMethods: ("existing" | "fresh" | "combined")[];
   scholarEvaluationEvidence: ("teach_checks" | "revision" | "spaced_review" | "clinical_reasoning")[];
@@ -2662,6 +2696,9 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarCaseReasoningFeedback: clampChoice(policyDef("scholar_case_reasoning_feedback") as ChoicePolicy, published.get(policyPath("scholar_case_reasoning_feedback"))) as "ai_then_self" | "self",
     scholarCaseConversation: clampChoice(policyDef("scholar_case_conversation") as ChoicePolicy, published.get(policyPath("scholar_case_conversation"))) as "on" | "off",
     scholarCaseConversationTurns: Number(clampChoice(policyDef("scholar_case_conversation_turns") as ChoicePolicy, published.get(policyPath("scholar_case_conversation_turns")))) as 10 | 15 | 20 | 30 | 40,
+    scholarCaseDeterioration: clampChoice(policyDef("scholar_case_deterioration") as ChoicePolicy, published.get(policyPath("scholar_case_deterioration"))) as "on" | "off",
+    scholarCaseDebriefReview: clampChoice(policyDef("scholar_case_debrief_review") as ChoicePolicy, published.get(policyPath("scholar_case_debrief_review"))) as "on" | "off",
+    scholarCaseAttemptDelete: clampChoice(policyDef("scholar_case_attempt_delete") as ChoicePolicy, published.get(policyPath("scholar_case_attempt_delete"))) as "on" | "off",
     scholarEvaluationMethods: clampSet(policyDef("scholar_evaluation_methods") as SetPolicy, published.get(policyPath("scholar_evaluation_methods"))) as ("existing" | "fresh" | "combined")[],
     scholarEvaluationEvidence: clampSet(policyDef("scholar_evaluation_evidence") as SetPolicy, published.get(policyPath("scholar_evaluation_evidence"))) as ("teach_checks" | "revision" | "spaced_review" | "clinical_reasoning")[],
     scholarEvaluationMinEvidence: int("scholar_evaluation_min_evidence"),
