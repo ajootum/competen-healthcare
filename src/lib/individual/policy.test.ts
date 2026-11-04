@@ -126,6 +126,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SALE-2026-11 R1: the learning state and the adaptive next step on, with transparent thresholds.
       scholarLearningState: "on", scholarLearningStateMinEvidence: 2, scholarLearningStateDistinctQuestions: 2, scholarLearningStateDelayDays: 3, scholarLearningStateStaleDays: 30,
       scholarAdaptiveTeaching: "on", scholarAdaptiveReteachMax: 2, scholarAdaptivePrerequisiteMisses: 3,
+      // SALE-2026-11 R4: application evidence (SALE-13) and the three competency views (SALE-14) OFF until HQ switches them on.
+      scholarApplicationEvidence: "off", scholarCompetencyEvidenceViews: "off",
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -537,4 +539,13 @@ it("SALE-2026-11 R1: the learning-state and adaptive-teaching keys default on wi
   expect(p("scholar_learning_state_distinct_questions", 1).scholarLearningStateDistinctQuestions).toBe(2);
   expect(p("scholar_learning_state_delay_days", 7).scholarLearningStateDelayDays).toBe(7);
   expect(p("scholar_adaptive_prerequisite_misses", 1).scholarAdaptivePrerequisiteMisses).toBe(2);
+});
+
+it("SALE-2026-11 R4: the application-evidence and competency-views keys default off and accept only on or off", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({ scholarApplicationEvidence: "off", scholarCompetencyEvidenceViews: "off" });
+  expect(p("scholar_application_evidence", "on").scholarApplicationEvidence).toBe("on");
+  expect(p("scholar_application_evidence", "maybe").scholarApplicationEvidence).toBe("off");
+  expect(p("scholar_competency_evidence_views", "on").scholarCompetencyEvidenceViews).toBe("on");
+  expect(p("scholar_competency_evidence_views", true).scholarCompetencyEvidenceViews).toBe("off");
 });

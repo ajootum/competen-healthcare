@@ -19,6 +19,12 @@ import { frameworksView } from "./competencies-view";
 import { loadCompetencyProfile, myPlanOn } from "./competency-profile-data";
 import { loadExplorerData } from "./explorer-data";
 import { FrameworksSection } from "./frameworks-section";
+import { CompetencyEvidenceViews } from "./evidence-views";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadCompetencyEvidenceRecords } from "@/lib/individual/scholar/application-evidence-data";
+import { competencyThreeViews } from "@/lib/individual/scholar/application-evidence";
+import { loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
+import { verificationPanel } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -66,12 +72,39 @@ export default async function MyCompetenciesOverview({ params, searchParams }: {
   const base = experienceHref("scholar", "my-competencies/assessments");
   // The Explorer: only with a programme that offers competencies. Its reads are the existing ones (explorer-data.ts).
   const explorer = catalogue.length ? await loadExplorerData(ctx.admin, ctx.userId, catalogue, model.rows, activity) : null;
+  // SALE-2026-11 R4 (SALE-14): the three separate views, behind scholar_competency_evidence_views (default off). Self from the rows' own
+  // self panels, learning evidence from the traceable records, verified ONLY from the rows' verification (the Passport). No AI.
+  const viewsOn = (await loadIndividualPolicy(ctx.admin).catch(() => null))?.scholarCompetencyEvidenceViews === "on";
+  const evidenceRecords = viewsOn ? await loadCompetencyEvidenceRecords(ctx.admin, ctx.userId).catch(() => null) : null;
+  // A record may name a competency outside the rows (not in the programme, never self-rated): it is still the learner's learning evidence, named from its label.
+  const inRows = new Set(model.rows.map(r => r.competency.id));
+  const extraIds = evidenceRecords?.ok ? [...new Set(evidenceRecords.data.flatMap(r => r.competencies.map(l => l.competencyId)))].filter(id => !inRows.has(id)).slice(0, 50) : [];
+  const extraLabels = extraIds.length ? await loadCompetencyLabels(ctx.admin, extraIds) : new Map();
+  const verifications = verificationFacts(passport);
+  const threeViews = viewsOn ? competencyThreeViews({
+    competencies: [
+      ...model.rows.map(r => ({ id: r.competency.id, code: r.competency.code, title: r.competency.title, framework: r.competency.framework ?? null })),
+      ...extraIds.map(id => ({ id, code: extraLabels.get(id)?.code ?? null, title: extraLabels.get(id)?.title ?? "A competency outside your current programme", framework: extraLabels.get(id)?.framework ?? null })),
+    ],
+    self: new Map(model.rows.map(r => [r.competency.id, r.self ? { rating: r.self.rating, descriptor: r.self.descriptor } : null])),
+    scaleMax: ready?.history.scaleMax ?? null,
+    records: evidenceRecords?.ok ? evidenceRecords.data : [],
+    verification: id => model.rows.find(r => r.competency.id === id)?.verification ?? verificationPanel(id, verifications),
+  }) : null;
   const codes = [...new Set(catalogue.map(c => c.frameworkCode).filter((c): c is string => !!c))];
   const title = codes.length === 1 ? `My Competencies · ${codes[0]}` : "My Competencies";
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="My Competencies" title={title} intro="How you rate yourself, what your learning shows, and where they differ. Each is kept apart, and none of it is verified competence." />
       <Notice>{FORMATIVE_NOTICE}. {SELF_CLASS_LABEL}. Only an independent verification is a verified competency.</Notice>
+
+      {threeViews && (
+        <div className="mb-10">
+          <Block id="three-views" title="Self-assessment, learning evidence and verified competence" note="What you believe, what your learning records show, and what has been verified, kept apart.">
+            <CompetencyEvidenceViews views={threeViews} recordsUnreadable={!evidenceRecords?.ok} />
+          </Block>
+        </div>
+      )}
 
       {explorer && (
         <CompetencyExplorer model={explorer.model} details={explorer.details} scaleMax={ready?.history.scaleMax ?? 6} study={study ?? null} assessmentsBase={base}
