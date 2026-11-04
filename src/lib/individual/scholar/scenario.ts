@@ -22,7 +22,7 @@ import { PROMPT_VERSIONS, SCENARIO_STAGES_MAX, SCENARIO_STAGES_MIN, SCENARIO_WEI
 import { CLOZE_BLANK, markCloze } from "./cloze";
 import { markShortAnswer } from "./revision";
 import { rubricHash } from "./rubric-snapshot";
-import { asksQuestion } from "./question-intel";
+import { asksQuestion, feedbackPartsFrom, type FeedbackParts } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
 import { containsAnswer } from "./answer-leak";
 import { textGroundingViolations } from "@/lib/ai/grounding";
@@ -175,7 +175,8 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 // ── THE MARKS: stage scores summed with the stage weights ──
 
-export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null };
+/** `parts`: SQIE WS-D, the five-part feedback (question-intel.ts FeedbackParts) an AI-judged stage was shown, kept with the attempt. */
+export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; parts?: FeedbackParts | null };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -214,7 +215,11 @@ export function storedStageResults(response: unknown, count: number): StageResul
 
 export const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 export type Progress = { next: number; results: StageResult[]; evaluator: { model: string; promptVersion: string } | null };
-type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string }[]; e: Progress["evaluator"] };
+type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; p?: FeedbackParts }[]; e: Progress["evaluator"] };
+/** The longest token readProgress accepts. */
+export const TOKEN_MAX_CHARS = 12000;
+/** SQIE WS-D: the five-part feedback rides in the token only while the token stays under this (oldest stages' parts go first; their summary stays). */
+const TOKEN_PARTS_BUDGET = 10500;
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
 const mac = (secret: string, body: string) => createHmac("sha256", secret).update(body).digest("base64url");
@@ -226,9 +231,16 @@ export const tokenKey = (secret: string): string => createHash("sha256").update(
 export function signProgress(key: string, who: { userId: string; questionId: string; answer: unknown }, p: Progress, now: number): string {
   const claims: Claims = {
     u: who.userId, q: who.questionId, h: rubricHash(who.answer), t: now, n: p.next,
-    r: p.results.map(x => ({ s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}) })), e: p.evaluator,
+    r: p.results.map(x => {
+      const parts = x.by === "ai" ? feedbackPartsFrom(x.parts) : null;
+      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}), ...(parts ? { p: parts } : {}) };
+    }), e: p.evaluator,
   };
-  const body = b64(JSON.stringify(claims));
+  let body = b64(JSON.stringify(claims));
+  for (const r of claims.r) {
+    if (body.length <= TOKEN_PARTS_BUDGET) break;
+    if (r.p) { delete r.p; body = b64(JSON.stringify(claims)); }
+  }
   return `${body}.${mac(key, body)}`;
 }
 
@@ -237,7 +249,7 @@ export function signProgress(key: string, who: { userId: string; questionId: str
  * been altered, or does not stand at the stage the caller expects (a token for stage 2 cannot answer stage 3).
  */
 export function readProgress(key: string, token: unknown, who: { userId: string; questionId: string; answer: unknown }, now: number): Progress | null {
-  if (typeof token !== "string" || token.length > 12000) return null;
+  if (typeof token !== "string" || token.length > TOKEN_MAX_CHARS) return null;
   const [body, sig, extra] = token.split(".");
   if (!body || !sig || extra !== undefined) return null;
   const want = Buffer.from(mac(key, body)), got = Buffer.from(sig);
@@ -246,7 +258,7 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
   try { c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Claims; } catch { return null; }
   if (c.u !== who.userId || c.q !== who.questionId || c.h !== rubricHash(who.answer) || !Number.isFinite(c.t) || now - c.t > TOKEN_TTL_MS || now < c.t - 60_000) return null;
   if (!Number.isInteger(c.n) || c.n < 1 || !Array.isArray(c.r) || c.r.length !== c.n) return null;
-  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null })), evaluator: c.e ?? null };
+  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, parts: x.b === "ai" ? feedbackPartsFrom(x.p) : null })), evaluator: c.e ?? null };
 }
 
 // ── NEW SCENARIOS FROM A PASSAGE ──

@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // the AI are replaced by recorders, so what the browser WOULD have been sent is what is asserted.
 
 const h = vi.hoisted(() => ({
-  user: "u1", question: null as any, session: null as any, recorded: [] as any[], snapshots: 0, positions: [] as number[], marking: "self" as string, evals: 0,
+  user: "u1", question: null as any, session: null as any, recorded: [] as any[], snapshots: 0, positions: [] as number[], marking: "self" as string, evals: 0, parts: null as any,
 }));
 
 vi.mock("@/lib/individual/guard", () => ({
@@ -33,7 +33,7 @@ vi.mock("@/lib/individual/scholar/http", () => ({
 }));
 vi.mock("@/lib/individual/scholar/outcome", () => ({ answerOutcome: () => ({ outcome: "accepted", reasons: [] }), recordScholarOutcome: async () => {} }));
 vi.mock("@/lib/individual/scholar/generation", () => ({
-  runEvaluate: async () => { h.evals++; return { ok: true, model: "m", promptVersion: "p", evaluation: { ok: true, verdict: "partly", score: 0.5, feedback: "Partly right: it names the risk." } }; },
+  runEvaluate: async () => { h.evals++; return { ok: true, model: "m", promptVersion: "p", evaluation: { ok: true, verdict: "partly", score: 0.5, feedback: "Partly right: it names the risk.", ...(h.parts ? { parts: h.parts } : {}) } }; },
 }));
 
 import { POST } from "./route";
@@ -65,7 +65,7 @@ const post = async (body: Record<string, unknown>) => {
 const right = (i: number) => (i === 0 ? { index: spec.stages[0].correct[0] } : i === 2 ? { indexes: spec.stages[2].correct } : { text: "the risk" });
 
 beforeEach(() => {
-  h.user = "u1"; h.question = mkQuestion(); h.session = null; h.recorded.length = 0; h.snapshots = 0; h.positions.length = 0; h.marking = "self"; h.evals = 0;
+  h.user = "u1"; h.question = mkQuestion(); h.session = null; h.recorded.length = 0; h.snapshots = 0; h.positions.length = 0; h.marking = "self"; h.evals = 0; h.parts = null;
   process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-role-key-not-a-real-one"; // gitleaks:allow
 });
 
@@ -175,6 +175,16 @@ describe("POST revision/scenario -- marking, the record and the feedback", () =>
     expect(h.recorded[0].response.formative.items[0].part).toBe(2);
     expect(r2.json.feedback.scenario.stages[1].evaluation.feedback).toContain("Partly right");
     expect(r2.json.feedback.scenario.practiceMarks.awarded).toBe(4);
+  });
+  it("SQIE WS-D: an AI-judged stage keeps its five-part feedback in the attempt response, carried across stages by the signed token", async () => {
+    h.marking = "ai_then_self";
+    h.parts = { right: ["names the risk"], missing: ["infection"], misconceptions: [], why: "Retained urine lets bacteria grow.", next: "Name the infection." };
+    const r0 = await post({ response: right(0) });
+    const r1 = await post({ token: r0.json.token, response: { text: "it increases chances" } });
+    expect(r1.text).not.toContain("infection"); // the parts ride inside the signed token, never as readable fields
+    await post({ token: r1.json.token, response: right(2) });
+    const item = h.recorded[0].response.formative.items[0];
+    expect(item).toMatchObject({ part: 2, parts: h.parts, summary: null });
   });
   it("patient identifiers are refused before anything is sent to a model", async () => {
     h.marking = "ai_then_self";
