@@ -25,6 +25,7 @@ import { rubricHash } from "./rubric-snapshot";
 import { asksQuestion } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
 import { textGroundingViolations } from "@/lib/ai/grounding";
+import { matchUnsafe, safetyMarkersOf, type SafetyOutcome } from "./scoring-rules";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
@@ -47,6 +48,9 @@ export type ScenarioStage = {
   source: string;
   /** The tags of approved references this stage also draws on (mode: your notes + approved references). */
   refs: string[];
+  /** SQIE-CLOSE-2026-11 WS-B (scoring-rules.ts): the stage must not be missed, and the answers (or option texts) that would be unsafe. */
+  safetyCritical?: boolean;
+  unsafe?: string[];
 };
 export type ScenarioSpec = { stages: ScenarioStage[]; totalWeight: number };
 
@@ -66,7 +70,8 @@ function stageOf(raw: unknown): ScenarioStage | null {
   const correct = Array.isArray(x.correct) && x.correct.every(i => Number.isInteger(i)) ? (x.correct as number[]) : [];
   const source = typeof x.source === "string" ? x.source.trim().slice(0, 500) : "";
   const refs = (strs(x.refs) ?? []).map(t => t.trim()).filter(Boolean).slice(0, 4);
-  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs };
+  const markers = safetyMarkersOf(x);
+  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs, ...(markers.safetyCritical ? { safetyCritical: true } : {}), ...(markers.unsafe.length ? { unsafe: markers.unsafe } : {}) };
   if (kind === "mcq") return options.length === 4 && correct.length === 1 && correct[0] >= 0 && correct[0] < 4 ? { ...base, options, correct, accepted: [] } : null;
   if (kind === "mrq") {
     const set = [...new Set(correct)].sort();
@@ -145,7 +150,11 @@ export function parseStageAnswer(stage: ScenarioStage, raw: unknown): StageAnswe
  * it is then judged by AI or by the learner, as a short answer always is). mcq right or wrong; mrq fractional as revision.ts marks it;
  * cloze a normalised match either way.
  */
-export function markStageByCode(stage: ScenarioStage, a: StageAnswer): { score: number } | null {
+export function markStageByCode(stage: ScenarioStage, a: StageAnswer): { score: number; unsafe?: string } | null {
+  // WS-B (rules v2): an answer (or a chosen option) the stage names as unsafe is recognised by code first, and scores nothing.
+  const unsafe = stage.unsafe?.length ? matchUnsafe(a.kind === "text" ? a.text : a.kind === "choice" ? stage.options[a.index] ?? "" : "", stage.unsafe)
+    ?? (a.kind === "set" ? a.indexes.map(i => matchUnsafe(stage.options[i] ?? "", stage.unsafe!)).find(Boolean) ?? null : null) : null;
+  if (unsafe) return { score: 0, unsafe };
   if (stage.kind === "mcq" && a.kind === "choice") return { score: a.index === stage.correct[0] ? 1 : 0 };
   if (stage.kind === "mrq" && a.kind === "set") {
     const hits = a.indexes.filter(i => stage.correct.includes(i)).length, wrong = a.indexes.length - hits;
@@ -174,7 +183,18 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 // ── THE MARKS: stage scores summed with the stage weights ──
 
-export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null };
+export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; unsafe?: string | null };
+
+/**
+ * Pure (WS-B, rules v2). A scenario's safety outcome: unsafe where any stage's answer was unsafe, else critical_missed where a
+ * safety-critical stage did not score in full (a stage the learner marked themselves is their own judgement), else safe.
+ */
+export function scenarioSafety(spec: ScenarioSpec, results: readonly StageResult[]): { outcome: SafetyOutcome; statement: string | null; missed: string[]; by: "code" | "ai" } {
+  const u = results.findIndex(r => !!r.unsafe);
+  if (u >= 0) return { outcome: "unsafe", statement: results[u].unsafe ?? null, missed: [], by: results[u].by === "ai" ? "ai" : "code" };
+  const missed = spec.stages.filter((st, i) => st.safetyCritical && results[i] && results[i].by !== "self" && results[i].score < 1).map(st => st.keyPoint);
+  return { outcome: missed.length ? "critical_missed" : "safe", statement: null, missed, by: results.some(r => r.by === "ai") ? "ai" : "code" };
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -213,7 +233,7 @@ export function storedStageResults(response: unknown, count: number): StageResul
 
 export const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 export type Progress = { next: number; results: StageResult[]; evaluator: { model: string; promptVersion: string } | null };
-type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string }[]; e: Progress["evaluator"] };
+type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; x?: string }[]; e: Progress["evaluator"] };
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
 const mac = (secret: string, body: string) => createHmac("sha256", secret).update(body).digest("base64url");
@@ -225,7 +245,7 @@ export const tokenKey = (secret: string): string => createHash("sha256").update(
 export function signProgress(key: string, who: { userId: string; questionId: string; answer: unknown }, p: Progress, now: number): string {
   const claims: Claims = {
     u: who.userId, q: who.questionId, h: rubricHash(who.answer), t: now, n: p.next,
-    r: p.results.map(x => ({ s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}) })), e: p.evaluator,
+    r: p.results.map(x => ({ s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}), ...(x.unsafe ? { x: x.unsafe.slice(0, 300) } : {}) })), e: p.evaluator,
   };
   const body = b64(JSON.stringify(claims));
   return `${body}.${mac(key, body)}`;
@@ -245,7 +265,7 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
   try { c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Claims; } catch { return null; }
   if (c.u !== who.userId || c.q !== who.questionId || c.h !== rubricHash(who.answer) || !Number.isFinite(c.t) || now - c.t > TOKEN_TTL_MS || now < c.t - 60_000) return null;
   if (!Number.isInteger(c.n) || c.n < 1 || !Array.isArray(c.r) || c.r.length !== c.n) return null;
-  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null })), evaluator: c.e ?? null };
+  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, ...(typeof x.x === "string" && x.x ? { unsafe: x.x } : {}) })), evaluator: c.e ?? null };
 }
 
 // ── NEW SCENARIOS FROM A PASSAGE ──

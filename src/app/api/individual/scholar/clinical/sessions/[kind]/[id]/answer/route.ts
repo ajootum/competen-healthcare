@@ -9,7 +9,8 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { REASONING_CAPS } from "@/lib/cases/categories";
 import { HANDOVER_SECTIONS, composeHandover } from "@/lib/cases/handover";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
-import { libraryReasoningFeedback } from "@/lib/individual/scholar/clinical-library-feedback";
+import { caseCriteria, libraryReasonFeedback, libraryReasoningFeedback, recordedFeedbackText } from "@/lib/individual/scholar/clinical-library-feedback";
+import { criteriaMarks } from "@/lib/individual/scholar/scoring-rules";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
@@ -68,14 +69,21 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${d.prompt}\n${d.answer}`, passages, competencyIds: c?.competencyIds }));
     // Owner item 5: where it was answered (the case and its decision), so a study answer is read as study; framing only.
     Object.assign(ai.risk, { intentContext: { surface: "apply" as const, lessonTitle: c?.title ?? null, objective: d.prompt.slice(0, 300), materialTopics: ai.risk.topicTerms ?? [] } });
-    const e = await runCaseReasoning(ctx.userId, { ...d, passages }, ai.run);
+    // SQIE-CLOSE-2026-11 WS-B: the decision's weighted criteria, where it has them, and the UNSAFE line (always) are scored by code.
+    const criteria = caseCriteria(d.criteria ?? []);
+    const e = await runCaseReasoning(ctx.userId, { prompt: d.prompt, expected: d.expected, facts: d.facts, answer: d.answer, passages, criteria }, ai.run);
     const refused = ai.refusal();
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, {
       outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
       model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
     });
     if (refused || !e.ok || !e.evaluation.ok) return { kind: "self" };
-    return { kind: "ai", correct: e.evaluation.verdict === "correct", score: e.evaluation.score, feedback: e.evaluation.feedback, evaluator: { model: e.model, promptVersion: e.promptVersion } };
+    const unsafe = e.evaluation.unsafe ?? null;
+    const marks = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe) : null;
+    // An unsafe answer is never correct and earns nothing; against criteria the score is their weighted share (rules v2, capped).
+    const correct = marks ? marks.correct : !unsafe && e.evaluation.verdict === "correct";
+    const score = marks ? marks.score : unsafe ? 0 : e.evaluation.score;
+    return { kind: "ai", correct, score, feedback: recordedFeedbackText(e.evaluation.feedback, criteria, marks, unsafe), evaluator: { model: e.model, promptVersion: e.promptVersion } };
   };
 
   const r = await answerPlay(ctx.admin, ctx.userId, kind, id, { decisionToken: body.decisionToken, optionTokens, text, reason }, judge, body?.hints === true);
@@ -91,6 +99,15 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback` });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
     if (f.ok) return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
+  }
+  // SQIE-CLOSE-2026-11 WS-C: a REASON given for a choice in a library case whose decision defines rubric criteria is scored against them
+  // (formative, labelled, recorded by the shared delivery like any AI feedback). The choice's own marking is unchanged.
+  if (kind === "library" && !text && reason && policy.scholarCaseReasoningFeedback === "ai_then_self"
+    && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
+    const f = await libraryReasonFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:reason` });
+    if (f.ok || (f.reason !== "no_rubric" && f.reason !== "no_reason")) await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reason", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
+    if (f.ok) return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play),
+      feedback: { ...r.feedback, reasonFeedback: { text: f.text, label: MARKING_LABEL.ai_evaluation, marks: f.marks ? { awarded: f.marks.awarded, total: f.marks.total, outcome: f.marks.outcome } : null } } });
   }
   return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play) });
 }

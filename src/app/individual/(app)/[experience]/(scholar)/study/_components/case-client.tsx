@@ -204,7 +204,9 @@ export function CaseStart(props: {
 type Answered = { token: string; options: { token: string; correct: boolean; chosen: boolean; rationale: string | null }[]; rationale: string | null; safetyEvents: string[];
   /** CE-04: a handover's part marks, after answering. */
   handover?: HandoverResultView | null } | null;
-type Feedback = { token: string; handover?: HandoverResultView | null; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[] };
+type Feedback = { token: string; handover?: HandoverResultView | null; correct?: boolean | null; marking: string; markingLabel?: string; answered: Answered; expected?: string | null; aiFeedback?: string | null; safety?: string[]; chunkIds?: string[];
+  /** SQIE-CLOSE-2026-11 WS-C: the learner's reason for a choice, scored against the decision's weighted criteria (formative AI evaluation). */
+  reasonFeedback?: { text: string; label: string; marks: { awarded: number; total: number; outcome: string } | null } | null };
 type Debrief = {
   answered: number; of: number; correct: number; dimensions: { dimension: string; answered: number; correct: number; written: number }[];
   safetyEvents: string[]; missedFindings: { label: string }[]; objectives: { text: string }[]; revisit: { decisionPointId: string; chunkIds: string[] }[]; label: string;
@@ -386,7 +388,7 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
       {fb?.aiFeedback && (
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
-          <p className="mt-1 text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+          <p className="mt-1 whitespace-pre-line text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
           <FormativeAiLabel className="mt-1" />
         </div>
       )}
@@ -412,7 +414,14 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
       {fb.aiFeedback && (
         <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
-          <p className="mt-1 text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+          <p className="mt-1 whitespace-pre-line text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+          <FormativeAiLabel className="mt-1" />
+        </div>
+      )}
+      {fb.reasonFeedback && (
+        <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{fb.reasonFeedback.label}: your reason</p>
+          <p className="mt-1 whitespace-pre-line text-[13.5px] text-amber-950">{fb.reasonFeedback.text}</p>
           <FormativeAiLabel className="mt-1" />
         </div>
       )}

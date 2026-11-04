@@ -9,7 +9,8 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runEvaluate } from "@/lib/individual/scholar/generation";
-import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, type PartResult } from "@/lib/individual/scholar/revision";
+import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, structuredSafety, withSafety, writtenSafety, type PartResult } from "@/lib/individual/scholar/revision";
+import { SCORING_RULES_VERSION, criteriaMarks, marksFromShare, storedCalculation, toleranceOfChoice, type CalculationMark, type SafetyRecord } from "@/lib/individual/scholar/scoring-rules";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD } from "@/lib/individual/scholar/config";
@@ -130,8 +131,14 @@ export async function POST(req: Request) {
   const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
 
   // ── marking: code, then (a short answer only) AI evaluation or the student's own judgement ──
+  // SQIE-CLOSE-2026-11 WS-A: a calculation's default tolerance and unit rule are the published policy's (strict code defaults otherwise).
   let mark = markResponse(q, r);
+  // SQIE-CLOSE-2026-11 WS-A: a calculation is marked under the published tolerance and unit policy (the line above used the strict code defaults).
+  if (r.kind === "calc") mark = markResponse(q, r, { calculation: { tolerance: toleranceOfChoice(policy.scholarCalculationTolerance), units: policy.scholarCalculationUnits } });
   if (gaveUp) mark = { correct: false, score: 0, marking: "deterministic" };
+  const calc: CalculationMark | null = "calc" in mark ? mark.calc ?? null : null;
+  // SQIE-CLOSE-2026-11 WS-B (rules v2): what was unsafe or safety-critical about this answer, kept with the attempt.
+  let safety: SafetyRecord | null = "safety" in mark ? mark.safety ?? null : null;
   let evaluation: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   let evaluationParts: FeedbackParts | null = null;
   const extSpec = isExtendedQuestion(q) ? extendedSpecOf(q.answer) : null;
@@ -179,6 +186,9 @@ export async function POST(req: Request) {
             // Recorded as ai_evaluation below, with the evaluator model and prompt version.
             if (extSpec && e.evaluation.matched) { const xm = extendedMarks(extSpec, e.evaluation.matched); extendedMatched = xm.matched; mark = { correct: xm.correct, score: xm.score, marking: "deterministic" }; }
             else mark = { correct: e.evaluation.verdict === "correct", score: e.evaluation.score, marking: "deterministic" };
+            // WS-B: an unsafe statement the evaluator quoted, or a safety-critical point missed, caps the marks (never "partly correct").
+            const capped = withSafety(mark, writtenSafety(q, { correct: mark.correct, unsafe: e.evaluation.unsafe ?? null, matched: extendedMatched }), "ai");
+            mark = capped.mark; safety = capped.safety;
             evaluation = e.evaluation.feedback; evaluationParts = e.evaluation.parts ?? null; evaluator = { model: e.model, promptVersion: e.promptVersion };
           } else why = refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself.";
         }
@@ -205,7 +215,9 @@ export async function POST(req: Request) {
   // SCHOLAR-WRITTEN-FEEDBACK-01: an AI-evaluated answer keeps the formative feedback it was shown, on its own response.
   const formative = marking === "ai_evaluation" ? formativeFeedback([{ part: null, feedback: evaluation, parts: evaluationParts }], evaluator) : null;
   // SCHOLAR-SQIE-LEARNER-01: the key points an extended answer made, then the rubric snapshot, then the feedback (which yields first if the size is tight).
-  const answered = extendedMatched && stored.response ? { ...stored.response, matched: extendedMatched } : stored.response;
+  const withMatched = extendedMatched && stored.response ? { ...stored.response, matched: extendedMatched } : stored.response;
+  // SQIE-CLOSE-2026-11: the scoring rules it was marked under, and its safety outcome (scoring-rules.ts). A choice keeps the 416 shape.
+  const answered = withMatched ? { ...withMatched, rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}), ...(calc ? { calc: storedCalculation(calc) } : {}) } : withMatched;
   const kept = withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
     chosenIndex: stored.chosenIndex, response: kept, correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
@@ -220,7 +232,7 @@ export async function POST(req: Request) {
   if (feedbackMode === "end" && !finished) return NextResponse.json({ recorded: true, held: true });
   return NextResponse.json({
     recorded: true, ...understood,
-    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, justMarked: true, evaluation, evaluationParts, extendedMatched, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    feedback: feedbackView(q, { correct: mark.correct, score: mark.score, marking, justMarked: true, evaluation, evaluationParts, extendedMatched, safety, calc, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
     ...(recovered?.ok && evaluator ? { recovered: recoveredReply(recovered, true) } : {}),
   });
 }
@@ -261,7 +273,10 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
             if (results[i] !== null) continue;
             const part = parts[i];
             const ai = scholarAiRunner(ctx, req, "evaluate", await scholarRisk(ctx.admin, ctx.userId, { text: `${q.stem}\n${part.prompt}\n${r.texts[i]}`, passages: [passage] }), `p${i + 1}`);
-            const e = await runEvaluate(ctx.userId, { question: `${q.stem}\n${part.prompt}`, accepted: part.accepted, answer: r.texts[i], passage, rubric: part.rubric }, ai.run);
+            // SQIE-CLOSE-2026-11 WS-C: a justify or interpret part with weighted criteria is marked against them (rubric-based partial credit).
+            const criteria = part.contract.criteria;
+            const byCriteria = criteria ? { numberedCriteria: criteria } : {};
+            const e = await runEvaluate(ctx.userId, { question: `${q.stem}\n${part.prompt}`, accepted: part.accepted, answer: r.texts[i], passage, rubric: part.rubric, ...byCriteria }, ai.run);
             const refused = ai.refusal();
             await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
               question_id: q.id, part: i + 1, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
@@ -272,7 +287,10 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
               await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_evaluate", outputKind: "other", outcome: o.outcome, reasons: o.reasons, promptVersion: e.promptVersion });
             }
             if (!refused && e.ok && e.evaluation.ok) {
-              results[i] = { awarded: partMarks(part.marks, e.evaluation.verdict), by: "ai", feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null };
+              // WS-C: against criteria, the part's whole marks are its share of the criteria's weight (rounded down); otherwise the verdict (all, half, none).
+              const cm = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!e.evaluation.unsafe) : null;
+              const awarded = e.evaluation.unsafe ? 0 : cm ? marksFromShare(part.marks, cm.score) : partMarks(part.marks, e.evaluation.verdict);
+              results[i] = { awarded, by: "ai", feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null, unsafe: e.evaluation.unsafe ?? null, matched: cm ? cm.matched : null };
               evaluator = { model: e.model, promptVersion: e.promptVersion };
             } else {
               // No more AI is spent on the rest: the student compares every part code could not mark.
@@ -293,12 +311,16 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   }
 
   const final = results as PartResult[];
-  const m = practiceMarks(parts, final);
+  // SQIE-CLOSE-2026-11 WS-B (rules v2): an unsafe part, or a safety-critical part not earned in full, caps the whole answer.
+  const sm = structuredSafety(parts, final);
+  const capped = withSafety(practiceMarks(parts, final), sm, sm.by);
+  const m = capped.mark;
   const marking = final.some(x => x.by === "self") ? "self_graded" as const : evaluator ? "ai_evaluation" as const : "deterministic" as const;
   const stored = storedResponse(r);
   // SCHOLAR-WRITTEN-FEEDBACK-01: how each part was marked, and (AI-evaluated only) the formative feedback on each AI part.
   const formative = marking === "ai_evaluation" ? formativeFeedback(final.flatMap((x, i) => x.by === "ai" ? [{ part: i + 1, feedback: x.feedback ?? null, parts: x.parts ?? null }] : []), evaluator) : null;
-  const kept = withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative);
+  const criteriaMet = final.some(x => x.matched) ? { criteria: final.map(x => x.matched ?? null) } : {};
+  const kept = withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by), ...criteriaMet, rules: SCORING_RULES_VERSION, ...(capped.safety ? { safety: capped.safety } : {}) }, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
     chosenIndex: null, response: kept, correct: m.correct, score: m.score, marking,
     evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
@@ -309,6 +331,6 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   if (sessionId) await updateRevisionSession(ctx.admin, ctx.userId, sessionId, { position: answeredCount + 1 });
   return NextResponse.json({
     recorded: true,
-    feedback: feedbackView(q, { correct: m.correct, score: m.score, marking, justMarked: true, structured: final, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
+    feedback: feedbackView(q, { correct: m.correct, score: m.score, marking, justMarked: true, structured: final, safety: capped.safety, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null, link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null }),
   });
 }

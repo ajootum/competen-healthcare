@@ -24,6 +24,8 @@ export const isTrueFalseQuestion = (q: { kind: string; answer: unknown }): boole
 export const isExtendedQuestion = (q: { kind: string; answer: unknown }): boolean => formatOf(q) === "extended";
 /** Pure. Whether a stored question is an evolving scenario (a short item whose key says so; scenario.ts). */
 export const isScenarioQuestion = (q: { kind: string; answer: unknown }): boolean => formatOf(q) === "scenario";
+/** SQIE-CLOSE-2026-11 WS-A: whether a stored question is a calculation (a short item whose key says so; scoring-rules.ts). */
+export const isCalculationQuestion = (q: { kind: string; answer: unknown }): boolean => formatOf(q) === "calculation";
 
 // ── TRUE / FALSE ──
 

@@ -17,6 +17,8 @@ const rubric = { objective: "Check.", level: "understanding", expectedAnswer: "x
 /** One stored question for each format a learner can see, in the shape the store gives it. */
 const FIXTURES: Record<string, QuestionRow> = {
   mcq: base({ kind: "mcq", options: ["a", "b", "c", "d"], correctIndex: 1 }),
+  // SQIE-CLOSE-2026-11 WS-A.
+  calculation: base({ kind: "short", answer: { format: "calculation", accepted: ["10 mL"], value: 10, unit: "mL" } }),
   case: base({ kind: "case", options: ["a", "b", "c", "d"], correctIndex: 2 }),
   mrq: base({ kind: "mrq", options: ["a", "b", "c", "d"], answer: { correct: [0, 2] } }),
   short: base({ kind: "short", answer: { accepted: ["the risk"], rubric } }),
