@@ -7,6 +7,7 @@ import { isRated, type QuickMark, type RecallMark } from "@/lib/individual/schol
 import { PracticeQuestion, ghost, btn, focusRing, lessonFlashcardsHref, req } from "./learn-practice";
 import { carry } from "./study-active";
 import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
+import { LearningDisclosure } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): SHORT CHECKS INSIDE THE SCROLLING LESSON. Additive: the lesson's Check and
 // Practise actions are unchanged. Nothing here calls AI by itself and nothing is generated on reopen.
@@ -216,16 +217,13 @@ export function QuickCheck({ chunkId, aiAllowed, result, onResult, onPractised, 
   chunkId: string; aiAllowed: boolean; result: QuickMark | null; onResult: (m: QuickMark) => void; onPractised: () => void; accent: string;
 }) {
   return (
-    <details className="group mt-3 rounded-xl border border-gray-200 bg-white">
-      <summary className={`flex min-h-[44px] cursor-pointer list-none flex-wrap items-center gap-x-2 px-3 text-[13.5px] font-semibold text-gray-900 ${touch} [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Quick check: 1 question
-        {result && <span className="text-[12px] font-normal text-gray-600">· {result === "correct" ? "answered, matched your notes" : "answered, did not match your notes"}</span>}
-      </summary>
-      <div className="border-t border-gray-200 px-3 pb-3">
+    // SCHOLAR LEARNING DESIGN SYSTEM: Quick check is a shared LearningDisclosure in the quick-check (lilac) tone.
+    <LearningDisclosure tone="quickCheck" icon="target" title="Quick check: 1 question" className="mt-3" bodyClassName="pt-0"
+      meta={result ? <span className="text-[12px] font-normal text-gray-700">· {result === "correct" ? "answered, matched your notes" : "answered, did not match your notes"}</span> : null}>
+
         <PracticeQuestion variant="quick" chunkId={chunkId} aiAllowed={aiAllowed} accent={accent} onPractised={onPractised} onResult={c => onResult(c ? "correct" : "wrong")} />
         <p className="mt-2 text-[12px] text-gray-600">Marked against the stored answer · formative, not verified competence.</p>
-      </div>
-    </details>
+    </LearningDisclosure>
   );
 }
 

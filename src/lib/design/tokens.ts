@@ -195,6 +195,47 @@ export type AccentRole = keyof typeof accentRole;
 export const activityRole = { plan: "scholar", library: "scholar", learn: "scholar", revise: "revision", apply: "indigo", evaluate: "indigo", progress: "progress" } as const;
 export type ActivityKey = keyof typeof activityRole;
 
+// ── Scholar learning design system (owner directive 4 Nov 2026, docs/design/SCHOLAR-LEARNING-DESIGN-SYSTEM.md) ──────
+//
+// ONE SEMANTIC COLOUR IDENTITY PER LEARNING ACTIVITY, shared by every Scholar learning stage (Learn first; Revise, Apply,
+// Evaluate and My Plan adopt the same tones). Named by what the content IS, never by page. Each tone has four roles:
+//   surface  the soft background of its section     border  the quiet edge
+//   accent   icons and the SELECTED edge (>= 3:1 on its surface, on a white card and on the page: WCAG 1.4.11)
+//   ink      headings, labels and filled controls (>= 4.5:1 on its surface and on white: WCAG 1.4.3)
+// Colour is identity, never meaning: every use also has a heading in words and an icon. None is a correctness or a
+// clinical-review colour -- no tone may be used to imply that AI content was clinically checked. The answer callouts
+// (caution, key, summary, memory, example, record) share the set; caution keeps the strongest safety styling, memory
+// (the Memory aid) has its own rose identity apart from ai-beyond sky and quick-check lilac.
+// Dark values are staged: they apply under [data-cmp-scheme="dark"] (re-pointed by the generator), which no shell sets yet.
+// Every pair is asserted by src/lib/design/scholar-learning-tokens.test.ts.
+export type LearningToneRoles = { surface: string; border: string; accent: string; ink: string };
+export const learningTone = {
+  teach:      { light: { surface: "#F2F8EF", border: "#C9DFBF", accent: "#3E7B37", ink: "#24521F" }, dark: { surface: "#16241A", border: "#3F6B3A", accent: "#8FCB84", ink: "#C4E8BC" } },
+  check:      { light: { surface: "#F6F3FD", border: "#D9CFF4", accent: "#6A4FC4", ink: "#45309A" }, dark: { surface: "#1E1A33", border: "#5B4A9A", accent: "#B7A6F2", ink: "#DCD3FB" } },
+  aiBeyond:   { light: { surface: "#EEF6FC", border: "#C3DDF1", accent: "#1F6FA8", ink: "#154E78" }, dark: { surface: "#12222F", border: "#2F5E82", accent: "#8CC4EC", ink: "#CBE5F7" } },
+  explain:    { light: { surface: "#EFF8F1", border: "#BCE0C4", accent: "#2E7D45", ink: "#1D5A30" }, dark: { surface: "#14261A", border: "#3A7049", accent: "#86D09C", ink: "#C3EBCD" } },
+  guide:      { light: { surface: "#EFF4FD", border: "#C3D6F4", accent: "#2F63C4", ink: "#1E4691" }, dark: { surface: "#151F33", border: "#3B5B97", accent: "#9DBBF2", ink: "#D2E0FA" } },
+  challenge:  { light: { surface: "#F5F1FD", border: "#D6CAF5", accent: "#6D46C7", ink: "#4A2C96" }, dark: { surface: "#201833", border: "#5E4699", accent: "#BFA8F3", ink: "#E0D5FB" } },
+  practice:   { light: { surface: "#EDF7F6", border: "#BCDFDB", accent: "#1B7A73", ink: "#11564F" }, dark: { surface: "#12262A", border: "#2F6E69", accent: "#7FD0C7", ink: "#C2EDE8" } },
+  quickCheck: { light: { surface: "#F9F2FB", border: "#E3CDEE", accent: "#8A43A8", ink: "#632C7B" }, dark: { surface: "#26182C", border: "#74488A", accent: "#DDA9F0", ink: "#F0D8F8" } },
+  notes:      { light: { surface: "#FCF9F0", border: "#E7DCBF", accent: "#8A6A1F", ink: "#5E4712" }, dark: { surface: "#262013", border: "#6E5A2A", accent: "#E0C27A", ink: "#F2E3BC" } },
+  sources:    { light: { surface: "#F6F6FA", border: "#D9D9E6", accent: "#5A5B7A", ink: "#3D3E58" }, dark: { surface: "#1C1D2A", border: "#4E5070", accent: "#B4B6D6", ink: "#DADBF0" } },
+  next:       { light: { surface: "#EBF8FB", border: "#A9DDE8", accent: "#0E7490", ink: "#155E75" }, dark: { surface: "#0F252B", border: "#2F7A8F", accent: "#8FD3E4", ink: "#CDEEF6" } },
+  memory:     { light: { surface: "#FDF0F4", border: "#F0C3D2", accent: "#B5345E", ink: "#86203F" }, dark: { surface: "#2B1520", border: "#8A3B58", accent: "#F4A3BE", ink: "#FBD5E2" } },
+  caution:    { light: { surface: "#FFF5E1", border: "#E9B872", accent: "#B45309", ink: "#7C2D12" }, dark: { surface: "#2E1F0B", border: "#A86412", accent: "#F5B860", ink: "#FCE0B4" } },
+  key:        { light: { surface: "#E8F6F9", border: "#A6D6E2", accent: "#0B7089", ink: "#07566B" }, dark: { surface: "#0E2A33", border: "#2F7A8F", accent: "#8FD3E4", ink: "#CDEEF6" } },
+  example:    { light: { surface: "#ECFAF3", border: "#A9E0C5", accent: "#047857", ink: "#065F46" }, dark: { surface: "#0F2A20", border: "#2E7A5C", accent: "#7FDCB4", ink: "#C6F2DE" } },
+  record:     { light: { surface: "#EEF0FD", border: "#C3C7F4", accent: "#4338CA", ink: "#3730A3" }, dark: { surface: "#1B1C3A", border: "#4B4FA8", accent: "#AAB0F5", ink: "#D9DCFC" } },
+  summary:    { light: { surface: "#F3F5F8", border: "#C6CFD8", accent: "#526273", ink: "#1F2D3A" }, dark: { surface: "#1A222C", border: "#4C5A68", accent: "#B4C0CC", ink: "#E1E7ED" } },
+} as const satisfies Record<string, { light: LearningToneRoles; dark: LearningToneRoles }>;
+export type LearningTone = keyof typeof learningTone;
+export const LEARNING_TONES = Object.keys(learningTone) as LearningTone[];
+/** The text and page colours a learning tone sits with (light: appSurface; dark: the staged Scholar dark canvas). */
+export const learningCanvas = {
+  light: { page: appSurface.bg, card: appSurface.surface, text: appSurface.text, textSecondary: appSurface.textSecondary },
+  dark: { page: "#0F1722", card: "#172033", text: "#E8EEF4", textSecondary: "#BFCBDA" },
+} as const;
+
 // ── Consumption helpers ─────────────────────────────────────────────────────────────────────────────────
 export const clinicalColor = (status: string): string =>
   (color.clinical as Record<string, string>)[status] ?? color.clinical.discharged;
@@ -239,6 +280,13 @@ export function cssVariables(): Record<string, string> {
     out[cssVar(`activity.${a}.icon`)] = r === "revision" ? accentRole.revision.strong : p.accent;
     out[cssVar(`activity.${a}.chip`)] = p.soft;
   }
+  // Scholar learning tones: the light palette (--cmp-learn-<tone>-<role>) and the staged dark palette
+  // (--cmp-learn-dark-<tone>-<role>). The generator derives `.cmp-learn-<tone>` (the --learn-* roles a component reads)
+  // and the [data-cmp-scheme="dark"] re-pointing from these, the way it derives the product theme rules.
+  for (const [t, v] of Object.entries(learningTone)) {
+    for (const [k, c] of Object.entries(v.light)) out[cssVar(`learn.${t}.${k}`)] = c;
+    for (const [k, c] of Object.entries(v.dark)) out[cssVar(`learn.dark.${t}.${k}`)] = c;
+  }
   return out;
 }
 
@@ -250,8 +298,8 @@ export function themeCss(): string {
 // PUI-001 s10: "Design tokens ... available as JSON for system use" — served by /api/design/tokens so
 // tenant theming and any external consumer read the same values the app renders with.
 export function tokensJson() {
-  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, appSurface, accentRole };
+  return { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, appSurface, accentRole, learningTone };
 }
 
-const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, appSurface, accentRole, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
+const tokens = { color, font, space, radius, elevation, grid, breakpoint, a11y, priority, productTheme, appSurface, accentRole, learningTone, clinicalColor, cssVar, cssVariables, themeCss, tokensJson };
 export default tokens;

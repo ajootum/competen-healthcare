@@ -154,6 +154,142 @@
   --cmp-activity-evaluate-chip: #EEF0FD;
   --cmp-activity-progress-icon: #15803D;
   --cmp-activity-progress-chip: #ECFDF5;
+  --cmp-learn-teach-surface: #F2F8EF;
+  --cmp-learn-teach-border: #C9DFBF;
+  --cmp-learn-teach-accent: #3E7B37;
+  --cmp-learn-teach-ink: #24521F;
+  --cmp-learn-dark-teach-surface: #16241A;
+  --cmp-learn-dark-teach-border: #3F6B3A;
+  --cmp-learn-dark-teach-accent: #8FCB84;
+  --cmp-learn-dark-teach-ink: #C4E8BC;
+  --cmp-learn-check-surface: #F6F3FD;
+  --cmp-learn-check-border: #D9CFF4;
+  --cmp-learn-check-accent: #6A4FC4;
+  --cmp-learn-check-ink: #45309A;
+  --cmp-learn-dark-check-surface: #1E1A33;
+  --cmp-learn-dark-check-border: #5B4A9A;
+  --cmp-learn-dark-check-accent: #B7A6F2;
+  --cmp-learn-dark-check-ink: #DCD3FB;
+  --cmp-learn-ai-beyond-surface: #EEF6FC;
+  --cmp-learn-ai-beyond-border: #C3DDF1;
+  --cmp-learn-ai-beyond-accent: #1F6FA8;
+  --cmp-learn-ai-beyond-ink: #154E78;
+  --cmp-learn-dark-ai-beyond-surface: #12222F;
+  --cmp-learn-dark-ai-beyond-border: #2F5E82;
+  --cmp-learn-dark-ai-beyond-accent: #8CC4EC;
+  --cmp-learn-dark-ai-beyond-ink: #CBE5F7;
+  --cmp-learn-explain-surface: #EFF8F1;
+  --cmp-learn-explain-border: #BCE0C4;
+  --cmp-learn-explain-accent: #2E7D45;
+  --cmp-learn-explain-ink: #1D5A30;
+  --cmp-learn-dark-explain-surface: #14261A;
+  --cmp-learn-dark-explain-border: #3A7049;
+  --cmp-learn-dark-explain-accent: #86D09C;
+  --cmp-learn-dark-explain-ink: #C3EBCD;
+  --cmp-learn-guide-surface: #EFF4FD;
+  --cmp-learn-guide-border: #C3D6F4;
+  --cmp-learn-guide-accent: #2F63C4;
+  --cmp-learn-guide-ink: #1E4691;
+  --cmp-learn-dark-guide-surface: #151F33;
+  --cmp-learn-dark-guide-border: #3B5B97;
+  --cmp-learn-dark-guide-accent: #9DBBF2;
+  --cmp-learn-dark-guide-ink: #D2E0FA;
+  --cmp-learn-challenge-surface: #F5F1FD;
+  --cmp-learn-challenge-border: #D6CAF5;
+  --cmp-learn-challenge-accent: #6D46C7;
+  --cmp-learn-challenge-ink: #4A2C96;
+  --cmp-learn-dark-challenge-surface: #201833;
+  --cmp-learn-dark-challenge-border: #5E4699;
+  --cmp-learn-dark-challenge-accent: #BFA8F3;
+  --cmp-learn-dark-challenge-ink: #E0D5FB;
+  --cmp-learn-practice-surface: #EDF7F6;
+  --cmp-learn-practice-border: #BCDFDB;
+  --cmp-learn-practice-accent: #1B7A73;
+  --cmp-learn-practice-ink: #11564F;
+  --cmp-learn-dark-practice-surface: #12262A;
+  --cmp-learn-dark-practice-border: #2F6E69;
+  --cmp-learn-dark-practice-accent: #7FD0C7;
+  --cmp-learn-dark-practice-ink: #C2EDE8;
+  --cmp-learn-quick-check-surface: #F9F2FB;
+  --cmp-learn-quick-check-border: #E3CDEE;
+  --cmp-learn-quick-check-accent: #8A43A8;
+  --cmp-learn-quick-check-ink: #632C7B;
+  --cmp-learn-dark-quick-check-surface: #26182C;
+  --cmp-learn-dark-quick-check-border: #74488A;
+  --cmp-learn-dark-quick-check-accent: #DDA9F0;
+  --cmp-learn-dark-quick-check-ink: #F0D8F8;
+  --cmp-learn-notes-surface: #FCF9F0;
+  --cmp-learn-notes-border: #E7DCBF;
+  --cmp-learn-notes-accent: #8A6A1F;
+  --cmp-learn-notes-ink: #5E4712;
+  --cmp-learn-dark-notes-surface: #262013;
+  --cmp-learn-dark-notes-border: #6E5A2A;
+  --cmp-learn-dark-notes-accent: #E0C27A;
+  --cmp-learn-dark-notes-ink: #F2E3BC;
+  --cmp-learn-sources-surface: #F6F6FA;
+  --cmp-learn-sources-border: #D9D9E6;
+  --cmp-learn-sources-accent: #5A5B7A;
+  --cmp-learn-sources-ink: #3D3E58;
+  --cmp-learn-dark-sources-surface: #1C1D2A;
+  --cmp-learn-dark-sources-border: #4E5070;
+  --cmp-learn-dark-sources-accent: #B4B6D6;
+  --cmp-learn-dark-sources-ink: #DADBF0;
+  --cmp-learn-next-surface: #EBF8FB;
+  --cmp-learn-next-border: #A9DDE8;
+  --cmp-learn-next-accent: #0E7490;
+  --cmp-learn-next-ink: #155E75;
+  --cmp-learn-dark-next-surface: #0F252B;
+  --cmp-learn-dark-next-border: #2F7A8F;
+  --cmp-learn-dark-next-accent: #8FD3E4;
+  --cmp-learn-dark-next-ink: #CDEEF6;
+  --cmp-learn-memory-surface: #FDF0F4;
+  --cmp-learn-memory-border: #F0C3D2;
+  --cmp-learn-memory-accent: #B5345E;
+  --cmp-learn-memory-ink: #86203F;
+  --cmp-learn-dark-memory-surface: #2B1520;
+  --cmp-learn-dark-memory-border: #8A3B58;
+  --cmp-learn-dark-memory-accent: #F4A3BE;
+  --cmp-learn-dark-memory-ink: #FBD5E2;
+  --cmp-learn-caution-surface: #FFF5E1;
+  --cmp-learn-caution-border: #E9B872;
+  --cmp-learn-caution-accent: #B45309;
+  --cmp-learn-caution-ink: #7C2D12;
+  --cmp-learn-dark-caution-surface: #2E1F0B;
+  --cmp-learn-dark-caution-border: #A86412;
+  --cmp-learn-dark-caution-accent: #F5B860;
+  --cmp-learn-dark-caution-ink: #FCE0B4;
+  --cmp-learn-key-surface: #E8F6F9;
+  --cmp-learn-key-border: #A6D6E2;
+  --cmp-learn-key-accent: #0B7089;
+  --cmp-learn-key-ink: #07566B;
+  --cmp-learn-dark-key-surface: #0E2A33;
+  --cmp-learn-dark-key-border: #2F7A8F;
+  --cmp-learn-dark-key-accent: #8FD3E4;
+  --cmp-learn-dark-key-ink: #CDEEF6;
+  --cmp-learn-example-surface: #ECFAF3;
+  --cmp-learn-example-border: #A9E0C5;
+  --cmp-learn-example-accent: #047857;
+  --cmp-learn-example-ink: #065F46;
+  --cmp-learn-dark-example-surface: #0F2A20;
+  --cmp-learn-dark-example-border: #2E7A5C;
+  --cmp-learn-dark-example-accent: #7FDCB4;
+  --cmp-learn-dark-example-ink: #C6F2DE;
+  --cmp-learn-record-surface: #EEF0FD;
+  --cmp-learn-record-border: #C3C7F4;
+  --cmp-learn-record-accent: #4338CA;
+  --cmp-learn-record-ink: #3730A3;
+  --cmp-learn-dark-record-surface: #1B1C3A;
+  --cmp-learn-dark-record-border: #4B4FA8;
+  --cmp-learn-dark-record-accent: #AAB0F5;
+  --cmp-learn-dark-record-ink: #D9DCFC;
+  --cmp-learn-summary-surface: #F3F5F8;
+  --cmp-learn-summary-border: #C6CFD8;
+  --cmp-learn-summary-accent: #526273;
+  --cmp-learn-summary-ink: #1F2D3A;
+  --cmp-learn-dark-summary-surface: #1A222C;
+  --cmp-learn-dark-summary-border: #4C5A68;
+  --cmp-learn-dark-summary-accent: #B4C0CC;
+  --cmp-learn-dark-summary-ink: #E1E7ED;
   --cmp-font-sans: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
 }
 [data-cmp-theme="platform"] {
@@ -187,6 +323,93 @@
   --cmp-theme-border: var(--cmp-product-professional-border);
   --cmp-theme-ink: var(--cmp-product-professional-ink);
   --cmp-theme-on-accent: var(--cmp-product-professional-on-accent);
+}
+.cmp-learn-teach { --learn-surface: var(--cmp-learn-teach-surface); --learn-border: var(--cmp-learn-teach-border); --learn-accent: var(--cmp-learn-teach-accent); --learn-ink: var(--cmp-learn-teach-ink); }
+.cmp-learn-check { --learn-surface: var(--cmp-learn-check-surface); --learn-border: var(--cmp-learn-check-border); --learn-accent: var(--cmp-learn-check-accent); --learn-ink: var(--cmp-learn-check-ink); }
+.cmp-learn-ai-beyond { --learn-surface: var(--cmp-learn-ai-beyond-surface); --learn-border: var(--cmp-learn-ai-beyond-border); --learn-accent: var(--cmp-learn-ai-beyond-accent); --learn-ink: var(--cmp-learn-ai-beyond-ink); }
+.cmp-learn-explain { --learn-surface: var(--cmp-learn-explain-surface); --learn-border: var(--cmp-learn-explain-border); --learn-accent: var(--cmp-learn-explain-accent); --learn-ink: var(--cmp-learn-explain-ink); }
+.cmp-learn-guide { --learn-surface: var(--cmp-learn-guide-surface); --learn-border: var(--cmp-learn-guide-border); --learn-accent: var(--cmp-learn-guide-accent); --learn-ink: var(--cmp-learn-guide-ink); }
+.cmp-learn-challenge { --learn-surface: var(--cmp-learn-challenge-surface); --learn-border: var(--cmp-learn-challenge-border); --learn-accent: var(--cmp-learn-challenge-accent); --learn-ink: var(--cmp-learn-challenge-ink); }
+.cmp-learn-practice { --learn-surface: var(--cmp-learn-practice-surface); --learn-border: var(--cmp-learn-practice-border); --learn-accent: var(--cmp-learn-practice-accent); --learn-ink: var(--cmp-learn-practice-ink); }
+.cmp-learn-quick-check { --learn-surface: var(--cmp-learn-quick-check-surface); --learn-border: var(--cmp-learn-quick-check-border); --learn-accent: var(--cmp-learn-quick-check-accent); --learn-ink: var(--cmp-learn-quick-check-ink); }
+.cmp-learn-notes { --learn-surface: var(--cmp-learn-notes-surface); --learn-border: var(--cmp-learn-notes-border); --learn-accent: var(--cmp-learn-notes-accent); --learn-ink: var(--cmp-learn-notes-ink); }
+.cmp-learn-sources { --learn-surface: var(--cmp-learn-sources-surface); --learn-border: var(--cmp-learn-sources-border); --learn-accent: var(--cmp-learn-sources-accent); --learn-ink: var(--cmp-learn-sources-ink); }
+.cmp-learn-next { --learn-surface: var(--cmp-learn-next-surface); --learn-border: var(--cmp-learn-next-border); --learn-accent: var(--cmp-learn-next-accent); --learn-ink: var(--cmp-learn-next-ink); }
+.cmp-learn-memory { --learn-surface: var(--cmp-learn-memory-surface); --learn-border: var(--cmp-learn-memory-border); --learn-accent: var(--cmp-learn-memory-accent); --learn-ink: var(--cmp-learn-memory-ink); }
+.cmp-learn-caution { --learn-surface: var(--cmp-learn-caution-surface); --learn-border: var(--cmp-learn-caution-border); --learn-accent: var(--cmp-learn-caution-accent); --learn-ink: var(--cmp-learn-caution-ink); }
+.cmp-learn-key { --learn-surface: var(--cmp-learn-key-surface); --learn-border: var(--cmp-learn-key-border); --learn-accent: var(--cmp-learn-key-accent); --learn-ink: var(--cmp-learn-key-ink); }
+.cmp-learn-example { --learn-surface: var(--cmp-learn-example-surface); --learn-border: var(--cmp-learn-example-border); --learn-accent: var(--cmp-learn-example-accent); --learn-ink: var(--cmp-learn-example-ink); }
+.cmp-learn-record { --learn-surface: var(--cmp-learn-record-surface); --learn-border: var(--cmp-learn-record-border); --learn-accent: var(--cmp-learn-record-accent); --learn-ink: var(--cmp-learn-record-ink); }
+.cmp-learn-summary { --learn-surface: var(--cmp-learn-summary-surface); --learn-border: var(--cmp-learn-summary-border); --learn-accent: var(--cmp-learn-summary-accent); --learn-ink: var(--cmp-learn-summary-ink); }
+[data-cmp-scheme="dark"] {
+  --cmp-learn-teach-surface: var(--cmp-learn-dark-teach-surface);
+  --cmp-learn-teach-border: var(--cmp-learn-dark-teach-border);
+  --cmp-learn-teach-accent: var(--cmp-learn-dark-teach-accent);
+  --cmp-learn-teach-ink: var(--cmp-learn-dark-teach-ink);
+  --cmp-learn-check-surface: var(--cmp-learn-dark-check-surface);
+  --cmp-learn-check-border: var(--cmp-learn-dark-check-border);
+  --cmp-learn-check-accent: var(--cmp-learn-dark-check-accent);
+  --cmp-learn-check-ink: var(--cmp-learn-dark-check-ink);
+  --cmp-learn-ai-beyond-surface: var(--cmp-learn-dark-ai-beyond-surface);
+  --cmp-learn-ai-beyond-border: var(--cmp-learn-dark-ai-beyond-border);
+  --cmp-learn-ai-beyond-accent: var(--cmp-learn-dark-ai-beyond-accent);
+  --cmp-learn-ai-beyond-ink: var(--cmp-learn-dark-ai-beyond-ink);
+  --cmp-learn-explain-surface: var(--cmp-learn-dark-explain-surface);
+  --cmp-learn-explain-border: var(--cmp-learn-dark-explain-border);
+  --cmp-learn-explain-accent: var(--cmp-learn-dark-explain-accent);
+  --cmp-learn-explain-ink: var(--cmp-learn-dark-explain-ink);
+  --cmp-learn-guide-surface: var(--cmp-learn-dark-guide-surface);
+  --cmp-learn-guide-border: var(--cmp-learn-dark-guide-border);
+  --cmp-learn-guide-accent: var(--cmp-learn-dark-guide-accent);
+  --cmp-learn-guide-ink: var(--cmp-learn-dark-guide-ink);
+  --cmp-learn-challenge-surface: var(--cmp-learn-dark-challenge-surface);
+  --cmp-learn-challenge-border: var(--cmp-learn-dark-challenge-border);
+  --cmp-learn-challenge-accent: var(--cmp-learn-dark-challenge-accent);
+  --cmp-learn-challenge-ink: var(--cmp-learn-dark-challenge-ink);
+  --cmp-learn-practice-surface: var(--cmp-learn-dark-practice-surface);
+  --cmp-learn-practice-border: var(--cmp-learn-dark-practice-border);
+  --cmp-learn-practice-accent: var(--cmp-learn-dark-practice-accent);
+  --cmp-learn-practice-ink: var(--cmp-learn-dark-practice-ink);
+  --cmp-learn-quick-check-surface: var(--cmp-learn-dark-quick-check-surface);
+  --cmp-learn-quick-check-border: var(--cmp-learn-dark-quick-check-border);
+  --cmp-learn-quick-check-accent: var(--cmp-learn-dark-quick-check-accent);
+  --cmp-learn-quick-check-ink: var(--cmp-learn-dark-quick-check-ink);
+  --cmp-learn-notes-surface: var(--cmp-learn-dark-notes-surface);
+  --cmp-learn-notes-border: var(--cmp-learn-dark-notes-border);
+  --cmp-learn-notes-accent: var(--cmp-learn-dark-notes-accent);
+  --cmp-learn-notes-ink: var(--cmp-learn-dark-notes-ink);
+  --cmp-learn-sources-surface: var(--cmp-learn-dark-sources-surface);
+  --cmp-learn-sources-border: var(--cmp-learn-dark-sources-border);
+  --cmp-learn-sources-accent: var(--cmp-learn-dark-sources-accent);
+  --cmp-learn-sources-ink: var(--cmp-learn-dark-sources-ink);
+  --cmp-learn-next-surface: var(--cmp-learn-dark-next-surface);
+  --cmp-learn-next-border: var(--cmp-learn-dark-next-border);
+  --cmp-learn-next-accent: var(--cmp-learn-dark-next-accent);
+  --cmp-learn-next-ink: var(--cmp-learn-dark-next-ink);
+  --cmp-learn-memory-surface: var(--cmp-learn-dark-memory-surface);
+  --cmp-learn-memory-border: var(--cmp-learn-dark-memory-border);
+  --cmp-learn-memory-accent: var(--cmp-learn-dark-memory-accent);
+  --cmp-learn-memory-ink: var(--cmp-learn-dark-memory-ink);
+  --cmp-learn-caution-surface: var(--cmp-learn-dark-caution-surface);
+  --cmp-learn-caution-border: var(--cmp-learn-dark-caution-border);
+  --cmp-learn-caution-accent: var(--cmp-learn-dark-caution-accent);
+  --cmp-learn-caution-ink: var(--cmp-learn-dark-caution-ink);
+  --cmp-learn-key-surface: var(--cmp-learn-dark-key-surface);
+  --cmp-learn-key-border: var(--cmp-learn-dark-key-border);
+  --cmp-learn-key-accent: var(--cmp-learn-dark-key-accent);
+  --cmp-learn-key-ink: var(--cmp-learn-dark-key-ink);
+  --cmp-learn-example-surface: var(--cmp-learn-dark-example-surface);
+  --cmp-learn-example-border: var(--cmp-learn-dark-example-border);
+  --cmp-learn-example-accent: var(--cmp-learn-dark-example-accent);
+  --cmp-learn-example-ink: var(--cmp-learn-dark-example-ink);
+  --cmp-learn-record-surface: var(--cmp-learn-dark-record-surface);
+  --cmp-learn-record-border: var(--cmp-learn-dark-record-border);
+  --cmp-learn-record-accent: var(--cmp-learn-dark-record-accent);
+  --cmp-learn-record-ink: var(--cmp-learn-dark-record-ink);
+  --cmp-learn-summary-surface: var(--cmp-learn-dark-summary-surface);
+  --cmp-learn-summary-border: var(--cmp-learn-dark-summary-border);
+  --cmp-learn-summary-accent: var(--cmp-learn-dark-summary-accent);
+  --cmp-learn-summary-ink: var(--cmp-learn-dark-summary-ink);
 }
 /* @generated:design-tokens-end */
 
@@ -818,6 +1041,20 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
   --cmp-fc-bookmark-surface: #232453;
   --cmp-fc-bookmark-border: #6366F1;
   --cmp-fc-bookmark-ink: #C7D2FE;
+}
+
+/* ── SCHOLAR LEARNING DESIGN SYSTEM: shared helpers (docs/design/SCHOLAR-LEARNING-DESIGN-SYSTEM.md) ────────────────────
+   The learning tones themselves are design tokens (tokens.ts learningTone, generated above as --cmp-learn-<tone>-<role>,
+   with `.cmp-learn-<tone>` exposing the four roles as --learn-surface / --learn-border / --learn-accent / --learn-ink and
+   the staged [data-cmp-scheme="dark"] re-pointing). These helpers read those roles; the components live in
+   src/components/ui/scholar-learning.tsx. Layered as components, so a Tailwind utility on the same element still wins. */
+@layer components {
+  .cmp-learn-box { background: var(--learn-surface); border: 1px solid var(--learn-border); border-radius: var(--cmp-radius-xl); }
+  .cmp-learn-ink { color: var(--learn-ink); }
+  .cmp-learn-accent { color: var(--learn-accent); }
+  /* The reading surface: comfortable size, line height and paragraph rhythm for long study. */
+  .cmp-reading { font-size: 15.5px; line-height: 1.7; }
+  .cmp-reading p + p { margin-top: 0.75em; }
 }
 
 /* HFE-COLOR-02: a form field's edge must reach 3:1 (WCAG 1.4.11). The card border (#E2E8F0, 1.23:1) does not, so
