@@ -3,10 +3,11 @@ import { createHash } from "node:crypto";
 import { cache } from "react";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
+import { ABANDON_AFTER_MS, SETTLED_RETENTION_MS, STALE_CLAIM_MS, abandonedObjects, finishDecision, reusable, type UploadRow } from "./upload-record";
 import { parseLessonTitles } from "./learn-recut";
 import { learningPlanSchema } from "../learning-plan/event-store";
 import type { GoalType } from "../learning-plan/types";
-import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
+import { LEARNER_CARD, BUCKET, DOCX_MIME, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { AiReading, Chunk, ExtractionQuality } from "./extract";
 import { planChunkInsertion, type NewChunk } from "./slide-images";
 import type { CandidateChunk } from "./retrieval";
@@ -187,8 +188,13 @@ export async function findDuplicate(admin: Admin, userId: string, sha256: string
   return data ? { id: data.id, title: data.title } : null;
 }
 
-export async function createUploadSlot(admin: Admin, userId: string, mime: MaterialMime): Promise<{ uploadId: string; path: string; token: string } | null> {
-  const uploadId = crypto.randomUUID();
+/**
+ * A one-time signed upload token for <user_id>/<uploadId>.<ext>. SCHOLAR-CE07C: `existingId` re-issues a token for the
+ * SAME path, so an interrupted upload continues under the same identity (the path is still built from the caller's
+ * own id, so it can only ever be their own folder).
+ */
+export async function createUploadSlot(admin: Admin, userId: string, mime: MaterialMime, existingId?: string): Promise<{ uploadId: string; path: string; token: string } | null> {
+  const uploadId = existingId && isUuid(existingId) ? existingId : crypto.randomUUID();
   const path = uploadPath(userId, uploadId, mime);
   const { data, error } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
   if (error || !data?.token) return null;
@@ -216,7 +222,7 @@ export async function createMaterial(admin: Admin, userId: string, input: {
   pageCount: number | null; extractor: string; chunks: Chunk[];
   /** UPLOAD-01 U2 (migration 406). Where 406 is absent the row is stored without it: quality "not measured". */
   quality?: ExtractionQuality | null;
-}): Promise<{ ok: true; id: string; qualityStored: boolean } | { ok: false; error: string; detail?: string }> {
+}): Promise<{ ok: true; id: string; qualityStored: boolean; existing?: boolean } | { ok: false; error: string; detail?: string }> {
   const { id, path } = input;
   const row = {
     id, user_id: userId, title: input.title, file_name: input.fileName.slice(0, 255), mime_type: input.mime,
@@ -233,6 +239,10 @@ export async function createMaterial(admin: Admin, userId: string, input: {
     ({ error: mErr } = await admin.from("individual_scholar_material").insert({ ...row, user_id: userId }));
   }
   if (mErr) {
+    // SCHOLAR-CE07C: a second finish of the SAME upload (a retry after a lost response) collides with the material the
+    // first one kept, on its id, path or sha256. That object belongs to the kept material: never remove it.
+    const { data: kept } = await admin.from("individual_scholar_material").select("id").eq("user_id", userId).eq("id", id).maybeSingle();
+    if (kept) return { ok: true, id, qualityStored, existing: true };
     await admin.storage.from(BUCKET).remove([path]);
     return { ok: false, error: "material", detail: mErr.message };
   }
@@ -268,6 +278,18 @@ export const fromQualityJson = (j: any): ExtractionQuality | null =>
       ...(provenance(j.ai_provenance) ? { aiProvenance: provenance(j.ai_provenance) } : {}),
     }
     : null;
+
+/**
+ * SCHOLAR-CE07C: the kept material with this upload id, for an idempotent finish (the same answer the first finish gave).
+ * The id is the caller's own upload id, matched on their own user_id.
+ */
+export async function keptMaterial(admin: Admin, userId: string, id: string): Promise<{ id: string; mime: MaterialMime; chunks: number; pages: number | null; quality: ExtractionQuality | null } | null | "unreadable"> {
+  if (!isUuid(id)) return null;
+  const { data, error } = await admin.from("individual_scholar_material").select("*").eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error) return "unreadable";
+  if (!data) return null;
+  return { id: data.id, mime: data.mime_type, chunks: Number(data.chunk_count), pages: data.page_count ?? null, quality: fromQualityJson(data.extraction_quality) };
+}
 
 /** Owner erasure of one material: the object, then the row (which cascades to everything derived). */
 export async function deleteMaterial(admin: Admin, userId: string, id: string): Promise<{ ok: boolean; found: boolean }> {
@@ -329,8 +351,10 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   // function drives the delete from a receipt insert). It returns the storage paths of uploaded evidence, which the route that stores
   // evidence files removes. Absent function (893 not applied): nothing to do.
   const { error: asErr } = await admin.rpc("asmt_scholar_erase_user", { p_user: userId });
+  // SCHOLAR-CE07C (960): the records of uploads in flight go too (they hold a sha256 of the learner's file). Absent: nothing to do.
+  const { error: upErr } = await admin.from("individual_scholar_upload").delete().eq("user_id", userId);
   const fine = (e: any) => !e || isNotProvisioned(e);
-  return { ok: fine(asErr) && fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
+  return { ok: fine(upErr) && fine(asErr) && fine(cvErr) && fine(cErr) && fine(lErr) && fine(pErr) && fine(rsErr) && fine(rtErr) && fine(evErr) && fine(osErr) && fine(fdErr) && fine(ntErr), erased: rows.length };
 }
 
 // ── UPLOAD-01 U5: THE LIBRARY -- QUALITY, RENAMING AND COLLECTIONS (406, 407) ───────────────────────────
@@ -4824,3 +4848,143 @@ export const cardDueDates = cache(cardDueDatesRead);
 export const listMonthlyReviewRecords = cache(listMonthlyReviewRecordsRead);
 const masteryEvidenceOnce = cache((admin: Admin, userId: string, sinceIso: string, maxRows: number) => masteryEvidenceRead(admin, userId, { sinceIso, maxRows }));
 export const masteryEvidence = (admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<MasteryRaw>> => masteryEvidenceOnce(admin, userId, o.sinceIso, o.maxRows);
+
+// ── SCHOLAR-CE07C: THE UPLOAD RECORD (migration 960) ─────────────────────────────────────────────────
+//
+// One row per upload identity between the signed slot and the material (upload-record.ts holds the decisions).
+// Without 960 every function answers "absent" (or does nothing) and the routes behave as before it.
+
+/** Record a new upload identity. "absent": 960 not applied (go on without it). */
+export async function issueUpload(admin: Admin, userId: string, u: { id: string; mime: MaterialMime; size: number; sha256: string }, nowMs: number): Promise<"ok" | "absent" | "failed"> {
+  const { error } = await admin.from("individual_scholar_upload").insert({ id: u.id, user_id: userId, mime_type: u.mime, byte_size: u.size, sha256: u.sha256, state: "issued", issued_at: new Date(nowMs).toISOString() });
+  if (!error) return "ok";
+  return isNotProvisioned(error) ? "absent" : "failed";
+}
+
+export async function getUpload(admin: Admin, userId: string, id: string): Promise<UploadRow | null | "absent"> {
+  if (!isUuid(id)) return null;
+  const { data, error } = await admin.from("individual_scholar_upload").select("*").eq("user_id", userId).eq("id", id).maybeSingle();
+  if (error) return isNotProvisioned(error) ? "absent" : null;
+  return (data as UploadRow) ?? null;
+}
+
+/** The newest unfinished upload of exactly these bytes, to continue under the same identity. */
+export async function findReusableUpload(admin: Admin, userId: string, want: { mime: string; size: number; sha256: string }, nowMs: number): Promise<UploadRow | null> {
+  const { data, error } = await admin.from("individual_scholar_upload").select("*").eq("user_id", userId).eq("sha256", want.sha256).eq("state", "issued")
+    .order("issued_at", { ascending: false }).limit(5);
+  if (error) return null;
+  return ((data ?? []) as UploadRow[]).find(r => reusable(r, want, nowMs)) ?? null;
+}
+
+/**
+ * Take the single finish claim: issued -> processing, or a stale processing claim taken over. Returns the row when
+ * the claim is ours, the current row when it is not, "absent" without 960, null when there is no row.
+ */
+export async function claimUpload(admin: Admin, userId: string, id: string, nowMs: number): Promise<{ claimed: true; row: UploadRow } | { claimed: false; row: UploadRow } | "absent" | null> {
+  if (!isUuid(id)) return null;
+  const staleBefore = new Date(nowMs - STALE_CLAIM_MS).toISOString();
+  const { data, error } = await admin.from("individual_scholar_upload")
+    .update({ state: "processing", processing_started_at: new Date(nowMs).toISOString(), updated_at: new Date(nowMs).toISOString() })
+    .eq("user_id", userId).eq("id", id)
+    .or(`state.eq.issued,and(state.eq.processing,processing_started_at.lt.${staleBefore})`)
+    .select("*");
+  if (error) return isNotProvisioned(error) ? "absent" : null;
+  if ((data ?? []).length) return { claimed: true, row: data[0] as UploadRow };
+  const row = await getUpload(admin, userId, id);
+  if (row === "absent") return "absent";
+  return row ? { claimed: false, row } : null;
+}
+
+/** Settle an upload. A refusal keeps the learner-facing answer for a retried finish. */
+export async function settleUpload(admin: Admin, userId: string, id: string, outcome: { state: "kept" | "cancelled" | "abandoned" } | { state: "refused"; status: number; message: string }, nowMs: number): Promise<void> {
+  const now = new Date(nowMs).toISOString();
+  const patch = outcome.state === "refused"
+    ? { state: "refused", refusal_status: outcome.status, refusal_message: outcome.message.slice(0, 600), settled_at: now, updated_at: now }
+    : { state: outcome.state, refusal_status: null, refusal_message: null, settled_at: now, updated_at: now };
+  await admin.from("individual_scholar_upload").update(patch).eq("user_id", userId).eq("id", id);
+}
+
+/** Give a claim back (a transient failure): the same upload can be finished again without sending the file again. */
+export async function releaseUpload(admin: Admin, userId: string, id: string, nowMs: number): Promise<void> {
+  await admin.from("individual_scholar_upload").update({ state: "issued", processing_started_at: null, updated_at: new Date(nowMs).toISOString() })
+    .eq("user_id", userId).eq("id", id).eq("state", "processing");
+}
+
+/** Settled records past their retention go (a week: a late retry still gets its answer). */
+export async function pruneSettledUploads(admin: Admin, userId: string, nowMs: number): Promise<number> {
+  const { data, error } = await admin.from("individual_scholar_upload").delete().eq("user_id", userId).not("settled_at", "is", null)
+    .lt("settled_at", new Date(nowMs - SETTLED_RETENTION_MS).toISOString()).select("id");
+  return error ? 0 : (data ?? []).length;
+}
+
+/** Is this upload id a kept material of this person? null: unreadable. */
+export async function materialExists(admin: Admin, userId: string, id: string): Promise<boolean | null> {
+  const { data, error } = await admin.from("individual_scholar_material").select("id").eq("user_id", userId).eq("id", id).maybeSingle();
+  return error ? null : !!data;
+}
+
+/** The object paths an upload id may have (the type is not known without the record). */
+const UPLOAD_MIMES: MaterialMime[] = ["application/pdf", DOCX_MIME, PPTX_MIME, "text/plain"] as MaterialMime[];
+export const candidatePaths = (userId: string, id: string, mime?: MaterialMime | null) =>
+  mime ? [uploadPath(userId, id, mime)] : UPLOAD_MIMES.map(m => uploadPath(userId, id, m));
+
+/**
+ * The learner cancels an upload that is not kept. Removes the object if it got there, and records the cancel.
+ * "kept": a material exists (delete that instead). "busy": a finish is reading it now.
+ */
+export async function cancelUpload(admin: Admin, userId: string, id: string, nowMs: number): Promise<"ok" | "kept" | "busy" | "failed"> {
+  if (!isUuid(id)) return "ok";
+  const exists = await materialExists(admin, userId, id);
+  if (exists === null) return "failed";
+  if (exists) return "kept";
+  const row = await getUpload(admin, userId, id);
+  if (row && row !== "absent" && finishDecision(row, nowMs).kind === "busy") return "busy";
+  const rm = await admin.storage.from(BUCKET).remove(candidatePaths(userId, id, row && row !== "absent" ? row.mime_type : null));
+  if (rm.error) return "failed";
+  if (row && row !== "absent" && (row.state === "issued" || row.state === "processing")) await settleUpload(admin, userId, id, { state: "cancelled" }, nowMs);
+  return "ok";
+}
+
+/**
+ * One person's clean-up, run on their next upload (works without 960): objects in their folder older than 24 h that
+ * no material uses and no finish is reading are removed, their unfinished records marked abandoned, and their settled
+ * records past retention removed. Best effort and bounded (one listing of up to 1000 objects). Returns objects removed.
+ */
+export async function sweepPersonUploads(admin: Admin, userId: string, nowMs: number): Promise<number> {
+  const before = new Date(nowMs - ABANDON_AFTER_MS).toISOString();
+  const now = new Date(nowMs).toISOString();
+  const { data: rows, error: rErr } = await admin.from("individual_scholar_upload").select("id, mime_type, state, processing_started_at").eq("user_id", userId).eq("state", "processing");
+  if (!rErr) {
+    await admin.from("individual_scholar_upload").update({ state: "abandoned", settled_at: now, updated_at: now }).eq("user_id", userId).eq("state", "issued").lt("issued_at", before);
+    await pruneSettledUploads(admin, userId, nowMs);
+  }
+  const listed = await admin.storage.from(BUCKET).list(userId, { limit: 1000 });
+  if (listed.error) return 0;
+  const objects = (listed.data ?? []) as { name: string; created_at?: string | null }[];
+  if (!objects.some(o => o.created_at && nowMs - Date.parse(o.created_at) >= ABANDON_AFTER_MS)) return 0;
+  const { data: mats, error } = await admin.from("individual_scholar_material").select("storage_path").eq("user_id", userId).limit(5000);
+  if (error) return 0;
+  const kept = new Set(((mats ?? []) as any[]).map(m => m.storage_path as string));
+  const busy = new Set<string>();
+  if (!rErr) for (const r of (rows ?? []) as any[]) if (finishDecision(r, nowMs).kind === "busy") busy.add(uploadPath(userId, r.id, r.mime_type));
+  const gone = abandonedObjects(userId, objects, kept, busy, nowMs);
+  if (!gone.length) return 0;
+  const rm = await admin.storage.from(BUCKET).remove(gone);
+  return rm.error ? 0 : gone.length;
+}
+
+/**
+ * The platform clean-up's action on ONE unfinished upload it listed (scholar-upload-sweep.ts): a kept material is
+ * recorded kept, anything else has its object removed and is recorded abandoned. Keyed on the upload's own person.
+ */
+export async function abandonUpload(admin: Admin, userId: string, row: Pick<UploadRow, "id" | "mime_type" | "state" | "processing_started_at" | "refusal_status" | "refusal_message">, nowMs: number): Promise<"kept" | "abandoned" | "skipped"> {
+  if (finishDecision(row, nowMs).kind === "busy") return "skipped";
+  const exists = await materialExists(admin, userId, row.id);
+  if (exists === null) return "skipped";
+  if (exists) { await settleUpload(admin, userId, row.id, { state: "kept" }, nowMs); return "kept"; }
+  const rm = await admin.storage.from(BUCKET).remove([uploadPath(userId, row.id, row.mime_type)]);
+  if (rm.error) return "skipped";
+  await settleUpload(admin, userId, row.id, { state: "abandoned" }, nowMs);
+  await pruneSettledUploads(admin, userId, nowMs);
+  return "abandoned";
+}
