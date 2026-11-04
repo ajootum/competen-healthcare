@@ -5,8 +5,8 @@
 // decides nothing itself.
 import { useMemo } from "react";
 import { Btn, Chip } from "@/components/assessment/ui";
-import { evaluate, presetAllSatisfactory, runTests, type InstrumentDef, type RulesDoc, type ScoringTestCase } from "@/lib/assessment/core";
-import { PROFILE_LIST, summarizeResult, type ProfileId } from "@/lib/assessment/import/profiles";
+import { evaluate, presetAllSatisfactory, runTests, type Evaluation, type InstrumentDef, type RulesDoc, type ScoringTestCase } from "@/lib/assessment/core";
+import { PROFILE_LIST, summarizeResult, type ProfileId, type ResultSummary } from "@/lib/assessment/import/profiles";
 import type { ValidationResult } from "@/lib/assessment/core";
 import { Notice, Panel } from "./studio-ui";
 
@@ -21,13 +21,14 @@ export function ScoringEvaluationPanel({ def, doc, tests, live, editable, busy, 
   const mandatory = def.items.filter((it) => it.mandatory).length;
   const critical = def.items.filter((it) => it.critical).length;
   const thresholds = doc ? doc.rules.filter((r) => "aggregate" in r.when) : [];
-  const preview = useMemo(() => {
-    if (!doc || !def.items.length) return null;
+  // The preview is one of three honest states: nothing to preview (no rules or no items), evaluated, or the engine refused.
+  const preview = useMemo<Preview>(() => {
+    if (!doc || !def.items.length) return { kind: "none" };
     try {
       const responses = presetAllSatisfactory(def);
       const ev = evaluate(def, doc, responses);
-      return { ev, summary: summarizeResult(def, doc, ev, responses), tests: tests.length ? runTests(def, doc, tests) : null };
-    } catch (e) { return { error: e instanceof Error ? e.message : String(e) }; }
+      return { kind: "ok", ev, summary: summarizeResult(def, doc, ev, responses), tests: tests.length ? runTests(def, doc, tests) : null };
+    } catch (e) { return { kind: "error", error: e instanceof Error ? e.message : String(e) }; }
   }, [def, doc, tests]);
   const fieldKeys = [...new Set(def.items.flatMap((it) => (it.fields ?? []).map((f) => f.label)))];
 
@@ -51,8 +52,8 @@ export function ScoringEvaluationPanel({ def, doc, tests, live, editable, busy, 
         </Row>
         <Row label="Validation status">{!doc ? <Chip tone="warning">No rules</Chip> : live && live.errors.length ? <Chip tone="error">{live.errors.length} problem(s)</Chip> : <Chip tone="success">Rules valid</Chip>}{live?.warnings.length ? <span className="ml-2 text-xs text-[var(--cmp-app-text-secondary)]">{live.warnings.length} warning(s)</span> : null}</Row>
       </dl>
-      {preview && "error" in preview && <Notice tone="warning">The preview could not be evaluated: {preview.error}</Notice>}
-      {preview && "ev" in preview && (
+      {preview.kind === "error" && <Notice tone="warning">The preview could not be evaluated: {preview.error}</Notice>}
+      {preview.kind === "ok" && (
         <div className="mt-3 rounded-lg border border-[var(--cmp-app-border)] p-3 text-sm">
           <p className="font-semibold">Result preview (every item answered with its met value)</p>
           {preview.summary ? (
@@ -86,6 +87,11 @@ export function ScoringEvaluationPanel({ def, doc, tests, live, editable, busy, 
     </Panel>
   );
 }
+
+type Preview =
+  | { kind: "none" }
+  | { kind: "ok"; ev: Evaluation; summary: ResultSummary | null; tests: ReturnType<typeof runTests> | null }
+  | { kind: "error"; error: string };
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return <div><dt className="text-xs font-semibold uppercase tracking-wide text-[var(--cmp-app-text-secondary)]">{label}</dt><dd className="mt-0.5">{children}</dd></div>;
