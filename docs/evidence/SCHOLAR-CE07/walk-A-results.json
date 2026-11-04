@@ -1,0 +1,289 @@
+{
+  "at": "2026-11-04T07:25:02.932Z",
+  "results": [
+    {
+      "id": "A.paused-plain",
+      "ok": true,
+      "note": "deck-7.pdf paused Paused, waiting for a connection. 3.0 MB of 9.7 MB (30%) sent, kept safely: it continues by itself when you are back online. Cancel"
+    },
+    {
+      "id": "A.resumed",
+      "ok": true,
+      "note": "paused at 30%, then: deck-7.pdf uploading Uploading 3.0 MB of 9.7 MB (31%) Cancel"
+    },
+    {
+      "id": "A.duration",
+      "ok": true,
+      "note": "226 s for 10.2 MB on slow 3G with a 20 s offline spell"
+    },
+    {
+      "id": "A.progress-honest",
+      "ok": true,
+      "note": "percent samples never jump ahead of the server: 10,16,22,29"
+    },
+    {
+      "id": "A.one-material",
+      "ok": true,
+      "note": "1 material(s) with sha256 a051bb18426a…"
+    },
+    {
+      "id": "A.bytes-intact",
+      "ok": true,
+      "note": "stored 10222322 bytes, sha256 a051bb18426a… = local a051bb18426a…; 16 sections extracted"
+    },
+    {
+      "id": "A.record-kept",
+      "ok": true,
+      "note": "upload record state kept"
+    },
+    {
+      "id": "A.extracted-once",
+      "ok": true,
+      "note": "1 \"material uploaded\" audit row(s) for ec6c0deb-4bce-4976-8fd3-794fa68daf4b"
+    }
+  ],
+  "timeline": {
+    "A": [
+      {
+        "t": 0,
+        "text": "deck-7.pdf uploading Preparing the file…"
+      },
+      {
+        "t": 1,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 2,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 3,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 4,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 5,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 6,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 7,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 8,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 9,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 10,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 11,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 12,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 13,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 14,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 15,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 16,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 17,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 18,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 19,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 20,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 21,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 22,
+        "text": "deck-7.pdf uploading Starting… Cancel"
+      },
+      {
+        "t": 23,
+        "text": "deck-7.pdf uploading Uploading 1.0 MB of 9.7 MB (10%) Cancel"
+      },
+      {
+        "t": 24,
+        "text": "deck-7.pdf uploading Uploading 1.1 MB of 9.7 MB (11%) Cancel"
+      },
+      {
+        "t": 25,
+        "text": "deck-7.pdf uploading Uploading 1.2 MB of 9.7 MB (11%) Cancel"
+      },
+      {
+        "t": 26,
+        "text": "deck-7.pdf uploading Uploading 1.2 MB of 9.7 MB (12%) Cancel"
+      },
+      {
+        "t": 27,
+        "text": "deck-7.pdf uploading Uploading 1.3 MB of 9.7 MB (13%) Cancel"
+      },
+      {
+        "t": 28,
+        "text": "deck-7.pdf uploading Uploading 1.3 MB of 9.7 MB (13%) Cancel"
+      },
+      {
+        "t": 29,
+        "text": "deck-7.pdf uploading Uploading 1.4 MB of 9.7 MB (14%) Cancel"
+      },
+      {
+        "t": 30,
+        "text": "deck-7.pdf uploading Uploading 1.5 MB of 9.7 MB (15%) Cancel"
+      },
+      {
+        "t": 31,
+        "text": "deck-7.pdf uploading Uploading 1.5 MB of 9.7 MB (15%) Cancel"
+      },
+      {
+        "t": 32,
+        "text": "deck-7.pdf uploading Uploading 1.6 MB of 9.7 MB (16%) Cancel"
+      },
+      {
+        "t": 33,
+        "text": "deck-7.pdf uploading Uploading 1.7 MB of 9.7 MB (16%) Cancel"
+      },
+      {
+        "t": 34,
+        "text": "deck-7.pdf uploading Uploading 1.7 MB of 9.7 MB (17%) Cancel"
+      },
+      {
+        "t": 35,
+        "text": "deck-7.pdf uploading Uploading 1.8 MB of 9.7 MB (18%) Cancel"
+      },
+      {
+        "t": 36,
+        "text": "deck-7.pdf uploading Uploading 1.8 MB of 9.7 MB (18%) Cancel"
+      },
+      {
+        "t": 37,
+        "text": "deck-7.pdf uploading Uploading 1.9 MB of 9.7 MB (19%) Cancel"
+      },
+      {
+        "t": 38,
+        "text": "deck-7.pdf uploading Uploading 2.0 MB of 9.7 MB (20%) Cancel"
+      },
+      {
+        "t": 39,
+        "text": "deck-7.pdf uploading Uploading 2.0 MB of 9.7 MB (20%) Cancel"
+      },
+      {
+        "t": 41,
+        "text": "deck-7.pdf uploading Uploading 2.0 MB of 9.7 MB (20%) Cancel"
+      },
+      {
+        "t": 42,
+        "text": "deck-7.pdf uploading Uploading 2.1 MB of 9.7 MB (21%) Cancel"
+      },
+      {
+        "t": 43,
+        "text": "deck-7.pdf uploading Uploading 2.2 MB of 9.7 MB (22%) Cancel"
+      },
+      {
+        "t": 44,
+        "text": "deck-7.pdf uploading Uploading 2.2 MB of 9.7 MB (22%) Cancel"
+      },
+      {
+        "t": 45,
+        "text": "deck-7.pdf uploading Uploading 2.3 MB of 9.7 MB (23%) Cancel"
+      },
+      {
+        "t": 46,
+        "text": "deck-7.pdf uploading Uploading 2.4 MB of 9.7 MB (24%) Cancel"
+      },
+      {
+        "t": 47,
+        "text": "deck-7.pdf uploading Uploading 2.4 MB of 9.7 MB (24%) Cancel"
+      },
+      {
+        "t": 48,
+        "text": "deck-7.pdf uploading Uploading 2.5 MB of 9.7 MB (25%) Cancel"
+      },
+      {
+        "t": 49,
+        "text": "deck-7.pdf uploading Uploading 2.5 MB of 9.7 MB (25%) Cancel"
+      },
+      {
+        "t": 50,
+        "text": "deck-7.pdf uploading Uploading 2.6 MB of 9.7 MB (26%) Cancel"
+      },
+      {
+        "t": 51,
+        "text": "deck-7.pdf uploading Uploading 2.7 MB of 9.7 MB (27%) Cancel"
+      },
+      {
+        "t": 52,
+        "text": "deck-7.pdf uploading Uploading 2.7 MB of 9.7 MB (27%) Cancel"
+      },
+      {
+        "t": 53,
+        "text": "deck-7.pdf uploading Uploading 2.8 MB of 9.7 MB (28%) Cancel"
+      },
+      {
+        "t": 54,
+        "text": "deck-7.pdf uploading Uploading 2.8 MB of 9.7 MB (29%) Cancel"
+      },
+      {
+        "t": 55,
+        "text": "deck-7.pdf uploading Uploading 2.9 MB of 9.7 MB (29%) Cancel"
+      },
+      {
+        "t": 56,
+        "text": "deck-7.pdf uploading Uploading 3.0 MB of 9.7 MB (30%) Cancel"
+      },
+      {
+        "t": 0,
+        "text": "deck-7.pdf uploading Uploading 3.0 MB of 9.7 MB (30%) Cancel"
+      },
+      {
+        "t": 1,
+        "text": "deck-7.pdf paused Paused, waiting for a connection. 3.0 MB of 9.7 MB (30%) sent, kept safely: it continues by itself when you are back online. Cancel"
+      },
+      {
+        "t": 0,
+        "text": "deck-7.pdf uploading Uploading 3.0 MB of 9.7 MB (30%) Cancel"
+      },
+      {
+        "t": 1,
+        "text": "deck-7.pdf uploading Uploading 3.0 MB of 9.7 MB (31%) Cancel"
+      }
+    ]
+  }
+}

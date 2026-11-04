@@ -2,8 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import { discardInterrupted, recordsFrom, recordsSnapshot, subscribeRecords, uploadScholarFile, type Progress } from "@/lib/individual/scholar/upload-client";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { readyHref, sourceHref, studyHref } from "./question-view";
 import { AiFeedback } from "./ai-feedback";
@@ -200,7 +200,32 @@ function mimeOf(f: File): string {
   return f.type;
 }
 
-type FileOutcome = { name: string; state: "waiting" | "uploading" | "reading" | "done" | "duplicate" | "refused"; message?: string; id?: string; partial?: boolean };
+type FileOutcome = {
+  name: string; state: "waiting" | "uploading" | "reading" | "done" | "duplicate" | "refused" | "cancelled" | "interrupted";
+  message?: string; id?: string; partial?: boolean;
+  /** SCHOLAR-CE07C: bytes the server holds (plus the chunk on the wire), and what the upload is doing now. */
+  progress?: Progress;
+};
+
+/** SCHOLAR-CE07C: sizes as a learner reads them. */
+const mb = (n: number) => `${(n / (1024 * 1024)).toFixed(n >= 10 * 1024 * 1024 ? 0 : 1)} MB`;
+const pct = (p: Progress) => (p.total ? Math.floor((p.sent / p.total) * 100) : 0);
+
+/** SCHOLAR-CE07C: what an upload is doing, in plain words. Offline is a pause, never an error. */
+function progressLine(p: Progress): string {
+  const where = `${mb(p.sent)} of ${mb(p.total)} (${pct(p)}%)`;
+  switch (p.phase) {
+    case "hashing": return "Preparing the file…";
+    case "starting": return "Starting…";
+    case "offline": return `Paused, waiting for a connection. ${where} sent, kept safely: it continues by itself when you are back online.`;
+    case "retrying": return `The connection dropped. Trying again${p.retryInMs ? ` in ${Math.max(1, Math.round(p.retryInMs / 1000))} s` : ""}. ${where} sent, kept safely.`;
+    case "resumed": return `Resumed. ${where}`;
+    case "reading": return "Sent in full. Checking it arrived complete and reading it…";
+    case "waiting": return "Still reading your file…";
+    case "complete": return `Sent in full. ${where}`;
+    default: return `Uploading ${where}`;
+  }
+}
 
 /**
  * Stage 2 (COMPETEN-SCHOLAR-UPLOAD). A file, or -- where plain text is enabled -- text pasted straight into the
@@ -222,6 +247,17 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
   const [error, setError] = useState("");
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const maxBytes = rules.maxMb * 1024 * 1024;
+  // SCHOLAR-CE07C: one cancel per file, and uploads a closed tab or a lost connection left unfinished (this device).
+  const aborts = useRef(new Map<number, AbortController>());
+  const recordsRaw = useSyncExternalStore(subscribeRecords, recordsSnapshot, () => "[]");
+  const unfinished = useMemo(() => recordsFrom(recordsRaw), [recordsRaw]);
+  const busy = stage === "uploading" || stage === "reading";
+  useEffect(() => {
+    if (!busy) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [busy]);
 
   function pasted(): File | null {
     const t = pasteText.trim();
@@ -231,21 +267,28 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
   }
   const chosen: File[] = mode === "paste" ? (pasted() ? [pasted()!] : []) : files;
 
-  /** One file, start to finish. Each is refused or kept on its own: one bad file never stops the others. */
-  async function uploadOne(f: File, set: (o: Partial<FileOutcome>) => void): Promise<void> {
+  /**
+   * One file, start to finish. Each is refused or kept on its own: one bad file never stops the others.
+   * SCHOLAR-CE07C: resumable, retried, verified and finished once (upload-client.ts). The same file chosen again after
+   * an interruption continues from the bytes the server holds.
+   */
+  async function uploadOne(f: File, i: number, set: (o: Partial<FileOutcome>) => void): Promise<void> {
     const mime = mimeOf(f);
     if (!rules.mimes.includes(mime)) return set({ state: "refused", message: `Not a format you can upload here: ${rules.describe}.` });
     if (f.size > maxBytes) return set({ state: "refused", message: `Larger than ${rules.maxMb} MB.` });
-    set({ state: "uploading" });
-    const slot = await post("/api/individual/scholar/uploads", { mime, size: f.size, piiAttested: true });
-    if (!slot.ok) return set({ state: "refused", message: slot.json.error ?? "The upload could not be started." });
-    const { error: upErr } = await createClient().storage.from(slot.json.bucket).uploadToSignedUrl(slot.json.path, slot.json.token, f, { contentType: mime });
-    if (upErr) return set({ state: "refused", message: "It could not be uploaded. Check your connection and try again." });
-    set({ state: "reading" });
-    const done = await post("/api/individual/scholar/materials", { uploadId: slot.json.uploadId, mime, fileName: f.name, piiAttested: true, ...(examPaper ? { examPaper: true, examAttested } : {}) });
-    if (done.json.duplicateOf) return set({ state: "duplicate", message: done.json.error, id: done.json.duplicateOf.id });
-    if (!done.ok) return set({ state: "refused", message: `${done.json.error ?? "It could not be read."} Nothing was kept.` });
-    set({ state: "done", id: done.json.id, partial: done.json.status === "partial", message: done.json.quality?.summary });
+    const ac = new AbortController();
+    aborts.current.set(i, ac);
+    set({ state: "uploading", progress: { phase: "hashing", sent: 0, total: f.size } });
+    const out = await uploadScholarFile(f, mime, {
+      examPaper, examAttested, signal: ac.signal,
+      onProgress: p => set({ state: p.phase === "reading" || p.phase === "waiting" ? "reading" : "uploading", progress: p }),
+    }).catch((): { state: "interrupted"; message: string } => ({ state: "interrupted", message: "The upload stopped. Choose the file again to continue." }));
+    aborts.current.delete(i);
+    if (out.state === "done") return set({ state: "done", id: out.id, partial: out.partial, message: out.summary });
+    if (out.state === "duplicate") return set({ state: "duplicate", message: out.message, id: out.id });
+    if (out.state === "cancelled") return set({ state: "cancelled", message: "Cancelled. Nothing was kept." });
+    if (out.state === "interrupted") return set({ state: "interrupted", message: out.message });
+    set({ state: "refused", message: out.message });
   }
 
   async function upload(e: React.FormEvent) {
@@ -259,11 +302,16 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
     setOutcomes([...list]);
     setStage("uploading");
     for (const [i, f] of chosen.entries()) {
-      await uploadOne(f, o => { list[i] = { ...list[i], ...o }; setOutcomes([...list]); setStage(o.state === "reading" ? "reading" : "uploading"); });
+      await uploadOne(f, i, o => { list[i] = { ...list[i], ...o }; setOutcomes([...list]); setStage(o.state === "reading" ? "reading" : "uploading"); });
     }
     const kept = list.filter(o => o.state === "done").map(o => o.id!);
     setStage(kept.length ? "done" : "");
-    if (!kept.length) { setError(list.length === 1 ? (list[0].message ?? "Your material could not be read.") : "None of the files was kept. Each one says why."); return; }
+    // SCHOLAR-CE07C: an interrupted upload is kept to continue. Say so plainly, never as a failure.
+    if (!kept.length && list.some(o => o.state === "interrupted")) return;
+    if (!kept.length && list.every(o => o.state === "cancelled")) return;
+    // One file: its own line above says why. Several: a summary here, each line says why.
+    if (!kept.length) { setError(list.length === 1 ? "" : "None of the files was kept. Each one says why."); return; }
+    if (list.some(o => o.state === "interrupted")) { setStage(""); return; } // kept ones are listed; the learner continues the others first
     // COMPETEN-SCHOLAR-EXAM-PAPERS-01: one examination paper goes straight to its questions, once its structure is read.
     if (examPaper && kept.length === 1) {
       const prepared = await post("/api/individual/scholar/papers", { materialId: kept[0], attested: true, transcribe: false });
@@ -332,33 +380,57 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
         <span>{UPLOAD_ATTESTATION}</span>
       </label>
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen.length || !attested || (examPaper && !examAttested) || stage === "uploading" || stage === "reading"}>
+        <button type="submit" className={btn} style={{ background: accent }} disabled={!chosen.length || !attested || (examPaper && !examAttested) || busy}>
           {stage === "uploading" ? "Uploading…" : stage === "reading" ? "Reading your notes…" : stage === "done" ? "Opening…" : chosen.length > 1 ? `Upload ${chosen.length} files` : "Upload"}
         </button>
         <span className="text-[13px] text-gray-500" aria-live="polite">
-          {stage === "uploading" ? "Step 1 of 3: sending it to your private space."
+          {stage === "uploading" ? "Step 1 of 3: sending it to your private space. On a slow or broken connection it pauses and continues by itself."
             : stage === "reading" ? "Step 2 of 3: reading the text and checking it for patient information. A long file can take a little while."
               : stage === "done" ? "Step 3 of 3: saved. Opening what Scholar found." : ""}
         </span>
       </div>
-      {outcomes.length > 1 && (
+      {unfinished.length > 0 && !busy && (
+        <div className="mt-3 rounded-xl border border-gray-300 bg-gray-50 px-3.5 py-3 text-[13.5px] text-gray-800" role="status">
+          <p className="font-semibold text-gray-900">{unfinished.length === 1 ? "An upload was not finished" : `${unfinished.length} uploads were not finished`}</p>
+          <ul className="mt-1.5 space-y-1.5">
+            {unfinished.map(r => (
+              <li key={r.uploadId} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                <span><span className="font-semibold">{r.name}</span>: {mb(r.sent)} of {mb(r.size)} sent. Choose the same file again and press Upload to continue from there.</span>
+                <button type="button" onClick={() => { void discardInterrupted(r); }}
+                  className={`min-h-[36px] rounded-lg border border-gray-300 bg-white px-3 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-100 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Discard</button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {outcomes.length > 0 && (
         <ul aria-live="polite" className="mt-3 space-y-1.5">
           {outcomes.map((o, i) => (
             <li key={i} className="rounded-lg border border-gray-200 px-3 py-2 text-[13px]">
               <span className="font-semibold text-gray-900">{o.name}</span>{" "}
-              <span className={o.state === "refused" ? "text-red-700" : o.state === "duplicate" ? "text-amber-800" : o.partial ? "text-amber-800" : "text-gray-600"}>
-                {o.state === "waiting" ? "waiting" : o.state === "uploading" ? "uploading…" : o.state === "reading" ? "reading…" : o.state === "done" ? (o.partial ? "kept, partly read" : "kept") : o.state === "duplicate" ? "already in your library" : "not kept"}
+              <span className={o.state === "refused" ? "text-red-700" : o.state === "duplicate" || o.partial ? "text-amber-800" : "text-gray-600"}>
+                {o.state === "waiting" ? "waiting" : o.state === "uploading" ? (o.progress?.phase === "offline" ? "paused" : "uploading") : o.state === "reading" ? "reading…" : o.state === "done" ? (o.partial ? "kept, partly read" : "kept") : o.state === "duplicate" ? "already in your library" : o.state === "cancelled" ? "cancelled" : o.state === "interrupted" ? "paused, not finished" : "not kept"}
               </span>
-              {o.message && o.state !== "done" && <span className="block text-gray-700">{o.message}</span>}
+              {(o.state === "uploading" || o.state === "reading") && o.progress && (
+                <>
+                  <span className="mt-1.5 block h-2 w-full overflow-hidden rounded-full bg-gray-100" role="progressbar" aria-label={`${o.name} upload`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct(o.progress)} aria-valuetext={progressLine(o.progress)}>
+                    <span className={`block h-full rounded-full transition-[width] duration-300 ${o.progress.phase === "offline" || o.progress.phase === "retrying" ? "bg-gray-400" : ""}`} style={{ width: `${pct(o.progress)}%`, ...(o.progress.phase === "offline" || o.progress.phase === "retrying" ? {} : { background: accent }) }} />
+                  </span>
+                  <span className="mt-1 block text-gray-700">{progressLine(o.progress)}</span>
+                  {o.state === "uploading" && o.progress.phase !== "hashing" && (
+                    <button type="button" onClick={() => aborts.current.get(i)?.abort()}
+                      className={`mt-1.5 min-h-[36px] rounded-lg border border-gray-300 bg-white px-3 text-[12.5px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Cancel</button>
+                  )}
+                </>
+              )}
+              {o.message && o.state !== "done" && <span className={`block ${o.state === "refused" ? "text-red-700" : "text-gray-700"}`}>{o.message}</span>}
+              {o.state === "interrupted" && <span className="block text-gray-600">Press Upload again to continue. Only the part not yet sent is sent.</span>}
               {o.state === "duplicate" && o.id && <Link href={studyHref(o.id)} className={`text-[12.5px] font-semibold underline ${focusRing}`} style={{ color: accent }}>Open the copy you have</Link>}
             </li>
           ))}
         </ul>
       )}
-      {outcomes.length === 1 && outcomes[0].state === "duplicate" && outcomes[0].id && (
-        <p className="mt-3 text-[13.5px] text-amber-900">{outcomes[0].message} <Link href={studyHref(outcomes[0].id)} className={`font-semibold underline ${focusRing}`}>Open it</Link></p>
-      )}
-      <ErrorLine text={outcomes.length === 1 && outcomes[0].state === "duplicate" ? "" : error} />
+      <ErrorLine text={error} />
       <p className="mt-3 text-[12px] text-gray-500">Competen also checks the text for NHS numbers, labelled dates of birth and hospital numbers, and will not keep a file that has them. That check cannot find everything, which is why your confirmation is needed.</p>
     </form>
   );

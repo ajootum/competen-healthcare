@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { countMaterials, createUploadSlot, recentUploads } from "@/lib/individual/scholar/store";
+import { cancelUpload, countMaterials, createUploadSlot, findDuplicate, findReusableUpload, getUpload, isUuid, issueUpload, recentUploads, sweepPersonUploads } from "@/lib/individual/scholar/store";
+import { isSha256, reusable } from "@/lib/individual/scholar/upload-record";
 import { BUCKET, type MaterialMime, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 
@@ -31,6 +32,25 @@ export async function POST(req: Request) {
   if (body?.piiAttested !== true)
     return NextResponse.json({ error: UPLOAD_ATTESTATION_REQUIRED }, { status: 400 });
 
+  // SCHOLAR-CE07C. The browser hashes the file first (sha256) and may name an upload it began earlier (resumeUploadId).
+  // One file keeps ONE upload identity until it is kept, refused or cancelled: the same path, so bytes already sent
+  // are continued, never sent again under a second identity, and the finish can never create a second material.
+  const now = Date.now();
+  const sha256 = isSha256(body?.sha256) ? body.sha256 : null;
+  const resumeId = isUuid(body?.resumeUploadId) ? body.resumeUploadId as string : null;
+  // Opportunistic clean-up of this person's abandoned uploads (older than 24 h). Best effort, never blocks the upload.
+  await sweepPersonUploads(ctx.admin, ctx.userId, now).catch(() => 0);
+
+  if (sha256) {
+    // The same bytes already kept: say so BEFORE the file is sent again over a slow network.
+    const duplicate = await findDuplicate(ctx.admin, ctx.userId, sha256);
+    if (duplicate) {
+      // The learner's own interrupted upload that was in fact kept (its answer was lost): the finish answers it again.
+      if (resumeId && duplicate.id === resumeId) return NextResponse.json({ bucket: BUCKET, uploadId: resumeId, kept: true });
+      return NextResponse.json({ error: `This file is already in your library as "${duplicate.title}".`, duplicateOf: duplicate }, { status: 409 });
+    }
+  }
+
   const count = await countMaterials(ctx.admin, ctx.userId);
   if (count === null) return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly." }, { status: 503 });
   // How many a person may keep is Individual policy (COMPETEN-CONFIG-002), never above MAX_MATERIALS_PER_PERSON.
@@ -43,7 +63,41 @@ export async function POST(req: Request) {
   const overSession = sessionRefusal(rules, recent, size);
   if (overSession) return NextResponse.json({ error: overSession }, { status: 429 });
 
-  const slot = await createUploadSlot(ctx.admin, ctx.userId, mime);
+  let identity: string | undefined;
+  let resumed = false;
+  if (sha256) {
+    const want = { mime, size, sha256 };
+    if (resumeId) {
+      const row = await getUpload(ctx.admin, ctx.userId, resumeId);
+      // Without 960 there is no record to check: the id only ever names a path in the caller's own folder.
+      if (row === "absent" || (row && reusable(row, want, now))) { identity = resumeId; resumed = true; }
+    }
+    if (!identity) {
+      const open = await findReusableUpload(ctx.admin, ctx.userId, want, now);
+      if (open) { identity = open.id; resumed = true; }
+    }
+  }
+
+  const slot = await createUploadSlot(ctx.admin, ctx.userId, mime, identity);
   if (!slot) return NextResponse.json({ error: "The upload could not be started. Try again shortly." }, { status: 503 });
-  return NextResponse.json({ bucket: BUCKET, uploadId: slot.uploadId, path: slot.path, token: slot.token });
+  if (!resumed && sha256) {
+    const recorded = await issueUpload(ctx.admin, ctx.userId, { id: slot.uploadId, mime, size, sha256 }, now);
+    if (recorded === "failed") return NextResponse.json({ error: "The upload could not be started. Try again shortly." }, { status: 503 });
+  }
+  return NextResponse.json({ bucket: BUCKET, uploadId: slot.uploadId, path: slot.path, token: slot.token, resumed });
+}
+
+// DELETE /api/individual/scholar/uploads?uploadId=... -- SCHOLAR-CE07C: the learner cancels an upload that is not kept
+// (or discards an interrupted one). The object is removed if it got to storage. A kept material is deleted from the
+// library instead, and an upload being read right now cannot be cancelled.
+export async function DELETE(req: Request) {
+  const ctx = await requireIndividualContext("scholar");
+  if (isGuardRefusal(ctx)) return ctx;
+  const id = new URL(req.url).searchParams.get("uploadId");
+  if (!isUuid(id)) return NextResponse.json({ error: "That upload could not be found." }, { status: 400 });
+  const r = await cancelUpload(ctx.admin, ctx.userId, id, Date.now());
+  if (r === "kept") return NextResponse.json({ error: "This file is already kept in your library. Delete it there if you no longer want it." }, { status: 409 });
+  if (r === "busy") return NextResponse.json({ error: "This file is being read now and cannot be cancelled. It will finish in a moment." }, { status: 409 });
+  if (r === "failed") return NextResponse.json({ error: "The upload could not be cancelled just now. Try again shortly." }, { status: 503 });
+  return NextResponse.json({ ok: true, cancelled: id });
 }
