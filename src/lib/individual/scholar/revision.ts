@@ -28,6 +28,7 @@ import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
+import { choiceLeaks, writtenLeaks } from "./answer-leak";
 import type { Passage } from "./generation";
 import {
   asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
@@ -474,6 +475,10 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && kind !== "true_false" && kind !== "scenario" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
   if (kind === "flashcard") { const p = flashcardDraftProblem(d.stem, String(d.answer.back ?? ""), passage.content); if (p) return { ok: false, reason: p }; }
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
+  // SQIE-CLOSE-2026-11 WS-H: the item does not give its own answer away (answer-leak.ts, the rule scenarios already use): the
+  // stem of a multiple-response item states every keyed option and no other; a short answer's stem states an accepted answer;
+  // a structured item's lead-in or any of its part prompts states a part's accepted answer (the parts are shown together).
+  if (answerLeaks(kind, d)) return { ok: false, reason: "answer_leaked" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);
   if (kind === "true_false") {
@@ -508,6 +513,19 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
 const repeatsObjective = (objective: string | null, checks: DraftChecks): boolean => !!objective && !!checks.existingObjectives?.has(objectiveKey(objective));
 
 /** The answer an item expects, in words: what its rubric records and its consistency check reads. */
+/** Pure. SQIE-CLOSE-2026-11 WS-H: whether a revision draft states its own answer before it is answered (see the call above). */
+export function answerLeaks(kind: Exclude<RevisionFormat, "mcq">, d: Pick<RevisionDraft, "stem" | "options" | "answer">): boolean {
+  const a = d.answer as Record<string, unknown>;
+  if (kind === "mrq") return choiceLeaks(d.stem, d.options, Array.isArray(a.correct) ? (a.correct as number[]) : []);
+  if (kind === "short") return writtenLeaks(d.stem, Array.isArray(a.accepted) ? (a.accepted as string[]) : []);
+  if (kind === "structured") {
+    const parts = Array.isArray(a.parts) ? (a.parts as { prompt: string; accepted: string[] }[]) : [];
+    const shown = [d.stem, ...parts.map(p => p.prompt)].join(" ");
+    return parts.some(p => writtenLeaks(shown, p.accepted ?? []));
+  }
+  return false;
+}
+
 function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): string {
   const a = d.answer as Record<string, unknown>;
   if (kind === "short") return String((a.accepted as string[])[0] ?? "");
