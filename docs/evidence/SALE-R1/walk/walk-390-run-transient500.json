@@ -1,0 +1,117 @@
+{
+  "base": "http://localhost:3181",
+  "width": 390,
+  "session": "71c00aeb-3f15-4043-97e9-1542a5968eb7",
+  "q1": "How does the Study phase go beyond simply checking whether predictions came true? [S6]",
+  "q2": "Why might a change go through several PDSA cycles rather than just one? [S2]",
+  "need1": "misconception",
+  "approach1": "mistake",
+  "reason1": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+  "need2": "understood",
+  "approach2": "challenge",
+  "reason2": "After explain my mistake, you answered a different question well. That is stronger evidence than the same question again. You showed you understand this, so the next step is a harder question that asks you to use it.",
+  "changed": [
+    {
+      "topic": "quality improvement science and methods",
+      "before": {
+        "headline": "Understanding: stronger evidence; a possible misconception; recall after time: not enough evidence; applying it: not enough evidence.",
+        "understanding": "Understanding shownStronger evidence14 different questions answered well out of 39 questions tried. Your latest answer here was not fully right yet.",
+        "enough": "Quality Improvement Science and MethodsSee the evidence"
+      },
+      "after": {
+        "headline": "Understanding: stronger evidence; a possible misconception; recall after time: not enough evidence; applying it: not enough evidence.",
+        "understanding": "Understanding shownStronger evidence15 different questions answered well out of 39 questions tried.",
+        "enough": "Quality Improvement Science and MethodsSee the evidence"
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "sent": {
+        "followUp": null,
+        "confidence": "sure"
+      },
+      "kept": "b5af78f6-e3af-4a62-80ad-d0360f16a269",
+      "adaptive": {
+        "v": 1,
+        "need": "misconception",
+        "rule": "T2",
+        "approach": "mistake",
+        "reason": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+        "misconception": "Giving the patient more medicine isn't part of the Study phase — that's a natural mix-up because the example involves a medication schedule, but what actually …",
+        "evidence": [
+          "The feedback named something incorrect: \"Giving the patient more medicine isn't part of the Study phase — that's a natural mix-up because the example involves a medication schedule, but what actually …\"."
+        ],
+        "round": 2,
+        "capped": false,
+        "follows": null,
+        "differentQuestion": true,
+        "earlierQuestions": [
+          "Why might a change go through several PDSA cycles rather than just one?"
+        ]
+      }
+    },
+    {
+      "sent": {
+        "followUp": {
+          "afterAttemptId": "b5af78f6-e3af-4a62-80ad-d0360f16a269",
+          "approach": "mistake"
+        },
+        "confidence": null
+      },
+      "kept": "7362e94b-6252-4f7d-bb7e-c91eceb2d20a",
+      "adaptive": {
+        "v": 1,
+        "need": "understood",
+        "rule": "T1",
+        "approach": "challenge",
+        "reason": "After explain my mistake, you answered a different question well. That is stronger evidence than the same question again. You showed you understand this, so the next step is a harder question that asks you to use it.",
+        "misconception": null,
+        "evidence": [
+          "This answer was judged understood."
+        ],
+        "round": 0,
+        "capped": false,
+        "follows": {
+          "attemptId": "b5af78f6-e3af-4a62-80ad-d0360f16a269",
+          "approach": "mistake",
+          "differentQuestion": true
+        },
+        "differentQuestion": false,
+        "earlierQuestions": []
+      }
+    }
+  ],
+  "log": [
+    "INFO learning state before: 3 topics",
+    "PASS SALE-04 Progress shows What your evidence shows, by topic",
+    "PASS Progress fits 390px with no sideways scroll",
+    "PASS SALE-04 the learning state shows no percentage",
+    "PASS SALE-04 the learning state says it is not verified competence",
+    "PASS SALE-04 the learner can correct the topics behind a topic's evidence",
+    "INFO resume: Go to lesson 8",
+    "INFO question 1: How does the Study phase go beyond simply checking whether predictions came true? [S6]",
+    "INFO check response 200: kept=true adaptive=true withheld=false ",
+    "INFO after the wrong answer: need=misconception approach=mistake",
+    "INFO reason shown: Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+    "PASS SALE-05/06 a wrong answer changes the next teaching action (not the harder question)",
+    "PASS SALE-06 the reason for the next action is shown",
+    "PASS the lesson with the next step fits 390px",
+    "INFO running: Explain my mistake",
+    "PASS SALE-07 after the corrective step a different question is offered",
+    "INFO question 2: Why might a change go through several PDSA cycles rather than just one? [S2]",
+    "PASS SALE-07 the follow-up question is a different question",
+    "INFO answer 2 built from the lesson's teaching citing [S2]: 1073 chars",
+    "INFO check response 500: kept=false adaptive=false withheld=false ",
+    "INFO judgement not kept (attempt 1); trying again",
+    "INFO check response 200: kept=true adaptive=true withheld=false ",
+    "INFO after the second answer: need=understood approach=challenge",
+    "INFO reason shown: After explain my mistake, you answered a different question well. That is stronger evidence than the same question again. You showed you understand this, so the next step is a harder question that asks you to use it.",
+    "PASS SALE-07 the follow-up answer is recorded against the step it followed, with its reason",
+    "INFO state changed for \"quality improvement science and methods\": Understanding shownStronger evidence14 different questions answered well out of 39 questions tried. Your latest answer here was not fully right yet. => Understanding shownStronger evidence15 different questions answered well out of 39 questions tried.",
+    "PASS SALE-04 the learning state reflects the new answers",
+    "PASS Progress still fits 390px",
+    "FAIL 0 console errors (1): http://localhost:3181/individual/scholar/study/learn?session=71c00aeb-3f15-4043-97e9-1542a5968eb7 :: Failed to load resource: the server responded with a status of 500 (Internal Server Error)",
+    "FAIL no 5xx (500 http://localhost:3181/api/individual/scholar/learn/act)"
+  ]
+}

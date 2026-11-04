@@ -1,0 +1,184 @@
+{
+  "target": "ezhvpgtcqcdsgylrxgdb",
+  "at": "2026-11-04T10:44:42.341Z",
+  "batch": "SQIE-PILOT-2026-11-v1",
+  "1 loaded: 60 revision_question resources, one version each": {
+    "ok": true,
+    "detail": "60 resources, 60 versions"
+  },
+  "2 none published: every version is a draft, never submitted or published": {
+    "ok": true,
+    "detail": {
+      "draft": 60
+    }
+  },
+  "3 provenance: origin ai_draft with model and prompt version": {
+    "ok": true,
+    "detail": [
+      "ai_draft/claude-opus-5-5/sqie-pilot-batch-v1"
+    ]
+  },
+  "4 mapping is draft with framework-version provenance, never validated": {
+    "ok": true,
+    "detail": [
+      "NUR-CCF 1.0.0 (draft)"
+    ]
+  },
+  "5 every version marked 'source not verified'": {
+    "ok": true,
+    "detail": "60 of 60"
+  },
+  "6 one competency link per version (442 table, frozen at submission)": {
+    "ok": true,
+    "detail": "60 links"
+  },
+  "counts": {
+    "area": {
+      "respiratory": 12,
+      "cardiovascular": 12,
+      "abcde": 12,
+      "reasoning": 12,
+      "medication": 12
+    },
+    "type": {
+      "single_best": 17,
+      "multiple_response": 9,
+      "short": 5,
+      "structured": 4,
+      "case": 7,
+      "sequence": 8,
+      "calculation": 8,
+      "extended": 1,
+      "calculation_structured": 1
+    },
+    "format": {
+      "mcq": 17,
+      "mrq": 9,
+      "short": 13,
+      "structured": 12,
+      "sequence": 8,
+      "extended": 1
+    },
+    "difficulty": {
+      "intermediate": 31,
+      "introductory": 10,
+      "advanced": 19
+    }
+  },
+  "7 gate: ckri_knowledge_approved is false for every version": {
+    "ok": true,
+    "detail": "0 approved"
+  },
+  "8 gate: Scholar loadLibraryQuestions offers none of them": {
+    "ok": true,
+    "detail": "0 offered"
+  },
+  "9 gate: Scholar servableLibraryVersions serves none of them": {
+    "ok": true,
+    "detail": "0 servable"
+  },
+  "10 gate: publication by an authorised publisher is refused for a draft": {
+    "ok": true,
+    "detail": "only a submitted, clinically approved version is published (this one is draft)"
+  },
+  "10b the refused version is still a draft": {
+    "ok": true,
+    "detail": "draft"
+  },
+  "11 gate: the 800 guard refuses a Scholar library copy of a draft": "individual_scholar_question: only the published version of an active revision question is reused (this one is active revision_question, draft)",
+  "12 HQ catalogue (loadCatalogue, the /super-admin/research/questions read model) lists all 60 as Draft": {
+    "ok": true,
+    "detail": "60 listed; statuses {\"draft\":60}; served 0"
+  },
+  "catalogue_sample": [
+    {
+      "code": "sqie-pilot-med-12",
+      "title": "Medication safety: drawing insulin from a pen device",
+      "status": "draft",
+      "format": "Single best answer",
+      "competencies": [
+        "Quality and Safety"
+      ]
+    },
+    {
+      "code": "sqie-pilot-med-11",
+      "title": "Medication safety case: reaction during an antibiotic infusion",
+      "status": "draft",
+      "format": "Structured (parts)",
+      "competencies": [
+        "Hemodynamic Emergency"
+      ]
+    },
+    {
+      "code": "sqie-pilot-med-10",
+      "title": "Medication safety: order of the administration checks",
+      "status": "draft",
+      "format": "Sequence",
+      "competencies": [
+        "Quality and Safety"
+      ]
+    }
+  ],
+  "version_ids": {
+    "sqie-pilot-resp-02": "b0ee4910-dbc3-4b79-b86c-3298b7d01936",
+    "sqie-pilot-resp-03": "5d425e1d-4020-4fd2-a721-5c0585fdfba5",
+    "sqie-pilot-resp-04": "973e7e8d-1ead-4472-be36-89ced11c55da",
+    "sqie-pilot-resp-01": "1a7608c6-11fb-4ab2-95ff-5cefc2ccf8db",
+    "sqie-pilot-resp-05": "4a13184a-4f77-4fd3-b6c6-0eb08155e47b",
+    "sqie-pilot-resp-06": "af54680c-1bc9-420f-b5b3-ae0b4324639f",
+    "sqie-pilot-resp-07": "c6d9746b-8eea-4b35-9c04-062c19aba1b8",
+    "sqie-pilot-resp-08": "b8cc5db4-7e58-4990-bd7d-aa10d332f508",
+    "sqie-pilot-resp-09": "062f1ace-211d-4619-a181-a5a27f0bbc0e",
+    "sqie-pilot-resp-10": "363e17e0-a24c-40d7-8358-98a3966a3650",
+    "sqie-pilot-resp-11": "49d7e436-0788-47e8-8538-49cbfc9f1816",
+    "sqie-pilot-resp-12": "d7a06aac-4aea-46ea-a91f-819a004ce27d",
+    "sqie-pilot-cvs-02": "8fba3cb1-f9d6-4849-9956-470ffa5346c3",
+    "sqie-pilot-cvs-04": "c2532db7-1c4c-435c-a125-6dc96b73fcd7",
+    "sqie-pilot-cvs-06": "ed5cbae2-97b5-47a9-bbe0-1836ce29f563",
+    "sqie-pilot-cvs-01": "950f50a9-c5d5-492b-a754-af284c2ac1ae",
+    "sqie-pilot-cvs-03": "60c60139-328d-439b-ac04-e7a800a65c69",
+    "sqie-pilot-cvs-05": "4369b2ba-e44f-42e5-add2-c3d69280a73b",
+    "sqie-pilot-cvs-07": "d38117bb-7fd4-4129-81e4-2c62e5e1877d",
+    "sqie-pilot-cvs-08": "9ce8b72d-3c84-493f-9cec-38d1e3704227",
+    "sqie-pilot-cvs-09": "3241d09b-356c-4b8d-a31b-3f7b01c47383",
+    "sqie-pilot-cvs-10": "12ce22e1-ebf3-4803-9dfc-fb6616c992cb",
+    "sqie-pilot-cvs-11": "5d67c926-39eb-4297-bdb0-cd0e27ee37ec",
+    "sqie-pilot-cvs-12": "03d79a70-89f9-4776-8aca-0d9e0c18bdf3",
+    "sqie-pilot-abcde-01": "c09271a3-edd8-4db3-a047-e344e1bde2ad",
+    "sqie-pilot-abcde-02": "a7838049-eb1a-44cc-b959-6f21cdbdc001",
+    "sqie-pilot-abcde-03": "8e2924f6-8968-4bdc-b572-fff5bb02ce81",
+    "sqie-pilot-abcde-04": "caf68fd4-1359-4909-add4-c491b7f0ea47",
+    "sqie-pilot-abcde-06": "a9a08365-6180-44a0-833a-6e3f08240c9f",
+    "sqie-pilot-abcde-08": "355a701c-f75b-4a0d-be27-b45136fba789",
+    "sqie-pilot-abcde-10": "ce634b3b-d4f0-4a67-84b0-deeca0402064",
+    "sqie-pilot-reason-09": "29ca4137-4c19-4e9b-ba21-c041113fd844",
+    "sqie-pilot-reason-11": "4577a102-bfd1-4f95-82d7-0fe53740530d",
+    "sqie-pilot-abcde-05": "aac8fcea-6fd5-4e3d-977f-56e56b8f44c4",
+    "sqie-pilot-abcde-07": "070582b8-54cf-426d-9e34-87eef88ba3eb",
+    "sqie-pilot-abcde-09": "024870b4-d95c-46f6-9a6e-c03ac2bed2c0",
+    "sqie-pilot-abcde-11": "ae3474e2-44b0-4889-b5df-00f611e33915",
+    "sqie-pilot-abcde-12": "553949d3-5ff4-4104-b1d3-fdf848acd94e",
+    "sqie-pilot-reason-01": "54d91e8d-af81-4a9d-818f-255aef24b3e7",
+    "sqie-pilot-reason-02": "e99f5b20-6137-4b88-885c-b0330f616ae4",
+    "sqie-pilot-reason-03": "b6a2d1f8-24b3-4831-94bb-a79ecc79bda0",
+    "sqie-pilot-reason-04": "a5a3a99b-39ce-4a89-8282-bab758d32425",
+    "sqie-pilot-reason-05": "f1c4af18-b6ba-4ee5-a8a4-6737dfd8960e",
+    "sqie-pilot-reason-06": "0ea08f86-d0b4-49df-b329-4c0518242af9",
+    "sqie-pilot-reason-07": "0cbb1c06-bc43-4443-ae87-91487a34fddb",
+    "sqie-pilot-reason-08": "17c68d8e-d851-4e89-86d4-0c297f890ffb",
+    "sqie-pilot-reason-10": "ab6aa1ab-955e-46d5-bb56-ac7992084a3b",
+    "sqie-pilot-reason-12": "6abfcebf-14ae-4842-b6be-9543cd9966c4",
+    "sqie-pilot-med-01": "a419a574-736e-42ab-8d42-58050ce15b0d",
+    "sqie-pilot-med-02": "b838bc4c-c451-45de-aca5-a4fe4d5ad06f",
+    "sqie-pilot-med-03": "875b480f-7c2b-4e0a-9ede-44665680255f",
+    "sqie-pilot-med-04": "a40a5c31-4233-426f-82f5-340efbb226a9",
+    "sqie-pilot-med-05": "fb6a114d-2ee4-4417-aa56-565837c1593b",
+    "sqie-pilot-med-06": "505cc102-3a28-4aa4-9c12-3488f32c7829",
+    "sqie-pilot-med-07": "ea7ba73d-f326-45f6-8d40-01fc48cfefc3",
+    "sqie-pilot-med-08": "746bbe91-762e-4aae-92cb-6b23b94ed86e",
+    "sqie-pilot-med-09": "bfd6ea0b-1b56-4dfb-b4d2-6e1f9dc9f5c0",
+    "sqie-pilot-med-10": "1215fecc-ee55-487c-be8c-3d1ebb7fb5d4",
+    "sqie-pilot-med-11": "841c10dd-594e-444d-bd32-a7ddd5c9dfae",
+    "sqie-pilot-med-12": "433a6805-74f5-487c-8687-570dcb3da9dc"
+  }
+}

@@ -94,7 +94,8 @@ describe("the wiring, as written", () => {
     // SCHOLAR-SQIE-LEARNER-01: the rubric snapshot goes on first, so the feedback is what yields when the size is tight.
     // SCHOLAR-CONTINUITY-01: the same response is stored on the attempt and kept in its 791 snapshot.
     expect(s).toContain("const kept = withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative);");
-    expect(s).toContain("const kept = withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by) }, rubricSnapshotOf(q)), formative);");
+    // SQIE-CLOSE-2026-11: the scoring rules version and the safety outcome (and criteria met) are kept with the marks, still before the snapshot and the feedback.
+    expect(s).toContain("const kept = withFormative(withRubricSnapshot({ ...stored.response, awarded: final.map(x => x.awarded), by: final.map(x => x.by), ...criteriaMet, rules: SCORING_RULES_VERSION, ...(capped.safety ? { safety: capped.safety } : {}) }, rubricSnapshotOf(q)), formative);");
     expect(s.match(/response: kept, correct:/g)?.length).toBe(4); // two attempts and their two snapshots
   });
   it("the session review shows it again, read back through formativeOf", () => {

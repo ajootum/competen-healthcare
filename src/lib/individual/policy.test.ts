@@ -98,6 +98,10 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarRevisionFormats: ["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false"], scholarVerifyFormats: ["mcq", "case", "mrq", "short"], scholarRevisionModes: ["today", "quick", "spaced", "weak", "mock", "flashcards", "custom"],
       scholarRevisionQuantity: 10, scholarRevisionDifficulty: "any", scholarRevisionFeedback: "immediate", scholarRevisionGeneration: "generate", scholarShortAnswerMarking: "self",
       scholarRevisionRecommendations: "on",
+      // SQIE-CLOSE-2026-11 WS-A (owner decision 4 Nov 2026): question tolerances inactive until the clinical calculation policy is approved.
+      scholarCalculationTolerances: "off",
+      // SQIE-CLOSE-2026-11 WS-B (owner release decision 4 Nov 2026): the clinical scoring caps wait for clinical approval.
+      scholarClinicalScoringCaps: "off",
       // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams on, 15 questions, at most 30, every adaptive format (no flashcards).
       scholarAdaptiveExams: "on", scholarAdaptiveLength: 15, scholarAdaptiveMaxLength: 30, scholarAdaptiveFormats: ["mcq", "mrq", "short", "match", "sequence", "structured"],
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
@@ -115,6 +119,9 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
       // LEARNING-CLOSE-2026-11 D02 / LE-04: three cumulative Go deeper rounds by default, configurable in HQ.
       scholarLearnDeeperRoundsMax: 3,
+      // SALE-2026-11 R1: the learning state and the adaptive next step on, with transparent thresholds.
+      scholarLearningState: "on", scholarLearningStateMinEvidence: 2, scholarLearningStateDistinctQuestions: 2, scholarLearningStateDelayDays: 3, scholarLearningStateStaleDays: 30,
+      scholarAdaptiveTeaching: "on", scholarAdaptiveReteachMax: 2, scholarAdaptivePrerequisiteMisses: 3,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -490,4 +497,20 @@ describe("scholar_assessment_instruments", () => {
     expect(validateDraft("scholar_assessment_instruments", "CHK-RESP-ASSESS").ok).toBe(false);
     expect(validateDraft("scholar_assessment_instruments", Array.from({ length: 21 }, (_, i) => `CHK-${i}X`)).ok).toBe(false);
   });
+});
+
+it("SALE-2026-11 R1: the learning-state and adaptive-teaching keys default on with their thresholds and clamp to their limits", () => {
+  const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+  expect(DEFAULT_POLICY).toMatchObject({
+    scholarLearningState: "on", scholarLearningStateMinEvidence: 2, scholarLearningStateDistinctQuestions: 2, scholarLearningStateDelayDays: 3, scholarLearningStateStaleDays: 30,
+    scholarAdaptiveTeaching: "on", scholarAdaptiveReteachMax: 2, scholarAdaptivePrerequisiteMisses: 3,
+  });
+  expect(p("scholar_learning_state", "off").scholarLearningState).toBe("off");
+  expect(p("scholar_learning_state", "maybe").scholarLearningState).toBe("on");
+  expect(p("scholar_adaptive_teaching", "off").scholarAdaptiveTeaching).toBe("off");
+  expect(p("scholar_adaptive_reteach_max", 9).scholarAdaptiveReteachMax).toBe(5);
+  expect(p("scholar_adaptive_reteach_max", 0).scholarAdaptiveReteachMax).toBe(1);
+  expect(p("scholar_learning_state_distinct_questions", 1).scholarLearningStateDistinctQuestions).toBe(2);
+  expect(p("scholar_learning_state_delay_days", 7).scholarLearningStateDelayDays).toBe(7);
+  expect(p("scholar_adaptive_prerequisite_misses", 1).scholarAdaptivePrerequisiteMisses).toBe(2);
 });

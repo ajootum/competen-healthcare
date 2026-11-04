@@ -10,6 +10,7 @@
 // ⚠ FORMATIVE. A kept check is a learning record for the learner: never assessment, never verified competence, never a Passport record.
 
 import type { CheckFeedbackParts } from "./learn-check";
+import { adaptiveForStorage, isStatedConfidence, parseAdaptiveRecord, type AdaptiveRecord, type StatedConfidence } from "./learning-need";
 
 // ── CYU-01: PLACEMENT ──
 
@@ -54,6 +55,10 @@ export type CheckResponse = {
   verdict: CheckVerdictValue | null; selfGrade: SelfGrade | null;
   /** The AI judgement's parts, or its free text where it wrote none. */
   feedback: CheckFeedbackParts | null; summary: string | null;
+  /** SALE-2026-11 R1: how sure the learner said they were (optional, never evidence of understanding). */
+  confidence?: StatedConfidence | null;
+  /** SALE-2026-11 R1 (SALE-06/07): the next-step decision made for this answer, with its reason (learning-need.ts). */
+  adaptive?: AdaptiveRecord | null;
 };
 /** The response is kept under this many bytes of JSON (416 allows 8000; the formative copy shares the row). */
 export const CHECK_RESPONSE_BUDGET = 6000;
@@ -61,12 +66,15 @@ const bytesOf = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).leng
 const cut = (s: string, n: number) => (s.length > n ? `${s.slice(0, Math.max(0, n - 1))}…` : s);
 
 /** Pure. The response object to store: the answer always, the feedback where it fits (points dropped from the end, longest part first). */
-export function checkResponse(input: { text: string; question: string; verdict?: CheckVerdictValue | null; selfGrade?: SelfGrade | null; feedback?: CheckFeedbackParts | null; summary?: string | null }): Record<string, unknown> {
+export function checkResponse(input: { text: string; question: string; verdict?: CheckVerdictValue | null; selfGrade?: SelfGrade | null; feedback?: CheckFeedbackParts | null; summary?: string | null; confidence?: StatedConfidence | null; adaptive?: AdaptiveRecord | null }): Record<string, unknown> {
   const base: CheckResponse = {
     kind: "check", text: cut(input.text.trim(), 3000), question: cut(input.question.trim(), 400),
     verdict: input.verdict ?? null, selfGrade: input.selfGrade ?? null,
     feedback: input.feedback ? { right: [...input.feedback.right], missing: [...input.feedback.missing], misconceptions: [...input.feedback.misconceptions], keyPoints: [...input.feedback.keyPoints], next: input.feedback.next } : null,
     summary: input.feedback ? null : input.summary ? cut(input.summary.trim(), 1200) : null,
+    // SALE-2026-11 R1: kept beside the answer (no new column); the decision is bounded by adaptiveForStorage.
+    ...(input.confidence ? { confidence: input.confidence } : {}),
+    ...(input.adaptive ? { adaptive: adaptiveForStorage(input.adaptive) as unknown as AdaptiveRecord } : {}),
   };
   const lists: (keyof Omit<CheckFeedbackParts, "next">)[] = ["right", "missing", "misconceptions", "keyPoints"];
   while (bytesOf(base) > CHECK_RESPONSE_BUDGET) {
@@ -95,6 +103,8 @@ export function parseCheckResponse(raw: unknown): CheckResponse | null {
     verdict: isCheckVerdict(r.verdict) ? r.verdict : null, selfGrade: isSelfGrade(r.selfGrade) ? r.selfGrade : null,
     feedback: feedback && (feedback.right.length || feedback.missing.length || feedback.misconceptions.length || feedback.keyPoints.length || feedback.next) ? feedback : null,
     summary: typeof r.summary === "string" && r.summary.trim() ? r.summary : null,
+    confidence: isStatedConfidence(r.confidence) ? r.confidence : null,
+    adaptive: parseAdaptiveRecord(r.adaptive),
   };
 }
 

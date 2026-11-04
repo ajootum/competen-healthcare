@@ -6,13 +6,16 @@
 //   keepAttemptSnapshot      after an attempt is stored, in the same request. NEVER fails the answer. 791 absent: nothing
 //                            is kept and nothing is said (the feature is not provisioned). Any other failure is NOT silently
 //                            dropped: an audit_log row (codes only) says the snapshot was not kept, and the answer stands.
+//   keepCheckSnapshot        SQIE WS-D (990): the same for a kept understanding check (CYU, both write sites), which kept no
+//                            snapshot before. 990 absent: nothing is kept, exactly as before. Never fails the learner's answer.
 //   recordAttemptCorrection  HQ-free: a future HQ action (or a system rule) calls it with the learner's id and its own actor
 //                            id. Appends one correction (the original is never overwritten) and writes one audit_log row,
 //                            codes only (no reason text, no answer, no question content).
 
 import { currentTraceId } from "@/lib/trace";
-import { buildAttemptSnapshot, CORRECTION_BASES, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
-import { insertAttemptCorrection, insertAttemptSnapshot, questionContentVersion, type Admin, type QuestionRow } from "./store";
+import { rubricOf } from "./question-intel";
+import { buildAttemptSnapshot, withObjective, CORRECTION_BASES, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
+import { competencyProvenance, getQuestion, insertAttemptCorrection, insertAttemptSnapshot, questionContentVersion, snapshotProvenanceAbsent, type Admin, type QuestionRow } from "./store";
 
 export const SNAPSHOT_FAILED_ACTION = "individual_scholar_attempt_snapshot_failed";
 export const CORRECTION_ACTION = "individual_scholar_attempt_corrected";
@@ -31,16 +34,40 @@ export async function keepAttemptSnapshot(ctx: { admin: Admin; userId: string; p
   const actor = { id: ctx.userId, name: ctx.profile?.fullName ?? null };
   if (!a.attempt) return "no_attempt";
   try {
-    const contentVersion = q.library ? null : await questionContentVersion(ctx.admin, ctx.userId, q.id);
-    const snap = buildAttemptSnapshot(q, { attemptId: a.attempt.id, answeredAt: a.attempt.answeredAt, chosenIndex: a.chosenIndex, response: a.response, correct: a.correct, score: a.score, marking: a.marking, contentVersion });
+    // An understanding check (learn-check-record.ts checkResponse) needs 990: without it no snapshot is kept, as before.
+    const needs990 = a.response?.kind === "check" || a.marking === "unmarked";
+    if (needs990 && snapshotProvenanceAbsent()) return "absent";
+    const [contentVersion, provenance] = await Promise.all([
+      q.library ? Promise.resolve(null) : questionContentVersion(ctx.admin, ctx.userId, q.id),
+      // 990: what the competency said at answer time (skipped once 990 is known absent: nothing would keep it).
+      snapshotProvenanceAbsent() ? Promise.resolve(undefined) : competencyProvenance(ctx.admin, q.competencyId ? [q.competencyId] : []),
+    ]).then(([v, p]) => [v, p ? withObjective(p, rubricOf(q.answer)?.objective) : p] as const);
+    const snap = buildAttemptSnapshot(q, { attemptId: a.attempt.id, answeredAt: a.attempt.answeredAt, chosenIndex: a.chosenIndex, response: a.response, correct: a.correct, score: a.score, marking: a.marking, contentVersion, provenance });
     if (!snap) { await auditRow(ctx.admin, actor, SNAPSHOT_FAILED_ACTION, a.attempt.id, { code: "too_large", kind: q.kind }); return "too_large"; }
-    const r = await insertAttemptSnapshot(ctx.admin, ctx.userId, snap);
+    const r = await insertAttemptSnapshot(ctx.admin, ctx.userId, snap, { needs990 });
     if (r === "failed") await auditRow(ctx.admin, actor, SNAPSHOT_FAILED_ACTION, a.attempt.id, { code: "insert_failed", kind: q.kind });
     return r;
   } catch {
     await auditRow(ctx.admin, actor, SNAPSHOT_FAILED_ACTION, a.attempt.id, { code: "error", kind: q.kind });
     return "failed";
   }
+}
+
+/**
+ * SQIE WS-D: keep the snapshot of an understanding check just kept (store.ts recordCheckAttempt): the question as shown, the
+ * typed answer, the lesson's key points as its key and rubric (with the rubric hash), the judgement, the five-part feedback where
+ * an AI gave it, the competency and its 990 provenance. Never throws and never fails the answer.
+ */
+export async function keepCheckSnapshot(ctx: { admin: Admin; userId: string; profile?: { fullName?: string | null } }, kept: { id: string; answeredAt: string } | null, a: {
+  questionId: string; response: Record<string, unknown>; correct: boolean; score: number | null; marking: string;
+}): Promise<"ok" | "absent" | "failed" | "too_large" | "no_attempt"> {
+  if (!kept) return "no_attempt";
+  if (snapshotProvenanceAbsent()) return "absent";
+  try {
+    const q = await getQuestion(ctx.admin, ctx.userId, a.questionId);
+    if (!q) return "failed";
+    return await keepAttemptSnapshot(ctx, q, { attempt: kept, chosenIndex: null, response: a.response, correct: a.correct, score: a.score, marking: a.marking });
+  } catch { return "failed"; }
 }
 
 const OUTCOMES: readonly Outcome[] = ["correct", "partial", "incorrect"];

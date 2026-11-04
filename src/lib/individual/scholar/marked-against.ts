@@ -64,6 +64,8 @@ export function markedAgainstLine(i: MarkedAgainstInput): string {
       const how = i.marking === "ai_evaluation" ? "by code where it matched, otherwise by AI" : i.marking === "self_graded" ? "by code where it matched, otherwise by you" : "by code";
       return `Marked stage by stage (${w}) against each stage's key, ${how}${tail}.`;
     }
+    // SQIE-CLOSE-2026-11 WS-A: a calculation is marked by code only, against its number, its unit and its tolerance.
+    case "calculation": return `Marked by code against the answer's number, its unit and the tolerance allowed${tail}.`;
     case "short": {
       if (i.marking === "ai_evaluation") {
         const kp = i.keyPoints ? ` and ${plural(i.keyPoints, "key point")}` : "";

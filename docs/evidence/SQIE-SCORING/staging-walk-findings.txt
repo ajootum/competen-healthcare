@@ -1,0 +1,26 @@
+INFO question ids: 5a18828b-fade-4dc3-b3da-293a20aa1da9,c2d90969-54bd-4a36-a03c-5f979b3aa9d1,3f0561b0-caaf-4be3-8b82-345316c78541,5ea2c008-be6c-4a00-879d-c7192d1e3df2
+PASS seeded four fixture questions (short + unsafe markers, calculation, answer-and-justify, interpretation) through the 416/710 CHECKs: no migration
+INFO first answer: HTTP 200 
+PASS WS-B short: "IV bolus" is unsafe by code, score 0, statement named (Clinically unsafe answer)
+PASS WS-B short: the accepted answer is still correct, no safety block
+PASS WS-A: 0.01 L for a mL answer is wrong (strict unit default): "This question asks for the answer in mL. Your 0.01 L is 10 mL. The answer is 10 mL."
+PASS WS-A: 10.4 mL is wrong under the exact default tolerance
+PASS WS-A owner rule: a tenfold error is unsafe independently of tolerance ("Your 100 mL is not 10 mL. That is 10 times the right amount: an error of this size would be unsafe in practice.")
+PASS WS-A: the sign is kept (-10 mL is not 10 mL)
+PASS WS-A: 10 mL is correct
+PASS WS-A: an ambiguous decimal comma is refused as a number, never guessed
+INFO WS-C: the justify part needs judgement and AI marking is not on for this learner/policy ("Some parts do not match the stored answers word for word, so compare them yourself."), so it is self-graded
+PASS WS-B v3: the unsafe option is flagged and wrong AT ITS PART only; the justification part keeps its marks (3 of 4; caps off on staging)
+PASS WS-B v3: with scholar_clinical_scoring_caps off (default) the flag is explained without claiming a cap
+PASS WS-C: the feedback names the variant, the justify role and its weighted criteria
+PASS WS-C interpretation: findings table returned with the feedback, 2 of 3 marks, no safety outcome
+PASS every attempt of this run records its scoring rules (sqie-scoring-v3): 10 attempts
+PASS the unsafe short attempt keeps response.safety and score 0
+PASS the calculation attempt keeps what was given and the key it was marked against (snapshot calc)
+PASS the justify attempt keeps its unsafe outcome (capped: false) and 3 of 4 (0.75): only the unsafe part scored 0
+PASS a 791 snapshot is kept beside each attempt (10 of 10)
+PASS UI: the unsafe answer is said plainly, with the statement and the capped marks
+PASS UI: a wrong unit is marked wrong with feedback naming the unit asked for
+PASS UI: an interpretation item shows its findings table before the parts
+INFO UI items walked: short, calc, interp; console errors: none
+PASS no server error responses (none)

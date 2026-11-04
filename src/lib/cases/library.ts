@@ -223,7 +223,8 @@ export type FeedbackContext = {
   versionId: string;
   prompt: string;
   expectedResponse: string;
-  rubric: { criterion: string; dimension?: string }[];
+  /** SQIE-CLOSE-2026-11 WS-B: each criterion's stored weight and safety flag travel with it, so Scholar can score them (server-side only). */
+  rubric: { criterion: string; dimension?: string; weight?: number; safetyCritical?: boolean }[];
   answer: string;
   visibleFacts: { label: string; value: string; unit: string | null }[];
   competencyIds: string[];
@@ -246,7 +247,7 @@ export function feedbackContextFrom(b: Blueprint, s: Pick<SessionRow, "reached_s
   const seen = visibleFacts(b, { reachedStageIds: s.reached_stage_ids, revealedFactIds: s.revealed_fact_ids });
   return {
     prompt: d.prompt, expectedResponse: d.expectedResponse ?? "", answer: a.text,
-    rubric: (d.rubric ?? []).map(c => ({ criterion: c.criterion, ...(c.dimension ? { dimension: c.dimension } : {}) })),
+    rubric: (d.rubric ?? []).map(c => ({ criterion: c.criterion, ...(c.dimension ? { dimension: c.dimension } : {}), weight: c.weight, safetyCritical: c.safetyCritical === true })),
     visibleFacts: b.facts.filter(f => seen.has(f.id)).map(f => ({ label: f.label, value: f.value, unit: f.unit ?? null })),
     competencyIds: blueprintCompetencies(b),
   };
@@ -263,6 +264,42 @@ export async function sessionFeedbackContext(admin: any, userId: string, session
   if (!dpId) return { error: "not_answered" };
   const c = feedbackContextFrom(x.b, x.s, dpId);
   return "error" in c ? c : { versionId: x.s.version_id, ...c };
+}
+
+/** SQIE-CLOSE-2026-11 WS-C: what scoring ONE learner's reason for a choice needs. SERVER-SIDE ONLY: it carries the rubric. */
+export type ReasonContext = Omit<FeedbackContext, "versionId"> & { chosen: string[] };
+export type ReasonContextError = { error: "not_answered" | "no_reason" | "no_rubric" | "no_session" | "already_has_feedback" };
+
+/**
+ * Pure (SQIE-CLOSE-2026-11 WS-C, additive): the narrow context for scoring the REASON a learner gave for ONE answered choice
+ * ("Explain your choice", askReason) against the decision's rubric criteria -- its prompt, its rationale as the expected answer, the
+ * option texts the learner chose, their reason, the facts they had SEEN. Only where the decision asks for a reason AND defines a
+ * rubric; never an option key, never another decision.
+ */
+export function reasonContextFrom(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids" | "revealed_fact_ids" | "answers" | "feedback">, dpId: string): ReasonContext | ReasonContextError {
+  const d = b.decisionPoints.find(x => x.id === dpId);
+  const a = s.answers.find(x => x.decisionPointId === dpId);
+  if (!d || !a || isWritten(d)) return { error: "not_answered" };
+  if (d.askReason !== true || typeof a.reason !== "string" || !a.reason.trim()) return { error: "no_reason" };
+  if (!(d.rubric ?? []).length) return { error: "no_rubric" };
+  if ((s.feedback ?? []).some(f => f.decisionPointId === dpId)) return { error: "already_has_feedback" };
+  const seen = visibleFacts(b, { reachedStageIds: s.reached_stage_ids, revealedFactIds: s.revealed_fact_ids });
+  return {
+    prompt: d.prompt, expectedResponse: d.rationale ?? "", answer: a.reason,
+    chosen: a.chosen.map(id => d.options.find(o => o.id === id)?.text).filter((t): t is string => !!t),
+    rubric: (d.rubric ?? []).map(c => ({ criterion: c.criterion, ...(c.dimension ? { dimension: c.dimension } : {}), weight: c.weight, safetyCritical: c.safetyCritical === true })),
+    visibleFacts: b.facts.filter(f => seen.has(f.id)).map(f => ({ label: f.label, value: f.value, unit: f.unit ?? null })),
+    competencyIds: blueprintCompetencies(b),
+  };
+}
+
+/** SQIE-CLOSE-2026-11 WS-C: reasonContextFrom for the caller's own library session. SERVER-SIDE ONLY (static K12, as sessionFeedbackContext). */
+export async function sessionReasonContext(admin: any, userId: string, sessionId: string, decisionToken: string): Promise<ReasonContext | ReasonContextError> {
+  const x = await sessionFor(admin, userId, sessionId);
+  if (!x) return { error: "no_session" };
+  const dpId = resolveToken(x.b, x.s.view_salt, "decision", decisionToken);
+  if (!dpId) return { error: "not_answered" };
+  return reasonContextFrom(x.b, x.s, dpId);
 }
 
 /**

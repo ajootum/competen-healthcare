@@ -1,0 +1,114 @@
+{
+  "base": "http://localhost:3181",
+  "width": 390,
+  "session": "71c00aeb-3f15-4043-97e9-1542a5968eb7",
+  "q1": "How does the Study phase go beyond simply checking whether predictions came true? [S6]",
+  "q2": "",
+  "need1": "misconception",
+  "approach1": "mistake",
+  "reason1": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+  "need2": "prerequisite_gap",
+  "approach2": "foundation",
+  "reason2": "Several different questions here were not answered well yet, so the next step returns to the earlier lesson this one builds on.",
+  "changed": [
+    {
+      "topic": "quality improvement science and methods",
+      "before": {
+        "headline": "Understanding: stronger evidence; a possible misconception; recall after time: not enough evidence; applying it: not enough evidence.",
+        "understanding": "Understanding shownStronger evidence15 different questions answered well out of 39 questions tried.",
+        "enough": "Quality Improvement Science and MethodsSee the evidence"
+      },
+      "after": {
+        "headline": "Understanding: stronger evidence; a possible misconception; recall after time: not enough evidence; applying it: not enough evidence.",
+        "understanding": "Understanding shownStronger evidence15 different questions answered well out of 40 questions tried. Your latest answer here was not fully right yet.",
+        "enough": "Quality Improvement Science and MethodsSee the evidence"
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "sent": {
+        "followUp": null,
+        "confidence": "sure"
+      },
+      "kept": "517b4f3a-d9e3-4938-9384-6183a8220e7d",
+      "adaptive": {
+        "v": 1,
+        "need": "misconception",
+        "rule": "T2",
+        "approach": "mistake",
+        "reason": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+        "misconception": "Your answer is about giving more medicine and waiting, but the Study phase is not a treatment step — it is about observing, analyzing and learning from the tes…",
+        "evidence": [
+          "The feedback named something incorrect: \"Your answer is about giving more medicine and waiting, but the Study phase is not a treatment step — it is about observing, analyzing and learning from the tes…\"."
+        ],
+        "round": 1,
+        "capped": false,
+        "follows": null,
+        "differentQuestion": true,
+        "earlierQuestions": []
+      }
+    },
+    {
+      "sent": {
+        "followUp": {
+          "afterAttemptId": "517b4f3a-d9e3-4938-9384-6183a8220e7d",
+          "approach": "mistake"
+        },
+        "confidence": null
+      },
+      "kept": "36e77b07-8153-4c04-a74f-f2d2ee1f9a68",
+      "adaptive": {
+        "v": 1,
+        "need": "prerequisite_gap",
+        "rule": "T5",
+        "approach": "foundation",
+        "reason": "Several different questions here were not answered well yet, so the next step returns to the earlier lesson this one builds on.",
+        "misconception": null,
+        "evidence": [
+          "3 different questions on these sections were not answered well yet.",
+          "An earlier lesson of this session holds the ideas this one builds on."
+        ],
+        "round": 2,
+        "capped": false,
+        "follows": {
+          "attemptId": "517b4f3a-d9e3-4938-9384-6183a8220e7d",
+          "approach": "mistake",
+          "differentQuestion": true
+        },
+        "differentQuestion": true,
+        "earlierQuestions": []
+      }
+    }
+  ],
+  "log": [
+    "INFO learning state before: 3 topics",
+    "PASS SALE-04 Progress shows What your evidence shows, by topic",
+    "PASS Progress fits 390px with no sideways scroll",
+    "PASS SALE-04 the learning state shows no percentage",
+    "PASS SALE-04 the learning state says it is not verified competence",
+    "PASS SALE-04 the learner can correct the topics behind a topic's evidence",
+    "INFO resume: Go to lesson 8",
+    "INFO question 1: How does the Study phase go beyond simply checking whether predictions came true? [S6]",
+    "INFO check response 200: kept=true adaptive=true withheld=false ",
+    "INFO after the wrong answer: need=misconception approach=mistake",
+    "INFO reason shown: Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+    "PASS SALE-05/06 a wrong answer changes the next teaching action (not the harder question)",
+    "PASS SALE-06 the reason for the next action is shown",
+    "PASS the lesson with the next step fits 390px",
+    "INFO running: Explain my mistake",
+    "PASS SALE-07 after the corrective step a different question is offered",
+    "INFO question 2: ",
+    "FAIL SALE-07 the follow-up question is a different question",
+    "INFO answer 2 built from the lesson's teaching citing (no tag): 5793 chars",
+    "INFO check response 200: kept=true adaptive=true withheld=false ",
+    "INFO after the second answer: need=prerequisite_gap approach=foundation",
+    "INFO reason shown: Several different questions here were not answered well yet, so the next step returns to the earlier lesson this one builds on.",
+    "PASS SALE-07 the follow-up answer is recorded against the step it followed, with its reason",
+    "INFO state changed for \"quality improvement science and methods\": Understanding shownStronger evidence15 different questions answered well out of 39 questions tried. => Understanding shownStronger evidence15 different questions answered well out of 40 questions tried. Your latest answer here was not fully right yet.",
+    "PASS SALE-04 the learning state reflects the new answers",
+    "PASS Progress still fits 390px",
+    "PASS 0 console errors (0)",
+    "PASS no 5xx ()"
+  ]
+}
