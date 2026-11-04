@@ -96,13 +96,13 @@ describe("SCHOLAR-SEARCH-HISTORY-01: the page", () => {
 });
 
 // PHASE 4: the history is never Personal AI memory and never leaves the learner's plane. Only these files may name the table
-// or its functions: the model, its data module, its one route, and the HQ plane-boundary scan that REFUSES it.
+// or its functions: the model, the Scholar store (the one Scholar read and write site), and the HQ plane-boundary scan that REFUSES it.
 describe("SCHOLAR-SEARCH-HISTORY-01: who may read the history", () => {
   it("nothing outside the history's own files names the 992 table or functions", () => {
     const root = join(__dirname, "../../../..");
     const allowed = new Set([
       "src/lib/individual/scholar/search-history.ts",
-      "src/lib/individual/scholar/search-history-data.ts",
+      "src/lib/individual/scholar/store.ts",
       "src/lib/individual/scholar/search-history.test.ts",
       "src/lib/access/plane-boundary-scan.ts",
     ]);
@@ -117,6 +117,6 @@ describe("SCHOLAR-SEARCH-HISTORY-01: who may read the history", () => {
     };
     walk(join(root, "src"));
     expect(hits.filter(h => !allowed.has(h))).toEqual([]);
-    expect(hits).toContain("src/lib/individual/scholar/search-history-data.ts");
+    expect(hits).toContain("src/lib/individual/scholar/store.ts");
   }, 60_000);
 });

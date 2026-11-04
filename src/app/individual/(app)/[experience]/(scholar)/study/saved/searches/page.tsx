@@ -7,7 +7,7 @@ import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../..
 import StudyNav from "../../_components/StudyNav";
 import { studyHref } from "../../_components/question-view";
 import { ClearHistory, HistoryList, type ClientEntry } from "../../_components/search-history-client";
-import { countDue, librarySchema, listMaterials } from "@/lib/individual/scholar/store";
+import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, searchHistoryTopics } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
@@ -16,7 +16,6 @@ import {
   ACTIVITY_FILTER_LABEL, HISTORY_ACTIVITIES, HISTORY_PAGE_SIZE, HISTORY_PRIVACY, entryLinks, entryTitle, hasHistoryFilters, historyParams,
   parseHistoryQuery, saveTarget, type HistoryEntry, type HistoryQuery,
 } from "@/lib/individual/scholar/search-history";
-import { historySchema, historyTopics, listHistory } from "@/lib/individual/scholar/search-history-data";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -82,18 +81,18 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
       <PageHeader accent={SCHOLAR.accent} eyebrow="Kept for you" title="My search history"
         intro="Your searches, questions to Scholar, saved teaching and lessons, newest first. Search it, filter it and open what you found before. Opening anything here uses no AI." />
       <StudyNav dueCount={due} study={null} />
-      <p className="mb-4 text-[13px]"><Link href={studyHref("saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to your learning library</Link></p>
+      <p className="mb-4 text-[13px]"><Link href={studyHref("saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to My learning library</Link></p>
     </>
   );
-  if (policy.scholarSearchHistory !== "on") return <>{header}<StatePanel title="My search history is not offered here"><p>Your saved learning and lessons are in your learning library.</p></StatePanel></>;
-  if (!(await historySchema(ctx.admin))) return <>{header}<StatePanel title="My search history is not available here yet"><p>Your saved learning and lessons are unchanged in your learning library.</p></StatePanel></>;
+  if (policy.scholarSearchHistory !== "on") return <>{header}<StatePanel title="My search history is not offered here"><p>Your saved learning and lessons are in My learning library.</p></StatePanel></>;
+  if (!(await historySchema(ctx.admin))) return <>{header}<StatePanel title="My search history is not available here yet"><p>Your saved learning and lessons are unchanged in My learning library.</p></StatePanel></>;
 
   const q = parseHistoryQuery(await searchParams);
   const [list, pinned, materials, topics, notesOn] = await Promise.all([
-    listHistory(ctx.admin, ctx.userId, q),
+    listSearchHistory(ctx.admin, ctx.userId, q),
     // The pinned strip: only on the unfiltered first page, so it never repeats what a filter is showing.
-    !hasHistoryFilters(q) && q.page === 1 ? listHistory(ctx.admin, ctx.userId, q, { pinnedOnly: true, limit: 20 }) : Promise.resolve(null),
-    listMaterials(ctx.admin, ctx.userId), historyTopics(ctx.admin, ctx.userId),
+    !hasHistoryFilters(q) && q.page === 1 ? listSearchHistory(ctx.admin, ctx.userId, q, { pinnedOnly: true, limit: 20 }) : Promise.resolve(null),
+    listMaterials(ctx.admin, ctx.userId), searchHistoryTopics(ctx.admin, ctx.userId),
     policy.scholarLearningLibrary === "on" ? librarySchema(ctx.admin, ctx.userId) : Promise.resolve(false),
   ]);
   const mats = materials.ok ? materials.data.map(m => ({ id: m.id, title: m.title })) : [];

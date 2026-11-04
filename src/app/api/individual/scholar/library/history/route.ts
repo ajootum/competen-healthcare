@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal, type IndividualContext } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { parseEntryKey, parseHistoryQuery, validateCapture } from "@/lib/individual/scholar/search-history";
-import { clearHistory, historySchema, listHistory, recordCapture, removeEntry, setPinned } from "@/lib/individual/scholar/search-history-data";
+import { clearSearchHistory, historySchema, listSearchHistory, recordSearchCapture, removeSearchHistoryEntry, setSearchHistoryPinned } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
@@ -38,7 +38,7 @@ export async function GET(req: Request) {
   const refused = await gate(ctx);
   if (refused) return refused;
   const q = parseHistoryQuery(Object.fromEntries(new URL(req.url).searchParams));
-  const r = await listHistory(ctx.admin, ctx.userId, q);
+  const r = await listSearchHistory(ctx.admin, ctx.userId, q);
   if (!r.ok) return NextResponse.json({ error: "Your history could not be read just now." }, { status: 503 });
   return NextResponse.json({ entries: r.data.entries, total: r.data.total, page: q.page });
 }
@@ -51,7 +51,7 @@ export async function POST(req: Request) {
   if (!v.ok) return NextResponse.json({ kept: false, reason: v.problem });
   // Learner text is screened like every other learner text: words that look like they identify a patient are never kept.
   if (findPatientIdentifiers(v.entry.query).length > 0 || (v.entry.topic && findPatientIdentifiers(v.entry.topic).length > 0)) return NextResponse.json({ kept: false, reason: "identifiers" });
-  const r = await recordCapture(ctx.admin, ctx.userId, v.entry, new Date().toISOString());
+  const r = await recordSearchCapture(ctx.admin, ctx.userId, v.entry, new Date().toISOString());
   return NextResponse.json({ kept: r === "kept" || r === "existing" || r === "repeat", reason: r });
 }
 
@@ -63,7 +63,7 @@ export async function PATCH(req: Request) {
   const body = await req.json().catch(() => ({}));
   const ref = parseEntryKey(body?.key);
   if (!ref || typeof body?.pinned !== "boolean") return NextResponse.json({ error: NOT_FOUND }, { status: 404 });
-  const r = await setPinned(ctx.admin, ctx.userId, ref, body.pinned, new Date().toISOString());
+  const r = await setSearchHistoryPinned(ctx.admin, ctx.userId, ref, body.pinned, new Date().toISOString());
   if (r !== "ok") return NextResponse.json({ error: r === "not_found" ? NOT_FOUND : "That could not be changed just now." }, { status: r === "not_found" ? 404 : 500 });
   return NextResponse.json({ ok: true, pinned: body.pinned });
 }
@@ -76,13 +76,13 @@ export async function DELETE(req: Request) {
   const u = new URL(req.url).searchParams;
   if (u.get("all") === "1") {
     if (u.get("confirm") !== "CLEAR") return NextResponse.json({ error: "Confirm that you want to clear your whole search history." }, { status: 400 });
-    const r = await clearHistory(ctx.admin, ctx.userId);
+    const r = await clearSearchHistory(ctx.admin, ctx.userId);
     if (!r.ok) return NextResponse.json({ error: "Your history could not be cleared just now." }, { status: 500 });
     return NextResponse.json({ ok: true, cleared: r.cleared });
   }
   const ref = parseEntryKey(u.get("key"));
   if (!ref) return NextResponse.json({ error: NOT_FOUND }, { status: 404 });
-  const r = await removeEntry(ctx.admin, ctx.userId, ref, new Date().toISOString());
+  const r = await removeSearchHistoryEntry(ctx.admin, ctx.userId, ref, new Date().toISOString());
   if (r !== "ok") return NextResponse.json({ error: r === "not_found" ? NOT_FOUND : "That could not be removed just now." }, { status: r === "not_found" ? 404 : 500 });
   return NextResponse.json({ ok: true });
 }
