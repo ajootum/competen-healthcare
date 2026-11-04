@@ -4591,6 +4591,106 @@ export async function attemptIntegrity(admin: Admin, userId: string, attemptIds:
   return out;
 }
 
+// ── SQIE-CLOSE-2026-11 WS-I: ONE QUESTION'S HISTORY ACROSS REVISE, CYU AND EXAMS (no new store) ──────────────────────
+//
+// The rows question-history.ts assembles: every attempt at one of the caller's questions (416/417/950 individual_scholar_attempt),
+// the revision session each was made in (417, and its set where 720 is absent, to tell an adaptive exam from a mock), the clarify
+// event that kept a check (950), and the exam-paper answers this question was made from (570 revision_question_id). The snapshot
+// and corrections come from attemptIntegrity (791/990). Owner-keyed throughout. Every read falls back: a column or table that is
+// absent gives what the rest can say, never an error page.
+
+export type HistoryAttemptRow = {
+  id: string; questionId: string; answeredAt: string; correct: boolean; score: number | null; chosenIndex: number | null; marking: string;
+  response: Record<string, unknown> | null; evaluatorModel: string | null; evaluatorPromptVersion: string | null; contentVersion: number | null;
+  revisionSessionId: string | null;
+};
+export type HistorySessionRow = { id: string; mode: string; adaptive: boolean };
+export type HistoryCheckEvent = { attemptId: string; sessionId: string; step: number };
+export type HistoryExamAnswer = { id: string; materialId: string; examQuestionId: string | null; examStem: string | null; attempt: Record<string, unknown> | null; model: string; promptVersion: string; createdAt: string };
+
+const HISTORY_ATTEMPT_COLS = "id, question_id, answered_at, correct, score, chosen_index, marking, response, evaluator_model, evaluator_prompt_version, revision_session_id";
+const toHistoryAttempt = (a: any): HistoryAttemptRow => ({
+  id: a.id, questionId: a.question_id, answeredAt: a.answered_at, correct: !!a.correct, score: a.score === null || a.score === undefined ? null : Number(a.score),
+  chosenIndex: Number.isInteger(a.chosen_index) ? a.chosen_index : null, marking: String(a.marking ?? "deterministic"),
+  response: a.response && typeof a.response === "object" && !Array.isArray(a.response) ? a.response : null,
+  evaluatorModel: a.evaluator_model ?? null, evaluatorPromptVersion: a.evaluator_prompt_version ?? null,
+  contentVersion: Number.isInteger(a.content_version) ? a.content_version : null, revisionSessionId: a.revision_session_id ?? null,
+});
+
+/** The caller's attempts at one question, newest first (at most `limit`). 950 absent: read without content_version. */
+export async function questionAttemptRows(admin: Admin, userId: string, questionId: string, limit = 100): Promise<Read<HistoryAttemptRow[]>> {
+  if (!isUuid(questionId)) return { ok: true, data: [] };
+  const read = (cols: string) => admin.from("individual_scholar_attempt").select(cols).eq("user_id", userId).eq("question_id", questionId).order("answered_at", { ascending: false }).limit(Math.min(200, Math.max(1, limit)));
+  let { data, error } = await read(`${HISTORY_ATTEMPT_COLS}, content_version`);
+  if (error && isMissingColumn(error)) ({ data, error } = await read(HISTORY_ATTEMPT_COLS));
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toHistoryAttempt) };
+}
+
+/** The questions the caller most recently answered, newest first (distinct, at most `limit`), with when and how often. */
+export async function recentlyAnsweredQuestions(admin: Admin, userId: string, limit = 30): Promise<Read<{ questionId: string; lastAt: string; count: number }[]>> {
+  const { data, error } = await admin.from("individual_scholar_attempt").select("question_id, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(1000);
+  if (error) return fail(error);
+  const out = new Map<string, { questionId: string; lastAt: string; count: number }>();
+  for (const r of (data ?? []) as any[]) {
+    const e = out.get(r.question_id);
+    if (e) e.count++; else out.set(r.question_id, { questionId: r.question_id, lastAt: r.answered_at, count: 1 });
+  }
+  return { ok: true, data: [...out.values()].slice(0, Math.max(1, Math.min(100, limit))) };
+}
+
+/** A light read of the caller's questions (stem, kind, key and guide): for a history list, never the practice surfaces. */
+export async function questionHeads(admin: Admin, userId: string, ids: readonly string[]): Promise<Read<{ id: string; kind: string; stem: string; answer: unknown; materialId: string }[]>> {
+  const list = [...new Set(ids)].filter(isUuid).slice(0, 200);
+  if (!list.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select("id, kind, stem, answer, material_id").eq("user_id", userId).in("id", list);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(q => ({ id: q.id, kind: q.kind, stem: q.stem, answer: q.answer ?? null, materialId: q.material_id })) };
+}
+
+/** The revision sessions these attempts were made in: their mode, and whether it is an adaptive exam (720 mode, or the set's marker). */
+export async function historySessions(admin: Admin, userId: string, ids: readonly string[]): Promise<Map<string, HistorySessionRow>> {
+  const out = new Map<string, HistorySessionRow>();
+  const list = [...new Set(ids)].filter(isUuid).slice(0, 200);
+  if (!list.length) return out;
+  const { data, error } = await admin.from("individual_scholar_revision_session").select("id, mode, set_id").eq("user_id", userId).in("id", list);
+  if (error) return out;
+  const rows = (data ?? []) as any[];
+  const setIds = [...new Set(rows.filter(r => r.mode === "mock" && r.set_id).map(r => r.set_id as string))];
+  const adaptiveSets = new Set<string>();
+  if (setIds.length) {
+    const { data: sets } = await admin.from("individual_scholar_revision_set").select("id, scope").eq("user_id", userId).in("id", setIds);
+    for (const st of (sets ?? []) as any[]) if (isAdaptiveScope(st.scope)) adaptiveSets.add(st.id);
+  }
+  for (const r of rows) out.set(r.id, { id: r.id, mode: String(r.mode ?? ""), adaptive: r.mode === "adaptive" || (!!r.set_id && adaptiveSets.has(r.set_id)) });
+  return out;
+}
+
+/** The clarify events that kept these attempts as understanding checks (950). Empty without 950. */
+export async function historyCheckEvents(admin: Admin, userId: string, attemptIds: readonly string[]): Promise<Map<string, HistoryCheckEvent>> {
+  const out = new Map<string, HistoryCheckEvent>();
+  const list = [...new Set(attemptIds)].filter(isUuid).slice(0, 200);
+  if (!list.length) return out;
+  const { data, error } = await admin.from("individual_scholar_learning_event").select("attempt_id, session_id, step").eq("user_id", userId).in("attempt_id", list);
+  if (error) return out;
+  for (const e of (data ?? []) as any[]) if (e.attempt_id && !out.has(e.attempt_id)) out.set(e.attempt_id, { attemptId: e.attempt_id, sessionId: e.session_id, step: e.step });
+  return out;
+}
+
+/** The exam-paper answers this practice question was made from (570 revision_question_id), with the printed question. Empty without 570. */
+export async function historyExamAnswers(admin: Admin, userId: string, questionId: string): Promise<HistoryExamAnswer[]> {
+  if (!isUuid(questionId)) return [];
+  const { data, error } = await admin.from("individual_scholar_exam_answer").select("id, material_id, question_id, attempt, model, prompt_version, created_at").eq("user_id", userId).eq("revision_question_id", questionId).order("created_at", { ascending: false }).limit(20);
+  if (error || !data?.length) return [];
+  const qIds = [...new Set((data as any[]).map(a => a.question_id).filter(Boolean))];
+  const { data: qs } = qIds.length ? await admin.from("individual_scholar_exam_question").select("id, stem").eq("user_id", userId).in("id", qIds) : { data: [] };
+  const stem = new Map(((qs ?? []) as any[]).map(q => [q.id as string, String(q.stem ?? "")]));
+  return (data as any[]).map(a => ({
+    id: a.id, materialId: a.material_id, examQuestionId: a.question_id ?? null, examStem: a.question_id ? stem.get(a.question_id) ?? null : null,
+    attempt: a.attempt && typeof a.attempt === "object" ? a.attempt : null, model: a.model, promptVersion: a.prompt_version, createdAt: a.created_at,
+  }));
+}
+
 /**
  * Append one correction to one of the learner's attempts (791). The trigger fills previous_* from the effective result and
  * refuses a correction that changes nothing. `userId` is the learner the attempt belongs to (the HQ caller resolves it).
