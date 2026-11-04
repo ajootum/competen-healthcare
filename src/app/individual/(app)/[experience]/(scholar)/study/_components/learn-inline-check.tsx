@@ -7,7 +7,7 @@ import { isRated, type QuickMark, type RecallMark } from "@/lib/individual/schol
 import { PracticeQuestion, ghost, btn, focusRing, lessonFlashcardsHref, req } from "./learn-practice";
 import { carry } from "./study-active";
 import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
-import { LearningDisclosure } from "@/components/ui/scholar-learning";
+import { LearningDisclosure, LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): SHORT CHECKS INSIDE THE SCROLLING LESSON. Additive: the lesson's Check and
 // Practise actions are unchanged. Nothing here calls AI by itself and nothing is generated on reopen.
@@ -232,11 +232,12 @@ export function ApplyCard({ href, skippable, onApplied }: { href: string; skippa
   const [skipped, setSkipped] = useState(false);
   if (skipped) return null;
   return (
-    <section aria-label="Apply it" className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2.5">
-      <p className="min-w-0 text-[13.5px] text-gray-900"><span className="font-semibold">Apply it: try a short case.</span> <span className="text-gray-600">Optional practice on this topic, not an assessment.</span></p>
+    <section aria-label="Apply it" className={`${learnBox("practice")} mt-3 flex flex-wrap items-center justify-between gap-3 px-4 py-3`}>
+      <p className="flex min-w-0 flex-1 basis-[16rem] items-start gap-2.5 text-[14px] text-gray-900"><span className="cmp-learn-accent mt-0.5"><LearningIcon name="target" className="h-5 w-5" /></span>
+        <span><span className="cmp-learn-ink font-semibold">Apply it: try a short case.</span> <span className="text-gray-700">Optional practice on this topic, not an assessment.</span></span></p>
       <span className="flex flex-wrap gap-2">
-        <a href={href} className={`${ghost} ${touch}`} onClick={e => { e.preventDefault(); onApplied(); router.push(carry(href)); }}>Try a case</a>
-        {skippable && <button type="button" className={`${ghost} ${touch}`} onClick={() => setSkipped(true)}>Skip</button>}
+        <a href={href} className={learnAction.primary} onClick={e => { e.preventDefault(); onApplied(); router.push(carry(href)); }}>Try a case</a>
+        {skippable && <button type="button" className={learnAction.secondary} onClick={() => setSkipped(true)}>Skip</button>}
       </span>
     </section>
   );

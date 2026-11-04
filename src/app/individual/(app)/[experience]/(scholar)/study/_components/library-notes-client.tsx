@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { noteDatesLabel } from "@/lib/individual/scholar/library-organise";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
-import { LearningIcon } from "@/components/ui/scholar-learning";
+import { LearningIcon, learnAction } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-LIBRARY-01 (owner, 1 Nov 2026): the learner's OWN notes, bookmark and highlights on one saved teaching or one
 // lesson. Learner-authored, private, never AI: every write goes to api/individual/scholar/library/notes (820), which keys
@@ -104,11 +104,11 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
               className={`mt-1 w-full rounded-lg border border-gray-300 px-3 py-2 text-[14px] ${focusRing}`} placeholder="Your own words: what to remember, a question to ask" />
             <DictateButton fieldId={`note-${containerId ?? "x"}`} onValue={setDraft} disabled={busy} className="mt-2" />
             <div className="mt-2 flex flex-wrap gap-2">
-              <button type="button" className={chip} disabled={busy || !draft.trim()} onClick={() => void add("note", draft.trim(), null).then(ok => ok && setDraft(""))}>Save note</button>
-              {allowHighlight && containerId && <button type="button" className={chip} disabled={busy} onClick={() => void highlight()}>Highlight selected text</button>}
+              <button type="button" className={tone ? learnAction.primary : chip} disabled={busy || !draft.trim()} onClick={() => void add("note", draft.trim(), null).then(ok => ok && setDraft(""))}>Save note</button>
+              {allowHighlight && containerId && <button type="button" className={tone ? learnAction.secondary : chip} disabled={busy} onClick={() => void highlight()}>Highlight selected text</button>}
               {allowBookmark && (bookmark
-                ? <button type="button" className={chip} aria-pressed="true" disabled={busy} onClick={() => void remove(bookmark.id)}>Bookmarked · Remove bookmark</button>
-                : <button type="button" className={chip} aria-pressed="false" disabled={busy} onClick={() => void add("bookmark", null, null)}>Bookmark for revision</button>)}
+                ? <button type="button" className={tone ? learnAction.secondary : chip} aria-pressed="true" disabled={busy} onClick={() => void remove(bookmark.id)}>Bookmarked · Remove bookmark</button>
+                : <button type="button" className={tone ? learnAction.secondary : chip} aria-pressed="false" disabled={busy} onClick={() => void add("bookmark", null, null)}>Bookmark for revision</button>)}
             </div>
           </>
         )}
