@@ -24,6 +24,7 @@ import {
   type Progress, type ScenarioStage, type StageResult,
 } from "@/lib/individual/scholar/scenario";
 import { SCORING_RULES_VERSION, unsafeStatement } from "@/lib/individual/scholar/scoring-rules";
+import { questionCapPolicy } from "@/lib/individual/scholar/safety-caps";
 
 // Request-time only: it reads the session and the learner's policy, and signs with a server-only secret.
 export const dynamic = "force-dynamic";
@@ -111,7 +112,8 @@ export async function POST(req: Request) {
   const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
   // SQIE-CLOSE-2026-11 WS-B (rules v3): an unsafe stage, or a safety-critical stage not earned in full, is capped AT THAT STAGE (never the
   // others), and only where HQ policy scholar_clinical_scoring_caps is on; the flag is recorded either way.
-  const cs = capScenario(spec, results, { capsActive: policy.scholarClinicalScoringCaps === "on" });
+  // Owner decision 1 (998): a scenario is never a library copy, so this is formative (uncapped) -- the gate says so, not this line.
+  const cs = capScenario(spec, results, await questionCapPolicy(ctx.admin, q, policy.scholarClinicalScoringCaps === "on"));
   const m = scenarioMarks(spec, cs.results), safety = cs.safety;
   const marking = scenarioMarking(results);
   // SQIE WS-D: each AI-judged stage keeps its five parts (right, missing, misconceptions, why, next), not only the summary.

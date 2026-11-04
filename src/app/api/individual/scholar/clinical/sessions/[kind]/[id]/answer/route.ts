@@ -10,7 +10,7 @@ import { REASONING_CAPS } from "@/lib/cases/categories";
 import { HANDOVER_SECTIONS, composeHandover } from "@/lib/cases/handover";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { caseCriteria, libraryReasonFeedback, libraryReasoningFeedback, recordedFeedbackText } from "@/lib/individual/scholar/clinical-library-feedback";
-import { capForSafety, criteriaMarks, unsafeStatement } from "@/lib/individual/scholar/scoring-rules";
+import { capForSafety, criteriaMarks, unsafeStatement, type CapPolicy } from "@/lib/individual/scholar/scoring-rules";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
@@ -19,6 +19,9 @@ import { handoverFeedbackNote } from "@/lib/individual/scholar/case-talk";
 import type { ReasoningJudge } from "@/lib/individual/scholar/clinical-play";
 import { answerSpelling, vocabularyOf } from "@/lib/individual/scholar/spelling";
 import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
+
+// Owner decision 1 (4 Nov 2026, migration 998): no case decision is capped -- the caps are for explicitly approved library questions only.
+const CASE_CAPS: CapPolicy = { capsActive: false };
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -80,9 +83,9 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     });
     if (refused || !e.ok || !e.evaluation.ok) return { kind: "self" };
     const unsafe = unsafeStatement(e.evaluation.unsafe);
-    // Against criteria the score is their weighted share. The rules-v3 caps apply AT THIS DECISION only where scholar_clinical_scoring_caps
-    // is on (unsafe at most half, a missed safety-critical criterion nothing); the flag is in the recorded feedback either way.
-    const caps = { capsActive: policy.scholarClinicalScoringCaps === "on" };
+    // Against criteria the score is their weighted share. Owner decision 1 (4 Nov 2026, 998): the rules-v3 caps apply only to a library
+    // QUESTION whose markers clinical reviewers explicitly approved (safety-caps.ts). A case has none, so its flags are recorded and shown, uncapped.
+    const caps = CASE_CAPS;
     const marks = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe, caps) : null;
     const decided = marks ?? capForSafety({ correct: e.evaluation.verdict === "correct", score: e.evaluation.score }, unsafe ? "unsafe" : "safe", caps);
     const correct = decided.correct, score = decided.score;
@@ -99,7 +102,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
   // is not given, the student reviews their answer themselves.
   if (kind === "library" && text && policy.scholarCaseReasoningFeedback === "ai_then_self"
     && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
-    const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback`, capsActive: policy.scholarClinicalScoringCaps === "on" });
+    const f = await libraryReasoningFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:feedback`, capsActive: CASE_CAPS.capsActive });
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
     if (f.ok) return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play), feedback: { ...r.feedback, marking: "ai_evaluation", markingLabel: MARKING_LABEL.ai_evaluation, aiFeedback: f.text } });
   }
@@ -107,7 +110,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
   // (formative, labelled, recorded by the shared delivery like any AI feedback). The choice's own marking is unchanged.
   if (kind === "library" && !text && reason && policy.scholarCaseReasoningFeedback === "ai_then_self"
     && activityState(await getScholarAiStanding(ctx.admin, ctx.userId), "evaluate").available && !(await aiPreflight(ctx))) {
-    const f = await libraryReasonFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:reason`, capsActive: policy.scholarClinicalScoringCaps === "on" });
+    const f = await libraryReasonFeedback(ctx.admin, { userId: ctx.userId, sessionId: id, decisionToken: body.decisionToken, requestId: `${scholarRequestId(ctx, req)}:reason`, capsActive: CASE_CAPS.capsActive });
     if (f.ok || (f.reason !== "no_rubric" && f.reason !== "no_reason")) await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reason", id, { kind, outcome: f.ok ? "recorded" : f.reason, model: f.ok ? f.model : null });
     if (f.ok) return NextResponse.json({ ...r, ...understood, handoverNote, play: await finishPlay(ctx.admin, ctx.userId, kind, id, r.play),
       feedback: { ...r.feedback, reasonFeedback: { text: f.text, label: MARKING_LABEL.ai_evaluation, marks: f.marks ? { awarded: f.marks.awarded, total: f.marks.total, outcome: f.marks.outcome } : null } } });

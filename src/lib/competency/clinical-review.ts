@@ -171,13 +171,23 @@ export function reviewRefusal(message: string | undefined): string {
   if (/stale/i.test(m)) return "The content has changed since this version was put forward. It needs a new version and renewed review.";
   if (/shared frameworks/i.test(m)) return "Only competencies of shared frameworks are reviewed here.";
   if (/duplicate key|unique/i.test(m)) return "You have already recorded a decision on this version.";
+  // SQIE 998 (owner decision 1, 4 Nov 2026): the explicit approval of safety markers and their scoring scope.
+  if (/safety markers are approved only with an approval/i.test(m)) return "Safety markers are approved only together with an approval of the version.";
+  if (/safety markers are approved only on a library revision question/i.test(m)) return "Safety markers are approved only on a library revision question.";
+  if (/carries no safety marker/i.test(m)) return "This version carries no safety marker to approve.";
+  if (/safety_markers_approved/i.test(m)) return "Safety-marker approval is not available here yet (migration 998 is not applied). Nothing was recorded.";
   return "The decision could not be recorded just now.";
 }
 
-/** Record one reviewer's decision on one version, under one of their appointments. */
-export async function decideReview(admin: any, versionId: string, reviewerId: string, appointmentId: string, decision: "approved" | "rejected", comment: string | null)
+/**
+ * Record one reviewer's decision on one version, under one of their appointments. `safetyMarkersApproved` (SQIE 998, owner decision 1) is
+ * the reviewer's EXPLICIT approval of a library question's safety markers and their scoring scope, kept on this same decision row --
+ * bound by the 395/442 guards to this exact version and content hash. Sent only when true, so every other decision is written as before.
+ */
+export async function decideReview(admin: any, versionId: string, reviewerId: string, appointmentId: string, decision: "approved" | "rejected", comment: string | null,
+  opts: { safetyMarkersApproved?: boolean } = {})
   : Promise<{ ok: true } | { ok: false; error: string }> {
-  const { error } = await admin.from("clinical_review_decision").insert({ version_id: versionId, reviewer_id: reviewerId, appointment_id: appointmentId, decision, comment });
+  const { error } = await admin.from("clinical_review_decision").insert({ version_id: versionId, reviewer_id: reviewerId, appointment_id: appointmentId, decision, comment, ...(opts.safetyMarkersApproved ? { safety_markers_approved: true } : {}) });
   return error ? { ok: false, error: reviewRefusal(error.message) } : { ok: true };
 }
 

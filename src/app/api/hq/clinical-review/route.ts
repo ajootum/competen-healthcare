@@ -45,13 +45,17 @@ export async function POST(req: Request) {
   if (body.decision !== "approved" && body.decision !== "rejected") return refuse(400, "Approve or reject.");
   const comment = typeof body.comment === "string" && body.comment.trim() ? body.comment.trim().slice(0, 2000) : null;
   if (body.decision === "rejected" && !comment) return refuse(422, "Say what needs to change.");
+  // SQIE 998 (owner decision 1, 4 Nov 2026): the reviewer's explicit approval of a library question's safety markers and their scoring
+  // scope. Only "approved" counts; the database refuses it on anything but an approval of a marked revision question.
+  const safetyMarkersApproved = body.safetyMarkers === "approved";
+  if (safetyMarkersApproved && body.decision !== "approved") return refuse(422, "Safety markers are approved only together with an approval of the version.");
 
-  const r = await decideReview(ctx.admin, body.versionId, ctx.userId, body.appointmentId, body.decision, comment);
+  const r = await decideReview(ctx.admin, body.versionId, ctx.userId, body.appointmentId, body.decision, comment, { safetyMarkersApproved });
   if (!r.ok) return refuse(409, r.error);
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.fullName ?? null,
     action: "clinical_review_decided", entity_type: "clinical_content_version", entity_id: body.versionId,
-    new_value: { decision: body.decision, appointment_id: body.appointmentId },
+    new_value: { decision: body.decision, appointment_id: body.appointmentId, ...(safetyMarkersApproved ? { safety_markers_approved: true } : {}) },
   }).then((x: unknown) => x, () => {});
   return NextResponse.json({ ok: true });
 }
