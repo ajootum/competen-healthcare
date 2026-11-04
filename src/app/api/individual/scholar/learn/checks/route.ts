@@ -4,7 +4,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { ensureCheckQuestion, findSavedLesson, getLearningSession, getPassage, isUuid, listCheckAttempts, recordCheckAttempt, recordLearningEvent, sectionLinks } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { parseTeachAnswer, questionText } from "@/lib/individual/scholar/teach-format";
-import { CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_SCORE, checkResponse, isSelfGrade } from "@/lib/individual/scholar/learn-check-record";
+import { CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_SCORE, checkResponse, isSelfGrade, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
 import { QUESTION_MAX } from "@/lib/individual/scholar/config";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +41,7 @@ export async function POST(req: Request) {
   const sessionId = isUuid(body?.sessionId) ? String(body.sessionId) : null;
   const step = Number.isInteger(body?.step) && Number(body.step) >= 0 ? Number(body.step) : null;
   const question = text(body?.question, 400), answer = typeof body?.answer === "string" ? body.answer.trim() : "";
-  const selfGrade = isSelfGrade(body?.selfGrade) ? body.selfGrade : null;
+  const selfGrade: SelfGrade | null = isSelfGrade(body?.selfGrade) ? body.selfGrade : null;
   if (!sessionId || step === null) return NextResponse.json({ error: "Name the lesson the check belongs to." }, { status: 400 });
   if (!question || question.length > 400 || !answer || answer.length > QUESTION_MAX) return NextResponse.json({ error: "Answer the check question first." }, { status: 400 });
   if (findPatientIdentifiers(answer).length) return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });

@@ -630,7 +630,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     const src = (cited && passages[cited - 1]) || passages[0];
     const q = await ensureCheckQuestion(ctx.admin, ctx.userId, {
       materialId: src.materialId, chunkId: src.chunkId, stem: checkQuestion, keyPoints: parts?.keyPoints ?? [], modelAnswer: parts?.keyPoints.length ? parts.keyPoints.join(" ") : null,
-      sourceQuote: src.content.slice(0, 1500), competencyId: risk.competencyIds[0] ?? null, model: r.model, provider: r.provider, promptVersion: r.promptVersion,
+      sourceQuote: src.content.slice(0, 1500), competencyId: risk.competencyIds?.[0] ?? null, model: r.model, provider: r.provider, promptVersion: r.promptVersion,
     });
     const evaluator = { model: r.model, promptVersion: r.promptVersion };
     const response = withFormative(checkResponse({ text: answer, question: checkQuestion, verdict: r.verdict, feedback: parts, summary: parts ? null : r.check.text }),
