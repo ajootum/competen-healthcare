@@ -7,6 +7,8 @@ import { parseTeachAnswer, questionText } from "@/lib/individual/scholar/teach-f
 import { CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_SCORE, checkResponse, isSelfGrade, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
 import { QUESTION_MAX } from "@/lib/individual/scholar/config";
 
+import { adaptiveDecision } from "@/lib/individual/scholar/learning-need-service";
+import { isStatedConfidence, parseCheckLevel } from "@/lib/individual/scholar/learning-need";
 export const dynamic = "force-dynamic";
 
 // LEARNING-CLOSE-2026-11 WS01 (owner decision D01, 4 Nov 2026): THE LEARNER'S KEPT UNDERSTANDING CHECKS.
@@ -18,6 +20,8 @@ export const dynamic = "force-dynamic";
 //        keep without a mark (unmarked): the self-review path, when AI did not judge it. The question must be one the lesson's
 //        saved teaching wrote (teach-format.ts), the answer is screened for identifiers, and the clarify learning event
 //        (verdict null: a self-grade is never a verdict) references the attempt. Nothing here calls AI.
+//        SALE-2026-11 R1: optional { confidence, checkLevel, followUp, aiAvailable, applyAvailable }; a self-graded answer gets the
+//        next-step decision (learning-need.ts, rule table, no AI), kept on the same attempt and returned as `adaptive`.
 // A judged answer is kept by the act route itself, with its judgement (act/route.ts, the D01 block).
 // FORMATIVE. A kept check is a learning record for the learner, never assessment, never competence.
 
@@ -67,11 +71,17 @@ export async function POST(req: Request) {
     materialId: passage.materialId, chunkId: passage.chunkId, stem: question, keyPoints: parts?.points ?? [], modelAnswer: null, sourceQuote: passage.content.slice(0, 1500),
     competencyId: links.find(l => l.accepted)?.competencyId ?? null, model: saved?.model ?? "learner", provider: "scholar", promptVersion: saved?.promptVersion ?? "learner:check",
   });
+  const adaptive = q && selfGrade ? await adaptiveDecision(ctx.admin, ctx.userId, policy, {
+    sessionId, step, steps: s.data!.steps.map(x => ({ step: x.step })), chunkIds,
+    current: { questionId: q.id, stem: question, verdict: null, selfGrade, feedback: null, level: parseCheckLevel(body?.checkLevel) },
+    followUp: body?.followUp, aiAvailable: body?.aiAvailable === true, applyAvailable: body?.applyAvailable === true,
+  }).catch(() => null) : null;
+  const confidence = isStatedConfidence(body?.confidence) ? body.confidence : null;
   const kept = q ? await recordCheckAttempt(ctx.admin, ctx.userId, {
-    questionId: q.id, contentVersion: q.contentVersion, response: checkResponse({ text: answer, question, selfGrade }),
+    questionId: q.id, contentVersion: q.contentVersion, response: checkResponse({ text: answer, question, selfGrade, confidence, adaptive }),
     correct: selfGrade === "covered", score: selfGrade ? SELF_GRADE_SCORE[selfGrade] : null, marking: selfGrade ? "self_graded" : "unmarked", evaluator: null, missed: selfGrade === "missed",
   }) : null;
   if (!kept) return NextResponse.json({ kept: null, note: CHECK_NOT_SAVED_NOTE, reason: "not_kept" });
   await recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: "clarify", verdict: null, chunkIds: [passage.chunkId], attemptId: kept.id });
-  return NextResponse.json({ kept: { attemptId: kept.id, answeredAt: kept.answeredAt, questionId: q!.id, marking: selfGrade ? "self_graded" : "unmarked", chunkId: passage.chunkId, materialId: passage.materialId }, note: CHECK_SAVED_NOTE });
+  return NextResponse.json({ kept: { attemptId: kept.id, answeredAt: kept.answeredAt, questionId: q!.id, marking: selfGrade ? "self_graded" : "unmarked", chunkId: passage.chunkId, materialId: passage.materialId }, note: CHECK_SAVED_NOTE, ...(adaptive ? { adaptive } : {}) });
 }
