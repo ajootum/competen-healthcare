@@ -105,6 +105,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
       scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
+      // LEARNING-CLOSE-2026-11 CYU-01: a lesson's own checks follow its teaching sequence.
+      scholarLearnCheckPlacement: "distributed",
       // SCHOLAR-LEARN-STYLE-01: Guide me, Challenge me and the More menu offered (Explain is always on).
       scholarLearnStyleGuide: "on", scholarLearnStyleChallenge: "on", scholarLearnMoreMenu: "on",
       scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
@@ -384,7 +386,7 @@ it("SCHOLAR-INLINE-CHECKS-01: the six inline-check keys default to the lightweig
   expect(DEFAULT_POLICY).toMatchObject({
     scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180,
     scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
-    scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
+    scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2", scholarLearnCheckPlacement: "distributed",
   });
   expect(p("scholar_learn_check_every", "3").scholarLearnCheckEvery).toBe("3");
   expect(p("scholar_learn_check_every", "journey_end").scholarLearnCheckEvery).toBe("journey_end");
