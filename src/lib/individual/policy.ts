@@ -127,7 +127,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook"
+  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_search_history"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
@@ -1288,6 +1288,15 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offer the Notebook" }, { value: "off", label: "Do not offer" }],
     fallback: "off",
     limitReason: "Personal summaries need migration 975 (without it the Notebook works without them). Practice uses the existing Revise generation, allowance and model routing unchanged. Default: off.",
+  },
+  // SCHOLAR-SEARCH-HISTORY-01 (owner directive 4 Nov 2026, P1, SALE learner continuity): My Search History in the library.
+  {
+    key: "scholar_search_history", kind: "choice", product: "Scholar",
+    label: "Library: My search history",
+    help: "Whether the learning library offers My search history: one private, searchable list of the learner's own submitted searches and Ask Scholar questions, with their saved teaching and lessons, newest first, filtered by activity, material, topic and date. Saved answers reopen as saved (no AI). The learner can pin, save for revision, remove one entry or clear it all. Never shown to HQ, employers or educators, and never used as AI memory.",
+    options: [{ value: "on", label: "Offer search history" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "Needs migration 992 (without it the history says it is not available yet and records nothing). Keeps the learner's words and references, never an answer. Kept until the learner deletes it. Default: off.",
   },
   // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): short checks INSIDE the scrolling lesson. No new stage, engine or AI call: the
   // recall card reads the saved lesson, the quick check reads a stored question (writing one stays the learner's click), the
@@ -2451,6 +2460,8 @@ export type IndividualPolicy = {
   scholarNextBestAction: "on" | "off";
   scholarNextBestActionMax: number;
   scholarActiveNotebook: "on" | "off";
+  /** SCHOLAR-SEARCH-HISTORY-01: My Search History in the library (migration 992). Default off. */
+  scholarSearchHistory: "on" | "off";
   /** SCHOLAR-INLINE-CHECKS-01: checks inside the scrolling lesson. */
   scholarLearnInlineRecall: "on" | "off";
   scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
@@ -2693,6 +2704,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarNextBestAction: clampChoice(policyDef("scholar_next_best_action") as ChoicePolicy, published.get(policyPath("scholar_next_best_action"))) as "on" | "off",
     scholarNextBestActionMax: int("scholar_next_best_action_max"),
     scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
+    scholarSearchHistory: clampChoice(policyDef("scholar_search_history") as ChoicePolicy, published.get(policyPath("scholar_search_history"))) as "on" | "off",
     scholarLearnInlineRecall: clampChoice(policyDef("scholar_learn_inline_recall") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall"))) as "on" | "off",
     scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
     scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),

@@ -108,6 +108,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarLearningLibrary: "on",
       // SALE-2026-11 R3: next best actions and the active Notebook are new learner features, so off; three suggestions at once.
       scholarNextBestAction: "off", scholarNextBestActionMax: 3, scholarActiveNotebook: "off",
+      // SCHOLAR-SEARCH-HISTORY-01: My Search History is a new learner feature, so off.
+      scholarSearchHistory: "off",
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
       scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
@@ -247,6 +249,15 @@ it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only f
     expect(p("scholar_active_notebook", "yes").scholarActiveNotebook).toBe("off");
     expect(p("scholar_next_best_action_max", 9).scholarNextBestActionMax).toBe(5);
     expect(p("scholar_next_best_action_max", 0).scholarNextBestActionMax).toBe(1);
+  });
+  it("SCHOLAR-SEARCH-HISTORY-01: My Search History defaults off and resolves on only from a published on", () => {
+    const p = (value: unknown) => resolvePolicy([{ config_path: policyPath("scholar_search_history"), published: { value } }]);
+    expect(DEFAULT_POLICY.scholarSearchHistory).toBe("off");
+    expect(p("on").scholarSearchHistory).toBe("on");
+    expect(p(true).scholarSearchHistory).toBe("off");
+    expect(p("yes").scholarSearchHistory).toBe("off");
+    expect(validateDraft("scholar_search_history", "on")).toMatchObject({ ok: true, settings: { value: "on" } });
+    expect(validateDraft("scholar_search_history", "always").ok).toBe(false);
   });
   it("SCHOLAR-SESSION-AI-02: study sessions default off, resolve on only from a published on, and need 740 too", () => {
     const path = policyPath("scholar_study_sessions");

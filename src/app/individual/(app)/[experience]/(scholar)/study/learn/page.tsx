@@ -18,6 +18,8 @@ import type { ServerPosition } from "@/lib/individual/scholar/learn-position";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
 import { learnLanding, parseSearchParams, searchLibrary, topicDetail, displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { ContinueLearning, LearnSearchBox, MyTopics, RecentlyAdded, SearchResults, TopicDetail, learnHref } from "../_components/learn-landing";
+// SCHOLAR-SEARCH-HISTORY-01: a submitted search is kept in the learner's own history (policy scholar_search_history, default off).
+import { RecordSearch } from "../_components/search-history-client";
 import { getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { continueStudy, loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
 import { STUDY_SPACE_LABEL, stageHref } from "@/lib/individual/scholar/study-carry";
@@ -128,7 +130,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
         </StatePanel>
       ) : !resume && !start ? (
         <>
-          <Discover admin={ctx.admin} userId={ctx.userId} q={q} library={library.ok ? library.data : null} studyOn={studyOn} />
+          <Discover admin={ctx.admin} userId={ctx.userId} q={q} library={library.ok ? library.data : null} studyOn={studyOn} historyOn={policy.scholarSearchHistory === "on"} />
           {/* COMPETEN-SCHOLAR-EXAM-PAPERS-01: a past paper is learned from in Apply, question by question, with evidence. */}
           {policy.scholarExams.enabled && (
             <p className="mt-5 text-[13.5px] text-gray-600">
@@ -159,14 +161,14 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
  * SCH-LEARN-UX-01: what Learn shows with nothing to start or resume -- a topic, a search's results, or the landing.
  * Reads only, no AI. `library` null: the materials could not be read (said so, never shown as empty).
  */
-async function Discover({ admin, userId, q, library, studyOn }: { admin: unknown; userId: string; q: Search; library: MaterialRow[] | null; studyOn: boolean }) {
+async function Discover({ admin, userId, q, library, studyOn, historyOn }: { admin: unknown; userId: string; q: Search; library: MaterialRow[] | null; studyOn: boolean; historyOn: boolean }) {
   const name = one(q.topicView).trim().slice(0, 200);
   if (name) {
     const page = Math.max(1, Math.min(200, Math.floor(Number(one(q.page)) || 1)));
     const t = await topicDetail(admin, userId, name, page, library ?? []);
     return (
       <>
-        <LearnSearchBox studyOn={studyOn} />
+        <LearnSearchBox studyOn={studyOn} historyOn={historyOn} />
         {t === "unreadable" ? <StatePanel title="Your topics could not be read just now"><p>Try again shortly. Your notes and sessions are unchanged.</p></StatePanel>
           : t === null ? (
             <StatePanel title="That topic is not in your notes" actions={<Link href={learnHref({ tab: "topics" })} className={secondaryBtn}>See your topics</Link>}>
@@ -179,12 +181,14 @@ async function Discover({ admin, userId, q, library, studyOn }: { admin: unknown
   const params = parseSearchParams(q);
   if (params.q || one(q.tab)) {
     const r = await searchLibrary(admin, userId, params, library ?? []);
-    return (<><LearnSearchBox q={params.q} studyOn={studyOn} /><SearchResults r={r} /></>);
+    // A submitted search (the form's own key, hk) is kept once in the learner's history; paging and tabs carry no key, so they add nothing.
+    const found = Object.values(r.counts).every(c => c === null) ? null : Object.values(r.counts).reduce<number>((n, c) => n + (c ?? 0), 0);
+    return (<><LearnSearchBox q={params.q} studyOn={studyOn} historyOn={historyOn} /><SearchResults r={r} />{historyOn && params.q && <RecordSearch activity="material_search" query={params.q} requestKey={one(q.hk) || null} resultCount={found} />}</>);
   }
   const [l, cont] = await Promise.all([learnLanding(admin, userId, library), studyOn ? continueStudy(admin, userId) : null]);
   return (
     <>
-      <LearnSearchBox studyOn={studyOn} />
+      <LearnSearchBox studyOn={studyOn} historyOn={historyOn} />
       <ContinueLearning sessions={l.sessions} total={l.sessionTotal} study={cont ? { title: cont.title, space: STUDY_SPACE_LABEL[cont.space], href: stageHref(cont.space, cont.id) } : null} />
       <MyTopics groups={l.topicGroups} total={l.topicTotal} />
       <RecentlyAdded docs={l.recent} studyOn={studyOn} />

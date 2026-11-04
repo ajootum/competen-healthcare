@@ -57,6 +57,8 @@ import { AdaptiveNext, type AdaptiveUi, type AdaptiveView } from "./learn-adapti
 import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, NEED_LABEL, pickDifferentQuestion, type StatedConfidence } from "@/lib/individual/scholar/learning-need";
 import { CitationChip, FeedbackParts, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, QuestionCard, SourceLink, VerdictLine, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
 import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
+// SCHOLAR-SEARCH-HISTORY-01: an answered Ask Scholar question is kept in the learner's own history (their words and where, never the answer).
+import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -1062,6 +1064,8 @@ export function LearnWorkspace(props: {
     const history = askThread.slice(0, props.maxTurns).reverse().flatMap(c => [{ speaker: "student", text: c.asked ?? "" }, ...(c.reply.answer ? [{ speaker: "tutor", text: c.reply.answer }] : [])]);
     const r = await act("ask", { question: q, history }, "ask", q);
     if (r && !r.continuity) setAsk(""); // no new AI: the question stays in the box
+    // Once answered (not withheld, not continuity): one history entry for this submission. The server keeps nothing when it is off.
+    if (r && !r.continuity && !r.withheld && step) void recordHistory({ activity: "ask", query: q, sessionId: session?.id ?? null, step: session?.id ? step.step : null, chunkId: step.sections[0]?.chunkId ?? null });
   }
   /** A teaching approach's request, through the same route and body as every Learn action (allowance, grounding, dedupe). */
   const runApproach = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {

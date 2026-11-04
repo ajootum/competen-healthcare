@@ -14,6 +14,7 @@ import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spel
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 import { activeStudyId } from "./study-active";
+import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 
 // "ASK ABOUT THIS" -- SCHOLAR-CE-2026 CE-01. ONE panel, used from Revise feedback, a flashcard, a case debrief, OSCE feedback,
 // My Plan's next step and a saved lesson. The learner stays on the page: a side drawer on a wide screen, a bottom sheet on a
@@ -111,14 +112,19 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
       // A failure after text began: the partial text is not an answer and is not kept.
       if (r.error) { setTurns(t => t.filter(x => x.id !== id)); setError({ body: { error: r.error.message } }); return; }
       patch({ a: r.text, streaming: false, sources: r.done?.sources, label: r.done?.label });
-      if (!followUp) setQuestion("");
+      if (!followUp) { setQuestion(""); keep(text); }
       return;
     }
     const prompt = r.status === 409 ? clarifyFrom(r.json) : null;
     if (prompt) { setClarify({ q: text, followUp, prompt }); return; }
     if (!r.ok) { setError({ body: r.json }); return; }
     setTurns(t => [{ id, q: text, a: String(r.json.answer ?? ""), streaming: false, followUp: followUp?.kind, sources: Array.isArray(r.json.sources) ? r.json.sources as PersonalAiSourceRef[] : undefined, label: typeof r.json.label === "string" ? r.json.label : undefined }, ...t]);
-    if (!followUp) setQuestion("");
+    if (!followUp) { setQuestion(""); keep(text); }
+  }
+  // SCHOLAR-SEARCH-HISTORY-01: an answered question (never a follow-up, which repeats it) is kept once in the learner's own history:
+  // their words and where they asked, never the answer. The server keeps nothing while HQ has the history off.
+  function keep(text: string) {
+    void recordHistory({ activity: "ask", query: text, sessionId: sessionId ?? null, step: sessionId ? step ?? null : null, materialId: materialId ?? null, chunkId: chunkIds?.[0] ?? null });
   }
 
   return (
