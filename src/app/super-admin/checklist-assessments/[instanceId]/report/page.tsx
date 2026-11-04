@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { requireHqCapability } from "@/lib/hq/context";
 import { loadReport } from "@/lib/assessment/assessor/report";
 import { AssessmentReport } from "@/components/assessment";
+import { ATTESTATION_LABEL, isHqRole } from "@/lib/assessment/assessor/common";
 
 // /super-admin/checklist-assessments/[instanceId]/report -- the finished result of an assessment I carried out.
 // Guarded by hq.assessment.instrument.assess; the instance must be mine. Print-friendly.
@@ -26,13 +27,15 @@ export default async function AssessmentReportPage({ params }: { params: Promise
   const d = r.value;
   const { def, rules, standardLayout } = { def: d.loaded.definition.def, rules: d.loaded.definition.rules, standardLayout: d.loaded.standardLayout };
   const extra = [...d.safetyConcerns, ...d.recommendations, ...d.generalComments];
+  const role = isHqRole(d.loaded.instance.respondent_role) ? d.loaded.instance.respondent_role : "assessor";
+  const who = role === "auditor" ? "an authorised auditor" : "an authorised assessor";
   return (
     <div data-cmp-theme="platform" className="max-w-4xl space-y-4">
       <nav aria-label="Breadcrumb" className="text-sm print:hidden"><Link href="/super-admin/checklist-assessments" className="font-semibold text-[var(--cmp-theme-ink)] underline underline-offset-2">Assessor workspace</Link></nav>
       <AssessmentReport
         def={def} rules={rules} responses={d.loaded.responses} evaluation={d.evaluation} evidenceCounts={d.loaded.evidenceCounts}
-        attestationLabel="Assessor-evaluated, not formal verification"
-        banner={<p>This is the result of an assessment by an authorised assessor. It is not a formal verification of competence and does not confer one.{d.loaded.outcome?.backstop_applied ? " A database safeguard set the outcome because a critical or required item was not met." : ""}</p>}
+        attestationLabel={ATTESTATION_LABEL[role]}
+        banner={<p>This is the result of an assessment recorded by {who}. It is not a formal verification of competence and does not confer one.{d.loaded.outcome?.backstop_applied ? " A database safeguard set the outcome because a critical or required item was not met." : ""}</p>}
         layout={standardLayout} title={d.loaded.definition.version.title ?? "Assessment report"} subtitle={d.subjectName ? `Assessment of ${d.subjectName}` : undefined}
         metadata={d.metadata} strengths={d.strengths} gaps={d.gaps} evidenceRefs={d.evidenceRefs} comments={d.itemComments}
         generatedAt={d.loaded.instance.submitted_at ? `Submitted ${new Date(d.loaded.instance.submitted_at).toLocaleString("en-GB", { timeZone: "UTC" })} UTC` : undefined}

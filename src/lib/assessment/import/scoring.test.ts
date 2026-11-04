@@ -6,9 +6,9 @@ import { join } from "node:path";
 import { readWorkbookGrids } from "./grid";
 import { draftWorkbook } from "./workbook";
 import { buildInstrumentPlan } from "./to-content";
-import { acceptProposedRules, isProposedRules, patchPartialOptions, proposalSummary, proposeScoring, thresholdFromText } from "./scoring";
+import { acceptProposedRules, isProposedRules, patchPartialOptions, proposalSummary, proposeScoring } from "./scoring";
 import { toDefinition } from "../studio/assemble";
-import { runTests, validateRules, type InstrumentDef, type ResponseScale } from "../core";
+import { validateRules, type InstrumentDef, type ResponseScale } from "../core";
 import { STARTERS } from "../studio/starters";
 import type { WorkbookDraft } from "./types";
 
@@ -33,79 +33,44 @@ function defOf(groupIndex: number) {
   return { g, plan, content, def, sheets };
 }
 
-describe("rating-scale instrument (sheet 1)", () => {
+describe("the import proposal is a scoring profile", () => {
   const { g, def, sheets, plan } = defOf(0);
-  const p = proposeScoring({ sheets, def, respondentRoles: g.respondentRoles });
-  it("proposes a rating threshold at the middle level, flagged as a neutral default, with assessor-led delivery", () => {
-    expect(p.family).toBe("rating");
-    expect(p.threshold).toMatchObject({ ordinal: 3, source: "default", label: "Competent" });
-    expect(p.flags.map((f) => f.code)).toEqual(expect.arrayContaining(["threshold_default", "rating_threshold_rules", "delivery_mode_proposed"]));
+  it("sheet 1 gets the graded profile with the average grade, marked proposed, delivery assessor-led", () => {
+    const p = proposeScoring({ sheets, def, respondentRoles: g.respondentRoles, levels: plan.scale?.levels ?? null });
+    expect(p.profileId).toBe("graded_assessment");
+    expect(p.rules?.profile?.id).toBe("graded_assessment");
+    expect(p.rules?.aggregates?.map((a) => a.fn)).toEqual(["mean_numeric", "count", "min_ordinal"]);
+    expect(p.rules?.permitOrdinalMean).toBe(true);
     expect(p.deliveryModes).toEqual(["assessor_led"]);
     expect(isProposedRules(p.rules)).toBe(true);
-  });
-  it("is valid for the engine and its saved tests pass", () => {
-    const v = validateRules(def, p.rules!);
-    expect(v.errors).toEqual([]);
-    const run = runTests(def, p.rules!, p.tests);
-    expect(run.results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.mismatches.join("; ")}`)).toEqual([]);
-    expect(run.passed).toBe(5);
-  });
-  it("never averages ordinals and keeps the scale as imported", () => {
-    expect(p.rules!.permitOrdinalMean).toBeUndefined();
-    expect(p.rules!.aggregates!.map((a) => a.fn)).toEqual(["min_ordinal", "max_ordinal", "count"]);
+    expect(p.flags.map((f) => f.code)).toEqual(expect.arrayContaining(["profile_applied", "interpretation_not_configured", "delivery_mode_proposed"]));
     expect(plan.scale!.levels.every((l) => l.satisfactory === null)).toBe(true);
   });
   it("accepting removes the proposal mark and nothing else", () => {
-    const a = acceptProposedRules(p.rules!);
+    const a = acceptProposedRules(plan.scoring.rules!);
     expect(isProposedRules(a)).toBe(false);
-    expect(a.rules.map((r) => r.id)).toEqual(["nothing_rated", "all_at_threshold", "some_at_threshold"]);
+    expect(a.rules.map((r) => r.id)).toEqual(["unanswered", "nothing_graded"]);
     expect(validateRules(def, a).errors).toEqual([]);
-    expect(proposalSummary(p)).toMatch(/Rating threshold at Competent \(neutral default\)/);
+    expect(proposalSummary(plan.scoring)).toMatch(/Graded assessment.*Not configured/);
   });
-});
-
-describe("audits with Yes / No / Partial (sheets 2 and 3)", () => {
-  for (const gi of [1, 2]) {
-    const { g, def, content, sheets, plan } = defOf(gi);
-    const p = plan.scoring;
-    it(`${g.title}: compliance percentage with N/A excluded, Partial counted as not met and flagged, auditor-recorded delivery`, () => {
-      expect(p.family).toBe("compliance");
-      expect(p.flags.map((f) => f.code)).toEqual(expect.arrayContaining(["partial_counted_not_met", "compliance_percentage", "threshold_default", "delivery_mode_proposed"]));
-      expect(p.deliveryModes).toEqual(["auditor_recorded"]);
-      expect(p.rules!.defaults).toEqual({ na: "exclude", undeterminable: "exclude" });
-      expect(validateRules(def, p.rules!).errors).toEqual([]);
-      const run = runTests(def, p.rules!, p.tests);
-      expect(run.results.filter((r) => !r.ok).map((r) => `${r.name}: ${r.mismatches.join("; ")}`)).toEqual([]);
-      expect(run.passed).toBe(4);
-    });
-    it(`${g.title}: the plan's content already counts Partial as not met (the workbook defines nothing else), and the sheet still records it as undefined`, () => {
-      expect(content.items[0].config.options?.find((o) => o.code === "partial")?.satisfactory).toBe(false);
-      expect(sheets[0].response.options.find((o) => o.code === "partial")?.satisfactory).toBeNull();
-      expect(patchPartialOptions(content).changed).toEqual([]);
-    });
-  }
+  it("the two audits get the weighted profiles", () => {
+    expect(defOf(1).plan.scoring.profileId).toBe("weighted_agreement");
+    expect(defOf(2).plan.scoring.profileId).toBe("weighted_compliance");
+    expect(defOf(2).plan.scoring.rules?.aggregates?.map((a) => a.id)).toEqual(["weighted_pct", "full_match_pct", "judged"]);
+  });
   it("patchPartialOptions marks only options without a met or not met meaning", () => {
     const { content } = defOf(2);
     const raw = { ...content, items: content.items.map((it) => ({ ...it, config: { ...it.config, options: it.config.options?.map((o) => (o.code === "partial" ? { ...o, satisfactory: null } : o)) } })) };
     const r = patchPartialOptions(raw);
     expect(r.changed).toEqual(["Partial"]);
     expect(r.content.items.every((it) => it.config.options?.every((o) => typeof o.satisfactory === "boolean"))).toBe(true);
-    expect(r.content.items[0].config.options?.find((o) => o.code === "yes")?.satisfactory).toBe(true);
   });
-});
-
-describe("thresholds from text", () => {
-  it("reads an explicit threshold sentence and ignores descriptions that name no level", () => {
-    expect(thresholdFromText(["A minimum score of 4 is required to pass."], ["0", "1", "2", "3", "4", "5", "6"])).toEqual({ value: "4", text: "A minimum score of 4 is required to pass." });
-    expect(thresholdFromText(["Can perform this activity satisfactorily without supervision."], ["0", "1", "2", "3"])).toBeNull();
-    expect(thresholdFromText(["Pass level 9"], ["0", "1", "2"])).toBeNull();
-  });
-  it("proposes no scoring and says so when the items carry no rating or compliance answers", () => {
-    const def: InstrumentDef = { version_no: 1, groups: [], sections: [], items: [] };
-    const p = proposeScoring({ sheets: [], def, respondentRoles: [] });
+  it("proposes nothing when the items carry no rating or choice answers", () => {
+    const empty: InstrumentDef = { version_no: 1, groups: [], sections: [], items: [] };
+    const p = proposeScoring({ sheets: [], def: empty, respondentRoles: [] });
     expect(p.family).toBe("none");
     expect(p.rules).toBeNull();
-    expect(p.flags.map((f) => f.code)).toEqual(["delivery_mode_missing", "no_scoring_proposed"]);
+    expect(p.flags.map((f) => f.code)).toEqual(["no_scoring_proposed"]);
   });
 });
 

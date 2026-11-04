@@ -11,7 +11,7 @@ import type { LayoutDoc, ResponseValue, Responses } from "@/lib/assessment/core"
 import { rkey, PRIMARY } from "@/lib/assessment/core";
 import {
   type Admin, type GrantRow, type InstanceRow, type OwnedInstance, type Res, ASSESS_CAPABILITY,
-  fail, grantState, guardMessage, isUuid, okRes,
+  fail, grantState, guardMessage, isUuid, okRes, HQ_RESPONDENT_ROLES, ATTESTATION_OF, isHqRole,
 } from "./common";
 import { loadDefinition, pickLayouts, type LoadedDefinition } from "./definition";
 
@@ -19,7 +19,7 @@ import { loadDefinition, pickLayouts, type LoadedDefinition } from "./definition
 export async function own(admin: Admin, actor: string, instanceId: string): Promise<Res<OwnedInstance>> {
   if (!isUuid(instanceId) || !isUuid(actor)) return fail(404, "That assessment could not be found.");
   const { data, error } = await admin.from("asmt_instance").select("id, instrument_version_id, subject_kind, subject_id, subject_user_id, respondent_role, respondent_id, respondent_snapshot, grant_id, owner_scope, status, attestation, amends_instance_id, started_at, submitted_at")
-    .eq("id", instanceId).eq("respondent_id", actor).eq("respondent_role", "assessor").maybeSingle();
+    .eq("id", instanceId).eq("respondent_id", actor).in("respondent_role", [...HQ_RESPONDENT_ROLES]).maybeSingle();
   if (error) return fail(503, "The assessment could not be read just now.");
   if (!data) return fail(404, "That assessment could not be found.");
   return okRes(data as OwnedInstance);
@@ -33,7 +33,7 @@ export interface InstanceSummary {
 export async function listMyInstances(admin: Admin, actor: string): Promise<Res<InstanceSummary[]>> {
   const { data, error } = await admin.from("asmt_instance")
     .select("id, status, started_at, submitted_at, grant_id, subject_user_id, instrument_version_id")
-    .eq("respondent_id", actor).eq("respondent_role", "assessor").order("started_at", { ascending: false }).limit(200);
+    .eq("respondent_id", actor).in("respondent_role", [...HQ_RESPONDENT_ROLES]).order("started_at", { ascending: false }).limit(200);
   if (error) return fail(503, "Your assessments could not be read just now.");
   return okRes((data ?? []) as InstanceSummary[]);
 }
@@ -45,7 +45,8 @@ export async function startInstance(admin: Admin, actor: string, grantId: string
   if (g.error) return fail(503, "The assessment could not be read just now.");
   const grant = g.data as GrantRow | null;
   if (!grant) return fail(404, "That assessment could not be found.");
-  if (grant.respondent_role !== "assessor") return fail(409, "That authority is not an assessor authority.");
+  const role = grant.respondent_role;
+  if (!isHqRole(role)) return fail(409, "That authority is not an assessor or auditor authority.");
   if (grantState(grant) !== "live") return fail(409, "That authority is not ready: it must be accepted by the person, not ended and inside its dates.");
 
   const open = await admin.from("asmt_instance").select("id").eq("grant_id", grantId).eq("respondent_id", actor).eq("status", "in_progress").limit(1);
@@ -56,13 +57,13 @@ export async function startInstance(admin: Admin, actor: string, grantId: string
     .eq("instrument_id", grant.instrument_id).eq("state", "published").order("version_no", { ascending: false }).limit(1).maybeSingle();
   if (ver.error) return fail(503, "The checklist could not be read just now.");
   if (!ver.data) return fail(409, "This checklist has no published version.");
-  if (!(ver.data.respondent_roles ?? []).includes("assessor")) return fail(409, "This checklist is not open to an assessor.");
+  if (!(ver.data.respondent_roles ?? []).includes(role)) return fail(409, `This checklist is not open to an ${role}.`);
   const ins = await admin.from("asmt_instrument").select("owner_scope, owner_product_line, owner_organisation_id, owner_user_id, owner_instrument_id").eq("id", grant.instrument_id).maybeSingle();
   if (ins.error || !ins.data) return fail(503, "The checklist could not be read just now.");
 
   const created = await admin.from("asmt_instance").insert({
     instrument_version_id: ver.data.id, subject_kind: grant.subject_kind, subject_id: grant.subject_id, subject_user_id: grant.subject_user_id,
-    respondent_role: "assessor", respondent_id: actor, grant_id: grant.id, attestation: "assessor_evaluated",
+    respondent_role: role, respondent_id: actor, grant_id: grant.id, attestation: ATTESTATION_OF[role],
     owner_scope: ins.data.owner_scope, owner_product_line: ins.data.owner_product_line, owner_organisation_id: ins.data.owner_organisation_id,
     owner_user_id: ins.data.owner_user_id, owner_instrument_id: ins.data.owner_instrument_id,
   }).select("id").single();

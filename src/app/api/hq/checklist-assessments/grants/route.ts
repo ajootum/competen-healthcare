@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 // /api/hq/checklist-assessments/grants -- the authority to assess one person with one checklist. Gated by
 // hq.assessment.assessor.assign (the assessment coordinator).
 //   GET  the grants I made, and the checklists that admit an assessor
-//   POST { instrumentId, subjectUserId, respondentId, appointmentId, reason, validUntil? }
+//   POST { instrumentId, subjectUserId, respondentId, appointmentId, reason, validUntil?, respondentRole? (assessor | auditor) }
 // The person accepts the grant in their own product (this plane only reads accepted_at). The database refuses a grant to or
 // by the person assessed, to an appointment that does not hold the assess capability, and by someone without assign.
 export async function GET() {
@@ -26,7 +26,7 @@ export async function POST(req: Request) {
   const ctx = await hqApiGate([ASSIGN_CAPABILITY]);
   if (isHqRefusal(ctx)) return ctx;
   const b = await readJson(req);
-  const r = await createGrant(ctx.admin, ctx.userId, { instrumentId: b.instrumentId, subjectUserId: b.subjectUserId, respondentId: b.respondentId, appointmentId: b.appointmentId, reason: b.reason, validUntil: b.validUntil });
-  if (r.ok) await auditAssessor(ctx, "grant_created", "asmt_respondent_grant", r.value.id, { instrumentId: b.instrumentId, appointmentId: b.appointmentId });
+  const r = await createGrant(ctx.admin, ctx.userId, { instrumentId: b.instrumentId, subjectUserId: b.subjectUserId, respondentId: b.respondentId, appointmentId: b.appointmentId, reason: b.reason, validUntil: b.validUntil, respondentRole: b.respondentRole });
+  if (r.ok) await auditAssessor(ctx, "grant_created", "asmt_respondent_grant", r.value.id, { instrumentId: b.instrumentId, appointmentId: b.appointmentId, respondentRole: b.respondentRole ?? "assessor" });
   return r.ok ? NextResponse.json(r.value, { status: 201 }) : respond(r);
 }

@@ -8,6 +8,7 @@ import {
   type Evaluation, type InstrumentDef, type ItemStatus, type LayoutDoc, type Responses, type RulesDoc, type ScopeCounts, type TraceStep,
 } from "@/lib/assessment/core";
 import { answerCodeLabels, describeResponse } from "./describe";
+import { summarizeResult } from "@/lib/assessment/import/profiles";
 import { Btn, Chip, classTone, humanize, mutedText, type Tone } from "./ui";
 
 export interface ReportListEntry { text: string; itemKey?: string }
@@ -131,6 +132,9 @@ export function AssessmentReport(props: AssessmentReportProps) {
   });
   const criticalFindings = critical.filter((c) => c.failed || !c.e.answered);
 
+  // ASMT-SCORING-INTEGRATION-01: the instrument-specific summary the scoring profile promises. Raw responses, the calculated
+  // result and the governed interpretation stay distinct; the three instruments are never rolled into one score.
+  const profileSummary = summarizeResult(def, rules, ev, responses);
   const strengths = (props.strengths ?? []).map(entry);
   const gaps = (props.gaps ?? []).map(entry);
   const rows = [
@@ -206,6 +210,18 @@ export function AssessmentReport(props: AssessmentReportProps) {
         </Card>
       ) : null}
 
+      {profileSummary && (
+        <Card title={`Result summary: ${profileSummary.title}`}>
+          <dl className="grid gap-x-6 gap-y-1 text-sm md:grid-cols-2" data-profile-summary>
+            {profileSummary.calculated.map((l) => <div key={l.label}><dt className={`text-xs ${mutedText}`}>{l.label}</dt><dd><b>{l.value}</b>{l.note ? <span className={`block text-xs ${mutedText}`}>{l.note}</span> : null}</dd></div>)}
+          </dl>
+          <p className="mt-2 text-sm">Governed interpretation: <Chip tone={profileSummary.interpretation.configured ? classTone(ev.class) : "neutral"}>{profileSummary.interpretation.label}</Chip> <span className={`text-xs ${mutedText}`}>{profileSummary.interpretation.note}</span></p>
+          {profileSummary.attention.filter((a) => a.items.length).map((a) => (
+            <div key={a.label} className="mt-2"><p className="text-xs font-semibold uppercase tracking-wide">{a.label} ({a.items.length})</p>
+              <ul className="list-disc pl-5 text-sm">{a.items.map((x) => <li key={x.key}><span className="font-semibold">{x.code}</span>{x.detail ? ` ${x.detail}` : ""}</li>)}</ul></div>
+          ))}
+        </Card>
+      )}
       <Card title="Findings counts">
         <CountsTable rows={rows} labels={labels} />
         <p className={`mt-2 text-xs ${mutedText}`}>The denominator is the items met plus the items not met. Items left out of it are listed below with the reason.</p>

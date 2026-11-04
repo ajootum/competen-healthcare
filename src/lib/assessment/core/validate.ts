@@ -15,7 +15,7 @@ import {
 import {
   AGG_FNS, AGGREGATE_KEYS, AVAILABLE_PRESENTATIONS, BADGES, CONTROL_VOCAB, GROUPINGS, HEADER_BLOCKS, ITEM_COMPONENTS, ITEM_SELECTOR_KEYS,
   LAYOUT_SCHEMA, LAYOUT_TOP_KEYS, NAV_KEYS, NAV_MODES, NAV_PROGRESS, NAV_UNITS, OPS, PRED_ALLOWED, PRED_KEYS, PRESENTATIONS,
-  PRINT_KEYS, PROG_TOP_KEYS, PROGRESSION_SCHEMA, RULE_KEYS, RULES_SCHEMA, RULES_TOP_KEYS, SCOPES, SECTION_COMPONENTS, SELECTOR_KEYS,
+  PRINT_KEYS, PROFILE_KEYS, PROG_TOP_KEYS, PROGRESSION_SCHEMA, RULE_KEYS, RULES_SCHEMA, RULES_TOP_KEYS, SCOPES, SECTION_COMPONENTS, SELECTOR_KEYS,
   SLOT_KEYS, SLOT_VALUES, TEST_KEYS, WEIGHT_MODES, WHERE_KEYS,
   type LayoutDoc, type Pred, type ProgPred, type ProgressionDoc, type Rule, type RulesDoc, type Selector, type StageScale,
 } from "./rules-ast";
@@ -307,6 +307,14 @@ export function validateRules(def: InstrumentDef, doc: RulesDoc): ValidationResu
   const d = doc as unknown as Rec;
   checkKeys(d, RULES_TOP_KEYS, "", c);
   if (d.schema !== RULES_SCHEMA) c.err("bad_schema", "schema", `schema must be "${RULES_SCHEMA}".`);
+  if (d.profile !== undefined) {
+    if (!isObj(d.profile)) c.err("bad_profile", "profile", "profile is an object { id, label, version, formula?, notes? }.");
+    else {
+      checkKeys(d.profile, PROFILE_KEYS, "profile", c);
+      for (const k of ["id", "label", "version"]) if (!isStr((d.profile as Rec)[k])) c.err("bad_profile", `profile.${k}`, `profile.${k} is text.`);
+      for (const k of ["formula", "notes"]) if ((d.profile as Rec)[k] !== undefined && !isStr((d.profile as Rec)[k])) c.err("bad_profile", `profile.${k}`, `profile.${k} is text.`);
+    }
+  }
 
   // outcomes
   const outcomes = Array.isArray(doc.outcomes) ? doc.outcomes : [];
