@@ -9,6 +9,7 @@ import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE } from "@/lib/individua
 import type { PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
 import { Diagram } from "./Diagram";
 import { PracticeCard } from "./PracticeCard";
+import { LearningCallout, type LearningIconName, type LearningTone } from "@/components/ui/scholar-learning";
 
 type Save = (card: { front: string; back: string }) => Promise<string | null>;
 
@@ -46,24 +47,18 @@ function Inline({ text }: { text: string }): ReactNode {
   );
 }
 
-const ICON: Record<CalloutKind, ReactNode> = {
-  caution: <path d="M10 3l8 14H2L10 3zm0 5v4m0 2.5v.01" />,
-  key: <path d="M10 2.5l2.2 4.6 5 .7-3.6 3.5.9 5-4.5-2.4-4.5 2.4.9-5L2.8 7.8l5-.7L10 2.5z" />,
-  summary: <path d="M4 5h12M4 10h12M4 15h8" />,
-  memory: <path d="M7 14.5h6M8 17h4M10 2.5a5 5 0 00-3 9v1.5h6V11.5a5 5 0 00-3-9z" />,
-  example: <path d="M3 4h14v9H8l-4 3.5V13H3V4z" />,
-  record: <path d="M5 2.5h7l3 3v12H5v-15zM8 9h5M8 12.5h5" />,
-  background: <path d="M10 2.5a7.5 7.5 0 100 15 7.5 7.5 0 000-15zM2.5 10h15M10 2.5c2.2 2.1 3.3 4.6 3.3 7.5s-1.1 5.4-3.3 7.5c-2.2-2.1-3.3-4.6-3.3-7.5S7.8 4.6 10 2.5z" />,
-};
-const CALLOUT: Record<CalloutKind, { label: string; box: string; ink: string }> = {
-  caution: { label: "Clinical caution", box: "border-amber-700 bg-amber-50", ink: "text-amber-900" },
-  key: { label: "Key concept", box: "border-l-[var(--cmp-theme-accent)] bg-[var(--cmp-theme-soft)]", ink: "text-[var(--cmp-theme-ink)]" },
-  summary: { label: "Summary", box: "border-gray-500 bg-gray-50", ink: "text-gray-900" },
-  memory: { label: "Memory aid", box: "border-indigo-700 bg-indigo-50", ink: "text-indigo-900" },
-  example: { label: "Example", box: "border-emerald-700 bg-emerald-50", ink: "text-emerald-900" },
-  record: { label: "From your record", box: "border-sky-700 bg-sky-50", ink: "text-sky-900" },
+// SCHOLAR LEARNING DESIGN SYSTEM: each callout is a learning tone (tokens.ts learningTone) with its icon and label in words
+// (shared LearningCallout). Labels and parsing are unchanged. Clinical caution keeps the strongest safety styling; the Memory
+// aid is prominent in its own rose identity; general background is the ai-beyond tone, apart from the notes.
+const CALLOUT: Record<CalloutKind, { label: string; tone: LearningTone; icon: LearningIconName; emphasis: "safety" | "prominent" | "standard" }> = {
+  caution: { label: "Clinical caution", tone: "caution", icon: "warn", emphasis: "safety" },
+  key: { label: "Key concept", tone: "key", icon: "key", emphasis: "standard" },
+  summary: { label: "Summary", tone: "summary", icon: "summary", emphasis: "standard" },
+  memory: { label: "Memory aid", tone: "memory", icon: "bulb", emphasis: "prominent" },
+  example: { label: "Example", tone: "example", icon: "example", emphasis: "standard" },
+  record: { label: "From your record", tone: "record", icon: "record", emphasis: "standard" },
   // SCHOLAR-PAI-RESEARCH-01: AI explanation that is NOT from the learner's notes -- apart from them, in its own colour.
-  background: { label: "General background \u2014 not from your notes", box: "border-violet-700 bg-violet-50", ink: "text-violet-900" },
+  background: { label: "General background — not from your notes", tone: "aiBeyond", icon: "robot", emphasis: "standard" },
 };
 
 function Callout({ kind, lines }: { kind: CalloutKind; lines: string[] }) {
@@ -77,17 +72,11 @@ function Callout({ kind, lines }: { kind: CalloutKind; lines: string[] }) {
     if (last && last.list === list && list) last.items.push(text); else groups.push({ list, items: [text] });
   }
   return (
-    <aside role="note" aria-label={c.label} className={`rounded-lg border-l-4 px-3.5 py-3 ${c.box}`}>
-      <p className={`flex items-center gap-1.5 text-[12.5px] font-bold uppercase tracking-[0.08em] ${c.ink}`}>
-        <svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">{ICON[kind]}</svg>
-        {c.label}
-      </p>
-      <div className="mt-1.5 space-y-1.5 text-[15px] leading-[1.6] text-gray-900">
-        {groups.map((g, i) => g.list
-          ? <ul key={i} className="ml-5 list-disc space-y-1">{g.items.map((t, j) => <li key={j} className="break-words"><Inline text={t} /></li>)}</ul>
-          : <p key={i} className="break-words"><Inline text={g.items[0]} /></p>)}
-      </div>
-    </aside>
+    <LearningCallout tone={c.tone} icon={c.icon} label={c.label} emphasis={c.emphasis}>
+      {groups.map((g, i) => g.list
+        ? <ul key={i} className="ml-5 list-disc space-y-1">{g.items.map((t, j) => <li key={j} className="break-words"><Inline text={t} /></li>)}</ul>
+        : <p key={i} className="break-words"><Inline text={g.items[0]} /></p>)}
+    </LearningCallout>
   );
 }
 

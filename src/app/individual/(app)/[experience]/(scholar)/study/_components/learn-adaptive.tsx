@@ -5,6 +5,7 @@
 // existing Learn action), then answer a DIFFERENT question, or skip. Nothing runs by itself. Formative, never competence.
 
 import { APPROACH_LABEL, AI_APPROACHES, NEED_LABEL, type AdaptiveRecord } from "@/lib/individual/scholar/learning-need";
+import { LearningSectionHead, learnBox } from "@/components/ui/scholar-learning";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
@@ -27,8 +28,9 @@ export function AdaptiveNext({ ui, step, accent, offReason, differentLabel, onRu
   const runs = d.approach !== "continue";
   const id = `adaptive-${step}`;
   return (
-    <section aria-labelledby={`${id}-h`} data-adaptive-need={d.need} data-adaptive-approach={d.approach} className="mt-4 rounded-xl border border-sky-200 bg-sky-50/60 p-3 sm:p-4">
-      <h4 id={`${id}-h`} className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">Your next step</h4>
+    <section aria-labelledby={`${id}-h`} data-adaptive-need={d.need} data-adaptive-approach={d.approach} className={`${learnBox("next")} mt-4 p-4`}>
+      {/* LESSON REDESIGN: the suggested next step in the What next? identity (cyan); sky is kept for AI beyond the notes. */}
+      <LearningSectionHead level={4} id={`${id}-h`} icon="target" title="Your next step" />
       <p className="mt-1 text-[14px] font-semibold text-gray-900">{NEED_LABEL[d.need]}{d.misconception ? `: ${d.misconception}` : ""}</p>
       <p className="mt-1 text-[14px] leading-relaxed text-gray-800" id={`${id}-why`}>{d.reason}</p>
       <details className="mt-1.5">

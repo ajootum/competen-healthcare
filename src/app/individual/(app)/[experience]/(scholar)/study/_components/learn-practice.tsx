@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { carry } from "./study-active";
 import { studyHref } from "./question-view";
+import { LearningDisclosure } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-COMPANION-01 P0b: PRACTISE THIS LESSON, inline and collapsed. No new engine: it reuses what exists.
 //   Quiz           GET  /api/individual/scholar/questions (the learner's own unanswered questions on this section: a
@@ -48,11 +49,9 @@ export function LessonPractice({ open, onToggle, chunkId, materialId, draft, own
   const [mode, setMode] = useState<"quiz" | "cards" | null>(null);
   const cards = ownCards && !!materialId;
   return (
-    <details open={open} onToggle={e => onToggle((e.currentTarget as HTMLDetailsElement).open)} className="group mt-3 rounded-xl border border-gray-200">
-      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Practise this lesson
-      </summary>
-      <div className="border-t border-gray-200 px-3 py-3">
+    // SCHOLAR LEARNING DESIGN SYSTEM: Practise is a shared LearningDisclosure in the practice (teal) tone.
+    <LearningDisclosure tone="practice" icon="cards" title="Practise this lesson" open={open} onToggle={onToggle} className="mt-3">
+
         {/* Three choices at most: Flashcards, Quiz, Apply (only for clinically relevant content). Stacked on a phone. */}
         <div role="group" aria-label="Ways to practise" className="grid gap-2 @sm:grid-cols-3">
           {cards && <Choice label="Flashcards" hint="Quick recall and spaced revision" selected={mode === "cards"} onClick={() => setMode(m => (m === "cards" ? null : "cards"))} />}
@@ -67,8 +66,7 @@ export function LessonPractice({ open, onToggle, chunkId, materialId, draft, own
           </>
         )}
         <p className="mt-3 text-[12px] text-gray-600">Practice is for your own learning. It is not an assessment and does not change your competence record.</p>
-      </div>
-    </details>
+    </LearningDisclosure>
   );
 }
 

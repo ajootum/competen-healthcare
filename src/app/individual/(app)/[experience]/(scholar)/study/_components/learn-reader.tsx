@@ -12,6 +12,7 @@ import { ReplayCase } from "./case-client";
 import { lessonFlashcardsHref, req } from "./learn-practice";
 import { AskAbout } from "./ask-panel";
 import { carry } from "./study-active";
+import { LearningDisclosure } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-INDEPENDENT-LEARNING-01 P0: YOUR NOTES, INSIDE THE LESSON. The lesson's own sections as the learner uploaded them
 // (GET learn/sessions/[id]/read?step=: a read of their own chunks, no AI, no allowance), each cited, each an anchor the 790
@@ -79,13 +80,10 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
   const first = loaded && loaded !== "failed" ? loaded.sections[0] : null;
   const words = loaded && loaded !== "failed" ? relatedWords({ cards: loaded.related.cards, questions: loaded.related.questions, attempts: loaded.related.attempts, cases: loaded.related.cases.length, stations: loaded.related.stations.length, savedLessons: loaded.related.savedLessons }) : null;
   return (
-    <details open={isOpen} onToggle={e => setOpen((e.currentTarget as HTMLDetailsElement).open)} className="group mt-3 rounded-xl border border-gray-200 bg-white">
-      <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 ${touch} [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>
-        Your notes{n !== null ? ` · ${n} ${n === 1 ? "section" : "sections"}` : ""}
-        {marked && <span className="ml-auto inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900">{READ_MARK.done}</span>}
-      </summary>
-      <div className="border-t border-gray-200 px-3 py-3 sm:px-4">
+    // SCHOLAR LEARNING DESIGN SYSTEM: the learner's own notes, a shared LearningDisclosure in the notes (cream) tone; no AI.
+    <LearningDisclosure tone="notes" icon="notes" title={`Your notes${n !== null ? ` · ${n} ${n === 1 ? "section" : "sections"}` : ""}`} open={isOpen} onToggle={setOpen} className="mt-3"
+      meta={marked ? <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900">{READ_MARK.done}</span> : null}>
+
         {loaded === null && <p role="status" className="text-[13.5px] text-gray-700">Opening your notes…</p>}
         {loaded === "failed" && (
           <p role="status" className="text-[13.5px] text-gray-800">Your notes could not be read just now. They are unchanged.{" "}
@@ -172,7 +170,6 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
             </div>
           </>
         )}
-      </div>
-    </details>
+    </LearningDisclosure>
   );
 }
