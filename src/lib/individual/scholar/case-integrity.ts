@@ -15,12 +15,13 @@
 // never Passport evidence (810 holds standing = formative only). Nothing here writes anywhere else.
 // ⚠ FAIL CLOSED. Where 810 is absent nothing is kept and nothing is said to the learner: the case plays as before.
 
-import { isWritten, type Blueprint } from "@/lib/cases/blueprint";
+import { blueprintCompetencies, isWritten, type Blueprint } from "@/lib/cases/blueprint";
+import type { CompetencyProvenance } from "./attempt-snapshot";
 import { HANDOVER_DEFAULTS } from "@/lib/cases/handover";
 import { sessionAttemptSource } from "@/lib/cases/library";
 import { brokenSafety, caseDebrief, markDecision, markHandoverAnswer, type Debrief } from "./clinical";
 import {
-  getCaseAttemptSnapshot, getPrivateCase, getPrivateCaseSession, insertCaseAttemptCorrection, insertCaseAttemptSnapshot, listCaseConversation,
+  competencyProvenance, getCaseAttemptSnapshot, getPrivateCase, getPrivateCaseSession, insertCaseAttemptCorrection, insertCaseAttemptSnapshot, listCaseConversation,
   type CaseAttemptCorrectionRow, type CaseAttemptSnapshotRow, type ConversationEntry,
 } from "./store";
 import { TIMELINE_LABEL, escalationOutcomes, simClock, type EscalationOutcome } from "@/lib/cases/timeline";
@@ -70,6 +71,12 @@ export type AttemptRecord = {
   review?: CaseReview;
   completion: { state: "completed"; answered: number; of: number };
   label: string;
+  /**
+   * SALE-2026-11 R4 (SALE-13): what each competency the case teaches said when the attempt was kept (990/991 shape: framework, its
+   * version, published or draft, and the case's learning objective for it). Kept only where scholar_application_evidence is on.
+   * Absent: not recorded (the competency is then read as it is now, and said so). Formative: never competence or a stage.
+   */
+  competencies?: CompetencyProvenance[];
 };
 export type AttemptRubric = {
   decisions: { id: string; key: string[]; rationale: string | null; expectedResponse: string | null;
@@ -239,6 +246,22 @@ async function attemptSource(admin: any, userId: string, kind: "private" | "libr
 }
 
 /**
+ * SALE-13: the competency provenance a completed case is kept with, where HQ has scholar_application_evidence on. Each competency the
+ * blueprint's learning objectives name (at most 20), with the framework version and mapping status now (= when the attempt is kept)
+ * and the objective that names it. null: off, or none. Never throws: the attempt is kept without it.
+ */
+export async function caseCompetencyProvenance(admin: any, b: Blueprint): Promise<CompetencyProvenance[] | null> {
+  try {
+    const p = await loadIndividualPolicy(admin);
+    if (p.scholarApplicationEvidence !== "on") return null;
+    const ids = blueprintCompetencies(b).slice(0, 20);
+    if (!ids.length) return null;
+    const read = await competencyProvenance(admin, ids);
+    return read.map(x => ({ ...x, objective: b.learningObjectives.find(l => l.competencyIds.includes(x.id))?.text?.slice(0, 300) ?? null }));
+  } catch { return null; }
+}
+
+/**
  * Keep the record of one of the caller's completed attempts, exactly once (idempotent on the session: a second call
  * finds it kept). Called when a case completes, and again when a finished case is opened without one (a failed write,
  * or an attempt finished before 810). Never throws, never an error to the learner.
@@ -249,6 +272,8 @@ export async function keepCaseAttemptSnapshot(admin: any, userId: string, kind: 
     const src = await attemptSource(admin, userId, kind, sessionId);
     if (!src || !src.completed) return "not_completed";
     const { record, rubric } = buildCaseAttemptRecord(src.input);
+    const competencies = await caseCompetencyProvenance(admin, src.input.blueprint);
+    if (competencies?.length) record.competencies = competencies;
     const r = await insertCaseAttemptSnapshot(admin, userId, { kind, sessionId, caseRef: src.caseRef, contentHash: src.contentHash, record, rubric });
     return r.ok ? "kept" : r.reason === "exists" ? "exists" : r.reason === "not_provisioned" ? "not_provisioned" : "failed";
   } catch {
