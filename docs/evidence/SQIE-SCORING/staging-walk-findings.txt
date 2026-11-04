@@ -3,19 +3,21 @@ PASS seeded four fixture questions (short + unsafe markers, calculation, answer-
 INFO first answer: HTTP 200 
 PASS WS-B short: "IV bolus" is unsafe by code, score 0, statement named (Clinically unsafe answer)
 PASS WS-B short: the accepted answer is still correct, no safety block
-PASS WS-A: 0.01 L for a mL answer is wrong (strict unit default): "This question asks for the answer in mL. Your 0.01 L is 10 mL, the right amount in the wrong unit. The answer is 10 mL."
+PASS WS-A: 0.01 L for a mL answer is wrong (strict unit default): "This question asks for the answer in mL. Your 0.01 L is 10 mL. The answer is 10 mL."
 PASS WS-A: 10.4 mL is wrong under the exact default tolerance
+PASS WS-A owner rule: a tenfold error is unsafe independently of tolerance ("Your 100 mL is not 10 mL. That is 10 times the right amount: an error of this size would be unsafe in practice.")
+PASS WS-A: the sign is kept (-10 mL is not 10 mL)
 PASS WS-A: 10 mL is correct
 PASS WS-A: an ambiguous decimal comma is refused as a number, never guessed
 INFO WS-C: the justify part needs judgement and AI marking is not on for this learner/policy ("Some parts do not match the stored answers word for word, so compare them yourself."), so it is self-graded
 PASS WS-B/C: choosing the unsafe option caps the whole answer at 0 even with a justification marked right (0 of 4)
 PASS WS-C: the feedback names the variant, the justify role and its weighted criteria
 PASS WS-C interpretation: findings table returned with the feedback, 2 of 3 marks, no safety outcome
-PASS every attempt records its scoring rules (sqie-scoring-v2): 40 attempts
+PASS every attempt records its scoring rules (sqie-scoring-v2): 52 attempts
 PASS the unsafe short attempt keeps response.safety and score 0
 PASS the calculation attempt keeps what was given and the key it was marked against (snapshot calc)
 PASS the justify attempt keeps its unsafe outcome and score 0
-PASS a 791 snapshot is kept beside each attempt (40 of 40)
+PASS a 791 snapshot is kept beside each attempt (52 of 52)
 PASS UI: the unsafe answer is said plainly, with the statement and the capped marks
 PASS UI: a wrong unit is marked wrong with feedback naming the unit asked for
 PASS UI: an interpretation item shows its findings table before the parts
