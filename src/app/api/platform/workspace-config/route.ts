@@ -46,7 +46,8 @@ export async function POST(req: Request) {
   if (action === "reset") {
     const path = body.config_path as string;
     if (!path) return badRequest("config_path required");
-    await resetOverride(admin, actor, scope, path);
+    const r = await resetOverride(admin, actor, scope, path);
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.status });
     return NextResponse.json({ ok: true });
   }
 

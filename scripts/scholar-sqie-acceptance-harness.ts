@@ -200,7 +200,7 @@ async function restoreConfig(): Promise<string[]> {
   const log: string[] = [];
   let individualTouched = false;
   for (const s of [...snaps].reverse()) {
-    if (s.row === null) { await resetOverride(admin, ACTOR, s.scope, s.path); log.push(`${s.scope.scopeRef}:${s.path} removed (had no override before)`); }
+    if (s.row === null) { const rr = await resetOverride(admin, ACTOR, s.scope, s.path); log.push(`${s.scope.scopeRef}:${s.path} ${rr.ok ? "removed (had no override before)" : `NOT removed (ERROR ${rr.error})`}`); }
     else {
       const { error } = await admin.from("workspace_config_overrides").update({ draft: s.row.draft, published: s.row.published, updated_at: new Date().toISOString() })
         .eq("scope_type", s.scope.scopeType).eq("scope_ref", s.scope.scopeRef).eq("config_path", s.path);
