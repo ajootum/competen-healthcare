@@ -128,7 +128,10 @@ export const HQ_WORKSPACES: HqWorkspace[] = [
       { key: "products.individual.economics", label: "Unit Economics & FX", href: "/super-admin/individual/economics", icon: "💱", keywords: ["fx exposure","exchange rate","currency"], flag: "individual" },
       { key: "products.individual.scholar-preview", label: "View Scholar", href: "/super-admin/individual/scholar", icon: "👁️", keywords: ["scholar preview","product preview","demo learner","demonstration"], flag: "individual" },
       // SCHOLAR-ENGAGEMENT-ANALYTICS-01 (migration 910): adoption, activity, engagement and AI expenditure of genuine learners.
-      { key: "products.individual.scholar-analytics", label: "Learner Engagement", href: "/super-admin/individual/scholar/analytics", icon: "📈", keywords: ["analytics","engagement","usage","active learners","leaderboard","ai expenditure","ai cost","active days","study time"], flag: "individual" },
+      { key: "products.individual.scholar-analytics", label: "Learner Engagement", href: "/super-admin/individual/scholar/analytics", icon: "📈", keywords: ["analytics","engagement","usage","active learners","leaderboard","ai expenditure","ai cost","active days","study time"], flag: "individual", children: [
+        // SALE-2026-11 R5 (migration 985): pilot evaluation readout, learning effectiveness, cost and latency per useful activity.
+        { key: "products.individual.scholar-evaluation", label: "Pilot Evaluation", href: "/super-admin/individual/scholar/analytics/effectiveness", icon: "·", keywords: ["pilot evaluation","learning effectiveness","outcomes","delayed recall","misconception","cost per lesson","latency","report export"] },
+      ]},
       { key: "products.individual.course-access", label: "Course Access", href: "/super-admin/learning/access", icon: "🔑", kind: "cross" },
     ]},
     { key: "products.practice", group: "Competen Practice", items: [

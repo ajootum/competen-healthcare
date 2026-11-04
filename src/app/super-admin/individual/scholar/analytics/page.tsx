@@ -32,6 +32,7 @@ export default async function LearnerEngagementPage() {
         </div>
         <h1 className="mt-0.5 text-2xl font-bold text-gray-900">Learner Engagement</h1>
         <p className="text-sm text-gray-500">Who is using Competen Scholar, what they do, and what their AI use costs. Anonymous by default.</p>
+        <p className="mt-1 text-sm"><Link href="/super-admin/individual/scholar/analytics/effectiveness" className="text-teal-700 underline hover:text-teal-900">Pilot Evaluation: learning outcomes, cost and latency</Link></p>
       </div>
       <EngagementDashboard canIdentify={canIdentifyWith(caller)} initial={first.status === 200 ? first.body : null} initialError={first.status === 200 ? null : first.body.error} />
     </div>

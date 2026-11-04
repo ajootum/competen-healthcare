@@ -107,6 +107,32 @@ All components are in `src/components/ui/scholar-learning.tsx`. They are present
 | `LearningCallout` | Answer callout: icon and label in words. | `role="note"`, `aria-label`. Emphasis `safety` (caution): full 2px edge and a 6px rule. `prominent` (memory): full edge and a 4px rule. `standard`: 4px rule. |
 | `LearningIcon` | The shared line icons. | Always `aria-hidden`; the words beside an icon carry its meaning. |
 
+### 3.1 Inside a section (v1.1, LEARN SECTIONS HFE, 4 Nov 2026)
+
+These patterns lay out what sits *inside* a section shell. They were added for reading ease.
+
+| Component | Pattern | States and accessibility |
+|---|---|---|
+| `SectionCard` | A light card inside a section: one notes section, one cited source, one previous check. White, with a hairline in the tone. | `as="li"` inside lists, so the list structure is announced. |
+| `NotesText` | The learner's own text laid out for reading: 15.5 / 1.7 type, about 68 characters per line (`max-w-[68ch]`). | Layout comes from `notes-layout.ts`, described under the reading rule below. |
+| `RefChip` | A short source reference ("Slide 14", "Pages 3–4") as a chip that opens the material. | Accessible name and title: "Open in the material: <full citation>". At least 44px on touch. |
+| `ActionRow` | One consistent action row at the foot of a card: the primary action first, then the secondary ones. | `role="group"` with a label; wraps on a phone. |
+| `learnAction` | The shared action classes: `primary` (filled in the tone's ink), `secondary` (outlined) and `link`. | 40px with a mouse, 44px or more on touch. |
+| `InlineNote` | A calm inline note with an icon. `info` is a plain state, for example a slide with no text, shown with its picture button. `ai` is provenance that must stay visible, for example text read by AI from a picture, in the amber unreviewed colour. | Never an alarm and never red. |
+| `ChoiceCard` | A toggle choice as a card (Flashcards / Quiz / Apply). | `aria-pressed`. Pressed shows a 2px accent edge and the word "Selected", never colour alone. With `href` it is a link. |
+| `AnswerOption` | One option of a marked question. | The radio stays the real control. After marking, the option that matches the notes says "Matches your notes" with a tick. The learner's other choice says "Your answer" with a calm amber mark. Never red. |
+
+**Reading rule for the learner's own text** (`src/lib/individual/scholar/notes-layout.ts`, with tests). Layout may only decide where the text breaks. It never rewrites, drops or reorders a word.
+
+- **Kept as written:** blank lines (paragraphs), line breaks, and numbered or lettered markers.
+- **Bullet characters:** they become list styling.
+- **Wrapped lines:** a line that ends mid-sentence and continues in lower case is joined to the one before.
+- **Lead-ins:** a short line ending ":" introduces the short lines after it as its points, and is set semibold.
+- **Short lines:** two or more short lines without sentence ends read as the slide's points.
+- **Prose:** stays as paragraphs.
+
+`notes-layout.test.ts` asserts that the laid-out words equal the source words, minus bullet glyphs.
+
 ## 4. Rules
 
 1. **No colour-only meaning.** Every tone also has a heading in words and an icon. Every state (selected, answered, verdict, progress, feedback part) also changes shape, words or edge width.
@@ -124,7 +150,9 @@ All components are in `src/components/ui/scholar-learning.tsx`. They are present
    - Every control keeps the platform focus ring.
 7. **Motion.** No decorative animation. Transitions are `motion-safe` only, and the platform reduced-motion floor applies.
 8. **Zoom and reflow.** No fixed heights on text. Layouts wrap, and no horizontal scroll is introduced at 390px or at 200% zoom.
-9. **One edge per level.** Don't nest bordered cards more than one level. Sections are siblings, not boxes in boxes.
+9. **One edge per level.** Don't nest bordered cards more than one level. Sections are siblings, not boxes in boxes; inside a section, items are `SectionCard`s.
+10. **One action row per item.** Each item has one primary action, and the rest are secondary. Don't repeat a control that a chip already gives (the `RefChip` opens the material, so there is no separate "Open in the material" link).
+11. **Reading measure.** Long text from the learner's notes uses the reading type at about 68 characters per line, and is never rewritten.
 
 ## 5. Layout (Learn)
 
@@ -154,6 +182,16 @@ When you adopt:
 1. Keep each page's existing words, disclaimers and behaviour.
 2. Run the page's own harness and vitest.
 3. Add the page to this list.
+
+### 6.1 Adopted so far
+
+| Stage | Since | What it uses |
+|---|---|---|
+| **Learn** | v1 (PR #281) | Every component; the first consumer. |
+| **Apply** | DS rollout 1 | The case start and case player in the `practice` tone (`LearningSectionHead`, white inner cards with one ring, one filled primary in the tone's ink); the decision verdict as a shape and words, never a red or green box; `FeedbackParts` for the debrief; `LearningCallout` (`caution`, safety emphasis) for every safety-critical point; "Your cases" in `next`; the case-library offer and the clinically approved cases in `sources`. |
+| **Evaluate** | DS rollout 1 | Dimension cards in `check`; confidence in `record`; the competency framework view in `sources`; "What to do next" in `next`; "What this evaluation cannot say" and "Verified clinical competence: not assessed here" in `summary`. Bands are words with a shape (strong: a tick in `check`; developing and needs work: the revision amber), never red or green. |
+
+Still to adopt: Revise (once SALE R2, PR #283, is merged), Progress (next: SALE R4 is merged), My Plan, Saved learning / Library, and the papers, OSCE and monthly-review panels shared by Apply and Evaluate.
 
 ## 7. Change control
 

@@ -27,6 +27,8 @@ import { activeStudyId } from "./study-active";
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const touch = "min-h-[44px] pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const trigger = `inline-flex ${touch} items-center justify-center gap-1.5 rounded-xl border border-indigo-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-indigo-950 hover:bg-indigo-50 disabled:opacity-50 ${focusRing}`;
+/** LEARN SECTIONS HFE: the primary action of a section's action row, filled in Ask Scholar's identity (the `next` learning tone). */
+const triggerPrimary = `inline-flex min-h-[40px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center justify-center gap-1.5 rounded-xl border border-[var(--cmp-learn-next-ink)] bg-[var(--cmp-learn-next-ink)] px-4 py-1.5 text-[13.5px] font-semibold text-[var(--cmp-learn-next-surface)] hover:opacity-90 disabled:opacity-50 ${focusRing}`;
 
 export type AskAboutProps = {
   surface: AskSurface;
@@ -42,6 +44,8 @@ export type AskAboutProps = {
   /** The button's words. */
   label?: string;
   className?: string;
+  /** "primary": the filled trigger, for the one primary action of a section's action row. Default: as before. */
+  variant?: "primary";
 };
 
 /** The "Ask about this" button and, once pressed, its panel. Disabled with the shared reason when AI is not available. */
@@ -52,7 +56,7 @@ export function AskAbout(props: AskAboutProps) {
   const off = !!availability && !availability.available;
   return (
     <div className={props.className}>
-      <button type="button" className={trigger} disabled={off} aria-haspopup="dialog" aria-describedby={off ? why : undefined} onClick={() => setOpen(true)}>
+      <button type="button" className={props.variant === "primary" ? triggerPrimary : trigger} disabled={off} aria-haspopup="dialog" aria-describedby={off ? why : undefined} onClick={() => setOpen(true)}>
         <span aria-hidden>✦</span>{props.label ?? "Ask about this"}<span className="sr-only">: {props.refLabel}</span>
       </button>
       {off && availability && !availability.available && <AiUnavailableNote id={why} reason={availability.reason} experience="scholar" className="mt-2 max-w-xl" />}

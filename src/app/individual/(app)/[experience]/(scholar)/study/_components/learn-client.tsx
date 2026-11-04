@@ -56,7 +56,8 @@ import { CHECK_MARKING_LABEL, CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE
 import { CHECK_VERDICT_LABEL } from "@/lib/individual/scholar/config";
 import { AdaptiveNext, type AdaptiveUi, type AdaptiveView } from "./learn-adaptive";
 import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, NEED_LABEL, pickDifferentQuestion, type StatedConfidence } from "@/lib/individual/scholar/learning-need";
-import { CitationChip, FeedbackParts, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, QuestionCard, SourceLink, VerdictLine, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
+import { ActionRow, CitationChip, FeedbackParts, InlineNote, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, NotesText, QuestionCard, RefChip, SectionCard, SourceLink, VerdictLine, learnAction, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
+import { shortRef } from "@/lib/individual/scholar/notes-layout";
 import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
@@ -1436,17 +1437,25 @@ export function LearnWorkspace(props: {
         {/* LEARNING-CLOSE-2026-11 D01 (CYU-04): the lesson's kept checks, revisitable on any device, each attempt its own; Try again reopens the check with the answer. */}
         {(checks[st.step]?.length ?? 0) > 0 && (
           <LearningDisclosure tone="check" icon="question" title={`Your previous checks (${checks[st.step].length})`} className="mt-4" bodyClassName="py-0">
-            <ul className="divide-y divide-[var(--learn-border)]">
+            {/* LEARN SECTIONS HFE: each kept check is its own light card -- when, the outcome in words, how it was marked, the
+                question, the learner's answer, the feedback in its parts, and one action row. */}
+            <ul className="space-y-3 py-1">
               {checks[st.step].map(h => (
-                <li key={h.attemptId} className="py-3 text-[13.5px]">
-                  <p className="text-[12px] text-gray-600">{new Date(h.answeredAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(h, CHECK_VERDICT_LABEL)}</span> · {CHECK_MARKING_LABEL[h.marking]}</p>
-                  <p className="mt-0.5 break-words font-semibold text-gray-900">{h.question}</p>
-                  <p className="mt-0.5 break-words text-gray-800"><span className="font-semibold">You:</span> {h.response.text}</p>
+                <SectionCard as="li" key={h.attemptId} className="text-[14px]">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-gray-700">
+                    <span className="cmp-learn-ink inline-flex items-center gap-1 rounded-full border border-[var(--learn-border)] bg-[var(--learn-surface)] px-2 py-0.5 font-semibold">{checkOutcomeLabel(h, CHECK_VERDICT_LABEL)}</span>
+                    <span>{new Date(h.answeredAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                  </p>
+                  <p className="mt-1 text-[12.5px] text-gray-700">{CHECK_MARKING_LABEL[h.marking]}</p>
+                  <p className="mt-2 break-words text-[15px] font-semibold leading-snug text-gray-900">{h.question}</p>
+                  <p className="mt-2 break-words border-l-2 border-[var(--learn-accent)] pl-3 leading-relaxed text-gray-800"><span className="font-semibold">You:</span> {h.response.text}</p>
                   {h.response.feedback && <CheckFeedbackList parts={h.response.feedback} sources={lastTeach?.reply.sources ?? []} />}
-                  {h.response.summary && <p className="mt-1 whitespace-pre-wrap text-[13px] text-gray-800"><Cited text={h.response.summary} sources={lastTeach?.reply.sources ?? []} /></p>}
-                  <button type="button" disabled={!!myCheck || busyHere} className={`${chip} mt-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-50`}
-                    onClick={() => { setCheck(openCheck(st.step, teachQuestions.find(q => questionText(q) === h.question) ?? h.question, h.response.text)); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); }}>Try again</button>
-                </li>
+                  {h.response.summary && <p className="mt-2 whitespace-pre-wrap text-[13.5px] leading-relaxed text-gray-800"><Cited text={h.response.summary} sources={lastTeach?.reply.sources ?? []} /></p>}
+                  <ActionRow label="This check">
+                    <button type="button" disabled={!!myCheck || busyHere} className={learnAction.secondary}
+                      onClick={() => { setCheck(openCheck(st.step, teachQuestions.find(q => questionText(q) === h.question) ?? h.question, h.response.text)); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); }}>Try again</button>
+                  </ActionRow>
+                </SectionCard>
               ))}
             </ul>
           </LearningDisclosure>
@@ -1525,17 +1534,24 @@ export function LearnWorkspace(props: {
           {step && (
             <div className={`${learnBox("sources")} mt-4 p-3`}>
               <LearningSectionHead level={3} icon="library" title="This lesson&apos;s sources" />
-              <ul className="mt-2 space-y-1.5">
-                {step.sections.map(x => (
-                  <li key={x.chunkId}><SourceLink href={sourceHref(x.materialId, x.chunkId)} citation={x.citation}
-                    note={aiReadNote.get(x.chunkId) ? <span className="block text-[11.5px] leading-snug text-amber-900">{aiReadNote.get(x.chunkId)}</span> : null} /></li>
-                ))}
-              </ul>
+              {/* LEARN SECTIONS HFE: the material named once, its slides or pages as chips that open them (the full citation is
+                  each chip's name), and the original file under the title. An AI-read source keeps its note. */}
+              {[...new Map(step.sections.map(x => [x.materialId, x.materialTitle])).entries()].map(([mid, mtitle]) => {
+                const mine = step.sections.filter(x => x.materialId === mid);
+                const read = mine.filter(x => aiReadNote.get(x.chunkId));
+                return (
+                  <div key={mid} className="mt-2.5">
+                    <p className="break-words text-[13px] font-semibold leading-snug text-gray-900">{mtitle}</p>
+                    <ul className="mt-1.5 flex flex-wrap gap-1.5">
+                      {mine.map(x => <li key={x.chunkId}><RefChip href={sourceHref(x.materialId, x.chunkId)} text={shortRef(x.unit, x.pageFrom, x.pageTo) ?? x.citation} citation={x.citation} /></li>)}
+                    </ul>
+                    {read.map(x => <InlineNote key={x.chunkId} kind="ai" className="mt-1.5 text-[12px]">{shortRef(x.unit, x.pageFrom, x.pageTo) ?? x.citation}: {aiReadNote.get(x.chunkId)}</InlineNote>)}
+                    <p className="mt-1.5 text-[12.5px]"><a href={`/api/individual/scholar/materials/${mid}`} className={`inline-flex min-h-[32px] items-center text-gray-800 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Original: {mtitle}</a></p>
+                  </div>
+                );
+              })}
               {/* CLINICAL-REASONING-01 CR1: from Teach Me, a case written from this step's own section. */}
-              <p className="mt-3 text-[12.5px]"><Link href={`/individual/scholar/study/apply?section=${step.sections[0].chunkId}&from=teach`} className={`cmp-learn-ink font-semibold underline underline-offset-2 ${focusRing}`}>Practise this in a clinical case</Link></p>
-              <p className="mt-2 break-words text-[12px] text-gray-700">Originals: {[...new Map(step.sections.map(x => [x.materialId, x.materialTitle])).entries()].map(([id, t], i) => (
-                <span key={id}>{i ? ", " : ""}<a href={`/api/individual/scholar/materials/${id}`} className={`underline ${focusRing}`}>{t}</a></span>
-              ))}</p>
+              <p className="mt-3 text-[12.5px]"><Link href={`/individual/scholar/study/apply?section=${step.sections[0].chunkId}&from=teach`} className={`cmp-learn-ink inline-flex min-h-[32px] items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Practise this in a clinical case</Link></p>
             </div>
           )}
         </aside>
@@ -2045,14 +2061,15 @@ function SourcesDisclosure({ sources }: { sources: Source[] }) {
   if (!sources.length) return null;
   return (
     <LearningDisclosure tone="sources" icon="library" title={`View sources (${sources.length})`} className="mt-3" bodyClassName="py-3">
+      {/* LEARN SECTIONS HFE: each cited source its own light card -- its tag and citation, then the passage in readable type. */}
       <ul className="space-y-2.5">
         {sources.map(s => (
-          <li key={s.tag}>
+          <SectionCard as="li" key={s.tag} className="p-3.5">
             <SourceLink tag={s.tag} href={sourceHref(s.materialId, s.chunkId)} citation={s.citation}
-              note={s.aiRead && s.aiReadNote ? <span className="mt-0.5 block rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[11.5px] text-amber-950">{s.aiReadNote}</span> : null}>
-              {s.excerpt && <span className="mt-1 block whitespace-pre-wrap border-l-2 border-gray-200 pl-2 text-[12.5px] leading-relaxed text-gray-700">{s.excerpt}{s.excerpt.length >= 400 ? "…" : ""}</span>}
+              note={s.aiRead && s.aiReadNote ? <InlineNote kind="ai" className="mt-1.5 text-[12.5px]">{s.aiReadNote}</InlineNote> : null}>
+              {s.excerpt && <div className="mt-2 border-l-2 border-[var(--learn-accent)] pl-3"><NotesText text={`${s.excerpt}${s.excerpt.length >= 400 ? "…" : ""}`} className="text-[14px] leading-relaxed text-gray-800" /></div>}
             </SourceLink>
-          </li>
+          </SectionCard>
         ))}
       </ul>
     </LearningDisclosure>

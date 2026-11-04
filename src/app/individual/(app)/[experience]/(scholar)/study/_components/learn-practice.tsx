@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { carry } from "./study-active";
 import { studyHref } from "./question-view";
-import { LearningDisclosure } from "@/components/ui/scholar-learning";
+import { ActionRow, AnswerOption, ChoiceCard, LearningDisclosure, LearningIcon, learnAction } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-COMPANION-01 P0b: PRACTISE THIS LESSON, inline and collapsed. No new engine: it reuses what exists.
 //   Quiz           GET  /api/individual/scholar/questions (the learner's own unanswered questions on this section: a
@@ -53,9 +53,9 @@ export function LessonPractice({ open, onToggle, chunkId, materialId, draft, own
     <LearningDisclosure tone="practice" icon="cards" title="Practise this lesson" open={open} onToggle={onToggle} className="mt-3">
 
         {/* Three choices at most: Flashcards, Quiz, Apply (only for clinically relevant content). Stacked on a phone. */}
-        <div role="group" aria-label="Ways to practise" className="grid gap-2 @sm:grid-cols-3">
-          {cards && <Choice label="Flashcards" hint="Quick recall and spaced revision" selected={mode === "cards"} onClick={() => setMode(m => (m === "cards" ? null : "cards"))} />}
-          {chunkId && <Choice label="Quiz" hint="Short knowledge check" selected={mode === "quiz"} onClick={() => setMode(m => (m === "quiz" ? null : "quiz"))} />}
+        <div role="group" aria-label="Ways to practise" className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
+          {cards && <ChoiceCard tone="practice" icon="cards" label="Flashcards" hint="Quick recall and spaced revision" pressed={mode === "cards"} onClick={() => setMode(m => (m === "cards" ? null : "cards"))} />}
+          {chunkId && <ChoiceCard tone="practice" icon="question" label="Quiz" hint="Short knowledge check" pressed={mode === "quiz"} onClick={() => setMode(m => (m === "quiz" ? null : "quiz"))} />}
           {applyHref && <CaseLink href={applyHref} onApplied={onApplied} />}
         </div>
         {mode === "quiz" && chunkId && <PracticeQuestion chunkId={chunkId} aiAllowed={aiAllowed} onPractised={onPractised} accent={accent} />}
@@ -65,32 +65,16 @@ export function LessonPractice({ open, onToggle, chunkId, materialId, draft, own
             <p className="mt-3"><Link href={lessonFlashcardsHref(materialId, chunkId)} className={`font-semibold underline ${focusRing}`}>Study flashcards from this lesson</Link></p>
           </>
         )}
-        <p className="mt-3 text-[12px] text-gray-600">Practice is for your own learning. It is not an assessment and does not change your competence record.</p>
+        <p className="mt-3 text-[12.5px] text-gray-700">Practice is for your own learning. It is not an assessment and does not change your competence record.</p>
     </LearningDisclosure>
   );
 }
 
-const choiceCls = (selected: boolean) => `flex w-full min-h-[44px] flex-col items-start justify-center rounded-xl border-2 bg-white px-3 py-2 text-left hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${selected ? "border-gray-900" : "border-gray-300"} ${focusRing}`;
-
-/** One of the practice choices: a title and a one-line description. Selected is a border AND the word "Selected", not colour alone. */
-function Choice({ label, hint, selected, onClick }: { label: string; hint: string; selected: boolean; onClick: () => void }) {
-  return (
-    <button type="button" aria-pressed={selected} onClick={onClick} className={choiceCls(selected)}>
-      <span className="text-[14px] font-semibold text-gray-900">{label}{selected && <span className="ml-1.5 text-[12px] font-bold">✓ Selected</span>}</span>
-      <span className="text-[12.5px] font-normal text-gray-600">{hint}</span>
-    </button>
-  );
-}
-
+// LEARN SECTIONS HFE: the practice choices are the shared ChoiceCard (pressed: a 2px edge and the word "Selected", never colour alone).
 function CaseLink({ href, onApplied }: { href: string; onApplied: () => void }) {
   const router = useRouter();
   // The open study session is read when the link is used, not while rendering (study-active.ts).
-  return (
-    <a href={href} className={choiceCls(false)} onClick={e => { e.preventDefault(); onApplied(); router.push(carry(href)); }}>
-      <span className="text-[14px] font-semibold text-gray-900">Apply</span>
-      <span className="text-[12.5px] font-normal text-gray-600">Try it in a case</span>
-    </a>
-  );
+  return <ChoiceCard tone="practice" icon="target" label="Apply" hint="Try it in a case" href={href} onClick={e => { e.preventDefault(); onApplied(); router.push(carry(href)); }} />;
 }
 
 /**
@@ -98,7 +82,7 @@ function CaseLink({ href, onApplied }: { href: string; onApplied: () => void }) 
  * "Write a question" (the existing POST) only when none is stored and `aiAllowed`, on the learner's click. `onResult`: the code-marked
  * outcome, so the lesson can keep it. "practice" (the default) is the Practise panel exactly as before.
  */
-export function PracticeQuestion({ chunkId, aiAllowed, onPractised, accent, variant = "practice", onResult }: {
+export function PracticeQuestion({ chunkId, aiAllowed, onPractised, variant = "practice", onResult }: {
   chunkId: string; aiAllowed: boolean; onPractised: () => void; accent: string; variant?: "practice" | "quick"; onResult?: (correct: boolean) => void;
 }) {
   const id = useId();
@@ -146,47 +130,43 @@ export function PracticeQuestion({ chunkId, aiAllowed, onPractised, accent, vari
   const q = list?.[at];
   return (
     <div className="mt-3">
-      {variant === "quick" && list !== null && !list.length && aiAllowed && <button type="button" className={btn} style={{ background: accent }} disabled={state !== "idle"} onClick={() => void load(true)}>{state === "writing" ? "Writing a question…" : state === "loading" ? "Finding a question…" : "Write a question"}</button>}
+      {variant === "quick" && list !== null && !list.length && aiAllowed && <button type="button" className={learnAction.primary} disabled={state !== "idle"} onClick={() => void load(true)}>{state === "writing" ? "Writing a question…" : state === "loading" ? "Finding a question…" : "Write a question"}</button>}
       {variant === "quick" && list === null && <p role="status" className="text-[13.5px] text-gray-700">Finding your stored question…</p>}
-      {variant === "practice" && list === null && <button type="button" className={btn} style={{ background: accent }} disabled={state !== "idle"} onClick={() => void load()}>{state === "writing" ? "Writing a question…" : state === "loading" ? "Finding a question…" : "Show me a question"}</button>}
+      {variant === "practice" && list === null && <button type="button" className={learnAction.primary} disabled={state !== "idle"} onClick={() => void load()}>{state === "writing" ? "Writing a question…" : state === "loading" ? "Finding a question…" : "Show me a question"}</button>}
       {msg && <p role="status" className="mt-2 text-[13.5px] text-gray-700">{msg}</p>}
       {q && (
-        <form onSubmit={submit} className="mt-2 rounded-xl border border-gray-200 bg-white p-3">
+        // LEARN SECTIONS HFE: the question on its own white card in the section's tone; options as AnswerOptions (after marking:
+        // "Matches your notes" with a tick, the other choice "Your answer" in calm amber -- never red, never colour alone).
+        <form onSubmit={submit} className="mt-3 rounded-xl bg-[var(--cmp-app-surface)] p-4 ring-1 ring-[var(--learn-border)]">
           <fieldset disabled={!!fb}>
-            <legend className="break-words text-[14.5px] font-semibold text-gray-900">{q.stem}</legend>
-            <div className="mt-2 grid gap-2">
-              {q.options.map((o, i) => {
-                const mark = fb ? (i === fb.correctIndex ? "right" : i === choice ? "wrong" : "") : "";
-                return (
-                  <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${mark === "right" ? "border-emerald-600 bg-emerald-50" : mark === "wrong" ? "border-red-500 bg-red-50" : choice === i ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
-                    <input type="radio" name={`${id}-q`} checked={choice === i} onChange={() => setChoice(i)} className="mt-1 h-4 w-4 shrink-0" />
-                    <span className="min-w-0 break-words">{o}{mark === "right" && <span className="font-semibold"> — matches your notes</span>}{mark === "wrong" && <span className="font-semibold"> — your answer</span>}</span>
-                  </label>
-                );
-              })}
+            <legend className="break-words text-[15.5px] font-semibold leading-snug text-gray-900">{q.stem}</legend>
+            <div className="mt-3 grid gap-2">
+              {q.options.map((o, i) => (
+                <AnswerOption key={i} name={`${id}-q`} checked={choice === i} onChange={() => setChoice(i)} mark={fb ? (i === fb.correctIndex ? "right" : i === choice ? "chosen" : "") : ""}>{o}</AnswerOption>
+              ))}
             </div>
           </fieldset>
-          {!fb && <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={choice === null || busy}>{busy ? "Checking…" : "Check my answer"}</button>}
+          {!fb && <div className="mt-3"><button type="submit" className={learnAction.primary} disabled={choice === null || busy}>{busy ? "Checking…" : "Check my answer"}</button></div>}
           {fb && (
-            <div aria-live="polite" className="mt-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-[13.5px] text-gray-800">
-              <p className="font-semibold text-gray-900">{fb.correct ? "That matches your notes." : "That does not match your notes."}</p>
-              {fb.rationale && <p className="mt-1 break-words">{fb.rationale}</p>}
-              {fb.source?.quote && <p className="mt-1.5 break-words border-l-2 border-gray-300 pl-2 italic">“{fb.source.quote}” <span className="not-italic text-gray-600">— {fb.source.citation}</span></p>}
-              {!fb.correct && <p className="mt-1.5 text-[12.5px] text-gray-600">A missed question is added to your spaced review. <Link href={studyHref("revise/mistakes")} className={`font-semibold underline ${focusRing}`}>Review missed questions in Revise</Link></p>}
-              <div className="mt-2 flex flex-wrap gap-2">
-                {list && at < list.length - 1 && <button type="button" className={ghost} onClick={() => { setAt(a => a + 1); setChoice(null); setFb(null); }}>Next question</button>}
-                <button type="button" className={ghost} onClick={() => void load(variant !== "quick")}>Another question</button>
-              </div>
+            <div aria-live="polite" className="mt-3 rounded-xl bg-[var(--learn-surface)] px-3.5 py-3 text-[14px] leading-relaxed text-gray-800 ring-1 ring-[var(--learn-border)]">
+              <p className="flex items-center gap-2 font-semibold text-gray-900"><span className={fb.correct ? "cmp-learn-accent" : "text-[var(--cmp-role-revision-strong)]"}><LearningIcon name={fb.correct ? "check" : "miss"} className="h-[18px] w-[18px]" /></span>{fb.correct ? "That matches your notes." : "That does not match your notes."}</p>
+              {fb.rationale && <p className="mt-1.5 break-words">{fb.rationale}</p>}
+              {fb.source?.quote && <blockquote className="mt-2 break-words border-l-2 border-[var(--learn-accent)] pl-3 italic">“{fb.source.quote}” <span className="not-italic text-gray-700">— {fb.source.citation}</span></blockquote>}
+              {!fb.correct && <p className="mt-2 text-[13px] text-gray-700">A missed question is added to your spaced review. <Link href={studyHref("revise/mistakes")} className={`font-semibold underline ${focusRing}`}>Review missed questions in Revise</Link></p>}
+              <ActionRow label="After this question">
+                {list && at < list.length - 1 && <button type="button" className={learnAction.primary} onClick={() => { setAt(a => a + 1); setChoice(null); setFb(null); }}>Next question</button>}
+                <button type="button" className={learnAction.secondary} onClick={() => void load(variant !== "quick")}>Another question</button>
+              </ActionRow>
             </div>
           )}
-          <p className="mt-2 text-[12px] text-gray-600">From {q.citation}</p>
+          <p className="mt-3 text-[12.5px] text-gray-700">From {q.citation}</p>
         </form>
       )}
     </div>
   );
 }
 
-export function OwnCard({ materialId, chunkId, draft, onPractised, accent }: { materialId: string; chunkId: string | null; draft: { front: string; back: string }; onPractised: () => void; accent: string }) {
+export function OwnCard({ materialId, chunkId, draft, onPractised }: { materialId: string; chunkId: string | null; draft: { front: string; back: string }; onPractised: () => void; accent: string }) {
   const id = useId();
   const [front, setFront] = useState(draft.front);
   const [back, setBack] = useState(draft.back);
@@ -204,8 +184,8 @@ export function OwnCard({ materialId, chunkId, draft, onPractised, accent }: { m
   return (
     <div className="mt-3 space-y-3">
       <button type="button" aria-pressed={flipped} onClick={() => setFlipped(f => !f)}
-        className={`block w-full rounded-xl border border-gray-300 bg-white px-4 py-5 text-left pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-        <span className="block text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{flipped ? "Back" : "Front"} · tap to turn over</span>
+        className={`block w-full rounded-xl bg-[var(--cmp-app-surface)] px-4 py-5 text-left ring-1 ring-[var(--learn-border)] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+        <span className="cmp-learn-ink block text-[11.5px] font-bold uppercase tracking-[0.1em]">{flipped ? "Back" : "Front"} · tap to turn over</span>
         <span className="mt-1 block whitespace-pre-wrap break-words text-[15px] text-gray-900">{(flipped ? back : front) || "(empty)"}</span>
       </button>
       {state === "saved" ? <p role="status" className="text-[14px] font-semibold text-gray-900">{msg}</p> : (
@@ -216,7 +196,7 @@ export function OwnCard({ materialId, chunkId, draft, onPractised, accent }: { m
           <label htmlFor={`${id}-b`} className="block text-[13px] font-semibold text-gray-900">Back</label>
           <textarea id={`${id}-b`} rows={Math.min(10, Math.max(3, back.split("\n").length + 1))} maxLength={600} value={back} onChange={e => setBack(e.target.value)} className={`w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
           {msg && <p role="alert" className="text-[13px] text-red-800">{msg}</p>}
-          <button type="submit" className={btn} style={{ background: accent }} disabled={state !== "edit" || !front.trim() || !back.trim()}>{state === "saving" ? "Saving…" : "Save to my flashcards"}</button>
+          <button type="submit" className={learnAction.primary} disabled={state !== "edit" || !front.trim() || !back.trim()}>{state === "saving" ? "Saving…" : "Save to my flashcards"}</button>
         </form>
       )}
     </div>
