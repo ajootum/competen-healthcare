@@ -32,11 +32,11 @@
 | CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) | Not started | Needs a schema decision (820 has no topic target) | — |
 | CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-03 | CE | P1 *(proposed)* | Engineering (CE) | Live — verification pending | Production signed-in walk | — |
-| CE-04A | CE | P0 | CE-04/05 session (PR #275) | Blocked | An approved case with a patient voice; the owner switching `scholar_case_conversation` on (verified end to end on staging) | — |
+| CE-04A | CE | P0 | CE-04/05 session (PR #275) | Blocked | Patient voice stays off (D-11): a case author supplies the patient script and an independent clinician approves the complete case and permitted responses | — |
 | CE-04B | CE | P1 | CE-04/05 session (PR #275) | Ready for review | — (verified on staging) | — |
 | CE-04C | CE | P1 | CE-04/05 session (PR #275) | Ready for review | Key `scholar_case_deterioration` is off; a clinically approved timeline is needed before use | — |
-| CE-04D | CE | P0 | CE-04/05 session (PR #275) | Ready for review | D05 retention rule is the owner's decision; key `scholar_case_attempt_delete` is off | — |
-| CE-05 | CE | P0 | CE-04/05 session (PR #275) + clinical reviewer | Ready for review | Clinician read of scenario content; owner scenario-policy decision D-3 (owner asked for an explanation; pending) | — |
+| CE-04D | CE | P0 | CE-04/05 session (PR #275) | Ready for review | PR #275 (owner GO to merge given); retention decided (D-13): learner deletion enabled once the implementation is verified, per the documented policy | — |
+| CE-05 | CE | P0 | CE-04/05 session (PR #275) + clinical reviewer | Ready for review | Scenarios stay off (D-3 decided): about ten generated scenarios need independent clinical review first | — |
 | CE-06A | CE | P1 | Engineering (CE) | Live — verification pending | — | — |
 | CE-06A-1 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-06B | CE | P1 | Engineering (CE) | Not started | — | — |
@@ -48,8 +48,8 @@
 | LE-03 | Learning Engine | P1 | LE session (PR #266, merged) | Live — verification pending | Production walk by a learner not yet done | — |
 | LE-04 | Learning Engine | P1 | LE session (PR #266, merged) | Live — verification pending | Production walk by a learner not yet done | — |
 | LE-05 | Learning Engine | P1 *(proposed)* | LE session (PR #266, merged) | Live — verification pending | Production walk by a learner not yet done | — |
-| AI-01 | AI | P0 | Independent clinical reviewer (to be named) | Ready for review | Reviewer not yet named | — |
-| AI-02 | AI | P0 | Coordinator (config) | Blocked | AI-01 signed review | — |
+| AI-01 | AI | P0 | Independent clinical reviewer (to be assigned) | Ready for review | Owner assigns the clinician (decided D-12); review must meet the acceptance criteria | — |
+| AI-02 | AI | P0 | Coordinator (config) | Blocked | AI-01 review accepted (D-12: activate only after it meets the criteria) | — |
 | AI-03 | AI | P1 | Coordinator (read-only runs) | Blocked | AI-02 | — |
 | AI-04 | AI | P1 *(proposed)* | Coordinator | Not started | AI-03 | — |
 | AI-05 | AI | P1 *(proposed)* | Coordinator | Not started | AI-03 | — |
@@ -200,7 +200,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** a clinically approved case version that defines a patient voice; the HQ switch. · **Environment:** staging verified (PR #275 open); production: 880 applied, switches off, unused
 - **Acceptance criteria:** directive §6.4 turn order preserved and no leakage of future scenario information; replies grounded in the stage; per-stage cap; works the same when off or AI unavailable; learner's AI allowance applies; clinical review and approval kept.
 - **Evidence:** PR #237; `docs/evidence/CASE-CONVERSATION/880-build-record.md`; `case-talk.ts`, `src/lib/cases/{conversation,voice,handover}.ts`; tests `ce04.test.ts`, `case-talk.test.ts`, `case-conversation-scope.test.ts`; policy keys in `policy.ts`. PR #275.
-- **Status:** Blocked · **Blocker:** an approved case with a patient voice; the owner switching `scholar_case_conversation` on · **Completed:** —
+- **Status:** Blocked · **Blocker:** case author's patient script and an independent clinician's approval of the complete case and permitted responses; then the owner switches `scholar_case_conversation` on · **Completed:** —
 
 ### CE-04B — Handover tasks
 - **Programme:** CE · **Priority:** P1 · **Owner:** Engineering (CE)
@@ -227,7 +227,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** CE-04A (turns appear only once the switch is on) · **Environment:** staging verified (PR #275 open); production off
 - **Acceptance criteria:** turns survive refresh; deleted attempt removes its turns; erase-all removes library-play turns; no turn reaches Personal AI memory or unrelated answers; a retention rule is recorded.
 - **Evidence:** PR #237; `supabase/migrations/880-individual-scholar-case-conversation.sql` (sha256 `df966c11…2450f` at staging); `docs/evidence/CASE-CONVERSATION/880-build-record.md`; `docs/adr/ADR-016-individual-product-gate.md`. PR #275.
-- **Status:** Ready for review · **Blocker:** PR #275 review; owner decision on the D05 retention rule · **Completed:** —
+- **Status:** Ready for review · **Blocker:** PR #275 (owner GO to merge given, merging main in); verification of the delete implementation, then enable `scholar_case_attempt_delete` · **Completed:** —
 
 ### CE-05 — Clinical scenario quality and policy activation
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE) with a clinical reviewer
@@ -236,7 +236,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** owner decision D-3; clinician read of a sample of generated scenarios · **Environment:** production (code, format off)
 - **Acceptance criteria:** clinician confirms a sample has accurate clinical content, no leakage, patient-centred framing; progression cannot be skipped from the browser; the policy decision is recorded.
 - **Evidence:** PR #236; `scenario.ts`, `scenario-service.ts`, `scenario-quality.test.ts`, `scenario-sessions-wiring.test.ts`; `docs/evidence/SCHOLAR-INDEPENDENT/p3-cost.md` (scenarios 59 % of Scholar AI cost); policy `scholar_revision_formats` in `policy.ts`. PR #275 staging verification.
-- **Status:** Ready for review · **Blocker:** clinician read of scenario content; owner scenario-policy decision D-3 · **Completed:** —
+- **Status:** Ready for review · **Blocker:** independent clinical review of about ten representative generated scenarios (leakage, accuracy, scoring); then the owner enables the format · **Completed:** —
 
 ### CE-06A — Read-aloud across lessons
 - **Programme:** CE · **Priority:** P1 · **Owner:** Engineering (CE)
@@ -338,7 +338,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** D04 · **Environment:** staging evidence
 - **Acceptance criteria:** a named independent clinician marks each card Safe/Unsafe/Inaccurate/Unclear, comments, and signs the pack with name, role and date; outcome recorded.
 - **Evidence:** `p3-eval-2026-11-03.json`; `docs/evidence/AI-EVAL/run-d5v2-2026-11-03-cost-config.json`; run `55f56e85-87d5-4cab-b22a-f1dbbb20c89d`.
-- **Status:** Ready for review (the owner's "awaiting review"; the reviewer field in the pack is left blank) · **Blocker:** independent clinician not yet named · **Completed:** —
+- **Status:** Ready for review · **Blocker:** owner assigns the independent clinician; the review must meet the acceptance criteria · **Completed:** —
 
 ### AI-02 — Flashcard AI configuration
 - **Programme:** AI · **Priority:** P0 · **Owner:** Coordinator (owner-run configuration)
@@ -347,7 +347,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** AI-01 signed · **Environment:** production (configuration)
 - **Acceptance criteria:** §6.7 routing follows published permissions and fair-use controls; post-activation queries show clinical notes on Sonnet and standard notes on Haiku; questions, scenarios and OSCE unchanged on Opus; rollback SQL recorded.
 - **Evidence:** PRs #259, #262; `docs/evidence/SCHOLAR-INDEPENDENT/p3-staging-config.sql`, `p3-cost.md`.
-- **Status:** Blocked · **Blocker:** AI-01 · **Completed:** —
+- **Status:** Blocked · **Blocker:** AI-01 review accepted · **Completed:** —
 
 ### AI-03 — Cost comparison and report
 - **Programme:** AI · **Priority:** P1 · **Owner:** Coordinator (read-only runs)
@@ -454,6 +454,11 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Acceptance criteria:** every row Complete or explicitly Blocked on an owner decision; production state reconciled; §8 items 1-7 delivered.
 - **Evidence:** this file; the register; the AI-01 pack.
 - **Status:** Implementing · **Blocker:** — · **Completed:** —
+- **Owner decision (4 Nov 2026):** **Patient voice stays disabled** until a case author supplies the required patient script and an independent clinician approves the complete case and the permitted responses (D-11). Nothing in the release waits on this.
+- **Owner decision (4 Nov 2026):** **Retention (D05) decided:** learner-owned attempts are kept until the learner deletes them, under the published privacy and retention rules. **Learner deletion is to be enabled once the existing implementation is verified**, following the documented policy for primary records, backups and any mandatory retention exceptions (D-13). The key `scholar_case_attempt_delete` therefore stays off until that verification.
+- **Owner decision (4 Nov 2026):** **D-3 decided: scenarios stay disabled** until about ten representative generated scenarios have had independent clinical review, covering answer leakage, clinical accuracy and scoring checks (D-14). `scholar_revision_formats` in production keeps excluding scenario.
+- **Owner decision (4 Nov 2026):** **A reviewer is to be assigned** (independent clinician). The proposed AI settings are activated only after the review meets the established acceptance criteria (D-12). The existing clinical review workflow is used; no new committee.
+- **Owner decision (4 Nov 2026):** Activate the proposed flashcard AI settings **only after** AI-01 meets its acceptance criteria (D-12). Not blocking the 4 Nov release.
 
 ---
 
@@ -465,13 +470,23 @@ Items decided on 4 Nov 2026 are recorded as decided (they do not resurface). Mig
 |---|---|---|---|---|
 | D-1 | Who may access **identifiable learner names** in analytics | **Decided 4 Nov: executive level (six positions)** | Capability exists in production with no grants; owner grants it to six positions (five 940 executive positions plus the legacy chief_executive seat) in Organisation & Appointments, coordinator verifies | GOV-01 |
 | D-2 | **AI metering** activation and initial limits | **Decided 4 Nov: stay OFF during the pilot; revisit on/after 20 Nov 2026** | Flag `ai_fair_use` dark; routing and eligibility apply regardless; initial limits still to be set at revisit | GOV-02 |
-| D-3 | **CE-05 scenario policy** activation (learner-wide) | **Pending.** Owner asked for an explanation | Production `scholar_revision_formats` excludes scenario; scenarios were 59 % of Scholar AI cost on Opus; no clinician read recorded | CE-05 |
+| D-3 | **CE-05 scenario policy** activation (learner-wide) | **Decided 4 Nov: keep disabled** until about ten representative generated scenarios have had independent clinical review (answer leakage, clinical accuracy, scoring checks) | Production `scholar_revision_formats` excludes scenario; scenarios were 59 % of Scholar AI cost on Opus; no clinician read recorded. See D-14 | CE-05 |
 | D-4 | Whether an **approver may also publish** under DA-000001 | **Decided 4 Nov: keep current state** | The 940 guard allows it when the author differs; DA-000001 v1 published 4 Nov 06:26Z by competenelisha (approver), author elisha.okaisu | GOV-04 |
 | D-5 | **Production package 550** release | **GO given; production already has 550** | Nothing to apply | REL-01 |
 | D-6 | **Governance migration 610** release | **GO given; production already has 610** | Nothing to apply | REL-02 |
 | D-7 | **LEARNING-01 payment** credentials and webhook setup | **Deferred by owner; revisit 18 Nov 2026** | 460-464 applied; switches off; needs Flutterwave TEST keys, staging webhook, 5 staging identities | REL-03 |
+| D-8 | **R1 default configuration** (SALE) | **Decided 4 Nov:** learning-state view and next-step suggestions ON by default; automatic My Plan changes OFF; automatic competency staging OFF; existing learning evidence and deterministic recommendations by default; no new persistent Personal AI memory and no unapproved AI routing. Recommendations are explainable, optional and dismissible; insufficient evidence is never presented as demonstrated mastery | PR #276 merged to main; resolves the open question on the eight default-on keys | SALE-04..07 |
+| D-9 | **Calculation tolerance** | **Decided 4 Nov: default tolerance stays at zero** (equivalent numerical representations, validated equivalent units, explicitly specified rounding). Non-zero clinical tolerances need a separately approved policy | SQIE scoring v3 (PR #277 merged) | SQIE tracker |
+| D-10 | **Clinical scoring caps** | **Decided 4 Nov:** unsafe response at most 50 % of the applicable score; safety-critical failure 0 %; applied at the scope of the approved rubric, never failing unrelated components. Caps apply **only to clinically reviewed, approved library questions**, and the independent reviewer explicitly approves the safety-critical and unsafe-response markers and their scope. AI markers on personal practice questions stay formative | Gated until clinical approval. Calculation format approved for learners once scoring, library and safety checks pass and the production migrations are applied | SQIE tracker |
+| D-11 | **Patient-voice simulation** | **Decided 4 Nov: stays disabled** until a case author supplies the patient script and an independent clinician approves the complete case and permitted responses | Production 880 applied, 0 rows | CE-04A |
+| D-12 | **Flashcards AI settings** | **Decided 4 Nov:** assign an independent clinician to review the existing sample; activate the proposed settings only after the review meets the established acceptance criteria | Review pack delivered; clinician not yet assigned | AI-01, AI-02 |
+| D-13 | **Simulation retention** (D05) | **Decided 4 Nov:** learner-owned attempts are kept until the learner deletes them, under the published privacy and retention rules; learner deletion is enabled once the existing implementation is verified, following the documented policy for primary records, backups and mandatory retention exceptions | Key `scholar_case_attempt_delete` stays off until then | CE-04D |
+| D-14 | **Evolving scenarios** | **Decided 4 Nov:** see D-3 (disabled until about ten reviewed) | | CE-05 |
+| D-15 | **Pilot Question Library** | **Decided 4 Nov:** the 60 pilot questions are authorised for production import **as unpublished drafts** with unverified-source status preserved. Not published or shown to learners until independent clinical review, source verification, Ugandan-practice review and authorised publication are complete | SQIE pilot batch (PR #270 merged) | SQIE tracker |
+| D-16 | **Production GO for SQIE migrations** | **Decided 4 Nov: conditional GO for 990, 991, 995, 996 and 997**; merge #277 before #272; update #272 with the latest scoring code; no deploy with unresolved relevant CI failures | 990 and 991 APPLIED in production and verified read-only (coordinator, 4 Nov); #272 (995-997) in CI | SQIE tracker |
+| D-17 | **Governance process** | **Decided 4 Nov:** keep the existing clinical review and publication workflows; no new committees and no duplicate approval processes. None of the deferred activations blocks the 4 Nov release | | all |
 
-Decisions already taken in the directive (D01-D06) are not reopened here. Two points that may need the owner's attention when they arise: D04 says Opus stays for question generation, and the proposed package changes only flashcards (Sonnet for clinical flashcards, Haiku for standard-educational only); and D05 asks that simulation conversations are deleted with the attempt "subject to retention requirements", for which no retention rule is recorded (CE-04D).
+Decisions already taken in the directive (D01-D06) are not reopened here. Two points that may need the owner's attention when they arise: D04 says Opus stays for question generation, and the proposed package changes only flashcards (Sonnet for clinical flashcards, Haiku for standard-educational only); and D05 asks that simulation conversations are deleted with the attempt "subject to retention requirements"; the retention rule is now decided (D-13, 4 Nov).
 
 ## Appendix A — production facts needed (read-only, via the coordinator)
 
@@ -496,6 +511,7 @@ Results of the read-only queries (Q1-Q6), coordinator, 4 Nov 2026:
 - Release 4 Nov ~12:25 EAT (coordinator): owner applied migration 960 in production, VERIFY-960 PASS (table present, RLS on, 0 policies, 4 checks, 3 indexes, 0 rows); app deployed `09d9da09` (`dpl_F1Pho3Kn5xZtXL9qpRRkFkYPsvYn`, rollback `6d76cdda`); smoke: home 200, scholar 307, uploads route 405 to a GET. Production DB now includes 950, 955 and 960.
 - Backups (owner rule 4 Nov): no backup before each apply; backup plus restore test run every 4 hours (Windows task, from 16:00). The latest backup before 960 is `competen-production-20261104-1212` (taken 12:12); it has no restore test yet, and the 16:00 run tests it.
 - PR #274 (config resetOverride fix: a failed override delete is reported, not silently successful) merged to main as bec417b5 on 4 Nov, not deployed.
+- 4 Nov (coordinator): merged to main: #276 (R1), #271 (WS-H/J), #273 (990/991), #270 (pilot), #277 (scoring v3). **Migrations 990 and 991 are APPLIED in production and verified read-only.** #272 (995-997) is in CI. #275 has owner GO and is merging main in.
 - Q7 (do any approved case versions define a patient voice or handover) was not run.
 
 ## Change log
@@ -503,6 +519,7 @@ Results of the read-only queries (Q1-Q6), coordinator, 4 Nov 2026:
 | Date | Change |
 |---|---|
 | 4 Nov 2026 | Created from directive §4 and the repository at `e19a363a`; rows added: CE-01-1..3, CE-02-1..2, CE-03, CE-06A-1, LE-05, AI-04, AI-05; no row Complete |
+| 4 Nov 2026 | Owner decisions recorded: R1 defaults (D-8), calculation tolerance, scoring caps, patient voice (D-11), flashcards reviewer (D-12), retention (D-13), scenarios (D-3/D-14), pilot import (D-15), conditional GO 990/991/995/996/997 (D-16), no new committees (D-17). CE-04A, CE-04D, CE-05, AI-01, AI-02 blockers reworded; no status value changed. Merges #276, #271, #273, #270, #277; 990/991 applied in production |
 | 4 Nov 2026 | Wave 2: CE-04A..D and CE-05 recorded against PR #275 (head 7f661319, open, no migration, keys default off). CE-04A Blocked (approved case with a patient voice; owner switch), CE-04B/C/D Ready for review (04C staging walk 25/25, keys `scholar_case_deterioration`, `scholar_case_attempt_delete`, `scholar_case_debrief_review` off; D05 retention rule still the owner's), CE-05 verified on staging, D-3 pending. PR #274 (config resetOverride fix) merged bec417b5, not deployed. This branch (`docs/sale-tracker`) now carries both trackers |
 | 4 Nov 2026 | Release 2: owner applied 960 in production (VERIFY-960 PASS), app 09d9da09 deployed (rollback 6d76cdda). CE-07C Live — verification pending (real-device test and a learner upload walk outstanding). Backup rule changed: every 4 hours with restore test from 16:00; latest backup before 960 is competen-production-20261104-1212 (no restore test yet) |
 | 4 Nov 2026 | PR #267 merged to main as 09d9da09: CE-07C Ready for release (not deployed; owner applies 960 after a backup, package PENDING-45, then deploy; real-device test in Wave 4) |
