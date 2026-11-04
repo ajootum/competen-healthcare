@@ -84,8 +84,11 @@ function Row({ e, notesOn }: { e: ClientEntry; notesOn: boolean }) {
 
 /** The history list in one section (one edge), newest first, each row an entry. */
 export function HistoryList({ entries, title, notesOn, empty, id }: { entries: ClientEntry[]; title: string; notesOn: boolean; empty: string; id: string }) {
+  // data-ready once hydrated, so a scripted walk never clicks a control before it works.
+  const [ready, setReady] = useState(false);
+  useEffect(() => setReady(true), []);
   return (
-    <section aria-labelledby={`${id}-h`} className={`${learnBox("next")} p-4 sm:p-5`} data-testid={id}>
+    <section aria-labelledby={`${id}-h`} className={`${learnBox("next")} p-4 sm:p-5`} data-testid={id} data-ready={ready ? "1" : undefined}>
       <LearningSectionHead id={`${id}-h`} icon="list" title={title} level={2} />
       {entries.length === 0
         ? <p className="mt-3 rounded-xl bg-[var(--cmp-app-surface)] p-4 text-[14px] text-gray-700">{empty}</p>
@@ -141,11 +144,14 @@ export function HistoryKeyInput() {
   useEffect(() => {
     const input = ref.current, form = input?.form;
     if (!input || !form) return;
+    // A key from the moment the form can be used, and a fresh one on every submit (the same page can be searched again).
+    input.value = newRequestKey();
     const onSubmit = () => { input.value = newRequestKey(); };
     form.addEventListener("submit", onSubmit);
     return () => form.removeEventListener("submit", onSubmit);
   }, []);
-  return <input ref={ref} type="hidden" name="hk" defaultValue="" />;
+  // The value is written after hydration (above), and a browser must not restore an old key on reload: autoComplete off.
+  return <input ref={ref} type="hidden" name="hk" defaultValue="" autoComplete="off" suppressHydrationWarning />;
 }
 
 /** Keeps one submitted search once its results are shown: only with the form's own key (no key, no entry). Renders nothing. */
