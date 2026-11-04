@@ -5182,3 +5182,50 @@ export async function abandonUpload(admin: Admin, userId: string, row: Pick<Uplo
   await pruneSettledUploads(admin, userId, nowMs);
   return "abandoned";
 }
+
+// ── SALE-2026-11 R2 / SALE-10: TRANSFER CHECKS (migration 970) ──────────────────────────────────────────────────────────
+//
+// One row per question of a revision session asked as a transfer check: the topic, the lesson context it is outside, and how
+// the question is outside it. The answers are the ordinary 416 attempts naming the session (revision_session_id, 417). Before
+// 970 is applied the table is absent: listTransferChecks answers not provisioned and recordTransferCheck "not_provisioned",
+// so the route offers no transfer check and the learning state reads no transfer evidence (fail closed).
+export type TransferCheckRow = { sessionId: string; questionId: string; topic: string; outside: string; source: string; contextChunkIds: string[]; createdAt: string };
+
+export async function listTransferChecks(admin: Admin, userId: string, o: { sinceIso?: string; sessionId?: string; limit?: number } = {}): Promise<Read<TransferCheckRow[]>> {
+  let q = admin.from("individual_scholar_transfer_check").select("revision_session_id, question_id, topic, outside, source, context_chunk_ids, created_at").eq("user_id", userId);
+  if (o.sinceIso) q = q.gte("created_at", o.sinceIso);
+  if (o.sessionId) q = q.eq("revision_session_id", o.sessionId);
+  const { data, error } = await q.order("created_at", { ascending: false }).limit(Math.min(2000, o.limit ?? 500));
+  if (error) return fail(error);
+  return {
+    ok: true,
+    data: ((data ?? []) as any[]).map(r => ({
+      sessionId: String(r.revision_session_id), questionId: String(r.question_id), topic: String(r.topic), outside: String(r.outside), source: String(r.source),
+      contextChunkIds: Array.isArray(r.context_chunk_ids) ? r.context_chunk_ids.map(String) : [], createdAt: String(r.created_at),
+    })),
+  };
+}
+
+/** Records a transfer check: one row per question of the session. The 970 foreign keys refuse a question not in that learner's session. */
+export async function recordTransferCheck(admin: Admin, userId: string, rows: readonly { sessionId: string; questionId: string; topic: string; outside: string; source: string; contextChunkIds: readonly string[] }[]): Promise<"ok" | "not_provisioned" | "failed"> {
+  if (!rows.length) return "failed";
+  const { error } = await admin.from("individual_scholar_transfer_check").insert(rows.slice(0, 10).map(r => ({
+    user_id: userId, revision_session_id: r.sessionId, question_id: r.questionId, topic: r.topic, outside: r.outside, source: r.source,
+    context_chunk_ids: [...new Set(r.contextChunkIds.filter(isUuid))].slice(0, 200),
+  })));
+  if (!error) return "ok";
+  return isNotProvisioned(error) ? "not_provisioned" : "failed";
+}
+
+/** The attempts made in these revision sessions (416 revision_session_id): which attempt answered which question in which session. */
+export async function sessionAttemptIds(admin: Admin, userId: string, sessionIds: readonly string[]): Promise<Read<{ id: string; questionId: string; sessionId: string; answeredAt: string }[]>> {
+  const ids = [...new Set(sessionIds.filter(isUuid))].slice(0, 500);
+  if (!ids.length) return { ok: true, data: [] };
+  const out: { id: string; questionId: string; sessionId: string; answeredAt: string }[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error } = await admin.from("individual_scholar_attempt").select("id, question_id, revision_session_id, answered_at").eq("user_id", userId).in("revision_session_id", ids.slice(i, i + 150)).limit(2000);
+    if (error) return fail(error);
+    for (const r of (data ?? []) as any[]) out.push({ id: String(r.id), questionId: String(r.question_id), sessionId: String(r.revision_session_id), answeredAt: String(r.answered_at) });
+  }
+  return { ok: true, data: out };
+}

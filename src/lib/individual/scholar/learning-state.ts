@@ -15,6 +15,7 @@
 // ⚠ TRANSPARENT RULES. Every threshold is an HQ policy key with a code default (policy.ts scholar_learning_state_*).
 
 import type { MasteryLevel } from "./mastery";
+import type { TransferOutside } from "./transfer";
 
 export type StateMarking = "code" | "ai_evaluation" | "self" | "unmarked";
 export type StateSource = "check" | "practice" | "review" | "osce";
@@ -27,6 +28,8 @@ export type StateEvidence = {
   confidence: "sure" | "unsure" | "guess" | null;
   /** Misconceptions the judgement named, or the rubric tags of a missed question. */
   misconceptions: readonly string[];
+  /** SALE-2026-11 R2 / SALE-10: an answer in a recorded transfer check (970), and how its question is outside the lesson. */
+  transfer?: TransferOutside | null;
 };
 /** One learning action on a section (teach, explain, read, ...): exposure, not understanding. */
 export type ExposureRow = { topicKey: string; chunkId: string; action: string; at: string };
@@ -62,7 +65,7 @@ export type TopicLearningState = {
   headline: string;
   dimensions: Dimension[];
   /** The answers behind it, newest first (at most 12), for "see the evidence". */
-  evidence: { at: string; source: StateSource; outcome: "right" | "partly" | "not yet" | "not marked"; marking: StateMarking; itemId: string; chunkId: string | null; confidence: StateEvidence["confidence"] }[];
+  evidence: { at: string; source: StateSource; outcome: "right" | "partly" | "not yet" | "not marked"; marking: StateMarking; itemId: string; chunkId: string | null; confidence: StateEvidence["confidence"]; transfer?: TransferOutside | null }[];
   lastAt: string | null;
 };
 export const LEARNING_STATE_NOTE = "Learning evidence from your own practice, not verified competence. No single answer decides it, and it is never a competency stage.";
@@ -146,10 +149,15 @@ export function topicLearningState(topic: StateTopic, rows: readonly StateEviden
     summary: delayedItems.size ? `${plural(delayedItems.size, "question")} answered well ${T.delayDays} or more days after you first met ${delayedItems.size === 1 ? "it" : "them"}: this supports retention.` : `No right answer yet ${T.delayDays} or more days after first meeting this topic.` });
 
   // application and reasoning
-  const app = markedRows.filter(r => r.level === "application" || r.level === "reasoning" || r.source === "osce");
+  // A2 (SALE-2026-11 R2 / SALE-10): an answer in a transfer check -- a question outside the lesson where the topic was taught -- is
+  // application evidence whatever its level, and is said apart.
+  const app = markedRows.filter(r => r.level === "application" || r.level === "reasoning" || r.source === "osce" || !!r.transfer);
   const appRight = distinctRight(app);
-  dims.push({ key: "application", label: DIMENSION_LABEL.application, word: wordFor(appRight.length, app.filter(right).reduce((n, r) => n + STATE_MARKING_WEIGHT[r.marking], 0), T, app.length > 0), rule: "A1",
-    summary: app.length ? `${plural(appRight.length, "application or reasoning task")} done well out of ${new Set(app.map(r => r.itemId)).size}.` : "No application, reasoning or case practice on this topic yet." });
+  const tr = markedRows.filter(r => !!r.transfer);
+  const trRight = distinctRight(tr);
+  const trLine = tr.length ? ` Transfer checks (a question away from the lesson where you learned it): ${trRight.length} of ${new Set(tr.map(r => r.itemId)).size} answered well.` : "";
+  dims.push({ key: "application", label: DIMENSION_LABEL.application, word: wordFor(appRight.length, app.filter(right).reduce((n, r) => n + STATE_MARKING_WEIGHT[r.marking], 0), T, app.length > 0), rule: tr.length ? "A1/A2" : "A1",
+    summary: app.length ? `${plural(appRight.length, "application or reasoning task")} done well out of ${new Set(app.map(r => r.itemId)).size}.${trLine}` : "No application, reasoning or case practice on this topic yet." });
 
   // stated confidence
   const conf = answers.filter(r => r.confidence);
@@ -184,7 +192,7 @@ export function topicLearningState(topic: StateTopic, rows: readonly StateEviden
 
   return {
     key: topic.key, label: topic.label, materialId: topic.materialId, chunkIds: [...topic.chunkIds], enough, headline, dimensions: dims, lastAt,
-    evidence: answers.slice(0, 12).map(a => ({ at: a.at, source: a.source, outcome: !marked(a) ? "not marked" : right(a) ? "right" : partly(a) ? "partly" : "not yet", marking: a.marking, itemId: a.itemId, chunkId: a.chunkId, confidence: a.confidence })),
+    evidence: answers.slice(0, 12).map(a => ({ at: a.at, source: a.source, outcome: !marked(a) ? "not marked" : right(a) ? "right" : partly(a) ? "partly" : "not yet", marking: a.marking, itemId: a.itemId, chunkId: a.chunkId, confidence: a.confidence, ...(a.transfer ? { transfer: a.transfer } : {}) })),
   };
 }
 
@@ -199,4 +207,4 @@ export function buildLearningState(input: { topics: readonly StateTopic[]; evide
 }
 
 export const evidenceLine = (e: TopicLearningState["evidence"][number]): string =>
-  `${e.at.slice(0, 10)} · ${SOURCE_WORD[e.source]} · ${e.outcome} (${MARK_WORD[e.marking]})${e.confidence ? ` · you said: ${e.confidence === "sure" ? "sure" : e.confidence === "unsure" ? "not sure" : "guessing"}` : ""}`;
+  `${e.at.slice(0, 10)} · ${SOURCE_WORD[e.source]}${e.transfer ? " (transfer check)" : ""} · ${e.outcome} (${MARK_WORD[e.marking]})${e.confidence ? ` · you said: ${e.confidence === "sure" ? "sure" : e.confidence === "unsure" ? "not sure" : "guessing"}` : ""}`;
