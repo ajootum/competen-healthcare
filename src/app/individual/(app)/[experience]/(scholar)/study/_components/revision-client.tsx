@@ -869,7 +869,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
           <p className="mt-0.5">{f.calculation.feedback}</p>
           {f.calculation.warnings.map(w => <p key={w} className="mt-0.5 text-[12.5px] text-amber-900">{w}</p>)}
           {!compact && f.calculation.working && <p className="mt-1"><span className="font-semibold">Working from your notes:</span> {f.calculation.working}</p>}
-          <p className="mt-1 text-[12px] text-gray-700">Marked {f.calculation.tolerance}. {f.calculation.unitRule}</p>
+          <p className="mt-1 text-[12px] text-gray-700">Tolerance: {f.calculation.tolerance}. {f.calculation.unitRule}</p>
         </div>
       )}
       <AttemptRecordNotes f={f} />
