@@ -115,7 +115,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "passport_recipient_label" | "passport_presentation" | "passport_validity_display" | "passport_export" | "passport_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
-  | "scholar_calculation_tolerance" | "scholar_calculation_units"
+  | "scholar_calculation_tolerances"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_case_conversation" | "scholar_case_conversation_turns" | "scholar_evaluation_recommendations"
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
@@ -1175,25 +1175,17 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "self",
     limitReason: "A match with an accepted answer is always marked by code first. AI evaluation is always labelled. Default: the student's own judgement.",
   },
-  // ── SQIE-CLOSE-2026-11 WS-A: CALCULATION QUESTIONS (scoring-rules.ts) ──
-  // ⚠ OWNER / CLINICAL DECISION: the clinical tolerance policy for calculation questions. The fallbacks are the STRICTEST choices (an
-  // exact answer, in the question's own unit) and stay so until the owner publishes another. A question that authors its own tolerance
-  // or unit rule uses that; these apply only where it authors none (every AI-written calculation: the model never writes a tolerance).
+  // ── SQIE-CLOSE-2026-11 WS-A: CALCULATION QUESTIONS (scoring-rules.ts; owner decision 4 Nov 2026, item 1) ──
+  // ⚠ OWNER / CLINICAL DECISION: non-zero tolerances stay INACTIVE for clinical calculations until the clinical calculation policy is
+  // approved. Until then every calculation is an exact match (with its question-defined rounding and validated equivalent units). A tenfold
+  // or greater error is unsafe whatever this says: that check never depends on tolerance.
   {
-    key: "scholar_calculation_tolerance", kind: "choice", product: "Scholar",
-    label: "Calculation tolerance",
-    help: "How close a calculation answer must be to count as correct, where the question does not set its own tolerance. A clinical decision: exact is the strictest.",
-    options: [{ value: "exact", label: "Exact answer only" }, { value: "percent_1", label: "Within 1%" }, { value: "percent_5", label: "Within 5%" }],
-    fallback: "exact",
-    limitReason: "At most 5%. A question's own authored tolerance always applies first. Default: exact.",
-  },
-  {
-    key: "scholar_calculation_units", kind: "choice", product: "Scholar",
-    label: "Calculation units",
-    help: "Whether a calculation answer must be in the unit the question asks for, or may be the same amount in another unit of the same kind (for example micrograms for milligrams), where the question does not say.",
-    options: [{ value: "exact_unit", label: "Only in the unit the question asks for" }, { value: "convert", label: "The same amount in an equivalent unit counts" }],
-    fallback: "exact_unit",
-    limitReason: "A unit of another kind, or no unit, is always wrong. Default: only the unit asked for.",
+    key: "scholar_calculation_tolerances", kind: "choice", product: "Scholar",
+    label: "Calculation tolerances",
+    help: "Whether the absolute or percentage tolerance a calculation question sets is used. Off: every calculation must be exact. Turn on only once the clinical calculation policy is approved.",
+    options: [{ value: "off", label: "Off: exact answers only (until the clinical calculation policy is approved)" }, { value: "on", label: "On: use each question's own tolerance" }],
+    fallback: "off",
+    limitReason: "Clinical calculation policy approval required before on. A tenfold error is unsafe either way. Default: off.",
   },
   {
     key: "scholar_revision_recommendations", kind: "choice", product: "Scholar",
@@ -2312,9 +2304,8 @@ export type IndividualPolicy = {
   scholarRevisionFeedback: "immediate" | "end";
   scholarRevisionGeneration: "generate" | "saved_only";
   scholarShortAnswerMarking: "ai_then_self" | "self";
-  /** SQIE-CLOSE-2026-11 WS-A: a calculation's default tolerance and unit rule (owner / clinical decision; strictest by default). */
-  scholarCalculationTolerance: "exact" | "percent_1" | "percent_5";
-  scholarCalculationUnits: "exact_unit" | "convert";
+  /** SQIE-CLOSE-2026-11 WS-A: whether question tolerances are used (off until the clinical calculation policy is approved). */
+  scholarCalculationTolerances: "off" | "on";
   scholarRevisionRecommendations: "on" | "off";
   /** SCHOLAR-PRACTICE-EXAMS-01: adaptive exams. */
   scholarAdaptiveExams: "on" | "off";
@@ -2540,8 +2531,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarRevisionFeedback: clampChoice(policyDef("scholar_revision_feedback") as ChoicePolicy, published.get(policyPath("scholar_revision_feedback"))) as "immediate" | "end",
     scholarRevisionGeneration: clampChoice(policyDef("scholar_revision_generation") as ChoicePolicy, published.get(policyPath("scholar_revision_generation"))) as "generate" | "saved_only",
     scholarShortAnswerMarking: clampChoice(policyDef("scholar_short_answer_marking") as ChoicePolicy, published.get(policyPath("scholar_short_answer_marking"))) as "ai_then_self" | "self",
-    scholarCalculationTolerance: clampChoice(policyDef("scholar_calculation_tolerance") as ChoicePolicy, published.get(policyPath("scholar_calculation_tolerance"))) as "exact" | "percent_1" | "percent_5",
-    scholarCalculationUnits: clampChoice(policyDef("scholar_calculation_units") as ChoicePolicy, published.get(policyPath("scholar_calculation_units"))) as "exact_unit" | "convert",
+    scholarCalculationTolerances: clampChoice(policyDef("scholar_calculation_tolerances") as ChoicePolicy, published.get(policyPath("scholar_calculation_tolerances"))) as "off" | "on",
     scholarRevisionRecommendations: clampChoice(policyDef("scholar_revision_recommendations") as ChoicePolicy, published.get(policyPath("scholar_revision_recommendations"))) as "on" | "off",
     scholarAdaptiveExams: clampChoice(policyDef("scholar_adaptive_exams") as ChoicePolicy, published.get(policyPath("scholar_adaptive_exams"))) as "on" | "off",
     scholarAdaptiveMaxLength: int("scholar_adaptive_max_length"),

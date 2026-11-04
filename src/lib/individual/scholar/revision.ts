@@ -30,9 +30,9 @@ import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
 import type { Passage } from "./generation";
 import {
-  CALCULATION_DEFAULTS, calculationAccepted, calculationSpecOf, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
-  safetyMarkersOf, safetyRecord, structuredVariantOf, unitChoices, unitInfo, worstOutcome,
-  type CalculationMark, type Finding, type PartContract, type PartRole, type SafetyOutcome, type SafetyRecord, type StructuredVariant, type Tolerance, type UnitRule,
+  CALCULATION_DEFAULTS, calculationAccepted, calculationSpecOf, calculationUnitChoices, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
+  safetyMarkersOf, safetyRecord, structuredVariantOf, unitInfo, worstOutcome,
+  type CalculationMark, type CalculationPolicy, type Finding, type PartContract, type PartRole, type SafetyOutcome, type SafetyRecord, type StructuredVariant,
 } from "./scoring-rules";
 import {
   asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
@@ -167,7 +167,7 @@ export type LearnerItem = {
   /** scenario only: how many stages, the weights' total, and the FIRST stage (the others are sent as each is answered). */
   scenario?: ScenarioLearnerView;
   /** WS-A calculation only: the units the unit select offers (the key's own and others of the same dimension, alphabetical), or none for a unitless answer. Never the value. */
-  calculation?: { units: string[]; unitless: boolean };
+  calculation?: { units: string[]; unitless: boolean; rounding?: { mode: "decimal_places" | "significant_figures"; places: number } };
 };
 
 /** A deterministic shuffle by seed. Stable for one question, so a resumed session shows the same order. */
@@ -199,7 +199,7 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
   // SCHOLAR-SQIE-LEARNER-01: so are true/false (two buttons) and extended response (a long answer, marked against key points).
   if (isExtendedQuestion(q)) { const e = extendedSpecOf(q.answer); return { ...base, kind: "extended", ...(e ? { extended: { marks: e.marks, points: e.keyPoints.length, maxChars: EXTENDED_RESPONSE_MAX } } : {}) }; }
   if (isScenarioQuestion(q)) { const v = scenarioLearnerView(q.answer); return { ...base, kind: "scenario", ...(v ? { scenario: v } : {}) }; }
-  if (isCalculationQuestion(q)) { const c = calculationSpecOf(q.answer); return { ...base, kind: "calculation", calculation: { units: c ? unitChoices(c.unit) : [], unitless: !c?.unit } }; }
+  if (isCalculationQuestion(q)) { const c = calculationSpecOf(q.answer); return { ...base, kind: "calculation", calculation: { units: c ? calculationUnitChoices(c) : [], unitless: !c?.unit, ...(c?.rounding ? { rounding: c.rounding } : {}) } }; }
   return isClozeQuestion(q) ? { ...base, kind: "cloze" } : isTrueFalseQuestion(q) ? { ...base, kind: "true_false" } : base;
 }
 
@@ -315,7 +315,7 @@ export function practiceMarks(parts: readonly StructuredPart[], results: readonl
 export type Mark = { correct: boolean; score: number; marking: "deterministic" | "self_graded"; safety?: SafetyRecord | null; calc?: CalculationMark } | { needsJudgement: true };
 
 /** What marking needs from the published policy (absent: the strict code defaults). WS-A: a calculation's default tolerance and unit rule. */
-export type MarkOptions = { calculation?: { tolerance: Tolerance; units: UnitRule } };
+export type MarkOptions = { calculation?: CalculationPolicy };
 
 /**
  * Pure. Deterministic marking. A short answer that matches no accepted answer is not marked here: code cannot tell,
@@ -328,8 +328,9 @@ export function markResponse(q: RevisionQuestion, r: Response, opts: MarkOptions
   if (k.kind === "accepted" && r.kind === "calc") {
     const spec = calculationSpecOf(q.answer);
     if (!spec) return { correct: false, score: 0, marking: "deterministic" };
+    // Owner decision 4 Nov 2026: a tenfold error is unsafe independently of tolerance (cm.safety), recorded as any unsafe answer is.
     const cm = markCalculation(spec, r, opts.calculation ?? CALCULATION_DEFAULTS);
-    return { correct: cm.correct, score: cm.score, marking: "deterministic", calc: cm };
+    return { correct: cm.correct, score: cm.score, marking: "deterministic", calc: cm, ...(cm.safety ? { safety: cm.safety } : {}) };
   }
   if (k.kind === "choice" && r.kind === "choice") return { correct: r.index === k.index, score: r.index === k.index ? 1 : 0, marking: "deterministic" };
   if (k.kind === "set" && r.kind === "set") {

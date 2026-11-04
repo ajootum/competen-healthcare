@@ -2,8 +2,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CALCULATION_DEFAULTS, CRITICAL_MISS_SCORE_CAP, LEGACY_RULES_VERSION, SCORING_RULES_VERSION, UNSAFE_SCORE_CAP,
-  calculationSpecOf, capForSafety, convertUnit, criteriaMarks, criteriaOf, extractUnsafeLine, findingsOf, marksFromShare, markCalculation, matchUnsafe,
-  numbersIn, parseCalculationResponse, parseNumber, partContractOf, readUnsafeLine, rulesOf, safetyRecord, storedSafety, toleranceOf, toleranceOfChoice,
+  applyRounding, calculationProblems, calculationSpecOf, capForSafety, convertUnit, magnitudeError, roundingOf, criteriaMarks, criteriaOf, extractUnsafeLine, findingsOf, marksFromShare, markCalculation, matchUnsafe,
+  numbersIn, parseCalculationResponse, parseNumber, partContractOf, readUnsafeLine, rulesOf, safetyRecord, storedSafety, toleranceOf,
   unitChoices, unitInfo, withinTolerance,
 } from "./scoring-rules";
 
@@ -73,10 +73,11 @@ describe("WS-A units: normalised and converted for common clinical units", () =>
   });
 });
 
-describe("WS-A tolerance: exact by default, authored per question, the policy default between", () => {
-  it("is exact with no tolerance (a hair of floating point only)", () => {
-    expect(withinTolerance(0.1 + 0.2, 0.3, { kind: "none" })).toBe(true);
-    expect(withinTolerance(2.51, 2.5, { kind: "none" })).toBe(false);
+describe("WS-A tolerance (owner decision 4 Nov 2026): built in full, inactive until the clinical calculation policy is approved", () => {
+  it("is exact with no tolerance (a hair of floating point only), and the sign always counts", () => {
+    expect(withinTolerance(0.1 + 0.2, 0.3, null)).toBe(true);
+    expect(withinTolerance(2.51, 2.5, null)).toBe(false);
+    expect(withinTolerance(-250, 250, { kind: "percent", amount: 10 })).toBe(false);
   });
   it("absolute and percent edges: on the edge passes, beyond it fails", () => {
     expect(withinTolerance(2.6, 2.5, { kind: "absolute", amount: 0.1 })).toBe(true);
@@ -85,42 +86,77 @@ describe("WS-A tolerance: exact by default, authored per question, the policy de
     expect(withinTolerance(105.01, 100, { kind: "percent", amount: 5 })).toBe(false);
     expect(withinTolerance(94.99, 100, { kind: "percent", amount: 5 })).toBe(false);
   });
-  it("an authored tolerance must be sound (percent at most 10); the policy choices map to tolerances", () => {
+  it("an authored tolerance must be sound (percent at most 10)", () => {
     expect(toleranceOf({ kind: "percent", amount: 11 })).toBeNull();
     expect(toleranceOf({ kind: "absolute", amount: 0 })).toBeNull();
     expect(toleranceOf({ kind: "absolute", amount: 0.5 })).toEqual({ kind: "absolute", amount: 0.5 });
-    expect(toleranceOfChoice("exact")).toEqual({ kind: "none" });
-    expect(toleranceOfChoice("percent_5")).toEqual({ kind: "percent", amount: 5 });
-    expect(toleranceOfChoice("nonsense")).toEqual({ kind: "none" });
+    expect(calculationProblems({ format: "calculation", accepted: ["x"], value: 1, unit: "mg", tolerance: { kind: "percent", amount: 50 } })[0]).toMatch(/tolerance/);
   });
-  it("the item's own tolerance beats the policy default, which beats the strict code default", () => {
+  it("an authored tolerance is NOT used while tolerances are inactive (the default), and is used once they are on", () => {
     const own = calc({ tolerance: { kind: "absolute", amount: 0.1 } });
-    expect(markCalculation(own, { value: "2.6", unit: "mL" }, { tolerance: { kind: "none" }, units: "exact_unit" }).correct).toBe(true);
-    expect(markCalculation(calc(), { value: "2.6", unit: "mL" }).correct).toBe(false);
-    expect(markCalculation(calc({ value: 100, unit: "mg" }), { value: "104", unit: "mg" }, { tolerance: { kind: "percent", amount: 5 }, units: "exact_unit" }).correct).toBe(true);
-    expect(CALCULATION_DEFAULTS).toEqual({ tolerance: { kind: "none" }, units: "exact_unit" });
+    const off = markCalculation(own, { value: "2.6", unit: "mL" });
+    expect(off).toMatchObject({ correct: false, reason: "wrong_value", tolerance: null, toleranceInactive: true });
+    expect(CALCULATION_DEFAULTS).toEqual({ tolerancesActive: false });
+    expect(markCalculation(own, { value: "2.6", unit: "mL" }, { tolerancesActive: true })).toMatchObject({ correct: true, tolerance: { kind: "absolute", amount: 0.1 } });
+    expect(markCalculation(own, { value: "2.61", unit: "mL" }, { tolerancesActive: true }).correct).toBe(false);
   });
 });
 
-describe("WS-A marking: wrong units are incorrect, with feedback", () => {
-  it("right number, right unit", () => {
-    const m = markCalculation(calc(), { value: "2.5", unit: "mL" });
-    expect(m).toMatchObject({ correct: true, score: 1, reason: "correct", rules: SCORING_RULES_VERSION });
+describe("WS-A rounding: question-defined", () => {
+  it("rounds half away from zero by decimal places or significant figures", () => {
+    expect(applyRounding(33.333, { mode: "decimal_places", places: 1 })).toBe(33.3);
+    expect(applyRounding(2.25, { mode: "decimal_places", places: 1 })).toBe(2.3);
+    expect(applyRounding(0.012345, { mode: "significant_figures", places: 2 })).toBe(0.012);
+    expect(applyRounding(1234, { mode: "significant_figures", places: 2 })).toBe(1200);
+    expect(applyRounding(-2.25, { mode: "decimal_places", places: 1 })).toBe(-2.3);
+    expect(roundingOf({ mode: "decimal_places", places: 7 })).toBeNull();
   });
-  it("the same amount in another unit is wrong under the strict default, and says so; right where conversion is allowed", () => {
-    const strict = markCalculation(calc({ value: 2.5, unit: "mg" }), { value: "2500", unit: "micrograms" });
-    expect(strict).toMatchObject({ correct: false, score: 0, reason: "wrong_unit", inKeyUnit: 2.5 });
+  it("an answer not rounded as the question says is wrong, with the rule named; the rounded value is right", () => {
+    const r = calc({ value: 33.3, unit: "mL/h", accepted: ["33.3 mL/hour"], rounding: { mode: "decimal_places", places: 1 } });
+    expect(markCalculation(r, { value: "33.3", unit: "mL/h" }).correct).toBe(true);
+    const m = markCalculation(r, { value: "33.33", unit: "mL/h" });
+    expect(m).toMatchObject({ correct: false, reason: "not_rounded" });
+    expect(m.feedback).toMatch(/1 decimal place/);
+    expect(markCalculation(r, { value: "33", unit: "mL/h" }).reason).toBe("wrong_value");
+  });
+  it("a key not itself rounded as its rule says is not sound", () => {
+    expect(calculationProblems({ format: "calculation", accepted: ["x"], value: 33.33, unit: "mL", rounding: { mode: "decimal_places", places: 1 } })).toContain("value: not rounded to 1 decimal place");
+    expect(calculationSpecOf({ format: "calculation", accepted: ["x"], value: 33.33, unit: "mL", rounding: { mode: "decimal_places", places: 1 } })).toBeNull();
+  });
+});
+
+describe("WS-A marking: validated unit equivalence, wrong units incorrect with feedback, tenfold errors unsafe", () => {
+  it("right number, right unit; the sign and the decimal point are kept (+250 is not -250)", () => {
+    expect(markCalculation(calc(), { value: "2.5", unit: "mL" })).toMatchObject({ correct: true, score: 1, reason: "correct", rules: SCORING_RULES_VERSION, safety: null });
+    const pos = calc({ value: 250, unit: "mL", accepted: ["250 mL"] });
+    expect(markCalculation(pos, { value: "+250", unit: "mL" }).correct).toBe(true);
+    expect(markCalculation(pos, { value: "-250", unit: "mL" })).toMatchObject({ correct: false, reason: "wrong_value" });
+    expect(markCalculation(pos, { value: "25.0", unit: "mL" }).correct).toBe(false);
+  });
+  it("only the key's unit or a validated equivalent counts; an equivalent must be a recognised unit of the same kind", () => {
+    const eq = calc({ value: 2.5, unit: "mg", accepted: ["2.5 mg"], equivalentUnits: ["micrograms"] });
+    expect(markCalculation(eq, { value: "2500", unit: "mcg" })).toMatchObject({ correct: true, reason: "correct" });
+    const strict = markCalculation(calc({ value: 2.5, unit: "mg" }), { value: "0.0025", unit: "g" });
+    expect(strict).toMatchObject({ correct: false, reason: "wrong_unit", inKeyUnit: 2.5, safety: null });
     expect(strict.feedback).toMatch(/asks for the answer in mg/);
-    expect(strict.feedback).toMatch(/right amount in the wrong unit/);
-    const loose = markCalculation(calc({ value: 2.5, unit: "mg" }), { value: "2500", unit: "micrograms" }, { tolerance: { kind: "none" }, units: "convert" });
-    expect(loose).toMatchObject({ correct: true, reason: "correct" });
-    const authored = markCalculation(calc({ value: 2.5, unit: "mg", units: "convert" }), { value: "2500", unit: "mcg" });
-    expect(authored.correct).toBe(true);
+    expect(calculationProblems({ format: "calculation", accepted: ["x"], value: 1, unit: "mg", equivalentUnits: ["mL"] })[0]).toMatch(/same kind/);
+    expect(calculationProblems({ format: "calculation", accepted: ["x"], value: 1, unit: "mg", equivalentUnits: ["spoonfuls"] })[0]).toMatch(/same kind/);
+    expect(calculationSpecOf({ format: "calculation", accepted: ["x"], value: 1, unit: "mg", equivalentUnits: ["mL"] })).toBeNull();
   });
-  it("a thousandfold slip in the right dimension is wrong, with the conversion shown", () => {
-    const m = markCalculation(calc({ value: 2.5, unit: "mg" }), { value: "2.5", unit: "micrograms" }, { tolerance: { kind: "none" }, units: "convert" });
-    expect(m).toMatchObject({ correct: false, reason: "wrong_value" });
-    expect(m.feedback).toMatch(/0\.0025 mg/);
+  it("a tenfold error is UNSAFE independently of tolerance: even a tolerance that would accept it does not", () => {
+    const k = calc({ value: 2.5, unit: "mg", accepted: ["2.5 mg"], tolerance: { kind: "percent", amount: 10 } });
+    const slip = markCalculation(k, { value: "25", unit: "mg" }, { tolerancesActive: true });
+    expect(slip).toMatchObject({ correct: false, score: 0, safety: { outcome: "unsafe", by: "code" } });
+    expect(slip.feedback).toMatch(/10 times the right amount/);
+    const unitSlip = markCalculation(k, { value: "2.5", unit: "micrograms" }, { tolerancesActive: true });
+    expect(unitSlip).toMatchObject({ reason: "wrong_unit", safety: { outcome: "unsafe" } });
+    expect(unitSlip.feedback).toMatch(/1\/1000 of the right amount/);
+    // A huge absolute tolerance that would accept 25 for 2.5 is still overruled by the safety check.
+    const wide = calc({ value: 2.5, unit: "mg", accepted: ["2.5 mg"], tolerance: { kind: "absolute", amount: 100 } });
+    expect(markCalculation(wide, { value: "25", unit: "mg" }, { tolerancesActive: true })).toMatchObject({ correct: false, safety: { outcome: "unsafe" } });
+    expect(magnitudeError(24.9, 2.5)).toBe(false); expect(magnitudeError(0.25, 2.5)).toBe(true); expect(magnitudeError(-25, 2.5)).toBe(false);
+    // An item may say its amount is not safety-critical (a score, not a dose).
+    expect(markCalculation(calc({ value: 2.5, unit: "", accepted: ["2.5"], safetyCritical: false }), { value: "25", unit: "" }).safety).toBeNull();
   });
   it("another dimension, no unit, an unknown unit or not a number is wrong", () => {
     expect(markCalculation(calc(), { value: "2.5", unit: "mg" }).reason).toBe("incompatible_unit");
@@ -130,7 +166,7 @@ describe("WS-A marking: wrong units are incorrect, with feedback", () => {
     expect(markCalculation(calc(), { value: "2,5", unit: "mL" }).feedback).toMatch(/decimal point/);
   });
   it("a unitless answer needs no unit", () => {
-    expect(markCalculation(calc({ value: 4, unit: "" }), { value: "4", unit: "" }).correct).toBe(true);
+    expect(markCalculation(calc({ value: 4, unit: "", accepted: ["4"] }), { value: "4", unit: "" }).correct).toBe(true);
   });
   it("an unsound key is not a calculation; a response is bounded", () => {
     expect(calculationSpecOf({ format: "calculation", accepted: ["x"], value: "2.5", unit: "mL" })).toBeNull();

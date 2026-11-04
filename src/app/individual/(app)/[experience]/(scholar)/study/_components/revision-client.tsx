@@ -28,7 +28,7 @@ import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
-import { ROLE_LABEL, VARIANT_LABEL, type Finding } from "@/lib/individual/scholar/scoring-rules";
+import { ROLE_LABEL, VARIANT_LABEL, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -699,7 +699,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                   </select>
                 </label>
               )}
-              <p id={`calc-${item.id}`} className="w-full text-[12px] text-gray-600">Write the number with a decimal point (0.5, not .5). {CALCULATION_LABEL}</p>
+              <p id={`calc-${item.id}`} className="w-full text-[12px] text-gray-600">{item.calculation?.rounding ? `Give your answer ${roundingText(item.calculation.rounding)}. ` : ""}Write the number with a decimal point (0.5, not .5). {CALCULATION_LABEL}</p>
             </div>
           )}
           {item.kind === "short" && (

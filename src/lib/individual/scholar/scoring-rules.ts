@@ -49,15 +49,18 @@
 //   case decision    askReason + rubric criteria                             the learner's reason scored against the criteria
 //                                                                            (library cases; formative, labelled).
 //
-// WS-A  CALCULATION (a `short` item, answer.format = 'calculation')
-//   answer { format: 'calculation', accepted: ["<value> <unit>"], value: number, unit: string (may be ""),
-//            tolerance?: { kind: "none" } | { kind: "absolute", amount > 0 } | { kind: "percent", amount in (0, 10] },
-//            units?: "exact_unit" | "convert", working?: string, rubric }
-//   Marked by CODE only (no model): the number is parsed (parseNumber), the unit normalised (unitInfo), converted where the
-//   item (or, failing that, policy scholar_calculation_units) allows, and compared within the item's tolerance (or, failing
-//   that, policy scholar_calculation_tolerance). STRICT CODE DEFAULTS: exact match, no tolerance, the answer in the item's own
-//   unit. A unit of another dimension, a missing unit, or (under exact_unit) a different unit is INCORRECT with feedback.
-//   ⚠ OWNER / CLINICAL DECISION: the clinical tolerance policy. The code default stays exact until the owner publishes another.
+// WS-A  CALCULATION (a `short` item, answer.format = 'calculation'; owner decision 4 Nov 2026)
+//   answer { format: 'calculation', accepted: ["<value> <unit>"],         the 416 CHECK's accepted answers (the answer in words)
+//            value: number,                                               the exact answer, already rounded as `rounding` says
+//            unit: string,                                                a recognised unit, or "" for a unitless answer
+//            equivalentUnits?: string[] (0..6),                           other units accepted, each recognised and of the SAME kind
+//            rounding?: { mode: 'decimal_places' | 'significant_figures', places: 0..6 },
+//            tolerance?: { kind: 'absolute', amount > 0 } | { kind: 'percent', amount in (0, 10] },   INACTIVE until policy turns it on
+//            safetyCritical?: boolean (default true: a tenfold error is unsafe), working?: string, rubric }
+//   calculationProblems(answer) lists what is wrong with a key, field by field (for the authoring form).
+//   Marked by CODE only (markCalculation). Exact by default; the sign and the decimal point are kept. Wrong or missing units are wrong,
+//   with feedback. A tenfold (or greater) error is UNSAFE whatever any tolerance would accept.
+//   ⚠ OWNER / CLINICAL DECISION: approval of the clinical calculation policy, which alone may turn scholar_calculation_tolerances on.
 
 // ═══════════════════════════════════════════ VERSIONS ═══════════════════════════════════════════
 
@@ -271,21 +274,27 @@ export function partContractOf(raw: unknown, accepted: readonly string[]): PartC
 }
 
 // ═══════════════════════════════════════════ WS-A: CALCULATION ═══════════════════════════════════════════
+//
+// OWNER DECISION 4 Nov 2026 (SQIE-CLOSE-2026-11-owner-decisions-4nov.md item 1), built exactly:
+//   - exact numerical matching by default (the sign and the decimal point are kept: "+250" is not "-250");
+//   - validated unit equivalence: an answer may be in the key's unit or in one of the item's own `equivalentUnits`, each of which must
+//     be a recognised unit of the SAME dimension (an item whose list fails that is not sound and is not offered);
+//   - question-defined rounding (`rounding`): the answer must be given rounded as the question says;
+//   - configurable absolute and percentage tolerances, built in full, but INACTIVE until the clinical calculation policy is approved:
+//     HQ policy scholar_calculation_tolerances defaults to "off", and while it is off an authored tolerance is ignored (exact match);
+//   - safety-critical errors handled INDEPENDENTLY of tolerance: a tenfold (or greater) error in the amount is unsafe whatever any
+//     tolerance would accept (rules v2 unsafe outcome: no marks, never correct, said plainly).
 
 export const CALCULATION_FORMAT = "calculation" as const;
 export type Tolerance = { kind: "none" } | { kind: "absolute"; amount: number } | { kind: "percent"; amount: number };
-export type UnitRule = "exact_unit" | "convert";
 export const TOLERANCE_PERCENT_MAX = 10;
-/** The strict code defaults (used when neither the item nor a published policy says otherwise). */
-export const CALCULATION_DEFAULTS: { tolerance: Tolerance; units: UnitRule } = { tolerance: { kind: "none" }, units: "exact_unit" };
+/** A tenfold error (either way) in the amount is unsafe, independently of tolerance (owner decision). */
+export const MAGNITUDE_ERROR_FACTOR = 10;
+/** What marking needs from policy. The strict code default: tolerances inactive. */
+export type CalculationPolicy = { tolerancesActive: boolean };
+export const CALCULATION_DEFAULTS: CalculationPolicy = { tolerancesActive: false };
 
-/** Policy scholar_calculation_tolerance (choice) → the default tolerance for an item that authors none. */
-export const TOLERANCE_CHOICES = ["exact", "percent_1", "percent_5"] as const;
-export type ToleranceChoice = (typeof TOLERANCE_CHOICES)[number];
-export const toleranceOfChoice = (c: string | null | undefined): Tolerance =>
-  c === "percent_1" ? { kind: "percent", amount: 1 } : c === "percent_5" ? { kind: "percent", amount: 5 } : { kind: "none" };
-
-/** Pure. A tolerance read from authored data, or null where it is not sound (the default then applies). */
+/** Pure. A tolerance read from authored data, or null where it is not sound. */
 export function toleranceOf(v: unknown): Tolerance | null {
   const x = (v ?? null) as Record<string, unknown> | null;
   if (!x || typeof x !== "object") return null;
@@ -299,6 +308,28 @@ export function toleranceOf(v: unknown): Tolerance | null {
 
 export const toleranceText = (t: Tolerance, unit: string): string =>
   t.kind === "none" ? "exact answer" : t.kind === "absolute" ? `within ±${fmt(t.amount)}${unit ? ` ${unit}` : ""}` : `within ±${fmt(t.amount)}%`;
+
+// ── ROUNDING (question-defined) ──
+
+export type Rounding = { mode: "decimal_places" | "significant_figures"; places: number };
+export const ROUNDING_PLACES_MAX = 6;
+/** Pure. A rounding rule read from authored data, or null where it is not sound. */
+export function roundingOf(v: unknown): Rounding | null {
+  const x = (v ?? null) as Record<string, unknown> | null;
+  if (!x || typeof x !== "object" || (x.mode !== "decimal_places" && x.mode !== "significant_figures")) return null;
+  const n = x.places;
+  if (!Number.isInteger(n) || (n as number) < (x.mode === "significant_figures" ? 1 : 0) || (n as number) > ROUNDING_PLACES_MAX) return null;
+  return { mode: x.mode, places: n as number };
+}
+/** Pure. A value rounded by a rule (half away from zero, as taught for clinical calculations). */
+export function applyRounding(v: number, r: Rounding): number {
+  if (v === 0) return 0;
+  const dp = r.mode === "decimal_places" ? r.places : r.places - 1 - Math.floor(Math.log10(Math.abs(v)));
+  const f = 10 ** dp;
+  return Math.sign(v) * Math.round(Math.abs(v) * f + 1e-9) / f;
+}
+export const roundingText = (r: Rounding): string =>
+  r.mode === "decimal_places" ? (r.places === 0 ? "to a whole number" : `to ${r.places} decimal place${r.places === 1 ? "" : "s"}`) : `to ${r.places} significant figure${r.places === 1 ? "" : "s"}`;
 
 // ── NUMBERS ──
 
@@ -426,74 +457,127 @@ export function unitChoices(unit: string): string[] {
 
 // ── THE KEY AND THE MARK ──
 
-export type CalculationSpec = { value: number; unit: string; tolerance: Tolerance | null; units: UnitRule | null; working: string | null; display: string };
+export type CalculationSpec = {
+  value: number; unit: string; equivalentUnits: string[]; rounding: Rounding | null; tolerance: Tolerance | null;
+  /** Default true: a calculation's amount is treated as safety-critical (a tenfold error is unsafe). An item may set false. */
+  safetyCritical: boolean; working: string | null; display: string;
+};
 
 /** Pure. Whether a stored `short` item is a calculation. */
 export const isCalculationAnswer = (answer: unknown): boolean =>
   !!answer && typeof answer === "object" && (answer as Record<string, unknown>).format === CALCULATION_FORMAT;
 
+/**
+ * Pure. What is wrong with a calculation key, field by field (empty: sound). The HQ library form (WS-E) can show these to an author;
+ * the learner side refuses to offer an item with any (calculationSpecOf returns null).
+ */
+export function calculationProblems(answer: unknown): string[] {
+  const a = (answer ?? {}) as Record<string, unknown>;
+  const p: string[] = [];
+  if (a.format !== CALCULATION_FORMAT) p.push("format: must be 'calculation'");
+  if (typeof a.value !== "number" || !Number.isFinite(a.value)) p.push("value: a finite number");
+  const unit = typeof a.unit === "string" ? a.unit.trim() : null;
+  const u = unit === null ? null : unitInfo(unit);
+  if (unit === null || !u) p.push("unit: a unit (\"\" for none)");
+  if (a.equivalentUnits !== undefined) {
+    if (!Array.isArray(a.equivalentUnits) || a.equivalentUnits.length > 6) p.push("equivalentUnits: up to six units");
+    else for (const e of a.equivalentUnits) {
+      const ei = typeof e === "string" ? unitInfo(e) : null;
+      if (!ei || !ei.known || !u || !u.known || ei.signature !== u.signature || ei.canonical === u.canonical) p.push(`equivalentUnits: "${String(e)}" is not a recognised unit of the same kind as "${unit ?? ""}"`);
+    }
+  }
+  if (a.rounding !== undefined && !roundingOf(a.rounding)) p.push("rounding: { mode: decimal_places | significant_figures, places }");
+  const r = roundingOf(a.rounding);
+  if (r && typeof a.value === "number" && applyRounding(a.value, r) !== a.value) p.push(`value: not rounded ${roundingText(r)}`);
+  if (a.tolerance !== undefined && !toleranceOf(a.tolerance)) p.push(`tolerance: { kind: absolute, amount > 0 } or { kind: percent, amount in (0, ${TOLERANCE_PERCENT_MAX}] }`);
+  if (a.safetyCritical !== undefined && typeof a.safetyCritical !== "boolean") p.push("safetyCritical: true or false");
+  if (!Array.isArray(a.accepted) || !a.accepted.length || !a.accepted.every(x => typeof x === "string")) p.push("accepted: [the answer in words] (the 416 check)");
+  return p;
+}
+
 /** Pure. A calculation's key from a stored `answer`, or null where it is not sound (the item is then not offered). */
 export function calculationSpecOf(answer: unknown): CalculationSpec | null {
-  if (!isCalculationAnswer(answer)) return null;
+  if (!isCalculationAnswer(answer) || calculationProblems(answer).length) return null;
   const a = answer as Record<string, unknown>;
-  const v = a.value;
-  if (typeof v !== "number" || !Number.isFinite(v)) return null;
-  const unit = typeof a.unit === "string" ? a.unit.trim() : "";
-  if (!unitInfo(unit)) return null;
-  const units = a.units === "exact_unit" || a.units === "convert" ? a.units : null;
+  const v = a.value as number, unit = (a.unit as string).trim();
   const working = typeof a.working === "string" && a.working.trim() ? a.working.trim().slice(0, 1200) : null;
-  return { value: v, unit, tolerance: a.tolerance === undefined ? null : toleranceOf(a.tolerance), units, working, display: `${fmt(v)}${unit ? ` ${unitLabel(unit)}` : ""}` };
+  return {
+    value: v, unit, equivalentUnits: ((a.equivalentUnits as string[] | undefined) ?? []).map(x => x.trim()), rounding: roundingOf(a.rounding),
+    tolerance: a.tolerance === undefined ? null : toleranceOf(a.tolerance), safetyCritical: a.safetyCritical !== false, working,
+    display: `${fmt(v)}${unit ? ` ${unitLabel(unit)}` : ""}`,
+  };
 }
 
 /** Pure. The answer stored as the item's accepted answer (the 416 CHECK: answer.accepted of 1 to 8 strings). */
 export const calculationAccepted = (value: number, unit: string): string[] => [`${fmt(value)}${unit.trim() ? ` ${unitLabel(unit)}` : ""}`];
 
 export type CalculationResponse = { value: string; unit: string };
-export type CalculationReason = "correct" | "wrong_value" | "wrong_unit" | "incompatible_unit" | "unit_missing" | "unparsed";
+export type CalculationReason = "correct" | "wrong_value" | "not_rounded" | "wrong_unit" | "incompatible_unit" | "unit_missing" | "unparsed";
 export type CalculationMark = {
   correct: boolean; score: 0 | 1; reason: CalculationReason; rules: typeof SCORING_RULES_VERSION;
   given: { value: number | null; unit: string }; expected: { value: number; unit: string };
-  /** The learner's value in the key's unit, where the units are compatible. */
+  /** The learner's value in the key's unit, where the units are of the same kind. */
   inKeyUnit: number | null;
-  tolerance: Tolerance; units: UnitRule; warnings: string[]; feedback: string;
+  /** The tolerance that was applied (null: exact match), and whether an authored tolerance was set aside because tolerances are not active. */
+  tolerance: Tolerance | null; toleranceInactive: boolean; rounding: Rounding | null;
+  /** WS-B, independent of tolerance: a tenfold (or greater) error in the amount. */
+  safety: SafetyRecord | null;
+  warnings: string[]; feedback: string;
 };
 
-/** Pure. A value within tolerance of the key (a hair of floating point allowed on an exact match). */
-export function withinTolerance(given: number, expected: number, t: Tolerance): boolean {
+/** Pure. A value within tolerance of the key (a hair of floating point allowed on an exact match). The sign always counts. */
+export function withinTolerance(given: number, expected: number, t: Tolerance | null): boolean {
   const eps = 1e-9 * Math.max(1, Math.abs(expected));
   const d = Math.abs(given - expected);
-  if (t.kind === "none") return d <= eps;
+  if (!t || t.kind === "none") return d <= eps;
   if (t.kind === "absolute") return d <= t.amount + eps;
   return d <= (Math.abs(expected) * t.amount) / 100 + eps;
 }
 
+/** Pure. A tenfold (or greater) error in the amount, either way: independent of any tolerance. (A wrong sign is simply wrong.) */
+export function magnitudeError(given: number, expected: number): boolean {
+  if (expected === 0) return false;
+  const ratio = given / expected;
+  return ratio <= 0 ? false : ratio >= MAGNITUDE_ERROR_FACTOR - 1e-9 || ratio <= 1 / MAGNITUDE_ERROR_FACTOR + 1e-12;
+}
+
 /**
- * Pure. A calculation marked by code. The tolerance and unit rule are the item's own where it authors them, else the published
- * policy defaults, else the strict code defaults (exact, the item's own unit). A unit of another dimension, a missing unit or
- * (exact_unit) another unit is wrong, with feedback saying which and what the answer is in the key's unit.
+ * Pure. A calculation marked by code (owner decision 4 Nov 2026). In order: the number (sign and decimal point kept); the unit (the key's,
+ * or one of the item's validated equivalent units -- any other unit, or none, is wrong, with the amount shown in the key's unit where it
+ * is of the same kind); the SAFETY check, independent of tolerance (a tenfold or greater error is unsafe); the question's rounding; then
+ * the value, exactly -- or within the item's tolerance only where `policy.tolerancesActive` (off until the clinical policy is approved).
  */
-export function markCalculation(spec: CalculationSpec, r: CalculationResponse, defaults: { tolerance: Tolerance; units: UnitRule } = CALCULATION_DEFAULTS): CalculationMark {
-  const tolerance = spec.tolerance ?? defaults.tolerance;
-  const units = spec.units ?? defaults.units;
+export function markCalculation(spec: CalculationSpec, r: CalculationResponse, policy: CalculationPolicy = CALCULATION_DEFAULTS): CalculationMark {
   const n = parseNumber(r.value);
   const keyUnit = unitInfo(spec.unit)!;
   const givenUnit = unitInfo(r.unit);
   const expected = { value: spec.value, unit: unitLabel(spec.unit) };
-  const base = { rules: SCORING_RULES_VERSION, expected, tolerance, units, warnings: n.ok ? n.warnings : [] } as const;
-  const wrong = (reason: CalculationReason, feedback: string, value: number | null, inKeyUnit: number | null = null): CalculationMark =>
-    ({ ...base, correct: false, score: 0, reason, given: { value, unit: givenUnit ? unitLabel(r.unit) : r.unit.trim().slice(0, 40) }, inKeyUnit, feedback });
-  if (!n.ok) return wrong("unparsed", n.reason === "ambiguous_comma" ? "Use a decimal point, not a comma, in your answer (for example 2.5)." : "Your answer is not a number.", null);
-  if (keyUnit.canonical && (!givenUnit || givenUnit.canonical === "")) return wrong("unit_missing", `Your answer has no unit. The answer is ${spec.display}.`, n.value);
-  if (!givenUnit) return wrong("incompatible_unit", `That unit was not recognised. The answer is ${spec.display}.`, n.value);
+  const active = policy.tolerancesActive && !!spec.tolerance && spec.tolerance.kind !== "none";
+  const tolerance = active ? spec.tolerance : null;
+  const base = { rules: SCORING_RULES_VERSION, expected, tolerance, toleranceInactive: !!spec.tolerance && spec.tolerance.kind !== "none" && !active, rounding: spec.rounding, warnings: n.ok ? n.warnings : [] } as const;
+  const givenShown = { value: n.ok ? n.value : null, unit: givenUnit ? unitLabel(r.unit) : r.unit.trim().slice(0, 40) };
+  const wrong = (reason: CalculationReason, feedback: string, inKeyUnit: number | null = null, safety: SafetyRecord | null = null): CalculationMark =>
+    ({ ...base, correct: false, score: 0, reason, given: givenShown, inKeyUnit, safety, feedback });
+  if (!n.ok) return wrong("unparsed", n.reason === "ambiguous_comma" ? "Use a decimal point, not a comma, in your answer (for example 2.5)." : "Your answer is not a number.");
+  if (keyUnit.canonical && (!givenUnit || givenUnit.canonical === "")) return wrong("unit_missing", `Your answer has no unit. The answer is ${spec.display}.`);
+  if (!givenUnit) return wrong("incompatible_unit", `That unit was not recognised. The answer is ${spec.display}.`);
   const same = givenUnit.canonical === keyUnit.canonical;
-  const converted = same ? n.value : convertUnit(n.value, r.unit, spec.unit);
-  if (converted === null) return wrong("incompatible_unit", `${unitLabel(r.unit) || "No unit"} measures something different from ${expected.unit || "the answer"}. The answer is ${spec.display}.`, n.value);
-  const ok = withinTolerance(converted, spec.value, tolerance);
-  if (!same && units === "exact_unit")
-    return wrong("wrong_unit", `This question asks for the answer in ${expected.unit}. Your ${fmt(n.value)} ${unitLabel(r.unit)} is ${fmt(converted)} ${expected.unit}${ok ? ", the right amount in the wrong unit" : ""}. The answer is ${spec.display}.`, n.value, converted);
-  if (!ok) return wrong("wrong_value", `${same ? "" : `Your ${fmt(n.value)} ${unitLabel(r.unit)} is ${fmt(converted)} ${expected.unit}. `}The answer is ${spec.display} (${toleranceText(tolerance, expected.unit)}).`, n.value, converted);
-  return { ...base, correct: true, score: 1, reason: "correct", given: { value: n.value, unit: unitLabel(r.unit) }, inKeyUnit: converted,
-    feedback: same ? `Correct: ${spec.display}.` : `Correct: ${fmt(n.value)} ${unitLabel(r.unit)} is ${fmt(converted)} ${expected.unit}.` };
+  const equivalent = !same && spec.equivalentUnits.some(e => unitInfo(e)?.canonical === givenUnit.canonical);
+  const inKey = same ? n.value : convertUnit(n.value, r.unit, spec.unit);
+  if (inKey === null) return wrong("incompatible_unit", `${unitLabel(r.unit) || "No unit"} measures something different from ${expected.unit || "the answer"}. The answer is ${spec.display}.`);
+  // Independent of tolerance and of rounding: a tenfold or greater error in the amount (a decimal-point or unit slip) is unsafe.
+  const tenfold = spec.safetyCritical && magnitudeError(inKey, spec.value);
+  const safety = tenfold ? safetyRecord("unsafe", { statement: `${fmt(n.value)} ${unitLabel(r.unit)}`.trim(), by: "code" }) : null;
+  const tenfoldNote = tenfold ? ` That is ${inKey / spec.value >= 1 ? fmt(Math.round(inKey / spec.value)) + " times" : "1/" + fmt(Math.round(spec.value / inKey)) + " of"} the right amount: an error of this size would be unsafe in practice.` : "";
+  if (!same && !equivalent)
+    return wrong("wrong_unit", `This question asks for the answer in ${expected.unit}. Your ${fmt(n.value)} ${unitLabel(r.unit)} is ${fmt(inKey)} ${expected.unit}.${tenfoldNote} The answer is ${spec.display}.`, inKey, safety);
+  if (tenfold) return wrong("wrong_value", `Your ${fmt(n.value)} ${unitLabel(r.unit)} is not ${spec.display}.${tenfoldNote}`, inKey, safety);
+  if (spec.rounding && same && applyRounding(n.value, spec.rounding) !== n.value && withinTolerance(applyRounding(n.value, spec.rounding), spec.value, null))
+    return wrong("not_rounded", `Round your answer ${roundingText(spec.rounding)}: the answer is ${spec.display}.`, inKey);
+  if (!withinTolerance(inKey, spec.value, tolerance))
+    return wrong("wrong_value", `${same ? "" : `Your ${fmt(n.value)} ${unitLabel(r.unit)} is ${fmt(inKey)} ${expected.unit}. `}The answer is ${spec.display} (${toleranceText(tolerance ?? { kind: "none" }, expected.unit)}${spec.rounding ? `, ${roundingText(spec.rounding)}` : ""}).`, inKey);
+  return { ...base, correct: true, score: 1, reason: "correct", given: givenShown, inKeyUnit: inKey, safety: null,
+    feedback: same ? `Correct: ${spec.display}.` : `Correct: ${fmt(n.value)} ${unitLabel(r.unit)} is ${fmt(inKey)} ${expected.unit}, an accepted equivalent.` };
 }
 
 /** Pure. A calculation response from a browser body, bounded, or null. */
@@ -504,10 +588,16 @@ export function parseCalculationResponse(raw: unknown): CalculationResponse | nu
   return value && value.length <= 40 && unit.length <= 40 ? { value, unit } : null;
 }
 
-/** Pure. The calculation record kept on the attempt's response (bounded): what was given, in the key unit, and why it was marked so. */
+/** Pure. The calculation record kept on the attempt's response (bounded): what was given, in the key unit, and the policy it was marked under. */
 export const storedCalculation = (m: CalculationMark): Record<string, unknown> => ({
-  reason: m.reason, given: m.given, inKeyUnit: m.inKeyUnit, tolerance: m.tolerance, units: m.units,
+  reason: m.reason, given: m.given, inKeyUnit: m.inKeyUnit, tolerancesActive: !!m.tolerance,
 });
+
+/** The units the learner may pick: the key's own, its validated equivalents, and the others of its dimension (realistic slips). */
+export function calculationUnitChoices(spec: CalculationSpec): string[] {
+  const all = new Set([...unitChoices(spec.unit), ...spec.equivalentUnits.map(unitLabel)]);
+  return [...all].sort((a, b) => a.localeCompare(b));
+}
 
 /** Pure. Every number written in a text (digits, with a decimal point; thousands commas removed), for the grounding of a stem. */
 export function numbersIn(text: string): number[] {

@@ -221,9 +221,15 @@ describe("WS-A calculation: a short item with answer.format calculation, marked 
     expect(r).toEqual({ kind: "calc", value: "10", unit: "mL" });
     expect(markResponse(CALC, r)).toMatchObject({ correct: true, score: 1, marking: "deterministic", calc: { reason: "correct" } });
     expect(markResponse(CALC, { kind: "calc", value: "0.01", unit: "L" })).toMatchObject({ correct: false, calc: { reason: "wrong_unit" } });
-    expect(markResponse(CALC, { kind: "calc", value: "0.01", unit: "L" }, { calculation: { tolerance: { kind: "none" }, units: "convert" } })).toMatchObject({ correct: true });
-    expect(markResponse(CALC, { kind: "calc", value: "10.4", unit: "mL" }, { calculation: { tolerance: { kind: "percent", amount: 5 }, units: "exact_unit" } })).toMatchObject({ correct: true });
-    expect(markResponse(CALC, { kind: "calc", value: "10.6", unit: "mL" }, { calculation: { tolerance: { kind: "percent", amount: 5 }, units: "exact_unit" } })).toMatchObject({ correct: false, calc: { reason: "wrong_value" } });
+    // A validated equivalent unit counts; a question's tolerance only once tolerances are active (owner decision 4 Nov 2026).
+    const eqL = row({ ...CALC, answer: { ...(CALC.answer as object), equivalentUnits: ["L"] } });
+    expect(markResponse(eqL, { kind: "calc", value: "0.01", unit: "L" })).toMatchObject({ correct: true });
+    const tol = row({ ...CALC, answer: { ...(CALC.answer as object), tolerance: { kind: "percent", amount: 5 } } });
+    expect(markResponse(tol, { kind: "calc", value: "10.4", unit: "mL" })).toMatchObject({ correct: false, calc: { reason: "wrong_value", toleranceInactive: true } });
+    expect(markResponse(tol, { kind: "calc", value: "10.4", unit: "mL" }, { calculation: { tolerancesActive: true } })).toMatchObject({ correct: true });
+    expect(markResponse(tol, { kind: "calc", value: "10.6", unit: "mL" }, { calculation: { tolerancesActive: true } })).toMatchObject({ correct: false, calc: { reason: "wrong_value" } });
+    // A tenfold slip is unsafe, independently of tolerance, and recorded as any unsafe answer is.
+    expect(markResponse(tol, { kind: "calc", value: "100", unit: "mL" }, { calculation: { tolerancesActive: true } })).toMatchObject({ correct: false, score: 0, safety: { outcome: "unsafe", by: "code" } });
     expect(parseResponse(CALC, { text: "10 mL" })).toBeNull();
   });
   it("an unsound key is not offered", () => {
@@ -271,15 +277,12 @@ describe("WS-A calculation: a short item with answer.format calculation, marked 
     const f = feedbackView(edited, { correct: false, score: 0, marking: "deterministic", ...kept });
     expect(f.calculation).toMatchObject({ reason: "wrong_unit", tolerance: "exact answer", given: { value: 0.01, unit: "L" } });
   });
-  it("the policy keys default to the strictest choice and clamp nonsense", () => {
-    const p = resolvePolicy([]);
-    expect(p.scholarCalculationTolerance).toBe("exact");
-    expect(p.scholarCalculationUnits).toBe("exact_unit");
-    expect((policyDef("scholar_calculation_tolerance") as any).fallback).toBe("exact");
+  it("the tolerance gate defaults OFF (until the clinical calculation policy is approved) and clamps nonsense", () => {
+    expect(resolvePolicy([]).scholarCalculationTolerances).toBe("off");
+    expect((policyDef("scholar_calculation_tolerances") as any).fallback).toBe("off");
     const set = (key: string, value: unknown) => resolvePolicy([{ config_path: policyPath(key as never), published: { value } }]);
-    expect(set("scholar_calculation_tolerance", "percent_5").scholarCalculationTolerance).toBe("percent_5");
-    expect(set("scholar_calculation_tolerance", "percent_50").scholarCalculationTolerance).toBe("exact");
-    expect(set("scholar_calculation_units", "convert").scholarCalculationUnits).toBe("convert");
+    expect(set("scholar_calculation_tolerances", "on").scholarCalculationTolerances).toBe("on");
+    expect(set("scholar_calculation_tolerances", "yes").scholarCalculationTolerances).toBe("off");
   });
 });
 
@@ -327,6 +330,6 @@ describe("WS-C case reason context (library.ts, pure): only an asked-for reason,
     expect(JSON.stringify(c)).not.toMatch(/"correct"|Escalate/);
     expect(reasonContextFrom(b, s, "d2")).toEqual({ error: "no_rubric" });
     expect(reasonContextFrom(b, { ...s, answers: [{ ...s.answers[0], reason: "" }] }, "d1")).toEqual({ error: "no_reason" });
-    expect(reasonContextFrom(b, { ...s, feedback: [{ decisionPointId: "d1" }] }, "d1")).toEqual({ error: "already_has_feedback" });
+    expect(reasonContextFrom(b, { ...s, feedback: [{ decisionPointId: "d1" } as any] }, "d1")).toEqual({ error: "already_has_feedback" });
   });
 });

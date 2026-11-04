@@ -10,7 +10,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRi
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runEvaluate } from "@/lib/individual/scholar/generation";
 import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, structuredSafety, withSafety, writtenSafety, type PartResult } from "@/lib/individual/scholar/revision";
-import { SCORING_RULES_VERSION, criteriaMarks, marksFromShare, storedCalculation, toleranceOfChoice, type CalculationMark, type SafetyRecord } from "@/lib/individual/scholar/scoring-rules";
+import { SCORING_RULES_VERSION, criteriaMarks, marksFromShare, storedCalculation, type CalculationMark, type SafetyRecord } from "@/lib/individual/scholar/scoring-rules";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD } from "@/lib/individual/scholar/config";
@@ -133,8 +133,8 @@ export async function POST(req: Request) {
   // ── marking: code, then (a short answer only) AI evaluation or the student's own judgement ──
   // SQIE-CLOSE-2026-11 WS-A: a calculation's default tolerance and unit rule are the published policy's (strict code defaults otherwise).
   let mark = markResponse(q, r);
-  // SQIE-CLOSE-2026-11 WS-A: a calculation is marked under the published tolerance and unit policy (the line above used the strict code defaults).
-  if (r.kind === "calc") mark = markResponse(q, r, { calculation: { tolerance: toleranceOfChoice(policy.scholarCalculationTolerance), units: policy.scholarCalculationUnits } });
+  // SQIE-CLOSE-2026-11 WS-A: a calculation is marked under the published tolerance gate (the line above used the strict code default: tolerances inactive).
+  if (r.kind === "calc") mark = markResponse(q, r, { calculation: { tolerancesActive: policy.scholarCalculationTolerances === "on" } });
   if (gaveUp) mark = { correct: false, score: 0, marking: "deterministic" };
   const calc: CalculationMark | null = "calc" in mark ? mark.calc ?? null : null;
   // SQIE-CLOSE-2026-11 WS-B (rules v2): what was unsafe or safety-critical about this answer, kept with the attempt.

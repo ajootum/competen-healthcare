@@ -18,7 +18,7 @@ import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, e
 import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
 import {
-  ROLE_LABEL, SAFETY_EXPLAINER, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, storedSafety, structuredVariantOf, toleranceOf, toleranceText,
+  ROLE_LABEL, SAFETY_EXPLAINER, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, roundingText, storedSafety, structuredVariantOf, toleranceText,
   type CalculationMark, type Finding, type PartRole, type SafetyRecord, type StructuredVariant,
 } from "./scoring-rules";
 import { CALCULATION_LABEL } from "./config";
@@ -157,9 +157,8 @@ export function keptCalculation(q: QuestionRow, response: unknown, snapshot: Rub
   const r = (response ?? {}) as Record<string, unknown>;
   const rec = (r.calc ?? null) as Record<string, unknown> | null;
   if (!spec || r.kind !== "calc" || typeof r.value !== "string" || typeof r.unit !== "string" || !rec || typeof rec !== "object") return null;
-  const tolerance = toleranceOf(rec.tolerance), units = rec.units === "exact_unit" || rec.units === "convert" ? rec.units : null;
-  if (!tolerance || !units) return null;
-  return markCalculation({ ...spec, tolerance, units }, { value: r.value, unit: r.unit });
+  if (typeof rec.tolerancesActive !== "boolean") return null;
+  return markCalculation(spec, { value: r.value, unit: r.unit }, { tolerancesActive: rec.tolerancesActive });
 }
 
 function keptKind(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string }, snapshot: RubricSnapshot | null) {
@@ -301,7 +300,8 @@ export function feedbackView(row: QuestionRow, m: {
     ...(m.safety ? { safety: safetyView(m.safety)! } : {}),
     ...(m.calc ? { calculation: {
       given: m.calc.given, expected: m.calc.expected, reason: m.calc.reason, feedback: m.calc.feedback, inKeyUnit: m.calc.inKeyUnit,
-      tolerance: toleranceText(m.calc.tolerance, m.calc.expected.unit), unitRule: m.calc.units === "exact_unit" ? "The answer must be in the unit the question asks for." : "The same amount in an equivalent unit counts.",
+      tolerance: toleranceText(m.calc.tolerance ?? { kind: "none" }, m.calc.expected.unit) + (m.calc.toleranceInactive ? " (this question sets a tolerance, which is not in use until the clinical calculation policy is approved)" : ""),
+      unitRule: [m.calc.rounding ? `Give the answer ${roundingText(m.calc.rounding)}.` : null, "The answer must be in the unit the question asks for, or an equivalent it accepts."].filter(Boolean).join(" "),
       warnings: m.calc.warnings, working: calculationSpecOf(q.answer)?.working ?? null, label: CALCULATION_LABEL,
     } } : {}),
     ...(!changed && rubricChanged(row, m.snapshot ?? null) ? { rubricNote: "This question's marking guide has been updated since you answered. What is shown here is the guide your answer was marked against." } : {}),
