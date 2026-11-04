@@ -2,7 +2,7 @@
 
 **Branch:** `scholar/sqie-scoring` (from `main` @ `661caf17`). It includes WS-B's evaluator branch `scholar/sqie-ws-b-unsafe-responses` @ `6737c1f0`, merged.
 **Tracker rows:** SQIE-02, SQIE-03, C-04 (`docs/programme/SQIE-CLOSE-2026-11-TRACKER.md`, ranks 1, 4 and 7).
-**Directive:** SQIE-CLOSE-2026-11 §3 and §5, and the owner decisions of 4 Nov 2026, item 1 (calculation scoring).
+**Directive:** SQIE-CLOSE-2026-11 §3 and §5; the owner decisions of 4 Nov 2026, item 1 (calculation scoring); the owner release decision of 4 Nov 2026 (clinical scoring caps).
 **Migration:** none. Every new field lives inside the existing `answer` jsonb (the 416/710 CHECKs allow extra keys) and the attempt `response` jsonb (416: an object of at most 8000 bytes). The seeded staging questions were stored through those CHECKs unchanged.
 **Production:** not touched.
 
@@ -25,18 +25,24 @@
 ## The rules (versioned)
 
 ### Versioning
-Every attempt marked under these rules records `response.rules = "sqie-scoring-v2"`. An attempt without it was marked under the legacy rules (`v1`). Its feedback is built exactly as before, and markers added later never re-judge it (tested). A change to a cap is a new version string.
+Every attempt marked now records `response.rules = "sqie-scoring-v3"`.
+- `v2` (whole-attempt caps, superseded before release by the owner's decision) and legacy `v1` attempts render exactly as stored.
+- Markers added later never re-judge an attempt (tested).
+- A change to a cap is a new version string.
 
-### WS-B: unsafe answers
-- **The evaluator** is the WS-B branch's, kept as built. Evaluate v3 and case reasoning v3 require an UNSAFE line, quote-checked against the answer, and an unsafe answer is marked incorrect, with no key point credited.
-- **This branch adds the rest:**
-  - authored unsafe answers, recognised by code;
-  - safety-critical markers;
-  - whole-attempt caps for short, structured, extended and scenario answers;
-  - `response.safety` kept on the attempt and shown as a plain "Clinically unsafe answer" / "Safety-critical point missed" block;
-  - the weights and safety flags of case criteria, scored.
-- **Unsafe:** the score is capped at `UNSAFE_SCORE_CAP = 0`. It is never correct and never partly.
-- **Critical missed:** a safety-critical part, key point, stage or criterion was not earned in full (the learner's own grade never counts here). The answer is never correct, and the score is capped at `CRITICAL_MISS_SCORE_CAP = 0.5`.
+### WS-B: unsafe answers (owner release decision 4 Nov 2026)
+- **The evaluator** is the WS-B branch's (evaluate v3 / case reasoning v3): it requires an `UNSAFE` line, quote-checked against the answer.
+  - Here the line is a **flag**: the verdict stands as judged.
+  - What the flag does to the marks is the gated cap below.
+- **Always detected, recorded (`response.safety`, with `capped`) and shown:**
+  - authored unsafe answers, recognised by code (a known wrong answer, so it scores 0 at its part);
+  - the AI flag;
+  - safety-critical failures (a safety-critical part, key point, stage or criterion missed or wrong).
+- **The caps (rules v3)** apply at the scope the approved rubric defines: the structured part, the scenario stage, the criteria-marked part or case decision, or the item for a single-answer item. They never apply to unrelated components; one unsafe part leaves the other parts' marks untouched.
+  - Unsafe response: at most `UNSAFE_SCORE_CAP = 0.5` of that scope, and never correct.
+  - Safety-critical failure: `CRITICAL_MISS_SCORE_CAP = 0` of that scope, and never correct.
+- **Gated:** the caps change marks only where HQ policy `scholar_clinical_scoring_caps` is `on`. It defaults to `off` until the safety-critical classifications are clinically approved. While it is off, the flag is explained without claiming a cap.
+- Case criterion `weight` and `safetyCritical` are scored for written decisions.
 
 ### WS-C: rubric-based partial credit
 - The same evaluator lists the numbered criteria met (`MATCHED:`), and code computes the weighted share and the whole part marks.
@@ -60,7 +66,7 @@ For generated calculation items:
 ## Owner and clinical decisions (recorded, not taken)
 
 1. **Approval of the clinical calculation policy.** Only that approval may turn `scholar_calculation_tolerances` on.
-2. **The rules-v2 caps:** unsafe = 0, critical missed ≤ 0.5.
+2. **Clinical approval of the safety-critical classifications.** Only that approval may turn `scholar_clinical_scoring_caps` on and activate the v3 caps.
 3. **Turning the `calculation` revision format on** in `scholar_revision_formats`.
 
 ## Proof
@@ -75,16 +81,18 @@ For generated calculation items:
     - caps and criteria;
     - the pilot batch's eight calculation items as fixtures.
   - `sqie-scoring.test.ts` (28):
-    - unsafe-capped and critical-missed for short, structured, extended, scenario and case;
+    - the v3 caps at each scope (part, stage, decision, item), gated off and on, with the other parts untouched;
+    - a v2 attempt rendered exactly as stored;
     - criteria partial credit, answer + justify, and interpretation;
     - calculation tolerance gating and unit mismatch;
     - generation grounding and the forced blind solve;
     - an old-snapshot render: legacy attempts unchanged, and a calculation read against its kept key after an edit.
   - WS-B's own `unsafe-response.test.ts` passes on the merged branch.
-- **Staging walk** on the merged branch (`staging-walk-findings.txt` and the screenshots in this folder): 21 PASS / 0 FAIL.
+- **Staging walk** on the merged branch (`staging-walk-findings.txt` and the screenshots in this folder): 22 PASS / 0 FAIL (rules v3).
   - The fixture learner was used on the staging-pointed dev server.
   - Four fixture questions were seeded (`model = fixture-sqie-scoring`) and answered through the real answer route and the revision UI.
-  - Every attempt records `sqie-scoring-v2`, and safety/calculation are kept.
-  - A 791 snapshot is beside each attempt (52 of 52).
+  - Every attempt records `sqie-scoring-v3`, and safety/calculation are kept.
+  - A 791 snapshot is beside each attempt (10 of 10 in the v3 run).
   - A tenfold calculation error is unsafe, and `-10 mL` is not `10 mL`.
+  - With the caps off (the default), an unsafe structured part scores 0 at that part only; the other part keeps its marks (3 of 4). The flag is recorded with `capped: false` and explained without claiming a cap.
   - There were no 5xx responses and no console errors.

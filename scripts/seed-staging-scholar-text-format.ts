@@ -51,7 +51,8 @@ async function main() {
   if (mode === "verify") return;
   await assertNoOtherDrafts();
   if (mode === "remove") {
-    await resetOverride(admin, ACTOR, SCOPE, PATH);
+    const rr = await resetOverride(admin, ACTOR, SCOPE, PATH);
+    if (!rr.ok) throw new Error(`resetOverride: ${rr.error}`);
     await publishScope(admin, ACTOR, SCOPE, { label: "Competen Individual policy", note: "COMPETEN-SCHOLAR-UPLOAD: plain text upload turned off on staging (default)" });
   } else {
     const set = await setOverride(admin, ACTOR, SCOPE, PATH, { enabled: ["pdf", "docx", "text"] });

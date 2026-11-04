@@ -129,8 +129,8 @@ export async function POST(req: Request) {
     case "reset": {
       const def = typeof body.key === "string" ? policyDef(body.key) : undefined;
       if (!def) return refuse(422, "That is not a Competen Individual policy.");
-      await resetOverride(ctx.admin, actor, SCOPE, policyPath(def.key));
-      return NextResponse.json({ ok: true });
+      const r = await resetOverride(ctx.admin, actor, SCOPE, policyPath(def.key));
+      return r.ok ? NextResponse.json({ ok: true }) : refuse(500, "The policy could not be reset. Nothing has changed.");
     }
     case "publish": {
       const note = typeof body.note === "string" && body.note.trim() ? body.note.trim().slice(0, 500) : null;

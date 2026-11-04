@@ -302,7 +302,9 @@ export function questionUserPrompt(passage: Passage): string {
 const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
 
-export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty";
+export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty"
+  // SQIE-CLOSE-2026-11 WS-H: a generated question or case item that names a person (the revision formats already refuse it).
+  | "identifier";
 
 /**
  * Pure. SCHOLAR-AI-OPT-01 P2: the words the vocabulary rule refused (unsupported_term), for the audit row. The acceptance
@@ -347,6 +349,9 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
       out.dropped.push({ reason: "malformed" });
       continue;
     }
+    // SQIE-CLOSE-2026-11 WS-H: every word the model wrote is screened for a patient identifier, as every revision format is
+    // (revision.ts checkRevisionDraft). The passage was screened at upload; the model's own stem, options and rationale were not.
+    if (findPatientIdentifiers([stem, ...options, rationale].join("\n")).length) { out.dropped.push({ reason: "identifier" }); continue; }
     const quoteKey = squash(quote).replace(/[.\s]+$/, "");
     if (quoteKey.length < 12 || !source.includes(quoteKey)) { out.dropped.push({ reason: "quote_not_in_passage" }); continue; }
     const violations = groundingViolations([stem, ...options, rationale].join("\n"), [passage.content]);
@@ -1216,9 +1221,11 @@ export function parseEvaluation(raw: string, grounding: readonly string[], opts:
   if (!feedback || feedback.length > (parts ? 2000 : 800)) return { ok: false, reason: "malformed" };
   if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
   if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
-  // An unsafe answer is not partly right: it is marked incorrect, earns nothing, and an extended answer is credited no key point.
-  const verdict = unsafe?.length ? "incorrect" : m[1].toLowerCase() as EvaluateVerdict;
-  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched: unsafe?.length ? [] : matched } : {}), ...(unsafe?.length ? { unsafe } : {}) };
+  // SQIE-CLOSE-2026-11 WS-B, owner release decision 4 Nov 2026: an unsafe statement is a FLAG here (always detected, kept and shown); the
+  // verdict stands as judged. What it does to the marks is the rules-v3 cap -- at most half of the applicable score, at the scope the rubric
+  // defines -- applied by the caller (scoring-rules.ts) and only once HQ policy scholar_clinical_scoring_caps is on.
+  const verdict = m[1].toLowerCase() as EvaluateVerdict;
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched } : {}), ...(unsafe?.length ? { unsafe } : {}) };
 }
 
 const flatWords = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

@@ -55,8 +55,11 @@ export async function setOverride(admin: any, actor: WceActor, scope: WceScope, 
 export async function resetOverride(admin: any, actor: WceActor, scope: WceScope, path: string): Promise<WceResult> {
   const { data: prev } = await admin.from("workspace_config_overrides")
     .select("draft").eq("scope_type", scope.scopeType).eq("scope_ref", scope.scopeRef).eq("config_path", path).maybeSingle();
-  await admin.from("workspace_config_overrides").delete()
+  // ⚠ A FAILED DELETE IS NOT A RESET. Unchecked, a delete lost to a connection timeout reported success and the next
+  // publish kept the old value (4 Nov 2026: a staging acceptance run left a policy switched on). Nothing is audited.
+  const { error } = await admin.from("workspace_config_overrides").delete()
     .eq("scope_type", scope.scopeType).eq("scope_ref", scope.scopeRef).eq("config_path", path);
+  if (error) return { ok: false, status: 500, error: error.message || "The setting could not be reset. Nothing has changed." };
   await writeAudit(admin, actor, "reset", scope, path, prev?.draft ?? null, null);
   return { ok: true };
 }
@@ -121,8 +124,10 @@ export async function rollbackVersion(admin: any, actor: WceActor, versionId: st
       .select("config_path").eq("scope_type", scope.scopeType).eq("scope_ref", scope.scopeRef);
     for (const r of rows ?? []) {
       if (keep.has(r.config_path)) continue;
-      await admin.from("workspace_config_overrides").delete()
+      // Same rule as resetOverride: a prune that did not happen is reported, not counted, and no version is recorded.
+      const del = await admin.from("workspace_config_overrides").delete()
         .eq("scope_type", scope.scopeType).eq("scope_ref", scope.scopeRef).eq("config_path", r.config_path);
+      if (del?.error) return { ok: false, status: 500, error: del.error.message || "The version could not be fully restored." };
       pruned++;
     }
   }

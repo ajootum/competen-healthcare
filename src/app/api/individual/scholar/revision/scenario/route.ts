@@ -12,7 +12,7 @@ import { runEvaluate } from "@/lib/individual/scholar/generation";
 import { feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
-import { rubricOf, type Rubric } from "@/lib/individual/scholar/question-intel";
+import { rubricOf, type FeedbackParts, type Rubric } from "@/lib/individual/scholar/question-intel";
 import { answerOutcome, recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
 import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
@@ -20,10 +20,9 @@ import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity"
 import { aiMarkingAllowed } from "@/lib/individual/scholar/library-format";
 import { isScenarioQuestion } from "@/lib/individual/scholar/formats";
 import {
-  answerSummary, markStageByCode, parseStageAnswer, readProgress, scenarioMarking, scenarioMarks, scenarioSafety, scenarioSpecOf, signProgress, stageView, storedStages, tokenKey, verdictScore,
+  answerSummary, markStageByCode, parseStageAnswer, readProgress, scenarioMarking, scenarioMarks, capScenario, scenarioSpecOf, signProgress, stageView, storedStages, tokenKey, verdictScore,
   type Progress, type ScenarioStage, type StageResult,
 } from "@/lib/individual/scholar/scenario";
-import { withSafety } from "@/lib/individual/scholar/revision";
 import { SCORING_RULES_VERSION, unsafeStatement } from "@/lib/individual/scholar/scoring-rules";
 
 // Request-time only: it reads the session and the learner's policy, and signs with a server-only secret.
@@ -93,7 +92,7 @@ export async function POST(req: Request) {
     if (typeof body?.selfGrade === "boolean") result = { score: body.selfGrade ? 1 : 0, by: "self", answer: answerSummary(stage, a) };
     else {
       const judged = await judgeShort(ctx, req, q, stage, n, a.text, sessionId);
-      if (judged.ok) { result = { score: judged.unsafe ? 0 : verdictScore(judged.verdict), by: "ai", answer: answerSummary(stage, a), feedback: judged.feedback, ...(judged.unsafe ? { unsafe: judged.unsafe } : {}) }; evaluator = judged.evaluator; }
+      if (judged.ok) { result = { score: verdictScore(judged.verdict), by: "ai", answer: answerSummary(stage, a), feedback: judged.feedback, parts: judged.parts, ...(judged.unsafe ? { unsafe: judged.unsafe } : {}) }; evaluator = judged.evaluator; }
       else return NextResponse.json({ needsSelfGrade: true, stage: n, accepted: stage.accepted, reason: judged.why, label: MARKING_LABEL.self_graded });
     }
   }
@@ -110,12 +109,14 @@ export async function POST(req: Request) {
   // ── the last stage: ONE attempt for the whole scenario, with every stage as it was marked ──
   const policy = await loadIndividualPolicy(ctx.admin);
   const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
-  // SQIE-CLOSE-2026-11 WS-B (rules v2): an unsafe stage, or a safety-critical stage not earned in full, caps the whole scenario.
-  const ss = scenarioSafety(spec, results);
-  const { mark: m, safety } = withSafety(scenarioMarks(spec, results), ss, ss.by);
+  // SQIE-CLOSE-2026-11 WS-B (rules v3): an unsafe stage, or a safety-critical stage not earned in full, is capped AT THAT STAGE (never the
+  // others), and only where HQ policy scholar_clinical_scoring_caps is on; the flag is recorded either way.
+  const cs = capScenario(spec, results, { capsActive: policy.scholarClinicalScoringCaps === "on" });
+  const m = scenarioMarks(spec, cs.results), safety = cs.safety;
   const marking = scenarioMarking(results);
-  const formative = marking === "ai_evaluation" ? formativeFeedback(results.flatMap((r, i) => (r.by === "ai" ? [{ part: i + 1, feedback: r.feedback ?? null, parts: null }] : [])), evaluator) : null;
-  const kept = withFormative(withRubricSnapshot({ ...storedStages(results), rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}) }, rubricSnapshotOf(q)), formative);
+  // SQIE WS-D: each AI-judged stage keeps its five parts (right, missing, misconceptions, why, next), not only the summary.
+  const formative = marking === "ai_evaluation" ? formativeFeedback(results.flatMap((r, i) => (r.by === "ai" ? [{ part: i + 1, feedback: r.feedback ?? null, parts: r.parts ?? null }] : [])), evaluator) : null;
+  const kept = withFormative(withRubricSnapshot({ ...storedStages(cs.results), rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}) }, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
     chosenIndex: null, response: kept, correct: m.correct, score: m.score, marking, evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
   });
@@ -126,7 +127,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     recorded: true, stage: { index: n, score: result.score, by: result.by },
     feedback: feedbackView(q, {
-      correct: m.correct, score: m.score, marking, scenario: results, safety, justMarked: true, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null,
+      correct: m.correct, score: m.score, marking, scenario: cs.results, safety, justMarked: true, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null,
       link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null,
     }),
   });
@@ -138,7 +139,7 @@ export async function POST(req: Request) {
  */
 async function judgeShort(
   ctx: Parameters<typeof aiPreflight>[0], req: Request, q: NonNullable<Awaited<ReturnType<typeof getQuestion>>>, stage: ScenarioStage, n: number, text: string, sessionId: string | null,
-): Promise<{ ok: true; verdict: "correct" | "partly" | "incorrect"; feedback: string; unsafe: string | null; evaluator: { model: string; promptVersion: string } } | { ok: false; why: string }> {
+): Promise<{ ok: true; verdict: "correct" | "partly" | "incorrect"; feedback: string; parts: FeedbackParts | null; unsafe: string | null; evaluator: { model: string; promptVersion: string } } | { ok: false; why: string }> {
   const own = "This answer does not match the stored answer word for word, so compare it yourself.";
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarShortAnswerMarking !== "ai_then_self") return { ok: false, why: own };
@@ -165,6 +166,6 @@ async function judgeShort(
     const o = answerOutcome(e.evaluation.ok ? null : e.evaluation.reason);
     await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_evaluate", outputKind: "other", outcome: o.outcome, reasons: o.reasons, promptVersion: e.promptVersion });
   }
-  if (!refused && e.ok && e.evaluation.ok) return { ok: true, verdict: e.evaluation.verdict, feedback: e.evaluation.feedback, unsafe: unsafeStatement(e.evaluation.unsafe), evaluator: { model: e.model, promptVersion: e.promptVersion } };
+  if (!refused && e.ok && e.evaluation.ok) return { ok: true, verdict: e.evaluation.verdict, feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null, unsafe: unsafeStatement(e.evaluation.unsafe), evaluator: { model: e.model, promptVersion: e.promptVersion } };
   return { ok: false, why: refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself." };
 }

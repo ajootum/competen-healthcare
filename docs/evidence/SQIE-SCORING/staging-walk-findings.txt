@@ -10,14 +10,15 @@ PASS WS-A: the sign is kept (-10 mL is not 10 mL)
 PASS WS-A: 10 mL is correct
 PASS WS-A: an ambiguous decimal comma is refused as a number, never guessed
 INFO WS-C: the justify part needs judgement and AI marking is not on for this learner/policy ("Some parts do not match the stored answers word for word, so compare them yourself."), so it is self-graded
-PASS WS-B/C: choosing the unsafe option caps the whole answer at 0 even with a justification marked right (0 of 4)
+PASS WS-B v3: the unsafe option is flagged and wrong AT ITS PART only; the justification part keeps its marks (3 of 4; caps off on staging)
+PASS WS-B v3: with scholar_clinical_scoring_caps off (default) the flag is explained without claiming a cap
 PASS WS-C: the feedback names the variant, the justify role and its weighted criteria
 PASS WS-C interpretation: findings table returned with the feedback, 2 of 3 marks, no safety outcome
-PASS every attempt records its scoring rules (sqie-scoring-v2): 52 attempts
+PASS every attempt of this run records its scoring rules (sqie-scoring-v3): 10 attempts
 PASS the unsafe short attempt keeps response.safety and score 0
 PASS the calculation attempt keeps what was given and the key it was marked against (snapshot calc)
-PASS the justify attempt keeps its unsafe outcome and score 0
-PASS a 791 snapshot is kept beside each attempt (52 of 52)
+PASS the justify attempt keeps its unsafe outcome (capped: false) and 3 of 4 (0.75): only the unsafe part scored 0
+PASS a 791 snapshot is kept beside each attempt (10 of 10)
 PASS UI: the unsafe answer is said plainly, with the statement and the capped marks
 PASS UI: a wrong unit is marked wrong with feedback naming the unit asked for
 PASS UI: an interpretation item shows its findings table before the parts

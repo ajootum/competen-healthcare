@@ -20,6 +20,10 @@
  *      clinical answered; an educational case-study question is answered
  *   E  cost: AI calls per scenario, model routing, withheld vs answered, total and per completed revision session;
  *      retrieval-only recovery vs an AI explanation
+ *   F  adaptive exam (SQIE-CLOSE-2026-11 WS-J): from the same note, three right answers raise the target difficulty and two
+ *      of the last three missed lower it; the blueprint (scope, formats, length, start, feedback) is unchanged by adaptation;
+ *      every item served was written by a model eligible for `questions`; the report is labelled a practice estimate and
+ *      names no competence stage. SQIE_ONLY=F runs only the setup, A0 and F, then Z (no repeat of A-E).
  *   Z  fixtures removed and every staging setting this run changed restored exactly as it was
  *
  * STAGING CONFIGURATION THIS RUN CHANGES (each restored in Z to its exact prior row, or removed if it had none):
@@ -27,6 +31,7 @@
  *                        individual.policy.scholar_recovery_external = offer                 (C)
  *                        individual.policy.scholar_recovery_providers = pubmed, openalex, crossref (C)
  *                        individual.policy.scholar_learn_source_modes = notes, library, research   (C: the tier plan needs it)
+ *                        individual.policy.scholar_adaptive_exams = on                       (F)
  *   platform/research    research.registry: pubmed, openalex, crossref taken to Active through the lifecycle
  *                        (server connectivity check, recorded checks); research.workflows: basic Active (C)
  *
@@ -37,7 +42,7 @@ import { createClient } from "@supabase/supabase-js";
 import { assertSafeTarget } from "./production-guard";
 import { REFUSAL } from "../src/lib/ai/operating-mode";
 import { grantIndividualAccess, validateGrant, isGrantRefusal } from "../src/lib/individual/grants";
-import { BUCKET, TEXT_MIME } from "../src/lib/individual/scholar/config";
+import { ADAPTIVE_REPORT_LABEL, BUCKET, TEXT_MIME } from "../src/lib/individual/scholar/config";
 import { rubricOf } from "../src/lib/individual/scholar/question-intel";
 import { POLICY_SCOPE, policyPath } from "../src/lib/individual/policy";
 import { publishScope, resetOverride, setOverride, type WceActor } from "../src/lib/config/workspace-config-write";
@@ -200,7 +205,7 @@ async function restoreConfig(): Promise<string[]> {
   const log: string[] = [];
   let individualTouched = false;
   for (const s of [...snaps].reverse()) {
-    if (s.row === null) { await resetOverride(admin, ACTOR, s.scope, s.path); log.push(`${s.scope.scopeRef}:${s.path} removed (had no override before)`); }
+    if (s.row === null) { const rr = await resetOverride(admin, ACTOR, s.scope, s.path); log.push(`${s.scope.scopeRef}:${s.path} ${rr.ok ? "removed (had no override before)" : `NOT removed (ERROR ${rr.error})`}`); }
     else {
       const { error } = await admin.from("workspace_config_overrides").update({ draft: s.row.draft, published: s.row.published, updated_at: new Date().toISOString() })
         .eq("scope_type", s.scope.scopeType).eq("scope_ref", s.scope.scopeRef).eq("config_path", s.path);
@@ -375,6 +380,7 @@ async function main() {
   const noteA = await uploadText(A.jar, NOTE_A, "Pyelonephritis lecture.txt");
   ok("A0. the pyelonephritis note is uploaded", !!noteA.id, noteA.why);
   if (!noteA.id) { await finishWithCleanup(); return; }
+  if (ONLY_F) { await scenarioF(A, noteA.id); await finishWithCleanup(); return; }
   // A-risk. How the PUBLISHED Scholar risk rules read this lecture note AS THE PRODUCT SENDS IT: the note's own stored
   // passages as context, a study request as the learner's words (requestText), built by the real scholarRisk and
   // resolved by the real resolveRiskSubject, so rules of scope "request" (acting now, a real patient now) read only the
@@ -679,6 +685,8 @@ async function main() {
     }
   }
 
+  await scenarioF(A, noteA.id);
+
   // ════════ E. COST ════════
   console.log("\n── E. cost ──");
   const scen = [["A", A.id], ["B", B.id], ["C", C?.id ?? null], ["D", D.id]] as const;
@@ -709,6 +717,65 @@ async function main() {
   ok("E2. retrieval-only recovery costs no AI (zero AI requests under its action ids)", recAi.length === 0 && recoveryIds.length > 0, `${recoveryIds.length} recoveries, ${recAi.length} AI rows, research rows ${recResearch.length} ($${usd(recResearch)})`);
 
   await finishWithCleanup();
+}
+
+// ════════ F. ADAPTIVE EXAM (SQIE-CLOSE-2026-11 WS-J) ════════
+const ONLY_F = process.env.SQIE_ONLY === "F";
+const LEVELS = ["easy", "standard", "harder"] as const;
+const STAGE_WORDS = /\b(benner|novice|advanced beginner|proficient|expert|competent|stage [0-6])\b/i;
+async function scenarioF(A: { id: string; jar: Jar }, materialId: string) {
+  console.log("\n── F. adaptive exam ──");
+  const cfg = await setIndividualPolicy({ scholar_adaptive_exams: { value: "on" } });
+  ok("F0. staging: adaptive exams switched on for this run", cfg === null, cfg ?? "");
+  if (cfg) return;
+  // The rule (question-intel.ts adaptDifficulty): three right in a row step up, two of the last three missed step down, and the
+  // count starts again after each change (fewer than three answers since it: unchanged). So the step up and the step down are
+  // each shown in their own short exam from the first answer: a short note yields only a handful of items, and the second exam
+  // reuses the questions the first one wrote (library, then stored, then generated), so it adds little or no AI.
+  const rank = (t: string | undefined) => LEVELS.indexOf((t ?? "") as (typeof LEVELS)[number]);
+  const fixed = (b: any) => b && JSON.stringify({ scope: b.scope, formats: b.formats, length: b.length, start: b.start, feedback: b.feedback, timeLimitMinutes: b.timeLimitMinutes, source: b.source, title: b.title });
+  async function runExam(tag: string, plan: boolean[]) {
+    const start = await send("POST", "/api/individual/scholar/revision/adaptive", { scope: { kind: "documents", materialIds: [materialId] }, formats: ["mcq"], length: plan.length, start: "standard", feedback: "immediate" }, A.jar);
+    const sessionId: string | null = start.json?.session?.id ?? null;
+    show(`F${tag} start`, { status: start.status, session: start.json?.session, error: start.json?.error });
+    if (!sessionId) return { start, sessionId, targets: [] as string[], served: [] as string[], before: null, after: null, fin: null as any };
+    const sess = (await admin.from("individual_scholar_revision_session").select("set_id").eq("id", sessionId).single()).data as any;
+    const scopeOf = async () => (((await admin.from("individual_scholar_revision_set").select("scope").eq("id", sess?.set_id).single()).data as any)?.scope?.adaptive ?? null);
+    const before = fixed(await scopeOf());
+    const targets: string[] = []; const served: string[] = [];
+    for (let i = 0; i < plan.length; i++) {
+      const nx = await send("POST", "/api/individual/scholar/revision/adaptive/next", { sessionId }, A.jar);
+      if (nx.json?.done || !nx.json?.item?.id) { show(`F${tag} next ${i + 1}`, { status: nx.status, done: nx.json?.done ?? false, error: nx.json?.error }); break; }
+      targets.push(String(nx.json.target)); served.push(nx.json.item.id);
+      const q = (await admin.from("individual_scholar_question").select("correct_index, options").eq("id", nx.json.item.id).single()).data as any;
+      const n = Array.isArray(q?.options) ? q.options.length : 4;
+      const index = plan[i] ? q?.correct_index : ((Number(q?.correct_index) + 1) % n);
+      const an = await send("POST", "/api/individual/scholar/revision/answer", { questionId: nx.json.item.id, sessionId, response: { index } }, A.jar);
+      if (an.status !== 200) show(`F${tag} answer ${i + 1}`, `${an.status} ${JSON.stringify(an.json).slice(0, 160)}`);
+    }
+    const after = fixed(await scopeOf());
+    const fin = await send("POST", "/api/individual/scholar/revision/adaptive/next", { sessionId, finish: true }, A.jar);
+    show(`F${tag} targets (item 1..n)`, targets);
+    show(`F${tag} trajectory`, fin.json?.report?.trajectory ?? fin.json);
+    return { start, sessionId, targets, served, before, after, fin };
+  }
+  // Exam 1: right, right, right, then two more: item 4's target is above item 1's.
+  const up = await runExam("a", [true, true, true, true, true]); // 5: the shortest exam the blueprint allows
+  ok("F1. an adaptive exam starts from the note, labelled a practice estimate", up.start.status === 200 && !!up.sessionId && up.start.json.label === ADAPTIVE_REPORT_LABEL, `${up.start.status} ${up.start.json?.error ?? ""}`);
+  ok("F2. three right answers raise the target difficulty (item 4 above item 1)", up.targets.length >= 4 && rank(up.targets[3]) > rank(up.targets[0]), up.targets.join(" > "));
+  // Exam 2: missed, missed, right, then two more: two of the last three missed, so item 4's target is below item 1's.
+  const down = await runExam("b", [false, false, true, true, true]);
+  ok("F3. two of the last three missed lower the target difficulty (item 4 below item 1)", down.targets.length >= 4 && rank(down.targets[3]) < rank(down.targets[0]), down.targets.join(" > "));
+  ok("F4. adaptation never changes the blueprint (scope, formats, length, start, feedback, time limit, source, title)", [up, down].every(e => !!e.before && e.before === e.after));
+  const served = [...up.served, ...down.served];
+  const qs = served.length ? ((await admin.from("individual_scholar_question").select("id, model, kind, library_version_id").in("id", [...new Set(served)])).data ?? []) as any[] : [];
+  const eligible = (m: string) => m === "competen-library" || (ELIG.get("questions") ?? []).some(e => m.startsWith(e.prefix));
+  show("F served", qs.map(q => ({ kind: q.kind, model: q.model, library: !!q.library_version_id })));
+  ok("F5. every item served was written by a model eligible for questions (or is a governed library copy)", qs.length === new Set(served).size && qs.length > 0 && qs.every(q => eligible(String(q.model ?? ""))), qs.map(q => q.model).join(", "));
+  const reports = [up, down].map(e => JSON.stringify(e.fin?.json?.report ?? {}));
+  summary.F = { up: up.targets, down: down.targets, served: qs.map(q => ({ kind: q.kind, model: q.model })), reports: [up, down].map(e => e.fin?.json?.report ?? null) };
+  ok("F6. each report is a labelled practice estimate and names no competence stage",
+    [up, down].every(e => e.fin?.status === 200 && e.fin?.json?.done === true) && reports.every(r => r.includes(ADAPTIVE_REPORT_LABEL) && !STAGE_WORDS.test(r.replace(ADAPTIVE_REPORT_LABEL, ""))));
 }
 
 async function finishWithCleanup() {

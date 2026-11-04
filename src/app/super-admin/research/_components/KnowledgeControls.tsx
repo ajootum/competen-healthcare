@@ -150,7 +150,7 @@ function QuestionFields({ q, set, programmes }: { q: QForm; set: (q: QForm) => v
         {ta("Key points it is marked against, one per line (3 to 8)", q.keyPoints, v => set({ ...q, keyPoints: v }), 4)}
         <label className={lbl}>Practice marks (1 to 10)<input type="number" min={1} max={10} value={q.marks} onChange={e => set({ ...q, marks: e.target.value })} className={`${input} w-24`} /></label>
         {q.keyPoints.split(/\r?\n/).filter(x => x.trim()).length > 0 && (
-          <fieldset className="grid gap-1 rounded-lg border border-red-200 p-2 text-[12.5px]"><legend className="px-1 font-semibold text-red-900">Safety-critical key points (an answer that misses one is never marked correct)</legend>
+          <fieldset className="grid gap-1 rounded-lg border border-red-200 p-2 text-[12.5px]"><legend className="px-1 font-semibold text-red-900">Safety-critical key points (a miss is flagged and named in the feedback, and scores nothing when HQ turns clinical scoring caps on)</legend>
             {q.keyPoints.split(/\r?\n/).filter(x => x.trim()).map((kp, i) => (
               <label key={i} className="flex items-center gap-2"><input type="checkbox" checked={q.safetyCriticalPoints.includes(i)} onChange={e => set({ ...q, safetyCriticalPoints: e.target.checked ? [...q.safetyCriticalPoints, i] : q.safetyCriticalPoints.filter(x => x !== i) })} />{kp}</label>
             ))}
@@ -236,8 +236,8 @@ function QuestionFields({ q, set, programmes }: { q: QForm; set: (q: QForm) => v
 function Safety({ critical, unsafe, set, hideCritical }: { critical: boolean; unsafe: string; set: (critical: boolean, unsafe: string) => void; hideCritical?: boolean }) {
   return (
     <fieldset className="grid gap-1 rounded-lg border border-red-200 p-2 text-[12.5px]"><legend className="px-1 font-semibold text-red-900">Clinical safety</legend>
-      {!hideCritical && <label className="flex items-center gap-2"><input type="checkbox" checked={critical} onChange={e => set(e.target.checked, unsafe)} /> Safety-critical: an answer that misses it is never marked correct</label>}
-      <label>Unsafe answers, one per line (up to 6): an answer that says one of these scores nothing and is told why<textarea rows={2} value={unsafe} onChange={e => set(critical, e.target.value)} className={`${input} w-full`} /></label>
+      {!hideCritical && <label className="flex items-center gap-2"><input type="checkbox" checked={critical} onChange={e => set(e.target.checked, unsafe)} /> Safety-critical: a miss is flagged and named in the feedback, and scores nothing when HQ turns clinical scoring caps on</label>}
+      <label>Unsafe answers, one per line (up to 6): an answer that says one of these is flagged and told why, and earns at most half the marks when HQ turns clinical scoring caps on<textarea rows={2} value={unsafe} onChange={e => set(critical, e.target.value)} className={`${input} w-full`} /></label>
     </fieldset>
   );
 }

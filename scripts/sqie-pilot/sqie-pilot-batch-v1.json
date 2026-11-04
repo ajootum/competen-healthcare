@@ -1,0 +1,1240 @@
+{
+  "batch": "SQIE-PILOT-2026-11-v1",
+  "decision": "SQIE-CLOSE-2026-11 owner decisions of 4 Nov 2026, items 2 (first Question Library) and 3 (competency mapping)",
+  "status": "DRAFT. AI-assisted. Source not verified. Not clinically reviewed. Never auto-published.",
+  "programme": {
+    "code": "nursing-ug-diploma",
+    "label": "Nursing (Uganda), diploma",
+    "qualification_level": "pre_registration_diploma",
+    "qualification_label": "Pre-registration nursing, diploma"
+  },
+  "framework": { "code": "NUR-CCF", "name": "Competen Nursing Competency Framework", "expected_version": "1.0.0" },
+  "provenance": {
+    "origin": "ai_draft",
+    "model": "claude-opus-5-5",
+    "prompt_version": "sqie-pilot-batch-v1",
+    "drafted_at": "2026-11-04",
+    "drafted_in": "Claude Code session (SQIE pilot batch), not the Scholar runtime generation route",
+    "assistance": "AI-assisted drafting. Every stem, key, rubric and rationale needs source verification and independent clinical review before submission."
+  },
+  "references": {
+    "RCP-NEWS2-2017": { "kind": "guideline", "citation": "Royal College of Physicians. National Early Warning Score (NEWS) 2: Standardising the assessment of acute-illness severity in the NHS. Updated report of a working party. London: RCP; 2017." },
+    "RCUK-ABCDE-2021": { "kind": "guideline", "citation": "Resuscitation Council UK. The ABCDE approach. Resuscitation Guidelines 2021. London: Resuscitation Council UK; 2021." },
+    "RCUK-IHR-2021": { "kind": "guideline", "citation": "Resuscitation Council UK. In-hospital resuscitation. Resuscitation Guidelines 2021. London: Resuscitation Council UK; 2021." },
+    "RCUK-ALS-2021": { "kind": "guideline", "citation": "Resuscitation Council UK. Adult advanced life support (including the adult bradycardia algorithm). Resuscitation Guidelines 2021. London: Resuscitation Council UK; 2021." },
+    "RCUK-ANAPH-2021": { "kind": "guideline", "citation": "Resuscitation Council UK. Emergency treatment of anaphylaxis: Guidelines for healthcare providers. London: Resuscitation Council UK; May 2021." },
+    "BTS-O2-2017": { "kind": "guideline", "citation": "O'Driscoll BR, Howard LS, Earis J, Mak V; British Thoracic Society Emergency Oxygen Guideline Group. BTS guideline for oxygen use in adults in healthcare and emergency settings. Thorax 2017;72(Suppl 1):ii1-ii90." },
+    "BTSSIGN-ASTHMA-2019": { "kind": "guideline", "citation": "British Thoracic Society / Scottish Intercollegiate Guidelines Network. British guideline on the management of asthma (SIGN 158). Edinburgh: SIGN; 2019." },
+    "NICE-NG51": { "kind": "guideline", "citation": "National Institute for Health and Care Excellence. Sepsis: recognition, diagnosis and early management. NICE guideline NG51. London: NICE; first published 2016 (reviewer to confirm the current update)." },
+    "NICE-CG174": { "kind": "guideline", "citation": "National Institute for Health and Care Excellence. Intravenous fluid therapy in adults in hospital. Clinical guideline CG174. London: NICE; 2013 (updated 2017)." },
+    "SSC-2021": { "kind": "guideline", "citation": "Evans L, Rhodes A, Alhazzani W, et al. Surviving Sepsis Campaign: international guidelines for management of sepsis and septic shock 2021. Crit Care Med 2021;49(11):e1063-e1143." },
+    "DANIELS-2011": { "kind": "journal", "citation": "Daniels R, Nutbeam T, McNamara G, Galvin C. The sepsis six and the severe sepsis resuscitation bundle: a prospective observational cohort study. Emerg Med J 2011;28(6):507-512." },
+    "ESC-ACS-2023": { "kind": "guideline", "citation": "Byrne RA, Rossello X, Coughlan JJ, et al. 2023 ESC Guidelines for the management of acute coronary syndromes. Eur Heart J 2023;44(38):3720-3826." },
+    "ESC-HF-2021": { "kind": "guideline", "citation": "McDonagh TA, Metra M, Adamo M, et al. 2021 ESC Guidelines for the diagnosis and treatment of acute and chronic heart failure. Eur Heart J 2021;42(36):3599-3726." },
+    "FREEMAN-2011": { "kind": "journal", "citation": "Freeman R, Wieling W, Axelrod FB, et al. Consensus statement on the definition of orthostatic hypotension, neurally mediated syncope and the postural tachycardia syndrome. Clin Auton Res 2011;21(2):69-72." },
+    "SJODING-2020": { "kind": "journal", "citation": "Sjoding MW, Dickson RP, Iwashyna TJ, Gay SE, Valley TS. Racial bias in pulse oximetry measurement. N Engl J Med 2020;383(25):2477-2478." },
+    "LEVETT-JONES-2010": { "kind": "journal", "citation": "Levett-Jones T, Hoffman K, Dempsey J, et al. The 'five rights' of clinical reasoning: an educational model to enhance nursing students' ability to identify and manage clinically 'at risk' patients. Nurse Educ Today 2010;30(6):515-520." },
+    "RM-10": { "kind": "textbook", "citation": "Lister S, Hofland J, Grafton H (eds). The Royal Marsden Manual of Clinical Nursing Procedures. 10th edn. Chichester: Wiley-Blackwell; 2020." },
+    "BNF": { "kind": "formulary", "citation": "Joint Formulary Committee. British National Formulary (current edition), including 'Guidance on prescribing' and the monographs named in the question. London: BMJ Group and Pharmaceutical Press." },
+    "RPS-RCN-2019": { "kind": "guideline", "citation": "Royal Pharmaceutical Society and Royal College of Nursing. Professional guidance on the administration of medicines in healthcare settings. London: RPS/RCN; January 2019." },
+    "WHO-PSS-2007": { "kind": "guideline", "citation": "WHO Collaborating Centre for Patient Safety Solutions. Patient Safety Solutions, Volume 1 (Solution 2: Patient identification). Geneva: World Health Organization; May 2007." },
+    "WHO-MWH-2017": { "kind": "guideline", "citation": "World Health Organization. Medication Without Harm: WHO Global Patient Safety Challenge on Medication Safety. Geneva: WHO; 2017." },
+    "NPSA-INSULIN-2010": { "kind": "guideline", "citation": "National Patient Safety Agency. Safer administration of insulin. Rapid Response Report NPSA/2010/RRR013. London: NPSA; 2010." },
+    "NHS-PSA-2016-INSULIN": { "kind": "guideline", "citation": "NHS England. Patient Safety Alert: Risk of severe harm and death from withdrawing insulin from pen devices. NHS/PSA/W/2016/011. November 2016." },
+    "NHSI-SBAR": { "kind": "guideline", "citation": "NHS Improvement. SBAR communication tool: situation, background, assessment, recommendation. Online library of Quality, Service Improvement and Redesign tools. London: NHS Improvement; 2018." },
+    "NMC-CODE-2018": { "kind": "standard", "citation": "Nursing and Midwifery Council. The Code: Professional standards of practice and behaviour for nurses, midwives and nursing associates. London: NMC; 2015, updated 2018 (section 11, delegation)." }
+  },
+  "questions": [
+    {
+      "code": "sqie-pilot-resp-01", "area": "respiratory", "title": "Respiratory assessment: counting the respiratory rate", "type": "single_best", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-001", "objective": "Able to perform a comprehensive respiratory assessment and document findings accurately in an infant/child/adult including the airway and breathing components." },
+      "references": [{ "id": "RM-10", "supports": "Respiratory rate is counted for a full minute, without the patient being aware it is being counted." }, { "id": "RCP-NEWS2-2017", "supports": "Respiratory rate is a core NEWS2 parameter and must be measured accurately." }],
+      "misconception_tags": ["short-count-multiplied", "observer-effect-ignored", "oximeter-pulse-read-as-respiratory-rate"],
+      "fields": {
+        "format": "mcq",
+        "stem": "You are recording observations for an adult on a medical ward who is awake and talking. Which method gives the most reliable respiratory rate?",
+        "options": [
+          "Count the chest rising for a full 60 seconds without telling the patient you are counting their breathing",
+          "Count for 15 seconds and multiply by four",
+          "Ask the patient to breathe normally, then count for 30 seconds and multiply by two",
+          "Record the number shown on the finger pulse oximeter"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "recall", "keyPoints": ["Count for a full 60 seconds", "Count discreetly, because breathing changes when the patient knows it is being watched", "A finger pulse oximeter shows the pulse rate, not the respiratory rate"], "misconceptions": ["A short count multiplied up is as accurate as a full minute", "Telling the patient you are counting does not change their breathing", "The number on the pulse oximeter is the respiratory rate"] },
+        "marking": "deterministic",
+        "rationale": "Count the respiratory rate for a full minute, discreetly (for example while still holding the wrist after the pulse). Breathing changes when a patient knows it is being watched, and short counts multiply any error. A standard finger pulse oximeter displays oxygen saturation and pulse rate, not respiratory rate.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-02", "area": "respiratory", "title": "Respiratory assessment: choosing the NEWS2 oxygen saturation scale", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-001", "objective": "Uses respiratory assessment findings to recognise deterioration or improvement in respiratory status, intervenes appropriately and communicates findings clearly in a timely manner." },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "SpO2 Scale 2 is used only for patients with confirmed hypercapnic respiratory failure for whom a competent clinician has prescribed a target range of 88-92%, recorded in the notes." }],
+      "misconception_tags": ["scale-2-for-all-copd", "no-spo2-score-on-oxygen", "single-scale-for-all-adults"],
+      "fields": {
+        "format": "mcq",
+        "stem": "An adult with chronic obstructive pulmonary disease (COPD) is admitted with breathlessness. Which statement about the NEWS2 oxygen saturation (SpO2) scale is correct?",
+        "options": [
+          "SpO2 Scale 1 is used for every adult, so the same scale applies to this patient",
+          "SpO2 Scale 2 is used only when a competent clinician has documented a target range of 88-92% for confirmed hypercapnic respiratory failure",
+          "No SpO2 score is recorded while the patient is receiving oxygen",
+          "SpO2 Scale 2 is used for every patient with COPD, whether or not a target range has been documented"
+        ],
+        "correctIndex": 1,
+        "rubric": { "level": "understanding", "keyPoints": ["Scale 2 needs confirmed hypercapnic respiratory failure", "The 88-92% target must be prescribed and documented by a competent clinician", "All other patients are scored on Scale 1"], "misconceptions": ["Every patient with COPD is scored on Scale 2", "SpO2 is not scored while on oxygen"] },
+        "marking": "deterministic",
+        "rationale": "NEWS2 has two SpO2 scales. Scale 2 is used only for patients with confirmed hypercapnic respiratory failure for whom a competent clinician has prescribed a target saturation of 88-92% and recorded this in the notes. Having COPD is not enough on its own. Oxygen use is scored separately (2 points) and SpO2 is still scored on oxygen.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-03", "area": "respiratory", "title": "Respiratory assessment: signs of increased work of breathing", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-001", "objective": "Able to assess work of breathing and recognise signs of increased and decreased respiratory effort." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Signs of respiratory distress in the Breathing assessment include accessory muscle use, abdominal breathing and inability to complete sentences." }, { "id": "RM-10", "supports": "Nasal flaring and intercostal recession are signs of increased respiratory effort." }],
+      "misconception_tags": ["normal-rate-means-normal-effort", "warm-peripheries-mistaken-for-distress"],
+      "fields": {
+        "format": "mrq",
+        "stem": "You are assessing an adult who says they feel short of breath. Which findings are signs of increased work of breathing? Select all that apply.",
+        "options": [
+          "Use of the neck (accessory) muscles when breathing in",
+          "Nasal flaring",
+          "Speaking in short phrases rather than full sentences",
+          "A respiratory rate of 14 breaths per minute with quiet, even breathing",
+          "Intercostal recession",
+          "Warm, pink hands and feet"
+        ],
+        "correct": [0, 1, 2, 4],
+        "rubric": { "level": "understanding", "keyPoints": ["Accessory muscle use", "Nasal flaring", "Inability to complete sentences", "Intercostal recession"], "misconceptions": ["A normal respiratory rate rules out increased effort", "Warm peripheries are a sign of respiratory distress"] },
+        "marking": "deterministic",
+        "rationale": "Accessory muscle use, nasal flaring, intercostal recession and being unable to complete sentences all show the patient is working harder to breathe. A rate of 14 with quiet, even breathing is within normal limits, and warm, pink peripheries are a normal finding.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-04", "area": "respiratory", "title": "Respiratory assessment: interpreting stridor", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-001", "objective": "Uses correct techniques to assess the respiratory system including observation, palpation, percussion and auscultation and is able to describe normal and abnormal findings." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Stridor (inspiratory) is caused by obstruction at or above the laryngeal level and is a sign of partial airway obstruction." }],
+      "misconception_tags": ["stridor-confused-with-wheeze", "stridor-treated-as-non-urgent"],
+      "fields": {
+        "format": "mcq",
+        "stem": "An adult develops a harsh, high-pitched sound when breathing in, audible without a stethoscope. What does this finding most likely indicate?",
+        "options": [
+          "Narrowing of the upper airway that needs immediate escalation",
+          "Narrowing of the small lower airways, typical of a mild asthma attack",
+          "Fluid in the alveoli",
+          "Normal breath sounds heard at the mouth"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "understanding", "keyPoints": ["Inspiratory stridor means upper airway (laryngeal or above) narrowing", "It is a sign of partial airway obstruction", "Call for help immediately"], "misconceptions": ["Stridor is the same as wheeze", "Stridor can wait for routine review"] },
+        "marking": "deterministic",
+        "rationale": "A harsh, high-pitched inspiratory sound is stridor, caused by narrowing at or above the larynx. It signals partial airway obstruction, which can progress quickly: call for help and manage the airway. Wheeze is usually expiratory and comes from the lower airways; crackles suggest fluid or secretions.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-05", "area": "respiratory", "title": "Respiratory assessment: limits of pulse oximetry", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-001", "objective": "Demonstrates knowledge of normal gas exchange and the effect that inadequate gas exchange has on the body, relating this to other assessment findings e.g. neurological status" },
+      "references": [{ "id": "BTS-O2-2017", "supports": "Pulse oximetry gives falsely reassuring readings in carbon monoxide poisoning; a blood gas with co-oximetry is needed." }, { "id": "SJODING-2020", "supports": "Pulse oximeters can overestimate arterial saturation in patients with darker skin pigmentation." }],
+      "misconception_tags": ["normal-spo2-excludes-hypoxia", "probe-site-changes-accuracy-in-co"],
+      "fields": {
+        "format": "mcq",
+        "stem": "In which situation is a pulse oximeter reading most likely to overestimate the patient's true arterial oxygen saturation?",
+        "options": [
+          "Carbon monoxide poisoning after smoke inhalation",
+          "A patient with a normal haemoglobin and warm, well-perfused hands",
+          "A reading taken from a correctly applied earlobe probe",
+          "A patient breathing room air at rest"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "application", "keyPoints": ["Standard oximeters cannot tell carboxyhaemoglobin from oxyhaemoglobin", "The reading can look normal while the patient is hypoxic", "Treat the clinical picture and request a blood gas"], "misconceptions": ["A normal SpO2 always rules out hypoxia", "Moving the probe to the earlobe corrects a carbon monoxide reading"] },
+        "marking": "deterministic",
+        "rationale": "Standard pulse oximeters read carboxyhaemoglobin as if it were oxyhaemoglobin, so after carbon monoxide exposure the SpO2 can look normal while oxygen delivery is dangerously low. Treat the patient, not the number, and request a blood gas. Oximeters may also overestimate saturation in people with darker skin, and readings are less reliable with poor perfusion.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-06", "area": "respiratory", "title": "Respiratory assessment: naming a breathing pattern", "type": "short", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-001", "objective": "Understands the impact that other systems and conditions have on the respiratory system e.g. neurological conditions, Sepsis" },
+      "references": [{ "id": "RM-10", "supports": "Deep, rapid, regular respirations (Kussmaul breathing) occur in metabolic acidosis such as diabetic ketoacidosis." }],
+      "misconception_tags": ["kussmaul-confused-with-cheyne-stokes", "metabolic-cause-missed"],
+      "fields": {
+        "format": "short",
+        "stem": "An adult with diabetic ketoacidosis is breathing deeply, rapidly and regularly. What is the name of this breathing pattern?",
+        "accepted": ["Kussmaul breathing", "Kussmaul respirations", "Kussmaul", "Kussmaul's breathing", "Kussmaul respiration"],
+        "rubric": { "level": "recall", "keyPoints": ["Kussmaul breathing", "A respiratory response to metabolic acidosis"], "misconceptions": ["This is Cheyne-Stokes breathing", "The cause is a primary lung problem"] },
+        "marking": "deterministic",
+        "rationale": "Kussmaul breathing is deep, rapid, regular breathing. It is the body blowing off carbon dioxide to compensate for a metabolic acidosis such as diabetic ketoacidosis. Cheyne-Stokes breathing is different: cycles of increasing then decreasing depth with pauses.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-07", "area": "respiratory", "title": "Respiratory assessment: target oxygen saturation for most acutely ill adults", "type": "short", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-002", "objective": "Can recognise and respond in a timely manner when a patient requires: Supplemental oxygen, suction, nebulisers or repositioning" },
+      "references": [{ "id": "BTS-O2-2017", "supports": "The recommended target saturation range for most acutely ill patients not at risk of hypercapnic respiratory failure is 94-98%." }],
+      "misconception_tags": ["aim-for-100-percent", "copd-target-applied-to-all"],
+      "fields": {
+        "format": "short",
+        "stem": "What target oxygen saturation range is recommended for most acutely ill adults who are NOT at risk of hypercapnic respiratory failure? Give the range in percent, for example 'x to y%'.",
+        "accepted": ["94 to 98%", "94-98%", "94 to 98 percent", "94-98 percent", "94 to 98", "94-98"],
+        "rubric": { "level": "recall", "keyPoints": ["94 to 98%", "Oxygen is prescribed to a target range", "88 to 92% applies only to patients at risk of hypercapnia"], "misconceptions": ["Aim for 100% in every acutely ill patient", "88 to 92% is the target for everyone"] },
+        "marking": "deterministic",
+        "rationale": "For most acutely ill adults the target saturation is 94-98%. Oxygen is a medicine and is prescribed to a target range. A lower target of 88-92% is used for patients at risk of hypercapnic respiratory failure, such as some people with COPD. Aiming for 100% is not recommended.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-08", "area": "respiratory", "title": "Respiratory assessment: features of life-threatening asthma", "type": "multiple_response", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-001", "objective": "Uses respiratory assessment findings to recognise deterioration or improvement in respiratory status, intervenes appropriately and communicates findings clearly in a timely manner." },
+      "references": [{ "id": "BTSSIGN-ASTHMA-2019", "supports": "Life-threatening features include SpO2 below 92%, a silent chest, cyanosis, poor respiratory effort, exhaustion, arrhythmia, hypotension, altered consciousness and PEF below 33% of best or predicted." }],
+      "misconception_tags": ["silent-chest-read-as-improvement", "talking-means-safe", "pef-thresholds-confused"],
+      "fields": {
+        "format": "mrq",
+        "stem": "An adult with acute asthma is being assessed. Which findings are features of LIFE-THREATENING asthma? Select all that apply.",
+        "options": [
+          "Oxygen saturation of 90% on air",
+          "A silent chest on auscultation",
+          "Exhaustion with poor respiratory effort",
+          "Able to complete full sentences",
+          "Peak expiratory flow at 60% of best",
+          "Heart rate of 95 beats per minute"
+        ],
+        "correct": [0, 1, 2],
+        "rubric": { "level": "application", "keyPoints": ["SpO2 below 92%", "Silent chest", "Exhaustion or poor respiratory effort"], "misconceptions": ["A quiet chest means the wheeze is improving", "A patient who can talk is not in danger"] },
+        "marking": "deterministic",
+        "rationale": "Life-threatening asthma includes SpO2 below 92%, a silent chest, cyanosis, poor respiratory effort or exhaustion, arrhythmia, hypotension, altered consciousness and peak flow below 33% of best or predicted. A silent chest means very little air is moving and is an emergency, not a sign of improvement. Completing sentences, a peak flow of 60% and a heart rate of 95 are not life-threatening features.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-09", "area": "respiratory", "title": "Respiratory assessment: interpreting examination findings", "type": "structured", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-001", "objective": "Uses correct techniques to assess the respiratory system including observation, palpation, percussion and auscultation and is able to describe normal and abnormal findings." },
+      "references": [{ "id": "RM-10", "supports": "Percussion is dull (stony dull) over fluid, hyper-resonant over air; wheeze is a musical sound of narrowed airways, mainly on expiration." }],
+      "misconception_tags": ["percussion-notes-reversed", "wheeze-confused-with-crackles"],
+      "fields": {
+        "format": "structured",
+        "stem": "Interpret each of these respiratory examination findings in adult patients. Answer each part with one word or a short phrase.",
+        "parts": [
+          { "prompt": "(a) What percussion note would you expect over a large pleural effusion?", "marks": 1, "accepted": ["stony dull", "dull", "stony dullness", "dullness"] },
+          { "prompt": "(b) What percussion note would you expect over a pneumothorax?", "marks": 1, "accepted": ["hyper-resonant", "hyperresonant", "hyper resonant", "hyper-resonance"] },
+          { "prompt": "(c) What is the name of the musical added sound of narrowed airways, heard mainly on breathing out?", "marks": 1, "accepted": ["wheeze", "wheezing", "expiratory wheeze", "polyphonic wheeze"] }
+        ],
+        "rubric": { "level": "understanding", "keyPoints": ["Fluid gives a dull (stony dull) note", "Air gives a hyper-resonant note", "Narrowed airways give a wheeze"], "misconceptions": ["Air in the pleural space sounds dull", "Wheeze and crackles are the same sound"] },
+        "marking": "deterministic",
+        "rationale": "Percussion over fluid such as a pleural effusion is dull, classically stony dull. Over trapped air, as in a pneumothorax, it is hyper-resonant. A wheeze is a musical sound from narrowed airways, mostly on expiration; crackles are short, non-musical sounds from fluid or secretions.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-10", "area": "respiratory", "title": "Respiratory case: breathless patient after surgery", "type": "case", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-001", "objective": "Uses respiratory assessment findings to recognise deterioration or improvement in respiratory status, intervenes appropriately and communicates findings clearly in a timely manner." },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "Parameter scores: RR 25 or more = 3; SpO2 (Scale 1) 91% or less = 3; air = 0; HR 91-110 = 1; temperature 38.1-39.0 = 1; SBP 111-219 = 0; alert = 0. Aggregate 7 or more = emergency response with continuous monitoring." }, { "id": "BTS-O2-2017", "supports": "For an acutely ill patient not at risk of hypercapnia, give oxygen to a target of 94-98%." }],
+      "misconception_tags": ["news2-parameter-misscored", "high-score-routine-review", "oxygen-delayed-until-prescription"],
+      "fields": {
+        "format": "structured",
+        "stem": "Day 1 after abdominal surgery, an adult with no history of lung disease becomes breathless. Observations: respiratory rate 26 breaths/min, SpO2 91% on room air, heart rate 108 beats/min, blood pressure 118/72 mmHg, temperature 38.4 C, alert. You hear crackles at the right lung base.",
+        "parts": [
+          { "prompt": "(a) Calculate the NEWS2 aggregate score (SpO2 Scale 1). Give the number.", "marks": 2, "accepted": ["8", "eight", "NEWS2 8", "a score of 8"] },
+          { "prompt": "(b) What level of clinical response does this score require?", "marks": 1, "accepted": ["emergency response", "an emergency response", "emergency assessment by a team with critical care competencies", "emergency response with continuous monitoring"] },
+          { "prompt": "(c) What should you do about oxygen while help is on its way?", "marks": 2, "accepted": ["start oxygen to a target of 94 to 98%", "give oxygen aiming for 94-98%", "give oxygen as prescribed or per local emergency protocol to 94-98%", "titrate oxygen to 94 to 98%"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["RR 26 = 3, SpO2 91% = 3, HR 108 = 1, temperature 38.4 = 1: total 8", "A score of 7 or more needs an emergency response and continuous monitoring", "Give oxygen to a target of 94-98% and escalate"], "misconceptions": ["Each abnormal observation scores 1 point", "A high score can wait for the next routine round"] },
+        "marking": "self",
+        "rationale": "NEWS2: respiratory rate 26 scores 3, SpO2 91% on Scale 1 scores 3, room air 0, heart rate 108 scores 1, systolic 118 scores 0, alert 0 and temperature 38.4 C scores 1, a total of 8. A score of 7 or more needs an emergency response from a team with critical care competencies and continuous monitoring. While help comes, give oxygen as prescribed or under the local emergency protocol, aiming for 94-98%, sit the patient up and keep reassessing.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-11", "area": "respiratory", "title": "Respiratory assessment: order of the chest examination", "type": "sequence", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-001", "objective": "Uses correct techniques to assess the respiratory system including observation, palpation, percussion and auscultation and is able to describe normal and abnormal findings." },
+      "references": [{ "id": "RM-10", "supports": "Respiratory examination proceeds by inspection, palpation, percussion and auscultation, comparing both sides." }],
+      "misconception_tags": ["auscultation-first", "inspection-skipped"],
+      "fields": {
+        "format": "sequence",
+        "stem": "Put the steps of an adult respiratory examination in the order you would perform them.",
+        "steps": [
+          "Look at the rate, pattern, effort and colour of breathing",
+          "Feel chest expansion and check the position of the trachea",
+          "Percuss the chest wall, comparing both sides",
+          "Listen to breath sounds with a stethoscope, comparing both sides"
+        ],
+        "rubric": { "level": "recall", "keyPoints": ["Inspection", "Palpation", "Percussion", "Auscultation"], "misconceptions": ["Listen first because it gives the most information"] },
+        "marking": "deterministic",
+        "rationale": "A respiratory examination follows inspection, palpation, percussion and auscultation. Looking first means important signs such as effort, colour and pattern are not missed, and comparing both sides at each step helps find one-sided problems.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-resp-12", "area": "respiratory", "title": "Respiratory assessment: recognising a tension pneumothorax", "type": "single_best", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-003", "objective": "Understands the main causes of respiratory distress, failure and arrest" },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "In the Breathing assessment, tracheal deviation and hyper-resonance with reduced air entry suggest a tension pneumothorax, a life-threatening condition needing immediate treatment." }],
+      "misconception_tags": ["trachea-deviates-towards-pneumothorax", "dull-percussion-read-as-air"],
+      "fields": {
+        "format": "mcq",
+        "stem": "After chest trauma, an adult becomes increasingly breathless and hypotensive. Chest movement is reduced on the left, the left side is hyper-resonant to percussion and the trachea is deviated to the right. What is the most likely cause?",
+        "options": [
+          "Left tension pneumothorax",
+          "Right pleural effusion",
+          "Left lower lobe pneumonia",
+          "Acute asthma"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "reasoning", "keyPoints": ["Hyper-resonance and reduced movement on the affected side", "Trachea pushed away from the affected side", "Hypotension means tension physiology: call for help immediately"], "misconceptions": ["The trachea moves towards a pneumothorax", "An effusion is hyper-resonant"] },
+        "marking": "deterministic",
+        "rationale": "Air under pressure in the left pleural space reduces movement and makes that side hyper-resonant, and it pushes the trachea away, to the right. With breathlessness and hypotension this is a tension pneumothorax, a life-threatening emergency: call for help immediately. An effusion is dull, pneumonia is usually dull with crackles, and asthma causes widespread wheeze without tracheal deviation.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+
+    {
+      "code": "sqie-pilot-cvs-01", "area": "cardiovascular", "title": "Cardiovascular assessment: capillary refill time", "type": "single_best", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-010", "objective": "Can assess and record central and peripheral capillary refill time and assess peripheral perfusion" },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Capillary refill: apply pressure for 5 seconds and release; normal refill is 2 seconds or less." }],
+      "misconception_tags": ["crt-normal-up-to-4-seconds", "crt-pressure-time-confused"],
+      "fields": {
+        "format": "mcq",
+        "stem": "You press on the skin over an adult's sternum for 5 seconds and then release. Which result is within normal limits?",
+        "options": [
+          "Colour returns within 2 seconds",
+          "Colour returns within 4 seconds",
+          "Colour returns within 6 seconds",
+          "The skin stays pale for 10 seconds"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "recall", "keyPoints": ["Apply pressure for 5 seconds", "Normal capillary refill is 2 seconds or less", "A longer time suggests poor peripheral perfusion"], "misconceptions": ["Up to 4 seconds is normal in adults"] },
+        "marking": "deterministic",
+        "rationale": "Capillary refill time is measured by pressing for 5 seconds and timing the return of colour. Two seconds or less is normal. A longer time suggests poor perfusion, for example in shock, though a cold environment and older age can also prolong it.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-02", "area": "cardiovascular", "title": "Cardiovascular assessment: blood pressure cuff size", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Can choose correctly sized cuff for Non invasive blood pressure and record findings" },
+      "references": [{ "id": "RM-10", "supports": "A cuff that is too small overestimates blood pressure; one that is too large underestimates it." }],
+      "misconception_tags": ["cuff-size-irrelevant", "small-cuff-reads-low"],
+      "fields": {
+        "format": "mcq",
+        "stem": "What effect does using a blood pressure cuff that is too small for the patient's arm usually have on the reading?",
+        "options": [
+          "The reading is falsely high",
+          "The reading is falsely low",
+          "There is no effect as long as the arm is at heart level",
+          "Only the heart rate shown on the monitor is affected"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "understanding", "keyPoints": ["A small cuff overestimates blood pressure", "A large cuff underestimates it", "Choose the cuff by measuring arm circumference"], "misconceptions": ["Cuff size makes no difference if the arm is positioned well"] },
+        "marking": "deterministic",
+        "rationale": "A cuff that is too small needs more pressure to compress the artery, so it overestimates blood pressure; a cuff that is too large underestimates it. Choose the cuff by arm circumference, and support the arm at heart level.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-03", "area": "cardiovascular", "title": "Cardiovascular assessment: early signs of hypovolaemic shock", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Recognises changes in haemodynamic status and responds in a timely manner" },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "In the Circulation assessment, tachycardia, prolonged capillary refill, cool peripheries and reduced urine output indicate poor perfusion; hypotension may be a late sign." }, { "id": "NICE-CG174", "supports": "Heart rate above 90, capillary refill longer than 2 seconds or cold peripheries indicate possible need for fluid resuscitation." }],
+      "misconception_tags": ["hypotension-is-early-sign", "wide-pulse-pressure-in-hypovolaemia"],
+      "fields": {
+        "format": "mrq",
+        "stem": "An adult is losing blood slowly from a wound drain after surgery. Which findings are EARLY signs that circulation is being compromised? Select all that apply.",
+        "options": [
+          "Rising heart rate",
+          "Capillary refill time longer than 2 seconds",
+          "Cool, pale hands and feet",
+          "Falling hourly urine output",
+          "Slowing heart rate",
+          "Widening pulse pressure"
+        ],
+        "correct": [0, 1, 2, 3],
+        "rubric": { "level": "application", "keyPoints": ["Tachycardia", "Prolonged capillary refill", "Cool, pale peripheries", "Falling urine output"], "misconceptions": ["A falling blood pressure is the first sign", "The pulse pressure widens in blood loss"] },
+        "marking": "deterministic",
+        "rationale": "The body compensates for blood loss by speeding up the heart and constricting peripheral vessels, so tachycardia, prolonged capillary refill, cool pale peripheries and falling urine output come early. Blood pressure is often maintained until late, so a normal reading does not rule out shock. The pulse pressure tends to narrow, not widen, and bradycardia is not an expected early sign.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-04", "area": "cardiovascular", "title": "Cardiovascular assessment: calculating mean arterial pressure", "type": "calculation", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Recognises changes in haemodynamic status and responds in a timely manner" },
+      "references": [{ "id": "RM-10", "supports": "Mean arterial pressure is approximately diastolic pressure plus one third of the pulse pressure, that is (systolic + 2 x diastolic) / 3." }, { "id": "SSC-2021", "supports": "An initial MAP target of 65 mmHg is recommended for adults with septic shock on vasopressors, showing the clinical relevance of the value." }],
+      "misconception_tags": ["map-is-average-of-two-numbers", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "An adult's blood pressure is 102/48 mmHg. Calculate the mean arterial pressure (MAP) using MAP = (systolic + 2 x diastolic) / 3. Give your answer as a whole number with its unit.",
+        "accepted": ["66 mmHg", "66mmHg", "66 mm Hg", "66 millimetres of mercury"],
+        "rubric": { "level": "application", "keyPoints": ["2 x 48 = 96", "102 + 96 = 198", "198 / 3 = 66 mmHg"], "misconceptions": ["MAP is the simple average of systolic and diastolic (75)", "The unit can be left off"] },
+        "marking": "deterministic",
+        "rationale": "MAP = (102 + 2 x 48) / 3 = (102 + 96) / 3 = 198 / 3 = 66 mmHg. Diastole lasts longer than systole, so MAP is weighted towards the diastolic pressure; the simple average (75) overestimates it. A MAP around 65 mmHg is the minimum usually targeted to perfuse organs in septic shock, so this patient needs prompt review.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "systolic": 102, "diastolic": 48 }, "formula": "(systolic + 2 * diastolic) / 3", "value": 66, "unit": "mmHg", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-cvs-05", "area": "cardiovascular", "title": "Cardiovascular assessment: lying and standing blood pressure", "type": "short", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Recognises changes in haemodynamic status and responds in a timely manner" },
+      "references": [{ "id": "FREEMAN-2011", "supports": "Orthostatic hypotension is a sustained fall in systolic BP of at least 20 mmHg or diastolic of at least 10 mmHg within 3 minutes of standing." }],
+      "misconception_tags": ["postural-drop-thresholds-unknown"],
+      "fields": {
+        "format": "short",
+        "stem": "An older adult's blood pressure is 132/78 mmHg lying down and 108/70 mmHg after 3 minutes standing, and they feel dizzy. What is the name of this finding?",
+        "accepted": ["orthostatic hypotension", "postural hypotension", "postural drop", "orthostatic hypotension (postural hypotension)"],
+        "rubric": { "level": "understanding", "keyPoints": ["Systolic fell by 24 mmHg within 3 minutes of standing", "A fall of 20 mmHg systolic or 10 mmHg diastolic is orthostatic (postural) hypotension", "It raises the risk of falls"], "misconceptions": ["A drop only matters if the standing reading is below 90 systolic"] },
+        "marking": "deterministic",
+        "rationale": "A fall in systolic pressure of at least 20 mmHg, or in diastolic of at least 10 mmHg, within 3 minutes of standing is orthostatic (postural) hypotension. Here systolic fell by 24 mmHg and the patient is symptomatic. Report it, review falls risk and medicines, and help the patient stand slowly.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-06", "area": "cardiovascular", "title": "Cardiovascular assessment: apical-radial pulse deficit", "type": "single_best", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-010", "objective": "Obtains and documents clinical data about rate, rhythm, volume and regularity of pulses in infant/child/adult" },
+      "references": [{ "id": "RM-10", "supports": "In irregular rhythms such as atrial fibrillation, apical and radial rates are counted simultaneously for a full minute; the difference is the pulse deficit." }],
+      "misconception_tags": ["radial-rate-is-true-rate", "irregular-rhythm-cannot-be-counted"],
+      "fields": {
+        "format": "mcq",
+        "stem": "An adult has an irregularly irregular radial pulse of 88 beats/min. A colleague listens at the cardiac apex for the same full minute and counts 118 beats/min. What is the best interpretation?",
+        "options": [
+          "There is a pulse deficit of 30: some heart contractions are not producing a palpable radial pulse",
+          "The radial count is the true heart rate, so 88 beats/min should be recorded",
+          "The two counts differ only because they were taken by different people, so the difference can be ignored",
+          "The apical count is wrong because an irregular rhythm cannot be counted with a stethoscope"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "reasoning", "keyPoints": ["Apical minus radial = pulse deficit (118 - 88 = 30)", "Weak, early beats may not reach the wrist", "Record both counts and report the deficit"], "misconceptions": ["The radial count is always the true heart rate"] },
+        "marking": "deterministic",
+        "rationale": "In an irregular rhythm such as atrial fibrillation, some contractions fill the ventricle too little to produce a pulse at the wrist. Counting apical and radial rates at the same time for a full minute shows this: 118 - 88 = a pulse deficit of 30. The apical rate is the true heart rate. Record both and report.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-07", "area": "cardiovascular", "title": "Cardiovascular assessment: signs of acute left ventricular failure", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Uses cardiovascular assessment to inform care by communicating findings with nursing and medical team." },
+      "references": [{ "id": "ESC-HF-2021", "supports": "Symptoms and signs of congestion in heart failure include orthopnoea, pulmonary crackles and, in acute pulmonary oedema, frothy sputum." }],
+      "misconception_tags": ["pulmonary-oedema-percussion-hyper-resonant", "lvf-signs-confused-with-pneumothorax"],
+      "fields": {
+        "format": "mrq",
+        "stem": "An adult with known heart disease becomes acutely breathless overnight. Which findings suggest acute left ventricular failure with fluid in the lungs? Select all that apply.",
+        "options": [
+          "Breathlessness that is worse when lying flat",
+          "Fine crackles at both lung bases",
+          "Pink, frothy sputum",
+          "A respiratory rate of 8 breaths per minute",
+          "Hyper-resonant percussion on one side",
+          "Trachea deviated to one side"
+        ],
+        "correct": [0, 1, 2],
+        "rubric": { "level": "application", "keyPoints": ["Orthopnoea", "Bibasal fine crackles", "Pink, frothy sputum"], "misconceptions": ["Pulmonary oedema causes hyper-resonance", "Breathing slows in acute heart failure"] },
+        "marking": "deterministic",
+        "rationale": "When the left ventricle fails, pressure backs up into the lungs: breathlessness worse lying flat, fine crackles at both bases and, in severe pulmonary oedema, pink frothy sputum. Breathing is usually fast, not slow. Hyper-resonance and tracheal deviation point to air in the pleural space, not fluid in the lungs.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-08", "area": "cardiovascular", "title": "Cardiovascular assessment: minimum hourly urine output", "type": "calculation", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-012", "objective": "Recognises deviations from normal hydration status and escalates concerns in a timely manner" },
+      "references": [{ "id": "NICE-NG51", "supports": "In catheterised adults with suspected sepsis, urine output below 0.5 mL/kg/hour is a high-risk criterion." }],
+      "misconception_tags": ["fixed-30ml-for-all", "kg-multiplication-error", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "An adult weighs 76 kg. The minimum acceptable urine output is 0.5 mL/kg/hour. Calculate the minimum hourly urine output. Give your answer in mL/hour as a whole number, with its unit.",
+        "accepted": ["38 mL/hour", "38 mL/h", "38 mL per hour", "38mL/h", "38 mL/hr"],
+        "rubric": { "level": "application", "keyPoints": ["0.5 x 76 = 38", "38 mL/hour", "Less than this needs escalation"], "misconceptions": ["The minimum is 30 mL/hour for every adult", "Multiply by 5 instead of 0.5"] },
+        "marking": "deterministic",
+        "rationale": "0.5 mL/kg/hour x 76 kg = 38 mL/hour. An output below this for this patient is a warning sign of poor kidney perfusion, for example in hypovolaemia or sepsis, and should be escalated. Weight-based targets are more accurate than a fixed figure.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "rate_ml_per_kg_h": 0.5, "weight_kg": 76 }, "formula": "rate_ml_per_kg_h * weight_kg", "value": 38, "unit": "mL/hour", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-cvs-09", "area": "cardiovascular", "title": "Cardiovascular assessment: 24-hour fluid balance", "type": "structured", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-012", "objective": "Can calculate the fluid balance of a patient and document clearly" },
+      "references": [{ "id": "RM-10", "supports": "Fluid balance is total measured input minus total measured output, including drains and vomit, recorded over 24 hours." }],
+      "misconception_tags": ["drain-loss-omitted", "balance-sign-reversed"],
+      "fields": {
+        "format": "structured",
+        "stem": "Over 24 hours an adult receives 1500 mL of intravenous fluid and drinks 800 mL. Measured losses are urine 1700 mL, wound drain 150 mL and vomit 200 mL. Answer each part with its unit.",
+        "parts": [
+          { "prompt": "(a) What is the total input in mL?", "marks": 1, "accepted": ["2300 mL", "2300mL", "2,300 mL"] },
+          { "prompt": "(b) What is the total output in mL?", "marks": 1, "accepted": ["2050 mL", "2050mL", "2,050 mL"] },
+          { "prompt": "(c) What is the fluid balance? Say whether it is positive or negative.", "marks": 1, "accepted": ["positive 250 mL", "250 mL positive", "positive balance of 250 mL", "plus 250 mL"] }
+        ],
+        "rubric": { "level": "application", "keyPoints": ["Input 1500 + 800 = 2300 mL", "Output 1700 + 150 + 200 = 2050 mL", "Balance 2300 - 2050 = positive 250 mL"], "misconceptions": ["Drain and vomit losses are left out of the output", "Output minus input gives the balance"] },
+        "marking": "deterministic",
+        "rationale": "Input: 1500 + 800 = 2300 mL. Output: 1700 + 150 + 200 = 2050 mL. Balance = input - output = 2300 - 2050 = positive 250 mL. All measured losses, including drains and vomit, count; insensible losses are not measured on the chart and should be considered when interpreting it.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "iv_ml": 1500, "oral_ml": 800, "urine_ml": 1700, "drain_ml": 150, "vomit_ml": 200 }, "formula": "(iv_ml + oral_ml) - (urine_ml + drain_ml + vomit_ml)", "value": 250, "unit": "mL", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true, "sign_in_words": true, "parts": { "a": 2300, "b": 2050, "c": 250 } }
+    },
+    {
+      "code": "sqie-pilot-cvs-10", "area": "cardiovascular", "title": "Cardiovascular case: new central chest pain", "type": "case", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-010", "objective": "Uses cardiovascular assessment to inform care by communicating findings with nursing and medical team." },
+      "references": [{ "id": "ESC-ACS-2023", "supports": "A 12-lead ECG should be recorded and interpreted within 10 minutes of first medical contact; routine oxygen is not recommended unless SpO2 is below 90%." }, { "id": "BTS-O2-2017", "supports": "Oxygen is not given to patients with suspected acute coronary syndrome whose saturation is within target." }, { "id": "NHSI-SBAR", "supports": "SBAR structures urgent escalation." }],
+      "misconception_tags": ["oxygen-for-all-chest-pain", "ecg-delayed", "escalation-delayed"],
+      "fields": {
+        "format": "structured",
+        "stem": "A 64-year-old adult on a surgical ward reports central crushing chest pain spreading to the left arm, which began 10 minutes ago. They are pale and sweaty. Observations: heart rate 104 beats/min, blood pressure 146/88 mmHg, respiratory rate 22 breaths/min, SpO2 97% on room air.",
+        "parts": [
+          { "prompt": "(a) Which investigation should be recorded straight away?", "marks": 1, "accepted": ["12-lead ECG", "a 12 lead ECG", "12-lead electrocardiogram", "ECG"] },
+          { "prompt": "(b) Their SpO2 is 97% on air. Should oxygen be started? Explain briefly.", "marks": 2, "accepted": ["No, oxygen is not needed because the saturation is within the target range", "No, routine oxygen is not given when SpO2 is normal"] },
+          { "prompt": "(c) How and to whom do you escalate?", "marks": 2, "accepted": ["Immediately to the doctor or medical team using SBAR", "Call the medical team urgently using SBAR"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["Record a 12-lead ECG immediately (within 10 minutes)", "Oxygen only if saturation falls below target", "Escalate immediately using SBAR and stay with the patient"], "misconceptions": ["Every patient with chest pain needs oxygen", "Wait for the pain to settle before calling the doctor"] },
+        "marking": "self",
+        "rationale": "Suspected acute coronary syndrome needs a 12-lead ECG within 10 minutes and immediate escalation to the medical team, using SBAR, while you stay with the patient and repeat observations. Oxygen is not given routinely when saturation is within target, because unnecessary oxygen has no benefit and may cause harm; start it if saturation falls below target.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-11", "area": "cardiovascular", "title": "Cardiovascular assessment: manual blood pressure measurement", "type": "sequence", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Can choose correctly sized cuff for Non invasive blood pressure and record findings" },
+      "references": [{ "id": "RM-10", "supports": "Manual blood pressure: correct cuff, arm supported at heart level, palpatory estimate, inflate above it, deflate at 2-3 mmHg per second, record the first and last Korotkoff sounds." }],
+      "misconception_tags": ["palpatory-estimate-skipped", "fast-deflation"],
+      "fields": {
+        "format": "sequence",
+        "stem": "Put the steps of measuring an adult's blood pressure manually with a sphygmomanometer and stethoscope in the correct order.",
+        "steps": [
+          "Choose a cuff whose bladder covers at least 80% of the upper arm circumference",
+          "Support the arm at heart level and apply the cuff",
+          "Estimate the systolic pressure by feeling the radial pulse while inflating the cuff",
+          "Deflate, then place the stethoscope over the brachial artery and inflate 20-30 mmHg above the estimated systolic",
+          "Deflate at 2-3 mmHg per second and record the first and last clear sounds"
+        ],
+        "rubric": { "level": "application", "keyPoints": ["Correct cuff size", "Arm supported at heart level", "Palpatory estimate first", "Slow deflation, record systolic and diastolic sounds"], "misconceptions": ["The palpatory estimate can be skipped", "Fast deflation is just as accurate"] },
+        "marking": "deterministic",
+        "rationale": "Correct cuff size and arm position come first, because both change the reading. Estimating systolic by palpation avoids missing an auscultatory gap. Then inflate 20-30 mmHg above that estimate, deflate slowly at 2-3 mmHg per second, and record the first (systolic) and last (diastolic) clear Korotkoff sounds.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-cvs-12", "area": "cardiovascular", "title": "Cardiovascular assessment: adverse features in bradycardia", "type": "single_best", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-011", "objective": "Recognises a haemodynamic emergency and acts appropriately using skills and knowledge described above in a timely manner" },
+      "references": [{ "id": "RCUK-ALS-2021", "supports": "Adverse features in bradycardia are shock, syncope, myocardial ischaemia and heart failure; their presence indicates the need for urgent treatment." }],
+      "misconception_tags": ["rate-alone-decides-urgency", "medicine-cause-means-benign"],
+      "fields": {
+        "format": "mcq",
+        "stem": "An adult on a medical ward has a heart rate of 36 beats/min on the monitor. Which accompanying finding is an adverse feature meaning the bradycardia needs urgent treatment?",
+        "options": [
+          "Systolic blood pressure of 78 mmHg with cold, clammy skin",
+          "The patient takes a beta-blocker each morning",
+          "The rhythm on the monitor is regular",
+          "Temperature of 36.8 C"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "application", "keyPoints": ["Adverse features: shock, syncope, myocardial ischaemia, heart failure", "Hypotension with cold, clammy skin is shock", "Call for help and follow the bradycardia algorithm"], "misconceptions": ["Bradycardia caused by a medicine is always harmless", "A regular rhythm means the patient is safe"] },
+        "marking": "deterministic",
+        "rationale": "In bradycardia, the adverse features of shock (here hypotension with cold, clammy skin), syncope, myocardial ischaemia and heart failure decide whether urgent treatment is needed. Call for help, assess with ABCDE and follow the bradycardia algorithm. A beta-blocker may explain the rate but does not make it safe; a regular rhythm and normal temperature are not adverse features.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+
+    {
+      "code": "sqie-pilot-abcde-01", "area": "abcde", "title": "ABCDE: the order of the assessment", "type": "sequence", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-001", "objective": "Able to perform a comprehensive respiratory assessment and document findings accurately in an infant/child/adult including the airway and breathing components." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "The ABCDE approach assesses Airway, Breathing, Circulation, Disability and Exposure in that order." }],
+      "misconception_tags": ["circulation-before-airway", "exposure-skipped"],
+      "fields": {
+        "format": "sequence",
+        "stem": "Put these steps of an ABCDE assessment of an acutely unwell adult in the correct order.",
+        "steps": [
+          "Look and listen for noisy breathing or see-saw chest movement",
+          "Count the respiratory rate, check SpO2 and listen to the chest",
+          "Check the pulse, capillary refill time and blood pressure",
+          "Assess level of consciousness (ACVPU), pupils and blood glucose",
+          "Examine the whole body for bleeding, rashes or wounds while keeping the patient warm and covered as far as possible"
+        ],
+        "rubric": { "level": "recall", "keyPoints": ["Airway", "Breathing", "Circulation", "Disability", "Exposure"], "misconceptions": ["Start with blood pressure because it is the most important observation"] },
+        "marking": "deterministic",
+        "rationale": "ABCDE works in order of what kills first: Airway, Breathing, Circulation, Disability (consciousness, pupils, glucose) and Exposure. Treat each life-threatening problem as you find it before moving on, call for help early and reassess regularly.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-02", "area": "abcde", "title": "ABCDE: treating problems as you find them", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-003", "objective": "Understands the importance of immediate action and physiological effects of respiratory failure and arrest on patient in the short term and long term" },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Treat life-threatening problems at each step before moving to the next; call for help early." }],
+      "misconception_tags": ["finish-assessment-before-treating", "airway-is-doctor-only"],
+      "fields": {
+        "format": "mcq",
+        "stem": "During an ABCDE assessment, you find the patient's airway is partially obstructed. What should you do next?",
+        "options": [
+          "Call for help and manage the airway before moving on to Breathing",
+          "Complete the full ABCDE assessment, then treat all the problems together",
+          "Record a complete set of observations first so the NEWS2 score is accurate",
+          "Move on to Circulation, because airway problems are managed only by the doctor"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "application", "keyPoints": ["Treat a life-threatening problem when you find it", "Call for help early", "Then continue the assessment and reassess"], "misconceptions": ["Finish the whole assessment before any treatment"] },
+        "marking": "deterministic",
+        "rationale": "In the ABCDE approach you treat each life-threatening problem as you find it, because an obstructed airway will cause hypoxia and cardiac arrest within minutes. Call for help, use simple airway manoeuvres and suction if you are trained, give oxygen, then continue the assessment and reassess.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-03", "area": "abcde", "title": "ABCDE: signs of airway obstruction", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-003", "objective": "Understands the main causes of respiratory distress, failure and arrest" },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Signs of airway obstruction include paradoxical (see-saw) chest and abdominal movement, accessory muscle use, and noisy breathing: gurgling (liquid), snoring (partial occlusion by tongue or palate), stridor; complete obstruction is silent." }],
+      "misconception_tags": ["noisy-breathing-is-normal-in-sleep", "silence-means-clear-airway"],
+      "fields": {
+        "format": "mrq",
+        "stem": "Which findings suggest airway obstruction in an acutely unwell adult? Select all that apply.",
+        "options": [
+          "Gurgling sounds",
+          "Snoring in a patient who is drowsy and difficult to wake",
+          "See-saw movement of the chest and abdomen",
+          "Stridor",
+          "Quiet breathing at 16 breaths per minute in a patient who is talking normally",
+          "Talking in full sentences"
+        ],
+        "correct": [0, 1, 2, 3],
+        "rubric": { "level": "understanding", "keyPoints": ["Gurgling: fluid in the airway", "Snoring: partial obstruction by the tongue or palate", "See-saw breathing", "Stridor"], "misconceptions": ["Snoring in a drowsy patient is just sleep", "No noise means the airway is clear"] },
+        "marking": "deterministic",
+        "rationale": "Gurgling (fluid), snoring in a drowsy patient (the tongue or palate partly blocking the airway), stridor and see-saw chest and abdominal movement all suggest obstruction. A patient talking normally has a patent airway at that moment. Remember complete obstruction is silent.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-04", "area": "abcde", "title": "ABCDE: the C in ACVPU", "type": "short", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-013", "objective": "Can perform AVPU assessment where appropriate." },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "NEWS2 uses ACVPU, adding new confusion (C) to AVPU; new confusion scores 3." }],
+      "misconception_tags": ["c-is-conscious", "confusion-not-scored"],
+      "fields": {
+        "format": "short",
+        "stem": "NEWS2 assesses level of consciousness with the ACVPU scale. What does the letter C stand for?",
+        "accepted": ["new confusion", "confusion", "new-onset confusion", "new onset confusion", "new confusion or delirium"],
+        "rubric": { "level": "recall", "keyPoints": ["New confusion", "It scores 3 in NEWS2"], "misconceptions": ["C stands for conscious", "Confusion is not scored"] },
+        "marking": "deterministic",
+        "rationale": "ACVPU is Alert, new Confusion, responds to Voice, responds to Pain, Unresponsive. New confusion (or new disorientation or agitation) scores 3 in NEWS2, the same as V, P or U, because it can be an early sign of deterioration such as hypoxia or sepsis.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-05", "area": "abcde", "title": "Deterioration: response to a single parameter score of 3", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-027", "objective": "Is aware of the SBAR tool to support clear communication and other tools associated with clinical escalation such as early warning systems" },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "A score of 3 in any single parameter: minimum 1-hourly observations; the registered nurse informs the medical team caring for the patient (urgent ward-based response)." }],
+      "misconception_tags": ["aggregate-only-matters", "single-red-score-ignored"],
+      "fields": {
+        "format": "mcq",
+        "stem": "A patient's NEWS2 aggregate is 3, all of it from a respiratory rate of 26 breaths/min. What is the minimum response?",
+        "options": [
+          "An urgent ward-based response: inform the medical team caring for the patient and observe at least hourly",
+          "Continue 12-hourly observations",
+          "Observe 4-6 hourly and inform only the registered nurse in charge",
+          "An emergency response by the critical care team with continuous monitoring"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "application", "keyPoints": ["A single parameter scoring 3 is a trigger on its own", "Minimum hourly observations", "Inform the medical team for urgent ward-based review"], "misconceptions": ["Only the aggregate score matters"] },
+        "marking": "deterministic",
+        "rationale": "In NEWS2 a score of 3 in any one parameter triggers an urgent ward-based response even when the aggregate is low: observe at least hourly and the registered nurse informs the medical team caring for the patient, who decides whether to escalate further. Clinical concern can always prompt escalation at any score.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-06", "area": "abcde", "title": "Deterioration: calculating and acting on NEWS2", "type": "structured", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-027", "objective": "Is aware of the SBAR tool to support clear communication and other tools associated with clinical escalation such as early warning systems" },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "Parameter scores: RR 21-24 = 2; SpO2 Scale 1 94-95% = 1; air = 0; SBP 101-110 = 1; HR 111-130 = 2; new confusion = 3; temperature 36.1-38.0 = 0. Aggregate 7 or more = high clinical risk, continuous monitoring, emergency response." }],
+      "misconception_tags": ["confusion-scored-1", "high-risk-band-unknown"],
+      "fields": {
+        "format": "structured",
+        "stem": "An adult's observations are: respiratory rate 22 breaths/min, SpO2 95% on room air (Scale 1), blood pressure 104/66 mmHg, heart rate 115 beats/min, newly confused, temperature 37.2 C.",
+        "parts": [
+          { "prompt": "(a) What is the NEWS2 aggregate score? Give the number.", "marks": 2, "accepted": ["9", "nine", "NEWS2 9", "a score of 9"] },
+          { "prompt": "(b) Which clinical risk category does this score fall into?", "marks": 1, "accepted": ["high", "high risk", "high clinical risk"] },
+          { "prompt": "(c) How often should vital signs now be monitored?", "marks": 1, "accepted": ["continuously", "continuous monitoring", "continuous"] }
+        ],
+        "rubric": { "level": "application", "keyPoints": ["RR 22 = 2, SpO2 95% = 1, SBP 104 = 1, HR 115 = 2, new confusion = 3: total 9", "7 or more is high clinical risk", "Continuous monitoring and an emergency response"], "misconceptions": ["New confusion scores 1", "Hourly observations are enough at 9"] },
+        "marking": "deterministic",
+        "rationale": "Respiratory rate 22 scores 2, SpO2 95% on Scale 1 scores 1, air 0, systolic 104 scores 1, heart rate 115 scores 2, new confusion 3 and temperature 37.2 C scores 0, a total of 9. A score of 7 or more is high clinical risk: continuous monitoring and an emergency response by a team with critical care competencies.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-07", "area": "abcde", "title": "Deterioration case: suspected sepsis after surgery", "type": "case", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-025", "objective": "Understands the importance of recognising the signs and symptoms of infection, escalating appropriately and taking action" },
+      "references": [{ "id": "NICE-NG51", "supports": "Suspect sepsis in a person with possible infection and signs such as raised respiratory rate, hypotension, tachycardia, altered mental state and reduced urine output; high-risk criteria need immediate senior review." }, { "id": "DANIELS-2011", "supports": "The Sepsis Six: oxygen to target, blood cultures, intravenous antibiotics, intravenous fluids, lactate and hourly urine output, within the first hour." }, { "id": "RCP-NEWS2-2017", "supports": "Parameter scores used in part (c)." }],
+      "misconception_tags": ["fever-only-sign-of-sepsis", "news2-voice-scored-1", "antibiotics-delayed"],
+      "fields": {
+        "format": "structured",
+        "stem": "A 52-year-old adult is 3 days after abdominal surgery. Temperature 38.9 C, heart rate 124 beats/min, blood pressure 92/58 mmHg, respiratory rate 24 breaths/min, SpO2 94% on room air (Scale 1). They are newly drowsy and respond only to voice. Urine output has been 15 mL/hour for 2 hours (weight 70 kg).",
+        "parts": [
+          { "prompt": "(a) What condition must you suspect?", "marks": 1, "accepted": ["sepsis", "post-operative sepsis", "suspected sepsis", "septic shock"] },
+          { "prompt": "(b) Name two Sepsis Six actions to start or prompt within the first hour.", "marks": 2, "accepted": ["blood cultures and intravenous antibiotics", "oxygen to target and measure lactate", "intravenous fluids and hourly urine output", "any two of: oxygen, blood cultures, IV antibiotics, IV fluids, lactate, urine output"] },
+          { "prompt": "(c) What is the NEWS2 aggregate score? Give the number.", "marks": 2, "accepted": ["11", "eleven", "NEWS2 11", "a score of 11"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["Suspect sepsis: infection risk plus physiological derangement", "Sepsis Six within the first hour, with immediate senior review", "RR 24 = 2, SpO2 94% = 1, SBP 92 = 2, HR 124 = 2, voice = 3, temperature 38.9 = 1: total 11"], "misconceptions": ["Sepsis needs a very high fever", "Responding to voice scores 1 in NEWS2"] },
+        "marking": "self",
+        "rationale": "Infection risk after surgery with fever, tachycardia, hypotension, raised respiratory rate, new drowsiness and urine output below 0.5 mL/kg/hour (35 mL/hour for 70 kg) means sepsis must be suspected and escalated immediately to a senior clinician. The Sepsis Six (oxygen to target, blood cultures, IV antibiotics, IV fluids, lactate, hourly urine output) should be completed within the first hour. NEWS2: RR 24 = 2, SpO2 94% = 1, air 0, SBP 92 = 2, HR 124 = 2, responds to voice = 3, temperature 38.9 C = 1; total 11.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-08", "area": "abcde", "title": "Deterioration: structuring an SBAR escalation", "type": "sequence", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-027", "objective": "Is aware of the SBAR tool to support clear communication and other tools associated with clinical escalation such as early warning systems" },
+      "references": [{ "id": "NHSI-SBAR", "supports": "SBAR: Situation, Background, Assessment, Recommendation." }],
+      "misconception_tags": ["history-before-concern", "no-clear-request"],
+      "fields": {
+        "format": "sequence",
+        "stem": "You are phoning a doctor about a deteriorating patient. Put the parts of your SBAR call in the correct order.",
+        "steps": [
+          "Say who you are, which patient you are calling about and your immediate concern",
+          "Give the relevant history and the reason for admission",
+          "Report your ABCDE findings and the NEWS2 score",
+          "State what you need, such as a review within 15 minutes, and agree what to do meanwhile"
+        ],
+        "rubric": { "level": "recall", "keyPoints": ["Situation", "Background", "Assessment", "Recommendation"], "misconceptions": ["Start with the full history before saying why you are calling", "End without a clear request"] },
+        "marking": "deterministic",
+        "rationale": "SBAR puts the concern first (Situation), then the context (Background), then your findings (Assessment) and finally a clear request with a time frame (Recommendation). Leading with the concern and ending with a request makes it far less likely an urgent call is misunderstood. Read back any instructions.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-09", "area": "abcde", "title": "ABCDE: the bedside test in Disability", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-013", "objective": "Recognises the patient with abnormal neurological findings, including subtle changes in neurological status and escalates appropriately." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "The Disability assessment includes level of consciousness, pupils and a capillary blood glucose to exclude hypoglycaemia (below 4.0 mmol/L)." }],
+      "misconception_tags": ["drowsiness-assumed-sedation", "glucose-check-omitted"],
+      "fields": {
+        "format": "mcq",
+        "stem": "During the Disability step of an ABCDE assessment, an adult is drowsy. Which quick bedside test must not be missed at this stage?",
+        "options": [
+          "Capillary blood glucose",
+          "Peak expiratory flow",
+          "12-lead ECG",
+          "Urinalysis"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "application", "keyPoints": ["Check capillary blood glucose in every patient with reduced consciousness", "Hypoglycaemia (below 4.0 mmol/L) is quickly reversible", "Also check pupils and ACVPU"], "misconceptions": ["Drowsiness is due to tiredness or sedation, so no test is needed"] },
+        "marking": "deterministic",
+        "rationale": "Reduced consciousness can be caused by hypoglycaemia, which is quick to find and treat. A capillary blood glucose is part of the Disability assessment together with ACVPU or GCS and the pupils. Treat a glucose below 4.0 mmol/L according to the hypoglycaemia protocol.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-10", "area": "abcde", "title": "ABCDE: what Exposure involves", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-011", "objective": "Recognises signs of internal/external haemorrhage, acts appropriately and ensures immediate help sought." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Exposure: examine the patient fully, for example for bleeding, rashes and wounds, respecting dignity and minimising heat loss." }],
+      "misconception_tags": ["exposure-skipped-if-alert", "dignity-and-warmth-ignored", "abc-delayed-for-exposure"],
+      "fields": {
+        "format": "mrq",
+        "stem": "Which actions belong to the Exposure step of an ABCDE assessment? Select all that apply.",
+        "options": [
+          "Examine for bleeding, rashes, swelling and wound problems",
+          "Inspect drains, catheters and cannula sites",
+          "Keep the patient's dignity and minimise heat loss",
+          "Leave the patient uncovered until the medical team arrives",
+          "Omit Exposure if the patient is alert",
+          "Delay treating a low oxygen saturation until Exposure is complete"
+        ],
+        "correct": [0, 1, 2],
+        "rubric": { "level": "understanding", "keyPoints": ["Look for bleeding, rashes, swelling and wounds", "Check drains, catheters and lines", "Protect dignity and keep the patient warm"], "misconceptions": ["Exposure can be skipped in an alert patient", "Treatment waits until the whole assessment is done"] },
+        "marking": "deterministic",
+        "rationale": "Exposure means examining the whole body for causes and complications such as bleeding, rashes, swelling, wound problems and problems with drains and lines, while protecting dignity and preventing heat loss. Hidden bleeding or a rash can be missed in an alert patient. Problems found earlier in ABCD are treated as you find them, never delayed until E.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-11", "area": "abcde", "title": "Deterioration case: suspected opioid toxicity", "type": "case", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-003", "objective": "Recognise respiratory failure and arrest and act accordingly:" },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Manage airway and breathing, give oxygen and call for help in a patient with reduced consciousness and respiratory depression." }, { "id": "BNF", "supports": "Naloxone is the antidote used to reverse opioid-induced respiratory depression (BNF naloxone monograph)." }],
+      "misconception_tags": ["pinpoint-pupils-ignored", "pca-left-running", "wait-for-doctor-before-airway"],
+      "fields": {
+        "format": "structured",
+        "stem": "An adult using a morphine patient-controlled analgesia (PCA) pump after surgery is found responding only to pain. Respiratory rate 7 breaths/min, SpO2 89% on room air, pupils pinpoint.",
+        "parts": [
+          { "prompt": "(a) What is the most likely cause?", "marks": 1, "accepted": ["opioid toxicity", "opioid-induced respiratory depression", "morphine overdose", "opioid overdose"] },
+          { "prompt": "(b) What are your immediate actions?", "marks": 3, "accepted": ["Call for help, open the airway, give high-flow oxygen and support breathing with a bag-valve-mask if needed, and stop the PCA", "Emergency call, airway and breathing support with oxygen, stop the PCA"] },
+          { "prompt": "(c) Which medicine reverses the cause, given as prescribed or per local protocol?", "marks": 1, "accepted": ["naloxone", "naloxone hydrochloride", "Narcan"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["Pinpoint pupils, low respiratory rate and reduced consciousness point to opioid toxicity", "Call for help, open the airway, give oxygen, support breathing, stop the PCA", "Naloxone as prescribed or per protocol, then monitor because it can wear off before the opioid"], "misconceptions": ["Wait for the doctor before supporting the airway", "Leave the PCA connected because the patient needs pain relief"] },
+        "marking": "self",
+        "rationale": "Reduced consciousness, a respiratory rate of 7 and pinpoint pupils in a patient on a morphine PCA suggest opioid toxicity. Call for help, open and support the airway, give oxygen, assist breathing with a bag-valve-mask if needed, and stop the PCA. Naloxone, given as prescribed or under the local protocol, reverses opioid effects; it can wear off before the opioid does, so keep monitoring closely.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-abcde-12", "area": "abcde", "title": "Deterioration: first response to an unresponsive patient", "type": "sequence", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-011", "objective": "Can describe how to call for help in cardiac arrest situation" },
+      "references": [{ "id": "RCUK-IHR-2021", "supports": "In-hospital: check response, shout for help, open the airway, look listen and feel for breathing and pulse for no more than 10 seconds, call the resuscitation team if no signs of life, start CPR 30:2 and attach a defibrillator as soon as possible." }],
+      "misconception_tags": ["compressions-before-airway-check", "prolonged-pulse-check"],
+      "fields": {
+        "format": "sequence",
+        "stem": "You find an adult patient collapsed in bed on the ward. Put your first actions in the correct order.",
+        "steps": [
+          "Check whether the patient responds and shout for help",
+          "Open the airway with head tilt and chin lift",
+          "Look, listen and feel for normal breathing, and check for a pulse, for no more than 10 seconds",
+          "If there are no signs of life, make sure the resuscitation team is called",
+          "Start chest compressions at 30:2 and attach the defibrillator as soon as it arrives"
+        ],
+        "rubric": { "level": "application", "keyPoints": ["Check response and shout for help", "Open the airway", "Check breathing and pulse for no more than 10 seconds", "Call the resuscitation team", "Start CPR and attach the defibrillator"], "misconceptions": ["Start compressions before opening the airway and checking breathing", "Spend as long as needed feeling for a pulse"] },
+        "marking": "deterministic",
+        "rationale": "Check for a response and shout for help, open the airway, then look, listen and feel for normal breathing (and a pulse, if trained) for no more than 10 seconds. If there are no signs of life, make sure the resuscitation team is called, start compressions at 30:2 and attach the defibrillator as soon as it arrives. Follow your hospital's emergency number and procedure.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+
+    {
+      "code": "sqie-pilot-reason-01", "area": "reasoning", "title": "Prioritisation: four patients at the start of a shift", "type": "sequence", "difficulty": "advanced",
+      "competency": { "code": "PP-06", "objective": "Justifies a decision made under uncertainty by documenting options, foreseeable consequences, consultation and the point at which further help is required." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Airway and breathing problems are life-threatening and take priority." }, { "id": "RCP-NEWS2-2017", "supports": "Low oxygen saturation and raised respiratory rate are high-scoring signs of deterioration." }],
+      "misconception_tags": ["task-time-over-clinical-need", "pain-over-hypoxia"],
+      "fields": {
+        "format": "sequence",
+        "stem": "At handover you are given four patients. Put them in the order you should see them, most urgent first.",
+        "steps": [
+          "A patient with a new respiratory rate of 30 breaths/min and SpO2 88% on 4 L/min oxygen",
+          "A patient 2 hours after surgery with a pain score of 8 out of 10, observations otherwise stable",
+          "A patient due a scheduled oral antibiotic dose in 30 minutes",
+          "A patient waiting for discharge paperwork"
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["Breathing problem with hypoxaemia first", "Severe pain next: it causes harm and can mask deterioration", "Time-critical medicine next", "Administrative tasks last"], "misconceptions": ["Patients are seen in bed order", "A scheduled task always comes before a clinical concern"] },
+        "marking": "deterministic",
+        "rationale": "Prioritise by threat to life: the patient with a rising respiratory rate and low saturation despite oxygen is deteriorating (A/B problem) and is seen first. Severe uncontrolled pain is next. A dose due in 30 minutes can be planned around the first two, and discharge paperwork can wait. In practice, escalate the first patient and ask for help if you cannot reach the others in time.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-02", "area": "reasoning", "title": "Prioritisation: which patient first", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "PP-06", "objective": "Justifies a decision made under uncertainty by documenting options, foreseeable consequences, consultation and the point at which further help is required." },
+      "references": [{ "id": "RCUK-ABCDE-2021", "supports": "Airway obstruction is assessed and treated before breathing, circulation and disability problems." }],
+      "misconception_tags": ["fever-over-airway", "abnormal-number-over-airway-sign"],
+      "fields": {
+        "format": "mcq",
+        "stem": "Four patients need you at the same time. Which patient should you go to first?",
+        "options": [
+          "A patient with gurgling breathing who responds only to pain",
+          "A patient with heart rate 112 beats/min and blood pressure 105/70 mmHg after a fluid bolus",
+          "An alert patient with a blood glucose of 3.6 mmol/L who is eating breakfast",
+          "A patient with a temperature of 38.3 C who is shivering"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "reasoning", "keyPoints": ["Gurgling with reduced consciousness is an airway threat", "Airway comes before breathing, circulation and disability", "Ask for help with the others"], "misconceptions": ["The most abnormal number decides priority"] },
+        "marking": "deterministic",
+        "rationale": "Gurgling breathing in a patient who responds only to pain means the airway is at risk from secretions or vomit, which can kill within minutes; it comes first in the ABCDE order. The others all need attention soon: the alert patient with low glucose is already eating, and the tachycardic and febrile patients should be reassessed as soon as possible or delegated to a colleague.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-03", "area": "reasoning", "title": "Delegation: tasks for a healthcare support worker", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "PP-10", "objective": "Explains which responsibilities may be delegated in the current role and which accountability remains with the delegating nurse." },
+      "references": [{ "id": "NMC-CODE-2018", "supports": "Delegate only tasks within the other person's competence, make sure they are supervised and supported, and confirm the outcome meets the required standard; the delegating nurse remains accountable for the decision to delegate." }],
+      "misconception_tags": ["assessment-delegated", "accountability-transferred"],
+      "fields": {
+        "format": "mrq",
+        "stem": "A healthcare support worker is trained and competent in the tasks below, and the patients concerned are stable. Which tasks can a registered nurse appropriately delegate? Select all that apply.",
+        "options": [
+          "Recording a set of observations on a stable patient and reporting them to the nurse",
+          "Helping a patient with personal hygiene",
+          "Measuring and recording fluid intake and output",
+          "Assessing a newly deteriorating patient and deciding whether to escalate",
+          "Interpreting a NEWS2 score of 6 and deciding the clinical response"
+        ],
+        "correct": [0, 1, 2],
+        "rubric": { "level": "application", "keyPoints": ["Delegate defined tasks within the worker's competence, for stable patients", "Assessment, interpretation and clinical decisions stay with the registered nurse", "The nurse stays accountable for the decision to delegate"], "misconceptions": ["Once delegated, the nurse is no longer accountable", "Interpreting an early warning score is a routine task"] },
+        "marking": "deterministic",
+        "rationale": "Recording observations, helping with hygiene and recording fluid balance are defined tasks that a competent support worker can do for stable patients, reporting back to the nurse. Assessing a deteriorating patient and deciding the response to a NEWS2 of 6 need a registered nurse's clinical judgement. The nurse remains accountable for the decision to delegate and for supervising the outcome.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-04", "area": "reasoning", "title": "Clinical reasoning: concern despite a low NEWS2", "type": "extended", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-013", "objective": "Recognises the patient with abnormal neurological findings, including subtle changes in neurological status and escalates appropriately." },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "New confusion scores 3; clinical concern by staff or family should prompt escalation regardless of the aggregate score." }, { "id": "RCUK-ABCDE-2021", "supports": "A full ABCDE assessment, including blood glucose, for a patient with altered consciousness." }],
+      "misconception_tags": ["low-score-means-safe", "family-concern-dismissed", "confusion-not-rescored"],
+      "fields": {
+        "format": "extended",
+        "stem": "An older adult's NEWS2 at 10:00 was 2. At 11:00 their daughter tells you: 'Dad's not himself. He's usually sharp, but now he keeps asking where he is.' Explain how you would respond and justify each step.",
+        "modelAnswer": "Take the daughter's concern seriously: she knows his baseline. New disorientation is new confusion, which scores 3 on its own in NEWS2, so his score is now at least 5 and must be recalculated with a full set of observations. Perform a full ABCDE assessment, including SpO2, respiratory rate and a capillary blood glucose, and look for causes such as hypoxia, sepsis, hypoglycaemia, pain, urinary retention or medicines. Escalate to the medical team using SBAR on the basis of the new confusion and your concern, whatever the number, increase the frequency of observations, and document the change, the escalation and the plan.",
+        "marks": 5,
+        "keyPoints": [
+          "Family concern about a change from baseline is a valid cue",
+          "New confusion scores 3 in NEWS2: rescore with a full set of observations",
+          "Full ABCDE assessment including SpO2 and capillary blood glucose",
+          "Escalate using SBAR on clinical concern regardless of the aggregate",
+          "Increase observation frequency and document"
+        ],
+        "rubric": { "level": "reasoning", "misconceptions": ["A low earlier score means the patient is safe", "Confusion in an older adult is expected and not significant"] },
+        "marking": "self",
+        "rationale": "New confusion is an early sign of deterioration (for example hypoxia, sepsis or hypoglycaemia) and scores 3 in NEWS2 on its own. A relative's concern about a change from baseline is an important cue. Reassess fully with ABCDE, rescore, escalate on concern whatever the number, and document.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-05", "area": "reasoning", "title": "Prioritisation case: two alarms in one bay", "type": "case", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-002", "objective": "Can recognise and respond in a timely manner when a patient requires: Supplemental oxygen, suction, nebulisers or repositioning" },
+      "references": [{ "id": "BTS-O2-2017", "supports": "For patients at risk of hypercapnic respiratory failure the target is 88-92%; if saturation falls below target, increase oxygen within the prescription (for example a 24-28% Venturi mask), obtain a blood gas and seek medical review." }],
+      "misconception_tags": ["alarm-volume-sets-priority", "high-flow-oxygen-for-copd-without-review", "hypoxaemia-tolerated-in-copd"],
+      "fields": {
+        "format": "structured",
+        "stem": "In your bay: Patient 1 has COPD with a prescribed target saturation of 88-92%. Their SpO2 is now 86% on 2 L/min via nasal cannula, respiratory rate 26 breaths/min, alert. Patient 2's intravenous antibiotic pump is alarming 'occlusion'; they are comfortable with normal observations.",
+        "parts": [
+          { "prompt": "(a) Which patient do you attend first, and why?", "marks": 2, "accepted": ["Patient 1, because their saturation is below the target range and they are breathless", "Patient 1: hypoxaemia below target with a raised respiratory rate"] },
+          { "prompt": "(b) What do you do for that patient?", "marks": 2, "accepted": ["Increase oxygen within the prescription to reach 88-92%, sit them up and escalate for medical review and a blood gas", "Titrate oxygen to 88 to 92%, escalate, request arterial blood gas"] },
+          { "prompt": "(c) How do you manage Patient 2 safely?", "marks": 1, "accepted": ["Ask a colleague to check the line and cannula, or check it yourself once Patient 1 is safe", "Delegate or attend after Patient 1: check for a kinked line or closed clamp"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["Patient 1 first: saturation below target with tachypnoea", "Increase oxygen within prescription to 88-92%, escalate, blood gas", "Patient 2's occlusion is not immediately life-threatening: delegate or attend next"], "misconceptions": ["The loudest alarm is the priority", "Hypoxaemia does not matter in COPD"] },
+        "marking": "self",
+        "rationale": "Patient 1's saturation is below their prescribed target and they are tachypnoeic: an A/B problem that comes first. Increase oxygen within the prescription to bring saturation back to 88-92% (avoiding both hypoxaemia and excessive oxygen), sit them up and escalate for medical review and a blood gas. The occlusion alarm on Patient 2's pump is not immediately life-threatening: ask a colleague to check the line or deal with it next.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-06", "area": "reasoning", "title": "Clinical reasoning case: low urine output after surgery", "type": "case", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-012", "objective": "Recognises deviations from normal hydration status and escalates concerns in a timely manner" },
+      "references": [{ "id": "NICE-CG174", "supports": "Indicators that a patient may need fluid resuscitation include heart rate above 90, capillary refill longer than 2 seconds or cold peripheries, systolic BP below 100 and NEWS 5 or more." }, { "id": "NICE-NG51", "supports": "Urine output below 0.5 mL/kg/hour is a warning sign in catheterised adults." }],
+      "misconception_tags": ["catheter-patency-not-checked", "oliguria-accepted-post-op", "weight-not-used"],
+      "fields": {
+        "format": "structured",
+        "stem": "Day 2 after surgery, a catheterised adult weighing 80 kg has passed 20 mL/hour for 3 hours. Heart rate 105 beats/min, blood pressure 110/70 mmHg, capillary refill 3 seconds, dry mouth.",
+        "parts": [
+          { "prompt": "(a) Is this urine output acceptable? Explain using the patient's weight.", "marks": 2, "accepted": ["No, it is below 0.5 mL/kg/hour, which is 40 mL/hour for 80 kg", "No, the minimum for 80 kg is 40 mL/hour"] },
+          { "prompt": "(b) Which other findings support a problem with fluid status?", "marks": 2, "accepted": ["Tachycardia, prolonged capillary refill and a dry mouth", "Heart rate 105, capillary refill 3 seconds, dry mucous membranes"] },
+          { "prompt": "(c) What do you do next?", "marks": 2, "accepted": ["Check the catheter is not blocked or kinked, escalate to the medical team, and keep an accurate fluid balance", "Check catheter patency, escalate for review and fluid assessment, hourly urine output"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["0.5 mL/kg/hour x 80 kg = 40 mL/hour minimum", "Tachycardia, capillary refill over 2 seconds and dry mouth suggest hypovolaemia", "Check the catheter, escalate, monitor hourly"], "misconceptions": ["Low urine output is normal after surgery", "The catheter cannot be the cause"] },
+        "marking": "self",
+        "rationale": "For 80 kg the minimum is 0.5 x 80 = 40 mL/hour, so 20 mL/hour for 3 hours is low. Tachycardia, capillary refill of 3 seconds and a dry mouth suggest hypovolaemia. First check the catheter is not kinked or blocked, then escalate for medical review and fluid assessment, continue hourly urine output and keep an accurate fluid balance.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "rate_ml_per_kg_h": 0.5, "weight_kg": 80 }, "formula": "rate_ml_per_kg_h * weight_kg", "value": 40, "unit": "mL/hour", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-reason-07", "area": "reasoning", "title": "Clinical reasoning: the clinical reasoning cycle", "type": "sequence", "difficulty": "intermediate",
+      "competency": { "code": "PP-06", "objective": "Justifies a decision made under uncertainty by documenting options, foreseeable consequences, consultation and the point at which further help is required." },
+      "references": [{ "id": "LEVETT-JONES-2010", "supports": "The clinical reasoning cycle: consider the patient situation, collect cues, process information, identify problems, establish goals, take action, evaluate outcomes and reflect." }],
+      "misconception_tags": ["action-before-problem-identified", "evaluation-skipped"],
+      "fields": {
+        "format": "sequence",
+        "stem": "Put the stages of the clinical reasoning cycle in order.",
+        "steps": [
+          "Consider the patient situation",
+          "Collect cues and information",
+          "Process the information",
+          "Identify the problem or issue",
+          "Establish goals and take action",
+          "Evaluate the outcome and reflect"
+        ],
+        "rubric": { "level": "understanding", "keyPoints": ["Consider the situation", "Collect cues", "Process", "Identify the problem", "Set goals and act", "Evaluate and reflect"], "misconceptions": ["Act first, then work out the problem", "Evaluation is optional once action is taken"] },
+        "marking": "deterministic",
+        "rationale": "The clinical reasoning cycle moves from considering the patient's situation and collecting cues, through processing them and identifying the problem, to setting goals and acting, and ends by evaluating the outcome and reflecting. It is a cycle: evaluation often sends you back to collect more cues.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-08", "area": "reasoning", "title": "Escalation: when the first escalation is not acted on", "type": "single_best", "difficulty": "advanced",
+      "competency": { "code": "PP-06", "objective": "Checks whether an escalated concern was acted on and re-escalates unresolved risk through the next appropriate route." },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "An aggregate of 7 or more needs an emergency response by a team with critical care competencies." }],
+      "misconception_tags": ["escalated-once-is-enough", "wait-for-same-doctor"],
+      "fields": {
+        "format": "mcq",
+        "stem": "45 minutes ago you escalated a patient with a NEWS2 of 6 to the ward doctor, who has not yet arrived. The score is now 7. What should you do?",
+        "options": [
+          "Escalate again through the next route, such as the senior doctor, nurse in charge, critical care outreach or emergency team, and document it",
+          "Wait, because the doctor has already been informed",
+          "Repeat the observations in 4 hours",
+          "Ask the patient's family to phone the doctor"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "reasoning", "keyPoints": ["An unanswered escalation is an unresolved risk", "A score of 7 needs an emergency response", "Re-escalate through the next route and document times and names"], "misconceptions": ["Once escalated, responsibility passes to the doctor"] },
+        "marking": "deterministic",
+        "rationale": "Escalation is not complete until someone acts. The patient is deteriorating and now meets the NEWS2 emergency threshold of 7, so escalate again through the next route your hospital uses (senior doctor, nurse in charge, critical care outreach or the emergency team), stay with the patient, monitor continuously and document who you called and when.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-09", "area": "reasoning", "title": "Deterioration: the NEWS2 threshold for possible sepsis", "type": "short", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-025", "objective": "Understands the importance of recognising the signs and symptoms of infection, escalating appropriately and taking action" },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "An aggregate score of 5 or more is the key threshold for urgent response and should prompt consideration of sepsis in a patient with known or suspected infection." }],
+      "misconception_tags": ["sepsis-threshold-7", "score-replaces-judgement"],
+      "fields": {
+        "format": "short",
+        "stem": "In a patient with known or suspected infection, what NEWS2 aggregate score is the key threshold that should prompt urgent review for possible sepsis? Give the number.",
+        "accepted": ["5", "five", "5 or more", "5 or above", "a score of 5 or more"],
+        "rubric": { "level": "recall", "keyPoints": ["5 or more", "Urgent clinical review", "Consider sepsis if infection is possible"], "misconceptions": ["Sepsis is only considered at a score of 7"] },
+        "marking": "deterministic",
+        "rationale": "NEWS2 identifies an aggregate of 5 or more as the key threshold for urgent response. In a patient with known or suspected infection it should prompt urgent assessment for sepsis. Sepsis can be present at lower scores, so clinical concern still counts.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-10", "area": "reasoning", "title": "Clinical reasoning: when NEWS2 alone can mislead", "type": "multiple_response", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-027", "objective": "Is aware of the SBAR tool to support clear communication and other tools associated with clinical escalation such as early warning systems" },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "NEWS2 is not validated for children under 16 or for pregnant women; physiological responses may be modified by medicines such as beta-blockers, and clinical judgement takes precedence." }],
+      "misconception_tags": ["news2-for-everyone", "score-overrides-context"],
+      "fields": {
+        "format": "mrq",
+        "stem": "In which situations is a NEWS2 score LESS reliable as the only basis for a clinical decision? Select all that apply.",
+        "options": [
+          "The patient takes a beta-blocker that limits how much their heart rate can rise",
+          "The patient is pregnant",
+          "The patient is 14 years old",
+          "A complete set of observations was recorded on time",
+          "The observations were recorded by a trained healthcare support worker",
+          "The score was calculated automatically by the electronic chart"
+        ],
+        "correct": [0, 1, 2],
+        "rubric": { "level": "reasoning", "keyPoints": ["Medicines such as beta-blockers can blunt the response", "NEWS2 is not for use in pregnancy", "NEWS2 is not for under-16s"], "misconceptions": ["NEWS2 applies to every patient", "An automatic score cannot mislead"] },
+        "marking": "deterministic",
+        "rationale": "NEWS2 was developed for non-pregnant adults aged 16 and over; pregnancy and childhood need age- or pregnancy-specific tools. Medicines such as beta-blockers can hide a rising heart rate. Who recorded the observations, or that the chart added them up, does not make the score less valid if the observations are accurate. In every case, clinical judgement and concern still drive escalation.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-11", "area": "reasoning", "title": "Clinical reasoning: interpreting an arterial blood gas", "type": "structured", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-004", "objective": "Able to identify and demonstrate basic understanding of the causes of Respiratory Acidosis" },
+      "references": [{ "id": "BTS-O2-2017", "supports": "Hypercapnia is a PaCO2 above 6.0 kPa; respiratory acidosis is pH below 7.35 with a raised PaCO2; type 2 respiratory failure is hypoxaemia with hypercapnia." }, { "id": "RM-10", "supports": "Normal arterial values: pH 7.35-7.45, PaCO2 4.7-6.0 kPa, PaO2 above 10 kPa on air, bicarbonate 22-26 mmol/L." }],
+      "misconception_tags": ["metabolic-respiratory-confused", "type-1-type-2-confused"],
+      "fields": {
+        "format": "structured",
+        "stem": "An adult's arterial blood gas on room air shows: pH 7.28, PaCO2 8.2 kPa (61.5 mmHg), PaO2 7.6 kPa (57 mmHg), bicarbonate 25 mmol/L. Answer each part with one or two words.",
+        "parts": [
+          { "prompt": "(a) Is this an acidosis or an alkalosis?", "marks": 1, "accepted": ["acidosis", "acidaemia", "an acidosis"] },
+          { "prompt": "(b) Is the cause respiratory or metabolic?", "marks": 1, "accepted": ["respiratory", "respiratory acidosis"] },
+          { "prompt": "(c) Which type of respiratory failure is this?", "marks": 1, "accepted": ["type 2", "type 2 respiratory failure", "type II", "hypercapnic respiratory failure"] }
+        ],
+        "rubric": { "level": "application", "keyPoints": ["pH below 7.35: acidosis", "Raised PaCO2 with normal bicarbonate: respiratory cause", "Low PaO2 with high PaCO2: type 2 respiratory failure"], "misconceptions": ["A low pH always means a metabolic problem", "Any low PaO2 is type 1 failure"] },
+        "marking": "deterministic",
+        "rationale": "pH 7.28 is below 7.35, so this is an acidosis. The PaCO2 is high (above 6.0 kPa) while bicarbonate is normal, so the cause is respiratory and not yet compensated. PaO2 is below 8 kPa with a raised PaCO2, which is type 2 (hypercapnic) respiratory failure. Escalate urgently; oxygen should be given to a target of 88-92% while awaiting review.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-reason-12", "area": "reasoning", "title": "Clinical reasoning: acting on a subtle trend", "type": "single_best", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-010", "objective": "Recognises changes in haemodynamic status and responds in a timely manner" },
+      "references": [{ "id": "RCP-NEWS2-2017", "supports": "For scores of 1-4 the registered nurse decides whether to increase observation frequency or escalate; trends and clinical concern matter as well as the aggregate." }],
+      "misconception_tags": ["low-score-means-no-action", "patient-concern-treated-as-anxiety"],
+      "fields": {
+        "format": "mcq",
+        "stem": "A patient with a NEWS2 of 1 tells you she feels 'something awful is going to happen'. Her heart rate has risen from 78 to 94 beats/min over 2 hours; respiratory rate is 20 breaths/min. What is the best next action?",
+        "options": [
+          "Do a full ABCDE assessment now, increase observation frequency and escalate if the concern or trend continues, documenting what you find",
+          "Reassure her and repeat observations in 12 hours, because the score is low",
+          "Give her a sedative to settle her anxiety",
+          "Wait until the score reaches 5 before doing anything further"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "reasoning", "keyPoints": ["A sense of impending doom and a rising heart rate are cues of possible deterioration", "Reassess fully and increase observation frequency", "Escalate on concern or trend, and document"], "misconceptions": ["A low score means no action is needed", "The patient's feeling is only anxiety"] },
+        "marking": "deterministic",
+        "rationale": "A patient's sense of impending doom and a steadily rising heart rate are cues that can come before the score rises. Reassess with ABCDE now, increase the observation frequency, escalate if the concern or trend continues, and document. Sedating her could hide deterioration, and waiting for a threshold wastes time.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+
+    {
+      "code": "sqie-pilot-med-01", "area": "medication", "title": "Medication safety: confirming patient identity", "type": "single_best", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-030", "objective": "Demonstrate effective use of technology and standardised practices that support safety and quality; effectively uses strategies to reduce risk of harm to self and others." },
+      "references": [{ "id": "WHO-PSS-2007", "supports": "Use at least two identifiers (for example name and date of birth), never the room or bed number, and involve the patient in identification." }, { "id": "RPS-RCN-2019", "supports": "Confirm the identity of the patient before administering a medicine." }],
+      "misconception_tags": ["closed-question-for-identity", "bed-number-as-identifier"],
+      "fields": {
+        "format": "mcq",
+        "stem": "Before giving a medicine to an alert adult, how should you confirm their identity?",
+        "options": [
+          "Ask them to tell you their full name and date of birth, and check these against their identity band and the prescription",
+          "Read out the name on the chart, ask 'Is that you?' and check the bed number",
+          "Check the name written above the bed",
+          "Ask a colleague who knows the patient"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "recall", "keyPoints": ["Ask an open question: the patient states their name and date of birth", "Check at least two identifiers against the identity band and prescription", "Never use the bed or room number"], "misconceptions": ["A closed 'Are you...?' question is enough", "The bed number identifies the patient"] },
+        "marking": "deterministic",
+        "rationale": "Use at least two identifiers, such as full name and date of birth, stated by the patient in answer to an open question, and check them against the identity band and the prescription. Patients may answer 'yes' to a closed question by mistake, and beds and signs change; neither is an identifier.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-med-02", "area": "medication", "title": "Medication safety: unsafe ways of writing doses", "type": "multiple_response", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-030", "objective": "Can describe human factors and other basic safety design principles; delineate general categories of errors and hazards in care, causes of error and allocation of responsibility and accountability (e.g. RCA); describe factors that create a culture of safety" },
+      "references": [{ "id": "BNF", "supports": "Guidance on prescribing: avoid unnecessary decimal points (3 mg not 3.0 mg), use a leading zero for values below 1 (0.5 mL not .5 mL), do not abbreviate micrograms, nanograms or units." }, { "id": "NPSA-INSULIN-2010", "supports": "Write 'units' in full; abbreviations such as 'U' or 'IU' have caused tenfold insulin overdoses." }],
+      "misconception_tags": ["trailing-zero-harmless", "u-for-units-acceptable", "leading-zero-optional"],
+      "fields": {
+        "format": "mrq",
+        "stem": "Which of these ways of writing a dose on a prescription are UNSAFE and should be queried with the prescriber? Select all that apply.",
+        "options": [
+          "Insulin 10 U",
+          "Warfarin 5.0 mg",
+          "Colchicine .5 mg",
+          "Levothyroxine 25 micrograms",
+          "Morphine 2.5 mg",
+          "Insulin 10 units"
+        ],
+        "correct": [0, 1, 2],
+        "rubric": { "level": "application", "keyPoints": ["'U' can be misread as 0: write units in full", "A trailing zero (5.0) can be misread as 50", "A missing leading zero (.5) can be misread as 5"], "misconceptions": ["A trailing zero makes a dose more precise and safer"] },
+        "marking": "deterministic",
+        "rationale": "'10 U' can be read as 100, '5.0 mg' as 50 mg and '.5 mg' as 5 mg, each a tenfold error. Safe practice is 'units' in full, no trailing zero and a leading zero before a decimal point. '25 micrograms' (written in full), '2.5 mg' and '10 units' are written safely. Query any unclear prescription before giving the medicine.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-med-03", "area": "medication", "title": "Medication calculation: tablets", "type": "calculation", "difficulty": "introductory",
+      "competency": { "code": "NUR-CCF-030", "objective": "Demonstrate effective use of technology and standardised practices that support safety and quality; effectively uses strategies to reduce risk of harm to self and others." },
+      "references": [{ "id": "BNF", "supports": "Metformin is available as 500 mg tablets; 1 g = 1000 mg." }, { "id": "RM-10", "supports": "Number of tablets = dose prescribed / strength of one tablet, with units converted first." }],
+      "misconception_tags": ["gram-milligram-conversion", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "Prescription: metformin 1 g orally. Stock: metformin 500 mg tablets. How many tablets will you give? Give a whole number of tablets with the word 'tablets'.",
+        "accepted": ["2 tablets", "two tablets", "2 tabs", "2 tablet"],
+        "rubric": { "level": "application", "keyPoints": ["Convert first: 1 g = 1000 mg", "1000 mg / 500 mg = 2", "2 tablets"], "misconceptions": ["1 g is 100 mg", "Divide the tablet strength by the dose"] },
+        "marking": "deterministic",
+        "rationale": "Convert to the same unit first: 1 g = 1000 mg. Then dose / strength = 1000 mg / 500 mg = 2 tablets. If a calculation gives an unusual number of tablets, stop and check with a colleague or pharmacist before giving the medicine.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "dose_mg": 1000, "tablet_mg": 500 }, "formula": "dose_mg / tablet_mg", "value": 2, "unit": "tablets", "rounding": "whole tablets (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-med-04", "area": "medication", "title": "Medication calculation: oral liquid", "type": "calculation", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-030", "objective": "Demonstrate effective use of technology and standardised practices that support safety and quality; effectively uses strategies to reduce risk of harm to self and others." },
+      "references": [{ "id": "BNF", "supports": "Amoxicillin oral suspension 250 mg/5 mL; adult oral dose 500 mg three times daily." }, { "id": "RM-10", "supports": "Volume = (dose prescribed / stock strength) x stock volume." }],
+      "misconception_tags": ["stock-volume-ignored", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "Prescription: amoxicillin 500 mg orally. Stock: amoxicillin oral suspension 250 mg in 5 mL. What volume will you give? Give your answer in mL as a whole number, with its unit.",
+        "accepted": ["10 mL", "10mL", "10 millilitres"],
+        "rubric": { "level": "application", "keyPoints": ["(500 / 250) x 5 mL", "= 2 x 5 mL", "= 10 mL"], "misconceptions": ["Give 2 mL because 500 / 250 = 2", "Give 5 mL because that is the stock volume"] },
+        "marking": "deterministic",
+        "rationale": "Volume = (what you want / what you have) x the volume it is in = (500 mg / 250 mg) x 5 mL = 2 x 5 mL = 10 mL. Measure it with an oral syringe or a graduated measure, never a household spoon.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "dose_mg": 500, "stock_mg": 250, "stock_ml": 5 }, "formula": "dose_mg / stock_mg * stock_ml", "value": 10, "unit": "mL", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-med-05", "area": "medication", "title": "Medication calculation: injection volume", "type": "calculation", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-019", "objective": "Demonstrates knowledge of different types of common diuretics and their actions" },
+      "references": [{ "id": "BNF", "supports": "Furosemide injection 10 mg/mL." }, { "id": "RM-10", "supports": "Volume = (dose prescribed / stock strength) x stock volume." }],
+      "misconception_tags": ["inverted-ratio", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "Prescription: furosemide 40 mg intravenously. Stock: furosemide injection 10 mg/mL. What volume will you draw up? Give your answer in mL as a whole number, with its unit.",
+        "accepted": ["4 mL", "4mL", "4 millilitres"],
+        "rubric": { "level": "application", "keyPoints": ["(40 / 10) x 1 mL", "= 4 mL"], "misconceptions": ["Divide the strength by the dose (0.25 mL)", "Give 40 mL"] },
+        "marking": "deterministic",
+        "rationale": "Volume = (40 mg / 10 mg) x 1 mL = 4 mL. Check the calculation independently with a second competent person where your policy requires it for intravenous medicines, and give IV furosemide at the rate stated in your local policy or the product information.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "dose_mg": 40, "stock_mg_per_ml": 10 }, "formula": "dose_mg / stock_mg_per_ml", "value": 4, "unit": "mL", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-med-06", "area": "medication", "title": "Medication calculation: micrograms to millilitres for adrenaline", "type": "calculation", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-024", "objective": "Familiar with the whereabouts and purpose of other emergency equipment such as the anaphylaxis box, difficult airway trolley, spill kit" },
+      "references": [{ "id": "RCUK-ANAPH-2021", "supports": "Adult intramuscular adrenaline for anaphylaxis: 500 micrograms (0.5 mL of 1 mg/mL adrenaline), repeated after 5 minutes if there is no improvement." }],
+      "misconception_tags": ["microgram-milligram-conversion", "wrong-concentration-used", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "An adult with anaphylaxis needs intramuscular adrenaline 500 micrograms. Stock: adrenaline 1 mg/mL (1 in 1000). What volume will you give? Give your answer in mL to one decimal place, with its unit.",
+        "accepted": ["0.5 mL", "0.5mL", "0.5 millilitres"],
+        "rubric": { "level": "application", "keyPoints": ["500 micrograms = 0.5 mg", "0.5 mg / 1 mg per mL = 0.5 mL", "Intramuscular, anterolateral thigh"], "misconceptions": ["500 micrograms = 5 mg", "Give 5 mL"] },
+        "marking": "deterministic",
+        "rationale": "1 mg = 1000 micrograms, so 500 micrograms = 0.5 mg. With 1 mg in each mL, 0.5 mg is 0.5 mL. Give it intramuscularly, ideally into the anterolateral thigh, and repeat after 5 minutes if there is no improvement. A tenfold error here is dangerous, so convert units before calculating.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "dose_micrograms": 500, "stock_mg_per_ml": 1 }, "formula": "(dose_micrograms / 1000) / stock_mg_per_ml", "value": 0.5, "unit": "mL", "rounding": "one decimal place (exact here, no rounding applied)", "decimals": 1, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-med-07", "area": "medication", "title": "Medication calculation: infusion pump rate", "type": "calculation", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-012", "objective": "Can administer fluid replacement of losses as prescribed and clearly document" },
+      "references": [{ "id": "RM-10", "supports": "Infusion pump rate (mL/hour) = total volume (mL) / time (hours)." }],
+      "misconception_tags": ["minutes-hours-confused", "unit-omitted"],
+      "fields": {
+        "format": "short",
+        "stem": "Prescription: 1000 mL sodium chloride 0.9% intravenously over 8 hours via a volumetric infusion pump. At what rate do you set the pump? Give your answer in mL/hour as a whole number, with its unit.",
+        "accepted": ["125 mL/hour", "125 mL/h", "125 mL per hour", "125mL/h", "125 mL/hr"],
+        "rubric": { "level": "application", "keyPoints": ["Rate = volume / time", "1000 mL / 8 hours", "= 125 mL/hour"], "misconceptions": ["Divide by minutes when the pump is set in mL/hour"] },
+        "marking": "deterministic",
+        "rationale": "Rate = volume / time = 1000 mL / 8 hours = 125 mL/hour. Check the pump settings against the prescription, confirm the volume to be infused, and check the infusion and the cannula site regularly.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "volume_ml": 1000, "hours": 8 }, "formula": "volume_ml / hours", "value": 125, "unit": "mL/hour", "rounding": "whole number (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-med-08", "area": "medication", "title": "Medication calculation: gravity drip rate", "type": "calculation", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-012", "objective": "Can accurately calculate daily and hourly fluid requirements and document clearly for infant/child/adult." },
+      "references": [{ "id": "RM-10", "supports": "Drops per minute = (volume in mL x drops per mL of the giving set) / time in minutes." }],
+      "misconception_tags": ["hours-not-converted-to-minutes", "drop-factor-ignored", "rounding-down"],
+      "fields": {
+        "format": "short",
+        "stem": "Prescription: 1000 mL sodium chloride 0.9% intravenously over 8 hours. No pump is available, and the gravity giving set delivers 20 drops per mL. Calculate the drip rate in drops per minute, rounded to the nearest whole drop, with its unit.",
+        "accepted": ["42 drops/minute", "42 drops/min", "42 drops per minute", "42 dpm", "42 drops a minute"],
+        "rubric": { "level": "application", "keyPoints": ["Total drops = 1000 x 20 = 20000", "Time = 8 x 60 = 480 minutes", "20000 / 480 = 41.67, rounded to 42 drops per minute"], "misconceptions": ["Divide by 8 hours instead of 480 minutes", "Always round down"] },
+        "marking": "deterministic",
+        "rationale": "Drops per minute = (1000 mL x 20 drops/mL) / (8 x 60 minutes) = 20000 / 480 = 41.67, which rounds to 42 drops per minute. Count the drops for a full minute when setting the rate and recheck regularly, because gravity infusions change with position and height of the bag.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "volume_ml": 1000, "drops_per_ml": 20, "hours": 8 }, "formula": "volume_ml * drops_per_ml / (hours * 60)", "value": 42, "unit": "drops/minute", "rounding": "nearest whole drop (41.67 rounds to 42)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true }
+    },
+    {
+      "code": "sqie-pilot-med-09", "area": "medication", "title": "Medication calculation: weight-based intravenous paracetamol", "type": "calculation_structured", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-015", "objective": "Can demonstrate ability to identify the correct choice of analgesia taking into consideration non-pharmacological measures." },
+      "references": [{ "id": "BNF", "supports": "Intravenous paracetamol for adults weighing 50 kg or less (BNF band 33-50 kg): 15 mg/kg per dose, maximum 60 mg/kg daily; paracetamol infusion 10 mg/mL." }],
+      "misconception_tags": ["standard-1g-for-all-adults", "weight-not-checked", "dose-volume-confused"],
+      "fields": {
+        "format": "structured",
+        "stem": "Intravenous paracetamol is prescribed at 15 mg/kg for an adult who weighs 42 kg. Stock: paracetamol 10 mg/mL solution for infusion. Answer each part with its unit.",
+        "parts": [
+          { "prompt": "(a) What dose is this, in mg as a whole number?", "marks": 1, "accepted": ["630 mg", "630mg", "630 milligrams"] },
+          { "prompt": "(b) What volume contains this dose, in mL as a whole number?", "marks": 1, "accepted": ["63 mL", "63mL", "63 millilitres"] },
+          { "prompt": "(c) Why must the weight be checked before giving intravenous paracetamol to a low-weight adult?", "marks": 2, "accepted": ["A standard 1 g dose would be too much for a low-weight adult and could cause liver damage", "To avoid overdose and liver toxicity in adults of 50 kg or less"] }
+        ],
+        "rubric": { "level": "application", "keyPoints": ["15 mg/kg x 42 kg = 630 mg", "630 mg / 10 mg per mL = 63 mL", "A fixed 1 g dose would exceed the weight-based dose and risk liver toxicity"], "misconceptions": ["Every adult gets 1 g", "Give 630 mL"] },
+        "marking": "deterministic",
+        "rationale": "Dose = 15 mg/kg x 42 kg = 630 mg. Volume = 630 mg / 10 mg per mL = 63 mL. For adults weighing 50 kg or less, intravenous paracetamol is dosed by weight; giving a standard 1 g dose would be about 24 mg/kg and risks liver toxicity, particularly if repeated. Check the weight, the maximum daily dose and the time of any earlier paracetamol from any route.",
+        "source": { "kind": "own_writing" }
+      },
+      "calculation": { "inputs": { "mg_per_kg": 15, "weight_kg": 42, "stock_mg_per_ml": 10 }, "formula": "mg_per_kg * weight_kg / stock_mg_per_ml", "value": 63, "unit": "mL", "rounding": "whole numbers (exact here, no rounding applied)", "decimals": 0, "tolerance": { "absolute": 0, "percent": 0 }, "unit_required": true, "parts": { "a": 630, "b": 63 } }
+    },
+    {
+      "code": "sqie-pilot-med-10", "area": "medication", "title": "Medication safety: order of the administration checks", "type": "sequence", "difficulty": "intermediate",
+      "competency": { "code": "NUR-CCF-030", "objective": "Demonstrate effective use of technology and standardised practices that support safety and quality; effectively uses strategies to reduce risk of harm to self and others." },
+      "references": [{ "id": "RPS-RCN-2019", "supports": "Before administering: check the prescription, the patient's allergy status and identity, the medicine and dose against the prescription; record the administration promptly." }, { "id": "RM-10", "supports": "Medicine administration procedure and the sequence of checks." }],
+      "misconception_tags": ["record-before-giving", "identity-check-after-administration"],
+      "fields": {
+        "format": "sequence",
+        "stem": "Put these steps for giving an oral medicine on a ward round in a safe order.",
+        "steps": [
+          "Check the prescription is complete, legible and current, and check the patient's allergy status",
+          "Prepare the medicine, checking its name, strength, dose, route and expiry against the prescription",
+          "At the bedside, confirm the patient's identity against their identity band and the prescription",
+          "Give the medicine and make sure it has been taken",
+          "Record the administration on the chart straight away"
+        ],
+        "rubric": { "level": "application", "keyPoints": ["Prescription and allergies first", "Prepare against the prescription", "Confirm identity at the bedside", "Give and observe", "Record immediately after giving"], "misconceptions": ["Sign the chart before giving the medicine", "Identity can be checked after the medicine is given"] },
+        "marking": "deterministic",
+        "rationale": "Start with a complete, current prescription and the allergy status, prepare the medicine against the prescription, confirm the patient's identity at the bedside before giving it, observe it being taken, and record it straight away. Never sign before giving, and never leave medicines unattended.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-med-11", "area": "medication", "title": "Medication safety case: reaction during an antibiotic infusion", "type": "case", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-011", "objective": "Describes commonly used medications in cardiovascular emergency, reasons for use and how to administer" },
+      "references": [{ "id": "RCUK-ANAPH-2021", "supports": "Recognise anaphylaxis (airway, breathing or circulation problems, usually with skin changes), call for help, remove the trigger, give IM adrenaline 500 micrograms in adults, position flat with legs raised or sitting if breathing is difficult." }],
+      "misconception_tags": ["antihistamine-first-line", "infusion-left-running", "sit-up-hypotensive-patient"],
+      "fields": {
+        "format": "structured",
+        "stem": "During an intravenous antibiotic infusion, an adult develops widespread hives, lip swelling and wheeze. Blood pressure is 82/50 mmHg.",
+        "parts": [
+          { "prompt": "(a) What is the most likely diagnosis?", "marks": 1, "accepted": ["anaphylaxis", "anaphylactic reaction", "anaphylactic shock"] },
+          { "prompt": "(b) What do you do with the infusion?", "marks": 1, "accepted": ["stop it", "stop the infusion", "stop the infusion and keep the cannula", "stop the antibiotic"] },
+          { "prompt": "(c) What is the first-line medicine, its adult dose and route?", "marks": 2, "accepted": ["adrenaline 500 micrograms intramuscularly", "IM adrenaline 0.5 mg (0.5 mL of 1 mg/mL)", "adrenaline 0.5 mg IM"] },
+          { "prompt": "(d) How do you position the patient?", "marks": 1, "accepted": ["lie flat with legs raised", "lying flat with the legs elevated", "flat, legs raised, or sitting up if breathing is difficult"] }
+        ],
+        "rubric": { "level": "reasoning", "keyPoints": ["Hives, lip swelling, wheeze and hypotension after a new medicine: anaphylaxis", "Call for help and stop the infusion", "IM adrenaline 500 micrograms, repeat after 5 minutes if no improvement", "Lie flat with legs raised (sit up if breathing is difficult)"], "misconceptions": ["An antihistamine is the first treatment", "Sit a hypotensive patient upright"] },
+        "marking": "self",
+        "rationale": "Skin and lip swelling with wheeze and hypotension after starting an IV antibiotic is anaphylaxis. Call for help, stop the infusion (keep the cannula), and give intramuscular adrenaline 500 micrograms (0.5 mL of 1 mg/mL) for an adult, repeating after 5 minutes if there is no improvement. Lie the patient flat with legs raised, or let them sit up if breathing is difficult; give high-flow oxygen and IV fluids as directed. Antihistamines are not first-line. Document and report the reaction and record the allergy.",
+        "source": { "kind": "own_writing" }
+      }
+    },
+    {
+      "code": "sqie-pilot-med-12", "area": "medication", "title": "Medication safety: drawing insulin from a pen device", "type": "single_best", "difficulty": "advanced",
+      "competency": { "code": "NUR-CCF-030", "objective": "Can describe human factors and other basic safety design principles; delineate general categories of errors and hazards in care, causes of error and allocation of responsibility and accountability (e.g. RCA); describe factors that create a culture of safety" },
+      "references": [{ "id": "NHS-PSA-2016-INSULIN", "supports": "Insulin must never be withdrawn from pen devices or cartridges with a syringe: some pens contain higher-strength insulin (for example 200 or 300 units/mL) and insulin syringes are graduated for 100 units/mL, risking severe overdose." }, { "id": "NPSA-INSULIN-2010", "supports": "Insulin doses are measured only with an insulin syringe or pen device." }],
+      "misconception_tags": ["all-insulin-is-100-units-per-ml", "workaround-normalised"],
+      "fields": {
+        "format": "mcq",
+        "stem": "The pen needles have run out, and a colleague suggests drawing a patient's insulin out of their pen cartridge with an insulin syringe. What is the main danger?",
+        "options": [
+          "The pen may hold a higher-strength insulin than the 100 units/mL the syringe is marked for, causing a large overdose",
+          "Insulin is inactivated as soon as it touches the plastic of a syringe",
+          "The only risk is that the cartridge is no longer sterile for the next dose",
+          "Insulin syringes cannot measure doses below 20 units"
+        ],
+        "correctIndex": 0,
+        "rubric": { "level": "reasoning", "keyPoints": ["Never withdraw insulin from a pen or cartridge with a syringe", "Some pens contain 200 or 300 units/mL, but syringes are marked for 100 units/mL", "Get pen needles or a vial supply through pharmacy; do not work around the device"], "misconceptions": ["All insulin is 100 units/mL", "A workaround is acceptable if the dose is checked"] },
+        "marking": "deterministic",
+        "rationale": "Insulin syringes are graduated for 100 units/mL insulin, but some pens contain higher-strength insulin (for example 200 or 300 units/mL). Drawing from a pen with a syringe can therefore give two or three times the intended dose and cause severe hypoglycaemia. Never withdraw insulin from a pen or cartridge; obtain pen needles or an appropriate supply through pharmacy and escalate if a dose will be delayed.",
+        "source": { "kind": "own_writing" }
+      }
+    }
+  ]
+}

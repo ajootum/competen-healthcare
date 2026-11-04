@@ -28,11 +28,12 @@ import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
+import { choiceLeaks, writtenLeaks } from "./answer-leak";
 import type { Passage } from "./generation";
 import {
-  CALCULATION_DEFAULTS, isReasoningPart, calculationAccepted, calculationSpecOf, calculationUnitChoices, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
+  CALCULATION_DEFAULTS, CAPS_DEFAULT, capPartMarks, isReasoningPart, calculationAccepted, calculationSpecOf, calculationUnitChoices, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
   safetyMarkersOf, safetyRecord, structuredVariantOf, unitInfo, worstOutcome,
-  type CalculationMark, type CalculationPolicy, type Finding, type PartContract, type PartRole, type SafetyOutcome, type SafetyRecord, type StructuredVariant,
+  type CalculationMark, type CalculationPolicy, type CapPolicy, type Finding, type PartContract, type PartRole, type SafetyOutcome, type SafetyRecord, type StructuredVariant,
 } from "./scoring-rules";
 import {
   asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
@@ -267,15 +268,31 @@ export function codeMarkParts(parts: readonly StructuredPart[], texts: readonly 
 }
 
 /**
- * Pure (WS-B, rules v2). The safety outcome of a structured answer: unsafe where any part made an unsafe statement, else
- * critical_missed where a safety-critical part did not earn its full marks (a part the learner marked themselves is their own
- * judgement, never counted here), else safe -- with the statement and what was missed.
+ * Pure (WS-B). One structured part's own safety outcome: unsafe where it made an unsafe statement (code or AI); critical_missed where the
+ * part is safety-critical and did not earn its full marks (missed or wrong) -- a part the learner marked themselves is their own
+ * judgement and never counted here; else safe.
  */
-export function structuredSafety(parts: readonly StructuredPart[], results: readonly PartResult[]): { outcome: SafetyOutcome; statement: string | null; missed: string[]; by: "code" | "ai" } {
-  const unsafeAt = results.findIndex(r => !!r?.unsafe);
-  if (unsafeAt >= 0) return { outcome: "unsafe", statement: results[unsafeAt].unsafe ?? null, missed: [], by: results[unsafeAt].by === "ai" ? "ai" : "code" };
-  const missed = parts.filter((p, i) => p.contract.safetyCritical && results[i]?.by !== "self" && (results[i]?.awarded ?? 0) < p.marks).map(p => p.prompt);
-  return { outcome: missed.length ? "critical_missed" : "safe", statement: null, missed, by: results.some(r => r?.by === "ai") ? "ai" : "code" };
+export function partOutcome(p: StructuredPart, r: PartResult | null | undefined): SafetyOutcome {
+  if (r?.unsafe) return "unsafe";
+  return p.contract.safetyCritical && r?.by !== "self" && (r?.awarded ?? 0) < p.marks ? "critical_missed" : "safe";
+}
+
+/**
+ * Pure (WS-B, rules v3). A structured answer's parts with the caps applied AT EACH PART (the rubric's scope) -- an unsafe part keeps at
+ * most half its marks, a safety-critical failure none -- and never to the other parts. Only where the caps are active; the outcome is
+ * always detected. The record kept with the attempt names the worst outcome, the first unsafe statement and what was missed.
+ */
+export function capStructured(parts: readonly StructuredPart[], results: readonly PartResult[], policy: CapPolicy = CAPS_DEFAULT): { results: PartResult[]; safety: SafetyRecord | null } {
+  const outcomes = parts.map((p, i) => partOutcome(p, results[i]));
+  const capped = results.map((r, i) => ({ ...r, awarded: capPartMarks(parts[i].marks, r.awarded, outcomes[i], policy) }));
+  const worst = outcomes.reduce<SafetyOutcome>((w, o) => worstOutcome(w, o), "safe");
+  const u = outcomes.indexOf("unsafe");
+  const flagged = outcomes.map((o, i) => (o === "safe" ? -1 : i)).filter(i => i >= 0);
+  const by: "code" | "ai" = flagged.some(i => results[i]?.by === "ai") ? "ai" : "code";
+  return {
+    results: capped,
+    safety: safetyRecord(worst, { statement: u >= 0 ? results[u].unsafe ?? null : null, missed: parts.filter((_, i) => outcomes[i] === "critical_missed").map(p => p.prompt), by, capped: policy.capsActive }),
+  };
 }
 
 /**
@@ -295,9 +312,12 @@ export function writtenSafety(q: RevisionQuestion, ai: { correct: boolean; unsaf
   return { outcome: safetyMarkersOf(a).safetyCritical && !ai.correct ? "critical_missed" : "safe", statement: null, missed: [] };
 }
 
-/** Pure (rules v2). A mark with the safety cap applied, and the record kept with the attempt (null for a safe answer). */
-export function withSafety<T extends { correct: boolean; score: number }>(m: T, s: { outcome: SafetyOutcome; statement?: string | null; missed?: readonly string[] }, by: "code" | "ai"): { mark: T; safety: SafetyRecord | null } {
-  return { mark: capForSafety(m, s.outcome), safety: safetyRecord(s.outcome, { statement: s.statement ?? null, missed: s.missed ?? [], by }) };
+/**
+ * Pure (rules v3). A single-answer item's mark (short, extended, calculation: the item is the rubric's scope) with the cap applied where the
+ * caps are active, and the record kept with the attempt (null for a safe answer).
+ */
+export function withSafety<T extends { correct: boolean; score: number }>(m: T, s: { outcome: SafetyOutcome; statement?: string | null; missed?: readonly string[] }, by: "code" | "ai", policy: CapPolicy = CAPS_DEFAULT): { mark: T; safety: SafetyRecord | null } {
+  return { mark: capForSafety(m, s.outcome, policy), safety: safetyRecord(s.outcome, { statement: s.statement ?? null, missed: s.missed ?? [], by, capped: policy.capsActive }) };
 }
 export { worstOutcome };
 
@@ -315,7 +335,7 @@ export function practiceMarks(parts: readonly StructuredPart[], results: readonl
 export type Mark = { correct: boolean; score: number; marking: "deterministic" | "self_graded"; safety?: SafetyRecord | null; calc?: CalculationMark } | { needsJudgement: true };
 
 /** What marking needs from the published policy (absent: the strict code defaults). WS-A: a calculation's default tolerance and unit rule. */
-export type MarkOptions = { calculation?: CalculationPolicy };
+export type MarkOptions = { calculation?: CalculationPolicy; caps?: CapPolicy };
 
 /**
  * Pure. Deterministic marking. A short answer that matches no accepted answer is not marked here: code cannot tell,
@@ -330,7 +350,7 @@ export function markResponse(q: RevisionQuestion, r: Response, opts: MarkOptions
     if (!spec) return { correct: false, score: 0, marking: "deterministic" };
     // Owner decision 4 Nov 2026: a tenfold error is unsafe independently of tolerance (cm.safety), recorded as any unsafe answer is.
     const cm = markCalculation(spec, r, opts.calculation ?? CALCULATION_DEFAULTS);
-    return { correct: cm.correct, score: cm.score, marking: "deterministic", calc: cm, ...(cm.safety ? { safety: cm.safety } : {}) };
+    return { correct: cm.correct, score: cm.score, marking: "deterministic", calc: cm, ...(cm.safety ? { safety: { ...cm.safety, capped: !!opts.caps?.capsActive } } : {}) };
   }
   if (k.kind === "choice" && r.kind === "choice") return { correct: r.index === k.index, score: r.index === k.index ? 1 : 0, marking: "deterministic" };
   if (k.kind === "set" && r.kind === "set") {
@@ -344,9 +364,10 @@ export function markResponse(q: RevisionQuestion, r: Response, opts: MarkOptions
   if (k.kind === "accepted" && r.kind === "text" && isExtendedQuestion(q)) return { needsJudgement: true };
   // SCHOLAR-COMPANION-01: a cloze answer is a single term, so code marks it either way (normalised match, accepted variants).
   if (k.kind === "accepted" && r.kind === "text" && isClozeQuestion(q)) { const ok = markCloze(r.text, k.answers); return { correct: ok, score: ok ? 1 : 0, marking: "deterministic" }; }
-  // SQIE-CLOSE-2026-11 WS-B (rules v2): an authored unsafe answer is recognised by code before anything else, and earns nothing.
+  // SQIE-CLOSE-2026-11 WS-B: an authored unsafe answer is recognised by code before anything else. It is a known WRONG answer (never
+  // accepted), so it is marked incorrect by code whether or not the caps are active; the flag is recorded either way.
   const unsafe = k.kind === "accepted" && r.kind === "text" ? matchUnsafe(r.text, safetyMarkersOf(q.answer).unsafe) : null;
-  if (unsafe) return { correct: false, score: 0, marking: "deterministic", safety: safetyRecord("unsafe", { statement: unsafe, by: "code" }) };
+  if (unsafe) return { correct: false, score: 0, marking: "deterministic", safety: safetyRecord("unsafe", { statement: unsafe, by: "code", capped: !!opts.caps?.capsActive }) };
   if (k.kind === "accepted" && r.kind === "text") return markShortAnswer(r.text, k.answers) ? { correct: true, score: 1, marking: "deterministic" } : { needsJudgement: true };
   if (k.kind === "back" && r.kind === "recall") return { correct: r.quality >= 3, score: r.quality / 5, marking: "self_graded" };
   if (k.kind === "matches" && r.kind === "matches") {
@@ -361,11 +382,10 @@ export function markResponse(q: RevisionQuestion, r: Response, opts: MarkOptions
     // Marked by code only when every part is blank or matches what it accepts. Otherwise each remaining part is judged.
     const coded = codeMarkParts(k.parts, r.texts);
     if (coded.some(x => x === null)) return { needsJudgement: true };
-    // WS-B (rules v2): every part judged as before, then the safety outcome caps the whole answer.
-    const final = coded as PartResult[];
-    const m = practiceMarks(k.parts, final);
-    const s = withSafety({ correct: m.correct, score: m.score }, structuredSafety(k.parts, final), "code");
-    return { correct: s.mark.correct, score: s.mark.score, marking: "deterministic", ...(s.safety ? { safety: s.safety } : {}) };
+    // WS-B (rules v3): every part judged as before, then each part capped at its own scope (where the caps are active).
+    const c = capStructured(k.parts, coded as PartResult[], opts.caps);
+    const m = practiceMarks(k.parts, c.results);
+    return { correct: m.correct, score: m.score, marking: "deterministic", ...(c.safety ? { safety: c.safety } : {}) };
   }
   return { correct: false, score: 0, marking: "deterministic" };
 }
@@ -586,6 +606,10 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     : kind === "flashcard" ? !flashcardFrontAsks(d.stem) : kind !== "match" && kind !== "true_false" && kind !== "scenario" && !asksQuestion(d.stem)) return { ok: false, reason: "not_a_question" };
   if (kind === "flashcard") { const p = flashcardDraftProblem(d.stem, String(d.answer.back ?? ""), passage.content); if (p) return { ok: false, reason: p }; }
   if (checks.existing?.has(stemKey(d.stem))) return { ok: false, reason: "repeat" };
+  // SQIE-CLOSE-2026-11 WS-H: the item does not give its own answer away (answer-leak.ts, the rule scenarios already use): the
+  // stem of a multiple-response item states every keyed option and no other; a short answer's stem states an accepted answer;
+  // a structured item's lead-in or any of its part prompts states a part's accepted answer (the parts are shown together).
+  if (answerLeaks(kind, d)) return { ok: false, reason: "answer_leaked" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);
   if (kind === "true_false") {
@@ -620,6 +644,19 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
 const repeatsObjective = (objective: string | null, checks: DraftChecks): boolean => !!objective && !!checks.existingObjectives?.has(objectiveKey(objective));
 
 /** The answer an item expects, in words: what its rubric records and its consistency check reads. */
+/** Pure. SQIE-CLOSE-2026-11 WS-H: whether a revision draft states its own answer before it is answered (see the call above). */
+export function answerLeaks(kind: Exclude<RevisionFormat, "mcq">, d: Pick<RevisionDraft, "stem" | "options" | "answer">): boolean {
+  const a = d.answer as Record<string, unknown>;
+  if (kind === "mrq") return choiceLeaks(d.stem, d.options, Array.isArray(a.correct) ? (a.correct as number[]) : []);
+  if (kind === "short") return writtenLeaks(d.stem, Array.isArray(a.accepted) ? (a.accepted as string[]) : []);
+  if (kind === "structured") {
+    const parts = Array.isArray(a.parts) ? (a.parts as { prompt: string; accepted: string[] }[]) : [];
+    const shown = [d.stem, ...parts.map(p => p.prompt)].join(" ");
+    return parts.some(p => writtenLeaks(shown, p.accepted ?? []));
+  }
+  return false;
+}
+
 function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): string {
   const a = d.answer as Record<string, unknown>;
   if (kind === "short") return String((a.accepted as string[])[0] ?? "");

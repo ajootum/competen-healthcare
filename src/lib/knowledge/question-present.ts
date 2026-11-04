@@ -7,9 +7,9 @@ import { ROLE_LABEL, VARIANT_LABEL, calculationSpecOf, criteriaOf, findingsOf, r
 // until the clinical calculation policy is approved), what is safety-critical and which answers are unsafe, the findings, each
 // part's role, choice and weighted criteria.
 const TOLERANCE_OFF = "recorded, NOT in use: answers must be exact until the clinical calculation policy is approved and HQ turns calculation tolerances on";
-function safetyLines(x: Record<string, unknown>, critical = "Safety-critical: an answer that misses it is never marked correct"): string[] {
+function safetyLines(x: Record<string, unknown>, critical = "Safety-critical: a miss is flagged and named in the feedback (scores nothing for this part when HQ turns clinical scoring caps on)"): string[] {
   const unsafe = Array.isArray(x.unsafe) ? x.unsafe.filter((u): u is string => typeof u === "string" && !!u.trim()) : [];
-  return [...(x.safetyCritical === true ? [critical] : []), ...unsafe.map(u => `Unsafe answer (scores nothing, and is named in the feedback): ${u}`)];
+  return [...(x.safetyCritical === true ? [critical] : []), ...unsafe.map(u => `Unsafe answer (flagged and named in the feedback, at most half this part's marks when HQ turns clinical scoring caps on): ${u}`)];
 }
 
 // ── A LIBRARY QUESTION, READ AS A QUESTION ── SQIE-LIBRARY-GAPS-01 ────────────────────────────────────────────────────────

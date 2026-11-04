@@ -16,6 +16,8 @@ const REASON: Record<string, string> = {
   malformed: "Malformed reply", quote_not_in_passage: "Quote not in passage", not_in_notes: "Not in the notes", no_citation: "No citation",
   bad_citation: "Bad citation", source_insufficient: "Notes insufficient (model)", sufficiency_insufficient: "Redirected: notes insufficient",
   sufficiency_simpler: "Redirected: simpler activity offered", repeat_rejected: "Identical retry stopped", save_failed: "Save failed",
+  // SQIE-CLOSE-2026-11 WS-H
+  answer_in_stem: "Stem gave the answer away", answer_leaked: "Answer given away", identifier: "Patient identifier",
 };
 const SUFF: Record<string, string> = { sufficient: "Sufficient", simpler: "Simpler offered", insufficient: "Insufficient", uncertain: "Uncertain (governed attempt)" };
 

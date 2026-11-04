@@ -214,7 +214,7 @@ async function switchOn(): Promise<string | null> {
 }
 async function switchBack(): Promise<string> {
   if (!SNAP) return "never changed";
-  if (SNAP.row === null) await resetOverride(admin, ACTOR, POLICY_SCOPE, KEY);
+  if (SNAP.row === null) { const rr = await resetOverride(admin, ACTOR, POLICY_SCOPE, KEY); if (!rr.ok) return `reset failed: ${rr.error}`; }
   else await admin.from("workspace_config_overrides").update({ draft: SNAP.row.draft, published: SNAP.row.published, updated_at: new Date().toISOString() })
     .eq("scope_type", POLICY_SCOPE.scopeType).eq("scope_ref", POLICY_SCOPE.scopeRef).eq("config_path", KEY);
   if (!(await pendingOthers()).length) await publishScope(admin, ACTOR, POLICY_SCOPE, { label: "SCHOLAR-SESSION-AI-02 acceptance: restored", note: "scholar_study_sessions put back as it was" });

@@ -9,8 +9,14 @@
 //
 // `hash` is the first 16 hex characters of the sha256 of the canonical JSON of the question's `answer` (key and rubric): the
 // same hash means the same marking guide. The other fields are what feedback shows (the accepted answers, the key points, the
-// practice marks), cut short. ⚠ NEVER FAILS AN ATTEMPT: the snapshot is kept small, and if it cannot fit with the answer it
-// is cut to { v, hash } and, failing that, left out -- the attempt is recorded either way.
+// practice marks), each text kept whole up to the 300 characters a generated key point or accepted answer may have.
+// ⚠ NEVER FAILS AN ATTEMPT: if it cannot fit with the answer it is cut back to the compact form, then to { v, hash } and,
+// failing that, left out -- the attempt is recorded either way.
+//
+// SQIE WS-D: TWO SIZES. The full snapshot (SNAPSHOT_MAX_BYTES, 6144) is what the 791 attempt snapshot keeps, within that table's
+// 16384-byte budget, so a normal guide (up to 8 key points and 8 accepted answers of up to 300 characters, or 4 parts of 4)
+// survives whole. The 416 response copy shares the 7000-byte response with the typed answer, so it falls back to the compact
+// form (SNAPSHOT_COMPACT_BYTES, 1500, the earlier cap) before { v, hash }. Only a genuinely oversized guide is cut to its hash.
 //
 // ⚠ An mcq or case attempt cannot carry one: migration 416 requires exactly one of chosen_index and response, and a choice is
 // stored in chosen_index. Those attempts are marked by code against a key that does not move, and keep the 416 shape.
@@ -24,8 +30,12 @@ import { RESPONSE_BUDGET } from "./written-feedback";
 import { calculationSpecOf, roundingOf, toleranceOf, unitInfo, type Rounding, type Tolerance } from "./scoring-rules";
 
 export const SNAPSHOT_VERSION = 1 as const;
-/** The most bytes a snapshot's JSON may take before it is cut back. */
-export const SNAPSHOT_MAX_BYTES = 1500;
+/** The most bytes a full snapshot's JSON may take before it is cut back (within the 791 snapshot's 16384-byte budget). */
+export const SNAPSHOT_MAX_BYTES = 6144;
+/** The compact form: the most bytes before it is cut back further (the 416 response fallback, and the 791 fit step). */
+export const SNAPSHOT_COMPACT_BYTES = 1500;
+/** The longest text kept per key point or accepted answer: the 300 characters question-intel.ts rubricOf allows. */
+export const SNAPSHOT_TEXT_MAX = 300;
 
 export type SnapshotPart = { marks: number; accepted: string[] };
 /** SQIE-CLOSE-2026-11 WS-A: a calculation's numeric key as it was marked against (value, unit, and any authored tolerance and unit rule). */
@@ -59,17 +69,17 @@ export function rubricSnapshotOf(q: { kind: string; answer: unknown }): RubricSn
   const a = q.answer as Record<string, unknown>;
   const rubric = (a.rubric ?? {}) as Record<string, unknown>;
   const snap: RubricSnapshot = { v: SNAPSHOT_VERSION, hash: rubricHash(q.answer) };
-  const keyPoints = cut(rubric.keyPoints, 8, 160);
+  const keyPoints = cut(rubric.keyPoints, 8, SNAPSHOT_TEXT_MAX);
   if (keyPoints.length) snap.keyPoints = keyPoints;
   if (isExtendedQuestion(q)) {
     const spec = extendedSpecOf(q.answer);
     if (spec) snap.marks = spec.marks;
   } else if (Array.isArray(a.accepted)) {
-    const acc = cut(a.accepted, 8, 120);
+    const acc = cut(a.accepted, 8, SNAPSHOT_TEXT_MAX);
     if (acc.length) snap.accepted = acc;
   }
   if (Array.isArray(a.parts)) {
-    const parts = (a.parts as Record<string, unknown>[]).map(p => ({ marks: Number.isInteger(p?.marks) ? (p.marks as number) : 1, accepted: cut(p?.accepted, 4, 120) }));
+    const parts = (a.parts as Record<string, unknown>[]).map(p => ({ marks: Number.isInteger(p?.marks) ? (p.marks as number) : 1, accepted: cut(p?.accepted, 4, SNAPSHOT_TEXT_MAX) }));
     if (parts.length && parts.every(p => p.accepted.length)) {
       snap.parts = parts; snap.marks = parts.reduce((n, p) => n + p.marks, 0);
     }
@@ -77,7 +87,7 @@ export function rubricSnapshotOf(q: { kind: string; answer: unknown }): RubricSn
   // CE-05: a scenario's guide is its stages: each stage's weight (as marks) and the key it was marked against (as accepted).
   const scenario = scenarioSpecOf(q.answer);
   if (scenario) {
-    snap.parts = scenario.stages.map(st => ({ marks: st.weight, accepted: [stageKeyText(st).slice(0, 120)] }));
+    snap.parts = scenario.stages.map(st => ({ marks: st.weight, accepted: [stageKeyText(st).slice(0, SNAPSHOT_TEXT_MAX)] }));
     snap.marks = scenario.totalWeight;
   }
   // WS-A: a calculation's numeric key (an attempt marked against it reads it back exactly, whatever the question says later).
@@ -86,12 +96,17 @@ export function rubricSnapshotOf(q: { kind: string; answer: unknown }): RubricSn
     value: calc.value, unit: calc.unit.slice(0, 40), ...(calc.equivalentUnits.length ? { equivalentUnits: calc.equivalentUnits.map(u => u.slice(0, 40)) } : {}),
     ...(calc.rounding ? { rounding: calc.rounding } : {}), ...(calc.tolerance ? { tolerance: calc.tolerance } : {}), ...(calc.safetyCritical ? {} : { safetyCritical: false as const }),
   };
-  // Cut back, longest optional field first, until it fits. { v, hash } always fits.
+  return compactSnapshot(snap, SNAPSHOT_MAX_BYTES);
+}
+
+/** Pure. A snapshot within `max` bytes: optional fields dropped in a fixed order until it fits. { v, hash } always fits. */
+export function compactSnapshot(snap: RubricSnapshot, max: number = SNAPSHOT_COMPACT_BYTES): RubricSnapshot {
+  const out: RubricSnapshot = { ...snap };
   for (const drop of ["keyPoints", "accepted", "parts"] as const) {
-    if (bytes(snap) <= SNAPSHOT_MAX_BYTES) break;
-    delete snap[drop];
+    if (bytes(out) <= max) break;
+    delete out[drop];
   }
-  return bytes(snap) <= SNAPSHOT_MAX_BYTES ? snap : { v: SNAPSHOT_VERSION, hash: snap.hash };
+  return bytes(out) <= max ? out : { v: SNAPSHOT_VERSION, hash: snap.hash };
 }
 
 /**
@@ -104,7 +119,7 @@ export function withRubricSnapshot(response: Record<string, unknown> | null, sna
   try {
     const { rubric: _old, ...rest } = response;
     void _old;
-    for (const s of [snap, { v: snap.v, hash: snap.hash }]) {
+    for (const s of [snap, compactSnapshot(snap), { v: snap.v, hash: snap.hash }]) {
       const next = { ...rest, rubric: s };
       if (bytes(next) <= RESPONSE_BUDGET) return next;
     }
@@ -118,12 +133,12 @@ export function snapshotOf(response: unknown): RubricSnapshot | null {
   const r = (response as Record<string, unknown>).rubric as Record<string, unknown> | undefined;
   if (!r || typeof r !== "object" || r.v !== SNAPSHOT_VERSION || typeof r.hash !== "string" || !/^[0-9a-f]{16}$/.test(r.hash)) return null;
   const out: RubricSnapshot = { v: SNAPSHOT_VERSION, hash: r.hash };
-  const keyPoints = cut(r.keyPoints, 8, 160), accepted = cut(r.accepted, 8, 120);
+  const keyPoints = cut(r.keyPoints, 8, SNAPSHOT_TEXT_MAX), accepted = cut(r.accepted, 8, SNAPSHOT_TEXT_MAX);
   if (keyPoints.length) out.keyPoints = keyPoints;
   if (accepted.length) out.accepted = accepted;
   if (Number.isInteger(r.marks) && (r.marks as number) >= 0 && (r.marks as number) <= 100) out.marks = r.marks as number;
   if (Array.isArray(r.parts)) {
-    const parts = (r.parts as Record<string, unknown>[]).slice(0, 4).map(p => ({ marks: Number.isInteger(p?.marks) ? (p.marks as number) : 0, accepted: cut(p?.accepted, 4, 120) }));
+    const parts = (r.parts as Record<string, unknown>[]).slice(0, 4).map(p => ({ marks: Number.isInteger(p?.marks) ? (p.marks as number) : 0, accepted: cut(p?.accepted, 4, SNAPSHOT_TEXT_MAX) }));
     if (parts.length && parts.every(p => p.marks >= 1 && p.marks <= 5 && p.accepted.length)) out.parts = parts;
   }
   const c = r.calc as Record<string, unknown> | undefined;
