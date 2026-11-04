@@ -196,6 +196,26 @@ Only genuine gaps. Working components are not rebuilt. Sizes: S < 1 day, M 1-3 d
 
 **Parallelism:** WS-A, WS-B and WS-C all touch `S/revision.ts`, RC and `S/question-formats.ts`, so build them one after another or in one branch. WS-D, WS-G, WS-H, WS-I and WS-F touch disjoint files. WS-D and WS-E each need a migration number claim.
 
+## SALE-2026-11 integration — workstream status
+
+**Authority:** owner instruction "SALE-2026-11 — SQIE Tracker Integration", 4 Nov 2026. WS-A..WS-J are **approved for development** with its conditions (below). This tracker stays the SQIE source of truth; the SALE programme tracker (`docs/programme/SALE-2026-11-TRACKER.md`, branch `docs/sale-tracker`) links here through **SALE-02** (Complete SQIE gaps) and SALE-00, and does not copy these rows. Status uses this tracker's four values; a merged PR is not Complete until its production acceptance is met.
+**Migration numbers:** 990 (WS-D), 991-999 reserved for SQIE (claim file `SQIE-WAVE1-migration-number-claim.md`, coordinator folder). R1 uses 970-979, CE-04/05 980-989.
+
+| WS | Wave | SALE link | Status | Branch / PR | Changes implemented | Acceptance evidence | Production | Owner decisions / blockers | Remaining |
+|---|---|---|---|---|---|---|---|---|---|
+| WS-B | 1 | SALE-02 (gates SALE-13 clinical formats) | Partially Complete | `scholar/sqie-ws-b-unsafe-responses` (6737c1f0, PR to open) | evaluate v3 and case reasoning v3 require an `UNSAFE:` line quoting the answer; required where asked (fail closed); only quotes found in the answer are kept; an unsafe answer, part, stage or case decision is marked incorrect with score 0, an extended answer is credited no key point; shown first in a red block with a formative note; kept in `response.formative` and the 791 snapshot; audit rows carry the count | `unsafe-response.test.ts` 13/13; scholar, cases and scholar API suites green except five load-timeout tests that fail identically on the WS-H tree | Not deployed | Owner GO to merge and deploy. Condition 1 (safeguards before new clinical formats) is met in code once merged | Case criterion `weight` and `safetyCritical` are still not scored (written case decisions keep a single verdict); evaluator false-positive rate not yet measured on real answers |
+| WS-H | 1 | SALE-02 | Partially Complete | `scholar/sqie-ws-h-quality-guards` (74753273, pushed, PR to open) | `answer-leak.ts` (the CE-05 rule, moved unchanged); `answer_in_stem` for single best answer and case items; `answer_leaked` for mrq, short and structured drafts; identifier screen on generated mcq/case text; `stage-boundary.test.ts` (no Scholar module imports a stage computation, with a planted-import control); HQ panel labels | `answer-leak.test.ts`, `stage-boundary.test.ts`; scholar + knowledge + scholar API suites 140 files / 2304 tests green; tsc clean | Not deployed | Owner GO to merge and deploy | — |
+| WS-D | 1 | SALE-02; feeds SALE-04 (learning state) and SALE-14 (competency evidence) | Partially Complete | session [SQIE WS-D](#local_0e0244d2-f1ac-4753-aec3-bacc52a1a405), migration 990 | In build: CYU check snapshots, framework provenance on snapshots, scenario five-part feedback, rubric snapshot cap | Pending (session report) | Not applied | 990 needs staging x2 then owner GO for production | As the session reports |
+| WS-J | 1 | SALE-02 | Partially Complete | on `scholar/sqie-ws-h-quality-guards` (scenario F commit) | Scenario F in `scripts/scholar-sqie-acceptance-harness.ts`: difficulty up after three right, down after two of the last three missed, blueprint unchanged, eligible models only, labelled report with no stage words; `SQIE_ONLY=F` runs only setup, A0, F and Z | Staging run: pending (recorded below when it completes) | — | Q14 and Q15: coordinator runs read-only | Q14/Q15 results |
+| WS-C | 2 | SALE-02; feeds SALE-13 (clinical application) | Not Started | — | — | — | — | — | As in the gap list |
+| WS-A | 3 | SALE-02 | Not Started | — | — | — | — | **Clinical calculation-tolerance policy must be approved before clinical activation; tolerances are never taken from AI output** | As in the gap list |
+| WS-E | 3 | SALE-02 | Not Started | — | — | — | — | Independent clinical review and publication stay as they are | As in the gap list |
+| WS-F | 3 | SALE-02; feeds SALE-06 (adaptive selection) | Not Started | — | — | — | — | Starter library published first (content) | As in the gap list |
+| WS-I | 4 | SALE-02; feeds SALE-12 (Active Notebook) | Not Started | — | — | — | — | — | As in the gap list |
+| WS-G | 5 | SALE-02; feeds SALE-15 (effectiveness analytics) and SALE-16 (cost) | Not Started | — | — | — | — | **No production cost figure while metering is off** (owner decision on metering) | As in the gap list |
+
+**Operational actions (owner and content, SALE-2026-11):** a small clinically reviewed starter library through the existing educator → reviewer → publisher workflow (production has 0 library questions); confirm the relevant framework is published and mapping is available, then validate mapping on real approved questions (production has 0 mapped learner questions); learner question contributions stay off until their policy is approved; owner decision on AI metering before any cost-effectiveness claim.
+
 ## Change log
 
 | Date | Change |
