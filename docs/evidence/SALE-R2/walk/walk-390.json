@@ -1,0 +1,53 @@
+{
+  "width": 390,
+  "at": "2026-11-04T17:45:55.272Z",
+  "dueBefore": [
+    {
+      "key": "recognising-deterioration-notes",
+      "rules": "S1 S2",
+      "text": "recognising-deterioration-notesDue since 2026-11-03 · about 5 minLast practised 2 days ago. Recalled well on 1 of 1 practice day, so the gap before the next recall is 1 day (the spacing grows each time you recall it).Recall it now"
+    }
+  ],
+  "dueAfter": [
+    {
+      "key": "essential nursing care of the critically ill",
+      "rules": "S1",
+      "text": "Essential Nursing Care of the Critically IllDue since 2026-10-28 · about 5 minLast practised 8 days ago, not recalled well yet, so it comes back after 1 day.Recall it now"
+    },
+    {
+      "key": "recognising-deterioration-notes",
+      "rules": "S1 S2 S6",
+      "text": "recognising-deterioration-notesDue since 2026-11-03 · for 2026-11-05 · about 5 minLast practised 2 days ago. Recalled well on 1 of 1 practice day, so the gap before the next recall is 1 day (the spacing grows each time you recall it).Why nowMore is due than fits one study session (1 topic), so this one is for 2026-11-05.Rules S1, S2, S6.Recall it now"
+    }
+  ],
+  "prerequisite": "Quality Improvement Science and Methods: review “Performs a systematic respiratory assessment” firstSeveral different questions on Quality Improvement Science and Methods were not answered well, and your framework lists \"Performs a systematic respiratory assessment\" as coming first. A short review of your notes on it may help before going on.24 different questions on Quality Improvement Science and Methods not answered well yet.In Nursing: Respiratory Care, \"Performs a systematic respiratory assessment\" is a prerequisite of \"Assess oxygen requirement\", which your notes on this topic are linked to.You have no answers on your notes for it yet.Review your notes: Essential Nursing Care of the Critically Ill",
+  "transferSession": "8daabd11-5890-498c-83d4-374e947449f2",
+  "application": "Applying itSome evidence2 application or reasoning tasks done well out of 6. Transfer checks (a question away from the lesson where you learned it): 0 of 1 answered well.",
+  "log": [
+    "PASS SALE-08 Revise shows Due for retrieval (scholar_retrieval_schedule on)",
+    "PASS SALE-08 before the delay: \"Essential Nursing Care of the Critically Ill\" (last practised today) is not due",
+    "PASS simulated delay applied on staging (its answers moved 8 days back)",
+    "PASS SALE-08 after the delay: \"Essential Nursing Care of the Critically Ill\" is Due for retrieval",
+    "PASS SALE-08 the reason says when it was last practised and why the gap",
+    "PASS SALE-08 the action is a retrieval exercise on its own sections (not only flashcards)",
+    "PASS SALE-08 no percentage or score shown",
+    "INFO due item: Essential Nursing Care of the Critically IllDue since 2026-10-28 · about 5 minLast practised 8 days ago, not recalled well yet, so it comes back after 1 day.Recall it now",
+    "PASS Revise fits 390 px",
+    "PASS SALE-09 a prerequisite review is suggested from the framework link",
+    "PASS SALE-09 the reason names the framework prerequisite and the different questions missed",
+    "PASS SALE-09 it links to the learner's own notes on the prerequisite",
+    "PASS simulated delay undone exactly on staging",
+    "PASS SALE-10 a transfer check is offered on \"Quality Improvement Science and Methods\" (some understanding shown)",
+    "PASS SALE-10 the transfer check opened as a revision session",
+    "PASS SALE-10 the session says it is a transfer check, and on which topic",
+    "INFO short answer: graded by the learner against the stored answer (It does not), as the revision route asks",
+    "PASS SALE-10 the transfer answer was recorded by the ordinary revision route (200)",
+    "PASS the transfer session fits 390 px",
+    "PASS SALE-10 the learning state's Applying it dimension shows the transfer check",
+    "FAIL SALE-10 the answer is listed as a transfer check in the evidence behind the topic",
+    "PASS never competence: the not-verified-competence note is shown",
+    "PASS Progress fits 390 px",
+    "PASS 0 console errors (0)",
+    "PASS no 5xx (0)"
+  ]
+}
