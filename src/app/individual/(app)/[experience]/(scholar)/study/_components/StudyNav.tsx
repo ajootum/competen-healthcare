@@ -9,6 +9,7 @@ import { STUDY_SPACES } from "@/lib/individual/scholar/study-session";
 import type { StudyBarView } from "@/lib/individual/scholar/study-carry";
 import { StudySessionBar } from "./study-session-bar";
 import { STUDY_EVENT, setActiveStudy } from "./study-active";
+import { NotebookReturn } from "./notebook-return";
 
 // The IN-WORKSPACE SWITCHER on every My Learning page (modular restructuring, 2 Nov 2026). My Plan, Library and Progress are
 // reached from the sidebar and the mobile drawer (ScholarSidebar, scholar/nav.ts); this keeps only the four study stages.
@@ -53,8 +54,10 @@ export default function StudyNav({ dueCount, study = null }: { dueCount?: number
     window.addEventListener(STUDY_EVENT, on);
     return () => window.removeEventListener(STUDY_EVENT, on);
   }, []);
-  if (bar) return <StudySessionBar bar={bar} />;
+  if (bar) return <><NotebookReturn /><StudySessionBar bar={bar} /></>;
   return (
+    <>
+    <NotebookReturn />
     <nav aria-label="Learning spaces" className="mb-5 overflow-x-auto md:mt-[23px]">
       <ul className="flex min-w-max gap-2">
         {SCHOLAR_SPACES.filter(s => (STUDY_SPACES as readonly string[]).includes(s.key)).map(s => {
@@ -78,5 +81,6 @@ export default function StudyNav({ dueCount, study = null }: { dueCount?: number
         })}
       </ul>
     </nav>
+    </>
   );
 }

@@ -80,7 +80,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
   | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
-  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max"
+  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max" | "scholar_next_best_action_max"
   | "scholar_learning_state_min_evidence" | "scholar_learning_state_distinct_questions" | "scholar_learning_state_delay_days" | "scholar_learning_state_stale_days"
   | "scholar_adaptive_reteach_max" | "scholar_adaptive_prerequisite_misses";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
@@ -127,7 +127,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
+  | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
@@ -1264,6 +1264,30 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offer the library" }, { value: "off", label: "Do not offer" }],
     fallback: "on",
     limitReason: "Search, notes, kept versions and lesson links need migration 820. Without it, the library still lists and filters saved teaching, and search is a basic match over the newest 500. Default: offered.",
+  },
+  // SALE-2026-11 R3 (SALE-11, SALE-12): the learning workspace. New learner features, so OFF until HQ turns them on. No AI, no cost.
+  {
+    key: "scholar_next_best_action", kind: "choice", product: "Scholar",
+    label: "My Plan: next best learning actions",
+    help: "Whether Today in My Plan suggests a few next learning ACTIONS (review a misconception, a short retrieval exercise, apply it in a case, continue an unfinished lesson, revisit a prerequisite), each with a short reason from the learner's own records, goals, exam and placement dates, available time and priorities. Every suggestion can be added to today, snoozed or dismissed, and the choice is recorded. Nothing changes the plan unless the learner adds it.",
+    options: [{ value: "on", label: "Suggest them" }, { value: "off", label: "Do not suggest" }],
+    fallback: "off",
+    limitReason: "Deterministic rules over existing records: no AI. Accept, snooze and dismiss need migration 975 (without it the suggestions are shown read only). Default: off.",
+  },
+  {
+    key: "scholar_next_best_action_max", kind: "int", product: "Scholar", unit: "suggestions",
+    label: "My Plan: next best learning actions shown at once",
+    help: "How many next learning actions Today shows at once, best first.",
+    fallback: 3, min: 1, max: 5,
+    limitReason: "One to five. Default: three.",
+  },
+  {
+    key: "scholar_active_notebook", kind: "choice", product: "Scholar",
+    label: "Library: the active Notebook",
+    help: "Whether the learning library offers the Notebook: the learner's own annotations and personal summaries, past misconceptions to revisit, related materials for each note, practice made from selected notes (through the existing Revise question generation and its routing), and a way back to the Notebook from the lesson or question they open. Learner-owned and private; citations are kept.",
+    options: [{ value: "on", label: "Offer the Notebook" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "Personal summaries need migration 975 (without it the Notebook works without them). Practice uses the existing Revise generation, allowance and model routing unchanged. Default: off.",
   },
   // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): short checks INSIDE the scrolling lesson. No new stage, engine or AI call: the
   // recall card reads the saved lesson, the quick check reads a stored question (writing one stays the learner's click), the
@@ -2423,6 +2447,10 @@ export type IndividualPolicy = {
   scholarMistakeNotebook: "on" | "off";
   /** SCHOLAR-LIBRARY-01. */
   scholarLearningLibrary: "on" | "off";
+  /** SALE-2026-11 R3: next best learning actions in My Plan (SALE-11) and the active Notebook (SALE-12). Default off. */
+  scholarNextBestAction: "on" | "off";
+  scholarNextBestActionMax: number;
+  scholarActiveNotebook: "on" | "off";
   /** SCHOLAR-INLINE-CHECKS-01: checks inside the scrolling lesson. */
   scholarLearnInlineRecall: "on" | "off";
   scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
@@ -2662,6 +2690,9 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarFlashcards: clampChoice(policyDef("scholar_flashcards") as ChoicePolicy, published.get(policyPath("scholar_flashcards"))) as "on" | "off",
     scholarMistakeNotebook: clampChoice(policyDef("scholar_mistake_notebook") as ChoicePolicy, published.get(policyPath("scholar_mistake_notebook"))) as "on" | "off",
     scholarLearningLibrary: clampChoice(policyDef("scholar_learning_library") as ChoicePolicy, published.get(policyPath("scholar_learning_library"))) as "on" | "off",
+    scholarNextBestAction: clampChoice(policyDef("scholar_next_best_action") as ChoicePolicy, published.get(policyPath("scholar_next_best_action"))) as "on" | "off",
+    scholarNextBestActionMax: int("scholar_next_best_action_max"),
+    scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
     scholarLearnInlineRecall: clampChoice(policyDef("scholar_learn_inline_recall") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall"))) as "on" | "off",
     scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
     scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),

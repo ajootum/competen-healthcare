@@ -25,6 +25,9 @@ import { PlanOptimistic } from "../_components/plan-optimistic";
 import { InsightsView } from "../_components/plan-insights-view";
 import { CalendarIcon, LearningOnlyNote } from "../_components/plan-ui";
 import { secondaryBtn, squareBtn } from "../_components/plan-style";
+// SALE-2026-11 R3 / SALE-11: next learning actions on Today (policy scholar_next_best_action, default off).
+import { NextActionsCard } from "../_components/plan-next-actions";
+import { loadNextActions } from "@/lib/individual/scholar/next-best-action-data";
 
 // Request-time only: it reads the release gate, the session and the learner's own records, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -109,7 +112,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
 
   // ── TODAY ──
   if (view === "today") {
-    const t = await loadToday(ctx, policy, o);
+    const [t, nba] = await Promise.all([loadToday(ctx, policy, o), loadNextActions(ctx, policy, { now: o.now, today }).catch(() => null)]);
     if (!t.ok) return <>{frame()}<NotReady reason={t.reason} /></>;
     const flashcards = experienceHref("scholar", "study/revise/flashcards");
     const calHref = calendarHref(base, { span: "month", date: today, today, extra: keep });
@@ -138,6 +141,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
             ) : (
               <TodayEmpty accent={x.accent} planHref={calendarHref(base, { span: "month", date: today, today, extra: { ...keep, add: "1" } })} studyNowHref={studyNow} calendarHref={calHref} />
             )}
+            {nba && <NextActionsCard accent={x.accent} items={nba.items} canDecide={nba.canDecide} canPlan={nba.canPlan} dismissed={nba.dismissed} snoozed={nba.snoozed} studyId={studyId} />}
             <ComingUp accent={x.accent} today={today} items={t.comingUp} calendarHref={calHref} />
             <NotesList notes={t.notes} />
             <MissedList accent={x.accent} today={today} missed={t.missed} />

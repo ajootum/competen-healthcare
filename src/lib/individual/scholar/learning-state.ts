@@ -64,6 +64,8 @@ export type TopicLearningState = {
   /** The answers behind it, newest first (at most 12), for "see the evidence". */
   evidence: { at: string; source: StateSource; outcome: "right" | "partly" | "not yet" | "not marked"; marking: StateMarking; itemId: string; chunkId: string | null; confidence: StateEvidence["confidence"] }[];
   lastAt: string | null;
+  /** SALE-2026-11 R3: the misconception named on two or more DIFFERENT questions (rule M1 "stronger"), else null. Read by next-best-action.ts. */
+  repeatedMisconception?: string | null;
 };
 export const LEARNING_STATE_NOTE = "Learning evidence from your own practice, not verified competence. No single answer decides it, and it is never a competency stage.";
 
@@ -183,7 +185,7 @@ export function topicLearningState(topic: StateTopic, rows: readonly StateEviden
       .filter(Boolean).join("; ") + ".";
 
   return {
-    key: topic.key, label: topic.label, materialId: topic.materialId, chunkIds: [...topic.chunkIds], enough, headline, dimensions: dims, lastAt,
+    key: topic.key, label: topic.label, materialId: topic.materialId, chunkIds: [...topic.chunkIds], enough, headline, dimensions: dims, lastAt, repeatedMisconception: repeated[0]?.[0] ?? null,
     evidence: answers.slice(0, 12).map(a => ({ at: a.at, source: a.source, outcome: !marked(a) ? "not marked" : right(a) ? "right" : partly(a) ? "partly" : "not yet", marking: a.marking, itemId: a.itemId, chunkId: a.chunkId, confidence: a.confidence })),
   };
 }
