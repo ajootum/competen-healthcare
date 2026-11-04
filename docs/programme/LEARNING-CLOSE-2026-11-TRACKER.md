@@ -42,11 +42,11 @@
 | CE-07A | CE | P1 | CE-07 session | Not started | — | — |
 | CE-07B | CE | P1 | CE-07 session | Not started | — | — |
 | CE-07C | CE | P0 | CE-07 session | Implementing | — | — |
-| LE-01 | Learning Engine | P1 | LE session (local_0272e81f) | Implementing | — | — |
-| LE-02 | Learning Engine | P1 | LE session | Implementing | — | — |
-| LE-03 | Learning Engine | P1 | LE session | Implementing | Depends on LE-02 identity rules | — |
-| LE-04 | Learning Engine | P1 | LE session | Implementing | — | — |
-| LE-05 | Learning Engine | P1 *(proposed)* | LE session | Not started | Depends on LE-02, LE-03 | — |
+| LE-01 | Learning Engine | P1 | LE session (PR #266) | Ready for review | — | — |
+| LE-02 | Learning Engine | P1 | LE session (PR #266) | Ready for review | — | — |
+| LE-03 | Learning Engine | P1 | LE session (PR #266) | Ready for review | Owner GO for migration 955 in production (re-cut answers 409 without it) | — |
+| LE-04 | Learning Engine | P1 | LE session (PR #266) | Ready for review | — | — |
+| LE-05 | Learning Engine | P1 *(proposed)* | LE session (PR #266) | Ready for review | Walk was on staging with 955; production needs 955 (owner GO) | — |
 | AI-01 | AI | P0 | Independent clinical reviewer (to be named) | Ready for review | Reviewer not yet named | — |
 | AI-02 | AI | P0 | Coordinator (config) | Blocked | AI-01 signed review | — |
 | AI-03 | AI | P1 | Coordinator (read-only runs) | Blocked | AI-02 | — |
@@ -290,43 +290,43 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### LE-01 — Consistent AI-off wording
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session (local_0272e81f)
 - **Deliverable:** One AI-unavailable experience for Scholar and Professional (D06).
-- **Current state:** Scholar has the shared copy (`ai-availability.ts`, `AiAvailability.tsx`; P1 #253: refusal codes, `provider_unavailable`, no "environment" wording). Bespoke strings still exist on Apply and OSCE pages ("AI help is off, so …", `apply/page.tsx:63`, `apply/osce/page.tsx:71`). No use of the shared component found under the Professional routes in this pass. In build.
-- **Dependency:** none · **Environment:** development
+- **Current state:** **Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** Shared AI-off wording for Scholar and Professional. **Scope note:** HQ Copilot and the case studio keep their own AI wording. Earlier state: Scholar has the shared copy (`ai-availability.ts`, `AiAvailability.tsx`; P1 #253: refusal codes, `provider_unavailable`, no "environment" wording). Bespoke strings still exist on Apply and OSCE pages ("AI help is off, so …", `apply/page.tsx:63`, `apply/osce/page.tsx:71`). No use of the shared component found under the Professional routes in this pass. In build.
+- **Dependency:** none · **Environment:** development (PR #266 open; not on main)
 - **Acceptance criteria:** same wording and next step across Scholar and Professional; supported non-AI functions stay usable; no internal detail exposed.
-- **Evidence:** PR #253; `src/lib/individual/ai-availability.ts`. · **Status:** Implementing · **Blocker:** — · **Completed:** —
+- **Evidence:** PR #253; `src/lib/individual/ai-availability.ts`. · **Status:** Implementing · **Blocker:** — · **Completed:** — PR #266.
 
 ### LE-02 — Rename learning units
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session
 - **Deliverable:** Learners rename learning units (D03) with stable identities and mappings to original materials.
-- **Current state:** Learning units exist as My Plan proposals (#256) and Learn lessons planned by heading family (#257). No rename of a unit found in the repository. In build.
-- **Dependency:** none · **Environment:** development
+- **Current state:** **Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** Learning units can be renamed, and the accepted units can be changed again, in My Plan. Earlier state: Learning units exist as My Plan proposals (#256) and Learn lessons planned by heading family (#257). No rename of a unit found in the repository. In build.
+- **Dependency:** none · **Environment:** development (PR #266 open; not on main)
 - **Acceptance criteria:** rename persists; progress, annotations, saved explanations, questions, flashcards, attempts and citations keep working.
-- **Evidence:** PRs #256, #257; `docs/programme/SCHOLAR-PLAN-UNITS-01.md`. · **Status:** Implementing · **Blocker:** — · **Completed:** —
+- **Evidence:** PRs #256, #257; `docs/programme/SCHOLAR-PLAN-UNITS-01.md`. · **Status:** Implementing · **Blocker:** — · **Completed:** — PR #266; screenshot `desktop-1280-units-card.png`.
 
 ### LE-03 — Re-cut lesson structure
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session
 - **Deliverable:** Reorganise lesson boundaries, split/combine sections, re-cut session lessons without losing completed work (D03); recalculate affected progress safely.
-- **Current state:** Not on `main`. Plan-unit review (merge, split, leave out, put first) exists for My Plan proposals only. In build.
-- **Dependency:** LE-02 identity rules · **Environment:** development
+- **Current state:** **Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** A recorded Learn session's lessons can be re-cut (split, merge, rename) without losing completed work, through migration 955 (one function, one transaction; events moved, copied or detached by containment; position, notes and artefact links follow). 955 is applied twice on staging with strict VERIFY passed; **production needs the owner's GO**; without 955 the route answers 409 and the session is unchanged. **Scope note:** re-cut works only for recorded sessions. Earlier state: Not on `main`. Plan-unit review (merge, split, leave out, put first) exists for My Plan proposals only. In build.
+- **Dependency:** LE-02 identity rules · **Environment:** staging (955 applied and verified); production without 955 fails closed
 - **Acceptance criteria:** §6.3 restructuring orphans no saved record; progress recalculated, not transferred indiscriminately.
-- **Evidence:** PR #256. · **Status:** Implementing · **Blocker:** LE-02 · **Completed:** —
+- **Evidence:** PR #256. · **Status:** Implementing · **Blocker:** LE-02 · **Completed:** — `docs/evidence/LEARNING-CLOSE-WS03/955-build-record.md` (sha256 `472cf84d…7caa`), `verify-955-strict.sql`, `ROLLBACK-955.sql`, desktop and phone screenshots.
 
 ### LE-04 — Configurable Go Deeper limit
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session
 - **Deliverable:** Three cumulative Go Deeper rounds by default; the maximum configurable in HQ (D02).
-- **Current state:** **Verified gap.** Three cumulative rounds are delivered (#257, `learn-context.ts` `DEEPER_ROUNDS_MAX = 3`, enforced in `learn/act/route.ts`:404, "depth reached" beyond it). The maximum is a **code constant**; `policy.ts` has no Go Deeper key. Raising it needs an HQ policy.
-- **Dependency:** none · **Environment:** development
+- **Current state:** **Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** The Go Deeper maximum is now an HQ policy, `scholar_learn_deeper_rounds_max` (1-10, default 3), replacing the code constant. Earlier state: **Verified gap.** Three cumulative rounds are delivered (#257, `learn-context.ts` `DEEPER_ROUNDS_MAX = 3`, enforced in `learn/act/route.ts`:404, "depth reached" beyond it). The maximum is a **code constant**; `policy.ts` has no Go Deeper key. Raising it needs an HQ policy.
+- **Dependency:** none · **Environment:** development (PR #266 open; not on main)
 - **Acceptance criteria:** HQ policy with default 3, clamped by the policy engine; takes effect without redeploy; existing AI fair-use and cost controls unchanged.
-- **Evidence:** `learn-context.ts:51`; `learn-context.test.ts`; PR #257.
-- **Status:** Implementing · **Blocker:** — · **Completed:** —
+- **Evidence:** `learn-context.ts:51`; `learn-context.test.ts`; PR #257. PR #266.
+- **Status:** Ready for review · **Blocker:** none; awaits PR review · **Completed:** —
 
 ### LE-05 — Verify history, citations and progress after restructuring (§3, absent from §4; added)
 - **Programme:** Learning Engine · **Priority:** P1 *(proposed)* · **Owner:** LE session
 - **Deliverable:** Evidence that learning history, citations and progress remain intact after rename and re-cut.
-- **Current state:** Not started; depends on LE-02/LE-03.
-- **Dependency:** LE-02, LE-03 · **Environment:** development, then staging
+- **Current state:** **Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** Walk on the fixture learner (75-section material, 7 lessons) through two re-cuts: all invariants PASS (questions, attempts, flashcards, artefacts and section notes unchanged; no orphaned events, notes, artefact links or position; a read mark or teach event whose lesson grew beyond what it covered is detached as history only, never counted as completing the larger lesson). Earlier state: Not started; depends on LE-02/LE-03.
+- **Dependency:** LE-02, LE-03 · **Environment:** staging (walk done); production pending 955
 - **Acceptance criteria:** §6.3.
-- **Evidence:** none yet. · **Status:** Not started · **Blocker:** LE-02, LE-03 · **Completed:** —
+- **Evidence:** none yet. · **Status:** Not started · **Blocker:** LE-02, LE-03 · **Completed:** — `le05-walk-2026-11-04.json` in the WS03 evidence folder.
 
 ### AI-01 — Flashcard clinical review
 - **Programme:** AI · **Priority:** P0 · **Owner:** Independent clinical reviewer (to be named by the owner)
@@ -496,5 +496,6 @@ Results of the read-only queries (Q1-Q6), coordinator, 4 Nov 2026:
 | Date | Change |
 |---|---|
 | 4 Nov 2026 | Created from directive §4 and the repository at `e19a363a`; rows added: CE-01-1..3, CE-02-1..2, CE-03, CE-06A-1, LE-05, AI-04, AI-05; no row Complete |
+| 4 Nov 2026 | LE-01..05 Ready for review: PR #266 (head 05a8057e), migration 955 staging-verified, production needs owner GO; LE-03 scope: recorded sessions only; LE-01 scope: HQ Copilot and case studio keep their own wording; PR #266 also edits the CE register (merge conflict expected with #264, coordinator to say when to rebase) |
 | 4 Nov 2026 | CYU-01..04 Ready for review: PR #265 (head 02ec0efa), migration 950 staging-verified, production needs owner GO; CYU-02 partial format scope noted |
 | 4 Nov 2026 | Coordinator inputs: GOV-01 decided executive level (Ready for release); GOV-02 stays off until 20 Nov (Blocked by date); GOV-04 added and Complete; REL-01 and REL-02 Live — verification pending (production already has 550 and 610); REL-03 owner actions; CE-05 activation pending; decision register updated; production facts recorded. GOV-04 is the only Complete row. Later 4 Nov: Q1-Q6 results recorded (880 applied with 0 rows, so CE-04D moves to Live — verification pending; flashcards AI package confirmed not applied; metering off; identifiable right ungranted); REL-03 deferred to 18 Nov; GOV-01 grant is to six positions (five 940 executive positions plus chief_executive), Ready for release until the coordinator verifies |
