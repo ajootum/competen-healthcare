@@ -10,7 +10,7 @@
 
 ## How this was filled, and what is not verified
 
-- Current state, evidence and acceptance criteria come from the repository at the head above: `git log`, `docs/programme/*`, `docs/evidence/*`, `src/**` and `supabase/migrations/**`. Where a statement rests on code, the file is named. Where the repository cannot show production, the cell says **"production not read"** and a read-only query is queued (appendix A, file `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator folder).
+- Current state, evidence and acceptance criteria come from the repository at the head above: `git log`, `docs/programme/*`, `docs/evidence/*`, `src/**` and `supabase/migrations/**`. Where a statement rests on code, the file is named. Where the repository cannot show production, the cell says what was read or **"not read"**; Q1-Q6 were read on 4 Nov and are recorded under "Production facts"; Q7 was not run (a read-only query is queued (appendix A, file `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator folder).
 - Rows owned by parallel sessions (CYU-01..04 by session local_edea2037; LE-01..05 by local_0272e81f; CE-07 slow-network by a session starting 4 Nov) carry the status the coordinator reported at creation. This tracker does not verify their in-flight work. They are updated only when the coordinator sends a status change.
 - **GOV-03, REL-01..04 and OPS-01 are parallel commitments, not Learning Engine features** (directive §4, closing paragraph). They stay visible here as dependencies and are marked **PARALLEL**. They must not count toward "unfinished Learning Engine".
 - The directive's initial statuses ("Gap confirmed", "Awaiting review", "Decision pending", "Partially delivered", "Awaiting owner GO") are not in its own status vocabulary. They are mapped below; every mapping that differs from the directive's wording is explained in the reconciliation table.
@@ -31,10 +31,10 @@
 | CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) | Not started | Needs a schema decision (820 has no topic target) | — |
 | CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-03 | CE | P1 *(proposed)* | Engineering (CE) | Live — verification pending | Production signed-in walk | — |
-| CE-04A | CE | P0 | Engineering (CE) | Ready for release | Production 880 state not read; switch off; needs an approved case with patient voice | — |
+| CE-04A | CE | P0 | Engineering (CE) | Ready for release | Switch off (never used in production); needs an approved case with a patient voice; owner decision to switch on | — |
 | CE-04B | CE | P1 | Engineering (CE) | Live — verification pending | — | — |
 | CE-04C | CE | P1 | Engineering (CE) | Not started | Depends on CE-04A | — |
-| CE-04D | CE | P0 | Engineering (CE) | Ready for release | Production 880 state not read | — |
+| CE-04D | CE | P0 | Engineering (CE) | Live — verification pending | Retention rule (D05) to record; no production turns yet to verify against | — |
 | CE-05 | CE | P0 | Engineering (CE) + clinical reviewer | Ready for review | Clinician read of scenario content; owner scenario-policy decision (owner asked for an explanation; pending) | — |
 | CE-06A | CE | P1 | Engineering (CE) | Live — verification pending | — | — |
 | CE-06A-1 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
@@ -72,7 +72,7 @@ Where the verified repository state differs from the directive's initial table, 
 | CE-04A | Gap confirmed | Built and merged (#237), switched off | `scholar_case_conversation` default off; "Talk to the patient" server loop, caps, grounding and tests exist |
 | CE-04B | Gap confirmed | Built and merged (#237) | SBAR handover task and SBAR OSCE template; no migration |
 | CE-04C | Gap confirmed | **Confirmed gap** | No deterioration clock/timeline in `src/lib/cases/*` or `case-talk.ts` |
-| CE-04D | Gap confirmed — verify | Built (mig 880, #237), **production not read** | Append-only table, cascade delete with the attempt, erase-all, copied into the 810 attempt snapshot |
+| CE-04D | Gap confirmed — verify | Built (mig 880, #237); **880 applied in production, 0 rows** (read 4 Nov) | Append-only table, cascade delete with the attempt, erase-all, copied into the 810 attempt snapshot |
 | CE-05 | Partially delivered | Confirmed partial | Format shipped (#236) and off by default; clinical read and policy decision outstanding |
 | CE-06A | Gap confirmed | **Partly built** (#234, #239, #241) | Listen on most surfaces; missing on the lesson reader and OSCE (CE-06A-1) |
 | CE-06B | Gap confirmed | Confirmed for spoken conversation | Dictation shipped; no spoken patient/AI conversation; no HQ voice control |
@@ -195,17 +195,17 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### CE-04A — Multi-turn patient simulation
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE)
 - **Deliverable:** Genuine multi-turn simulated-patient interaction; patient replies reflect clinical context; correct answer not exposed early.
-- **Current state:** Built and merged (#237, 2 Nov): "Talk to the patient" (text) with a server loop that answers only from what the case says the person knows at that stage, a grounding filter that keeps future findings out, a per-stage turn cap (`scholar_case_conversation_turns`, default 20), a labelled simulated conversation, unavailable/cap states as notices; authored through Case Studio (voice persona, style, knowledge, key questions) and approved with the blueprint hash. **Switched off by default** (`scholar_case_conversation` = off) and needs migration 880. Production state of 880 and of the switch: **not read** (queries Q1-Q3). Voice is text only; there is no spoken exchange (see CE-06B).
-- **Dependency:** mig 880 in production; a clinically approved case version that defines a patient voice. · **Environment:** staging verified (880 staging ×2 plus VERIFY 46/0); production not read
+- **Current state:** Built and merged (#237, 2 Nov): "Talk to the patient" (text) with a server loop that answers only from what the case says the person knows at that stage, a grounding filter that keeps future findings out, a per-stage turn cap (`scholar_case_conversation_turns`, default 20), a labelled simulated conversation, unavailable/cap states as notices; authored through Case Studio (voice persona, style, knowledge, key questions) and approved with the blueprint hash. **Switched off by default** (`scholar_case_conversation` = off) and needs migration 880. Production (read 4 Nov): **migration 880 is applied**; no policy row exists for the switch or the turn cap, so the code default (OFF, 20 turns) applies; **0 turns and 0 sessions** exist, so the conversation has never been used in production. Voice is text only; there is no spoken exchange (see CE-06B).
+- **Dependency:** a clinically approved case version that defines a patient voice; the HQ switch. · **Environment:** staging verified (880 staging ×2 plus VERIFY 46/0); production: 880 applied, switch off, unused
 - **Acceptance criteria:** directive §6.4 turn order preserved and no leakage of future scenario information; replies grounded in the stage; per-stage cap; works the same when off or AI unavailable; learner's AI allowance applies; clinical review and approval kept.
 - **Evidence:** PR #237; `docs/evidence/CASE-CONVERSATION/880-build-record.md`; `case-talk.ts`, `src/lib/cases/{conversation,voice,handover}.ts`; tests `ce04.test.ts`, `case-talk.test.ts`, `case-conversation-scope.test.ts`; policy keys in `policy.ts`.
-- **Status:** Ready for release · **Blocker:** production 880 state (appendix A Q1); owner GO for 880 if absent; HQ switch; one approved case with a patient voice · **Completed:** —
+- **Status:** Ready for release · **Blocker:** switch is off by default and unused; needs one approved case with a patient voice, an owner decision to switch on, then a production walk · **Completed:** —
 
 ### CE-04B — Handover tasks
 - **Programme:** CE · **Priority:** P1 · **Owner:** Engineering (CE)
 - **Deliverable:** Structured handover (SBAR) tasks.
 - **Current state:** Built and merged (#237): SBAR handover boxes in case play, handover marking kept as a written answer (no migration), a handover rubric snapshot in the kept attempt, an SBAR OSCE template, Case Studio handover authoring and review display. Appears wherever a case version defines a handover; no HQ switch gates it. Whether any production case defines one: not read.
-- **Dependency:** a published case with a handover spec · **Environment:** staging; production not read
+- **Dependency:** a published case with a handover spec · **Environment:** staging; whether any production case defines a handover is not read (Q7 not run)
 - **Acceptance criteria:** learner completes and receives marked feedback; the answer is part of the attempt record; correct handover not shown beforehand.
 - **Evidence:** PR #237; `src/lib/cases/handover.ts`; `ce04.test.ts`; build record 880 ("SBAR handover task needs no migration").
 - **Status:** Live — verification pending · **Blocker:** — · **Completed:** —
@@ -222,16 +222,16 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### CE-04D — Attempt-linked conversation storage
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE)
 - **Deliverable:** Turns kept with the learner's individual simulation attempt; available for debrief; deleted with the attempt; not Personal AI memory (decision D05).
-- **Current state:** Built (mig 880): one append-only table `individual_scholar_case_conversation` (turn / communication note / handover note), RLS read-own, update refused, delete only by cascade, bounded 400 turns per session; copied into the 810 attempt snapshot at completion; `…_erase(p_user)` so Settings "erase all my study material" removes library-play conversations; owner ruling ADR-016 "D10 exception" (turns are assessment evidence of one case attempt, not Personal AI memory), pinned by `case-conversation-scope.test.ts`. Retention period: not configured in the repository (D05 "subject to applicable retention requirements" is open). Production applied state: **not read**.
-- **Dependency:** mig 880 in production · **Environment:** staging verified; production not read
+- **Current state:** Built (mig 880): one append-only table `individual_scholar_case_conversation` (turn / communication note / handover note), RLS read-own, update refused, delete only by cascade, bounded 400 turns per session; copied into the 810 attempt snapshot at completion; `…_erase(p_user)` so Settings "erase all my study material" removes library-play conversations; owner ruling ADR-016 "D10 exception" (turns are assessment evidence of one case attempt, not Personal AI memory), pinned by `case-conversation-scope.test.ts`. Retention period: not configured in the repository (D05 "subject to applicable retention requirements" is open). Production (read 4 Nov): table, erase function and guard function all present (880 applied); 0 rows.
+- **Dependency:** CE-04A (turns appear only once the switch is on) · **Environment:** staging verified; production schema present, no data
 - **Acceptance criteria:** turns survive refresh; deleted attempt removes its turns; erase-all removes library-play turns; no turn reaches Personal AI memory or unrelated answers; a retention rule is recorded.
 - **Evidence:** PR #237; `supabase/migrations/880-individual-scholar-case-conversation.sql` (sha256 `df966c11…2450f` at staging); `docs/evidence/CASE-CONVERSATION/880-build-record.md`; `docs/adr/ADR-016-individual-product-gate.md`.
-- **Status:** Ready for release · **Blocker:** production 880 state (Q1-Q2); retention rule to record · **Completed:** —
+- **Status:** Live — verification pending · **Blocker:** retention rule to record; behaviour cannot be verified in production until CE-04A is used · **Completed:** —
 
 ### CE-05 — Clinical scenario quality and policy activation
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE) with a clinical reviewer
 - **Deliverable:** Existing scenarios meet clinical content requirements; no answer leakage; no "student notes" framing; unfolding information; server-controlled progression; scenario policy confirmed before learner-wide activation.
-- **Current state:** Delivered in #236 (2 Nov) and tuned in later commits: one format registry; evolving scenario stored as `short` with `answer.format = 'scenario'` (no migration); stage-by-stage route where each later stage is sent only after a valid answer, with an HMAC progress token over learner, question, marking guide and results (`scenario.ts`); per-stage marking and snapshots; "marked against" line on every format; scenario-v3 prompt (a decision about this person at every stage, 2-4 stages, cited, nothing invented); validation refuses leakage of a later answer into an earlier stage, "notes/passage/learner/revising" framing, uncited or unsupported findings and figures (`scenario-quality.test.ts`); a stored scenario is re-held to today's rules before it is offered. **Not active for learners:** `scholar_revision_formats` code default excludes scenario ("OFF by default", owner cost decision 3 Nov), production excludes it (coordinator). The `scenarios` AI activity (Opus, falls back to `questions`) is in code (#259). No clinician read of generated scenarios is recorded in the repository. Production `scholar_revision_formats` excludes "scenario" (coordinator read, 4 Nov). The owner has asked for an explanation of the activation choice; the decision is still pending.
+- **Current state:** Delivered in #236 (2 Nov) and tuned in later commits: one format registry; evolving scenario stored as `short` with `answer.format = 'scenario'` (no migration); stage-by-stage route where each later stage is sent only after a valid answer, with an HMAC progress token over learner, question, marking guide and results (`scenario.ts`); per-stage marking and snapshots; "marked against" line on every format; scenario-v3 prompt (a decision about this person at every stage, 2-4 stages, cited, nothing invented); validation refuses leakage of a later answer into an earlier stage, "notes/passage/learner/revising" framing, uncited or unsupported findings and figures (`scenario-quality.test.ts`); a stored scenario is re-held to today's rules before it is offered. **Not active for learners:** `scholar_revision_formats` code default excludes scenario ("OFF by default", owner cost decision 3 Nov), production excludes it (coordinator). The `scenarios` AI activity (Opus, falls back to `questions`) is in code (#259). No clinician read of generated scenarios is recorded in the repository. Production `scholar_revision_formats` (published 3 Nov 10:05Z) enables mcq, mrq, short, flashcard, match, sequence, structured, cloze, true_false and extended, and excludes "scenario" (coordinator read, 4 Nov). Note that extended response, off by code default, is enabled in production. The owner has asked for an explanation of the activation choice; the decision is still pending.
 - **Dependency:** owner decision D-3; clinician read of a sample of generated scenarios · **Environment:** production (code, format off)
 - **Acceptance criteria:** clinician confirms a sample has accurate clinical content, no leakage, patient-centred framing; progression cannot be skipped from the browser; the policy decision is recorded.
 - **Evidence:** PR #236; `scenario.ts`, `scenario-service.ts`, `scenario-quality.test.ts`, `scenario-sessions-wiring.test.ts`; `docs/evidence/SCHOLAR-INDEPENDENT/p3-cost.md` (scenarios 59 % of Scholar AI cost); policy `scholar_revision_formats` in `policy.ts`.
@@ -335,12 +335,12 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** D04 · **Environment:** staging evidence
 - **Acceptance criteria:** a named independent clinician marks each card Safe/Unsafe/Inaccurate/Unclear, comments, and signs the pack with name, role and date; outcome recorded.
 - **Evidence:** `p3-eval-2026-11-03.json`; `docs/evidence/AI-EVAL/run-d5v2-2026-11-03-cost-config.json`; run `55f56e85-87d5-4cab-b22a-f1dbbb20c89d`.
-- **Status:** Ready for review · **Blocker:** reviewer not named · **Completed:** —
+- **Status:** Ready for review (the owner's "awaiting review"; the reviewer field in the pack is left blank) · **Blocker:** independent clinician not yet named · **Completed:** —
 
 ### AI-02 — Flashcard AI configuration
 - **Programme:** AI · **Priority:** P0 · **Owner:** Coordinator (owner-run configuration)
 - **Deliverable:** Apply the approved flashcard settings package: `flashcards` fair-use activity (cheap tier, risk floor standard educational), route `scholar.flashcards` = Haiku › Sonnet › Opus, three activity-scoped eligibility rows (Haiku standard-educational; Sonnet and Opus clinical-educational). Sonnet stays for mapping and Opus for question generation (D04); the clinical floor is untouched.
-- **Current state:** Code on `main` (#259, #262): flashcards as their own activity with fallback to `questions`, tier from the published policy per activity. The production package is prepared (SQL §7 of `SCHOLAR-AI-COST-CONFIG-01.md` in the coordinator folder; staging counterpart `p3-staging-config.sql`). Production configuration: **not read** (appendix A Q4).
+- **Current state:** Code on `main` (#259, #262): flashcards as their own activity with fallback to `questions`, tier from the published policy per activity. The production package is prepared (SQL §7 of `SCHOLAR-AI-COST-CONFIG-01.md` in the coordinator folder; staging counterpart `p3-staging-config.sql`). Production (read 4 Nov): **not applied** — no `flashcards` or `scenarios` activity in `ai.fair_use.scholar` (map tier = reasoning), no `scholar.flashcards` or `scholar.scenarios` route (`scholar.questions` and `scholar.map` = Sonnet 4.6 then Opus 4.8), and no eligibility rows for flashcards or scenarios (existing: map Sonnet 4.6 clinical_educational from 28 Oct; questions Opus 4.8 clinical_educational from 27 Oct).
 - **Dependency:** AI-01 signed · **Environment:** production (configuration)
 - **Acceptance criteria:** §6.7 routing follows published permissions and fair-use controls; post-activation queries show clinical notes on Sonnet and standard notes on Haiku; questions, scenarios and OSCE unchanged on Opus; rollback SQL recorded.
 - **Evidence:** PRs #259, #262; `docs/evidence/SCHOLAR-INDEPENDENT/p3-staging-config.sql`, `p3-cost.md`.
@@ -375,7 +375,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### GOV-02 — AI metering activation
 - **Programme:** Governance · **Priority:** P1 · **Owner:** Owner
 - **Deliverable:** Activate metering with initial limits.
-- **Current state:** **Decided 4 Nov 2026: stay OFF during the pilot; revisit on or after 20 Nov 2026.** Metering is dark until the platform flag `ai_fair_use` (`practice_platform_flags`) is switched on; with it off the policy's routing and model eligibility still apply, fail-closed for clinical risk (`allowance.ts`). Initial limits are not yet decided.
+- **Current state:** **Decided 4 Nov 2026: stay OFF during the pilot; revisit on or after 20 Nov 2026.** Metering is dark until the platform flag `ai_fair_use` (`practice_platform_flags`) is switched on; with it off the policy's routing and model eligibility still apply, fail-closed for clinical risk (`allowance.ts`). Production confirmed 4 Nov: no `ai_fair_use` row in `practice_platform_flags`, so metering is off. Initial limits are not yet decided.
 - **Dependency:** none · **Environment:** production
 - **Acceptance criteria:** on or after 20 Nov the owner decides activation and initial limits; activation verified with a before/after read.
 - **Evidence:** `src/lib/ai/allowance.ts`; `docs/evidence/AI-FAIR-USE/`, `AI-CONSUMPTION/`; migration 410; owner decision via the coordinator, 4 Nov.
@@ -472,7 +472,7 @@ Decisions already taken in the directive (D01-D06) are not reopened here. Two po
 
 ## Appendix A — production facts needed (read-only, via the coordinator)
 
-File: `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator folder (Q1-Q6; Q7 pending a table name). Results are recorded here as "Production facts" when received; until then every "production not read" cell above stands.
+File: `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator folder (Q1-Q6; Q7 not run). Results are recorded under "Production facts" below (Q1-Q6 received 4 Nov; Q7 not run).
 
 ## Production facts (recorded as received)
 
@@ -482,11 +482,18 @@ Reported by the coordinator after read-only checks, 4 Nov 2026 (not the Q1-Q6 re
 - Production has the `learning_*` tables (460-464); `learning_app` and `learning_commerce` are OFF.
 - Production `scholar_revision_formats` excludes "scenario".
 - DA-000001 v1 published 4 Nov 06:26Z by competenelisha (approver); author elisha.okaisu.
-- Still unread: migration 880 and the conversation switch (CE-04A/D), the flashcards AI package (AI-02), the `ai_fair_use` flag value.
+
+Results of the read-only queries (Q1-Q6), coordinator, 4 Nov 2026:
+- Q1: migration 880 is applied (`individual_scholar_case_conversation` exists; erase function 1; guard function 1). Q2: 0 turns, 0 sessions.
+- Q3: one Individual policy row among those queried: `individual.policy.scholar_revision_formats` = enabled [mcq, mrq, short, flashcard, match, sequence, structured, cloze, true_false, extended], updated 3 Nov 10:05Z, no scenario. No rows for `scholar_case_conversation`, `_turns`, `scholar_verify_formats`, `scholar_explanation_depth`, `scholar_check_behaviour`, `scholar_plan_started_signal`, so code defaults apply (conversation OFF, plan started signal = learning).
+- Q4: the flashcards AI package is NOT applied (details in AI-02).
+- Q5: no `ai_fair_use` row, so metering is OFF.
+- Q6: `hq.scholar.analytics.view` is held by `individual_product_administrator` and `individual_product_reviewer`; `hq.scholar.analytics.identifiable.read` is held by no position.
+- Q7 (do any approved case versions define a patient voice or handover) was not run.
 
 ## Change log
 
 | Date | Change |
 |---|---|
 | 4 Nov 2026 | Created from directive §4 and the repository at `e19a363a`; rows added: CE-01-1..3, CE-02-1..2, CE-03, CE-06A-1, LE-05, AI-04, AI-05; no row Complete |
-| 4 Nov 2026 | Coordinator inputs: GOV-01 decided executive level (Ready for release); GOV-02 stays off until 20 Nov (Blocked by date); GOV-04 added and Complete; REL-01 and REL-02 Live — verification pending (production already has 550 and 610); REL-03 owner actions; CE-05 activation pending; decision register updated; production facts recorded. GOV-04 is the only Complete row. Later 4 Nov: REL-03 deferred to 18 Nov; GOV-01 grant is to six positions (five 940 executive positions plus chief_executive), Ready for release until the coordinator verifies |
+| 4 Nov 2026 | Coordinator inputs: GOV-01 decided executive level (Ready for release); GOV-02 stays off until 20 Nov (Blocked by date); GOV-04 added and Complete; REL-01 and REL-02 Live — verification pending (production already has 550 and 610); REL-03 owner actions; CE-05 activation pending; decision register updated; production facts recorded. GOV-04 is the only Complete row. Later 4 Nov: Q1-Q6 results recorded (880 applied with 0 rows, so CE-04D moves to Live — verification pending; flashcards AI package confirmed not applied; metering off; identifiable right ungranted); REL-03 deferred to 18 Nov; GOV-01 grant is to six positions (five 940 executive positions plus chief_executive), Ready for release until the coordinator verifies |
