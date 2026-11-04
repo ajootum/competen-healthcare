@@ -18,7 +18,7 @@ import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, e
 import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
 import {
-  ROLE_LABEL, SAFETY_EXPLAINER, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, roundingText, storedSafety, structuredVariantOf, toleranceText,
+  ROLE_LABEL, SAFETY_EXPLAINER, isReasoningPart, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, roundingText, storedSafety, structuredVariantOf, toleranceText,
   type CalculationMark, type Finding, type PartRole, type SafetyRecord, type StructuredVariant,
 } from "./scoring-rules";
 import { CALCULATION_LABEL } from "./config";
@@ -226,7 +226,7 @@ export function feedbackView(row: QuestionRow, m: {
           prompt: p.prompt, marks: p.marks, awarded: r ? r.awarded : null, by: r ? r.by : null, accepted: p.accepted.join("; "), keyPoints: p.rubric?.keyPoints ?? [],
           evaluation: r?.by === "ai" && r.feedback ? { feedback: r.feedback, label: MARKING_LABEL.ai_evaluation, parts: r.parts ?? null, formative: FORMATIVE_FEEDBACK_LABEL } : null,
           // SQIE-CLOSE-2026-11 WS-C / WS-B: only what the part carries (a plain part adds nothing, so older feedback is unchanged).
-          ...(c.role !== "answer" ? { role: c.role, roleLabel: ROLE_LABEL[c.role] } : {}),
+          ...(isReasoningPart(c.role) ? { role: c.role, roleLabel: ROLE_LABEL[c.role] } : {}),
           ...(c.options ? { options: c.options } : {}),
           ...(c.criteria ? { criteria: c.criteria.map((x, k) => ({ ...x, met: r?.matched ? r.matched.includes(k) : null })) } : {}),
           ...(c.safetyCritical ? { safetyCritical: true } : {}),

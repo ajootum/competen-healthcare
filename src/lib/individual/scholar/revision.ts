@@ -30,7 +30,7 @@ import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
 import type { Passage } from "./generation";
 import {
-  CALCULATION_DEFAULTS, calculationAccepted, calculationSpecOf, calculationUnitChoices, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
+  CALCULATION_DEFAULTS, isReasoningPart, calculationAccepted, calculationSpecOf, calculationUnitChoices, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
   safetyMarkersOf, safetyRecord, structuredVariantOf, unitInfo, worstOutcome,
   type CalculationMark, type CalculationPolicy, type Finding, type PartContract, type PartRole, type SafetyOutcome, type SafetyRecord, type StructuredVariant,
 } from "./scoring-rules";
@@ -191,7 +191,7 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
     const variant = structuredVariantOf(q.answer), findings = findingsOf(q.answer);
     return {
       ...base,
-      parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks, ...(p.contract.role !== "answer" ? { role: p.contract.role } : {}), ...(p.contract.options ? { options: [...p.contract.options] } : {}) })),
+      parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks, ...(isReasoningPart(p.contract.role) ? { role: p.contract.role } : {}), ...(p.contract.options ? { options: [...p.contract.options] } : {}) })),
       ...(variant || findings.length ? { structured: { variant, findings } } : {}),
     };
   }

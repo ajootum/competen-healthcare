@@ -28,7 +28,7 @@ import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
-import { ROLE_LABEL, VARIANT_LABEL, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
+import { ROLE_LABEL, VARIANT_LABEL, isReasoningPart, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -644,7 +644,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                   ) : (
                     <>
                       <label className="block text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.role ? <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11.5px] font-semibold text-gray-700">{ROLE_LABEL[pt.role]}</span> : null}{pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
-                        <textarea id={`rv-part-${item.id}-${i}`} rows={pt.role === "justify" || pt.role === "interpret" ? 3 : 2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
+                        <textarea id={`rv-part-${item.id}-${i}`} rows={isReasoningPart(pt.role) ? 3 : 2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
                       </label>
                       <DictateButton fieldId={`rv-part-${item.id}-${i}`} onValue={v => setTexts(t => t.map((x, k) => (k === i ? v : x)))} disabled={busy} className="mt-1" />
                     </>

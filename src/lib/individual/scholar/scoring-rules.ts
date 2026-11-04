@@ -205,6 +205,8 @@ export type StructuredVariant = (typeof STRUCTURED_VARIANTS)[number];
 export const PART_ROLES = ["answer", "justify", "interpret"] as const;
 export type PartRole = (typeof PART_ROLES)[number];
 export const VARIANT_LABEL: Record<StructuredVariant, string> = { answer_justify: "Answer and justify", interpretation: "Interpret the findings" };
+/** Pure. A part's role is not the plain answer (a justification or an interpretation: shown with its label). Not an access role. */
+export const isReasoningPart = (r: PartRole | null | undefined): boolean => !!r && r !== PART_ROLES[0];
 export const ROLE_LABEL: Record<PartRole, string> = { answer: "Your answer", justify: "Your justification", interpret: "Your interpretation" };
 
 export type Finding = { label: string; value: string; unit: string | null };
