@@ -9,6 +9,7 @@ import { readyHref, sourceHref, studyHref } from "./question-view";
 import { AiFeedback } from "./ai-feedback";
 import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, PPTX_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
+import { DisclaimerBadge } from "@/components/ui/scholar-learning";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
 // including its refusals, in words. Nothing here decides access or ownership: the routes do, by the
@@ -47,12 +48,9 @@ export function ContentStatusTag({ status }: { status: string | null | undefined
 }
 
 /** The label every AI output carries, in the position the output is read. */
+/** SCHOLAR LEARNING DESIGN SYSTEM: the shared DisclaimerBadge (amber, the unreviewed colour), with the label it has always had. */
 export function AiBadge() {
-  return (
-    <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900">
-      <span aria-hidden>✦</span>{AI_LABEL}
-    </p>
-  );
+  return <DisclaimerBadge>{AI_LABEL}</DisclaimerBadge>;
 }
 
 // ── CONSENT ────────────────────────────────────────────────────────────────────────────────────────
