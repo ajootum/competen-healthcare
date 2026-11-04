@@ -25,7 +25,7 @@ import { rubricHash } from "./rubric-snapshot";
 import { asksQuestion } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
 import { textGroundingViolations } from "@/lib/ai/grounding";
-import { matchUnsafe, safetyMarkersOf, type SafetyOutcome } from "./scoring-rules";
+import { CAPS_DEFAULT, capForSafety, matchUnsafe, safetyMarkersOf, safetyRecord, worstOutcome, type CapPolicy, type SafetyOutcome, type SafetyRecord } from "./scoring-rules";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
@@ -185,15 +185,28 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; unsafe?: string | null };
 
+/** Pure (WS-B). One stage's own safety outcome: unsafe where its answer was; critical_missed where the stage is safety-critical and did
+ * not score in full (a stage the learner marked themselves is their own judgement, never counted here); else safe. */
+export function stageOutcome(stage: ScenarioStage, r: StageResult | undefined): SafetyOutcome {
+  if (r?.unsafe) return "unsafe";
+  return stage.safetyCritical && r && r.by !== "self" && r.score < 1 ? "critical_missed" : "safe";
+}
+
 /**
- * Pure (WS-B, rules v2). A scenario's safety outcome: unsafe where any stage's answer was unsafe, else critical_missed where a
- * safety-critical stage did not score in full (a stage the learner marked themselves is their own judgement), else safe.
+ * Pure (WS-B, rules v3). The stage results with the caps applied AT EACH STAGE (the rubric's scope) -- an unsafe stage keeps at most half
+ * its score, a safety-critical failure none -- never to the other stages. Only where the caps are active; the outcome is always detected.
+ * The record names the worst outcome, the first unsafe statement and the key points of the stages missed.
  */
-export function scenarioSafety(spec: ScenarioSpec, results: readonly StageResult[]): { outcome: SafetyOutcome; statement: string | null; missed: string[]; by: "code" | "ai" } {
-  const u = results.findIndex(r => !!r.unsafe);
-  if (u >= 0) return { outcome: "unsafe", statement: results[u].unsafe ?? null, missed: [], by: results[u].by === "ai" ? "ai" : "code" };
-  const missed = spec.stages.filter((st, i) => st.safetyCritical && results[i] && results[i].by !== "self" && results[i].score < 1).map(st => st.keyPoint);
-  return { outcome: missed.length ? "critical_missed" : "safe", statement: null, missed, by: results.some(r => r.by === "ai") ? "ai" : "code" };
+export function capScenario(spec: ScenarioSpec, results: readonly StageResult[], policy: CapPolicy = CAPS_DEFAULT): { results: StageResult[]; safety: SafetyRecord | null } {
+  const outcomes = spec.stages.map((st, i) => stageOutcome(st, results[i]));
+  const capped = results.map((r, i) => ({ ...r, score: capForSafety({ correct: r.score === 1, score: r.score }, outcomes[i] ?? "safe", policy).score }));
+  const worst = outcomes.reduce<SafetyOutcome>((w, o) => worstOutcome(w, o), "safe");
+  const u = outcomes.indexOf("unsafe");
+  const by: "code" | "ai" = outcomes.some((o, i) => o !== "safe" && results[i]?.by === "ai") ? "ai" : "code";
+  return {
+    results: capped,
+    safety: safetyRecord(worst, { statement: u >= 0 ? results[u].unsafe ?? null : null, missed: spec.stages.filter((_, i) => outcomes[i] === "critical_missed").map(st => st.keyPoint), by, capped: policy.capsActive }),
+  };
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;

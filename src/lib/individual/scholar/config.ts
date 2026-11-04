@@ -293,7 +293,7 @@ export const FEEDBACK_HEADINGS = {
   unsafe: "Unsafe if done in practice",
 } as const;
 /** SQIE-CLOSE-2026-11 WS-B: under the unsafe statements. Formative: an AI check, never a verdict on the person's practice. */
-export const UNSAFE_NOTE = "An AI check (formative, not verified) found this would be unsafe if done in practice, so it earns no marks. Check it against your notes.";
+export const UNSAFE_NOTE = "An AI check (formative, not verified) found this would be unsafe if done in practice. Check it against your notes.";
 
 /** Owner D3: the shared personal AI, reached from Learn. Never a Learn answer: shown apart, under these words. */
 export const PERSONAL_AI_LABEL = "Personal AI assistant — general explanation, not checked against your notes, not clinically reviewed";

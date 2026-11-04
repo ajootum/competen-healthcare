@@ -33,7 +33,7 @@ export function criteriaMarksLine(criteria: readonly Criterion[], m: CriteriaMar
   return [
     `Practice marks (formative, from the case's weighted criteria): ${m.awarded} of ${m.total}.`,
     met.length ? `Criteria met: ${met.join("; ")}.` : "No criterion met.",
-    m.outcome === "unsafe" ? `${SAFETY_LABEL.unsafe}: "${unsafe ?? ""}". It earns no marks.` : null,
+    m.outcome === "unsafe" ? `${SAFETY_LABEL.unsafe}: "${unsafe ?? ""}".` : null,
     m.outcome === "critical_missed" ? `${SAFETY_LABEL.critical_missed}: ${m.missedCritical.join("; ")}.` : null,
   ].filter(Boolean).join("\n");
 }
@@ -47,7 +47,7 @@ export function recordedFeedbackText(feedback: string, criteria: readonly Criter
 type Recorded = { ok: true; text: string; model: string; marks: CriteriaMarks | null; unsafe: string | null } | { ok: false; reason: string };
 
 /** AI feedback on one answered written decision of the caller's library session, recorded by the shared delivery. */
-export async function libraryReasoningFeedback(admin: any, args: { userId: string; sessionId: string; decisionToken: string; requestId: string })
+export async function libraryReasoningFeedback(admin: any, args: { userId: string; sessionId: string; decisionToken: string; requestId: string; capsActive?: boolean })
   : Promise<Recorded> {
   const ctx = await sessionFeedbackContext(admin, args.userId, args.sessionId, args.decisionToken);
   if ("error" in ctx) return { ok: false, reason: ctx.error };
@@ -61,7 +61,7 @@ export async function libraryReasoningFeedback(admin: any, args: { userId: strin
  * the decision's own weighted rubric criteria where the case defines them: rubric-based partial credit and the five-part feedback, by the
  * same evaluator, formative and labelled. The choice's marking is unchanged (it stays on the key). No criteria: nothing is scored.
  */
-export async function libraryReasonFeedback(admin: any, args: { userId: string; sessionId: string; decisionToken: string; requestId: string }): Promise<Recorded> {
+export async function libraryReasonFeedback(admin: any, args: { userId: string; sessionId: string; decisionToken: string; requestId: string; capsActive?: boolean }): Promise<Recorded> {
   const reason = await sessionReasonContext(admin, args.userId, args.sessionId, args.decisionToken);
   if ("error" in reason) return { ok: false, reason: reason.error };
   const criteria = caseCriteria(reason.rubric);
@@ -75,7 +75,7 @@ export async function libraryReasonFeedback(admin: any, args: { userId: string; 
  * The ONE owned evaluation path for a library case (a written answer, or a reason): the owner resolved by rule, the spend counted against
  * the session, the reply checked, weighed and recorded only through the shared delivery (424).
  */
-async function evaluateOwned(admin: any, args: { userId: string; sessionId: string; decisionToken: string; requestId: string },
+async function evaluateOwned(admin: any, args: { userId: string; sessionId: string; decisionToken: string; requestId: string; capsActive?: boolean },
   ctx: { prompt: string; answer: string; competencyIds: string[]; visibleFacts: { label: string; value: string; unit: string | null }[] },
   input: { prompt: string; expected: string; criteria: Criterion[] | null }): Promise<Recorded> {
   const owner = await resolveOwner(admin, "case.live_with_stored", "scholar", { userId: args.userId });
@@ -93,7 +93,8 @@ async function evaluateOwned(admin: any, args: { userId: string; sessionId: stri
   if (!e.ok) return { ok: false, reason: `error:${e.error}` };
   if (!e.evaluation.ok) return { ok: false, reason: `withheld:${e.evaluation.reason}` };
   const unsafe = unsafeStatement(e.evaluation.unsafe);
-  const marks = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe) : null;
+  // Rules v3: capped at this decision only where scholar_clinical_scoring_caps is on (the route passes it); the flag is in the text either way.
+  const marks = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe, { capsActive: !!args.capsActive }) : null;
   const text = recordedFeedbackText(e.evaluation.feedback, criteria, marks, unsafe);
   const saved = await recordSessionFeedback(admin, args.userId, args.sessionId, args.decisionToken,
     { provider: e.provider, model: e.model, requestId: args.requestId, policyVersion: e.promptVersion, text });

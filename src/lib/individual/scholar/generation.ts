@@ -1216,9 +1216,11 @@ export function parseEvaluation(raw: string, grounding: readonly string[], opts:
   if (!feedback || feedback.length > (parts ? 2000 : 800)) return { ok: false, reason: "malformed" };
   if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
   if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
-  // An unsafe answer is not partly right: it is marked incorrect, earns nothing, and an extended answer is credited no key point.
-  const verdict = unsafe?.length ? "incorrect" : m[1].toLowerCase() as EvaluateVerdict;
-  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched: unsafe?.length ? [] : matched } : {}), ...(unsafe?.length ? { unsafe } : {}) };
+  // SQIE-CLOSE-2026-11 WS-B, owner release decision 4 Nov 2026: an unsafe statement is a FLAG here (always detected, kept and shown); the
+  // verdict stands as judged. What it does to the marks is the rules-v3 cap -- at most half of the applicable score, at the scope the rubric
+  // defines -- applied by the caller (scoring-rules.ts) and only once HQ policy scholar_clinical_scoring_caps is on.
+  const verdict = m[1].toLowerCase() as EvaluateVerdict;
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched } : {}), ...(unsafe?.length ? { unsafe } : {}) };
 }
 
 const flatWords = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();

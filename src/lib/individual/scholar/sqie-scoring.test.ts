@@ -1,14 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import {
-  checkRevisionDraft, codeMarkParts, effectiveKind, keyOf, learnerItem, markResponse, parseResponse, practiceMarks, structuredParts, structuredSafety, withSafety, writtenSafety,
+  capStructured, checkRevisionDraft, codeMarkParts, effectiveKind, keyOf, learnerItem, markResponse, parseResponse, practiceMarks, structuredParts, withSafety, writtenSafety,
   type PartResult,
 } from "./revision";
 import { parseEvaluation, revisionPromptVersion, runEvaluate, runCaseReasoning, runRevisionQuestions, type Passage } from "./generation";
 import { feedbackView, keptAttemptView } from "./revision-view";
 import { applySnapshot, rubricSnapshotOf, snapshotOf } from "./rubric-snapshot";
 import { storedPartResults } from "./written-feedback";
-import { markStageByCode, readProgress, scenarioSafety, scenarioSpecOf, signProgress, tokenKey } from "./scenario";
+import { capScenario, markStageByCode, readProgress, scenarioSpecOf, signProgress, tokenKey } from "./scenario";
 import { applyBlindVerification, blindItemOf, calculationAgrees } from "./blind-verify";
 import { PROMPT_VERSIONS } from "./config";
 import { REVISION_FORMATS, REVISION_FORMATS_OFF_BY_DEFAULT, BLIND_FORMATS, FORMAT_ROW } from "./question-formats";
@@ -47,11 +47,14 @@ describe("WS-B short answers: an unsafe answer is recognised, capped and named",
     expect(markResponse(SHORT_UNSAFE, { kind: "text", text: "by infusion" })).toEqual({ correct: true, score: 1, marking: "deterministic" });
     expect(markResponse(SHORT_UNSAFE, { kind: "text", text: "slowly, diluted, over time" })).toEqual({ needsJudgement: true });
   });
-  it("the evaluator's UNSAFE line (WS-B evaluate v3) makes it incorrect, never partly; a safety-critical item answered partly is a critical miss", () => {
-    const e = parseEvaluation("VERDICT: partly\nUNSAFE: push it as an IV bolus\nRIGHT: none\nMISSING: diluted infusion\nMISCONCEPTIONS: none\nWHY: Potassium chloride must never be given as an intravenous bolus.\nNEXT: none", [NOTE], { safety: { answer: "I would push it as an IV bolus" } });
-    expect(e).toMatchObject({ ok: true, verdict: "incorrect", score: 0, unsafe: ["push it as an IV bolus"] });
-    const s = writtenSafety(SHORT_UNSAFE, { correct: false, unsafe: unsafeStatement((e as any).unsafe), matched: null });
-    expect(withSafety({ correct: false, score: 0.5 }, s, "ai")).toEqual({ mark: { correct: false, score: 0 }, safety: { outcome: "unsafe", statement: "push it as an IV bolus", by: "ai" } });
+  it("the evaluator's UNSAFE line is a flag; the v3 item cap (at most half) applies only while the caps are active", () => {
+    const e = parseEvaluation("VERDICT: correct\nUNSAFE: push it as an IV bolus\nRIGHT: none\nMISSING: diluted infusion\nMISCONCEPTIONS: none\nWHY: Potassium chloride must never be given as an intravenous bolus.\nNEXT: none", [NOTE], { safety: { answer: "I would push it as an IV bolus" } });
+    expect(e).toMatchObject({ ok: true, verdict: "correct", score: 1, unsafe: ["push it as an IV bolus"] });
+    const s = writtenSafety(SHORT_UNSAFE, { correct: true, unsafe: unsafeStatement((e as any).unsafe), matched: null });
+    expect(withSafety({ correct: true, score: 1 }, s, "ai", { capsActive: true })).toEqual({ mark: { correct: false, score: 0.5 }, safety: { outcome: "unsafe", statement: "push it as an IV bolus", by: "ai", capped: true } });
+    expect(withSafety({ correct: true, score: 1 }, s, "ai")).toEqual({ mark: { correct: true, score: 1 }, safety: { outcome: "unsafe", statement: "push it as an IV bolus", by: "ai", capped: false } });
+    // A safety-critical item answered partly: a safety-critical failure, 0 of the item when active.
+    expect(withSafety({ correct: false, score: 0.5 }, writtenSafety(SHORT_UNSAFE, { correct: false, unsafe: null, matched: null }), "ai", { capsActive: true }).mark).toEqual({ correct: false, score: 0 });
     expect(writtenSafety(SHORT_UNSAFE, { correct: false, unsafe: null, matched: null }).outcome).toBe("critical_missed");
     expect(writtenSafety(row({ answer: { accepted: ["x"] } }), { correct: false, unsafe: null, matched: null }).outcome).toBe("safe");
   });
@@ -76,20 +79,32 @@ const PARTS = [
 ];
 const STRUCT = row({ kind: "structured", answer: { parts: PARTS } });
 
-describe("WS-B structured: an unsafe part or a missed safety-critical part caps the whole answer", () => {
-  it("an unsafe part earns nothing and the answer earns nothing, however right the rest", () => {
+describe("WS-B structured (v3): a cap applies AT THE PART, never to the other parts", () => {
+  it("an authored unsafe answer is a wrong answer (0 for that part); the OTHER part keeps its marks", () => {
     const coded = codeMarkParts(structuredParts(STRUCT), ["IV bolus", "urgent escalation"]);
     expect(coded[0]).toEqual({ awarded: 0, by: "code", unsafe: "IV bolus" });
-    const m = markResponse(STRUCT, { kind: "parts", texts: ["IV bolus", "urgent escalation"] }) as any;
-    expect(m).toMatchObject({ correct: false, score: 0, safety: { outcome: "unsafe", statement: "IV bolus", by: "code" } });
+    const m = markResponse(STRUCT, { kind: "parts", texts: ["IV bolus", "urgent escalation"] }, { caps: { capsActive: true } }) as any;
+    expect(m).toMatchObject({ correct: false, score: 0.5, safety: { outcome: "unsafe", statement: "IV bolus", by: "code", capped: true } });
   });
-  it("a safety-critical part not earned in full: never correct, capped at half; a part the learner marked is their own", () => {
+  it("an AI-flagged unsafe part keeps at most half ITS marks (active); the rest of the attempt is untouched", () => {
+    const parts = structuredParts(STRUCT);
+    const results: PartResult[] = [{ awarded: 2, by: "ai", unsafe: "push it fast" }, { awarded: 2, by: "code" }];
+    const on = capStructured(parts, results, { capsActive: true });
+    expect(on.results.map(r => r.awarded)).toEqual([1, 2]);
+    expect(practiceMarks(parts, on.results)).toMatchObject({ awarded: 3, total: 4, correct: false });
+    expect(on.safety).toMatchObject({ outcome: "unsafe", statement: "push it fast", by: "ai", capped: true });
+    const off = capStructured(parts, results);
+    expect(off.results.map(r => r.awarded)).toEqual([2, 2]);
+    expect(off.safety).toMatchObject({ outcome: "unsafe", capped: false });
+  });
+  it("a safety-critical part not earned in full gets 0 for THAT part (active); a part the learner marked is their own", () => {
     const parts = structuredParts(STRUCT);
     const results: PartResult[] = [{ awarded: 1, by: "ai" }, { awarded: 2, by: "code" }];
-    const s = structuredSafety(parts, results);
-    expect(s).toMatchObject({ outcome: "critical_missed", missed: ["(a) How is concentrated potassium given?"] });
-    expect(withSafety(practiceMarks(parts, results), s, s.by).mark).toMatchObject({ correct: false, score: 0.5 });
-    expect(structuredSafety(parts, [{ awarded: 0, by: "self" }, { awarded: 2, by: "code" }]).outcome).toBe("safe");
+    const c = capStructured(parts, results, { capsActive: true });
+    expect(c.results.map(r => r.awarded)).toEqual([0, 2]);
+    expect(c.safety).toMatchObject({ outcome: "critical_missed", missed: ["(a) How is concentrated potassium given?"] });
+    expect(practiceMarks(parts, c.results)).toMatchObject({ awarded: 2, total: 4, correct: false });
+    expect(capStructured(parts, [{ awarded: 0, by: "self" }, { awarded: 2, by: "code" }], { capsActive: true }).safety).toBeNull();
   });
   it("a plain structured question is marked exactly as before (no safety record)", () => {
     const plain = row({ kind: "structured", answer: { parts: [{ prompt: "(a) a?", marks: 1, accepted: ["x"] }, { prompt: "(b) b?", marks: 1, accepted: ["y"] }] } });
@@ -103,11 +118,18 @@ describe("WS-B scenario: stages carry the markers, the token carries the unsafe 
     { reveal: "A new fever is found.", prompt: "What does the team do now?", kind: "short", accepted: ["escalate"], weight: 1, keyPoint: "Escalate sepsis" },
   ] } });
   const spec = scenarioSpecOf(sc.answer)!;
-  it("choosing an unsafe option scores nothing and is recorded as unsafe", () => {
+  it("choosing an unsafe option is a wrong answer at THAT stage and is recorded; the other stages keep their scores", () => {
     expect(markStageByCode(spec.stages[0], { kind: "choice", index: 0 })).toEqual({ score: 0, unsafe: "As an IV bolus" });
     expect(markStageByCode(spec.stages[0], { kind: "choice", index: 1 })).toEqual({ score: 1 });
-    expect(scenarioSafety(spec, [{ score: 0, by: "code", answer: "As an IV bolus", unsafe: "As an IV bolus" }, { score: 1, by: "code", answer: "escalate" }])).toMatchObject({ outcome: "unsafe" });
-    expect(scenarioSafety(spec, [{ score: 0, by: "code", answer: "Orally" }, { score: 1, by: "code", answer: "escalate" }])).toMatchObject({ outcome: "critical_missed", missed: ["Never as a bolus"] });
+    const u = capScenario(spec, [{ score: 0, by: "code", answer: "As an IV bolus", unsafe: "As an IV bolus" }, { score: 1, by: "code", answer: "escalate" }], { capsActive: true });
+    expect(u.safety).toMatchObject({ outcome: "unsafe", capped: true });
+    expect(u.results.map(r => r.score)).toEqual([0, 1]);
+    // An AI-flagged unsafe stage keeps at most half its score; a safety-critical stage partly right gets 0 for that stage only.
+    expect(capScenario(spec, [{ score: 1, by: "ai", answer: "x", unsafe: "x" }, { score: 1, by: "code", answer: "escalate" }], { capsActive: true }).results.map(r => r.score)).toEqual([0.5, 1]);
+    const cm = capScenario(spec, [{ score: 0.5, by: "ai", answer: "Orally" }, { score: 1, by: "code", answer: "escalate" }], { capsActive: true });
+    expect(cm.results.map(r => r.score)).toEqual([0, 1]);
+    expect(cm.safety).toMatchObject({ outcome: "critical_missed", missed: ["Never as a bolus"] });
+    expect(capScenario(spec, [{ score: 0.5, by: "ai", answer: "Orally" }, { score: 1, by: "code", answer: "escalate" }]).results.map(r => r.score)).toEqual([0.5, 1]);
   });
   it("the progress token keeps a stage's unsafe statement (and an old token without one still reads)", () => {
     const key = tokenKey("secret"), who = { userId: "u", questionId: sc.id, answer: sc.answer };
@@ -299,6 +321,21 @@ describe("an attempt marked before the v2 rules renders exactly as before", () =
     const f = feedbackView(q, { correct: true, score: 1, marking: "self_graded", ...kept });
     expect(f.safety).toBeUndefined(); expect(f.calculation).toBeUndefined();
     expect(f.answer).toBe("by infusion");
+  });
+  it("a v2 attempt (whole-attempt cap, never released) renders exactly as stored: its score, its capped marks, its flag", () => {
+    // v2 kept the parts' own marks and a whole-attempt score of 0 (unsafe = 0 then).
+    const v2 = { texts: ["push it fast", "urgent escalation"], kind: "parts", awarded: [2, 2], by: ["ai", "code"], rules: "sqie-scoring-v2", safety: { outcome: "unsafe", statement: "push it fast", by: "ai" } };
+    const kept = keptAttemptView(STRUCT, { response: v2, marking: "ai_evaluation" }) as any;
+    const f = feedbackView(STRUCT, { correct: false, score: 0, marking: "ai_evaluation", ...kept });
+    expect(f.score).toBe(0);
+    expect(f.structured!.practiceMarks).toMatchObject({ awarded: 0, total: 4 });
+    expect(f.safety).toMatchObject({ outcome: "unsafe", label: "Clinically unsafe answer" });
+  });
+  it("the clinical scoring caps key defaults OFF (until clinical approval) and clamps nonsense", () => {
+    expect(resolvePolicy([]).scholarClinicalScoringCaps).toBe("off");
+    const set = (value: unknown) => resolvePolicy([{ config_path: policyPath("scholar_clinical_scoring_caps" as never), published: { value } }]);
+    expect(set("on").scholarClinicalScoringCaps).toBe("on");
+    expect(set("maybe").scholarClinicalScoringCaps).toBe("off");
   });
   it("a v2 attempt that kept a safety record shows it again", () => {
     const kept = keptAttemptView(SHORT_UNSAFE, { response: { kind: "text", text: "IV bolus", rules: SCORING_RULES_VERSION, safety: { outcome: "unsafe", statement: "IV bolus", by: "code" } }, marking: "deterministic" }) as any;

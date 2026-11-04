@@ -20,10 +20,9 @@ import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity"
 import { aiMarkingAllowed } from "@/lib/individual/scholar/library-format";
 import { isScenarioQuestion } from "@/lib/individual/scholar/formats";
 import {
-  answerSummary, markStageByCode, parseStageAnswer, readProgress, scenarioMarking, scenarioMarks, scenarioSafety, scenarioSpecOf, signProgress, stageView, storedStages, tokenKey, verdictScore,
+  answerSummary, markStageByCode, parseStageAnswer, readProgress, scenarioMarking, scenarioMarks, capScenario, scenarioSpecOf, signProgress, stageView, storedStages, tokenKey, verdictScore,
   type Progress, type ScenarioStage, type StageResult,
 } from "@/lib/individual/scholar/scenario";
-import { withSafety } from "@/lib/individual/scholar/revision";
 import { SCORING_RULES_VERSION, unsafeStatement } from "@/lib/individual/scholar/scoring-rules";
 
 // Request-time only: it reads the session and the learner's policy, and signs with a server-only secret.
@@ -110,12 +109,13 @@ export async function POST(req: Request) {
   // ── the last stage: ONE attempt for the whole scenario, with every stage as it was marked ──
   const policy = await loadIndividualPolicy(ctx.admin);
   const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
-  // SQIE-CLOSE-2026-11 WS-B (rules v2): an unsafe stage, or a safety-critical stage not earned in full, caps the whole scenario.
-  const ss = scenarioSafety(spec, results);
-  const { mark: m, safety } = withSafety(scenarioMarks(spec, results), ss, ss.by);
+  // SQIE-CLOSE-2026-11 WS-B (rules v3): an unsafe stage, or a safety-critical stage not earned in full, is capped AT THAT STAGE (never the
+  // others), and only where HQ policy scholar_clinical_scoring_caps is on; the flag is recorded either way.
+  const cs = capScenario(spec, results, { capsActive: policy.scholarClinicalScoringCaps === "on" });
+  const m = scenarioMarks(spec, cs.results), safety = cs.safety;
   const marking = scenarioMarking(results);
   const formative = marking === "ai_evaluation" ? formativeFeedback(results.flatMap((r, i) => (r.by === "ai" ? [{ part: i + 1, feedback: r.feedback ?? null, parts: null }] : [])), evaluator) : null;
-  const kept = withFormative(withRubricSnapshot({ ...storedStages(results), rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}) }, rubricSnapshotOf(q)), formative);
+  const kept = withFormative(withRubricSnapshot({ ...storedStages(cs.results), rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}) }, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
     chosenIndex: null, response: kept, correct: m.correct, score: m.score, marking, evaluator: marking === "ai_evaluation" ? evaluator : null, sessionId, srs,
   });
@@ -126,7 +126,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     recorded: true, stage: { index: n, score: result.score, by: result.by },
     feedback: feedbackView(q, {
-      correct: m.correct, score: m.score, marking, scenario: results, safety, justMarked: true, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null,
+      correct: m.correct, score: m.score, marking, scenario: cs.results, safety, justMarked: true, card: saved.card, nextReviewAt: saved.nextReviewAt ?? null,
       link: (await questionLinks(ctx.admin, ctx.userId, [q])).get(q.id) ?? null,
     }),
   });

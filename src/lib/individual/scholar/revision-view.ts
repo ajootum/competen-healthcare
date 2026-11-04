@@ -18,7 +18,7 @@ import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, e
 import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
 import {
-  ROLE_LABEL, SAFETY_EXPLAINER, isReasoningPart, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, roundingText, storedSafety, structuredVariantOf, toleranceText,
+  ROLE_LABEL, SAFETY_EXPLAINER, SAFETY_EXPLAINER_UNCAPPED, isReasoningPart, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, roundingText, storedSafety, structuredVariantOf, toleranceText,
   type CalculationMark, type Finding, type PartRole, type SafetyRecord, type StructuredVariant,
 } from "./scoring-rules";
 import { CALCULATION_LABEL } from "./config";
@@ -26,7 +26,7 @@ import { CALCULATION_LABEL } from "./config";
 /** SQIE-CLOSE-2026-11 WS-B: how a safety outcome is shown (rules v2). Never shown for an attempt marked before those rules. */
 export type SafetyView = { outcome: SafetyRecord["outcome"]; label: string; explainer: string; statement: string | null; missed: string[]; by: SafetyRecord["by"]; byLabel: string };
 export const safetyView = (s: SafetyRecord | null | undefined): SafetyView | null => !s ? null : {
-  outcome: s.outcome, label: SAFETY_LABEL[s.outcome], explainer: SAFETY_EXPLAINER[s.outcome], statement: s.statement ?? null, missed: s.missed ?? [], by: s.by,
+  outcome: s.outcome, label: SAFETY_LABEL[s.outcome], explainer: (s.capped ? SAFETY_EXPLAINER : SAFETY_EXPLAINER_UNCAPPED)[s.outcome], statement: s.statement ?? null, missed: s.missed ?? [], by: s.by,
   byLabel: s.by === "code" ? "Recognised by code against the question's marking guide." : `${MARKING_LABEL.ai_evaluation}: formative, not a verified judgement.`,
 };
 

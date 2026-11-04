@@ -47,18 +47,18 @@ describe("parseEvaluation with the safety line", () => {
     const e = parseEvaluation(`VERDICT: partly\nUNSAFE: none\n${PARTS}`, grounding, safety);
     expect(e.ok && [e.verdict, e.score, e.unsafe, e.parts?.unsafe]).toEqual(["partly", 0.5, undefined, undefined]);
   });
-  it("an unsafe statement makes it incorrect, scores nothing, and is shown first in the learner's words", () => {
+  it("an unsafe statement is flagged and shown first in the learner's words; the verdict stands (owner 4 Nov 2026: the cap is the caller's, gated)", () => {
     const e = parseEvaluation(`VERDICT: partly\nUNSAFE: wait until tomorrow before giving antibiotics\n${PARTS}`, grounding, safety);
     expect(e.ok).toBe(true);
     if (!e.ok) return;
-    expect([e.verdict, e.score]).toEqual(["incorrect", 0]);
+    expect([e.verdict, e.score]).toEqual(["partly", 0.5]);
     expect(e.unsafe).toEqual(["wait until tomorrow before giving antibiotics"]);
     expect(e.parts?.unsafe).toEqual(e.unsafe);
     expect(e.feedback.split("\n")[0]).toMatch(/^Unsafe if done in practice: wait until tomorrow/);
   });
-  it("an extended answer flagged unsafe is credited no key point", () => {
+  it("an extended answer flagged unsafe keeps the key points it made; the flag travels with it for the (gated) cap", () => {
     const e = parseEvaluation(`VERDICT: correct\nMATCHED: 1, 2\nUNSAFE: wait until tomorrow before giving antibiotics\n${PARTS}`, grounding, { keyPoints: 2, ...safety });
-    expect(e.ok && e.matched).toEqual([]);
+    expect(e.ok && [e.matched, e.unsafe]).toEqual([[0, 1], ["wait until tomorrow before giving antibiotics"]]);
     expect(extendedMarks({ modelAnswer: "x", keyPoints: ["a", "b"], marks: 2 } as never, []).score).toBe(0);
   });
   it("without the option the parser is exactly as before (paper and other callers)", () => {
@@ -80,14 +80,14 @@ describe("kept with the attempt and read back", () => {
 
 describe("the runners send the rule and parse with it", () => {
   const fake = (text: string) => async () => ({ ok: true as const, text, model: "claude-test", provider: "anthropic" });
-  it("runEvaluate: an unsafe short answer comes back incorrect with the quote", async () => {
+  it("runEvaluate: an unsafe short answer comes back flagged with the quote", async () => {
     const r = await runEvaluate("u", { question: "What is done within one hour?", accepted: ["give intravenous antibiotics"], answer: ANSWER, passage }, fake(`VERDICT: partly\nUNSAFE: Wait until tomorrow before giving antibiotics\n${PARTS}`) as never);
-    expect(r.ok && r.evaluation.ok && [r.evaluation.verdict, r.evaluation.unsafe]).toEqual(["incorrect", ["Wait until tomorrow before giving antibiotics"]]);
+    expect(r.ok && r.evaluation.ok && [r.evaluation.verdict, r.evaluation.unsafe]).toEqual(["partly", ["Wait until tomorrow before giving antibiotics"]]);
     expect(r.ok && r.promptVersion).toBe("scholar-evaluate-v3");
   });
   it("runCaseReasoning: the same for a written case decision", async () => {
     const r = await runCaseReasoning("u", { prompt: "What is done within one hour?", expected: "Give intravenous antibiotics within one hour.", facts: [], answer: ANSWER, passages: [passage] }, fake(`VERDICT: correct\nUNSAFE: wait until tomorrow before giving antibiotics\n${PARTS}`) as never);
-    expect(r.ok && r.evaluation.ok && r.evaluation.verdict).toBe("incorrect");
+    expect(r.ok && r.evaluation.ok && r.evaluation.unsafe).toEqual(["wait until tomorrow before giving antibiotics"]);
     expect(r.ok && r.promptVersion).toBe("scholar-case-reasoning-v3");
   });
   it("a runner reply with no safety line is withheld (the learner compares it themselves)", async () => {

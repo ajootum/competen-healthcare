@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { describe, expect, it } from "vitest";
 import {
-  CALCULATION_DEFAULTS, CRITICAL_MISS_SCORE_CAP, LEGACY_RULES_VERSION, SCORING_RULES_VERSION, UNSAFE_SCORE_CAP,
+  CALCULATION_DEFAULTS, CAPS_DEFAULT, CRITICAL_MISS_SCORE_CAP, capPartMarks, LEGACY_RULES_VERSION, SCORING_RULES_VERSION, UNSAFE_SCORE_CAP,
   applyRounding, calculationProblems, calculationSpecOf, capForSafety, convertUnit, magnitudeError, roundingOf, criteriaMarks, criteriaOf, findingsOf, marksFromShare, markCalculation, matchUnsafe,
   numbersIn, parseCalculationResponse, parseNumber, partContractOf, rulesOf, safetyRecord, storedSafety, toleranceOf,
   unitChoices, unitInfo, withinTolerance,
@@ -184,12 +184,26 @@ describe("WS-B unsafe answers and safety-critical misses", () => {
     expect(matchUnsafe("Do not give the IV potassium as a bolus", ["give the IV potassium as a bolus"])).toBeNull();
     expect(matchUnsafe("", ["x"])).toBeNull();
   });
-  it("caps: unsafe earns nothing and is never correct; a critical miss is never correct and at most half", () => {
-    expect(UNSAFE_SCORE_CAP).toBe(0); expect(CRITICAL_MISS_SCORE_CAP).toBe(0.5);
-    expect(capForSafety({ correct: true, score: 1 }, "unsafe")).toEqual({ correct: false, score: 0 });
-    expect(capForSafety({ correct: true, score: 0.75 }, "critical_missed")).toEqual({ correct: false, score: 0.5 });
-    expect(capForSafety({ correct: false, score: 0.25 }, "critical_missed")).toEqual({ correct: false, score: 0.25 });
-    expect(capForSafety({ correct: true, score: 1 }, "safe")).toEqual({ correct: true, score: 1 });
+  it("v3 caps (owner 4 Nov 2026): unsafe at most 50%, a safety-critical failure 0% -- and only while the caps are active", () => {
+    const on = { capsActive: true };
+    expect(UNSAFE_SCORE_CAP).toBe(0.5); expect(CRITICAL_MISS_SCORE_CAP).toBe(0);
+    expect(capForSafety({ correct: true, score: 1 }, "unsafe", on)).toEqual({ correct: false, score: 0.5 });
+    expect(capForSafety({ correct: false, score: 0.25 }, "unsafe", on)).toEqual({ correct: false, score: 0.25 });
+    expect(capForSafety({ correct: false, score: 0.75 }, "critical_missed", on)).toEqual({ correct: false, score: 0 });
+    expect(capForSafety({ correct: true, score: 1 }, "safe", on)).toEqual({ correct: true, score: 1 });
+    // Inactive (the default, until clinical approval): nothing is re-scored.
+    expect(CAPS_DEFAULT).toEqual({ capsActive: false });
+    expect(capForSafety({ correct: true, score: 1 }, "unsafe")).toEqual({ correct: true, score: 1 });
+    expect(capForSafety({ correct: false, score: 0.75 }, "critical_missed")).toEqual({ correct: false, score: 0.75 });
+    // At a part: whole marks, rounded down.
+    expect(capPartMarks(3, 3, "unsafe", on)).toBe(1); expect(capPartMarks(4, 4, "unsafe", on)).toBe(2);
+    expect(capPartMarks(4, 3, "critical_missed", on)).toBe(0); expect(capPartMarks(4, 3, "critical_missed")).toBe(3);
+  });
+  it("versions: v3 is current; a v2 attempt is read as v2 (rendered as stored); a v2 safety record counts as capped", () => {
+    expect(SCORING_RULES_VERSION).toBe("sqie-scoring-v3");
+    expect(rulesOf({ rules: "sqie-scoring-v2" })).toBe("sqie-scoring-v2");
+    expect(storedSafety({ safety: { outcome: "unsafe", by: "code" } })).toMatchObject({ capped: true });
+    expect(storedSafety({ safety: { outcome: "unsafe", by: "code", capped: false } })).toMatchObject({ capped: false });
   });
   it("the record kept on the attempt is bounded and read back; a safe or legacy attempt has none", () => {
     const r = safetyRecord("unsafe", { statement: "x".repeat(400), by: "ai" })!;
@@ -207,9 +221,12 @@ describe("WS-B / WS-C weighted criteria: rubric-based partial credit", () => {
     expect(criteriaMarks(C, [0, 1, 2])).toMatchObject({ correct: true, score: 1, awarded: 6, total: 6, outcome: "safe" });
     expect(criteriaMarks(C, [1, 2, 2, 9])).toMatchObject({ matched: [1, 2], score: 4 / 6, correct: false, outcome: "safe" });
   });
-  it("a safety-critical criterion not met caps it; an unsafe statement zeroes it", () => {
-    expect(criteriaMarks(C, [0, 2])).toMatchObject({ outcome: "critical_missed", score: 0.5, correct: false, missedCritical: ["Escalates now"] });
-    expect(criteriaMarks(C, [0, 1, 2], true)).toMatchObject({ outcome: "unsafe", score: 0, awarded: 0, correct: false });
+  it("a safety-critical criterion not met is detected always and capped to 0 when active; an unsafe statement caps it at half", () => {
+    const on = { capsActive: true };
+    expect(criteriaMarks(C, [0, 2])).toMatchObject({ outcome: "critical_missed", score: 3 / 6, correct: false, missedCritical: ["Escalates now"] });
+    expect(criteriaMarks(C, [0, 2], false, on)).toMatchObject({ outcome: "critical_missed", score: 0, awarded: 0, correct: false });
+    expect(criteriaMarks(C, [0, 1, 2], true, on)).toMatchObject({ outcome: "unsafe", score: 0.5, awarded: 3, correct: false });
+    expect(criteriaMarks(C, [0, 1, 2], true)).toMatchObject({ outcome: "unsafe", score: 1, correct: true });
   });
   it("criteria read from authored data are bounded (case rubric `criterion` too)", () => {
     expect(criteriaOf([{ criterion: "A", weight: 2 }])).toEqual([{ text: "A", weight: 2, safetyCritical: false }]);

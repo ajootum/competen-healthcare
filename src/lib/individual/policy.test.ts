@@ -100,6 +100,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarRevisionRecommendations: "on",
       // SQIE-CLOSE-2026-11 WS-A (owner decision 4 Nov 2026): question tolerances inactive until the clinical calculation policy is approved.
       scholarCalculationTolerances: "off",
+      // SQIE-CLOSE-2026-11 WS-B (owner release decision 4 Nov 2026): the clinical scoring caps wait for clinical approval.
+      scholarClinicalScoringCaps: "off",
       // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams on, 15 questions, at most 30, every adaptive format (no flashcards).
       scholarAdaptiveExams: "on", scholarAdaptiveLength: 15, scholarAdaptiveMaxLength: 30, scholarAdaptiveFormats: ["mcq", "mrq", "short", "match", "sequence", "structured"],
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.

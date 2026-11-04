@@ -26,14 +26,20 @@
 //                                 answer.unsafe: string[]
 //   scenario stage                stages[i].safetyCritical: boolean, stages[i].unsafe: string[]
 //   case free-text criterion      blueprint RubricCriterion { weight, safetyCritical } (already stored; now SCORED)
-//   Outcomes (SafetyOutcome):
+//   Outcomes (SafetyOutcome), ALWAYS detected, recorded and shown:
 //     unsafe           the answer states something an authored `unsafe` answer names (code), or the evaluator's required UNSAFE line
-//                      (evaluate v3 / case reasoning v3, branch WS-B) flags it (AI, formative). Score capped at UNSAFE_SCORE_CAP, never correct,
-//                      never "partly": the feedback names the unsafe statement.
-//     critical_missed  a safety-critical part / key point / stage / criterion was not earned in full. Never correct, score
-//                      capped at CRITICAL_MISS_SCORE_CAP, and the feedback names what was missed.
+//                      (evaluate v3 / case reasoning v3, branch WS-B) flags it (AI, formative). The feedback names the statement.
+//     critical_missed  a safety-critical part / key point / stage / criterion was not earned in full (missed or wrong). The
+//                      feedback names what was missed.
 //     safe             neither.
-//   Recorded on the attempt as response.safety = { outcome, statement?, missed?: string[], by: "code" | "ai" } (bounded).
+//   Recorded on the attempt as response.safety = { outcome, statement?, missed?: string[], by: "code" | "ai", capped } (bounded).
+//
+//   THE CAPS (rules v3, owner release decision 4 Nov 2026), applied AT THE SCOPE THE RUBRIC DEFINES -- the structured part, the scenario
+//   stage, the criteria-marked part or decision, or the item for a single-answer item -- never to unrelated components:
+//     unsafe           at most UNSAFE_SCORE_CAP (50%) of that scope's score, and never correct;
+//     critical_missed  at most CRITICAL_MISS_SCORE_CAP (0%) of that scope's score, and never correct.
+//   ⚠ GATED: the caps change scores only where HQ policy scholar_clinical_scoring_caps is "on" (default "off": clinical approval of the
+//   safety-critical classifications is required first). While it is off, nothing is re-scored; the flags are still recorded and shown.
 //
 // WS-C  JUSTIFICATION AND INTERPRETATION (rubric-based partial credit, five-part feedback, the existing evaluator)
 //   structured answer.variant: "answer_justify" | "interpretation"           what the item is (display and feedback wording)
@@ -64,31 +70,46 @@
 
 // ═══════════════════════════════════════════ VERSIONS ═══════════════════════════════════════════
 
-export const SCORING_RULES_VERSION = "sqie-scoring-v2" as const;
+/**
+ * v3 (owner release decision 4 Nov 2026): unsafe <= 50%, safety-critical failure = 0%, each at the rubric's own scope, gated by
+ * scholar_clinical_scoring_caps. v2 (never released): unsafe = 0 and critical <= 50% on the WHOLE attempt -- an attempt that recorded
+ * v2 keeps its stored score and renders exactly as stored. v1: every attempt kept before (no rules field).
+ */
+export const SCORING_RULES_VERSION = "sqie-scoring-v3" as const;
+export const SCORING_RULES_V2 = "sqie-scoring-v2" as const;
 export const LEGACY_RULES_VERSION = "sqie-scoring-v1" as const;
-export type ScoringRulesVersion = typeof SCORING_RULES_VERSION | typeof LEGACY_RULES_VERSION;
+export type ScoringRulesVersion = typeof SCORING_RULES_VERSION | typeof SCORING_RULES_V2 | typeof LEGACY_RULES_VERSION;
 
 /** Pure. The rules an attempt was marked under: the version it recorded, else the legacy rules (attempts kept before v2). */
 export function rulesOf(response: unknown): ScoringRulesVersion {
   const r = response && typeof response === "object" ? (response as Record<string, unknown>).rules : null;
-  return r === SCORING_RULES_VERSION ? SCORING_RULES_VERSION : LEGACY_RULES_VERSION;
+  return r === SCORING_RULES_VERSION || r === SCORING_RULES_V2 ? r : LEGACY_RULES_VERSION;
 }
 
 // ═══════════════════════════════════════════ WS-B: SAFETY ═══════════════════════════════════════════
 
 export type SafetyOutcome = "safe" | "critical_missed" | "unsafe";
-/** v2: an unsafe answer earns nothing. ⚠ Owner/clinical decision recorded in the PR; a change is a new rules version. */
-export const UNSAFE_SCORE_CAP = 0;
-/** v2: missing a safety-critical element is never correct and earns at most half. ⚠ Owner/clinical decision; a change is a new rules version. */
-export const CRITICAL_MISS_SCORE_CAP = 0.5;
+/** v3 (owner 4 Nov 2026): an unsafe response earns at most half of the applicable score. A change is a new rules version. */
+export const UNSAFE_SCORE_CAP = 0.5;
+/** v3 (owner 4 Nov 2026): a safety-critical failure earns nothing of the applicable score. A change is a new rules version. */
+export const CRITICAL_MISS_SCORE_CAP = 0;
+/** Whether the caps change scores (HQ policy scholar_clinical_scoring_caps). The strict default: they do not, until clinical approval. */
+export type CapPolicy = { capsActive: boolean };
+export const CAPS_DEFAULT: CapPolicy = { capsActive: false };
 
 export const SAFETY_LABEL: Record<Exclude<SafetyOutcome, "safe">, string> = {
   unsafe: "Clinically unsafe answer",
   critical_missed: "Safety-critical point missed",
 };
+/** What the block says when the caps changed the marks (v3: at the scope the rubric defines). */
 export const SAFETY_EXPLAINER: Record<Exclude<SafetyOutcome, "safe">, string> = {
-  unsafe: "Part of this answer would be unsafe to act on, so it earns no practice marks, however much else is right.",
-  critical_missed: "This answer misses a point that must not be missed, so it is not counted as correct and its practice marks are capped.",
+  unsafe: "Part of this answer would be unsafe to act on, so that part is not counted as correct and earns at most half its practice marks.",
+  critical_missed: "This answer misses or gets wrong a point that must not be missed, so that part is not counted as correct and earns no practice marks.",
+};
+/** What it says when the caps are not active (no clinical approval yet): flagged and explained, the marks unchanged. */
+export const SAFETY_EXPLAINER_UNCAPPED: Record<Exclude<SafetyOutcome, "safe">, string> = {
+  unsafe: "Part of this answer would be unsafe to act on. Look at it again against your notes before you rely on it.",
+  critical_missed: "This answer misses or gets wrong a point that must not be missed. Look at it again against your notes.",
 };
 
 const UNSAFE_MAX = 6, UNSAFE_LEN = 200;
@@ -117,13 +138,25 @@ export function matchUnsafe(answer: string, unsafe: readonly string[]): string |
 /** Pure. The evaluator's unsafe statements (WS-B evaluate v3: the learner's own words, or a flag) as the one statement a record keeps, or null. */
 export const unsafeStatement = (unsafe: readonly string[] | null | undefined): string | null => (unsafe?.length ? unsafe.join("; ").slice(0, 300) : null);
 
-export type SafetyRecord = { outcome: Exclude<SafetyOutcome, "safe">; statement?: string; missed?: string[]; by: "code" | "ai" };
+/** `capped`: whether the v3 caps changed marks (false while scholar_clinical_scoring_caps is off). A v2 record has none: it was capped. */
+export type SafetyRecord = { outcome: Exclude<SafetyOutcome, "safe">; statement?: string; missed?: string[]; by: "code" | "ai"; capped: boolean };
 
-/** Pure. A score and correctness with the v2 safety cap applied. A safe outcome leaves them as they were. */
-export function capForSafety<T extends { correct: boolean; score: number }>(m: T, outcome: SafetyOutcome): T {
+/**
+ * Pure. One SCOPE's score (a part, a stage, a criteria-marked decision, or a single-answer item) with the v3 cap applied -- only where
+ * the caps are active. Inactive, or a safe outcome: unchanged.
+ */
+export function capForSafety<T extends { correct: boolean; score: number }>(m: T, outcome: SafetyOutcome, policy: CapPolicy = CAPS_DEFAULT): T {
+  if (!policy.capsActive) return m;
   if (outcome === "unsafe") return { ...m, correct: false, score: Math.min(m.score, UNSAFE_SCORE_CAP) };
   if (outcome === "critical_missed") return { ...m, correct: false, score: Math.min(m.score, CRITICAL_MISS_SCORE_CAP) };
   return m;
+}
+
+/** Pure. A part's whole marks with the v3 cap applied at the part (rounded down; only where the caps are active). */
+export function capPartMarks(marks: number, awarded: number, outcome: SafetyOutcome, policy: CapPolicy = CAPS_DEFAULT): number {
+  if (!policy.capsActive || outcome === "safe") return awarded;
+  const cap = Math.floor(marks * (outcome === "unsafe" ? UNSAFE_SCORE_CAP : CRITICAL_MISS_SCORE_CAP) + 1e-9);
+  return Math.min(awarded, cap);
 }
 
 /** Pure. The worse of two outcomes (unsafe > critical_missed > safe). */
@@ -131,10 +164,10 @@ export const worstOutcome = (a: SafetyOutcome, b: SafetyOutcome): SafetyOutcome 
   a === "unsafe" || b === "unsafe" ? "unsafe" : a === "critical_missed" || b === "critical_missed" ? "critical_missed" : "safe";
 
 /** Pure. The bounded record kept on the attempt's response (response.safety), or null for a safe answer. */
-export function safetyRecord(outcome: SafetyOutcome, detail: { statement?: string | null; missed?: readonly string[]; by: "code" | "ai" }): SafetyRecord | null {
+export function safetyRecord(outcome: SafetyOutcome, detail: { statement?: string | null; missed?: readonly string[]; by: "code" | "ai"; capped?: boolean }): SafetyRecord | null {
   if (outcome === "safe") return null;
   return {
-    outcome, by: detail.by,
+    outcome, by: detail.by, capped: detail.capped === true,
     ...(detail.statement ? { statement: detail.statement.slice(0, 300) } : {}),
     ...(detail.missed?.length ? { missed: detail.missed.slice(0, 4).map(s => s.slice(0, 200)) } : {}),
   };
@@ -145,8 +178,9 @@ export function storedSafety(response: unknown): SafetyRecord | null {
   if (!response || typeof response !== "object") return null;
   const s = (response as Record<string, unknown>).safety as Record<string, unknown> | undefined;
   if (!s || typeof s !== "object" || (s.outcome !== "unsafe" && s.outcome !== "critical_missed") || (s.by !== "code" && s.by !== "ai")) return null;
+  // A v2 record has no `capped`: v2 always capped (its stored score already reflects it).
   return {
-    outcome: s.outcome, by: s.by,
+    outcome: s.outcome, by: s.by, capped: s.capped !== false,
     ...(typeof s.statement === "string" && s.statement.trim() ? { statement: s.statement.slice(0, 300) } : {}),
     ...(strList(s.missed, 4, 200).length ? { missed: strList(s.missed, 4, 200) } : {}),
   };
@@ -174,18 +208,18 @@ export function criteriaOf(v: unknown): Criterion[] | null {
 export type CriteriaMarks = { matched: number[]; awarded: number; total: number; score: number; correct: boolean; outcome: SafetyOutcome; missedCritical: string[] };
 
 /**
- * Pure. Rubric-based partial credit: the share of the criteria's WEIGHT the answer meets (indexes, repeats and strays ignored),
- * then the v2 safety rules -- an unsafe statement caps it at UNSAFE_SCORE_CAP, a safety-critical criterion not met caps it at
- * CRITICAL_MISS_SCORE_CAP. Correct only when every criterion is met and nothing unsafe was said.
+ * Pure. Rubric-based partial credit: the share of the criteria's WEIGHT the answer meets (indexes, repeats and strays ignored). The
+ * outcome is always detected; where the caps are active (v3) an unsafe statement caps THIS part or decision at UNSAFE_SCORE_CAP and a
+ * safety-critical criterion not met caps it at CRITICAL_MISS_SCORE_CAP. Correct only when every criterion is met (and, capped, nothing unsafe).
  */
-export function criteriaMarks(criteria: readonly Criterion[], matched: readonly number[], unsafe = false): CriteriaMarks {
+export function criteriaMarks(criteria: readonly Criterion[], matched: readonly number[], unsafe = false, policy: CapPolicy = CAPS_DEFAULT): CriteriaMarks {
   const n = criteria.length;
   const hit = [...new Set(matched.filter(i => Number.isInteger(i) && i >= 0 && i < n))].sort((a, b) => a - b);
   const total = criteria.reduce((s, c) => s + c.weight, 0);
   const awarded = hit.reduce((s, i) => s + criteria[i].weight, 0);
   const missedCritical = criteria.filter((c, i) => c.safetyCritical && !hit.includes(i)).map(c => c.text);
   const outcome: SafetyOutcome = unsafe ? "unsafe" : missedCritical.length ? "critical_missed" : "safe";
-  const capped = capForSafety({ correct: n > 0 && hit.length === n, score: total ? awarded / total : 0 }, outcome);
+  const capped = capForSafety({ correct: n > 0 && hit.length === n, score: total ? awarded / total : 0 }, outcome, policy);
   return { matched: hit, awarded: Math.round(total * capped.score * 100) / 100, total, score: capped.score, correct: capped.correct, outcome, missedCritical };
 }
 

@@ -9,7 +9,7 @@ import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRisk } from "@/lib/individual/scholar/http";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runEvaluate } from "@/lib/individual/scholar/generation";
-import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, structuredSafety, withSafety, writtenSafety, type PartResult } from "@/lib/individual/scholar/revision";
+import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, capStructured, withSafety, writtenSafety, type PartResult } from "@/lib/individual/scholar/revision";
 import { SCORING_RULES_VERSION, criteriaMarks, marksFromShare, storedCalculation, unsafeStatement, type CalculationMark, type SafetyRecord } from "@/lib/individual/scholar/scoring-rules";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
@@ -134,11 +134,14 @@ export async function POST(req: Request) {
   // SQIE-CLOSE-2026-11 WS-A: a calculation's default tolerance and unit rule are the published policy's (strict code defaults otherwise).
   let mark = markResponse(q, r);
   // SQIE-CLOSE-2026-11 WS-A: a calculation is marked under the published tolerance gate (the line above used the strict code default: tolerances inactive).
-  if (r.kind === "calc") mark = markResponse(q, r, { calculation: { tolerancesActive: policy.scholarCalculationTolerances === "on" } });
+  // SQIE-CLOSE-2026-11 WS-B (rules v3): the clinical scoring caps change marks only where HQ policy scholar_clinical_scoring_caps is on.
+  const caps = { capsActive: policy.scholarClinicalScoringCaps === "on" };
+  if (r.kind === "calc") mark = markResponse(q, r, { calculation: { tolerancesActive: policy.scholarCalculationTolerances === "on" }, caps });
   if (gaveUp) mark = { correct: false, score: 0, marking: "deterministic" };
   const calc: CalculationMark | null = "calc" in mark ? mark.calc ?? null : null;
-  // SQIE-CLOSE-2026-11 WS-B (rules v2): what was unsafe or safety-critical about this answer, kept with the attempt.
+  // SQIE-CLOSE-2026-11 WS-B: what was unsafe or safety-critical about this answer, kept with the attempt.
   let safety: SafetyRecord | null = "safety" in mark ? mark.safety ?? null : null;
+  if (safety && caps.capsActive) safety = { ...safety, capped: true };
   let evaluation: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   let evaluationParts: FeedbackParts | null = null;
   const extSpec = isExtendedQuestion(q) ? extendedSpecOf(q.answer) : null;
@@ -189,7 +192,7 @@ export async function POST(req: Request) {
             if (extSpec && e.evaluation.matched) { const xm = extendedMarks(extSpec, e.evaluation.matched); extendedMatched = xm.matched; mark = { correct: xm.correct, score: xm.score, marking: "deterministic" }; }
             else mark = { correct: e.evaluation.verdict === "correct", score: e.evaluation.score, marking: "deterministic" };
             // WS-B: an unsafe statement the evaluator quoted, or a safety-critical point missed, caps the marks (never "partly correct").
-            const capped = withSafety(mark, writtenSafety(q, { correct: mark.correct, unsafe: unsafeStatement(e.evaluation.unsafe), matched: extendedMatched }), "ai");
+            const capped = withSafety(mark, writtenSafety(q, { correct: mark.correct, unsafe: unsafeStatement(e.evaluation.unsafe), matched: extendedMatched }), "ai", caps);
             mark = capped.mark; safety = capped.safety;
             evaluation = e.evaluation.feedback; evaluationParts = e.evaluation.parts ?? null; evaluator = { model: e.model, promptVersion: e.promptVersion };
           } else why = refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself.";
@@ -292,8 +295,9 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
             if (!refused && e.ok && e.evaluation.ok) {
               // WS-C: against criteria, the part's whole marks are its share of the criteria's weight (rounded down); otherwise the verdict (all, half, none).
               const unsafe = unsafeStatement(e.evaluation.unsafe);
+              // The part's own marks; an unsafe part or a missed safety-critical one is capped AT THIS PART below (capStructured), where the caps are active.
               const cm = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe) : null;
-              const awarded = unsafe ? 0 : cm ? marksFromShare(part.marks, cm.score) : partMarks(part.marks, e.evaluation.verdict);
+              const awarded = cm ? marksFromShare(part.marks, cm.score) : partMarks(part.marks, e.evaluation.verdict);
               results[i] = { awarded, by: "ai", feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null, unsafe, matched: cm ? cm.matched : null };
               evaluator = { model: e.model, promptVersion: e.promptVersion };
             } else {
@@ -314,11 +318,11 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
     }
   }
 
-  const final = results as PartResult[];
-  // SQIE-CLOSE-2026-11 WS-B (rules v2): an unsafe part, or a safety-critical part not earned in full, caps the whole answer.
-  const sm = structuredSafety(parts, final);
-  const capped = withSafety(practiceMarks(parts, final), sm, sm.by);
-  const m = capped.mark;
+  const judged = results as PartResult[];
+  // SQIE-CLOSE-2026-11 WS-B (rules v3): each part capped at its own scope, never the others, only where scholar_clinical_scoring_caps is on.
+  const capped = capStructured(parts, judged, { capsActive: policy.scholarClinicalScoringCaps === "on" });
+  const final = capped.results;
+  const m = practiceMarks(parts, final);
   const marking = final.some(x => x.by === "self") ? "self_graded" as const : evaluator ? "ai_evaluation" as const : "deterministic" as const;
   const stored = storedResponse(r);
   // SCHOLAR-WRITTEN-FEEDBACK-01: how each part was marked, and (AI-evaluated only) the formative feedback on each AI part.
