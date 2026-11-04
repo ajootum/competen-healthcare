@@ -13,6 +13,22 @@ export const CAP = {
   domainReview: "hq.quality.clinical.approve",
 } as const;
 
+/** Migration 942: governed policies share the engine with their own three rights. Domain review is the one shared right. */
+export const POLICY_CAP = {
+  view: "hq.quality.policy.view",
+  author: "hq.quality.policy.author",
+  review: "hq.quality.policy.review",
+  publish: "hq.quality.policy.publish",
+} as const;
+
+export interface KindCapabilities { view: string; author: string; review: string; publish: string; domainReview: string }
+/** The capabilities a lifecycle step needs for a kind, as asmt_lifecycle_capability answers in the database. */
+export function capabilitiesFor(kind: DefinitionKind): KindCapabilities {
+  return kind === "policy"
+    ? { view: POLICY_CAP.view, author: POLICY_CAP.author, review: POLICY_CAP.review, publish: POLICY_CAP.publish, domainReview: CAP.domainReview }
+    : { view: CAP.view, author: CAP.author, review: CAP.review, publish: CAP.publish, domainReview: CAP.domainReview };
+}
+
 export interface Availability { allowed: boolean; reason: string | null }
 const yes: Availability = { allowed: true, reason: null };
 const no = (reason: string): Availability => ({ allowed: false, reason });
@@ -72,6 +88,7 @@ export interface Availabilities {
 }
 
 export function availabilities(i: TransitionInput): Availabilities {
+  const CAP = capabilitiesFor(i.kind);
   const holds = (c: string) => i.caps.includes(c);
   const mine = i.authoredBy.includes(i.actorId) || i.editedBy.includes(i.actorId);
   const involved = i.involved.includes(i.actorId);

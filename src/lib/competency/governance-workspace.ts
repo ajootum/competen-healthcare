@@ -11,7 +11,7 @@ import { loadAuthoringView, type AuthoringCompetency, type AuthoringView } from 
 import { CLINICAL_STATE_LABEL, clinicalNote, scopeCovers, type ClinicalReview, type ReviewerScope } from "./clinical-review";
 import { reviewQueue, type QueueItem } from "./clinical-review-hq";
 import { eligibilityOf, type Eligibility } from "./review-batch";
-import { contributorsOf, loadPublicationView, publisherConflict, type PublicationRow } from "./framework-publication";
+import { approversOf, contributorsOf, loadPublicationView, publisherConflict, publisherNotApproverRule, type PublicationRow } from "./framework-publication";
 import { checksFor } from "./criteria-checks";
 import { activeGrants, appointmentInTerm, narrowToScope } from "@/lib/hq/spaces";
 
@@ -154,13 +154,13 @@ export function pathwayOf(fw: GovFramework, c: Counts, publishersEligible: numbe
     next: allApproved && !fw.pending ? "Put the framework forward for publication" : null,
   };
   const decision: Stage = {
-    key: "decision", label: "Publication decision", role: "Quality Council Member (independent publisher)",
+    key: "decision", label: "Publication decision", role: "Publisher (Quality Council Member)",
     status: published ? "done" : fw.pending ? (allApproved ? (publishersEligible === 0 ? "blocked" : "current") : "waiting") : "not_started",
     done: fw.pending ? [`Publication request submitted${fw.pending.submittedByName ? ` by ${fw.pending.submittedByName}` : ""}`] : [],
     outstanding: fw.pending
-      ? [!allApproved ? "Publication blocked until every competency is clinically approved" : "", publishersEligible === 0 ? "No eligible independent publisher: submitter and contributors may not decide" : ""].filter(Boolean)
+      ? [!allApproved ? "Publication blocked until every competency is clinically approved" : "", publishersEligible === 0 ? "No eligible publisher: nobody appointed with the publish right, or every holder is one of the clinical approvers (configured rule)" : ""].filter(Boolean)
       : ["No publication request yet"],
-    next: fw.pending && allApproved ? (publishersEligible === 0 ? "Appoint an independent publisher (Quality Council Member) who did not contribute or submit" : "Publish, or return to the author with a note") : null,
+    next: fw.pending && allApproved ? (publishersEligible === 0 ? "Appoint a publisher (Quality Council Member); the author or submitter may publish the exact approved content" : "Publish the exact approved content, or return to the author with a note") : null,
   };
   const pub: Stage = { key: "published", label: "Published", role: "", status: published ? "done" : "not_started", done: published ? [`Version ${fw.version} in use`] : [], outstanding: [], next: null };
   return [prep, review, readiness, decision, pub];
@@ -181,9 +181,9 @@ export function nextActionOf(fw: GovFramework, c: Counts, me: Me, mineCount: num
   if (c.changes > 0) return { headline: `${plural(c.changes, "competency needs", "competencies need")} changes from the author.`, detail: "A reviewer returned them with a note. Revise, then put them forward again.", action: me.canAuthor ? { kind: "edit", label: "Open Competency Authoring" } : null, responsible: "Competency Author" };
   if (allApproved && !fw.pending) return { headline: "All competencies are clinically approved.", detail: "The framework can be put forward for publication.", action: me.canAuthor && fw.editable && !!fw.layer ? { kind: "submit_publication", label: "Put forward for publication" } : null, responsible: "Competency Author" };
   if (allApproved && fw.pending) {
-    if (publishersEligible === 0) return { headline: "Ready to publish, but no eligible independent publisher.", detail: "The submitter and every contributor are excluded. Appoint a Quality Council Member who has touched nothing in this framework.", action: { kind: "assign_reviewer", label: "Open HQ Positions" }, responsible: "Platform owner" };
-    if (me.canPublish && !viewerPublisherConflict) return { headline: "Awaiting your publication decision.", detail: "Every competency is clinically approved at its current content.", action: { kind: "publish", label: "Decide publication" }, responsible: "Independent publisher" };
-    return { headline: "Awaiting an independent publication decision.", detail: viewerPublisherConflict ?? "Waiting on the publishers named below.", action: null, responsible: "Independent publisher" };
+    if (publishersEligible === 0) return { headline: "Ready to publish, but no eligible publisher.", detail: "Nobody appointed holds the publish right for this framework, or every holder is one of its clinical approvers (configured rule). Appoint a Quality Council Member.", action: { kind: "assign_reviewer", label: "Open HQ Positions" }, responsible: "Platform owner" };
+    if (me.canPublish && !viewerPublisherConflict) return { headline: "Awaiting your publication decision.", detail: "Every competency is independently approved at its current content. The author or submitter may publish this exact content.", action: { kind: "publish", label: "Decide publication" }, responsible: "Publisher" };
+    return { headline: "Awaiting a publication decision.", detail: viewerPublisherConflict ?? "Waiting on the publishers named below.", action: null, responsible: "Publisher" };
   }
   return { headline: "Clinical review incomplete.", detail: `${c.approved} of ${c.total} approved.`, action: null, responsible: "Clinical Content Reviewer" };
 }
@@ -266,7 +266,11 @@ export async function loadGovernanceModel(admin: any, userId: string, frameworkI
   const entityIds = [f.id, ...f.domains.map(d => d.id), ...compIds];
   const trail = (await rows(admin.from("audit_log").select("actor_id, actor_name, action, entity_id, entity_type, created_at, new_value").in("entity_id", entityIds).order("created_at", { ascending: false }).limit(5000))) ?? [];
   const contributors = contributorsOf(trail);
-  const publisherConflictOf = (personId: string) => framework.pending ? publisherConflict(personId, framework.pending.submittedBy, contributors) : (contributors.includes(personId) ? "Contributed to this framework's content, so may not publish it." : null);
+  // 941: contributors and the submitter may publish the exact approved content; the configured publisher-not-approver
+  // rule is the one remaining conflict, read off the decision rows loaded below.
+  const decisionsForRule = versionIds.length ? (await rows(admin.from("clinical_review_decision").select("reviewer_id, decision").in("version_id", versionIds).limit(2000))) ?? [] : [];
+  const publishRule = { approvers: approversOf(decisionsForRule), publisherNotApprover: await publisherNotApproverRule(admin) };
+  const publisherConflictOf = (personId: string) => publisherConflict(personId, framework.pending?.submittedBy ?? null, contributors, publishRule);
   const reviewerConflictOf = (personId: string) => {
     const vs = [...versionByComp.values()].filter((v): v is NonNullable<typeof v> => !!v);
     const blocked = vs.filter(v => v.authoredBy.includes(personId) || v.submittedBy === personId).length;
@@ -275,7 +279,7 @@ export async function loadGovernanceModel(admin: any, userId: string, frameworkI
   const domainIds = f.domains.map(d => d.id);
   const [reviewers, publishers, authors] = await Promise.all([
     actorsFor(admin, REVIEW_CAP, "Clinical Content Reviewer", framework, domainIds, reviewerConflictOf, true),
-    actorsFor(admin, PUBLISH_CAP, "Independent publisher", framework, domainIds, publisherConflictOf, false),
+    actorsFor(admin, PUBLISH_CAP, "Publisher", framework, domainIds, publisherConflictOf, false),
     actorsFor(admin, AUTHOR_CAP, "Competency Author", framework, domainIds, () => null, false),
   ]);
   // History: the governance trail of this framework and its content, plus every clinical decision on its versions.

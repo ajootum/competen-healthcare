@@ -7,7 +7,7 @@ import {
   revalidateTemplate, validateLayout, validateProgression, type LayoutDoc, type ProgressionDoc, type RulesDoc, type ScoringTestCase, type StageScale,
 } from "../core";
 import { validateInstrumentVersion, type LayoutInput } from "./validation";
-import { listLayoutTemplates, loadInstrumentVersion, loadLayoutTemplateVersion, loadProgressionVersion, loadRuleTemplateVersion, loadScaleVersion } from "./read";
+import { listLayoutTemplates, loadInstrumentVersion, loadLayoutTemplateVersion, loadPolicyVersion, loadProgressionVersion, loadRuleTemplateVersion, loadScaleVersion } from "./read";
 import { recordValidated, saveScoring, submitVersion, type WriteResult } from "./write";
 import type { DefinitionKind, LoadedInstrumentVersion, StudioIssue, ValidationReport } from "./types";
 
@@ -62,6 +62,14 @@ export async function validateOther(admin: Admin, kind: Exclude<DefinitionKind, 
     const rules = t?.rules as any;
     if (!rules || !Array.isArray(rules.outcomes) || rules.outcomes.length === 0) errors.push({ code: "no_rules", path: "rules", message: "A scoring template needs outcomes and rules.", source: "rules" });
     else warnings.push({ code: "template_checked_on_copy", path: "rules", message: "A template is checked against each checklist it is copied into.", source: "rules" });
+  } else if (kind === "policy") {
+    const p = await loadPolicyVersion(admin, versionId);
+    if (!p) errors.push({ code: "missing", path: "version", message: "That policy version does not exist.", source: "policy" });
+    else {
+      if (p.version.title.trim().length < 3) errors.push({ code: "no_title", path: "title", message: "A policy needs a title.", source: "policy" });
+      if (p.version.content.trim().length < 20) errors.push({ code: "no_content", path: "content", message: "A policy needs its text (at least a sentence).", source: "policy" });
+      if (!p.version.effective_from) warnings.push({ code: "no_effective_date", path: "effective_from", message: "No effective date set: it will apply from publication.", source: "policy" });
+    }
   } else if (kind === "progression") {
     const p = await loadProgressionVersion(admin, versionId);
     if (p) {

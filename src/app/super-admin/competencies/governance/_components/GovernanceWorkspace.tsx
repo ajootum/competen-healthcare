@@ -156,7 +156,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
               </ul>
             </div>
           ))}
-          <p className="text-[12px] text-gray-600 md:col-span-3">Eligibility is content-specific: a reviewer may not approve a version they authored, edited or put forward; a publisher may not be the submitter or a contributor. The database refuses either regardless of what is drawn here.</p>
+          <p className="text-[12px] text-gray-600 md:col-span-3">Eligibility is content-specific: a reviewer may not approve a version they authored, edited or put forward; the author or submitter may publish the exact independently approved content, but a publisher may not be one of its clinical approvers where that rule is configured. The database refuses either regardless of what is drawn here.</p>
         </section>
       )}
       {panel === "history" && (
@@ -296,7 +296,7 @@ export default function GovernanceWorkspace({ model, initialId, initialFilter, i
         <div className="mt-2 h-2 rounded-full bg-gray-100" aria-hidden><div className="h-2 rounded-full bg-teal-700" style={{ width: `${counts.total ? (100 * counts.approved) / counts.total : 0}%` }} /></div>
         <p className="mt-2 text-[13px] text-gray-800">
           {counts.approved} of {counts.total} clinically approved at their current content.
-          {fw.pending ? ` A publication request was submitted${fw.pending.submittedByName ? ` by ${fw.pending.submittedByName}` : ""} on ${day(fw.pending.submittedAt)}: it waits until every competency is approved, then needs an independent publisher.` : " No publication request yet."}
+          {fw.pending ? ` A publication request was submitted${fw.pending.submittedByName ? ` by ${fw.pending.submittedByName}` : ""} on ${day(fw.pending.submittedAt)}: it waits until every competency is independently approved, then a publisher (the author or submitter may be one) releases that exact content.` : " No publication request yet."}
         </p>
         {me.canPublish && fw.pending && <Decide frameworkId={fw.id} firstPublication={(fw.publication?.publishedCount ?? 0) === 0} version={fw.version} blocker={publishBlocker} />}
         {me.canAuthor && fw.editable && !!fw.layer && !fw.pending && allApproved && <SubmitForPublication frameworkId={fw.id} revision={fw.pubStatus === "published"} />}

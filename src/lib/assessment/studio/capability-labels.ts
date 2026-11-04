@@ -1,5 +1,5 @@
 // Checklist Studio: plain names for the capabilities a Studio step can need, for the refusal message. Pure.
-import { CAP } from "./transitions";
+import { CAP, POLICY_CAP } from "./transitions";
 
 const LABEL: Record<string, string> = {
   [CAP.view]: "the right to view Checklist Studio",
@@ -9,6 +9,10 @@ const LABEL: Record<string, string> = {
   [CAP.assign]: "the right to assign assessors",
   [CAP.assess]: "the right to assess with a checklist",
   [CAP.domainReview]: "the right to give domain review",
+  [POLICY_CAP.view]: "the right to view governed policies",
+  [POLICY_CAP.author]: "the right to author policies",
+  [POLICY_CAP.review]: "the right to review policies",
+  [POLICY_CAP.publish]: "the right to publish policies",
 };
 
 /** The label of a capability, or the capability code itself when it is not one the Studio knows. */
