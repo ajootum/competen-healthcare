@@ -67,12 +67,15 @@ describe("HFE-01 Wave 1: AI availability", () => {
     expect(reasonFromRefusal({ error: "x", code: "consent_off" })).toBe("consent_off");
     expect(reasonFromRefusal({ error: "x", code: "consent_outdated" })).toBe("consent_outdated");
     expect(reasonFromRefusal({ error: "x", code: "not_configured" })).toBe("provider_unavailable");
-    expect(reasonFromRefusal({ error: "x", code: "failed" })).toBe("provider_unavailable");
+    expect(reasonFromRefusal({ error: "x", code: "failed" })).toBe("provider_failed");
     expect(aiReasonCopy("provider_unavailable", "scholar").text).toMatch(/saved still works/);
+    // LEARNING-CLOSE-2026-11 D06 / LE-01: both products read the same codes to the same words.
+    expect(aiReasonCopy("provider_failed", "professional").text).toMatch(/saved still works/);
+    expect(aiReasonCopy("provider_unavailable", "professional").text).toBe(aiReasonCopy("provider_unavailable", "scholar").text);
   });
 
   it("speaks in the person's terms, with a next step only where they can act", () => {
-    const reasons = ["policy_unpublished", "consent_off", "consent_outdated", "consent_awaiting_legal", "allowance_exhausted", "level_insufficient", "activity_unsupported", "not_eligible", "unreadable", "not_entitled", "provider_unavailable"] as const;
+    const reasons = ["policy_unpublished", "consent_off", "consent_outdated", "consent_awaiting_legal", "allowance_exhausted", "level_insufficient", "activity_unsupported", "not_eligible", "unreadable", "not_entitled", "provider_unavailable", "provider_failed"] as const;
     for (const r of reasons) {
       const c = aiReasonCopy(r, "professional");
       expect(c.text.length).toBeGreaterThan(20);

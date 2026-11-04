@@ -18,7 +18,7 @@ import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, cumulativePromptVersion, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
   type LessonBrief, type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
-import { CONTEXT_ACTIONS, DEEPER_ROUNDS_MAX, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
+import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
 import { coversLesson } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
@@ -92,7 +92,7 @@ export const dynamic = "force-dynamic";
 //   CONTEXT_ACTIONS) is given a concise block of what this lesson's SAVED teaching already covers and how the learner answered
 //   the checks of this visit (`priorChecks`, bounded, screened, never stored). Go deeper then extends the lesson (its saved key
 //   carries the taught ground's fingerprint, so each round is a new answer and a reopen of the same round is the saved one),
-//   at most DEEPER_ROUNDS_MAX rounds by AI, and may answer "depth reached" (no lesson, the next activity suggested); Explain /
+//   at most policy scholar_learn_deeper_rounds_max rounds by AI (LE-04, default three), and may answer "depth reached" (no lesson, the next activity suggested); Explain /
 //   Simplify become Explain again; Guide me carries its own turns (`history`); the checks know what was asked and answered.
 //   An OPEN of a saved lesson also returns the lesson's other saved teaching (alsoSaved: Go deeper rounds, examples ...), oldest
 //   first, so the thread shows what has been covered with no AI call.
@@ -396,12 +396,12 @@ export async function POST(req: Request) {
   if (open) return NextResponse.json({ action, step, depth, ...lessonFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate" });
   if (prepare && key && (await flightActive(ctx, key))) return notPrepared("in_flight", { step });
 
-  // ── SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper has a round limit by AI (DEEPER_ROUNDS_MAX); beyond it the answer is "depth reached", no call ──
+  // ── SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper has a round limit by AI (policy scholar_learn_deeper_rounds_max, LE-04); beyond it the answer is "depth reached", no call ──
   const depthReachedReply = (message: string, suggestion: string | null, extra: Record<string, unknown> = {}) => NextResponse.json({
     action, step, depth, label: AI_LABEL, kinds: SOURCE_KIND_LABEL, ...lessonFields, sources: [], passageIds: passages!.map(p => p.chunkId), references: [],
     depthReached: { message, suggestion, next: DEPTH_REACHED_NEXT, rounds: taughtSoFar?.rounds.deeper ?? 0 }, ...extra,
   });
-  if (action === "deeper" && taughtSoFar && (taughtSoFar.rounds.deeper ?? 0) >= DEEPER_ROUNDS_MAX) {
+  if (action === "deeper" && taughtSoFar && (taughtSoFar.rounds.deeper ?? 0) >= policy.scholarLearnDeeperRoundsMax) {
     const timing = clock.snapshot();
     later(() => audit(ctx, LEARN_SERVED_ACTION, LEARN_ENTITY, sessionId, { action, step, depth, mode, cached: false, depth_reached: "cap", rounds: taughtSoFar.rounds.deeper, timing_ms: timing }));
     return depthReachedReply(DEPTH_REACHED_CAP_MESSAGE, null, { cap: true });

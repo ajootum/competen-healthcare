@@ -80,7 +80,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
   | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
-  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes";
+  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -1999,6 +1999,14 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Five to sixty minutes. Default: twelve.",
   },
   {
+    // LEARNING-CLOSE-2026-11 D02 / LE-04: the Go deeper limit, configurable in HQ (default three cumulative rounds, learn-context DEEPER_ROUNDS_MAX).
+    key: "scholar_learn_deeper_rounds_max", kind: "int", product: "Scholar", unit: "rounds",
+    label: "Learn: Go deeper rounds per lesson",
+    help: "How many cumulative Go deeper rounds one lesson gets by AI. Beyond it Scholar answers \"depth reached\" from the notes, with no AI call. Fair-use and cost controls apply as before.",
+    fallback: 3, min: 1, max: 10,
+    limitReason: "One to ten rounds. Default: three.",
+  },
+  {
     key: "scholar_plan_rule_order", kind: "sequence", product: "Scholar",
     label: "My Plan: what comes first",
     help: "The order the planning rules are applied in when choosing the next activity. Revision that is due, topics showing gaps, unfinished lessons, the exam date, a deadline the student put in their calendar, consolidating what was recently studied, and covering all accepted notes. Rules left out are not used.",
@@ -2405,6 +2413,8 @@ export type IndividualPolicy = {
   /** SCHOLAR-INDEPENDENT-LEARNING-01 P2: what counts as a section started for My Plan (a lesson read / opened / taught, or only a question answered). */
   scholarPlanStartedSignal: "learning" | "practice";
   scholarPlanSectionMinutes: number;
+  /** LE-04: cumulative Go deeper rounds one lesson gets by AI (D02 default three). */
+  scholarLearnDeeperRoundsMax: number;
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
   scholarPlanRuleOrder: string[];
   scholarPlanWeeklyReflection: "on" | "off";
@@ -2598,6 +2608,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarPlanProposal: clampChoice(policyDef("scholar_plan_proposal") as ChoicePolicy, published.get(policyPath("scholar_plan_proposal"))) as "on" | "off",
     scholarPlanStartedSignal: clampChoice(policyDef("scholar_plan_started_signal") as ChoicePolicy, published.get(policyPath("scholar_plan_started_signal"))) as "learning" | "practice",
     scholarPlanSectionMinutes: int("scholar_plan_section_minutes"),
+    scholarLearnDeeperRoundsMax: int("scholar_learn_deeper_rounds_max"),
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
     scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),
