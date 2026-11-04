@@ -19,6 +19,7 @@ import { contextHistory } from "./context";
 import { governedReferences, referenceSource } from "./learn";
 import { levelWords as spellLevel } from "./learner-context";
 import { topicsOfSections } from "./store";
+import { qualificationOf, type LearnerFit } from "./library-meta";
 import { levelDefaultDifficulty, type GenerationContext, type GenerationDifficulty, type PromptReference, type SourceMode } from "./question-intel";
 
 export type GenerationContextLoader = {
@@ -26,6 +27,8 @@ export type GenerationContextLoader = {
   forSection: (chunkId: string, ask: { difficulty: GenerationDifficulty | null; mode: SourceMode }) => Promise<GenerationContext>;
   /** The difficulty the programme level suggests (a default only), or null. */
   levelDefault: GenerationDifficulty | null;
+  /** SQIE-CLOSE-2026-11 WS-E: the learner's programme code and qualification level, for matching library items (library-meta.ts). */
+  learnerFit: LearnerFit;
 };
 
 /** One loader per request: the programme, catalogue and level are read once, the section's rows per section. */
@@ -43,6 +46,7 @@ export async function generationContextLoader(admin: any, userId: string, policy
   let source: Awaited<ReturnType<typeof referenceSource>> | null = null;
   return {
     levelDefault: levelDefaultDifficulty(programme, level),
+    learnerFit: { programmeCode: learner?.programme?.code ?? null, level: qualificationOf(programme, learner?.programme?.level, level) },
     async forSection(chunkId, ask) {
       try {
         source = source ?? await referenceSource(admin, policy, learner?.competencies ?? null);

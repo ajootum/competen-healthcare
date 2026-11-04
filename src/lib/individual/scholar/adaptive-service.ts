@@ -22,7 +22,8 @@ import {
   insertRevisionQuestions, listMappings, listMaterials, questionsByIds, revisionPool, sectionLinks, topicsOfSections, updateAdaptiveScope, updateRevisionSession,
   type HeldAnswer, type QuestionRow, type RevisionSessionRow, type SessionAttempt,
 } from "./store";
-import { formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "./library-questions";
+import { adaptiveLibraryFits, formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "./library-questions";
+import type { LearnerFit } from "./library-meta";
 import { competencyLabels, loadLearnerCatalogue } from "./competency-view";
 import { resolveScope } from "./learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "./http";
@@ -89,20 +90,23 @@ export async function resolveAdaptiveSections(admin: any, userId: string, scope:
 /**
  * LIBRARY FIRST. The governed library questions matched to these sections (accepted links, their topics), copied as the
  * student's own rows (store.ts insertLibraryCopies -- 710 only; [] without it). Held copies are reused, not copied again.
+ * SQIE-CLOSE-2026-11 WS-F: every format the exam asks for, not only single best answer (adaptiveLibraryFits), and only
+ * items fitting the learner's known programme and level (WS-E). Only published, clinically approved versions are ever
+ * read (loadLibraryQuestions), and the 466/710/800 guard refuses any other copy in the database.
  */
-export async function adaptiveLibraryCopies(ctx: IndividualContext, sections: readonly string[], length: number): Promise<string[]> {
+export async function adaptiveLibraryCopies(ctx: IndividualContext, sections: readonly string[], length: number, formats: readonly string[] = ["mcq"], learner: LearnerFit | null = null): Promise<string[]> {
   const ids = sections.slice(0, 40);
   if (!ids.length) return [];
   const [links, topics] = await Promise.all([sectionLinks(ctx.admin, ctx.userId, ids), topicsOfSections(ctx.admin, ctx.userId, ids)]);
   const libSections: LibrarySection[] = ids.map(c => ({ chunkId: c, competencyIds: [...new Set(links.filter(l => l.chunkId === c && l.accepted).map(l => l.competencyId))], topics: topics.get(c) ?? [] }))
     .filter(x => x.competencyIds.length);
   if (!libSections.length) return [];
-  const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds));
-  // SQIE-LIBRARY-EXPANSION-01: an adaptive exam is single best answer questions, so only those formats are reused here.
-  const picks = pickLibraryQuestions({ questions: library.filter(q => formatOfLibrary(q) === "mcq"), sections: libSections, exclude: new Set(), limit: Math.min(BLUEPRINT_LIBRARY_MAX, length) });
+  const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds), learner);
+  const picks = pickLibraryQuestions({ questions: adaptiveLibraryFits(library, formats), sections: libSections, exclude: new Set(), limit: Math.min(BLUEPRINT_LIBRARY_MAX, length) });
   const copies = await insertLibraryCopies(ctx.admin, ctx.userId, picks);
   await audit(ctx, "individual_scholar_revision_library", "individual_scholar_revision_session", null, {
     adaptive: true, offered: library.length, picked: picks.length, copied: copies.copied, reused: copies.ids.length, versions: picks.map(p => p.question.versionId),
+    formats: [...new Set(picks.map(p => formatOfLibrary(p.question)))],
   });
   return copies.ids.slice(0, BLUEPRINT_LIBRARY_MAX);
 }

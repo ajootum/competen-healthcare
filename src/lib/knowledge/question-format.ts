@@ -1,5 +1,6 @@
 import { normaliseSource } from "./question-source";
 import { LIBRARY_FORMATS, type LibraryFormat } from "@/lib/individual/scholar/library-format";
+import { carriedOf, metaFromFields, metaOf } from "@/lib/individual/scholar/library-meta";
 
 // ── A LIBRARY QUESTION FROM THE EDUCATOR'S FORM ── SQIE-LIBRARY-EXPANSION-01 (owner GO 31 Oct 2026, item F) ─────────────
 //
@@ -15,6 +16,16 @@ const s = (v: unknown, n: number) => (typeof v === "string" ? v.trim().slice(0, 
 const lines = (v: unknown, n: number, each: number): string[] =>
   (Array.isArray(v) ? v : typeof v === "string" ? v.split(/\r?\n/) : []).map(x => s(x, each)).filter(Boolean).slice(0, n);
 const int = (v: unknown): number | undefined => { const n = Number(v); return Number.isInteger(n) ? n : undefined; };
+// SQIE-CLOSE-2026-11 (997): the WS-B safety markers of a key or part, from the form ({ safetyCritical, unsafe: lines }).
+const markers = (x: Record<string, unknown>) => {
+  const unsafe = lines(x.unsafe, 6, 200);
+  return { ...(x.safetyCritical === true || x.safetyCritical === "true" ? { safetyCritical: true } : {}), ...(unsafe.length ? { unsafe } : {}) };
+};
+/** A structured part's WS-C role (answer, justify, interpret) as text, or "". A question part, not an authorization role. */
+const partRole = (x: Record<string, unknown>): string => { const r = x["role"]; return typeof r === "string" ? r : ""; };
+/** An integer, where "" (an untouched field) is no value -- never 0. */
+const intOpt = (v: unknown): number | undefined => (v === "" || v === null || v === undefined ? undefined : int(v));
+const num = (v: unknown): number | undefined => { if (typeof v === "number") return v; const t = typeof v === "string" ? v.trim() : ""; const n = t ? Number(t) : NaN; return Number.isFinite(n) ? n : undefined; };
 
 /** Pure. A deterministic, never-identity order of n steps from the question's own text (no clock, no randomness). */
 export function stepShuffle(n: number, seed: string): number[] {
@@ -38,7 +49,8 @@ function rubricOf(f: Record<string, unknown>, keyPoints?: string[]): Record<stri
 export function questionContentFromFields(f: Record<string, unknown>): Record<string, unknown> {
   const format = ((LIBRARY_FORMATS as readonly string[]).includes(f.format as string) ? f.format : "mcq") as LibraryFormat;
   const source = normaliseSource(f.source);
-  const tail = { ...(source ? { source } : {}) };
+  // SQIE-CLOSE-2026-11 WS-E: programme, qualification level, difficulty and the carried provenance (library-meta.ts), optional.
+  const tail = { ...(source ? { source } : {}), ...metaFromFields(f) };
   const stem = s(f.stem, 2000), rationale = s(f.rationale, 4000);
   const marking = typeof f.marking === "string" && f.marking ? { marking: f.marking } : {};
   const rubric = format === "extended" ? rubricOf(f, lines(f.keyPoints, 8, 300)) : rubricOf(f);
@@ -53,10 +65,15 @@ export function questionContentFromFields(f: Record<string, unknown>): Record<st
       return { format, stem, options: options.slice(0, 4), correct_index: ci, ...withRubric, ...marking, rationale, ...tail };
     }
     case "mrq": return common(options, { correct: (Array.isArray(f.correct) ? f.correct : []).map(int).filter((x): x is number => x !== undefined) });
-    case "short": return common([], { accepted: lines(f.accepted, 8, 200) });
+    case "short": return common([], { accepted: lines(f.accepted, 8, 200), ...markers(f) });
     case "cloze": return common([], { format: "cloze", accepted: lines(f.accepted, 8, 80) });
     case "true_false": return common([], { format: "true_false", truth: f.truth === true || f.truth === "true" ? true : f.truth === false || f.truth === "false" ? false : null });
-    case "extended": return common([], { format: "extended", modelAnswer: s(f.modelAnswer, 1200), ...(int(f.marks) !== undefined ? { marks: int(f.marks) } : {}) });
+    case "extended": {
+      const scp = (Array.isArray(f.safetyCriticalPoints) ? f.safetyCriticalPoints : []).map(int).filter((x): x is number => x !== undefined);
+      const { safetyCritical: _sc, ...unsafe } = markers(f);
+      void _sc;
+      return common([], { format: "extended", modelAnswer: s(f.modelAnswer, 1200), ...(int(f.marks) !== undefined ? { marks: int(f.marks) } : {}), ...(scp.length ? { safetyCriticalPoints: scp } : {}), ...unsafe });
+    }
     case "flashcard": return common([], { back: s(f.back, 2000) });
     case "match": {
       const pairs = (Array.isArray(f.pairs) ? f.pairs : []).slice(0, 6).map(p => ({ prompt: s((p as Record<string, unknown>)?.prompt, 300), match: s((p as Record<string, unknown>)?.match, 300) }))
@@ -72,9 +89,34 @@ export function questionContentFromFields(f: Record<string, unknown>): Record<st
     case "structured": {
       const parts = (Array.isArray(f.parts) ? f.parts : []).slice(0, 4).map(p => {
         const x = (p ?? {}) as Record<string, unknown>;
-        return { prompt: s(x.prompt, 600), marks: int(x.marks) ?? Number(x.marks), accepted: lines(x.accepted, 4, 200) };
+        // WS-C (997): a part's role, a choice part (options in lines, the correct one, which is also its first accepted answer),
+        // weighted criteria, and WS-B safety markers. Absent: the plain part of before.
+        const opts = lines(x.options, 6, 200), correct = intOpt(x.correct);
+        const choice = opts.length >= 2 && correct !== undefined && correct >= 0 && correct < opts.length;
+        const accepted = lines(x.accepted, 4, 200);
+        const criteria = (Array.isArray(x.criteria) ? x.criteria : []).slice(0, 8).map(c => { const y = (c ?? {}) as Record<string, unknown>; return { text: s(y.text, 300), weight: int(y.weight) ?? 1, ...(y.safetyCritical === true ? { safetyCritical: true } : {}) }; })
+          .filter(c => c.text);
+        return {
+          prompt: s(x.prompt, 600), marks: int(x.marks) ?? Number(x.marks), accepted: choice ? [opts[correct!], ...accepted.filter(a => a !== opts[correct!])].slice(0, 4) : accepted,
+          ...(partRole(x) ? { role: partRole(x) } : {}), ...(opts.length ? { options: opts, correct } : {}), ...(criteria.length ? { criteria } : {}), ...markers(x),
+        };
       });
-      return common([], { parts });
+      const findings = (Array.isArray(f.findings) ? f.findings : []).slice(0, 12).map(r => { const y = (r ?? {}) as Record<string, unknown>; return { label: s(y.label, 120), value: s(y.value, 120), ...(s(y.unit, 30) ? { unit: s(y.unit, 30) } : {}) }; })
+        .filter(r => r.label || r.value);
+      return common([], { ...(typeof f.variant === "string" && f.variant ? { variant: f.variant } : {}), ...(findings.length ? { findings } : {}), parts });
+    }
+    case "calculation": {
+      // WS-A (997): the key the scoring rules mark (scoring-rules.ts). The accepted answer in words is built from value and unit.
+      const c = (f.calc ?? {}) as Record<string, unknown>;
+      const places = intOpt(c.places);
+      const amount = num(c.toleranceAmount);
+      return common([], {
+        format: "calculation", value: num(c.value) ?? s(c.value, 40), unit: s(c.unit, 30),
+        ...(lines(c.equivalentUnits, 6, 30).length ? { equivalentUnits: lines(String(c.equivalentUnits ?? "").replace(/,/g, "\n"), 6, 30) } : {}),
+        ...(c.roundingMode && places !== undefined ? { rounding: { mode: c.roundingMode, places } } : {}),
+        ...(c.toleranceKind && amount !== undefined ? { tolerance: { kind: c.toleranceKind, amount } } : {}),
+        safetyCritical: c.safetyCritical !== false && c.safetyCritical !== "false", ...(s(c.working, 1200) ? { working: s(c.working, 1200) } : {}), ...markers({ unsafe: c.unsafe }),
+      });
     }
   }
 }
@@ -85,17 +127,37 @@ export function fieldsFromQuestionContent(c: Record<string, unknown>): Record<st
   const k = (c.answerKey ?? {}) as Record<string, unknown>;
   const r = (c.rubric ?? {}) as Record<string, unknown>;
   const options = Array.isArray(c.options) ? c.options.map(String) : [];
+  const m = metaOf(c);
   const base = { format, stem: String(c.stem ?? ""), rationale: String(c.rationale ?? ""), marking: typeof c.marking === "string" ? c.marking : "", source: c.source,
+    programmeCode: m?.programmeCode ?? "", programmeLabel: m?.programmeLabel ?? "", qualificationLevel: m?.qualificationLevel ?? "", qualificationLabel: m?.qualificationLabel ?? "",
+    difficulty: m?.difficulty ?? "", carried: carriedOf(c),
     rubric: { level: String(r.level ?? ""), objective: String(r.objective ?? ""), keyPoints: Array.isArray(r.keyPoints) ? r.keyPoints.join("\n") : "", misconceptions: Array.isArray(r.misconceptions) ? r.misconceptions.join("\n") : "" } };
   switch (format) {
     case "mcq": return { ...base, options: options.length ? options : ["", "", "", ""], correctIndex: Number(c.correct_index ?? 0) };
     case "mrq": return { ...base, options, correct: Array.isArray(k.correct) ? k.correct : [] };
-    case "short": case "cloze": return { ...base, accepted: Array.isArray(k.accepted) ? k.accepted.join("\n") : "" };
+    case "short": return { ...base, accepted: Array.isArray(k.accepted) ? k.accepted.join("\n") : "", safetyCritical: k.safetyCritical === true, unsafe: Array.isArray(k.unsafe) ? k.unsafe.join("\n") : "" };
+    case "cloze": return { ...base, accepted: Array.isArray(k.accepted) ? k.accepted.join("\n") : "" };
     case "true_false": return { ...base, truth: Array.isArray(k.accepted) ? k.accepted[0] : "" };
-    case "extended": return { ...base, modelAnswer: String(k.modelAnswer ?? ""), marks: k.marks ?? "", keyPoints: Array.isArray(r.keyPoints) ? r.keyPoints.join("\n") : "" };
+    case "extended": return { ...base, modelAnswer: String(k.modelAnswer ?? ""), marks: k.marks ?? "", keyPoints: Array.isArray(r.keyPoints) ? r.keyPoints.join("\n") : "",
+      safetyCriticalPoints: Array.isArray(k.safetyCriticalPoints) ? k.safetyCriticalPoints : [], unsafe: Array.isArray(k.unsafe) ? k.unsafe.join("\n") : "" };
     case "flashcard": return { ...base, back: String(k.back ?? "") };
     case "match": return { ...base, pairs: options.map((p, i) => ({ prompt: p, match: String((k.matches as unknown[] | undefined)?.[i] ?? "") })) };
     case "sequence": return { ...base, steps: (Array.isArray(k.order) ? (k.order as number[]) : []).map(i => options[i] ?? "").join("\n") };
-    case "structured": return { ...base, parts: (Array.isArray(k.parts) ? k.parts : []).map(p => { const x = p as Record<string, unknown>; return { prompt: String(x.prompt ?? ""), marks: x.marks ?? 1, accepted: Array.isArray(x.accepted) ? x.accepted.join("\n") : "" }; }) };
+    case "structured": return { ...base, variant: typeof k.variant === "string" ? k.variant : "",
+      findings: Array.isArray(k.findings) ? k.findings.map(r => { const y = r as Record<string, unknown>; return { label: String(y.label ?? ""), value: String(y.value ?? ""), unit: String(y.unit ?? "") }; }) : [],
+      parts: (Array.isArray(k.parts) ? k.parts : []).map(p => {
+        const x = p as Record<string, unknown>;
+        const opts = Array.isArray(x.options) ? x.options.map(String) : [];
+        return { prompt: String(x.prompt ?? ""), marks: x.marks ?? 1, accepted: (Array.isArray(x.accepted) ? x.accepted.map(String) : []).filter(a => !opts.includes(a)).join("\n"),
+          role: partRole(x), options: opts.join("\n"), correct: typeof x.correct === "number" ? x.correct : "",
+          criteria: Array.isArray(x.criteria) ? x.criteria.map(c => { const y = c as Record<string, unknown>; return { text: String(y.text ?? ""), weight: Number(y.weight ?? 1), safetyCritical: y.safetyCritical === true }; }) : [],
+          safetyCritical: x.safetyCritical === true, unsafe: Array.isArray(x.unsafe) ? x.unsafe.join("\n") : "" };
+      }) };
+    case "calculation": return { ...base, calc: {
+      value: typeof k.value === "number" ? String(k.value) : "", unit: String(k.unit ?? ""), equivalentUnits: Array.isArray(k.equivalentUnits) ? k.equivalentUnits.join(", ") : "",
+      roundingMode: (k.rounding as Record<string, unknown> | undefined)?.mode ?? "", places: (k.rounding as Record<string, unknown> | undefined)?.places ?? "",
+      toleranceKind: (k.tolerance as Record<string, unknown> | undefined)?.kind ?? "", toleranceAmount: (k.tolerance as Record<string, unknown> | undefined)?.amount ?? "",
+      safetyCritical: k.safetyCritical !== false, working: String(k.working ?? ""), unsafe: Array.isArray(k.unsafe) ? k.unsafe.join("\n") : "",
+    } };
   }
 }

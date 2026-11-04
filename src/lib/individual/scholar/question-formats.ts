@@ -113,10 +113,10 @@ const ROWS = [
   // Stored as `short` (answer.format = 'calculation', its key and authored tolerance in scoring-rules.ts): no migration. Marked by CODE only
   // (numeric parsing, unit normalisation and conversion, tolerance). Off by default (a clinical tolerance policy is an owner decision). The
   // generated key is ALWAYS blind-solved by a second reader (generation.ts), whatever scholar_verify_formats says, so it is in no verify list.
-  // library: null until WS-E widens the library form and migration 800's format check (this row then gains its library entry).
+  // SQIE-CLOSE-2026-11 WS-E (migration 997): the governed library holds it too -- marked by code only, copied as `short`.
   { key: "calculation", label: "Calculation (units and tolerance)", description: "Work out a dose, rate or value from the figures in your notes; a number and its unit, marked by code.", marking: "code", aiMarking: false, aiWritten: true,
     stored: "short", usesOptions: false, answerFormat: "calculation", revisionDefault: "off", verifyRank: null, verifyDefault: false, adaptive: false, blindRank: 6,
-    library: null, immediateFeedbackOnly: false, remediation: "card_on_miss",
+    library: { rank: 10, label: "Calculation", marking: ["deterministic"], copyKind: "short" }, immediateFeedbackOnly: false, remediation: "card_on_miss",
     modules: { writer: `${S}/generation.ts`, marker: `${S}/scoring-rules.ts`, renderer: "app/individual/(app)/[experience]/(scholar)/study/_components/revision-client.tsx" } },
   // The multiple-choice case set: a Revision/Case question, never a Revision format of its own, but a stored kind the blind check covers.
   { key: "case", label: "Case questions", description: "Multiple-choice questions on a practice case.", marking: "code", aiMarking: false, aiWritten: true, stored: "case", usesOptions: true, answerFormat: null,
