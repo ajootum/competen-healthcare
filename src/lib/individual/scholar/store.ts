@@ -919,6 +919,8 @@ export async function insertLibraryCopies(admin: Admin, userId: string, picks: r
       source_quote: "", model: "competen-library", provider: "competen-library", prompt_version: `library:v${p.question.versionNo}`,
       review_status: "library_approved", library_resource_id: p.question.resourceId, library_version_id: p.question.versionId,
       competency_id: p.competencyId,
+      // SQIE-CLOSE-2026-11 WS-E: the item's recorded difficulty (995 meta), so an adaptive exam can target it. Not guarded by 800.
+      ...(p.question.meta?.difficulty ? { difficulty: p.question.meta.difficulty } : {}),
     }));
     // One at a time: a version refused by the guard (unpublished since it was read) costs only itself.
     for (const row of rows) {

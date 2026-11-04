@@ -50,7 +50,8 @@ export async function POST(req: Request) {
   if (!resolved.ok) return NextResponse.json({ error: resolved.error }, { status: resolved.status });
   const loader = await generationContextLoader(ctx.admin, ctx.userId, policy);
   const start = startingDifficulty(a.start, loader.levelDefault, policy.scholarRevisionDifficulty);
-  const libraryIds = sqie && a.formats.includes("mcq") ? await adaptiveLibraryCopies(ctx, resolved.sections, a.length) : [];
+  // SQIE-CLOSE-2026-11 WS-F: approved published library items of EVERY format the exam asks for, before any generation.
+  const libraryIds = sqie && a.formats.length ? await adaptiveLibraryCopies(ctx, resolved.sections, a.length, a.formats, loader.learnerFit) : [];
   const blueprint: AdaptiveBlueprint = {
     v: 1, title: a.title || `Adaptive exam: ${resolved.title}`.slice(0, 120), scope: a.scope, formats: a.formats, length: a.length,
     start: start.start, startFrom: start.from, feedback: a.feedback, timeLimitMinutes: a.timeLimitMinutes, source: a.source,

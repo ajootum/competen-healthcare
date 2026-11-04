@@ -267,7 +267,8 @@ export async function POST(req: Request) {
       .map(c => ({ chunkId: c, competencyIds: [...new Set(links.filter(l => l.chunkId === c && l.accepted).map(l => l.competencyId))], topics: topics.get(c) ?? [] }))
       .filter(x => x.competencyIds.length);
     if (libSections.length) {
-      const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds));
+      // SQIE-CLOSE-2026-11 WS-E: items recording another programme or level than the learner's known one are not offered.
+      const library = await loadLibraryQuestions(ctx.admin, libSections.flatMap(x => x.competencyIds), loader.learnerFit);
       const held = new Set(pool.questions.map(q => q.library?.versionId).filter((v): v is string => !!v));
       // SCHOLAR-FLASHCARDS-01: as cards, only a library question whose stem stands alone as a recall prompt.
       // As cards: a flashcard, or a single best answer question whose stem stands alone. Otherwise: the formats asked for.

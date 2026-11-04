@@ -1,5 +1,6 @@
 import { normaliseSource } from "./question-source";
 import { LIBRARY_FORMATS, type LibraryFormat } from "@/lib/individual/scholar/library-format";
+import { metaFromFields, metaOf } from "@/lib/individual/scholar/library-meta";
 
 // ── A LIBRARY QUESTION FROM THE EDUCATOR'S FORM ── SQIE-LIBRARY-EXPANSION-01 (owner GO 31 Oct 2026, item F) ─────────────
 //
@@ -38,7 +39,9 @@ function rubricOf(f: Record<string, unknown>, keyPoints?: string[]): Record<stri
 export function questionContentFromFields(f: Record<string, unknown>): Record<string, unknown> {
   const format = ((LIBRARY_FORMATS as readonly string[]).includes(f.format as string) ? f.format : "mcq") as LibraryFormat;
   const source = normaliseSource(f.source);
-  const tail = { ...(source ? { source } : {}) };
+  // SQIE-CLOSE-2026-11 WS-E: programme, qualification level and difficulty (library-meta.ts), optional.
+  const meta = metaFromFields(f);
+  const tail = { ...(source ? { source } : {}), ...(meta ? { meta } : {}) };
   const stem = s(f.stem, 2000), rationale = s(f.rationale, 4000);
   const marking = typeof f.marking === "string" && f.marking ? { marking: f.marking } : {};
   const rubric = format === "extended" ? rubricOf(f, lines(f.keyPoints, 8, 300)) : rubricOf(f);
@@ -85,7 +88,9 @@ export function fieldsFromQuestionContent(c: Record<string, unknown>): Record<st
   const k = (c.answerKey ?? {}) as Record<string, unknown>;
   const r = (c.rubric ?? {}) as Record<string, unknown>;
   const options = Array.isArray(c.options) ? c.options.map(String) : [];
+  const m = metaOf(c);
   const base = { format, stem: String(c.stem ?? ""), rationale: String(c.rationale ?? ""), marking: typeof c.marking === "string" ? c.marking : "", source: c.source,
+    programmes: m?.programmes ?? [], level: m?.level ?? "", difficulty: m?.difficulty ? String(m.difficulty) : "",
     rubric: { level: String(r.level ?? ""), objective: String(r.objective ?? ""), keyPoints: Array.isArray(r.keyPoints) ? r.keyPoints.join("\n") : "", misconceptions: Array.isArray(r.misconceptions) ? r.misconceptions.join("\n") : "" } };
   switch (format) {
     case "mcq": return { ...base, options: options.length ? options : ["", "", "", ""], correctIndex: Number(c.correct_index ?? 0) };

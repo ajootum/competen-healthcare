@@ -3,6 +3,7 @@ import { clinicalState, versionStatus, type VersionStatus } from "./educator";
 import { libraryContentOf, type LibraryDisplay } from "./question-content";
 import { findDuplicatePairs, type SimilarPair } from "./question-similarity";
 import { sourceOf, type QuestionSource } from "./question-source";
+import { metaOf, type LibraryMeta } from "@/lib/individual/scholar/library-meta";
 
 // ── HQ QUESTION LIBRARY CATALOGUE ── SQIE-COMPLETE-01 (owner GO 31 Oct 2026) ──────────────────────────────────────────────
 //
@@ -17,6 +18,8 @@ export type CatalogueVersion = {
   content: unknown; stem: string; options: string[]; correctIndex: number | null; rationale: string; source: QuestionSource | null;
   /** SQIE-LIBRARY-EXPANSION-01 (800): the format, the key in words, the marking rule and the rubric. */
   format: string; formatLabel: string; keyText: string; marking: string; rubric: LibraryDisplay["rubric"];
+  /** SQIE-CLOSE-2026-11 WS-E (995): programmes, qualification level and difficulty, or null when the version records none. */
+  meta: LibraryMeta | null;
   competencyIds: string[]; approvals: number; required: number | null; educatorReviewed: boolean;
   createdAt: string; submittedAt: string | null; publishedAt: string | null; trail: TrailEntry[];
 };
@@ -33,7 +36,11 @@ export const topicsOf = (title: string): string[] => [title.trim()].filter(Boole
 // SQIE-LIBRARY-EXPANSION-01 (801): "active" = learners are given a version now (published, approved, resource active).
 export const STATUS_FILTERS = ["active", "draft", "submitted", "reviewed", "approved", "published", "superseded", "retired"] as const;
 export type StatusFilter = (typeof STATUS_FILTERS)[number];
-export type CatalogueFilters = { q?: string; status?: string; origin?: string; competency?: string; topic?: string; duplicates?: boolean };
+export type CatalogueFilters = {
+  q?: string; status?: string; origin?: string; competency?: string; topic?: string; duplicates?: boolean;
+  /** WS-E: matched on the LATEST version. "none" = records no programme / level / difficulty. */
+  format?: string; programme?: string; level?: string; difficulty?: string;
+};
 
 /**
  * Pure. Which filter statuses a version answers to. draft = not submitted; submitted = in clinical review (or rejected);
@@ -62,6 +69,12 @@ export function filterCatalogue(items: readonly CatalogueItem[], f: CatalogueFil
     if (f.competency && !i.competencyIds.includes(f.competency)) return false;
     if (topic && !i.topics.some(t => t.toLowerCase().includes(topic))) return false;
     if (f.duplicates && !i.versions.some(v => dupIds.has(v.id))) return false;
+    // WS-E: format, programme, qualification level and difficulty of the latest version. "none" finds the untagged.
+    const m = i.latest.meta;
+    if (f.format && i.latest.format !== f.format) return false;
+    if (f.programme && (f.programme === "none" ? !!m?.programmes?.length : !m?.programmes?.includes(f.programme))) return false;
+    if (f.level && (f.level === "none" ? !!m?.level : m?.level !== f.level)) return false;
+    if (f.difficulty && (f.difficulty === "none" ? !!m?.difficulty : String(m?.difficulty ?? "") !== f.difficulty)) return false;
     return true;
   });
 }
@@ -114,6 +127,7 @@ export async function loadCatalogue(admin: any): Promise<Catalogue | null> {
         id: v.id, versionNo: v.version_no, state: v.state, status: versionStatus(v.state, clinical), origin: v.origin, aiProvenance: v.ai_provenance ?? null,
         content: v.content, stem: c?.stem ?? "", options: c?.options ?? [], correctIndex: c?.correctIndex ?? null, rationale: c?.rationale ?? "", source: sourceOf(v.content),
         format: c?.format ?? "mcq", formatLabel: c?.formatLabel ?? "Single best answer", keyText: c?.keyText ?? "", marking: c?.marking ?? "Not recorded", rubric: c?.rubric ?? null,
+        meta: metaOf(v.content),
         competencyIds: (links.data ?? []).filter((l: any) => l.version_id === v.id).map((l: any) => l.competency_id),
         approvals: ds.filter((d: any) => d.decision === "approved").length, required,
         educatorReviewed: !!v.educator_reviewed_by && v.educator_reviewed_hash === v.content_hash,

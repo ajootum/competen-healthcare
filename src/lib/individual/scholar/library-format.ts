@@ -39,6 +39,7 @@
 
 import { COGNITIVE_LEVELS } from "./question-intel";
 import { FORMAT_ROW, LIBRARY_COPY_KIND, LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL, LIBRARY_FORMAT_MARKING, type LibraryFormat } from "./question-formats";
+import { checkLibraryMeta } from "./library-meta";
 
 // SCHOLAR-CE-2026 CE-05: the library's format list, labels, marking rules and stored kinds come from the registry (question-formats.ts).
 export { LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL } from "./question-formats";
@@ -116,13 +117,20 @@ export function validateLibraryQuestion(raw: unknown): Check {
   if (!stem) return { ok: false, error: format === "true_false" ? "Write the statement (10 to 2000 characters)." : "Write the question (10 to 2000 characters)." };
   if (!rationale) return { ok: false, error: "Write the explanation learners see after answering (10 to 4000 characters)." };
   const source = c.source !== undefined ? { source: c.source } : {};
+  // SQIE-CLOSE-2026-11 WS-E (995): programme, qualification level and difficulty, optional, in `meta` (library-meta.ts).
+  const m = checkLibraryMeta(c.meta);
+  if (!m.ok) return m;
+  const meta = m.meta ? { meta: m.meta } : {};
 
   if (c.format === undefined) {
-    // 442 exactly: four options, one correct. Nothing else is read or written.
+    // 442 exactly: four options, one correct. Nothing else is read or written (WS-E: `meta` normalised where given).
     const options = strList(c.options, 4, 4, 500);
     if (!options) return { ok: false, error: "A single best answer question has four options, each written." };
     if (!isInt(c.correct_index, 0, 3)) return { ok: false, error: "Choose the correct option." };
-    return { ok: true, format, content: c as LibraryContent };
+    if (c.meta === undefined) return { ok: true, format, content: c as LibraryContent };
+    const { meta: _drop, ...rest } = c;
+    void _drop;
+    return { ok: true, format, content: { ...rest, ...meta } as LibraryContent };
   }
 
   const marking = (c.marking ?? FORMAT_MARKING[format][0]) as MarkingRule;
@@ -131,7 +139,7 @@ export function validateLibraryQuestion(raw: unknown): Check {
   if (!rub.ok) return rub;
   const k = (c.answerKey ?? {}) as Record<string, unknown>;
   const out = (options: string[], answerKey: Record<string, unknown> | null, extra: Record<string, unknown> = {}): Check => {
-    const content: LibraryContent = { format, stem, options, ...extra, ...(answerKey ? { answerKey } : {}), ...(rub.rubric ? { rubric: rub.rubric } : {}), marking, rationale, ...source };
+    const content: LibraryContent = { format, stem, options, ...extra, ...(answerKey ? { answerKey } : {}), ...(rub.rubric ? { rubric: rub.rubric } : {}), marking, rationale, ...source, ...meta };
     if (JSON.stringify(content).length > 30000) return { ok: false, error: "The question is too long to store." };
     const copy = libraryCopyOf(content);
     if (!copy || JSON.stringify(copy.answer ?? {}).length > 15000) return { ok: false, error: "The question is too long to store." };

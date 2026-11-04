@@ -5,6 +5,7 @@ import { currentTraceId } from "@/lib/trace";
 import { CKRI_OFF, ckriEnabled } from "@/lib/knowledge/governance";
 import { createResource, moveNeed, newVersion, publishVersion, raiseNeed, retireResource, retireVersion, reviewDraft, saveDraft, setCompetencies, submitDraft } from "@/lib/knowledge/educator";
 import { declineLearnerOffer, takeLearnerOffer } from "@/lib/knowledge/learner-offers";
+import { BULK_ACTIONS, bulkIds, loadCompetencyOptions, pickableCompetencies, runBulk, type BulkAction } from "@/lib/knowledge/library-admin";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -14,11 +15,13 @@ export const dynamic = "force-dynamic";
 //                                                            version_new, competencies_set, review, submit
 //                                                            offer_take, offer_decline (learner offers, 802)
 //   hq.quality.knowledge.publish  (Quality Council Member)   publish, retire, retire_version (one version, 801)
+// SQIE-CLOSE-2026-11 WS-E: bulk_submit and bulk_replace (educator), bulk_retire (publisher) -- each item through the single-item
+// function and audited on its own row. competencies_set takes only competencies of a PUBLISHED controlled catalogue (the picker).
 // Clinical approval is NOT here: it is /api/hq/clinical-review (hq.quality.clinical.approve) and the 442 trigger.
 // ⚠ NOTHING THE BROWSER SENDS PICKS AN AUTHOR, A REVIEWER, AN ORIGIN, A STATE OR EVIDENCE. Every action is audited.
 
-const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit", "offer_take", "offer_decline"] as const;
-const PUBLISH = ["publish", "retire", "retire_version"] as const;
+const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit", "offer_take", "offer_decline", "bulk_submit", "bulk_replace"] as const;
+const PUBLISH = ["publish", "retire", "retire_version", "bulk_retire"] as const;
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 export async function POST(req: Request) {
@@ -31,6 +34,21 @@ export async function POST(req: Request) {
   if (!(await ckriEnabled(ctx.admin))) return NextResponse.json({ error: CKRI_OFF }, { status: 409 });
   const me = ctx.userId;
   const fields = body?.fields && typeof body.fields === "object" ? body.fields : {};
+  if ((BULK_ACTIONS as readonly string[]).includes(action)) {
+    const ids = bulkIds(body?.ids);
+    if (!ids.ok) return NextResponse.json({ error: ids.error }, { status: 400 });
+    const reason = str(body.note ?? body.reason, 500);
+    if (action === "bulk_retire" && (reason.length < 10 || reason.length > 500)) return NextResponse.json({ error: "Give the reason these versions are retired (10 to 500 characters)." }, { status: 400 });
+    const results = await runBulk(ctx.admin, me, action as BulkAction, ids.ids, reason);
+    const trace = await currentTraceId();
+    for (const x of results) await ctx.admin.from("audit_log").insert({
+      trace_id: trace, actor_id: me, actor_name: ctx.fullName ?? null, action: `ckri_${action}`,
+      entity_type: action === "bulk_replace" ? "ckri_knowledge_resource" : "ckri_knowledge_version", entity_id: x.id,
+      new_value: { action, ok: x.ok, ...(x.versionId ? { versionId: x.versionId } : {}), ...(action === "bulk_retire" ? { reason } : {}), of: results.length },
+    }).then((y: unknown) => y, () => {});
+    const done = results.filter(x => x.ok).length;
+    return NextResponse.json({ ok: done > 0, done, of: results.length, results }, { status: done > 0 ? 200 : 409 });
+  }
   let r: any;
   switch (action) {
     case "need_raise": r = await raiseNeed(ctx.admin, me, { snapshotId: str(body.snapshotId, 40), subjectKind: str(body.subjectKind, 20), subjectRef: str(body.subjectRef, 40), cohort: str(body.cohort, 80), period: str(body.period, 10), summary: str(body.summary, 2000), responseKind: str(body.responseKind, 30) }); break;
@@ -38,7 +56,15 @@ export async function POST(req: Request) {
     case "resource_create": r = await createResource(ctx.admin, me, { code: str(body.code, 61), kind: str(body.kind, 30), title: str(body.title), needId: str(body.needId, 40) || null, fields }); break;
     case "draft_save": r = await saveDraft(ctx.admin, me, str(body.versionId, 40), fields); break;
     case "version_new": r = await newVersion(ctx.admin, me, str(body.resourceId, 40)); break;
-    case "competencies_set": r = await setCompetencies(ctx.admin, str(body.versionId, 40), Array.isArray(body.competencyIds) ? body.competencyIds.map((x: unknown) => str(x, 40)) : str(body.competencyIds ?? body.note, 2000).split(/[\s,]+/)); break;
+    case "competencies_set": {
+      // WS-E: only competencies of a published controlled catalogue (the picker's list), never a typed or stale id.
+      const asked: string[] = Array.isArray(body.competencyIds) ? body.competencyIds.map((x: unknown) => str(x, 40)) : str(body.competencyIds ?? body.note, 2000).split(/[\s,]+/);
+      const options = await loadCompetencyOptions(ctx.admin);
+      if (options === null) { r = { ok: false, error: "The published competency catalogues could not be read just now." }; break; }
+      const pick = pickableCompetencies(asked, options);
+      r = pick.refused.length ? { ok: false, error: `Choose competencies from the published catalogues (${pick.refused.length} not in one).` } : await setCompetencies(ctx.admin, str(body.versionId, 40), pick.ok);
+      break;
+    }
     case "review": r = await reviewDraft(ctx.admin, me, str(body.versionId, 40)); break;
     case "submit": r = await submitDraft(ctx.admin, me, str(body.versionId, 40), { duplicatesChecked: body.duplicatesChecked === true }); break;
     case "publish": r = await publishVersion(ctx.admin, me, str(body.versionId, 40)); break;

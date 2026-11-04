@@ -6,6 +6,7 @@ import { Msg, useResearchSend } from "./ResearchControls";
 import Link from "next/link";
 import { LIBRARY_FORM_OPTIONS } from "@/lib/individual/scholar/question-formats";
 import { SOURCE_KIND_LABEL, SOURCE_KINDS, normaliseSource, type SourceKind } from "@/lib/knowledge/question-source";
+import { DIFFICULTY_LABEL, LIBRARY_DIFFICULTIES, QUALIFICATION_LABEL, QUALIFICATION_LEVELS } from "@/lib/individual/scholar/library-meta";
 import { OsceStationFields, checkStationForm, stationFieldsFromForm, stationFormOf, type StationForm } from "./OsceStationEditor";
 
 // The educator half of K3 (COMPETEN-KNOWLEDGE-RESEARCH-01 s5). Posts to /api/hq/knowledge/educator, which re-checks the
@@ -32,11 +33,16 @@ type QForm = {
   format: string; stem: string; options: string[]; correctIndex: number; correct: number[]; accepted: string; truth: string; modelAnswer: string; marks: string;
   keyPoints: string; back: string; pairs: { prompt: string; match: string }[]; steps: string; parts: { prompt: string; marks: number; accepted: string }[];
   rubric: { level: string; objective: string; keyPoints: string; misconceptions: string }; marking: string; rationale: string; source: SourceForm;
+  /** SQIE-CLOSE-2026-11 WS-E: who it is written for, and its difficulty (library-meta.ts). All optional. */
+  programmes: string[]; level: string; difficulty: string;
 };
+/** The programmes an item may name (individual_scholar_programme, 387), passed down from the server page. */
+export type ProgrammeChoice = { code: string; label: string };
 const EMPTY_Q: QForm = {
   format: "mcq", stem: "", options: ["", "", "", ""], correctIndex: 0, correct: [], accepted: "", truth: "", modelAnswer: "", marks: "", keyPoints: "", back: "",
   pairs: [{ prompt: "", match: "" }, { prompt: "", match: "" }, { prompt: "", match: "" }], steps: "", parts: [{ prompt: "", marks: 1, accepted: "" }, { prompt: "", marks: 1, accepted: "" }],
   rubric: { level: "", objective: "", keyPoints: "", misconceptions: "" }, marking: "", rationale: "", source: { includes: false, kind: "governed_reference", reference: "", licence: "", permissionNote: "" },
+  programmes: [], level: "", difficulty: "",
 };
 /** The form state of stored fields (the server's fieldsFromQuestionContent), over the empty form. */
 function qFormOf(f: Record<string, unknown> | undefined): QForm {
@@ -49,6 +55,7 @@ function qFormOf(f: Record<string, unknown> | undefined): QForm {
     parts: Array.isArray(f.parts) && f.parts.length ? (f.parts as QForm["parts"]) : EMPTY_Q.parts,
     rubric: { level: String(r.level ?? ""), objective: String(r.objective ?? ""), keyPoints: String(r.keyPoints ?? ""), misconceptions: String(r.misconceptions ?? "") },
     source: sourceFormOf(f.source),
+    programmes: Array.isArray(f.programmes) ? (f.programmes as string[]) : [], level: String(f.level ?? ""), difficulty: String(f.difficulty ?? ""),
   };
 }
 const EMPTY_SOURCE: SourceForm = { includes: false, kind: "governed_reference", reference: "", licence: "", permissionNote: "" };
@@ -68,9 +75,9 @@ function toFields(kind: Kind, f: Fields) {
 }
 
 /** The kind-specific fields. A revision question is any of the library formats (QuestionFields). */
-function KindFields({ kind, f, set }: { kind: Kind; f: Fields; set: (f: Fields) => void }) {
+function KindFields({ kind, f, set, programmes = [] }: { kind: Kind; f: Fields; set: (f: Fields) => void; programmes?: ProgrammeChoice[] }) {
   if (kind === "osce_station") return <OsceStationFields value={f.station ?? stationFormOf(null)} set={station => set({ ...f, station })} />;
-  if (kind === "revision_question") return <QuestionFields q={f.q ?? EMPTY_Q} set={q => set({ ...f, q })} />;
+  if (kind === "revision_question") return <QuestionFields q={f.q ?? EMPTY_Q} set={q => set({ ...f, q })} programmes={programmes} />;
   return (
     <div className="grid gap-2">
       <label className="text-[12.5px]">Text<textarea rows={5} value={f.body ?? ""} onChange={e => set({ ...f, body: e.target.value })} className={`${input} w-full`} /></label>
@@ -80,7 +87,7 @@ function KindFields({ kind, f, set }: { kind: Kind; f: Fields; set: (f: Fields) 
 }
 
 /** A revision question in any format: the question, the fields of its format, its rubric, its marking rule, its source. */
-function QuestionFields({ q, set }: { q: QForm; set: (q: QForm) => void }) {
+function QuestionFields({ q, set, programmes }: { q: QForm; set: (q: QForm) => void; programmes: ProgrammeChoice[] }) {
   const fmt = FORMATS.find(x => x.value === q.format) ?? FORMATS[0];
   const lbl = "text-[12.5px]";
   const link = "font-semibold text-teal-800 underline";
@@ -172,8 +179,35 @@ function QuestionFields({ q, set }: { q: QForm; set: (q: QForm) => void }) {
       </fieldset>
       <label className={lbl}>Marking rule<select value={q.marking || fmt.marking[0]} onChange={e => set({ ...q, marking: e.target.value })} className={`${input} w-full`} disabled={fmt.marking.length === 1}>
         {fmt.marking.map(m => <option key={m} value={m}>{MARKING[m]}</option>)}</select></label>
+      <MetaFields q={q} set={set} programmes={programmes} />
       <SourceFields value={q.source} set={source => set({ ...q, source })} />
     </div>
+  );
+}
+
+/** SQIE-CLOSE-2026-11 WS-E: programmes, qualification level and difficulty. All optional; an item naming none suits every learner. */
+function MetaFields({ q, set, programmes }: { q: QForm; set: (q: QForm) => void; programmes: ProgrammeChoice[] }) {
+  const unknown = q.programmes.filter(c => !programmes.some(p => p.code === c));
+  return (
+    <fieldset className="grid gap-2 rounded-lg border border-gray-200 p-2 text-[12.5px]">
+      <legend className="px-1 font-semibold text-gray-700">Who it is for (optional)</legend>
+      <p className="text-gray-600">Left empty, the question suits every learner whose competency links match. A learner whose programme or level is known and differs is not given it.</p>
+      <div className="grid gap-2 md:grid-cols-2">
+        <label>Qualification level<select value={q.level} onChange={e => set({ ...q, level: e.target.value })} className={`${input} w-full`}>
+          <option value="">Any level</option>{QUALIFICATION_LEVELS.map(l => <option key={l} value={l}>{QUALIFICATION_LABEL[l]}</option>)}</select></label>
+        <label>Difficulty<select value={q.difficulty} onChange={e => set({ ...q, difficulty: e.target.value })} className={`${input} w-full`}>
+          <option value="">Not set (counts as standard)</option>{LIBRARY_DIFFICULTIES.map(d => <option key={d} value={String(d)}>{DIFFICULTY_LABEL[d]}</option>)}</select></label>
+      </div>
+      {programmes.length ? (
+        <fieldset><legend className="font-semibold text-gray-700">Programmes (up to 10; none ticked = every programme)</legend>
+          <div className="grid gap-x-3 md:grid-cols-2">{programmes.map(p => (
+            <label key={p.code} className="flex items-center gap-2"><input type="checkbox" checked={q.programmes.includes(p.code)} disabled={!q.programmes.includes(p.code) && q.programmes.length >= 10}
+              onChange={e => set({ ...q, programmes: e.target.checked ? [...q.programmes, p.code] : q.programmes.filter(x => x !== p.code) })} />{p.label} <code className="text-gray-600">{p.code}</code></label>
+          ))}</div>
+        </fieldset>
+      ) : <p className="text-gray-600">No Scholar programme is configured, so the question suits every programme.</p>}
+      {unknown.length > 0 && <p role="note" className="text-amber-950">Also names {unknown.join(", ")}, which is not an active programme now.</p>}
+    </fieldset>
   );
 }
 
@@ -196,7 +230,7 @@ function SourceFields({ value, set }: { value: SourceForm; set: (s: SourceForm) 
   );
 }
 
-export function NewResource({ needId }: { needId?: string }) {
+export function NewResource({ needId, programmes = [] }: { needId?: string; programmes?: ProgrammeChoice[] }) {
   const { busy, msg, send } = useResearchSend(EP);
   const [kind, setKind] = useState<Kind>("explanation");
   const [code, setCode] = useState(""); const [title, setTitle] = useState(""); const [f, setF] = useState<Fields>({});
@@ -207,20 +241,20 @@ export function NewResource({ needId }: { needId?: string }) {
         <input aria-label="Code" placeholder="code, e.g. fluid-balance-1" value={code} onChange={e => setCode(e.target.value)} className={input} />
         <input aria-label="Title" placeholder="Title" value={title} onChange={e => setTitle(e.target.value)} className={`${input} min-w-[16rem]`} />
       </div>
-      <KindFields kind={kind} f={f} set={setF} />
+      <KindFields kind={kind} f={f} set={setF} programmes={programmes} />
       <div className="flex items-center gap-2"><button type="button" disabled={busy || (kind === "osce_station" && !checkStationForm(f.station ?? stationFormOf(null)).ok)} className={primary} onClick={() => send({ action: "resource_create", kind, code, title, needId, fields: toFields(kind, f) }, "Draft created. Review it, name its competencies, then submit it for clinical review.")}>Create draft</button><Msg msg={msg} /></div>
     </div>
   );
 }
 
-export function EditDraft({ versionId, kind, initial, questionFields }: { versionId: string; kind: Kind; initial: Record<string, unknown>; /** revision_question: the server's fieldsFromQuestionContent of `initial`. */ questionFields?: Record<string, unknown> }) {
+export function EditDraft({ versionId, kind, initial, questionFields, programmes = [] }: { versionId: string; kind: Kind; initial: Record<string, unknown>; /** revision_question: the server's fieldsFromQuestionContent of `initial`. */ questionFields?: Record<string, unknown>; programmes?: ProgrammeChoice[] }) {
   const { busy, msg, send } = useResearchSend(EP);
   const [f, setF] = useState<Fields>(kind === "osce_station" ? { station: stationFormOf(initial) } : kind === "revision_question"
     ? { q: qFormOf(questionFields) }
     : { body: String(initial.body ?? ""), links: Array.isArray(initial.links) ? initial.links.join(" ") : "" });
   return (
     <div className="space-y-2">
-      <KindFields kind={kind} f={f} set={setF} />
+      <KindFields kind={kind} f={f} set={setF} programmes={programmes} />
       <div className="flex items-center gap-2"><button type="button" disabled={busy || (kind === "osce_station" && !checkStationForm(f.station ?? stationFormOf(null)).ok)} className={primary} onClick={() => send({ action: "draft_save", versionId, fields: toFields(kind, f) }, "Saved. Saving clears any earlier educator review.")}>Save draft</button><Msg msg={msg} /></div>
     </div>
   );

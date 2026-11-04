@@ -13,6 +13,8 @@ import { QuestionView } from "../_components/QuestionView";
 import { fieldsFromQuestionContent } from "@/lib/knowledge/question-format";
 import { listLearnerOffers } from "@/lib/knowledge/learner-offers";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { loadCompetencyOptions, loadProgrammeOptions } from "@/lib/knowledge/library-admin";
+import { CompetencyPicker } from "../_components/LibraryControls";
 
 // /super-admin/research/educator -- CKRI educator knowledge improvement (COMPETEN-KNOWLEDGE-RESEARCH-01 K3, migration 442).
 // Guarded by hq.learning.ckri.educator. Only the measures the published policy releases to educators, as suppressed
@@ -33,6 +35,10 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
   // SQIE-COMPLETE-01: possible duplicates of each draft revision question, shown before it is submitted.
   const pool = resources?.some(r => r.kind === "revision_question" && r.versions.some(v => v.state === "draft")) ? await loadQuestionPool(ctx.admin) : null;
   const reported = open?.cells.filter(c => !c.suppressed) ?? [];
+  // SQIE-CLOSE-2026-11 WS-E: the programmes a question may name, and the published competencies the picker offers.
+  const [programmeRows, competencyOptions] = await Promise.all([loadProgrammeOptions(ctx.admin), loadCompetencyOptions(ctx.admin)]);
+  const programmes = (programmeRows ?? []).map(p => ({ code: p.code, label: p.label }));
+  const competencyNames = Object.fromEntries((competencyOptions ?? []).map(o => [o.id, o.title]));
   return (
     <div className="max-w-5xl space-y-6">
       <header>
@@ -75,7 +81,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
                 {n.status === "open" && <ActionButton endpoint={EP} body={{ action: "need_move", needId: n.id, status: "in_progress" }} label="Start" done="Started." />}
                 <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Mark addressed</summary><FieldsForm action="need_move" endpoint={EP} extra={{ needId: n.id, status: "addressed" }} submit="Addressed" done="Addressed." fields={[{ name: "responseRef", label: `The ${String(n.response_kind).replace("_", " ")} record id`, required: true }, { name: "note", label: "Note" }]} /></details>
                 <ActionButton endpoint={EP} body={{ action: "need_move", needId: n.id, status: "declined" }} label="Decline" done="Declined." note="Reason (required)" />
-                {n.response_kind === "knowledge_resource" && <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Write a resource for this need</summary><NewResource needId={String(n.id)} /></details>}
+                {n.response_kind === "knowledge_resource" && <details><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Write a resource for this need</summary><NewResource needId={String(n.id)} programmes={programmes} /></details>}
               </div>}
             </li>
           ))}</ul>
@@ -111,7 +117,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
 
       <section className={card} aria-labelledby="r-h">
         <h2 id="r-h" className="text-[15px] font-bold text-gray-900">Knowledge resources</h2>
-        <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">New resource</summary><div className="mt-2"><NewResource /></div></details>
+        <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">New resource</summary><div className="mt-2"><NewResource programmes={programmes} /></div></details>
         {!resources ? <p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">Resources could not be read.</p>
           : resources.length === 0 ? <p className="text-[13px] text-gray-600">None yet.</p> : (
           <ul className="divide-y divide-gray-100 text-[13px]">{resources.map(r => {
@@ -126,8 +132,10 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
                   {r.kind === "osce_station" && v.state !== "draft" && <details><summary className="cursor-pointer font-semibold text-teal-800">View station</summary><StationPreview content={v.content} /></details>}
                   {r.kind === "revision_question" && <details><summary className="cursor-pointer font-semibold text-teal-800">View question as a reviewer reads it</summary><div className="mt-1"><QuestionView content={v.content} /></div></details>}
                   {v.state === "draft" && <div className="flex flex-wrap gap-2">
-                    <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} {...(r.kind === "revision_question" ? { questionFields: fieldsFromQuestionContent(v.content) } : {})} /></details>
-                    <ActionButton endpoint={EP} body={{ action: "competencies_set", versionId: v.id }} label="Set competencies" done="Saved." note="CFCA competency ids" />
+                    <details><summary className="cursor-pointer font-semibold text-teal-800">Edit</summary><EditDraft versionId={v.id} kind={r.kind} initial={v.content} {...(r.kind === "revision_question" ? { questionFields: fieldsFromQuestionContent(v.content), programmes } : {})} /></details>
+                    <details><summary className="cursor-pointer font-semibold text-teal-800">Competencies ({v.competencies.length})</summary><div className="mt-1">
+                      {competencyOptions === null ? <p role="alert" className="text-[12.5px] text-[var(--cmp-text-critical)]">The published competency catalogues could not be read.</p>
+                        : <CompetencyPicker versionId={v.id} selected={v.competencies} options={competencyOptions} names={competencyNames} />}</div></details>
                     <ActionButton endpoint={EP} body={{ action: "review", versionId: v.id }} label="I have reviewed this content" done="Educator review recorded." />
                     {r.kind === "revision_question" && pool
                       ? <SubmitDraft versionId={v.id} duplicates={duplicatesOf(v.content, pool, r.id).map(d => ({ code: d.item.code, title: d.item.title, band: d.band, score: d.score, href: `/super-admin/research/questions?r=${d.item.resourceId}` }))} />
