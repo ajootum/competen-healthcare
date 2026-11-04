@@ -51,11 +51,9 @@ export async function aiPreflight(ctx: IndividualContext): Promise<NextResponse 
 }
 
 /** The provider is not set up or did not answer: said in the learner's terms (never "environment"), with a code the shared copy reads. */
-export const AI_ERROR: Record<"not_configured" | "refusal" | "failed", { status: number; error: string; code: string }> = {
-  not_configured: { status: 503, error: "AI help is not available right now, so nothing was sent. Everything you have saved still works.", code: "not_configured" },
-  refusal: { status: 502, error: "The AI declined that request.", code: "refusal" },
-  failed: { status: 502, error: "The AI could not answer just now. Try again shortly. Everything you have saved still works.", code: "failed" },
-};
+// LEARNING-CLOSE-2026-11 D06 / LE-01: the table is shared with Professional and the Personal AI (ai-error.ts); re-exported for the Scholar routes.
+import { AI_ERROR } from "@/lib/individual/ai-error";
+export { AI_ERROR };
 
 /** One audit row. Counts and ids only -- never the person's question text or their material. */
 export async function audit(ctx: IndividualContext, action: string, entityType: string, entityId: string | null, value: Record<string, unknown>) {

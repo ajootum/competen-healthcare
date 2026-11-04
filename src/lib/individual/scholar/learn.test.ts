@@ -132,6 +132,10 @@ describe("SCHOLAR-LEARN-FIX-01: lesson titles and objectives (deterministic, no 
     const { step: s, profiles } = step(["m1", "Model For Improvement\nThe model for improvement."]);
     expect(sessionView({ id: null, recorded: false, title: "t", scopeKind: "document", currentStep: 0, status: "active", coverage: null, steps: [s], topics: new Map(), profiles }).steps[0])
       .toMatchObject({ title: "Model for improvement", objective: "Describe model for improvement." });
+    // LEARNING-CLOSE-2026-11 LE-03 (955): the learner's own lesson name replaces the title, the objective stays, and the names ride along.
+    const v = sessionView({ id: null, recorded: false, title: "t", scopeKind: "document", currentStep: 0, status: "active", coverage: null, steps: [s], topics: new Map(), profiles, titles: ["My MFI lesson"] });
+    expect(v.steps[0]).toMatchObject({ title: "My MFI lesson", objective: "Describe model for improvement." });
+    expect(v.lessonTitles).toEqual(["My MFI lesson"]);
   });
 });
 

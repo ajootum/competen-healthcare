@@ -10,6 +10,7 @@ import { getLearningSession, getPassage, isUuid } from "@/lib/individual/scholar
 import type { Passage } from "@/lib/individual/scholar/generation";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { AI_ERROR, aiErrorKindOf } from "@/lib/individual/ai-error";
 import { ASK_INTENT_SURFACE, parseAskContext, ownedPassages, safeRefLabel } from "@/lib/individual/scholar/ask-context";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
@@ -148,7 +149,8 @@ export async function POST(req: Request) {
   // Sections count as GIVEN only when the study material was actually read into the request (the published profile can leave that scope out).
   const given = (out: Extract<Out, { ok: true }>) => (out.scopesRead.includes("study_context") ? numbered.sources.length : 0);
   const shown = (out: Extract<Out, { ok: true }>, cited: number) => ({ label: answerLabel(given(out), cited) });
-  const declined = (out: Extract<Out, { kind: "generation" }>) => out.result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.";
+  // LEARNING-CLOSE-2026-11 D06 / LE-01: the shared provider words and codes (ai-error.ts).
+  const declined = (out: Extract<Out, { kind: "generation" }>) => AI_ERROR[aiErrorKindOf(out.result.error)].error;
   return personalAiResponse(flight, async () => {
     const out = await runIndividualAssistant(ctx.admin, {
       userId: ctx.userId, fullName: ctx.profile.fullName, live: ctx.live, experience: "scholar", mode, question,
@@ -171,8 +173,8 @@ export async function POST(req: Request) {
     // Text was already sent: the answer ended, or failed after it began (the browser discards the partial text).
     finish: async out => {
       if (out.ok) { await record(out); const a = shape(out.answer); return { type: "done", mode: out.mode, ...shown(out, a.sources.length), timing: flight.timing(), sources: a.sources, notCovered: a.notCovered, ...understood }; }
-      if (out.kind === "generation") { await record(out); return { type: "error", code: out.result.error, message: declined(out) }; }
-      return { type: "error", code: "failed", message: "The assistant could not answer just now. Try again shortly." };
+      if (out.kind === "generation") { await record(out); return { type: "error", code: aiErrorKindOf(out.result.error), message: declined(out) }; }
+      return { type: "error", code: "failed", message: AI_ERROR.failed.error };
     },
   });
 }

@@ -43,13 +43,16 @@ import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context"
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { LessonReader } from "./learn-reader";
+import { RecutPanel } from "./learn-recut-panel";
 import { WORKS_WITHOUT_AI } from "@/lib/individual/scholar/learn-reader";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
 import { INLINE_DEFAULTS, RECALL_WAIT_REASON, applicationAfter, applyEligible, blockPending, checkBlocks, inlineCheckPlacement, lessonCanContinue, marksFromActivities, quickFromCode, recallContent, recallFromCode, wordCount, type CheckBlock, type InlinePolicy } from "@/lib/individual/scholar/learn-inline";
 import { TEACHING_AI_ACTIVITY, isTeachingAction } from "@/lib/individual/scholar/config";
 import { ApproachControl, type ApproachMemory, type ApproachResult } from "./learn-approach";
 import { STYLE_DEFAULTS, effectiveStyle, mistakeOffer, moreItems, styleChoices, styleCode, type StylePolicy, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
-import { CHECK_BUTTON, CHECK_FEEDBACK_HEADING, CHECK_NO_AI_WHY, CHECK_PROCESSING, CHECK_SELF_REVIEW_LABEL, CHECK_SELF_REVIEW_NOTE, parseCheckFeedback, referenceAnswer, type CheckNoAiReason } from "@/lib/individual/scholar/learn-check";
+import { CHECK_BUTTON, CHECK_FEEDBACK_HEADING, CHECK_NO_AI_WHY, CHECK_PROCESSING, CHECK_SELF_REVIEW_LABEL, CHECK_SELF_REVIEW_NOTE, parseCheckFeedback, referenceAnswer, type CheckFeedbackParts, type CheckNoAiReason } from "@/lib/individual/scholar/learn-check";
+import { CHECK_MARKING_LABEL, CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_LABEL, SELF_GRADE_SAID, checkOutcomeLabel, isCheckVerdict, placeChecks, type CheckHistoryItem, type CheckPlacement, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
+import { CHECK_VERDICT_LABEL } from "@/lib/individual/scholar/config";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -126,6 +129,8 @@ type Reply = {
   savedEarlier?: { label: string; promptVersion: string; depth: string } | null;
   /** Item 8: an Ask question's everyday-word slips corrected on the server (spelling.ts, deterministic); `original` as typed. */
   spelling?: { original: string; display: string; corrections: { from: string; to: string }[] } | null;
+  /** LEARNING-CLOSE-2026-11 D01: a judged check answer was kept in the learner's learning record (its attempt), or null. */
+  kept?: { attemptId: string; answeredAt: string; questionId: string; marking: string; chunkId: string; materialId: string } | null;
   /** SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper found nothing further of value in the notes (or its round limit): no lesson, the next activity suggested. */
   depthReached?: { message: string; suggestion: string | null; next: readonly { key: string; label: string }[]; rounds?: number; cap?: boolean } | null;
   /** SCHOLAR-CUMULATIVE-TEACHING-01: on an open, the lesson's other saved teaching (Go deeper rounds, examples ...), oldest first, no AI. */
@@ -138,8 +143,12 @@ type Recover = { request: RecoveryRequestBody; explain: (rec: { id: string; mode
 type Pending = { prompt: ClarifyPrompt; target: "lesson" | "ask" | "assistant"; action?: string; extra?: Record<string, unknown>; asked?: string; question?: string; followUp?: FollowUp; step?: number };
 type Step = SessionView["steps"][number];
 /** SCHOLAR-UNDERSTANDING-CHECKS-01: one open understanding check (learn-check.ts). */
-type CheckState = { step: number; question: string; raw: string | null; answer: string; feedback: Reply | null; cardId: number | null; noAi: CheckNoAiReason | null; reviewing: boolean };
-const openCheck = (step: number, raw: string, answer = ""): CheckState => ({ step, question: questionText(raw), raw, answer, feedback: null, cardId: null, noAi: null, reviewing: false });
+type CheckState = {
+  step: number; question: string; raw: string | null; answer: string; feedback: Reply | null; cardId: number | null; noAi: CheckNoAiReason | null; reviewing: boolean;
+  /** LEARNING-CLOSE-2026-11 D01: whether this answer is kept in the learning record (the act route keeps a judged one; the checks route a self-graded or unmarked one). */
+  saved: "saving" | "saved" | "failed" | null; selfGrade: SelfGrade | null;
+};
+const openCheck = (step: number, raw: string, answer = ""): CheckState => ({ step, question: questionText(raw), raw, answer, feedback: null, cardId: null, noAi: null, reviewing: false, saved: null, selfGrade: null });
 
 /** One request. `signal`: the journey cancels a lesson request it no longer needs (an abort answers { aborted: true }). */
 async function call(url: string, body: unknown, method = "POST", headers: Record<string, string> = {}, signal?: AbortSignal): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -236,6 +245,10 @@ export function LearnWorkspace(props: {
   styleOn?: StylePolicy;
   /** SCHOLAR-LESSON-VISUALS-01: policy scholar_lesson_visuals and scholar_lesson_visuals_max_per_section -- the learner's own slide / page pictures under a lesson. */
   visuals?: { on: boolean; max: number };
+  /** LEARNING-CLOSE-2026-11 D01 (CYU-03/04): the session's kept understanding checks, per lesson step (the server's, so any device). */
+  initialChecks?: Record<number, CheckHistoryItem[]>;
+  /** CYU-01: policy scholar_learn_check_placement (absent: distributed). */
+  checkPlacement?: CheckPlacement;
 }) {
   const router = useRouter();
   const [session, setSession] = useState<SessionView | null>(props.initial);
@@ -272,6 +285,8 @@ export function LearnWorkspace(props: {
   const [check, setCheck] = useState<CheckState | null>(null);
   /** The latest request's error, with the action and lesson it belongs to, so it is shown where the learner is (the check panel). */
   const [errorAt, setErrorAt] = useState<{ action: string; step: number } | null>(null);
+  /** LEARNING-CLOSE-2026-11 D01: the kept checks per lesson, newest first -- the server's at open, plus what this visit keeps. */
+  const [checks, setChecks] = useState<Record<number, CheckHistoryItem[]>>(props.initialChecks ?? {});
   const [lastCheck, setLastCheck] = useState<Record<number, { question: string; answer: string }>>({});
   const [ask, setAsk] = useState("");
   const [askThread, setAskThread] = useState<Card[]>([]);
@@ -907,16 +922,42 @@ export function LearnWorkspace(props: {
       const cardId = seq.current; // the card `record` just added for this reply
       if (r.continuity) return { ...c, feedback: r, cardId, noAi: "continuity" };
       if (r.withheld) return { ...c, feedback: r, cardId, noAi: "withheld" };
-      return { ...c, feedback: r, cardId, noAi: null };
+      return { ...c, feedback: r, cardId, noAi: null, saved: r.kept ? "saved" : null };
     });
     if (r && !r.error && !r.continuity && !r.withheld && check) setLastCheck(m => ({ ...m, [check.step]: { question: check.question, answer: check.answer.trim() } }));
+    // D01: a judged answer the server kept joins this lesson's history at once (the server's own row, by id).
+    if (r?.kept && check && r.answer) {
+      const k = r.kept, c = check, verdict = r.verdict?.value;
+      setChecks(m => ({ ...m, [c.step]: [{
+        attemptId: k.attemptId, questionId: k.questionId, answeredAt: k.answeredAt, question: c.question, marking: "ai_evaluation", correct: verdict === "understood", score: null,
+        model: r.provenance?.model ?? null, promptVersion: r.provenance?.promptVersion ?? null, contentVersion: null, sessionId: session?.id ?? null, step: c.step, chunkId: k.chunkId, materialId: k.materialId,
+        response: { kind: "check", text: c.answer.trim(), question: c.question, verdict: isCheckVerdict(verdict) ? verdict : null, selfGrade: null, feedback: parseCheckFeedback(r.answer!), summary: parseCheckFeedback(r.answer!) ? null : r.answer! },
+      }, ...(m[c.step] ?? []).filter(x => x.attemptId !== k.attemptId)] }));
+    }
   }
   async function submitCheck(e: React.FormEvent) {
     e.preventDefault();
     if (!check?.answer.trim()) return;
     const c = check, answer = c.answer.trim();
-    const r = await act("clarify", { checkQuestion: c.question, answer }, "lesson", `Your answer: ${answer}`, c.step);
+    // D01: the section the question cites (its first [S n]), so the kept question is filed under it.
+    const cited = citedTags(c.raw ?? "")[0];
+    const r = await act("clarify", { checkQuestion: c.question, answer, ...(cited ? { checkCited: cited } : {}) }, "lesson", `Your answer: ${answer}`, c.step);
     applyCheckResult(r);
+  }
+  /** D01 (CYU-03), the self-review path: keep the answer with the learner's own grade against the key points (or without a mark). No AI. */
+  async function saveCheck(st: Step, grade: SelfGrade | null) {
+    const c = check;
+    if (!c || c.step !== st.step || !session?.id || !c.answer.trim()) return;
+    setCheck(x => (x ? { ...x, saved: "saving", selfGrade: grade } : x));
+    const cited = citedTags(c.raw ?? "")[0];
+    const r = await call("/api/individual/scholar/learn/checks", { sessionId: session.id, step: st.step, question: c.question, answer: c.answer.trim(), selfGrade: grade, ...(cited ? { checkCited: cited } : {}) });
+    const k = r.ok && r.json.kept ? r.json.kept as { attemptId: string; answeredAt: string; questionId: string; chunkId: string; materialId: string } : null;
+    setCheck(x => (x ? { ...x, saved: k ? "saved" : "failed" } : x));
+    if (k) setChecks(m => ({ ...m, [st.step]: [{
+      attemptId: k.attemptId, questionId: k.questionId, answeredAt: k.answeredAt, question: c.question, marking: grade ? "self_graded" : "unmarked", correct: grade === "covered", score: null,
+      model: null, promptVersion: null, contentVersion: null, sessionId: session.id, step: st.step, chunkId: k.chunkId, materialId: k.materialId,
+      response: { kind: "check", text: c.answer.trim(), question: c.question, verdict: null, selfGrade: grade, feedback: null, summary: null },
+    }, ...(m[st.step] ?? [])] }));
   }
   /** Try again: the answer stays in the box, the judgement moves to the lesson's thread as a previous check. */
   const retryCheck = () => { setCheck(c => (c ? { ...c, feedback: null, cardId: null, noAi: null, reviewing: false } : c)); setErrorAt(null); setPending(null); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); };
@@ -1102,6 +1143,8 @@ export function LearnWorkspace(props: {
             </div>
             {fb!.flags && fb!.flags.length > 0 && <AiFlagList flags={fb!.flags} />}
             {fb!.provenance && <p className="mt-2 text-[11px] text-gray-400">Model {fb!.provenance.model} · prompt {fb!.provenance.promptVersion}</p>}
+            {/* D01: kept, or honestly not (a session the browser holds, history off, or the store refusing). */}
+            <p role="status" className="mt-2 text-[12.5px] text-gray-700">{fb!.kept ? CHECK_SAVED_NOTE : session?.id && session.recorded ? CHECK_NOT_SAVED_NOTE : "Not kept: this session is not recorded, so nothing is saved to your learning record."}</p>
           </section>
         )}
         {/* (a) THE SELF-REVIEW, no AI: the lesson's own key points and the sections the question rests on. Never a verdict. */}
@@ -1112,6 +1155,22 @@ export function LearnWorkspace(props: {
             {ref.points.length > 0
               ? <div className="mt-2 text-[14px] leading-relaxed text-gray-800"><h5 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">Key points from your notes</h5>{bullets(ref.points)}</div>
               : <p className="mt-2 text-[13px] text-gray-700">This lesson has no saved key points yet. Read the sections below and compare your answer with them.</p>}
+            {/* D01 (CYU-03): the learner keeps the answer with their OWN judgement, or without a mark. No AI, never a verdict. */}
+            {session?.id && session.recorded && c.answer.trim() && (
+              <div className="mt-2.5" role="group" aria-label="Keep this answer with your own judgement">
+                <p className="text-[12.5px] text-gray-700">Keep this answer in your learning record with your own judgement (no AI):</p>
+                <div className="mt-1.5 flex flex-wrap gap-2 pointer-coarse:flex-col">
+                  {(["covered", "partly", "missed"] as const).map(g => (
+                    <button key={g} type="button" aria-pressed={c.selfGrade === g} disabled={c.saved === "saving" || c.saved === "saved"} onClick={() => void saveCheck(st, g)}
+                      className={`${chip} ${c.selfGrade === g ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-900 hover:bg-gray-100"}`}>{SELF_GRADE_LABEL[g]}</button>
+                  ))}
+                  <button type="button" disabled={c.saved === "saving" || c.saved === "saved"} onClick={() => void saveCheck(st, null)} className={`${chip} border-gray-300 bg-white text-gray-700 hover:bg-gray-100`}>Keep without a mark</button>
+                </div>
+                {c.saved === "saving" && <p role="status" className="mt-1.5 text-[12.5px] text-gray-600">Saving…</p>}
+                {c.saved === "saved" && <p role="status" className="mt-1.5 text-[12.5px] text-gray-800">{c.selfGrade ? `${SELF_GRADE_SAID[c.selfGrade]}. ` : ""}{CHECK_SAVED_NOTE}</p>}
+                {c.saved === "failed" && <p role="alert" className="mt-1.5 text-[12.5px] text-red-700">{CHECK_NOT_SAVED_NOTE}</p>}
+              </div>
+            )}
           </section>
         )}
         {/* Review source: the sections the question rests on, with their excerpts, and a link to each in your notes. */}
@@ -1224,7 +1283,7 @@ export function LearnWorkspace(props: {
             onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c, st)} wider={widerFor(c, st)} expansions={expansionsFor(c, st)}
             onAnswer={canCheck && c === lastTeach ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
             renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkPanel(st, true) : null) : undefined}
-            ask={lessonAsk(st, session, c.reply)} />))}
+            placement={props.checkPlacement ?? "distributed"} ask={lessonAsk(st, session, c.reply)} />))}
           {preparing && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
               <span aria-hidden="true" className="mt-1.5 inline-block h-2.5 w-2.5 shrink-0 rounded-full motion-safe:animate-pulse" style={{ background: accent }} />
@@ -1269,6 +1328,27 @@ export function LearnWorkspace(props: {
         )}
         {applyHref && hasLesson && applicationAfter(i, count, inlinePolicy, true) && <ApplyCard href={applyHref} skippable={inlinePolicy.skippable === "on"} onApplied={() => dispatch({ type: "activity", index: i, kind: "applied" })} />}
 
+        {/* LEARNING-CLOSE-2026-11 D01 (CYU-04): the lesson's kept checks, revisitable on any device, each attempt its own; Try again reopens the check with the answer. */}
+        {(checks[st.step]?.length ?? 0) > 0 && (
+          <details className="group mt-4 rounded-xl border border-gray-200 bg-white">
+            <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
+              <span aria-hidden="true" className="text-[10px] text-gray-500 transition-transform group-open:rotate-90">▶</span>Your previous checks ({checks[st.step].length})
+            </summary>
+            <ul className="divide-y divide-gray-200 border-t border-gray-200 px-3">
+              {checks[st.step].map(h => (
+                <li key={h.attemptId} className="py-3 text-[13.5px]">
+                  <p className="text-[12px] text-gray-500">{new Date(h.answeredAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(h, CHECK_VERDICT_LABEL)}</span> · {CHECK_MARKING_LABEL[h.marking]}</p>
+                  <p className="mt-0.5 break-words font-semibold text-gray-900">{h.question}</p>
+                  <p className="mt-0.5 break-words text-gray-800"><span className="font-semibold">You:</span> {h.response.text}</p>
+                  {h.response.feedback && <CheckFeedbackList parts={h.response.feedback} sources={lastTeach?.reply.sources ?? []} />}
+                  {h.response.summary && <p className="mt-1 whitespace-pre-wrap text-[13px] text-gray-800"><Cited text={h.response.summary} sources={lastTeach?.reply.sources ?? []} /></p>}
+                  <button type="button" disabled={!!myCheck || busyHere} className={`${chip} mt-2 border-gray-300 bg-white text-gray-900 hover:bg-gray-50`}
+                    onClick={() => { setCheck(openCheck(st.step, teachQuestions.find(q => questionText(q) === h.question) ?? h.question, h.response.text)); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); }}>Try again</button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <ActivityRow id={lessonAnchorId(st.step, "act")} label={`Activities for lesson ${i + 1}`} items={items} />
         {session.id && savedHere && <p className="mt-1"><DownloadLink href={lessonExportHref(session.id, st.step)}>Download this lesson (PDF)</DownloadLink></p>}
         {/* SCHOLAR-LIBRARY-01: Add a note, Bookmark lesson, select text then Highlight -- the learner's own words (820), never AI. */}
@@ -1423,6 +1503,11 @@ export function LearnWorkspace(props: {
           )}
           <LessonList rows={rows.slice(curIdx + 1)} onSelect={select} label="Later lessons" />
 
+          {/* LEARNING-CLOSE-2026-11 D03 / LE-03: a recorded session's lessons can be renamed, merged or split (955), progress re-pointed by containment. */}
+          {session.recorded && session.id && session.steps.length > 0 && (
+            <RecutPanel sessionId={session.id} steps={session.steps} titles={session.lessonTitles ?? null} accent={accent} disabled={!!busy} />
+          )}
+
           {/* Below 66rem of content width: the compact sticky navigator; it reflects the ACTIVE lesson. */}
           <JourneyBar lessons={navLessons} current={curIdx} read={read} onJump={select}
             trailing={!lastLesson ? <button type="button" className={`${btn} px-3`} style={{ background: accent }} onClick={continueNext} disabled={!!busy || !canContinue} title={canContinue ? undefined : RECALL_WAIT_REASON}>Next lesson</button> : null} />
@@ -1540,9 +1625,11 @@ function lessonAsk(st: { step: number; title: string; sections: { chunkId: strin
   };
 }
 
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask }: {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask, placement }: {
   /** The lesson-level "Ask about this" (the lesson thread only; not the short Ask replies or a saved list). */
   ask?: Omit<AskAboutProps, "className">;
+  /** LEARNING-CLOSE-2026-11 CYU-01: where a Teach Me lesson's check questions are shown (learn-check-record.ts placeChecks). */
+  placement?: CheckPlacement;
   /** SCHOLAR-LEARN-GAPS-02 item 2: the fixed DOM id of this reply in its lesson (the reading place is saved against it). */
   anchorId?: string;
   card: Card; labels: Record<LearnAction, string>; compact?: boolean; onFresh?: () => void; onRephrase?: () => void; recover?: Recover;
@@ -1609,7 +1696,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
               {ask && <AskAbout {...ask} />}
             </div>
           )}
-          {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} />}
+          {r.answer && <AnswerBody idPrefix={anchorId} text={r.answer} action={r.action} sources={r.sources} onAnswer={onAnswer} canAnswer={canAnswer} renderCheck={renderCheck} placement={placement} />}
           {/* SCHOLAR-GUIDED-LEARNING-01: a salvaged lesson -- shown, and said calmly what was left out (a count, never which). */}
           {r.salvage && (
             <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5">
@@ -1659,6 +1746,20 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
 }
 
 /** SCHOLAR-LEARN-FIX-01 L-B: an [S n] citation, inline, as a link to that section of the learner's own notes. */
+/** LEARNING-CLOSE-2026-11 D01: a kept check's feedback parts (the same headings as the live panel), each point cited into the notes. */
+function CheckFeedbackList({ parts, sources }: { parts: CheckFeedbackParts; sources: Source[] }) {
+  const sub = "text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-600";
+  const list = (k: keyof typeof CHECK_FEEDBACK_HEADING, items: readonly string[]) => items.length > 0 && (
+    <div><h5 className={sub}>{CHECK_FEEDBACK_HEADING[k]}</h5><ul className="mt-0.5 list-disc space-y-0.5 pl-5">{items.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul></div>
+  );
+  return (
+    <div className="mt-1.5 space-y-1.5 text-[13px] leading-relaxed text-gray-800">
+      {list("right", parts.right)}{list("missing", parts.missing)}{list("misconceptions", parts.misconceptions)}{list("keyPoints", parts.keyPoints)}
+      {parts.next && <div><h5 className={sub}>{CHECK_FEEDBACK_HEADING.next}</h5><p className="mt-0.5"><Cited text={parts.next} sources={sources} /></p></div>}
+    </div>
+  );
+}
+
 function CiteLink({ n, sources }: { n: number; sources: Source[] }) {
   const s = sources.find(x => x.tag === `S${n}`);
   if (!s) return <span className="font-mono text-[12.5px]">[S{n}]</span>;
@@ -1677,7 +1778,7 @@ function Cited({ text, sources }: { text: string; sources: Source[] }) {
  * Anything else -- every other action, and a Teach Me answer saved before the structure -- is shown as written. Either
  * way each [S n] is a link to its section.
  */
-function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode }) {
+function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, renderCheck, placement = "distributed" }: { idPrefix?: string; text: string; action: string; sources: Source[]; onAnswer?: (q: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => React.ReactNode; placement?: CheckPlacement }) {
   // SCHOLAR-CUMULATIVE-TEACHING-01: a Go deeper written in the lesson's parts (v2) is shown as a lesson too; an older free-text one as written.
   const parts = action === "teach" || action === "deeper" ? parseTeachAnswer(text) : null;
   // SCHOLAR-UNDERSTANDING-CHECKS-01: a clarification in the thread (a previous check) shows its labelled parts (learn-check.ts).
@@ -1705,6 +1806,27 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
     );
   }
   const sub = "text-[12px] font-bold uppercase tracking-[0.1em]";
+  // LEARNING-CLOSE-2026-11 CYU-01: the lesson's checks follow its teaching sequence (learn-check-record.ts placeChecks): on a
+  // substantial lesson the first comes after the teaching paragraphs, the rest after the lesson; every check is optional.
+  const placed = action === "teach" ? placeChecks(parts, { placement }) : { mid: [], end: parts.questions.map((_, i) => i) };
+  const questionBlock = (idxs: number[], id: string | undefined, note: string | null) => idxs.length > 0 && (
+    <div id={id} className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
+      <h4 className={`${sub} text-violet-900`}>Check your understanding</h4>
+      {note && <p className="mt-0.5 text-[12px] text-gray-600">{note}</p>}
+      <ul className="mt-1 space-y-2">
+        {idxs.map(i => { const q = parts.questions[i]; return (
+          <li key={i} className="flex flex-wrap items-center gap-2">
+            <span className="min-w-0 flex-1"><Cited text={q} sources={sources} /></span>
+            {onAnswer && canAnswer?.(q) && (
+              <button type="button" onClick={() => onAnswer(q)} className={`${chip} border-violet-300 bg-white text-violet-950 hover:bg-violet-50`}>Answer this</button>
+            )}
+            {renderCheck && <div className="w-full">{renderCheck(q)}</div>}
+          </li>
+        ); })}
+      </ul>
+      <p className="mt-1.5 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
+    </div>
+  );
   return (
     <div className="mt-1 space-y-3 break-words text-[14.5px] leading-relaxed text-gray-800">
       {parts.overview && <p id={idPrefix ? `${idPrefix}-ov` : undefined} className="text-[15px] text-gray-900"><Cited text={parts.overview} sources={sources} /></p>}
@@ -1714,6 +1836,7 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
           {parts.understanding.map((p, i) => <p key={i}><Cited text={p} sources={sources} /></p>)}
         </div>
       )}
+      {questionBlock(placed.mid, idPrefix ? `${idPrefix}-qm` : undefined, "A quick check on what you have just read, before the key points. Optional.")}
       {parts.points.length > 0 && (
         <div id={idPrefix ? `${idPrefix}-kp` : undefined}>
           <h4 className={`${sub} text-gray-600`}>Key points</h4>
@@ -1728,23 +1851,7 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
           </div>
         </ShowMore>
       )}
-      {parts.questions.length > 0 && (
-        <div id={idPrefix ? `${idPrefix}-q` : undefined} className="rounded-lg border border-violet-200 bg-violet-50/60 px-3 py-2">
-          <h4 className={`${sub} text-violet-900`}>Check your understanding</h4>
-          <ul className="mt-1 space-y-2">
-            {parts.questions.map((q, i) => (
-              <li key={i} className="flex flex-wrap items-center gap-2">
-                <span className="min-w-0 flex-1"><Cited text={q} sources={sources} /></span>
-                {onAnswer && canAnswer?.(q) && (
-                  <button type="button" onClick={() => onAnswer(q)} className={`${chip} border-violet-300 bg-white text-violet-950 hover:bg-violet-50`}>Answer this</button>
-                )}
-                {renderCheck && <div className="w-full">{renderCheck(q)}</div>}
-              </li>
-            ))}
-          </ul>
-          <p className="mt-1.5 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>
-        </div>
-      )}
+      {questionBlock(placed.end, idPrefix ? `${idPrefix}-q` : undefined, null)}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { pilotQuotaRefusal } from "@/lib/individual/pilot-ai";
 import { currentTraceId } from "@/lib/trace";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { cleanActivity, isAssistTask } from "@/lib/individual/professional/assistant";
+import { AI_ERROR, aiErrorBody, aiErrorKindOf } from "@/lib/individual/ai-error";
 
 // Request-time only: never prerendered, no client at build time (foundation harness 11a).
 export const dynamic = "force-dynamic";
@@ -48,7 +49,8 @@ export async function POST(req: Request) {
     const refusal = await pilotQuotaRefusal(ctx.admin, "professional", ctx.userId, quota, individualQuotaRefusal(quota, "questions"), "questions");
     if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   }
-  if (!aiStatus().configured) return NextResponse.json({ error: "The personal AI is not configured on this environment." }, { status: 503 });
+  // LEARNING-CLOSE-2026-11 D06 / LE-01: the shared words and code (ai-error.ts), the same as Scholar's routes.
+  if (!aiStatus().configured) return NextResponse.json(aiErrorBody("not_configured"), { status: AI_ERROR.not_configured.status });
 
   // The Holdings Personal AI (owner D3): the same engine as the shared assistant, in Professional's CPD modes.
   const out = await runIndividualAssistant(ctx.admin, {
@@ -57,11 +59,7 @@ export async function POST(req: Request) {
   });
   if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
   if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
-  if (!out.ok) {
-    const status = out.result.error === "not_configured" ? 503 : 502;
-    const msg = out.result.error === "refusal" ? "The assistant declined that request." : "The assistant could not answer just now. Try again shortly.";
-    return NextResponse.json({ error: msg }, { status });
-  }
+  if (!out.ok) { const kind = aiErrorKindOf(out.result.error); return NextResponse.json(aiErrorBody(kind), { status: AI_ERROR[kind].status }); }
 
   await ctx.admin.from("audit_log").insert({
     trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,

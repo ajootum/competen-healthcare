@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   COMPLEXITY_FACTOR, IMAGE_SLIDE_MINUTES, MAX_UNITS, PRACTICE_MAX, PRACTICE_MIN, READ_WPM, REVISION_REVIEWS, THIN_CHARS,
-  citeUnit, estimateBasis, estimateUnit, mergeUnits, parseStoredUnits, pictureOnlyWithin, plannedOrder, rangesOf, splitUnit, storedOrdinals,
+  applyStored, citeUnit, estimateBasis, estimateUnit, mergeUnits, parseStoredUnits, pictureOnlyWithin, plannedOrder, rangesOf, renameUnit, splitUnit, storedOrdinals,
   textFacts, titleFromParts, toStored, toggleExcluded, togglePriority, unitCount, unitFrom, unitSections, unitTotals, type UnitSection,
 } from "./plan-units";
 import { buildUnits, commonStems } from "./plan-units-build";
@@ -141,6 +141,36 @@ describe("the learner's review", () => {
     expect(bare.title).toBe("Slide 9");
     expect(titleFromParts([{ ...bare.parts[0], heading: null, topics: ["Sepsis"] }], "page").title).toBe("Sepsis");
     expect(citeUnit([{ ...bare.parts[0], page: null }], "slide")).toBe("section 7");
+  });
+});
+
+describe("LEARNING-CLOSE-2026-11 D03 / LE-02: naming a unit, and re-reviewing the units as accepted", () => {
+  const units = buildUnits(input);
+  const ctx = { unit: "slide" as const, emptyUnits: EMPTY };
+  it("rename takes the learner's words, collapsed and capped, drops them from the covers, and an empty name restores the parts' own", () => {
+    const r = renameUnit(units, 0, "  Eye  care:   the  essentials  ", ctx);
+    expect(r[0].title).toBe("Eye care: the essentials");
+    expect(r[0].objective).toMatch(/^Explain Eye care: the essentials/);
+    expect(r[0].covers.some(c => /^eye care$/i.test(c))).toBe(false);
+    expect(r[0].parts).toBe(units[0].parts);                                           // the sections are untouched
+    expect(r.slice(1)).toEqual(units.slice(1));
+    expect(renameUnit(units, 0, "x".repeat(200), ctx)[0].title).toHaveLength(60);
+    expect(renameUnit(r, 0, "   ", ctx)[0].title).toBe(titleFromParts(units[0].parts, "slide").title);
+    expect(renameUnit(units, 9, "Nope", ctx)).toEqual(units);
+    expect(toStored(r)[0].t).toBe("Eye care: the essentials");
+  });
+  it("the units as accepted (merged, renamed, flagged) come back over the material's sections for a re-review, renumbered", () => {
+    const reviewed = renameUnit(toggleExcluded(mergeUnits(units, 0, ctx), 1), 0, "Mouth and eyes", ctx);
+    const stored = toStored(reviewed);
+    const back = applyStored(units, stored, ctx)!;
+    expect(back.map(u => u.parts.map(p => p.ordinal))).toEqual([[1, 2, 3, 4, 5, 6, 7, 8, 9], [10, 11, 12]]);
+    expect(back[0]).toMatchObject({ id: "u1", title: "Mouth and eyes", excluded: false });
+    expect(back[1]).toMatchObject({ id: "u2", excluded: true, title: units[2].title.slice(0, 60) });
+    expect(back[0].estimate.imageSlides).toBe(3);
+    expect(toStored(back)).toEqual(stored);                                              // a re-review that changes nothing stores the same
+    // stored ordinals the material no longer has are skipped; nothing matching gives null
+    expect(applyStored(units, [{ t: "Gone", o: [[40, 41]] }, { t: "Here", o: [[1, 1]] }], ctx)!.map(u => u.title)).toEqual(["Here"]);
+    expect(applyStored(units, [{ t: "Gone", o: [[40, 41]] }], ctx)).toBeNull();
   });
 });
 

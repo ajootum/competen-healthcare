@@ -80,7 +80,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
   | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
-  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes";
+  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -125,7 +125,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
-  | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
+  | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
@@ -1273,6 +1273,15 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Uses stored questions first. A missed question reaches the mistake notebook and Revise as it already does. Default: on.",
   },
   {
+    // LEARNING-CLOSE-2026-11 WS01 CYU-01: where a lesson's own check questions (Teach Me writes at most two) are shown.
+    key: "scholar_learn_check_placement", kind: "choice", product: "Scholar",
+    label: "Where a lesson's understanding checks appear",
+    help: "A substantial lesson with two check questions shows the first after its teaching paragraphs and the second at the end, following the teaching sequence. A short lesson, or one question, keeps the check at the end. Checks are optional and never block reading.",
+    options: [{ value: "distributed", label: "Distributed through the lesson" }, { value: "lesson_end", label: "All at the end of the lesson" }],
+    fallback: "distributed",
+    limitReason: "At most the lesson's own questions, never one per slide or paragraph. Default: distributed.",
+  },
+  {
     key: "scholar_learn_inline_application", kind: "choice", product: "Scholar",
     label: "Application check at the end of the journey",
     help: "Whether the last lesson offers one optional \"Apply it: try a short case\" card that opens the existing clinical case practice. Offered once, after the final lesson.",
@@ -1999,6 +2008,14 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Five to sixty minutes. Default: twelve.",
   },
   {
+    // LEARNING-CLOSE-2026-11 D02 / LE-04: the Go deeper limit, configurable in HQ (default three cumulative rounds, learn-context DEEPER_ROUNDS_MAX).
+    key: "scholar_learn_deeper_rounds_max", kind: "int", product: "Scholar", unit: "rounds",
+    label: "Learn: Go deeper rounds per lesson",
+    help: "How many cumulative Go deeper rounds one lesson gets by AI. Beyond it Scholar answers \"depth reached\" from the notes, with no AI call. Fair-use and cost controls apply as before.",
+    fallback: 3, min: 1, max: 10,
+    limitReason: "One to ten rounds. Default: three.",
+  },
+  {
     key: "scholar_plan_rule_order", kind: "sequence", product: "Scholar",
     label: "My Plan: what comes first",
     help: "The order the planning rules are applied in when choosing the next activity. Revision that is due, topics showing gaps, unfinished lessons, the exam date, a deadline the student put in their calendar, consolidating what was recently studied, and covering all accepted notes. Rules left out are not used.",
@@ -2291,6 +2308,8 @@ export type IndividualPolicy = {
   scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
   scholarLearnInlineRecallMinWords: number;
   scholarLearnInlineChecks: "on" | "off";
+  /** LEARNING-CLOSE-2026-11 CYU-01: where a lesson's own check questions appear (learn-check-record.ts placeChecks). */
+  scholarLearnCheckPlacement: "distributed" | "lesson_end";
   scholarLearnInlineApplication: "on" | "off";
   scholarLearnInlineSkippable: "on" | "off";
   scholarLearnCheckRequired: "required" | "optional";
@@ -2405,6 +2424,8 @@ export type IndividualPolicy = {
   /** SCHOLAR-INDEPENDENT-LEARNING-01 P2: what counts as a section started for My Plan (a lesson read / opened / taught, or only a question answered). */
   scholarPlanStartedSignal: "learning" | "practice";
   scholarPlanSectionMinutes: number;
+  /** LE-04: cumulative Go deeper rounds one lesson gets by AI (D02 default three). */
+  scholarLearnDeeperRoundsMax: number;
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
   scholarPlanRuleOrder: string[];
   scholarPlanWeeklyReflection: "on" | "off";
@@ -2508,6 +2529,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
     scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),
     scholarLearnInlineChecks: clampChoice(policyDef("scholar_learn_inline_checks") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_checks"))) as "on" | "off",
+    scholarLearnCheckPlacement: clampChoice(policyDef("scholar_learn_check_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_check_placement"))) as "distributed" | "lesson_end",
     scholarLearnInlineApplication: clampChoice(policyDef("scholar_learn_inline_application") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_application"))) as "on" | "off",
     scholarLearnInlineSkippable: clampChoice(policyDef("scholar_learn_inline_skippable") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_skippable"))) as "on" | "off",
     scholarLearnCheckRequired: clampChoice(policyDef("scholar_learn_check_required") as ChoicePolicy, published.get(policyPath("scholar_learn_check_required"))) as "required" | "optional",
@@ -2598,6 +2620,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarPlanProposal: clampChoice(policyDef("scholar_plan_proposal") as ChoicePolicy, published.get(policyPath("scholar_plan_proposal"))) as "on" | "off",
     scholarPlanStartedSignal: clampChoice(policyDef("scholar_plan_started_signal") as ChoicePolicy, published.get(policyPath("scholar_plan_started_signal"))) as "learning" | "practice",
     scholarPlanSectionMinutes: int("scholar_plan_section_minutes"),
+    scholarLearnDeeperRoundsMax: int("scholar_learn_deeper_rounds_max"),
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
     scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),

@@ -18,6 +18,7 @@ import { pilotQuotaRefusal, purposeFrom } from "@/lib/individual/pilot-ai";
 import { parseDepth, parseFollowUp } from "@/lib/individual/personal-ai-options";
 import { personalAiFlight, personalAiResponse } from "@/lib/individual/personal-ai-stream";
 import { normaliseLearnerText, spellingNotice } from "@/lib/individual/scholar/spelling";
+import { AI_ERROR, aiErrorBody, aiErrorKindOf } from "@/lib/individual/ai-error";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -87,17 +88,15 @@ export async function POST(req: Request) {
     const refusal = await pilotQuotaRefusal(ctx.admin, experience, ctx.userId, quota, individualQuotaRefusal(quota, "questions"), "questions");
     if (refusal) return NextResponse.json({ error: refusal.error }, { status: refusal.status });
   }
-  if (!aiStatus().configured) return NextResponse.json({ error: "Personal AI is not available yet." }, { status: 503 });
+  // LEARNING-CLOSE-2026-11 D06 / LE-01: the shared words and code (ai-error.ts) for Scholar and Professional alike.
+  if (!aiStatus().configured) return NextResponse.json(aiErrorBody("not_configured"), { status: AI_ERROR.not_configured.status });
 
   // Owner item 8 (1 Nov 2026), Scholar: how the question was read (display only). The question is sent and stored as typed;
   // the risk classification reads both readings itself (operating-mode.ts) and takes the more cautious.
   const understood = scholar ? spellingNotice(normaliseLearnerText(question)) : {};
   const requestId = requestIdFor(ctx.userId, req.headers.get("x-request-id"));
   type Out = Awaited<ReturnType<typeof runIndividualAssistant>>;
-  const failure = (out: Extract<Out, { ok: false; kind: "generation" }>) => ({
-    status: out.result.error === "not_configured" ? 503 : 502,
-    error: out.result.error === "refusal" ? "The assistant declined to answer that question." : "The assistant could not answer just now. Try again shortly.",
-  });
+  const failure = (out: Extract<Out, { ok: false; kind: "generation" }>) => { const kind = aiErrorKindOf(out.result.error); return { status: AI_ERROR[kind].status, ...aiErrorBody(kind) }; };
   const recordAnswer = async (out: Extract<Out, { ok: true }>) => {
     await ctx.admin.from("audit_log").insert({
       trace_id: await currentTraceId(), actor_id: ctx.userId, actor_name: ctx.profile.fullName,
@@ -117,15 +116,15 @@ export async function POST(req: Request) {
     json: async out => {
       if (!out.ok && out.kind === "invalid") return NextResponse.json({ error: out.error }, { status: out.status });
       if (!out.ok && out.kind === "metered") { const m = meteredRefusalBody(out.refusal); return NextResponse.json(m.body, { status: m.status }); }
-      if (!out.ok) { const f = failure(out); return NextResponse.json({ error: f.error }, { status: f.status }); }
+      if (!out.ok) { const f = failure(out); return NextResponse.json({ error: f.error, code: f.code }, { status: f.status }); }
       await recordAnswer(out);
       return NextResponse.json({ answer: out.answer, mode: out.mode, ...understood });
     },
     // Text was already sent: the answer ended (audited as before), or failed after it began (the browser discards it).
     finish: async out => {
       if (out.ok) { await recordAnswer(out); return { type: "done", mode: out.mode, timing: flight.timing(), ...understood }; }
-      if (out.kind === "generation") return { type: "error", code: out.result.error, message: failure(out).error };
-      return { type: "error", code: "failed", message: "The assistant could not answer just now. Try again shortly." };
+      if (out.kind === "generation") { const f = failure(out); return { type: "error", code: f.code, message: f.error }; }
+      return { type: "error", code: "failed", message: AI_ERROR.failed.error };
     },
   });
 }

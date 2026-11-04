@@ -47,7 +47,7 @@ export type TaughtSoFar = {
   open: string[];
 };
 
-/** The most Go deeper rounds one lesson gets by AI; beyond it the route answers "depth reached" from the notes with no AI call. */
+/** The default most Go deeper rounds one lesson gets by AI (D02); the live limit is the HQ policy scholar_learn_deeper_rounds_max (LE-04), fallback this. Beyond it the route answers "depth reached" from the notes with no AI call. */
 export const DEEPER_ROUNDS_MAX = 3;
 /** The block given to the model is cut at this many characters (the oldest rounds are trimmed first, never mid-item). */
 export const TAUGHT_BLOCK_MAX = 3200;

@@ -42,7 +42,7 @@ export async function GET(_req: Request, ctx2: { params: Promise<{ id: string }>
   }
   const s = r.data.session;
   return NextResponse.json({
-    session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles }),
+    session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles, titles: r.data.lessonTitles }),
     progress: byStep, lastActiveAt: s.lastActiveAt,
   });
 }
