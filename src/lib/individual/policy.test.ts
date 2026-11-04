@@ -106,6 +106,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarAdaptiveExams: "on", scholarAdaptiveLength: 15, scholarAdaptiveMaxLength: 30, scholarAdaptiveFormats: ["mcq", "mrq", "short", "match", "sequence", "structured"],
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
       scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarLearningLibrary: "on",
+      // SALE-2026-11 R3: next best actions and the active Notebook are new learner features, so off; three suggestions at once.
+      scholarNextBestAction: "off", scholarNextBestActionMax: 3, scholarActiveNotebook: "off",
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
       scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",
@@ -239,6 +241,15 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
   });
 
 it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only from a published on", () => {    const path = policyPath("scholar_learn_prepare_next");    expect(DEFAULT_POLICY.scholarLearnPrepareNext).toBe(false);    expect(resolvePolicy([{ config_path: path, published: { value: "on" } }]).scholarLearnPrepareNext).toBe(true);    expect(resolvePolicy([{ config_path: path, published: { value: true } }]).scholarLearnPrepareNext).toBe(false);    expect(validateDraft("scholar_learn_prepare_next", "on")).toMatchObject({ ok: true, settings: { value: "on" } });    expect(validateDraft("scholar_learn_prepare_next", "ahead").ok).toBe(false);  });
+  it("SALE-2026-11 R3: next best actions and the active Notebook default off, resolve on only from a published on, and the count clamps", () => {
+    const p = (k: string, value: unknown) => resolvePolicy([{ config_path: policyPath(k as never), published: { value } }]);
+    expect(p("scholar_next_best_action", "on").scholarNextBestAction).toBe("on");
+    expect(p("scholar_next_best_action", true).scholarNextBestAction).toBe("off");
+    expect(p("scholar_active_notebook", "on").scholarActiveNotebook).toBe("on");
+    expect(p("scholar_active_notebook", "yes").scholarActiveNotebook).toBe("off");
+    expect(p("scholar_next_best_action_max", 9).scholarNextBestActionMax).toBe(5);
+    expect(p("scholar_next_best_action_max", 0).scholarNextBestActionMax).toBe(1);
+  });
   it("SCHOLAR-SESSION-AI-02: study sessions default off, resolve on only from a published on, and need 740 too", () => {
     const path = policyPath("scholar_study_sessions");
     expect(DEFAULT_POLICY.scholarStudySessions).toBe(false);

@@ -39,7 +39,8 @@ export type PlanItem = {
 };
 
 // ── the append-only event log (individual_learning_plan_event) ──
-export const PLAN_EVENT_KINDS = ["proposal", "topic_postponed", "recommendation_declined", "reflection", "settings_change", "auto_adjust"] as const;
+// next_action (migration 975, SALE-2026-11 R3): a next-best-action suggestion accepted, snoozed (deferred) or dismissed (declined).
+export const PLAN_EVENT_KINDS = ["proposal", "topic_postponed", "recommendation_declined", "reflection", "settings_change", "auto_adjust", "next_action"] as const;
 export type PlanEventKind = (typeof PLAN_EVENT_KINDS)[number];
 export const PLAN_EVENT_STATUSES = ["accepted", "declined", "deferred", "applied", "undone"] as const;
 export type PlanEventStatus = (typeof PLAN_EVENT_STATUSES)[number];

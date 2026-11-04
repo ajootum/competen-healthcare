@@ -2600,6 +2600,19 @@ export async function librarySchema(admin: Admin, userId: string): Promise<boole
 /** Tests only: forget what was detected. */
 export const resetLibrarySchema = () => { library820 = null; };
 
+// SALE-2026-11 R3 (migration 975): the next_action plan-event kind and the summary note kind are widened CHECKs, which a select
+// cannot see, so 975 ships a marker function. True only once it answers; a transient error is "no" for now and asked again.
+let workspace975: boolean | null = null;
+export async function workspaceSchema(admin: Admin): Promise<boolean> {
+  if (workspace975 !== null) return workspace975;
+  const { data, error } = await admin.rpc("individual_scholar_workspace_975");
+  if (!error) return (workspace975 = data === true);
+  if (isMissingRpc(error)) return (workspace975 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetWorkspaceSchema = (v: boolean | null = null) => { workspace975 = v; };
+
 async function artefactSources(admin: Admin, userId: string, ids: string[]): Promise<Map<string, string[]>> {
   if (!ids.length) return new Map();
   const out = new Map<string, string[]>();
