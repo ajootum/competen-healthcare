@@ -33,10 +33,11 @@ const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 // ── VIEWS AND FILTERS ──
 
-export const LIBRARY_VIEWS = ["recent", "continue", "completed", "revision", "notes"] as const;
+/** "notebook" is SALE-2026-11 R3 (SALE-12), offered only while HQ has scholar_active_notebook on (the page drops it otherwise). */
+export const LIBRARY_VIEWS = ["recent", "continue", "completed", "revision", "notes", "notebook"] as const;
 export type LibraryView = (typeof LIBRARY_VIEWS)[number];
 export const VIEW_LABEL: Record<LibraryView, string> = {
-  recent: "Recently studied", continue: "Continue learning", completed: "Completed learning", revision: "Saved for revision", notes: "Your notes",
+  recent: "Recently studied", continue: "Continue learning", completed: "Completed learning", revision: "Saved for revision", notes: "Your notes", notebook: "Notebook",
 };
 export const LIBRARY_STATUSES = ["any", "noted", "bookmarked", "earlier"] as const;
 export type LibraryStatus = (typeof LIBRARY_STATUSES)[number];
@@ -211,7 +212,8 @@ export function lessonLinkOf(
 
 // ── NOTES ──
 
-export type NoteKind = "note" | "bookmark" | "highlight";
+/** summary: SALE-2026-11 R3 (migration 975), the learner's own summary in their words. Shaped like a note. */
+export type NoteKind = "note" | "bookmark" | "highlight" | "summary";
 export type NoteTarget =
   | { targetKind: "artefact"; artefactId: string; sessionId?: string | null; step?: number | null }
   | { targetKind: "lesson"; sessionId: string; step: number; materialId?: string | null; chunkId?: string | null }
@@ -220,7 +222,7 @@ export type NoteTarget =
 export type NoteInput = NoteTarget & { kind: NoteKind; body: string | null; quote: string | null };
 export type NoteProblem = "kind" | "target" | "body" | "quote";
 export const NOTE_PROBLEM: Record<NoteProblem, string> = {
-  kind: "Choose a note, a bookmark or a highlight.",
+  kind: "Choose a note, a summary, a bookmark or a highlight.",
   target: "Choose what this note is about.",
   body: `Write your note in 1 to ${NOTE_BODY_MAX} characters.`,
   quote: `Select 1 to ${NOTE_QUOTE_MAX} characters of the lesson to highlight.`,
@@ -239,7 +241,7 @@ export function validateNote(raw: unknown): { ok: true; note: NoteInput } | { ok
   const no = (problem: NoteProblem) => ({ ok: false as const, problem, message: NOTE_PROBLEM[problem] });
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const kind = r.kind;
-  if (kind !== "note" && kind !== "bookmark" && kind !== "highlight") return no("kind");
+  if (kind !== "note" && kind !== "bookmark" && kind !== "highlight" && kind !== "summary") return no("kind");
   let target: NoteTarget;
   switch (r.targetKind) {
     case "artefact":
@@ -263,7 +265,7 @@ export function validateNote(raw: unknown): { ok: true; note: NoteInput } | { ok
   const body = text(r.body, NOTE_BODY_MAX), quote = text(r.quote, NOTE_QUOTE_MAX);
   if (body === false) return no("body");
   if (quote === false) return no("quote");
-  if (kind === "note" && !body) return no("body");
+  if ((kind === "note" || kind === "summary") && !body) return no("body");
   if (kind === "highlight" && !quote) return no("quote");
   return { ok: true, note: { ...target, kind, body: kind === "bookmark" ? null : body, quote: kind === "highlight" ? quote : null } };
 }
