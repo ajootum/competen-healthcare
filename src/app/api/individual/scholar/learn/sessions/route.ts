@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     if (same) {
       await audit(ctx, "individual_scholar_learning_resumed", "individual_scholar_learning_session", same.session.id, { scope: kind, reason: "same_scope" });
       return NextResponse.json({
-        session: sessionView({ id: same.session.id, recorded: true, title: displaySessionTitle(same.session.title), scopeKind: same.session.scopeKind, currentStep: Math.min(same.session.currentStep, Math.max(0, same.steps.length - 1)), status: same.session.status, coverage: null, steps: same.steps, topics: await sessionTopics(ctx.admin, ctx.userId, same.steps.flatMap(s => s.sections.map(x => x.chunkId))), profiles }),
+        session: sessionView({ id: same.session.id, recorded: true, title: displaySessionTitle(same.session.title), scopeKind: same.session.scopeKind, currentStep: Math.min(same.session.currentStep, Math.max(0, same.steps.length - 1)), status: same.session.status, coverage: null, steps: same.steps, topics: await sessionTopics(ctx.admin, ctx.userId, same.steps.flatMap(s => s.sections.map(x => x.chunkId))), profiles, titles: same.lessonTitles }),
         // SCHOLAR-PERSISTENT-LEARNING-01: each lesson's server records (saved teaching of the lesson action, attempts), no AI.
         progress: same.progress, resumed: true,
         lessons: await learnLessonRecords(ctx.admin, ctx.userId, same.steps, typeof body?.lessonAction === "string" && isOpenable(body.lessonAction) ? body.lessonAction : "teach").catch(() => []),

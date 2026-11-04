@@ -19,7 +19,9 @@ export type SessionView = {
   currentStep: number;
   status: "active" | "completed";
   coverage: { sections: number; of: number } | null;
-  /** SCHOLAR-LEARN-FIX-01: each lesson's title and objective, from the material's own headings and topics (learn.lessonOutline, no AI). */
+  /** LEARNING-CLOSE-2026-11 LE-03 (955): the learner's own lesson names, one text or null per lesson (null: none given, or 955 absent). */
+  lessonTitles?: (string | null)[] | null;
+  /** SCHOLAR-LEARN-FIX-01: each lesson's title and objective, from the material's own headings and topics (learn.lessonOutline, no AI). A learner's own name (LE-03) replaces the title. */
   steps: { step: number; title: string; objective: string; sections: {
     chunkId: string; materialId: string; materialTitle: string; citation: string;
     /** SCHOLAR-LESSON-VISUALS-01: the section's slide / page range and unit ("slide" = PowerPoint, "page" = PDF), to find its original pictures. */
@@ -30,11 +32,14 @@ export type SessionView = {
 export function sessionView(input: {
   id: string | null; recorded: boolean; title: string; scopeKind: string; currentStep: number; status: "active" | "completed";
   coverage: { sections: number; of: number } | null; steps: LearningStep[]; topics: ReadonlyMap<string, readonly string[]>; profiles?: ReadonlyMap<string, SectionProfile>;
+  /** LE-03: the learner's own lesson names (955), by lesson index. */
+  titles?: readonly (string | null)[] | null;
 }): SessionView {
   return {
     id: input.id, recorded: input.recorded, title: input.title, scopeKind: input.scopeKind, currentStep: input.currentStep, status: input.status, coverage: input.coverage,
-    steps: input.steps.map(s => ({
-      ...(({ title, objective }) => ({ step: s.step, title, objective }))(lessonOutline(s, input.topics, input.profiles)),
+    lessonTitles: input.titles ? [...input.titles] : null,
+    steps: input.steps.map((s, i) => ({
+      ...(({ title, objective }) => ({ step: s.step, title: input.titles?.[i] || title, objective }))(lessonOutline(s, input.topics, input.profiles)),
       // SCH-LEARN-UX-01: a file-like material title is shown as a title here; the act route cites the passages as stored.
       sections: s.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: displayTitle(x.materialTitle), citation: `${displayTitle(x.materialTitle)}, ${citeChunk(x, x.unit)}`, pageFrom: x.pageFrom, pageTo: x.pageTo, unit: x.unit })),
     })),

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { cache } from "react";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import { isNotProvisioned } from "../access";
+import { parseLessonTitles } from "./learn-recut";
 import { learningPlanSchema } from "../learning-plan/event-store";
 import type { GoalType } from "../learning-plan/types";
 import { LEARNER_CARD, BUCKET, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
@@ -1989,10 +1990,50 @@ export async function listLearningSessions(admin: Admin, userId: string, limit =
   return { ok: true, data: ((data ?? []) as any[]).map(toSession) };
 }
 
-/** One of the person's sessions with its steps (sections in document order within a step), or null. */
-export async function getLearningSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: LearningSessionRow; steps: LearningStep[] } | null>> {
+// ── LEARNING-CLOSE-2026-11 D03 / LE-03 (955): re-cutting a session's lessons ──────────────────────────────────────────
+// A re-cut is the same sections regrouped (learn-recut.ts). The 955 function rewrites the step rows and re-points the
+// events, the 790 position, lesson notes and lesson-linked artefacts in one transaction. Where 955 is absent nothing
+// here is called: the probe answers false, getLearningSession reads the 414 columns only and events are read as before.
+let recut955: boolean | null = null;
+/** Whether migration 955 is applied on this environment. A transient read error is "no" for now, and asked again. */
+export async function learningRecutSchema(admin: Admin, userId: string): Promise<boolean> {
+  if (recut955 !== null) return recut955;
+  try {
+    const { error } = await admin.from("individual_scholar_learning_session").select("lesson_titles").eq("user_id", userId).limit(1);
+    if (!error) return (recut955 = true);
+    if (isMissingColumn(error) || isNotProvisioned(error)) recut955 = false;
+    return false;
+  } catch { return false; }
+}
+/** Tests only: forget what was detected. */
+export const resetLearningRecutSchema = () => { recut955 = null; };
+export type RecutOutcome = { ok: true; summary: Record<string, unknown> } | { ok: false; error: "not_provisioned" | "not_found" | "invalid" | "failed" };
+/**
+ * Re-cut one of the caller's sessions through the 955 function: `steps` is every section of the session, regrouped,
+ * each exactly once (the function refuses anything else: "invalid"); `titles` one name or null per lesson, or null.
+ */
+export async function recutLearningSession(admin: Admin, userId: string, id: string, steps: readonly (readonly string[])[], titles: readonly (string | null)[] | null): Promise<RecutOutcome> {
+  if (!isUuid(id)) return { ok: false, error: "not_found" };
+  if (!(await learningRecutSchema(admin, userId))) return { ok: false, error: "not_provisioned" };
+  try {
+    const { data, error } = await admin.rpc("individual_scholar_learning_session_recut", { p_user_id: userId, p_session_id: id, p_steps: steps, p_titles: titles });
+    if (error) {
+      if (isMissingRpc(error)) { recut955 = false; return { ok: false, error: "not_provisioned" }; }
+      const code = String(error.code ?? "");
+      return { ok: false, error: code === "P0002" ? "not_found" : code === "22023" || code === "23514" || code === "23505" ? "invalid" : "failed" };
+    }
+    return { ok: true, summary: (data && typeof data === "object" ? data : {}) as Record<string, unknown> };
+  } catch { return { ok: false, error: "failed" }; }
+}
+
+/**
+ * One of the person's sessions with its steps (sections in document order within a step), or null.
+ * LE-03: and the learner's own lesson names (955 lesson_titles), null where none or where 955 is absent.
+ */
+export async function getLearningSession(admin: Admin, userId: string, id: string): Promise<Read<{ session: LearningSessionRow; steps: LearningStep[]; lessonTitles: (string | null)[] | null } | null>> {
   if (!isUuid(id)) return { ok: true, data: null };
-  const { data, error } = await admin.from("individual_scholar_learning_session").select(SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
+  const withTitles = await learningRecutSchema(admin, userId);
+  const { data, error } = await admin.from("individual_scholar_learning_session").select(withTitles ? `${SESSION_COLS}, lesson_titles` : SESSION_COLS).eq("user_id", userId).eq("id", id).maybeSingle();
   if (error) return fail(error);
   if (!data) return { ok: true, data: null };
   const { data: st, error: sErr } = await admin.from("individual_scholar_learning_step").select("step, chunk_id").eq("user_id", userId).eq("session_id", id).order("step").limit(200);
@@ -2003,7 +2044,7 @@ export async function getLearningSession(admin: Admin, userId: string, id: strin
   const byStep = new Map<number, SectionRef[]>();
   for (const r of (st ?? []) as any[]) { const s = refs.get(r.chunk_id); if (s) byStep.set(r.step, [...(byStep.get(r.step) ?? []), s]); }
   const steps = [...byStep.entries()].sort((a, b) => a[0] - b[0]).map(([step, sections]) => ({ step, sections: sections.sort((a, b) => a.materialId.localeCompare(b.materialId) || a.ordinal - b.ordinal) }));
-  return { ok: true, data: { session: toSession(data), steps } };
+  return { ok: true, data: { session: toSession(data), steps, lessonTitles: withTitles ? parseLessonTitles((data as any).lesson_titles, steps.length) : null } };
 }
 
 /** Move the session on (or back): the current step, active or completed, and when it was last used. */
@@ -2156,9 +2197,14 @@ export async function recordLearningEvent(admin: Admin, userId: string, input: {
 
 export type LearningEventRow = { step: number; action: string; verdict: string | null; createdAt: string };
 
-/** A session's events, in order (what was done, and the informal check outcomes). */
+/**
+ * A session's events, in order (what was done, and the informal check outcomes). LE-03 (955): an event detached by a
+ * re-cut (its lesson no longer exists as one) is left out, so it counts as no lesson's progress.
+ */
 export async function learningEvents(admin: Admin, userId: string, sessionId: string): Promise<Read<LearningEventRow[]>> {
-  const { data, error } = await admin.from("individual_scholar_learning_event").select("step, action, verdict, created_at").eq("user_id", userId).eq("session_id", sessionId).order("created_at").limit(2000);
+  let q = admin.from("individual_scholar_learning_event").select("step, action, verdict, created_at").eq("user_id", userId).eq("session_id", sessionId);
+  if (await learningRecutSchema(admin, userId)) q = q.is("detached_at", null);
+  const { data, error } = await q.order("created_at").limit(2000);
   if (error) return fail(error);
   return { ok: true, data: ((data ?? []) as any[]).map(r => ({ step: r.step, action: r.action, verdict: r.verdict, createdAt: r.created_at })) };
 }
@@ -3294,7 +3340,9 @@ export async function evaluationEvidence(admin: Admin, userId: string): Promise<
     admin.from("individual_scholar_attempt").select("id, question_id, correct, marking, answered_at, revision_session_id, evaluator_model").eq("user_id", userId).order("answered_at").limit(20000),
     soft(admin.from("individual_scholar_card").select("id, question_id").eq("user_id", userId).limit(5000)),
     soft(admin.from("individual_scholar_review").select("id, card_id, quality, interval_days, reviewed_at").eq("user_id", userId).limit(20000)),
-    soft(admin.from("individual_scholar_learning_event").select("id, session_id, step, verdict, created_at").eq("user_id", userId).eq("action", "clarify").not("verdict", "is", null).limit(5000)),
+    // LE-03 (955): a clarify outcome detached by a re-cut names a lesson that no longer exists, so it is left out here.
+    soft((await learningRecutSchema(admin, userId)) ? admin.from("individual_scholar_learning_event").select("id, session_id, step, verdict, created_at").eq("user_id", userId).eq("action", "clarify").not("verdict", "is", null).is("detached_at", null).limit(5000)
+      : admin.from("individual_scholar_learning_event").select("id, session_id, step, verdict, created_at").eq("user_id", userId).eq("action", "clarify").not("verdict", "is", null).limit(5000)),
     soft(admin.from("individual_scholar_learning_step").select("session_id, step, chunk_id").eq("user_id", userId).limit(20000)),
     soft(admin.from("individual_scholar_case_session").select("id, private_case_id").eq("user_id", userId).limit(2000)),
     soft(admin.from("individual_scholar_case_answer").select("id, session_id, decision_point_id, chosen_option_ids, marking, correct, safety_criterion_ids, created_at").eq("user_id", userId).limit(20000)),

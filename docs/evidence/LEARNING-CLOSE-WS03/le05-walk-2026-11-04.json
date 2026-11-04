@@ -1,0 +1,1337 @@
+{
+ "at": "2026-11-04T07:17:52.837Z",
+ "steps": [
+  {
+   "login": {
+    "ok": true
+   }
+  },
+  {
+   "user": {
+    "userId": "32142f0d-c150-4180-8156-fb4e11a20fea"
+   }
+  },
+  {
+   "material": {
+    "id": "5327bda5-add2-4dfd-86c3-b9bec6eca907",
+    "title": "Essential Nursing Care of the Critically Ill",
+    "sections": 75
+   }
+  },
+  {
+   "resumed_prior": {
+    "id": "3e5e2b1d-41eb-45ab-b0d2-5a0b7c40ffb9"
+   }
+  },
+  {
+   "session": {
+    "id": "3e5e2b1d-41eb-45ab-b0d2-5a0b7c40ffb9",
+    "lessons": 6,
+    "sizes": [
+     13,
+     16,
+     16,
+     4,
+     15,
+     11
+    ],
+    "titles": [
+     "Personal hygiene",
+     "Eye care",
+     "Patient positioning and mobilisation",
+     "Patient Positioning and Mobilisation",
+     "Bowel Management",
+     "Infection control"
+    ]
+   }
+  },
+  {
+   "read_marks": {
+    "l0": {
+     "ok": true,
+     "recorded": true
+    },
+    "l1": {
+     "ok": true,
+     "recorded": true
+    }
+   }
+  },
+  {
+   "position_put": {
+    "status": 200,
+    "accepted": true,
+    "cardId": "lesson-1:s15"
+   }
+  },
+  {
+   "lesson_note": {
+    "status": 200,
+    "id": "aa9ead0b-08f6-4c48-af3e-bc6e0544ce14",
+    "error": null
+   }
+  },
+  {
+   "teach_l0": {
+    "status": 200,
+    "cached": true,
+    "artefactId": "135e059a-1d44-4b46-b19a-9d6880d21afd",
+    "error": null
+   }
+  },
+  {
+   "before": {
+    "steps": [
+     {
+      "step": 0,
+      "sections": 13
+     },
+     {
+      "step": 1,
+      "sections": 16
+     },
+     {
+      "step": 2,
+      "sections": 16
+     },
+     {
+      "step": 3,
+      "sections": 4
+     },
+     {
+      "step": 4,
+      "sections": 15
+     },
+     {
+      "step": 5,
+      "sections": 11
+     }
+    ],
+    "events": [
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": false,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": false,
+      "sources": 16
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": false,
+      "sources": 10
+     }
+    ],
+    "position": [
+     {
+      "step": 1,
+      "furthest_step": 1,
+      "card_id": "lesson-1:s15",
+      "section_chunk_id": "befb54d6-3452-452a-981c-68d0640fc9ca",
+      "offset_hint": 40,
+      "unfinished": {
+       "v": 1,
+       "practiceOpen": 1
+      },
+      "revision": "5"
+     }
+    ],
+    "notes": [
+     {
+      "step": 1,
+      "target_kind": "lesson",
+      "kind": "note"
+     },
+     {
+      "step": 1,
+      "target_kind": "lesson",
+      "kind": "note"
+     },
+     {
+      "step": 1,
+      "target_kind": "lesson",
+      "kind": "note"
+     }
+    ],
+    "artefacts": [
+     {
+      "step": 0,
+      "action": "teach",
+      "sources": 10
+     }
+    ],
+    "orphans": {
+     "events_out_of_range": 0,
+     "notes_out_of_range": 0,
+     "artefacts_out_of_range": 0,
+     "position_out_of_range": 0
+    }
+   }
+  },
+  {
+   "recut_unchanged_refused": {
+    "status": 400,
+    "error": "Nothing changed."
+   }
+  },
+  {
+   "recut_missing_section_refused": {
+    "status": 400,
+    "error": "Every section of the session must stay in a lesson."
+   }
+  },
+  {
+   "recut_A": {
+    "status": 200,
+    "json": {
+     "ok": true,
+     "currentStep": 2,
+     "summary": {
+      "steps": 6,
+      "sections": 75,
+      "notes_moved": 3,
+      "current_step": 2,
+      "events_moved": 0,
+      "events_copied": 2,
+      "position_moved": true,
+      "artefacts_moved": 0,
+      "events_detached": 1
+     }
+    }
+   }
+  },
+  {
+   "after_A": {
+    "steps": [
+     {
+      "step": 0,
+      "sections": 1
+     },
+     {
+      "step": 1,
+      "sections": 12
+     },
+     {
+      "step": 2,
+      "sections": 32
+     },
+     {
+      "step": 3,
+      "sections": 4
+     },
+     {
+      "step": 4,
+      "sections": 15
+     },
+     {
+      "step": 5,
+      "sections": 11
+     }
+    ],
+    "events": [
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": false,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": false,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 16
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": false,
+      "sources": 10
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": false,
+      "sources": 10
+     }
+    ],
+    "position": [
+     {
+      "step": 2,
+      "furthest_step": 2,
+      "card_id": "lesson-2:s15",
+      "section_chunk_id": "befb54d6-3452-452a-981c-68d0640fc9ca",
+      "offset_hint": 40,
+      "unfinished": null,
+      "revision": "6"
+     }
+    ],
+    "notes": [
+     {
+      "step": 2,
+      "target_kind": "lesson",
+      "kind": "note"
+     },
+     {
+      "step": 2,
+      "target_kind": "lesson",
+      "kind": "note"
+     },
+     {
+      "step": 2,
+      "target_kind": "lesson",
+      "kind": "note"
+     }
+    ],
+    "artefacts": [
+     {
+      "step": 0,
+      "action": "teach",
+      "sources": 10
+     }
+    ],
+    "session": [
+     {
+      "current_step": 2,
+      "status": "active",
+      "lesson_titles": [
+       "WS03 walk: the first slide",
+       null,
+       null,
+       null,
+       null,
+       null
+      ]
+     }
+    ],
+    "orphans": {
+     "events_out_of_range": 0,
+     "notes_out_of_range": 0,
+     "artefacts_out_of_range": 0,
+     "position_out_of_range": 0
+    }
+   }
+  },
+  {
+   "view_A": {
+    "currentStep": 2,
+    "titles": [
+     "WS03 walk: the first slide",
+     "Personal hygiene",
+     "Patient positioning and mobilisation",
+     "Patient Positioning and Mobilisation",
+     "Bowel Management",
+     "Infection control"
+    ],
+    "lessonTitles": [
+     "WS03 walk: the first slide",
+     null,
+     null,
+     null,
+     null,
+     null
+    ],
+    "progress": {
+     "0": {
+      "actions": [
+       "read",
+       "teach"
+      ],
+      "verdict": null
+     },
+     "1": {
+      "actions": [
+       "read",
+       "teach"
+      ],
+      "verdict": null
+     }
+    }
+   }
+  },
+  {
+   "position_A": {
+    "provisioned": true,
+    "position": {
+     "step": 2,
+     "furthestStep": 2,
+     "cardId": "lesson-2:s15",
+     "sectionChunkId": "befb54d6-3452-452a-981c-68d0640fc9ca",
+     "offsetHint": 40,
+     "lastCompletedActivity": null,
+     "lastCompletedAt": null,
+     "unfinished": null,
+     "deviceId": "ws03walkdevice01",
+     "clientSeq": 1793776689109,
+     "clientUpdatedAt": "2026-11-04T07:18:09.109+00:00",
+     "revision": 6,
+     "updatedAt": "2026-11-04T07:18:26.614716+00:00"
+    }
+   }
+  },
+  {
+   "recut_B": {
+    "status": 200,
+    "json": {
+     "ok": true,
+     "currentStep": 1,
+     "summary": {
+      "steps": 5,
+      "sections": 75,
+      "notes_moved": 3,
+      "current_step": 1,
+      "events_moved": 1,
+      "events_copied": 0,
+      "position_moved": true,
+      "artefacts_moved": 0,
+      "events_detached": 2
+     }
+    }
+   }
+  },
+  {
+   "after_B": {
+    "steps": [
+     {
+      "step": 0,
+      "sections": 13
+     },
+     {
+      "step": 1,
+      "sections": 32
+     },
+     {
+      "step": 2,
+      "sections": 4
+     },
+     {
+      "step": 3,
+      "sections": 15
+     },
+     {
+      "step": 4,
+      "sections": 11
+     }
+    ],
+    "events": [
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": false,
+      "sources": 13
+     },
+     {
+      "step": 0,
+      "action": "read",
+      "verdict": null,
+      "detached": false,
+      "sources": 13
+     },
+     {
+      "step": 1,
+      "action": "read",
+      "verdict": null,
+      "detached": true,
+      "sources": 16
+     },
+     {
+      "step": 0,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     },
+     {
+      "step": 1,
+      "action": "teach",
+      "verdict": null,
+      "detached": true,
+      "sources": 10
+     }
+    ],
+    "position": [
+     {
+      "step": 1,
+      "furthest_step": 1,
+      "card_id": "lesson-1:s15",
+      "section_chunk_id": "befb54d6-3452-452a-981c-68d0640fc9ca",
+      "offset_hint": 40,
+      "unfinished": null,
+      "revision": "7"
+     }
+    ],
+    "notes": [
+     {
+      "step": 1,
+      "target_kind": "lesson",
+      "kind": "note"
+     },
+     {
+      "step": 1,
+      "target_kind": "lesson",
+      "kind": "note"
+     },
+     {
+      "step": 1,
+      "target_kind": "lesson",
+      "kind": "note"
+     }
+    ],
+    "artefacts": [
+     {
+      "step": 0,
+      "action": "teach",
+      "sources": 10
+     }
+    ],
+    "session": [
+     {
+      "current_step": 1,
+      "status": "active",
+      "lesson_titles": null
+     }
+    ],
+    "orphans": {
+     "events_out_of_range": 0,
+     "notes_out_of_range": 0,
+     "artefacts_out_of_range": 0,
+     "position_out_of_range": 0
+    }
+   }
+  },
+  {
+   "view_B": {
+    "currentStep": 1,
+    "titles": [
+     "Personal hygiene",
+     "Patient positioning and mobilisation",
+     "Patient Positioning and Mobilisation",
+     "Bowel Management",
+     "Infection control"
+    ],
+    "progress": {
+     "0": {
+      "actions": [
+       "read"
+      ],
+      "verdict": null
+     }
+    }
+   }
+  },
+  {
+   "invariants": {
+    "material_records_unchanged": true,
+    "section_count_unchanged": true,
+    "no_orphans": true,
+    "notes_kept": true,
+    "artefact_links_kept": true,
+    "position_kept": true,
+    "event_rows_never_lost": true
+   }
+  }
+ ],
+ "before": {
+  "label": "before",
+  "steps": [
+   {
+    "step": 0,
+    "sections": 13
+   },
+   {
+    "step": 1,
+    "sections": 16
+   },
+   {
+    "step": 2,
+    "sections": 16
+   },
+   {
+    "step": 3,
+    "sections": 4
+   },
+   {
+    "step": 4,
+    "sections": 15
+   },
+   {
+    "step": 5,
+    "sections": 11
+   }
+  ],
+  "events": [
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": false,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": false,
+    "sources": 16
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": false,
+    "sources": 10
+   }
+  ],
+  "position": [
+   {
+    "step": 1,
+    "furthest_step": 1,
+    "card_id": "lesson-1:s15",
+    "section_chunk_id": "befb54d6-3452-452a-981c-68d0640fc9ca",
+    "offset_hint": 40,
+    "unfinished": {
+     "v": 1,
+     "practiceOpen": 1
+    },
+    "revision": "5"
+   }
+  ],
+  "notes": [
+   {
+    "step": 1,
+    "target_kind": "lesson",
+    "kind": "note"
+   },
+   {
+    "step": 1,
+    "target_kind": "lesson",
+    "kind": "note"
+   },
+   {
+    "step": 1,
+    "target_kind": "lesson",
+    "kind": "note"
+   }
+  ],
+  "artefacts": [
+   {
+    "step": 0,
+    "action": "teach",
+    "sources": 10
+   }
+  ],
+  "session": [
+   {
+    "current_step": 1,
+    "status": "active",
+    "lesson_titles": null
+   }
+  ],
+  "material_records": {
+   "questions": 5,
+   "attempts": 2,
+   "cards": 5,
+   "artefacts_of_material": 5,
+   "section_notes": 0
+  },
+  "orphans": {
+   "events_out_of_range": 0,
+   "notes_out_of_range": 0,
+   "artefacts_out_of_range": 0,
+   "position_out_of_range": 0
+  }
+ },
+ "afterA": {
+  "label": "after A (split 0, merge 1+2, rename 0)",
+  "steps": [
+   {
+    "step": 0,
+    "sections": 1
+   },
+   {
+    "step": 1,
+    "sections": 12
+   },
+   {
+    "step": 2,
+    "sections": 32
+   },
+   {
+    "step": 3,
+    "sections": 4
+   },
+   {
+    "step": 4,
+    "sections": 15
+   },
+   {
+    "step": 5,
+    "sections": 11
+   }
+  ],
+  "events": [
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": false,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": false,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 16
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": false,
+    "sources": 10
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": false,
+    "sources": 10
+   }
+  ],
+  "position": [
+   {
+    "step": 2,
+    "furthest_step": 2,
+    "card_id": "lesson-2:s15",
+    "section_chunk_id": "befb54d6-3452-452a-981c-68d0640fc9ca",
+    "offset_hint": 40,
+    "unfinished": null,
+    "revision": "6"
+   }
+  ],
+  "notes": [
+   {
+    "step": 2,
+    "target_kind": "lesson",
+    "kind": "note"
+   },
+   {
+    "step": 2,
+    "target_kind": "lesson",
+    "kind": "note"
+   },
+   {
+    "step": 2,
+    "target_kind": "lesson",
+    "kind": "note"
+   }
+  ],
+  "artefacts": [
+   {
+    "step": 0,
+    "action": "teach",
+    "sources": 10
+   }
+  ],
+  "session": [
+   {
+    "current_step": 2,
+    "status": "active",
+    "lesson_titles": [
+     "WS03 walk: the first slide",
+     null,
+     null,
+     null,
+     null,
+     null
+    ]
+   }
+  ],
+  "material_records": {
+   "questions": 5,
+   "attempts": 2,
+   "cards": 5,
+   "artefacts_of_material": 5,
+   "section_notes": 0
+  },
+  "orphans": {
+   "events_out_of_range": 0,
+   "notes_out_of_range": 0,
+   "artefacts_out_of_range": 0,
+   "position_out_of_range": 0
+  }
+ },
+ "afterB": {
+  "label": "after B (merge new 0+1)",
+  "steps": [
+   {
+    "step": 0,
+    "sections": 13
+   },
+   {
+    "step": 1,
+    "sections": 32
+   },
+   {
+    "step": 2,
+    "sections": 4
+   },
+   {
+    "step": 3,
+    "sections": 15
+   },
+   {
+    "step": 4,
+    "sections": 11
+   }
+  ],
+  "events": [
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": false,
+    "sources": 13
+   },
+   {
+    "step": 0,
+    "action": "read",
+    "verdict": null,
+    "detached": false,
+    "sources": 13
+   },
+   {
+    "step": 1,
+    "action": "read",
+    "verdict": null,
+    "detached": true,
+    "sources": 16
+   },
+   {
+    "step": 0,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   },
+   {
+    "step": 1,
+    "action": "teach",
+    "verdict": null,
+    "detached": true,
+    "sources": 10
+   }
+  ],
+  "position": [
+   {
+    "step": 1,
+    "furthest_step": 1,
+    "card_id": "lesson-1:s15",
+    "section_chunk_id": "befb54d6-3452-452a-981c-68d0640fc9ca",
+    "offset_hint": 40,
+    "unfinished": null,
+    "revision": "7"
+   }
+  ],
+  "notes": [
+   {
+    "step": 1,
+    "target_kind": "lesson",
+    "kind": "note"
+   },
+   {
+    "step": 1,
+    "target_kind": "lesson",
+    "kind": "note"
+   },
+   {
+    "step": 1,
+    "target_kind": "lesson",
+    "kind": "note"
+   }
+  ],
+  "artefacts": [
+   {
+    "step": 0,
+    "action": "teach",
+    "sources": 10
+   }
+  ],
+  "session": [
+   {
+    "current_step": 1,
+    "status": "active",
+    "lesson_titles": null
+   }
+  ],
+  "material_records": {
+   "questions": 5,
+   "attempts": 2,
+   "cards": 5,
+   "artefacts_of_material": 5,
+   "section_notes": 0
+  },
+  "orphans": {
+   "events_out_of_range": 0,
+   "notes_out_of_range": 0,
+   "artefacts_out_of_range": 0,
+   "position_out_of_range": 0
+  }
+ },
+ "invariants": {
+  "material_records_unchanged": true,
+  "section_count_unchanged": true,
+  "no_orphans": true,
+  "notes_kept": true,
+  "artefact_links_kept": true,
+  "position_kept": true,
+  "event_rows_never_lost": true
+ }
+}
