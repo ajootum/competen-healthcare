@@ -81,6 +81,14 @@ export function CaseContent({ c }: { c: any }) {
           {c.voice.keyQuestions?.length ? <p className="text-gray-700">Key questions: {c.voice.keyQuestions.map((k: any) => k.label).join("; ")}</p> : null}
         </section>
       ) : null}
+      {c?.timeline ? (
+        <section>
+          <h3 className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Deterioration timeline (simulated minutes; time moves on only with what the learner does)</h3>
+          <p className="text-gray-700">Minutes per action: decision {c.timeline.costs?.answer ?? 5}, finding asked for {c.timeline.costs?.reveal ?? 2}, question to the patient {c.timeline.costs?.talkTurn ?? 1}{c.timeline.optionMinutes?.length ? `; extra minutes for ${c.timeline.optionMinutes.map((m: any) => `${m.decisionPointId}/${m.optionId} +${m.minutes}`).join(", ")}` : ""}.</p>
+          {c.timeline.events?.length ? <ul className="list-disc pl-5">{c.timeline.events.map((e: any) => <li key={e.id}>Minute {e.at}: {e.label}{e.updates?.length ? ` -- ${e.updates.map((u: any) => `${label(u.factId)} becomes ${u.value}`).join("; ")}` : ""}{e.reveals?.length ? ` -- shows ${e.reveals.map(label).join(", ")}` : ""}</li>)}</ul> : <p>{none}</p>}
+          {c.timeline.escalation?.length ? <ul className="list-disc pl-5">{c.timeline.escalation.map((w: any) => <li key={w.id}>Escalation expected by minute {w.closesAt}: {w.label}{w.safetyCritical ? " (safety-critical: late or missed is unsafe)" : ""} -- counts: {(w.escalate ?? []).map((r: any) => `${r.decisionPointId} ${(r.optionIds ?? []).join("/")}`).join(", ")}</li>)}</ul> : null}
+        </section>
+      ) : null}
       <section>
         <h3 className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">Variation boundaries</h3>
         {c?.variation?.rules?.length ? <ul className="list-disc pl-5">{c.variation.rules.map((r: any, i: number) => <li key={i}>{label(r.factId)}: {r.values?.length ? r.values.join(", ") : `${r.range?.min} to ${r.range?.max}`}</li>)}</ul> : <p className="text-gray-700">No variation: delivered exactly as written.</p>}

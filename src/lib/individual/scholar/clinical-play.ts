@@ -18,6 +18,9 @@ import {
   type CaseAnswerRow, type CaseSessionRow, type PrivateCaseRow,
 } from "./store";
 import { readCaseAttempt, type CaseAttemptView } from "./case-integrity";
+import { caseReview, type CaseReview } from "@/lib/cases/debrief";
+import { reviewQuestions } from "@/lib/cases/conversation";
+import type { PlaySim } from "@/lib/cases/library";
 import { MARKING_LABEL } from "./config";
 
 export const newViewSalt = () => randomBytes(24).toString("base64url");
@@ -44,6 +47,8 @@ export type PlayView = {
   reasons: Record<string, string>;
   /** SCHOLAR-CASE-INTEGRITY-01: the kept record of a finished attempt (810), or null (in progress, or none kept here). */
   attempt?: CaseAttemptView | null;
+  /** CE-04, once finished and switched on: what went well, what was missed, what was unsafe (code, no AI). */
+  review?: CaseReview | null;
 };
 
 const asState = (s: CaseSessionRow, answers: CaseAnswerRow[]) => ({
@@ -64,9 +69,16 @@ function feedbackOf(b: Blueprint, s: CaseSessionRow, a: CaseAnswerRow): Decision
   };
 }
 
-function playView(c: PrivateCaseRow, s: CaseSessionRow, answers: CaseAnswerRow[]): PlayView {
+function playView(c: PrivateCaseRow, s: CaseSessionRow, answers: CaseAnswerRow[], sim?: PlaySim | null): PlayView {
   const b = c.blueprint as Blueprint;
+  // CE-04: a private case never plays a timeline (it was written by AI from the student's notes). The review is code only.
+  const review = sim?.review && s.status === "completed" ? caseReview(b, {
+    answers: answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen ?? [], text: a.reasoning })),
+    revealed: s.revealedFactIds, reached: s.reachedStageIds,
+    questions: b.voice && sim.turns?.length ? reviewQuestions(b, sim.turns.map(t => t.question ?? "")) : null,
+  }) : null;
   return {
+    ...(review ? { review } : {}),
     kind: "private", sessionId: s.id, caseId: c.id, title: b.title, status: s.status, mode: s.mode, materialId: c.materialId,
     view: learnerView(b, { reachedStageIds: s.reachedStageIds, revealedFactIds: s.revealedFactIds }, s.viewSalt, { hints: s.mode === "guided" }),
     answered: answers.map(a => viewToken(s.viewSalt, "decision", a.decisionPointId)),
@@ -103,11 +115,11 @@ export async function startPrivatePlay(admin: any, userId: string, caseId: strin
 }
 
 /** The student's own view of a private session, where they left it. */
-export async function privatePlayView(admin: any, userId: string, sessionId: string): Promise<PlayView | null> {
+export async function privatePlayView(admin: any, userId: string, sessionId: string, sim?: PlaySim | null): Promise<PlayView | null> {
   const x = await load(admin, userId, sessionId);
   if (!x) return null;
   await updatePrivateCaseSession(admin, userId, sessionId, {});
-  return withAttempt(admin, userId, x.c, playView(x.c, x.session, x.answers));
+  return withAttempt(admin, userId, x.c, playView(x.c, x.session, x.answers, sim));
 }
 
 /** Ask for a finding. Only one a decision on the CURRENT stage permits -- library.ts revealInSession's rule. */
@@ -136,7 +148,7 @@ export type ReasoningJudge = (d: { prompt: string; expected: string; facts: stri
  * is judged by `judge` -- AI reasoning feedback (labelled), or, where that is unavailable, the student reviews it
  * against the expected answer themselves (self-graded, nothing guessed). Then applyAnswer moves the case on.
  */
-export async function answerPrivate(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null }, judge: ReasoningJudge)
+export async function answerPrivate(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null }, judge: ReasoningJudge, sim?: PlaySim | null)
   : Promise<{ feedback: DecisionFeedback; play: PlayView } | { error: string; status: number }> {
   const x = await load(admin, userId, sessionId);
   if (!x) return { error: "No such session.", status: 404 };
@@ -174,5 +186,5 @@ export async function answerPrivate(admin: any, userId: string, sessionId: strin
   const debrief = r.completed ? caseDebrief(x.b, answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen, text: a.reasoning, correct: a.correct, safety: a.safety, marking: a.marking })), r.revealed, r.reached) : undefined;
   await updatePrivateCaseSession(admin, userId, sessionId, { reached: r.reached, revealed: r.revealed, current, completed: r.completed, ...(debrief ? { debrief } : {}) });
   const session: CaseSessionRow = { ...x.session, reachedStageIds: r.reached, revealedFactIds: r.revealed, currentStageId: current, status: r.completed ? "completed" : "active", debrief: debrief ?? x.session.debrief };
-  return { feedback: feedbackOf(x.b, session, answers[answers.length - 1]), play: playView(x.c, session, answers) };
+  return { feedback: feedbackOf(x.b, session, answers[answers.length - 1]), play: playView(x.c, session, answers, sim) };
 }

@@ -5,6 +5,7 @@ import { primary, ghost, input, Message } from "@/app/super-admin/ai/fair-use/_c
 import { screenBlueprint, SCREEN_LABEL } from "@/lib/cases/screen";
 import { Problems, useCaseSend } from "./CaseControls";
 import { CASE_FACT_KINDS, REASONING_CAPS, STAGE_CATEGORIES, STAGE_CATEGORY_LABEL } from "@/lib/cases/categories";
+import { TimelineField } from "./TimelineField";
 
 // THE NO-CODE CASE EDITOR (C2 s8: edit clinical findings and structure, configure decision points and progression,
 // define objectives and assessment, link CFCA outcomes, add references and rationales). It edits ONE draft as a
@@ -355,6 +356,9 @@ export function CaseEditor({ versionId, initial, competencies, dimensions, initi
               </div>
             </fieldset>
           )}
+          {/* LEARNING-CLOSE-2026-11 CE-04C: the authored deterioration timeline, approved with the version. */}
+          <TimelineField value={b.timeline} input={input} small={small} ghost={ghost}
+            onChange={t => up(x => { if (t) x.timeline = t; else delete x.timeline; })} />
         </div>
       </section>
     </div>

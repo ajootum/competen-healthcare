@@ -7,6 +7,16 @@ import {
 import { REASONING_CAPS } from "./categories";
 import { caseLibraryEnabled, loadCasePolicy } from "./policy";
 import { RANK_POOL, rankLibraryCases, type RankGaps } from "./ranking";
+import { escalationOutcomes, simClock, type EscalationOutcome } from "./timeline";
+import { caseReview, type CaseReview } from "./debrief";
+import { reviewQuestions } from "./conversation";
+
+/**
+ * CE-04 (LEARNING-CLOSE-2026-11): what a Scholar play switches on for a library session, from HQ policy. Absent or false:
+ * the session plays exactly as before. `turns` are the session's questions to the simulated patient (880), which take
+ * simulated time; absent counts as none.
+ */
+export type PlaySim = { timeline?: boolean; review?: boolean; turns?: readonly { stageId: string; question?: string | null }[] };
 
 // ── C4: COST-OPTIMISED CASE DELIVERY ── COMPETEN-HOLDINGS-AI-CONSUMPTION-01 s10, IND-004 D-a to D-e, migrations 422-423 ──
 //
@@ -160,7 +170,11 @@ export type SessionView = { sessionId: string; status: string; current: boolean;
   /** Each answered decision as answeredView shows it (the key and rationales, AFTER answering), by decision token: what a resumed play shows again. */
   answeredViews: Record<string, ReturnType<typeof answeredView>>;
   /** Once the case has ended: its reflection prompt and the optional reasoning sections. null while it is in progress. */
-  closing: CaseClosing | null };
+  closing: CaseClosing | null;
+  /** CE-04C, once the case has ended and the timeline is on: recognition and timeliness per escalation window. */
+  escalations?: EscalationOutcome[] | null;
+  /** CE-04, once the case has ended and the review is on: what went well, what was missed, what was unsafe. */
+  review?: CaseReview | null };
 /** What Scholar passes when it records an AI evaluation: the generation's own provider, model and request id. */
 export type AiEvaluation = { provider: string; model: string; modelVersion?: string | null; policyVersion?: string | null; requestId: string; text: string };
 
@@ -173,15 +187,32 @@ async function sessionFor(admin: any, userId: string, sessionId: string): Promis
   return { s, c, b: applyVariation(c.blueprint, s.variation ?? {}) };
 }
 
-function viewOf(x: { s: SessionRow; c: LoadedCase; b: Blueprint }, hints: boolean): SessionView {
-  const view = learnerView(x.b, { reachedStageIds: x.s.reached_stage_ids, revealedFactIds: x.s.revealed_fact_ids }, x.s.view_salt, { hints });
+/** Pure (CE-04C): the session's simulated clock and escalation outcomes, or null where the timeline is off or absent. */
+export function sessionSim(b: Blueprint, s: Pick<SessionRow, "answers" | "revealed_fact_ids" | "status">, sim?: PlaySim | null) {
+  if (!sim?.timeline || !b.timeline) return null;
+  const input = { answers: s.answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen ?? [] })), revealed: s.revealed_fact_ids, turns: sim.turns ?? [] };
+  const clock = simClock(b, input);
+  return { clock, escalations: escalationOutcomes(b, input, clock, s.status === "completed") };
+}
+
+function viewOf(x: { s: SessionRow; c: LoadedCase; b: Blueprint }, hints: boolean, sim?: PlaySim | null): SessionView {
+  const t = sessionSim(x.b, x.s, sim);
+  const done = x.s.status === "completed";
+  const view = learnerView(x.b, { reachedStageIds: x.s.reached_stage_ids, revealedFactIds: x.s.revealed_fact_ids, ...(t ? { clock: t.clock.now } : {}) }, x.s.view_salt, { hints });
+  const esc = (dp: string) => t?.escalations.find(e => e.decisionPointId === dp) ?? null;
   const shown = (e: AiEntry): AiEvaluationView => ({ label: "AI evaluation", text: e.text, provider: e.provider, model: e.model, at: e.at });
   return { sessionId: x.s.id, status: x.s.status, current: x.c.current, view, answered: x.s.answers.map(a => viewToken(x.s.view_salt, "decision", a.decisionPointId)),
     feedback: (x.s.feedback ?? []).map(f => ({ ...shown(f), decisionToken: viewToken(x.s.view_salt, "decision", f.decisionPointId) })),
     debrief: x.s.debrief ? shown(x.s.debrief) : null,
     reasons: Object.fromEntries(x.s.answers.filter(a => typeof a.reason === "string" && a.reason).map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), a.reason as string])),
-    answeredViews: Object.fromEntries(x.s.answers.map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), answeredView(x.b, a.decisionPointId, a.chosen ?? [], x.s.view_salt, typeof a.text === "string" ? a.text : null)])),
-    closing: x.s.status === "completed" ? caseClosing(x.b) : null };
+    answeredViews: Object.fromEntries(x.s.answers.map(a => [viewToken(x.s.view_salt, "decision", a.decisionPointId), answeredView(x.b, a.decisionPointId, a.chosen ?? [], x.s.view_salt, typeof a.text === "string" ? a.text : null, esc(a.decisionPointId))])),
+    closing: done ? caseClosing(x.b) : null,
+    ...(t && done ? { escalations: t.escalations } : {}),
+    ...(sim?.review && done ? { review: caseReview(x.b, {
+      answers: x.s.answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen ?? [], text: typeof a.text === "string" ? a.text : null })),
+      revealed: x.s.revealed_fact_ids, reached: x.s.reached_stage_ids, escalations: t?.escalations ?? null,
+      questions: x.b.voice && sim.turns?.length ? reviewQuestions(x.b, sim.turns.map(q => q.question ?? "")) : null,
+    }) } : {}) };
 }
 
 /**
@@ -331,8 +362,20 @@ export async function recordSessionDebrief(admin: any, userId: string, sessionId
   return viewOf({ ...x, s }, false);
 }
 
+/**
+ * D05 (LEARNING-CLOSE-2026-11 CE-04D): the learner deletes ONE of their own library sessions. The delete cascades the
+ * session's simulated conversation and notes (880) and its kept attempt record and corrections (810); those tables refuse a
+ * delete except through this cascade. Only the caller's own row can match. Scholar decides whether it is allowed (policy).
+ */
+export async function deleteCaseSession(admin: any, userId: string, sessionId: string): Promise<"deleted" | "not_found" | "failed"> {
+  if (!UUID.test(userId) || !UUID.test(sessionId)) return "not_found";
+  const { data, error } = await admin.from("case_library_session").delete().eq("id", sessionId).eq("user_id", userId).select("id");
+  if (error) return "failed";
+  return data?.length ? "deleted" : "not_found";
+}
+
 /** Start a session on a deliverable case. The database refuses any other (423). No AI, no charge. */
-export async function startCaseSession(admin: any, userId: string, versionId: string, opts: { hints?: boolean } = {}): Promise<SessionView | { error: string }> {
+export async function startCaseSession(admin: any, userId: string, versionId: string, opts: { hints?: boolean; sim?: PlaySim | null } = {}): Promise<SessionView | { error: string }> {
   if (!UUID.test(userId) || !UUID.test(versionId)) return { error: "No such case." };
   const c = await loadLibraryCase(admin, versionId);
   if (!c || !c.current) return { error: "This case is not available." };
@@ -342,17 +385,17 @@ export async function startCaseSession(admin: any, userId: string, versionId: st
   const variation = pickVariation(c.blueprint, `${userId}:${versionId}:${Date.now()}`, policy.variationsEnabled);
   const { data: s, error } = await admin.from("case_library_session").insert({ user_id: userId, version_id: versionId, variation, reached_stage_ids: [first] }).select("*").single();
   if (error || !s) return { error: /only a published case approved/i.test(error?.message ?? "") ? "This case is not available." : "The case could not be started just now." };
-  return viewOf({ s, c, b: applyVariation(c.blueprint, variation) }, !!opts.hints);
+  return viewOf({ s, c, b: applyVariation(c.blueprint, variation) }, !!opts.hints, opts.sim);
 }
 
 /** The learner's view of their own session. */
-export async function caseSessionView(admin: any, userId: string, sessionId: string, opts: { hints?: boolean } = {}): Promise<SessionView | null> {
+export async function caseSessionView(admin: any, userId: string, sessionId: string, opts: { hints?: boolean; sim?: PlaySim | null } = {}): Promise<SessionView | null> {
   const x = await sessionFor(admin, userId, sessionId);
-  return x ? viewOf(x, !!opts.hints) : null;
+  return x ? viewOf(x, !!opts.hints, opts.sim) : null;
 }
 
 /** Ask for a fact. Only one a decision on the CURRENT stage permits, and only while the session is open. */
-export async function revealInSession(admin: any, userId: string, sessionId: string, factToken: string): Promise<SessionView | { error: string }> {
+export async function revealInSession(admin: any, userId: string, sessionId: string, factToken: string, sim?: PlaySim | null): Promise<SessionView | { error: string }> {
   const x = await sessionFor(admin, userId, sessionId);
   if (!x) return { error: "No such session." };
   if (x.s.status !== "in_progress") return { error: "This session is finished." };
@@ -360,11 +403,11 @@ export async function revealInSession(admin: any, userId: string, sessionId: str
   const stage = x.s.reached_stage_ids[x.s.reached_stage_ids.length - 1];
   const permitted = x.b.decisionPoints.filter(d => d.stageId === stage && !x.s.answers.some(a => a.decisionPointId === d.id)).flatMap(d => d.permittedReveals);
   if (!factId || !permitted.includes(factId)) return { error: "That cannot be asked for here." };
-  if (x.s.revealed_fact_ids.includes(factId)) return viewOf(x, false);
+  if (x.s.revealed_fact_ids.includes(factId)) return viewOf(x, false, sim);
   const revealed = [...x.s.revealed_fact_ids, factId];
   const { data: s, error } = await admin.from("case_library_session").update({ revealed_fact_ids: revealed }).eq("id", x.s.id).eq("status", "in_progress").select("*").single();
   if (error || !s) return { error: "That could not be recorded just now." };
-  return viewOf({ ...x, s }, false);
+  return viewOf({ ...x, s }, false, sim);
 }
 
 /** Pure: apply one answer to a session's state, by the blueprint's own rules. */
@@ -394,7 +437,7 @@ export function applyAnswer(b: Blueprint, s: Pick<SessionRow, "reached_stage_ids
 }
 
 /** Answer a decision. Deterministic: the key, the safety criteria and the progression are the blueprint's. */
-export async function answerInSession(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null })
+export async function answerInSession(admin: any, userId: string, sessionId: string, args: { decisionToken: string; optionTokens?: string[]; text?: string | null; reason?: string | null }, sim?: PlaySim | null)
   : Promise<{ answered: ReturnType<typeof answeredView>; session: SessionView } | { error: string }> {
   const x = await sessionFor(admin, userId, sessionId);
   if (!x) return { error: "No such session." };
@@ -411,5 +454,6 @@ export async function answerInSession(admin: any, userId: string, sessionId: str
     ...(r.completed ? { status: "completed" } : {}),
   }).eq("id", x.s.id).eq("status", "in_progress").select("*").single();
   if (error || !s) return { error: "Your answer could not be recorded just now." };
-  return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt, args.text ?? null), session: viewOf({ ...x, s }, false) };
+  const t = sessionSim(x.b, s, sim);
+  return { answered: answeredView(x.b, dpId, chosen, x.s.view_salt, args.text ?? null, t?.escalations.find(e => e.decisionPointId === dpId) ?? null), session: viewOf({ ...x, s }, false, sim) };
 }

@@ -3,6 +3,7 @@ import { createHash } from "node:crypto";
 import { REASONING_CAPS, STAGE_CATEGORIES, STAGE_CATEGORY_LABEL, isStageCategory, type StageCategory } from "./categories";
 import { handoverProblems, handoverResultView, type HandoverSpec } from "./handover";
 import { voiceProblems, type PatientVoice } from "./voice";
+import { escalationSentence, timelineProblems, timelineReveals, timelineView, valueAt, type EscalationOutcome, type Timeline, type TimelineView } from "./timeline";
 
 export { STAGE_CATEGORIES, STAGE_CATEGORY_LABEL, type StageCategory };
 
@@ -95,6 +96,8 @@ export type Blueprint = {
   aiBoundary: { patientVoice: boolean; phraseReveals: boolean; explain: boolean };
   /** CE-04: who the AI voices in "Talk to the patient", and what they know. Used only when aiBoundary.patientVoice is on. Server-side only. */
   voice?: PatientVoice | null;
+  /** CE-04C: an AUTHORED deterioration timeline (observations that change with simulated time, escalation windows). Server-side only; approved with the version. Library play only, behind scholar_case_deterioration. */
+  timeline?: Timeline | null;
   metadata: {
     level: Level; complexity: 1 | 2 | 3 | 4 | 5; risk: Risk;
     professionTermId: string | null; specialtyTermIds: string[];
@@ -203,6 +206,11 @@ export function validateBlueprint(b: any, profile: Profile, dimensions: readonly
   }
   // CE-04: the patient voice is optional. When given it must be sound, and it is used only if aiBoundary.patientVoice is on.
   if (b.voice !== undefined && b.voice !== null) p.push(...voiceProblems(b.voice, factIds, stageIds));
+  // CE-04C: the timeline is optional and authored. A student's private case (written by AI from their notes) never carries one.
+  if (b.timeline !== undefined && b.timeline !== null) {
+    if (b.metadata?.provenance?.kind === "private") p.push("timeline: a deterioration timeline is authored in Case Studio, never part of a private case");
+    else p.push(...timelineProblems(b.timeline, { facts, stages, decisionPoints: dps.map(d => ({ ...d, options: arr(d?.options), permittedReveals: arr(d?.permittedReveals) })), progression: trans, timeline: null }));
+  }
   // Optional reasoning sections (all optional, unknown shapes refused, never required).
   if (b.differentials !== undefined && b.differentials !== null) {
     if (!Array.isArray(b.differentials) || b.differentials.length > REASONING_CAPS.differentials) p.push(`differentials: a list of up to ${REASONING_CAPS.differentials}`);
@@ -326,7 +334,11 @@ export function variationWithinBounds(b: Blueprint, chosen: Record<string, strin
 // ── The browser boundary (B1-B5) ──────────────────────────────────────────────────────────────────────────────
 
 /** The session's progress, kept by the server: stages reached, and facts requested or revealed as consequences. */
-export type ViewState = { reachedStageIds: readonly string[]; revealedFactIds: readonly string[] };
+export type ViewState = { reachedStageIds: readonly string[]; revealedFactIds: readonly string[];
+  /** CE-04C: the simulated minute (timeline.ts simClock), only where the deterioration timeline is switched on for this play. Absent: no timeline. */
+  clock?: number | null };
+/** Pure (CE-04C): the minute a view runs at, or null when the timeline does not apply. */
+export const clockOf = (b: { timeline?: Timeline | null }, s: ViewState): number | null => (b.timeline && typeof s.clock === "number" ? s.clock : null);
 type Kind = "fact" | "stage" | "decision" | "option";
 /**
  * Pure: an opaque token for one id in one session view. Without the server's salt it says nothing about the id. An
@@ -357,6 +369,8 @@ export function visibleFacts(b: Blueprint, s: ViewState): Set<string> {
   const v = new Set<string>(s.revealedFactIds.filter(id => b.facts.some(f => f.id === id)));
   for (const f of b.facts) if (f.revealedAt === "start" || reached.has(f.revealedAt)) v.add(f.id);
   for (const st of b.stages) if (reached.has(st.id)) for (const r of st.reveals) v.add(r);
+  const clock = clockOf(b, s);
+  if (clock !== null) for (const r of timelineReveals(b.timeline, clock)) if (b.facts.some(f => f.id === r)) v.add(r);
   return v;
 }
 
@@ -371,7 +385,11 @@ export type LearnerView = {
   /** CE-04: set only when the case has a sound patient voice. Says who is spoken to, nothing of what they know. */
   talk: { speaker: "patient" | "caregiver" } | null;
   patient: Blueprint["patient"];
-  facts: { token: string; label: string; value: string; unit: string | null }[];
+  facts: { token: string; label: string; value: string; unit: string | null;
+    /** CE-04C: earlier values of a changing observation (oldest first), only once they have changed. */
+    trend?: { at: number; value: string }[] }[];
+  /** CE-04C: the simulated minute and what has happened so far; null without a timeline. Nothing ahead. */
+  sim: TimelineView | null;
   stages: { token: string; title: string; category: StageCategory | null; categoryLabel: string | null; guidance: StageGuidance | null;
     decisionPoints: { token: string; prompt: string; kind: DecisionPoint["kind"]; askReason: boolean; options: { token: string; text: string }[];
       canReveal: { token: string; label: string }[]; hint: string | null }[] }[];
@@ -426,10 +444,17 @@ export function learnerView(b: Blueprint, s: ViewState, salt: string, opts: { hi
   const reached = new Set(s.reachedStageIds);
   const visible = visibleFacts(b, s);
   const label = (id: string) => b.facts.find(f => f.id === id)?.label ?? "";
+  const clock = clockOf(b, s);
   return {
     title: b.title, intro: b.learnerIntro ?? b.patient?.presentingComplaint ?? null, patient: b.patient ?? null,
     talk: conversationEnabled(b) ? { speaker: b.voice!.speaker } : null,
-    facts: b.facts.filter(f => visible.has(f.id)).map(f => ({ token: viewToken(salt, "fact", f.id), label: f.label, value: f.value, unit: f.unit ?? null })),
+    sim: clock === null ? null : timelineView(b.timeline, clock),
+    facts: b.facts.filter(f => visible.has(f.id)).map(f => {
+      const base = { token: viewToken(salt, "fact", f.id), label: f.label, value: f.value, unit: f.unit ?? null };
+      if (clock === null) return base;
+      const at = valueAt(b.timeline, f, clock);
+      return at.history.length > 1 ? { ...base, value: at.value, trend: at.history.slice(0, -1) } : base;
+    }),
     stages: b.stages.filter(st => reached.has(st.id)).map(st => ({
       token: viewToken(salt, "stage", st.id), title: st.title,
       category: isStageCategory(st.category) ? st.category : null, categoryLabel: isStageCategory(st.category) ? STAGE_CATEGORY_LABEL[st.category] : null,
@@ -445,10 +470,12 @@ export function learnerView(b: Blueprint, s: ViewState, salt: string, opts: { hi
 }
 
 /** Pure (B5): what a learner sees after answering ONE decision -- its explanation, the key, and any safety events. */
-export function answeredView(b: Blueprint, decisionPointId: string, chosen: string[], salt: string, text?: string | null) {
+export function answeredView(b: Blueprint, decisionPointId: string, chosen: string[], salt: string, text?: string | null, escalation?: EscalationOutcome | null) {
   const d = b.decisionPoints.find(x => x.id === decisionPointId);
   if (!d) return null;
   return {
+    // CE-04C: where this answer escalated, when it did and whether that was in time (after answering only).
+    escalation: escalation && escalation.decisionPointId === d.id ? { timeliness: escalation.timeliness, minute: escalation.escalatedAt, closesAt: escalation.closesAt, text: escalationSentence(escalation) } : null,
     // CE-04: a handover's part marks (which boxes were written, which key points were found or missed), after answering only.
     ...(d.kind === "handover" ? { handover: handoverResultView(d.handover, text) } : {}),
     token: viewToken(salt, "decision", d.id), dimension: d.dimension, rationale: d.rationale ?? null,
