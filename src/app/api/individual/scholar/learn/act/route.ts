@@ -12,6 +12,7 @@ import {
 import { parseCheckFeedback } from "@/lib/individual/scholar/learn-check";
 import { VERDICT_SCORE, asFeedbackParts, checkResponse, historyToPriorChecks } from "@/lib/individual/scholar/learn-check-record";
 import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
+import { keepCheckAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { purposeFrom } from "@/lib/individual/pilot-ai";
 
@@ -640,6 +641,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
       marking: "ai_evaluation", evaluator, missed: r.verdict === "not_yet",
     }) : null;
     keptCheck = kept && q ? { ...kept, questionId: q.id } : null;
+    // SQIE-CLOSE-2026-11 WS-D (791/990): what this check was judged against. Never fails the answer.
+    if (keptCheck && response) await keepCheckAttemptSnapshot(ctx, keptCheck.questionId, { attempt: kept, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null, marking: "ai_evaluation" });
   }
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     await Promise.all([

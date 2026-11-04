@@ -301,7 +301,9 @@ export function questionUserPrompt(passage: Passage): string {
 const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
 
-export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty";
+export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty"
+  // SQIE-CLOSE-2026-11 WS-H: something in the stem, an option or the explanation looks like a patient identifier.
+  | "identifier";
 
 /**
  * Pure. SCHOLAR-AI-OPT-01 P2: the words the vocabulary rule refused (unsupported_term), for the audit row. The acceptance
@@ -348,6 +350,9 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
     }
     const quoteKey = squash(quote).replace(/[.\s]+$/, "");
     if (quoteKey.length < 12 || !source.includes(quoteKey)) { out.dropped.push({ reason: "quote_not_in_passage" }); continue; }
+    // SQIE-CLOSE-2026-11 WS-H: the patient-identifier screen every revision item and scenario already passes (revision.ts
+    // checkRevisionDraft), now on every word of a generated mcq and of each case step, before anything else is judged.
+    if (findPatientIdentifiers([stem, ...options, rationale].join("\n")).length) { out.dropped.push({ reason: "identifier" }); continue; }
     const violations = groundingViolations([stem, ...options, rationale].join("\n"), [passage.content]);
     if (violations.length) { out.dropped.push({ reason: "ungrounded", violations }); continue; }
     const draft: DraftQuestion = { stem, options: options as DraftQuestion["options"], correctIndex: ci, rationale, sourceQuote: quote };

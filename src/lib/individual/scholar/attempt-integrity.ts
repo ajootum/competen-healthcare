@@ -6,13 +6,17 @@
 //   keepAttemptSnapshot      after an attempt is stored, in the same request. NEVER fails the answer. 791 absent: nothing
 //                            is kept and nothing is said (the feature is not provisioned). Any other failure is NOT silently
 //                            dropped: an audit_log row (codes only) says the snapshot was not kept, and the answer stands.
+//   keepCheckAttemptSnapshot SQIE-CLOSE-2026-11 WS-D: the same, for an understanding check kept by the learn routes
+//                            (recordCheckAttempt): the check question is read back and snapshotted like any other answer,
+//                            unmarked included (990). The competency's framework version goes on every snapshot (990).
 //   recordAttemptCorrection  HQ-free: a future HQ action (or a system rule) calls it with the learner's id and its own actor
 //                            id. Appends one correction (the original is never overwritten) and writes one audit_log row,
 //                            codes only (no reason text, no answer, no question content).
 
 import { currentTraceId } from "@/lib/trace";
 import { buildAttemptSnapshot, CORRECTION_BASES, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
-import { insertAttemptCorrection, insertAttemptSnapshot, questionContentVersion, type Admin, type QuestionRow } from "./store";
+import { getQuestion, insertAttemptCorrection, insertAttemptSnapshot, questionContentVersion, type Admin, type QuestionRow } from "./store";
+import { competencyProvenance } from "./competency-provenance";
 
 export const SNAPSHOT_FAILED_ACTION = "individual_scholar_attempt_snapshot_failed";
 export const CORRECTION_ACTION = "individual_scholar_attempt_corrected";
@@ -31,8 +35,11 @@ export async function keepAttemptSnapshot(ctx: { admin: Admin; userId: string; p
   const actor = { id: ctx.userId, name: ctx.profile?.fullName ?? null };
   if (!a.attempt) return "no_attempt";
   try {
-    const contentVersion = q.library ? null : await questionContentVersion(ctx.admin, ctx.userId, q.id);
-    const snap = buildAttemptSnapshot(q, { attemptId: a.attempt.id, answeredAt: a.attempt.answeredAt, chosenIndex: a.chosenIndex, response: a.response, correct: a.correct, score: a.score, marking: a.marking, contentVersion });
+    const [contentVersion, provenance] = await Promise.all([
+      q.library ? Promise.resolve(null) : questionContentVersion(ctx.admin, ctx.userId, q.id),
+      q.competencyId ? competencyProvenance(ctx.admin, [q.competencyId]) : Promise.resolve(null),
+    ]);
+    const snap = buildAttemptSnapshot(q, { attemptId: a.attempt.id, answeredAt: a.attempt.answeredAt, chosenIndex: a.chosenIndex, response: a.response, correct: a.correct, score: a.score, marking: a.marking, contentVersion, provenance });
     if (!snap) { await auditRow(ctx.admin, actor, SNAPSHOT_FAILED_ACTION, a.attempt.id, { code: "too_large", kind: q.kind }); return "too_large"; }
     const r = await insertAttemptSnapshot(ctx.admin, ctx.userId, snap);
     if (r === "failed") await auditRow(ctx.admin, actor, SNAPSHOT_FAILED_ACTION, a.attempt.id, { code: "insert_failed", kind: q.kind });
@@ -41,6 +48,19 @@ export async function keepAttemptSnapshot(ctx: { admin: Admin; userId: string; p
     await auditRow(ctx.admin, actor, SNAPSHOT_FAILED_ACTION, a.attempt.id, { code: "error", kind: q.kind });
     return "failed";
   }
+}
+
+/**
+ * SQIE-CLOSE-2026-11 WS-D: keep the snapshot of an understanding check just kept (store.ts recordCheckAttempt). The check question
+ * is read back so the snapshot holds it as it stood (its key points as the guide). Never fails the check: every outcome is returned.
+ */
+export async function keepCheckAttemptSnapshot(ctx: Parameters<typeof keepAttemptSnapshot>[0], questionId: string, a: {
+  attempt: { id: string; answeredAt: string } | null; response: Record<string, unknown>; correct: boolean; score: number | null; marking: string;
+}): Promise<"ok" | "absent" | "failed" | "too_large" | "no_attempt" | "no_question"> {
+  if (!a.attempt) return "no_attempt";
+  const q = await getQuestion(ctx.admin, ctx.userId, questionId).catch(() => null);
+  if (!q) return "no_question";
+  return keepAttemptSnapshot(ctx, q, { attempt: a.attempt, chosenIndex: null, response: a.response, correct: a.correct, score: a.score, marking: a.marking });
 }
 
 const OUTCOMES: readonly Outcome[] = ["correct", "partial", "incorrect"];

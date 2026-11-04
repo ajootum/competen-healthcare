@@ -22,7 +22,7 @@ import { PROMPT_VERSIONS, SCENARIO_STAGES_MAX, SCENARIO_STAGES_MIN, SCENARIO_WEI
 import { CLOZE_BLANK, markCloze } from "./cloze";
 import { markShortAnswer } from "./revision";
 import { rubricHash } from "./rubric-snapshot";
-import { asksQuestion } from "./question-intel";
+import { asksQuestion, feedbackPartsFrom, type FeedbackParts } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 
@@ -174,7 +174,8 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 // ── THE MARKS: stage scores summed with the stage weights ──
 
-export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null };
+/** SQIE-CLOSE-2026-11 WS-D: `parts`, an AI-judged stage's five feedback parts (question-intel.ts), carried to the attempt's formative record. */
+export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; parts?: FeedbackParts | null };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -213,9 +214,17 @@ export function storedStageResults(response: unknown, count: number): StageResul
 
 export const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 export type Progress = { next: number; results: StageResult[]; evaluator: { model: string; promptVersion: string } | null };
-type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string }[]; e: Progress["evaluator"] };
+type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; p?: FeedbackParts }[]; e: Progress["evaluator"] };
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
+/** The encoded claims are kept under this (readProgress refuses a token over 12000 characters). */
+export const TOKEN_BODY_MAX = 11000;
+const clip = (xs: readonly string[], n: number) => xs.slice(0, n).map(x => x.slice(0, 160));
+/** Pure. A stage's five parts as the token carries them: bounded (feedbackPartsFrom), then cut to three points of 160 characters each. */
+function tokenParts(raw: FeedbackParts | null | undefined): FeedbackParts | null {
+  const p = raw ? feedbackPartsFrom(raw) : null;
+  return p ? { right: clip(p.right, 3), missing: clip(p.missing, 3), misconceptions: clip(p.misconceptions, 2), why: p.why ? p.why.slice(0, 240) : null, next: p.next ? p.next.slice(0, 240) : null } : null;
+}
 const mac = (secret: string, body: string) => createHmac("sha256", secret).update(body).digest("base64url");
 
 /** Pure. A key for the token from a server-only secret (the caller supplies it; tests supply their own). */
@@ -225,8 +234,13 @@ export const tokenKey = (secret: string): string => createHash("sha256").update(
 export function signProgress(key: string, who: { userId: string; questionId: string; answer: unknown }, p: Progress, now: number): string {
   const claims: Claims = {
     u: who.userId, q: who.questionId, h: rubricHash(who.answer), t: now, n: p.next,
-    r: p.results.map(x => ({ s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}) })), e: p.evaluator,
+    r: p.results.map(x => {
+      const parts = tokenParts(x.parts);
+      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, parts ? 400 : 600) } : {}), ...(parts ? { p: parts } : {}) };
+    }), e: p.evaluator,
   };
+  // The token stays well inside readProgress's bound: the parts of the earliest stages are dropped first (their text `f` stays).
+  for (const x of claims.r) { if (b64(JSON.stringify(claims)).length <= TOKEN_BODY_MAX) break; delete x.p; }
   const body = b64(JSON.stringify(claims));
   return `${body}.${mac(key, body)}`;
 }
@@ -245,7 +259,7 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
   try { c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Claims; } catch { return null; }
   if (c.u !== who.userId || c.q !== who.questionId || c.h !== rubricHash(who.answer) || !Number.isFinite(c.t) || now - c.t > TOKEN_TTL_MS || now < c.t - 60_000) return null;
   if (!Number.isInteger(c.n) || c.n < 1 || !Array.isArray(c.r) || c.r.length !== c.n) return null;
-  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null })), evaluator: c.e ?? null };
+  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, ...(x.p ? { parts: feedbackPartsFrom(x.p) } : {}) })), evaluator: c.e ?? null };
 }
 
 // ── NEW SCENARIOS FROM A PASSAGE ──

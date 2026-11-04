@@ -4498,8 +4498,10 @@ export async function clearStudyPlan(admin: Admin, userId: string): Promise<"ok"
 
 let position790: boolean | null = null;
 let snapshot791: boolean | null = null;
+/** SQIE-CLOSE-2026-11 WS-D: whether 990 (unmarked snapshots, competency_provenance) is applied. null: not yet known. */
+let snapshot990: boolean | null = null;
 /** Tests only: forget what was detected. */
-export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; };
+export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; snapshot990 = null; };
 const isMissingRpc = (error: any) => isNotProvisioned(error) || String(error?.code ?? "") === "42883";
 
 /** The caller's position in one of their Learn sessions, or null (none yet). notProvisioned where 790 is absent. */
@@ -4543,13 +4545,31 @@ export async function questionContentVersion(admin: Admin, userId: string, quest
   return error || !Number.isInteger(data?.content_version) ? 1 : data.content_version;
 }
 
-/** Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else. */
+/**
+ * Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else.
+ * SQIE-CLOSE-2026-11 WS-D (990): where 990 is absent, a row with competency_provenance is refused for the column and kept without
+ * it (the 791 row exactly), and an unmarked snapshot is refused by 791's marking CHECK: "absent" (the attempt stands, no error).
+ */
 export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow): Promise<"ok" | "absent" | "failed"> {
   if (snapshot791 === false) return "absent";
+  if (s.marking === "unmarked" && snapshot990 === false) return "absent";
   try {
-    const { error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...snapshotInsertRow(s), user_id: userId });
-    if (error) { if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; } return "failed"; }
+    const row: Record<string, unknown> = { ...snapshotInsertRow(s), user_id: userId };
+    if (snapshot990 === false) delete row.competency_provenance;
+    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert(row);
+    if (error && "competency_provenance" in row && isMissingColumn(error)) {
+      snapshot990 = false; delete row.competency_provenance;
+      if (s.marking === "unmarked") return "absent";
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert(row));
+    }
+    if (error) {
+      if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; }
+      // 990 absent: 791's marking CHECK knows no unmarked. Remembered, so the next unmarked check is not tried.
+      if (s.marking === "unmarked" && String((error as any)?.code ?? "") === "23514") { snapshot990 = false; return "absent"; }
+      return "failed";
+    }
     snapshot791 = true;
+    if ("competency_provenance" in row || s.marking === "unmarked") snapshot990 = true;
     return "ok";
   } catch { return "failed"; }
 }
