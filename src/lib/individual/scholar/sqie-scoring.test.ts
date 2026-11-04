@@ -199,7 +199,7 @@ describe("WS-C answer + justify, and interpretation of findings", () => {
   });
   it("the feedback shows the variant, the findings, each criterion met or not, and the roles; stored criteria read back", () => {
     const final: PartResult[] = [{ awarded: 1, by: "code" }, { awarded: 1, by: "ai", feedback: "f", matched: [0] }];
-    const f = feedbackView(JUSTIFY, { correct: false, score: 0.5, marking: "ai_evaluation", structured: final, justMarked: true, safety: { outcome: "critical_missed", missed: ["(b) Justify your choice."], by: "ai" } });
+    const f = feedbackView(JUSTIFY, { correct: false, score: 0.5, marking: "ai_evaluation", structured: final, justMarked: true, safety: { outcome: "critical_missed", missed: ["(b) Justify your choice."], by: "ai", capped: true } });
     expect(f.structured!.variantLabel).toBe("Answer and justify");
     expect(f.structured!.parts[1]).toMatchObject({ role: "justify", roleLabel: "Your justification", criteria: [{ text: "Names sepsis", met: true }, { text: "Says it is urgent", met: false, safetyCritical: true }] });
     expect(f.structured!.parts[0].options).toHaveLength(3);
