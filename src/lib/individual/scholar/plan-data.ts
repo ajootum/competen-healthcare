@@ -203,7 +203,7 @@ function assembleMaterials(ids: readonly string[], mats: readonly { id: string; 
  * SCHOLAR-PLAN-UNITS-01. Pure. The learning units each material's latest ACCEPTED proposal carries (value.units), checked against the
  * material's own section ordinals. A material accepted without units (an older acceptance, or text that could not be read) maps to null.
  */
-export function storedUnitsOf(events: readonly PlanEvent[], secs: readonly SectionRef[]): Map<string, StoredUnit[] | null> {
+export function storedUnitsOf(events: readonly PlanEvent[], secs: readonly Pick<SectionRef, "materialId" | "ordinal">[]): Map<string, StoredUnit[] | null> {
   const out = new Map<string, StoredUnit[] | null>();
   for (const [ref, e] of latestPerRef(events.filter(x => x.kind === "proposal"))) {
     if (e.status !== "accepted") continue;
@@ -462,7 +462,11 @@ export async function loadInsights(ctx: PlanCtx, policy: IndividualPolicy, o: { 
 }
 
 // ── PROPOSAL ──
-export type ProposalView = { ok: true; proposal: PlanProposal; decision: ProposalDecision | null; hasPlan: boolean; recordable: boolean } | { ok: false; reason: "off" | "not_provisioned" | "unreadable" | "not_found" };
+export type ProposalView = {
+  ok: true; proposal: PlanProposal; decision: ProposalDecision | null; hasPlan: boolean; recordable: boolean;
+  /** LEARNING-CLOSE-2026-11 LE-02: the learning units the latest acceptance carries (null: not accepted, or accepted without units), for a re-review. */
+  accepted: StoredUnit[] | null;
+} | { ok: false; reason: "off" | "not_provisioned" | "unreadable" | "not_found" };
 /**
  * The proposal for one of the learner's own materials, the current decision, and whether a plan already exists (first versus later
  * upload). Reads only. `recordable` is false without 840: the proposal is still shown but the answer cannot be remembered.
@@ -492,6 +496,8 @@ export async function loadProposal(ctx: PlanCtx, policy: IndividualPolicy, mater
     settings: s ? { sessionMinutes: s.sessionMinutes ?? Math.max(10, Math.round(s.weeklyMinutes / Math.max(1, s.daysPerWeek))), daysPerWeek: s.daysPerWeek } : null,
     sectionMinutes: policy.scholarPlanSectionMinutes, firstPlan: s === null && earlierIds.length === 0, units,
   });
+  // LEARNING-CLOSE-2026-11 LE-02: the units as accepted (the latest acceptance's), checked against this material's own ordinals.
+  const accepted = decision === "accepted" ? storedUnitsOf(events, self.sections.map(x => ({ materialId, ordinal: x.ordinal }))).get(materialId) ?? null : null;
   // A plan exists once settings are saved OR a material has been accepted into it: the next upload is offered as an addition.
-  return { ok: true, proposal, decision, hasPlan: s !== null || earlierIds.length > 0, recordable: has840 };
+  return { ok: true, proposal, decision, hasPlan: s !== null || earlierIds.length > 0, recordable: has840, accepted };
 }

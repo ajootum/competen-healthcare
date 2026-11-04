@@ -218,7 +218,7 @@ export function unitFrom(id: string, parts: readonly UnitSection[], o: { unit: "
   const own = titleFromParts(sorted, o.unit);
   const title = o.outline?.title ?? own.title;
   const covers = o.outline ? coversOf(title, [...o.outline.focus.slice(1), ...sorted.flatMap(p => p.topics)]) : own.covers;
-  const objective = o.outline?.objective ?? `Explain ${title.replace(/[?!.]+$/, "")}${covers.length ? `, including ${covers.slice(0, 2).join(" and ")}` : ""}.`;
+  const objective = o.outline?.objective ?? objectiveOf(title, covers);
   return { id, title, objective, covers, parts: sorted, pictureOnly, cite: citeUnit(sorted, o.unit), estimate: estimateUnit(sorted, pictureOnly.length), excluded: !!o.excluded, priority: !!o.priority };
 }
 
@@ -234,8 +234,10 @@ export function mergeUnits(units: readonly ProposedUnit[], index: number, ctx: C
   // Two units joined keep both names ("Eye care and Oral care") unless one already says the other.
   const title = joinTitles(a.title, b.title);
   const covers = coversOf(title, [...a.covers, ...b.covers]);
-  return renumber([...units.slice(0, index), { ...merged, title, covers, objective: `Explain ${title.replace(/[?!.]+$/, "")}${covers.length ? `, including ${covers.slice(0, 2).join(" and ")}` : ""}.` }, ...units.slice(index + 2)]);
+  return renumber([...units.slice(0, index), { ...merged, title, covers, objective: objectiveOf(title, covers) }, ...units.slice(index + 2)]);
 }
+/** Pure. "Explain <title>, including <the first two covers>." */
+export const objectiveOf = (title: string, covers: readonly string[]) => `Explain ${title.replace(/[?!.]+$/, "")}${covers.length ? `, including ${covers.slice(0, 2).join(" and ")}` : ""}.`;
 /** Pure. "A and B", at most 80 characters, unless one title already says the other. */
 export function joinTitles(a: string, b: string): string {
   const sa = new Set(stemsOf(a)), sb = stemsOf(b);
@@ -332,3 +334,44 @@ export function parseStoredUnits(value: unknown, ordinals?: ReadonlySet<number>)
 }
 /** Pure. The ordinals a stored unit holds, ascending. */
 export const storedOrdinals = (u: StoredUnit): number[] => u.o.flatMap(([a, b]) => Array.from({ length: b - a + 1 }, (_, i) => a + i)).sort((x, y) => x - y);
+
+// ── LEARNING-CLOSE-2026-11 D03 / LE-02: the learner names a unit, and re-reviews units already accepted ──────────────────
+//
+// A unit is a name over section ordinals: nothing of the learner's work hangs off it. Progress, notes, saved explanations,
+// questions, flashcards, attempts and citations all belong to the SECTIONS (chunk ids), which a rename, a merge or a split
+// never touches. So a re-review after acceptance is safe by construction: a new accepted `proposal` event carries the
+// units as changed (plan-data.ts storedUnitsOf reads the latest), and My Plan follows. No migration.
+
+/**
+ * Pure. Unit `index` takes the learner's own name: whitespace collapsed, at most STORED_TITLE_MAX characters. An empty
+ * name gives the unit back the title its parts carry. What the new name already says leaves the covers.
+ */
+export function renameUnit(units: readonly ProposedUnit[], index: number, title: string, ctx: Ctx): ProposedUnit[] {
+  const u = units[index];
+  if (!u) return [...units];
+  const clean = title.replace(/\s+/g, " ").trim().slice(0, STORED_TITLE_MAX).trim();
+  const own = titleFromParts(u.parts, ctx.unit);
+  const t = clean || own.title;
+  const covers = coversOf(t, [...u.covers, ...own.covers]);
+  return units.map((x, i) => (i === index ? { ...x, title: t, covers, objective: objectiveOf(t, covers) } : x));
+}
+
+/**
+ * Pure. The units as the learner accepted them (stored ranges, names and flags), laid over the sections of the material
+ * as the builder read them (`fresh`: every section, in its units): what the review step shows after acceptance, so the
+ * learner can rename, merge, split, leave out or put first again. Ordinals no stored unit names are left out, and a stored
+ * ordinal the material no longer has is skipped. Null when nothing matches.
+ */
+export function applyStored(fresh: readonly ProposedUnit[], stored: readonly StoredUnit[], ctx: Ctx): ProposedUnit[] | null {
+  const byOrdinal = new Map(fresh.flatMap(u => u.parts).map(p => [p.ordinal, p]));
+  const out: ProposedUnit[] = [];
+  stored.forEach((s, i) => {
+    const parts = storedOrdinals(s).map(n => byOrdinal.get(n)).filter((p): p is UnitSection => !!p);
+    if (!parts.length) return;
+    const u = unitFrom(`u${i + 1}`, parts, { ...ctx, excluded: s.x === 1, priority: s.p === 1 });
+    const title = s.t.trim().slice(0, 80) || u.title;
+    const covers = coversOf(title, [...u.covers, ...(u.title !== title ? [u.title] : [])]);
+    out.push({ ...u, title, covers, objective: objectiveOf(title, covers) });
+  });
+  return out.length ? renumber(out) : null;
+}
