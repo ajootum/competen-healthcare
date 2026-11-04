@@ -29,7 +29,8 @@ describe("the registry says what the code offered before it existed", () => {
     expect([...VERIFY_FORMATS]).toEqual(["mcq", "case", "mrq", "short", "structured", "match", "sequence", "flashcard", "true_false", "extended"]);
     expect([...VERIFY_FORMATS_DEFAULT]).toEqual(["mcq", "case", "mrq", "short"]);
     expect([...ADAPTIVE_FORMATS]).toEqual(["mcq", "mrq", "short", "match", "sequence", "structured"]);
-    expect([...LIBRARY_FORMATS]).toEqual(["mcq", "mrq", "short", "cloze", "true_false", "extended", "flashcard", "match", "sequence", "structured"]);
+    // SQIE-CLOSE-2026-11 WS-E (997): the calculation joins the governed library, last.
+    expect([...LIBRARY_FORMATS]).toEqual(["mcq", "mrq", "short", "cloze", "true_false", "extended", "flashcard", "match", "sequence", "structured", "calculation"]);
     // WS-A: a calculation's key is always blind-solved (generation.ts), so it is a blind format but in no verify list.
     expect([...BLIND_FORMATS]).toEqual(["true_false", "match", "sequence", "flashcard", "structured", "extended", "calculation"]);
     // SCHOLAR-AI-COST-CONFIG-01 (owner 3 Nov 2026): the evolving scenario is chosen deliberately, never by default.

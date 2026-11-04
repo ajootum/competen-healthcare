@@ -75,14 +75,19 @@ export async function moveNeed(admin: any, me: string, id: string, status: strin
   return data?.length ? { ok: true } : { ok: false, error: "Unknown need." };
 }
 
-export async function createResource(admin: any, me: string, r: { code: string; kind: string; title: string; needId: string | null; fields: Record<string, unknown> }): Promise<R<{ resourceId: string; versionId: string }>> {
+/**
+ * A new resource and its first draft. `ai` (SQIE-CLOSE-2026-11 bulk import): the draft was AI-assisted, so its origin is
+ * ai_draft with the model and prompt version recorded (442: origin, educator review and clinical approval stay three facts).
+ */
+export async function createResource(admin: any, me: string, r: { code: string; kind: string; title: string; needId: string | null; fields: Record<string, unknown>; ai?: { model: string; prompt_version: string } | null }): Promise<R<{ resourceId: string; versionId: string }>> {
   if (!CODE.test(r.code)) return { ok: false, error: "A resource code is lowercase letters, digits, hyphens and underscores." };
   if (!(RESOURCE_KINDS as readonly string[]).includes(r.kind)) return { ok: false, error: "Choose an explanation, a revision question, a targeted resource or an OSCE station." };
   const checked = checkedContent(r.kind as ResourceKind, r.fields);
   if (!checked.ok) return checked;
   const { data: res, error } = await admin.from("ckri_knowledge_resource").insert({ code: r.code, kind: r.kind, title: r.title, created_by: me, need_id: r.needId && UUID.test(r.needId) ? r.needId : null }).select("id").single();
   if (error) return { ok: false, error: dbRefusal(error, "The resource could not be created.") };
-  const { data: v, error: ve } = await admin.from("ckri_knowledge_version").insert({ resource_id: res.id, version_no: 1, content: checked.content, origin: "educator", authored_by: [me] }).select("id").single();
+  const origin = r.ai ? { origin: "ai_draft", ai_provenance: { model: r.ai.model, prompt_version: r.ai.prompt_version } } : { origin: "educator" };
+  const { data: v, error: ve } = await admin.from("ckri_knowledge_version").insert({ resource_id: res.id, version_no: 1, content: checked.content, ...origin, authored_by: [me] }).select("id").single();
   if (ve) { await admin.from("ckri_knowledge_resource").update({ status: "retired" }).eq("id", res.id); return { ok: false, error: dbRefusal(ve, "The content does not have the shape this kind needs.") }; }
   return { ok: true, resourceId: res.id, versionId: v.id };
 }

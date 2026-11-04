@@ -8,6 +8,7 @@ import { loadAiQuality } from "@/lib/ai/outcomes";
 import RecoveryPanel from "../_components/RecoveryPanel";
 import SqieMonitoringPanel from "../_components/SqieMonitoringPanel";
 import { loadSqieMonitoring } from "@/lib/ai/sqie-monitoring";
+import { loadSqieCost } from "@/lib/ai/sqie-cost";
 import { loadRecoverySummary } from "@/lib/individual/scholar/evidence-recovery";
 import { requireHqCapability } from "@/lib/hq/context";
 
@@ -34,7 +35,7 @@ export default async function IntelligenceAnalytics() {
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
   await requireHqCapability("hq.platform.ai.view");
 
-  const [d, quality, recovery, sqie] = await Promise.all([loadAiAnalytics(admin), loadAiQuality(admin, 14), loadRecoverySummary(admin, 14), loadSqieMonitoring(admin)]);
+  const [d, quality, recovery, sqie, sqieCost] = await Promise.all([loadAiAnalytics(admin), loadAiQuality(admin, 14), loadRecoverySummary(admin, 14), loadSqieMonitoring(admin), loadSqieCost(admin)]);
   const k = d.kpis;
 
   const kpiCards = [
@@ -84,7 +85,7 @@ export default async function IntelligenceAnalytics() {
       <RecoveryPanel s={recovery} />
 
       {/* SQIE-COMPLETE-01: the question engine per format, library reuse and legacy rechecks. */}
-      <SqieMonitoringPanel s={sqie} />
+      <SqieMonitoringPanel s={sqie} cost={sqieCost} />
 
       {/* Live telemetry generator — every ask records a real plat_ai_requests row
           that immediately feeds the analytics below (reload to see it land). */}

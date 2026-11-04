@@ -29,6 +29,13 @@
 //   match       options 3-6 prompts, answerKey.matches one per prompt             (kind match)
 //   sequence    options 3-6 steps (stored shuffled), answerKey.order the steps' order, a permutation  (kind sequence)
 //   structured  options [], answerKey.parts 2-4 of { prompt, marks 1-5, accepted 1-4, rubric? }    (kind structured)
+//   calculation options [], answerKey { format calculation, accepted, value, unit, equivalentUnits?, rounding?, tolerance?,
+//               safetyCritical, working? } -- the WS-A contract (scoring-rules.ts calculationProblems)   (kind short)
+//
+// SQIE-CLOSE-2026-11 (migration 997, contracts in scoring-rules.ts): the SAFETY MARKERS of WS-B -- short answerKey.safetyCritical
+// and .unsafe, extended answerKey.safetyCriticalPoints and .unsafe, structured parts[i].safetyCritical and .unsafe -- and the
+// WS-C structured variants -- answerKey.variant, answerKey.findings, parts[i].role, a choice part's options and correct, and
+// parts[i].criteria -- are kept in the key exactly as the scoring rules read them, so the learner copy marks with them.
 //
 // THE MARKING RULE. deterministic (code marks it, and where code cannot tell -- a short answer in other words, a structured
 // part -- the learner's own judgement, never AI), self (the learner's own judgement against the key), rubric_ai_formative
@@ -39,6 +46,10 @@
 
 import { COGNITIVE_LEVELS } from "./question-intel";
 import { FORMAT_ROW, LIBRARY_COPY_KIND, LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL, LIBRARY_FORMAT_MARKING, type LibraryFormat } from "./question-formats";
+import { checkLibraryMeta } from "./library-meta";
+import {
+  CALCULATION_FORMAT, PART_ROLES, STRUCTURED_VARIANTS, calculationAccepted, calculationProblems, findingsOf, partContractOf, roundingOf, toleranceOf,
+} from "./scoring-rules";
 
 // SCHOLAR-CE-2026 CE-05: the library's format list, labels, marking rules and stored kinds come from the registry (question-formats.ts).
 export { LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL } from "./question-formats";
@@ -75,6 +86,19 @@ const strList = (v: unknown, min: number, max: number, each: number): string[] |
 };
 const distinct = (xs: readonly string[]) => new Set(xs.map(x => x.toLowerCase())).size === xs.length;
 const isInt = (v: unknown, lo: number, hi: number): v is number => typeof v === "number" && Number.isInteger(v) && v >= lo && v <= hi;
+
+const UNSAFE_MAX = 6;
+/** Pure. The WS-B safety markers of one key or part, normalised (absent: none), or the reason they are not sound. */
+function markersOf(x: Record<string, unknown>, where: string): { ok: true; markers: Record<string, unknown> } | { ok: false; error: string } {
+  if (x.safetyCritical !== undefined && typeof x.safetyCritical !== "boolean") return { ok: false, error: `${where}: safety-critical is yes or no.` };
+  let unsafe: string[] = [];
+  if (x.unsafe !== undefined && x.unsafe !== null) {
+    const u = strList(x.unsafe, 0, UNSAFE_MAX, 200);
+    if (!u || !distinct(u)) return { ok: false, error: `${where}: up to ${UNSAFE_MAX} different unsafe answers, 200 characters each.` };
+    unsafe = u;
+  }
+  return { ok: true, markers: { ...(x.safetyCritical === true ? { safetyCritical: true } : {}), ...(unsafe.length ? { unsafe } : {}) } };
+}
 
 /** Pure. The format a stored library content is read as: its `format`, or mcq for a legacy (442) question. null: neither. */
 export function libraryFormatOf(content: unknown): LibraryFormat | null {
@@ -116,9 +140,14 @@ export function validateLibraryQuestion(raw: unknown): Check {
   if (!stem) return { ok: false, error: format === "true_false" ? "Write the statement (10 to 2000 characters)." : "Write the question (10 to 2000 characters)." };
   if (!rationale) return { ok: false, error: "Write the explanation learners see after answering (10 to 4000 characters)." };
   const source = c.source !== undefined ? { source: c.source } : {};
+  // SQIE-CLOSE-2026-11 WS-E (995): programme, qualification level, difficulty and the provenance keys (references,
+  // source verification, competency mapping, ...), all optional, kept at the top level (library-meta.ts).
+  const m = checkLibraryMeta(c);
+  if (!m.ok) return m;
+  const meta = m.fields;
 
   if (c.format === undefined) {
-    // 442 exactly: four options, one correct. Nothing else is read or written.
+    // 442 exactly: four options, one correct. Nothing else is read or written (WS-E: the metadata keys are checked).
     const options = strList(c.options, 4, 4, 500);
     if (!options) return { ok: false, error: "A single best answer question has four options, each written." };
     if (!isInt(c.correct_index, 0, 3)) return { ok: false, error: "Choose the correct option." };
@@ -131,7 +160,7 @@ export function validateLibraryQuestion(raw: unknown): Check {
   if (!rub.ok) return rub;
   const k = (c.answerKey ?? {}) as Record<string, unknown>;
   const out = (options: string[], answerKey: Record<string, unknown> | null, extra: Record<string, unknown> = {}): Check => {
-    const content: LibraryContent = { format, stem, options, ...extra, ...(answerKey ? { answerKey } : {}), ...(rub.rubric ? { rubric: rub.rubric } : {}), marking, rationale, ...source };
+    const content: LibraryContent = { format, stem, options, ...extra, ...(answerKey ? { answerKey } : {}), ...(rub.rubric ? { rubric: rub.rubric } : {}), marking, rationale, ...source, ...meta };
     if (JSON.stringify(content).length > 30000) return { ok: false, error: "The question is too long to store." };
     const copy = libraryCopyOf(content);
     if (!copy || JSON.stringify(copy.answer ?? {}).length > 15000) return { ok: false, error: "The question is too long to store." };
@@ -156,7 +185,9 @@ export function validateLibraryQuestion(raw: unknown): Check {
     case "short": {
       const accepted = strList(k.accepted, 1, 8, 200);
       if (!accepted || !distinct(accepted)) return { ok: false, error: "Give one to eight accepted answers, each different." };
-      return out([], { accepted });
+      const m = markersOf(k, "Safety");
+      if (!m.ok) return m;
+      return out([], { accepted, ...m.markers });
     }
     case "cloze": {
       if (stem.split(CLOZE_MARK).length !== 2) return { ok: false, error: `Mark the one blank in the sentence as ${CLOZE_MARK}.` };
@@ -175,7 +206,13 @@ export function validateLibraryQuestion(raw: unknown): Check {
       if (!model) return { ok: false, error: "Write the model answer (20 to 1200 characters)." };
       const marks = isInt(k.marks, 1, 10) ? k.marks : rub.rubric!.keyPoints.length;
       if (!isInt(marks, 1, 10)) return { ok: false, error: "An extended response carries 1 to 10 practice marks." };
-      return out([], { format: "extended", accepted: [model], modelAnswer: model, marks });
+      const m = markersOf(k, "Safety");
+      if (!m.ok) return m;
+      const { safetyCritical: _sc, ...em } = m.markers;
+      void _sc;
+      const scp = k.safetyCriticalPoints === undefined || k.safetyCriticalPoints === null ? [] : Array.isArray(k.safetyCriticalPoints) ? [...new Set(k.safetyCriticalPoints as unknown[])] : null;
+      if (!scp || !scp.every(i => isInt(i, 0, rub.rubric!.keyPoints.length - 1))) return { ok: false, error: "Mark safety-critical key points from the list of key points." };
+      return out([], { format: "extended", accepted: [model], modelAnswer: model, marks, ...(scp.length ? { safetyCriticalPoints: (scp as number[]).sort((a, b) => a - b) } : {}), ...em });
     }
     case "flashcard": {
       const back = str(k.back, 1, 2000);
@@ -205,10 +242,46 @@ export function validateLibraryQuestion(raw: unknown): Check {
         const prompt = str(x.prompt, 5, 600), accepted = strList(x.accepted, 1, 4, 200);
         if (!prompt || !isInt(x.marks, 1, 5) || !accepted) return { ok: false, error: `Part ${String.fromCharCode(97 + i)}: write its question, its marks (1 to 5) and one to four accepted answers.` };
         const pr = checkRubric(x.rubric);
-        if (!pr.ok) return { ok: false, error: `Part ${String.fromCharCode(97 + i)}: ${pr.error}` };
-        clean.push({ prompt, marks: x.marks, accepted, ...(pr.rubric ? { rubric: pr.rubric } : {}) });
+        const name = `Part ${String.fromCharCode(97 + i)}`;
+        if (!pr.ok) return { ok: false, error: `${name}: ${pr.error}` };
+        // WS-B / WS-C (997): role, a choice part, weighted criteria and safety markers, as scoring-rules.ts reads them.
+        if (x.role !== undefined && x.role !== null && !(PART_ROLES as readonly unknown[]).includes(x.role)) return { ok: false, error: `${name}: choose its role (answer, justify or interpret).` };
+        const pc = partContractOf(x, accepted);
+        if (x.options !== undefined && x.options !== null && !pc.options) return { ok: false, error: `${name}: a choice part has two to six options, the correct one chosen, and that option as its first accepted answer.` };
+        if (x.criteria !== undefined && x.criteria !== null && !pc.criteria) return { ok: false, error: `${name}: one to eight criteria, each with its text (300 characters) and a weight of 1 to 5.` };
+        const pm = markersOf(x, name);
+        if (!pm.ok) return pm;
+        clean.push({ prompt, marks: x.marks, accepted, ...(pr.rubric ? { rubric: pr.rubric } : {}),
+          ...(x.role ? { role: pc.role } : {}), ...(pc.options ? { options: pc.options, correct: pc.correct } : {}),
+          ...(pc.criteria ? { criteria: pc.criteria.map(c => ({ text: c.text, weight: c.weight, ...(c.safetyCritical ? { safetyCritical: true } : {}) })) } : {}), ...pm.markers });
       }
-      return out([], { parts: clean });
+      const variant = k.variant === undefined || k.variant === null || k.variant === "" ? null : (STRUCTURED_VARIANTS as readonly unknown[]).includes(k.variant) ? (k.variant as string) : undefined;
+      if (variant === undefined) return { ok: false, error: "Choose the structured variant: answer and justify, or interpret the findings." };
+      const findings = k.findings === undefined || k.findings === null ? [] : findingsOf(k);
+      if (k.findings !== undefined && k.findings !== null && !findings.length) return { ok: false, error: "Findings are 1 to 12 rows, each a label and a value (120 characters each)." };
+      if (variant === "interpretation" && !findings.length) return { ok: false, error: "An interpretation question shows its findings first: give 1 to 12." };
+      return out([], { ...(variant ? { variant } : {}), ...(findings.length ? { findings: findings.map(f => ({ label: f.label, value: f.value, ...(f.unit ? { unit: f.unit } : {}) })) } : {}), parts: clean });
+    }
+    case "calculation": {
+      // WS-A (997): the key exactly as scoring-rules.ts marks it. Exact match unless a tolerance is set, and a tolerance is used
+      // only while HQ policy scholar_calculation_tolerances is on (off until the clinical calculation policy is approved).
+      const value = typeof k.value === "number" ? k.value : typeof k.value === "string" && k.value.trim() ? Number(k.value) : NaN;
+      const unit = typeof k.unit === "string" ? k.unit.trim() : "";
+      const eq = Array.isArray(k.equivalentUnits) ? (k.equivalentUnits as unknown[]).map(x => (typeof x === "string" ? x.trim() : x)).filter(x => x !== "") : undefined;
+      const rounding = k.rounding === undefined || k.rounding === null ? undefined : roundingOf(k.rounding) ?? k.rounding;
+      const tolerance = k.tolerance === undefined || k.tolerance === null ? undefined : toleranceOf(k.tolerance) ?? k.tolerance;
+      const working = typeof k.working === "string" && k.working.trim() ? k.working.trim() : undefined;
+      if (working && working.length > 1200) return { ok: false, error: "The worked answer is at most 1200 characters." };
+      const accepted = strList(k.accepted, 1, 8, 200) ?? (Number.isFinite(value) ? calculationAccepted(value, unit) : null);
+      const m = markersOf({ unsafe: k.unsafe }, "Safety");
+      if (!m.ok) return m;
+      const key: Record<string, unknown> = {
+        format: CALCULATION_FORMAT, accepted, value, unit, ...(eq && eq.length ? { equivalentUnits: eq } : {}), ...(rounding ? { rounding } : {}),
+        ...(tolerance && (tolerance as { kind?: string }).kind !== "none" ? { tolerance } : {}), safetyCritical: k.safetyCritical !== false, ...(working ? { working } : {}), ...m.markers,
+      };
+      const problems = calculationProblems(key);
+      if (problems.length) return { ok: false, error: `The calculation key: ${problems.join("; ")}.` };
+      return out([], key);
     }
   }
 }
@@ -262,6 +335,7 @@ export function libraryKeyText(content: unknown): string {
     case "match": return o.map((p, i) => `${p} -> ${(a.matches as string[])?.[i] ?? ""}`).join("; ");
     case "sequence": return ((a.order as number[]) ?? []).map(i => o[i]).join(" -> ");
     case "structured": return ((a.parts as { prompt: string; marks: number; accepted: string[] }[]) ?? []).map((p, i) => `(${String.fromCharCode(97 + i)}) ${p.accepted?.[0] ?? ""} [${p.marks}]`).join("; ");
+    case "calculation": return ((a.accepted as string[]) ?? [])[0] ?? "";
   }
 }
 
