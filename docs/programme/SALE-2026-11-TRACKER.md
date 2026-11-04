@@ -26,7 +26,7 @@ The mapping of rows to releases is **proposed** where the directive lists conten
 | **R2 — Retention** | Retrieval scheduling, prerequisite pathways, transfer checks | SALE-08, 09, 10 | Personalised review and progression | **Built, ready for review (4 Nov).** Branch `scholar/sale-r2-retention`; migration 970 (transfer-check record) applied and verified on staging only. Three HQ keys default **off**: `scholar_retrieval_schedule`, `scholar_prerequisite_suggestions`, `scholar_transfer_checks`. 390 px staging walk: a topic not due became due after a simulated 8-day delay, with its reason; a framework prerequisite suggested with its reason; a transfer check started, answered and shown as transfer evidence. Evidence `docs/evidence/SALE-R2/` |
 | **R3 — Learning Workspace** | My Plan recommendations and active Notebook | SALE-11, 12 | Connected daily learning experience | Not started |
 | **R4 — Application** | Clinical cases, simulation and competency evidence integration | SALE-13, 14 | Traceable application evidence | CE-04/CE-05 Wave 2 built in PR #275 (open, no migration, keys default off; claim **980-989** unused so far), tracked under SALE-13 |
-| **R5 — Optimisation** | Evaluation, analytics, efficiency and final improvements | SALE-15, 16, 17†, 18, 19 | Measured outcomes and closure evidence | Not started |
+| **R5 — Optimisation** | Evaluation, analytics, efficiency and final improvements | SALE-15, 16, 17†, 18, 19 | Measured outcomes and closure evidence | **In progress.** SALE-15/16/18 instrumentation built on `scholar/sale-r5-effectiveness` (migration 985, staging only); PR and owner GO pending. SALE-17, SALE-19 not started |
 
 **Sequencing rules (§12, §14):** independent workstreams proceed in parallel. **R1 is not held for the optional CE voice and simulation enhancements** (CE-04, CE-05, CE-06, CE-07 remaining work). Migration numbers: 970-979 R1 Adaptive Core; 980-989 CE-04/CE-05; any other claim goes through the coordinator.
 
@@ -49,10 +49,10 @@ The mapping of rows to releases is **proposed** where the directive lists conten
 | SALE-12 | Active Notebook integration | P1 | R3 | Not assigned | Not started | Existing Library work (CE-02) | — | — |
 | SALE-13 | Clinical application integration | P1 | R4 | CE-04/05 session (PR #275, merged); R4 session (branch `scholar/sale-r4-application`) | Ready for review | CE-04/05, SQIE | R4 PR review and owner GO; key `scholar_application_evidence` default off; clinical approvals for patient voice and scenarios unchanged | — |
 | SALE-14 | Competency evidence integration | P1 | R4 | R4 session (branch `scholar/sale-r4-application`) | Ready for review | Framework mappings | R4 PR review and owner GO; key `scholar_competency_evidence_views` default off | — |
-| SALE-15 | Learning-effectiveness analytics | P1 | R5 | Not assigned | Not started | Learning event data | SALE-04 and pilot data | — |
+| SALE-15 | Learning-effectiveness analytics | P1 | R5 | R5 session (PR #280, branch `scholar/sale-r5-effectiveness`) | Ready for release (owner GO to merge) | Learning event data | Migrations 985 and 986 in production need a separate owner GO; pilot data for baselines | — |
 | SALE-16 | Cost and latency optimisation | P1 | R0 part, R5 | Coordinator (AI) | Blocked | AI monitoring | AI-01 clinician, then AI-02, then AI-03 (LEARNING-CLOSE) | — |
 | SALE-17 | Accessibility and low-bandwidth work | P1 | R0 part, R5 | CE-07 / CE-06 sessions | Not started | CE-06, CE-07 | Wave 3 not started | — |
-| SALE-18 | Pilot evaluation | P1 | R5 | Scholar Product Lead | Not started | Core adaptive experience | R1-R3 live | — |
+| SALE-18 | Pilot evaluation | P1 | R5 | Scholar Product Lead (readout built by the R5 session) | Instrumentation built — staging verified, PR pending | Core adaptive experience | Owner GO (merge, 985); R1-R3 live; the pilot itself | — |
 | SALE-19 | Final acceptance and closure | P0 | R5 | Scholar Product Lead + Coordinator | Not started | All required acceptance criteria | All other rows | — |
 
 ## Rows (detail)
@@ -146,13 +146,14 @@ Per row: Current state (what exists on `main` / in production, read 4 Nov 2026),
 - **PR / migration:** none. **Environment:** development. **Evidence:** none yet.
 
 ### SALE-15 — Learning-effectiveness analytics (P1, R5)
-- **Current state:** HQ Learner Engagement dashboard live (#248, migration 910): engagement, not learning effectiveness. The measures in §10.1 (immediate understanding, misconception resolution, delayed recall, transfer, independent reasoning, study efficiency, AI cost efficiency, learner experience) are not computed; most need SALE-04 evidence and pilot data. Identifiable-name access is decided (executive level, six positions; GOV-01).
+- **Current state (R5, 4 Nov):** migration 985 `ckri_scholar_effectiveness_stats` computes the §10.1 measures from existing records (consented collective_analytics only, 441 floor never below 5, rounded, no learner id or content, service_role only): immediate understanding, misconception resolution after R1 corrective teaching, delayed recall at 5-10 days (questions, flashcards), transfer (migration 986: the R2 970 transfer-check join, score at least 0.75; "not measured" until 970 is installed), independent reasoning, study efficiency (estimated time), friction signals, and the standard against adaptive comparison (same item type and lesson step). Every cell carries sample size and caution; no targets. Applied and verified on staging twice; not in production. Engagement dashboard (#248, 910) unchanged.
 - **Acceptance criteria (§10.1, §10.2):** baselines established from the first pilot (no invented targets); standard versus adaptive comparison where feasible; seven-day retention where feasible; small samples interpreted cautiously; engagement is not presented as proof of learning.
-- **PR / migration:** none. **Environment:** development. **Evidence:** none yet.
+- **PR / migration:** #280, migrations 985 and 986 (staging only). **Environment:** staging. **Evidence:** `docs/evidence/SALE-R5/`.
 
 ### SALE-16 — Cost and latency optimisation (P1, R0 part and R5)
 - **Current state (detail in the LEARNING-CLOSE tracker):** AI cost measured on staging and production (p3-cost: scenarios 59 %); flashcards as their own activity with fallback and the tier from the published policy per activity are in code (#259); monitoring queries exist (`p3-monitoring-queries.md`, baseline about USD 1.37 over 30 days). The flashcards configuration package is **not applied** in production and is **Blocked on AI-01** (clinician not yet named). AI-03 (comparison), AI-04 (report) and AI-05 (recommendations) follow. Metering stays off during the pilot (revisit on or after 20 Nov 2026; GOV-02). Mapping stays on Sonnet and questions on Opus (no model cleared the bar).
 - **Acceptance criteria (§10.3):** reuse of approved artifacts first, non-AI retrieval and scheduling where sufficient, efficient context, approved lower-cost models only where quality is demonstrated, monitoring of expensive activities; no compromise of clinical safety or privacy; no new routing without evidence and approval (§14.8).
+- **R5 (4 Nov):** cost and latency per useful activity on the Pilot Evaluation readout (`activity-cost.ts`): cost per evaluated answer and per completed session (sqie-cost), per lesson taught (settled teaching spend / lessons delivered), reuse against new generation (audit trail), latency p50/p90 per activity (gateway). Metering off reads "Metering off, no data", never $0. No migration. The AI-01..05 configuration work stays blocked as above.
 - **PR / migration:** #259, #262 (code, evidence); configuration only. **Environment:** production (configuration pending). **Evidence:** `docs/evidence/SCHOLAR-INDEPENDENT/p3-*.md`, `AI-01-flashcard-clinical-review.md`.
 
 ### SALE-17 — Accessibility and low-bandwidth work (P1, R0 part and R5)
@@ -161,9 +162,9 @@ Per row: Current state (what exists on `main` / in production, read 4 Nov 2026),
 - **PR / migration:** #234, #239, #241, #267 (960). **Environment:** production (partial). **Evidence:** `docs/evidence/SCHOLAR-CE07/`; CE register.
 
 ### SALE-18 — Pilot evaluation (P1, R5)
-- **Current state:** Not started. Depends on a working adaptive core (R1-R3) and learning-event data. There is a controlled invite-only pilot context (owner pilot directive 25 Oct); no evaluation design exists in the repository.
+- **Current state (R5, 4 Nov):** HQ Pilot Evaluation readout at `/super-admin/individual/scholar/analytics/effectiveness` (hq.scholar.analytics.view), with the closure report export (Markdown and CSV) carrying every sample size, suppressed cell, caution and limitation. Measurement collects from the first day of pilot use once 985 is applied. Staging walk 20/20.
 - **Acceptance criteria (§10.2):** baselines from the first pilot; comparison design with equivalent objectives and comparable items; retention at practical intervals including about seven days; stated limitations.
-- **PR / migration:** none. **Environment:** production pilot. **Evidence:** none yet.
+- **PR / migration:** branch `scholar/sale-r5-effectiveness`, migration 985 (staging only). **Environment:** staging (production pilot after GO). **Evidence:** `docs/evidence/SALE-R5/walk/`.
 
 ### SALE-19 — Final acceptance and closure (P0, R5)
 - **Current state:** Not started. Closure is the §15 acceptance map below, plus governance, data protection, reliability, accessibility and measured operational cost; every required row at Complete; remaining gates resolved or explicitly left open by the owner.
