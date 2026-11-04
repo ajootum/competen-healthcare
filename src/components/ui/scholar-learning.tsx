@@ -7,8 +7,9 @@
 // rule. Every component carries its meaning in words and shape, never in colour alone.
 
 import Link from "next/link";
-import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { forwardRef, type ButtonHTMLAttributes, type MouseEvent, type ReactNode } from "react";
 import type { LearningTone } from "@/lib/design/tokens";
+import { notesBlocks } from "@/lib/individual/scholar/notes-layout";
 
 export type { LearningTone } from "@/lib/design/tokens";
 
@@ -256,12 +257,12 @@ export function CitationChip({ tag, href, label, aiRead = false }: { tag: string
 /** A source as a list row: its tag chip, the citation as a link, and an optional note under it. */
 export function SourceLink({ tag, href, citation, note, children }: { tag?: string; href: string; citation: string; note?: ReactNode; children?: ReactNode }) {
   return (
-    <span className="block break-words text-[13px] text-gray-800">
+    <div className="break-words text-[13px] text-gray-800">
       {tag && <span className="cmp-learn-ink mr-1.5 inline-flex rounded-full border border-[var(--learn-border)] bg-[var(--learn-surface)] px-1.5 font-mono text-[11.5px] font-bold">{tag}</span>}
       <Link href={href} className={`text-gray-900 underline underline-offset-2 ${focusRing}`}>{citation}</Link>
       {note}
       {children}
-    </span>
+    </div>
   );
 }
 
@@ -334,5 +335,104 @@ export function LearningCallout({ tone, icon, label, emphasis = "standard", chil
       </p>
       <div className="mt-1.5 space-y-1.5 text-[15px] leading-[1.6] text-gray-900">{children}</div>
     </aside>
+  );
+}
+
+// ── Inside a section (LEARN SECTIONS HFE, owner 4 Nov 2026: "improve HFE and reading ease") ──────────────────────────
+
+/** The consistent action classes: ONE primary (filled in the tone's ink) and secondary (outlined) per row. 44px on touch. */
+export const learnAction = {
+  primary: `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-[var(--learn-ink)] bg-[var(--learn-ink)] px-4 py-1.5 text-[13.5px] font-semibold text-[var(--learn-surface)] hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`,
+  secondary: `inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-3.5 py-1.5 text-[13.5px] font-semibold text-gray-900 hover:bg-[var(--learn-surface)] disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`,
+  link: `inline-flex min-h-[40px] items-center gap-1 rounded text-[13.5px] font-semibold text-[var(--learn-ink)] underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`,
+} as const;
+
+/** A light card INSIDE a section (one notes section, one source, one previous check): white, a hairline in the tone. */
+export function SectionCard({ as: As = "div", id, className = "", children }: { as?: "div" | "li" | "article"; id?: string; className?: string; children: ReactNode }) {
+  return <As id={id} className={`rounded-xl bg-[var(--cmp-app-surface)] p-4 ring-1 ring-[var(--learn-border)] ${className}`}>{children}</As>;
+}
+
+/** One consistent action row at the foot of a card: primary first, then secondary; wraps on a phone. */
+export function ActionRow({ label, children, className = "" }: { label?: string; children: ReactNode; className?: string }) {
+  return <div role="group" aria-label={label} className={`mt-3 flex flex-wrap items-center gap-2 border-t border-[var(--learn-border)] pt-3 ${className}`}>{children}</div>;
+}
+
+/** A short source reference as a chip that opens it ("Slide 14"); the full citation is its accessible name and title. */
+export function RefChip({ href, text, citation }: { href: string; text: string; citation: string }) {
+  return (
+    <Link href={href} title={`Open in the material: ${citation}`} aria-label={`Open in the material: ${citation}`}
+      className={`cmp-learn-ink inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-full border border-[var(--learn-border)] bg-[var(--learn-surface)] px-2.5 text-[12.5px] font-semibold hover:underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+      {text}<svg aria-hidden="true" viewBox="0 0 16 16" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3H3v10h10v-3M9 3h4v4M13 3L7 9" /></svg>
+    </Link>
+  );
+}
+
+/**
+ * A calm inline note with its icon, never an alarm: "info" for a plain state (a slide with no text), "ai" for provenance that
+ * must stay visible (text read by AI from a picture), in the amber unreviewed colour.
+ */
+export function InlineNote({ kind = "info", children, className = "" }: { kind?: "info" | "ai"; children: ReactNode; className?: string }) {
+  const cls = kind === "ai" ? "border-[var(--cmp-role-revision-accent)] bg-[var(--cmp-role-revision-soft)] text-[var(--cmp-role-revision-ink)]" : "border-[var(--learn-border)] bg-[var(--learn-surface)] text-gray-800";
+  return (
+    <div className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-[13.5px] leading-snug ${cls} ${className}`}>
+      <span className="mt-0.5 shrink-0"><LearningIcon name={kind === "ai" ? "robot" : "notes"} className="h-4 w-4" /></span>
+      <div className="min-w-0 flex-1 break-words">{children}</div>
+    </div>
+  );
+}
+
+/**
+ * The learner's own notes laid out for reading (notes-layout.ts: paragraphs and lists from the structure the text already has,
+ * never a word changed), in the reading type at a comfortable measure (about 70 characters).
+ */
+export function NotesText({ text, className = "" }: { text: string; className?: string }) {
+  const blocks = notesBlocks(text);
+  return (
+    <div data-notes-body className={`cmp-reading max-w-[68ch] break-words text-gray-900 ${className}`}>
+      {blocks.map((b, i) => b.kind === "para"
+        ? <p key={i} className={b.text.endsWith(":") && blocks[i + 1]?.kind === "list" ? "font-semibold" : undefined}>{b.text}</p>
+        : <ul key={i} className={`my-2 space-y-1 pl-5 marker:text-[var(--learn-accent)] ${b.marked ? "list-disc" : "list-[circle]"}`}>{b.items.map((t, j) => <li key={j}>{t}</li>)}</ul>)}
+    </div>
+  );
+}
+
+/**
+ * A toggle choice as a card (Flashcards, Quiz, Apply): pressed is a 2px accent edge, the word "Selected", never colour alone.
+ * `href` makes it a link (then never pressed).
+ */
+export function ChoiceCard({ tone, icon, label, hint, pressed = false, onClick, href }: {
+  tone: LearningTone; icon: LearningIconName; label: string; hint: string; pressed?: boolean; onClick?: (e: MouseEvent) => void; href?: string;
+}) {
+  const cls = `${learnTone(tone)} flex w-full min-h-[44px] items-start gap-3 rounded-xl px-3.5 py-2.5 text-left pointer-coarse:min-h-[var(--cmp-touch-min)] ${pressed ? "border-2 border-[var(--learn-accent)] bg-[var(--learn-surface)]" : "border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] hover:bg-[var(--learn-surface)]"} ${focusRing}`;
+  const inner = (
+    <>
+      <span className="cmp-learn-accent mt-0.5"><LearningIcon name={icon} className="h-5 w-5" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="cmp-learn-ink flex flex-wrap items-center gap-x-2 text-[14.5px] font-bold">{label}{pressed && <span className="rounded-full bg-[var(--learn-ink)] px-2 py-px text-[11px] font-bold uppercase tracking-[0.06em] text-[var(--learn-surface)]">Selected</span>}</span>
+        <span className="mt-0.5 block text-[13px] leading-snug text-gray-700">{hint}</span>
+      </span>
+    </>
+  );
+  return href
+    ? <a href={href} onClick={onClick} className={cls}>{inner}</a>
+    : <button type="button" aria-pressed={pressed} onClick={onClick} className={cls}>{inner}</button>;
+}
+
+/**
+ * One answer option of a marked question. After marking: the option matching the notes says so with a tick; the learner's other
+ * choice says "Your answer" with a calm amber mark. Never red, never colour alone; the radio stays the real control.
+ */
+export function AnswerOption({ name, checked, onChange, mark, children }: {
+  name: string; checked: boolean; onChange: () => void; mark: "" | "right" | "chosen"; children: ReactNode;
+}) {
+  const edge = mark === "right" ? "border-2 border-[var(--learn-accent)] bg-[var(--learn-surface)]" : mark === "chosen" ? "border-2 border-[var(--cmp-role-revision-accent)] bg-[var(--cmp-role-revision-soft)]" : checked ? "border-2 border-[var(--learn-ink)] bg-[var(--cmp-app-surface)]" : "border border-gray-300 bg-[var(--cmp-app-surface)] hover:bg-[var(--learn-surface)]";
+  return (
+    <label className={`flex cursor-pointer items-start gap-3 rounded-xl px-3.5 py-2.5 text-[14.5px] leading-snug text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${edge}`}>
+      <input type="radio" name={name} checked={checked} onChange={onChange} className={`mt-0.5 h-4 w-4 shrink-0 pointer-coarse:h-5 pointer-coarse:w-5 ${focusRing}`} />
+      <span className="min-w-0 flex-1 break-words">{children}
+        {mark === "right" && <span className="cmp-learn-ink mt-1 flex items-center gap-1 text-[12.5px] font-bold"><LearningIcon name="check" className="h-4 w-4" />Matches your notes</span>}
+        {mark === "chosen" && <span className="mt-1 flex items-center gap-1 text-[12.5px] font-bold text-[var(--cmp-role-revision-ink)]"><LearningIcon name="miss" className="h-4 w-4" />Your answer</span>}
+      </span>
+    </label>
   );
 }
