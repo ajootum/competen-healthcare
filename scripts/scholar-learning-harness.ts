@@ -337,6 +337,7 @@ const MIG390 = migText(MIG390_FILE);
 const MIG405 = migText("supabase/migrations/405-individual-scholar-plain-text-materials.sql");
 const MIG406 = migText("supabase/migrations/406-individual-scholar-pptx-and-extraction-quality.sql");
 const MIG414 = migText("supabase/migrations/414-individual-scholar-learning-history.sql");
+const MIG950 = migText("supabase/migrations/950-individual-scholar-check-attempts.sql");
 const MIG415 = migText("supabase/migrations/415-individual-scholar-learning-artefacts.sql");
 /**
  * K25 (AI-FAIR-USE-01 s8 and s7): an artefact can only be private formative (415's CHECK) and goes with its material;
@@ -691,17 +692,30 @@ const withheldPlain = (src: Src) => {
  *     SCHOLAR-CUMULATIVE-TEACHING-01: `asked` may also hold the learner's earlier check ANSWERS (learnerTexts), which the
  *     act route feeds only from priorCheckTexts(priorChecks) -- the learner's own typed text, screened for identifiers with
  *     the rest -- never the learner context and never the TAUGHT SO FAR block (passed apart, as `taught`).
+ *   - LEARNING-CLOSE-2026-11 D01 (owner decision, 4 Nov 2026) CHANGES THE CONTRACT DELIBERATELY: a JUDGED check answer IS
+ *     kept -- as a 416 question row (ensureCheckQuestion) and an attempt (recordCheckAttempt), by the act route, under the SAME
+ *     gate as its event (a recorded session, shown, the judgement grounded, history on) and only for `clarify`; the event row
+ *     then carries attempt_id (950) and nothing else beyond 414's columns. 414 itself still holds no conversation column, and
+ *     950 adds no text column either. The route still never stores a PRACTICE question (insertQuestions) and never names the
+ *     question table.
  */
 const learnBounded = (src: Src) => {
   const act = src.get(`${API}/learn/act/route.ts`) ?? "", gen = src.get(GEN) ?? "", st = src.get(STORE) ?? "";
-  const rec = st.slice(st.indexOf("export async function recordLearningEvent"), st.indexOf("export type LearningEventRow"));
+  const rec = st.slice(st.indexOf("export async function recordLearningEvent"), st.indexOf("// ── LEARNING-CLOSE-2026-11 WS01"));
   const run = gen.slice(gen.indexOf("export async function runLearn"), gen.indexOf("S2 framing for the Holdings mapping engine"));
+  const keep = act.slice(act.indexOf("let keptCheck"), act.indexOf("if (recorded && sessionId && shown && policy.scholarLearningHistory === \"record\")"));
   return MIG414.length > 0 && !/\b(answer|question|content|note|body|transcript|message)\b\s+text/.test(MIG414)
-    && /\.insert\(\{ session_id: input\.sessionId, user_id: userId, step: input\.step, action: input\.action, verdict: input\.verdict \}\)/.test(rec)
+    && MIG950.length > 0 && !/\b(answer|question|content|note|body|transcript|message)\b\s+text/.test(MIG950) && /add column if not exists attempt_id uuid/.test(MIG950)
+    && /const row = \{ session_id: input\.sessionId, step: input\.step, action: input\.action, verdict: input\.verdict \};/.test(rec)
+    && /\.insert\(\{ user_id: userId, \.\.\.row, \.\.\.\(input\.attemptId \? \{ attempt_id: input\.attemptId \} : \{\}\) \}\)/.test(rec)
     && /if \(isLearnAction\(action\) && !policy\.scholarLearningActions\.includes\(action\)\) return NextResponse\.json\(\{[^}]*\}, \{ status: 403 \}\)/.test(act)
     && /findPatientIdentifiers\(t\)/.test(act)
     && /if \(recorded && sessionId && shown && policy\.scholarLearningHistory === "record"\)/.test(act)
     && !/insertQuestions|individual_scholar_question/.test(act)
+    // D01: the kept check is written ONLY inside the keep block, under the full gate, and the store calls appear nowhere else in the route.
+    && /if \(action === "clarify" && recorded && sessionId && shown && r\.check\.ok && policy\.scholarLearningHistory === "record"\) \{/.test(keep)
+    && (act.match(/ensureCheckQuestion\(/g) ?? []).length === 1 && keep.includes("ensureCheckQuestion(")
+    && (act.match(/recordCheckAttempt\(/g) ?? []).length === 1 && keep.includes("recordCheckAttempt(")
     && /const asked = \[args\.question, \.\.\.args\.history\.map\(t => t\.text\), \.\.\.\(args\.learnerTexts \?\? \[\]\)\]\.join\("\\n"\);/.test(run)
     && !/asked[^;]*(learnerContext|taught)/.test(run)
     && /learnerTexts: priorCheckTexts\(priorChecks\)/.test(act) && /\.\.\.priorCheckTexts\(priorChecks\)\]\.some\(t => t && findPatientIdentifiers\(t\)\.length\)/.test(act)
@@ -1511,7 +1525,11 @@ function main() {
     && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? [])].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? []), args.learnerContext ?? \"\"].join(\"\\n\");"))
     // SCHOLAR-CUMULATIVE-TEACHING-01: the TAUGHT SO FAR block may not ground either, and the route may not feed learnerTexts from anything but the screened prior checks.
     && !learnBounded(plant(GEN, "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? [])].join(\"\\n\");", "const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? []), taught ?? \"\"].join(\"\\n\");"))
-    && !learnBounded(plant(`${API}/learn/act/route.ts`, "learnerTexts: priorCheckTexts(priorChecks)", "learnerTexts: [learnerContext ?? \"\"]")));
+    && !learnBounded(plant(`${API}/learn/act/route.ts`, "learnerTexts: priorCheckTexts(priorChecks)", "learnerTexts: [learnerContext ?? \"\"]"))
+    // LEARNING-CLOSE-2026-11 D01: the kept check may not escape its gate (an unshown or ungrounded judgement kept, or history off), and the event row may carry nothing beyond attempt_id.
+    && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (action === \"clarify\" && recorded && sessionId && shown && r.check.ok && policy.scholarLearningHistory === \"record\") {", "if (action === \"clarify\" && recorded && sessionId && policy.scholarLearningHistory === \"record\") {"))
+    && !learnBounded(plant(`${API}/learn/act/route.ts`, "if (action === \"clarify\" && recorded && sessionId && shown && r.check.ok && policy.scholarLearningHistory === \"record\") {", "if (action === \"clarify\" && recorded && sessionId && shown && r.check.ok) {"))
+    && !learnBounded(plant(STORE, ".insert({ user_id: userId, ...row, ...(input.attemptId ? { attempt_id: input.attemptId } : {}) })", ".insert({ user_id: userId, ...row, ...(input.attemptId ? { attempt_id: input.attemptId, answer_text: input.verdict } : {}) })")));
   ok("P40. ⚠ K23 goes red when processing stops deciding the session, or the default jumps to the ceiling",
     !uploadLimitsHold(plant(`${API}/materials/route.ts`, "if (overSession) return refuse(429", "if (false) return refuse(429"))
     && !uploadLimitsHold(new Map([...REAL, [`${LIB}/config.ts`, (REAL.get(`${LIB}/config.ts`) ?? "").replace("export const DEFAULT_UPLOAD_MB = 10;", "export const DEFAULT_UPLOAD_MB = 25;")]])));

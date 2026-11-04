@@ -125,7 +125,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
-  | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable"
+  | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
@@ -1273,6 +1273,15 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Uses stored questions first. A missed question reaches the mistake notebook and Revise as it already does. Default: on.",
   },
   {
+    // LEARNING-CLOSE-2026-11 WS01 CYU-01: where a lesson's own check questions (Teach Me writes at most two) are shown.
+    key: "scholar_learn_check_placement", kind: "choice", product: "Scholar",
+    label: "Where a lesson's understanding checks appear",
+    help: "A substantial lesson with two check questions shows the first after its teaching paragraphs and the second at the end, following the teaching sequence. A short lesson, or one question, keeps the check at the end. Checks are optional and never block reading.",
+    options: [{ value: "distributed", label: "Distributed through the lesson" }, { value: "lesson_end", label: "All at the end of the lesson" }],
+    fallback: "distributed",
+    limitReason: "At most the lesson's own questions, never one per slide or paragraph. Default: distributed.",
+  },
+  {
     key: "scholar_learn_inline_application", kind: "choice", product: "Scholar",
     label: "Application check at the end of the journey",
     help: "Whether the last lesson offers one optional \"Apply it: try a short case\" card that opens the existing clinical case practice. Offered once, after the final lesson.",
@@ -2291,6 +2300,8 @@ export type IndividualPolicy = {
   scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
   scholarLearnInlineRecallMinWords: number;
   scholarLearnInlineChecks: "on" | "off";
+  /** LEARNING-CLOSE-2026-11 CYU-01: where a lesson's own check questions appear (learn-check-record.ts placeChecks). */
+  scholarLearnCheckPlacement: "distributed" | "lesson_end";
   scholarLearnInlineApplication: "on" | "off";
   scholarLearnInlineSkippable: "on" | "off";
   scholarLearnCheckRequired: "required" | "optional";
@@ -2508,6 +2519,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
     scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),
     scholarLearnInlineChecks: clampChoice(policyDef("scholar_learn_inline_checks") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_checks"))) as "on" | "off",
+    scholarLearnCheckPlacement: clampChoice(policyDef("scholar_learn_check_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_check_placement"))) as "distributed" | "lesson_end",
     scholarLearnInlineApplication: clampChoice(policyDef("scholar_learn_inline_application") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_application"))) as "on" | "off",
     scholarLearnInlineSkippable: clampChoice(policyDef("scholar_learn_inline_skippable") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_skippable"))) as "on" | "off",
     scholarLearnCheckRequired: clampChoice(policyDef("scholar_learn_check_required") as ChoicePolicy, published.get(policyPath("scholar_learn_check_required"))) as "required" | "optional",
