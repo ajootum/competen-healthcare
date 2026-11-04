@@ -17,6 +17,7 @@
 
 import { resolveOwner } from "@/lib/ai/consumption";
 import { caseSessionRecord, sessionAttemptSource, sessionViewSalt } from "@/lib/cases/library";
+import { simClock } from "@/lib/cases/timeline";
 import { conversationEnabled, resolveToken, viewToken, type Blueprint, type LearnerView } from "@/lib/cases/blueprint";
 import {
   COMMUNICATION_NOTE_LABEL, CONVERSATION_LABEL, buildCommunicationNoteRequest, buildVoiceRequest, cleanCommunicationNote, cleanQuestion, reviewQuestions,
@@ -39,6 +40,8 @@ export type TalkKind = "private" | "library";
 /** What the server knows of a session for the conversation. SERVER-SIDE ONLY: it carries the blueprint. */
 export type TalkSource = {
   kind: TalkKind; sessionId: string; blueprint: Blueprint; reached: string[]; revealed: string[]; status: "active" | "completed"; competencyIds: string[]; title: string;
+  /** CE-04C: the answers so far (library play), for the simulated clock of a deterioration timeline. */
+  answers?: { decisionPointId: string; chosen: string[] }[];
 };
 
 /** The caller's own session, from the database. null: not theirs. */
@@ -53,8 +56,23 @@ export async function loadTalkSource(admin: any, userId: string, kind: TalkKind,
   if (!l) return null;
   return {
     kind, sessionId, blueprint: l.blueprint, reached: l.reached, revealed: l.revealed, status: l.status === "completed" ? "completed" : "active",
+    answers: l.answers.map(a => ({ decisionPointId: a.decisionPointId, chosen: a.chosen ?? [] })),
     competencyIds: [...new Set(l.blueprint.learningObjectives.flatMap(o => o.competencyIds))], title: l.blueprint.title,
   };
+}
+
+/**
+ * CE-04 (LEARNING-CLOSE-2026-11): this ONE session's questions to the patient, by stage, for the simulated clock of a
+ * deterioration timeline and the code review of key questions in the debrief. Code only: nothing here reaches an AI. Any
+ * failure (880 absent, a read error) reads as none.
+ */
+export async function sessionTurnsForReview(admin: any, userId: string, kind: TalkKind, sessionId: string): Promise<{ stageId: string; question: string | null }[]> {
+  try {
+    const l = await listCaseConversation(admin, userId, kind, sessionId);
+    return l.ok ? l.data.filter(e => e.kind === "turn" && e.stageId).map(e => ({ stageId: e.stageId!, question: e.question ?? null })) : [];
+  } catch {
+    return [];
+  }
 }
 
 export type TalkGate = { ok: true } | { ok: false; reason: string; status?: number };
@@ -148,7 +166,11 @@ export async function askPatient(ctx: IndividualContext, req: Request, src: Talk
   const cap = turnState(turns.map(t => ({ stageId: t.stageId! })), stageId, policy.scholarCaseConversationTurns);
   if (cap.full) return { ok: false, error: `You have used your ${cap.cap} questions for this stage. Carry on with the case.`, status: 200, unavailable: false };
 
-  const state = { reachedStageIds: s.reached, revealedFactIds: s.revealed };
+  // CE-04C: with the deterioration timeline on (library cases only), the voice speaks from the patient as they are at this
+  // simulated minute, and a value still to come is screened out like any hidden finding.
+  const clock = s.kind === "library" && policy.scholarCaseDeterioration === "on" && s.blueprint.timeline
+    ? simClock(s.blueprint, { answers: s.answers ?? [], revealed: s.revealed, turns: turns.map(t => ({ stageId: t.stageId! })) }).now : null;
+  const state = { reachedStageIds: s.reached, revealedFactIds: s.revealed, ...(clock !== null ? { clock } : {}) };
   const history = turns.filter(t => t.stageId === stageId).map(t => ({ question: t.question ?? "", reply: t.reply }));
   const request = buildVoiceRequest(s.blueprint, state, history, q.question);
   const runner = await talkRunner(ctx, req, s, q.question, `t${turns.length + 1}`);

@@ -15,7 +15,8 @@
 // consequence, and nothing it says is marked, kept as a fact or taken as evidence of anything.
 // ⚠ FORMATIVE. Everything here is practice and is labelled so wherever it is shown.
 
-import { conversationEnabled, visibleFacts, type Blueprint, type ViewState } from "./blueprint";
+import { clockOf, conversationEnabled, visibleFacts, type Blueprint, type ViewState } from "./blueprint";
+import { futureValues, valueAt } from "./timeline";
 import { mentions, normaliseText } from "./handover";
 import { type KeyQuestion, type PatientVoice, type VoiceSpeaker, type VoiceStatement, CONVERSATION_SCHEMA_LIMITS, voiceProblems } from "./voice";
 
@@ -49,7 +50,8 @@ export function permittedKnowledge(b: Blueprint, s: ViewState): Permitted {
   const reached = new Set(s.reachedStageIds);
   const known = new Set(v.knowsFactIds ?? []);
   return {
-    facts: b.facts.filter(f => known.has(f.id) && seen.has(f.id)).map(f => ({ id: f.id, label: f.label, value: f.value, unit: f.unit ?? null })),
+    // CE-04C: with a deterioration timeline, the value as it is NOW (never one still to come).
+    facts: b.facts.filter(f => known.has(f.id) && seen.has(f.id)).map(f => { const c = clockOf(b, s); return { id: f.id, label: f.label, value: c === null ? f.value : valueAt(b.timeline, f, c).value, unit: f.unit ?? null }; }),
     statements: (v.knowsStatements ?? []).filter(x => x.from === "start" || reached.has(x.from)).map(x => ({ id: x.id, text: x.text })),
   };
 }
@@ -135,6 +137,14 @@ export function screenReply(b: Blueprint, s: ViewState, reply: string): { ok: tr
     }
     if (val.length < 5 || COMMON_VALUES.has(val)) continue;
     if (mentions(hay, f.value) && !allowedHas(f.value)) return { ok: false, reply: fallback, reason: "hidden_finding" };
+  }
+  // CE-04C: a value the timeline has not reached yet is a hidden finding, even for a fact the persona may speak about now.
+  const clock = clockOf(b, s);
+  if (clock !== null) for (const f of b.facts) for (const v of futureValues(b.timeline, f.id, clock)) {
+    const val = normaliseText(v).trim();
+    if (val.length < 2 || COMMON_VALUES.has(val) || allowedHas(v)) continue;
+    const about = [...f.label.split(/\s+/).filter(w => w.length >= 5), ...(f.aliases ?? []), ...(f.unit ? [f.unit] : [])];
+    if (mentions(hay, v) && (!/^\d/.test(val) || about.some(t => mentions(hay, t)))) return { ok: false, reply: fallback, reason: "hidden_finding" };
   }
   for (const d of b.differentials ?? []) if (d?.label && mentions(hay, d.label) && !allowedHas(d.label)) return { ok: false, reply: fallback, reason: "diagnosis" };
   return { ok: true, reply: clean.slice(0, 600) };

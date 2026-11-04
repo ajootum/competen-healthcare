@@ -134,6 +134,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarCaseReasoningFeedback: "self",
       // SCHOLAR-CE-2026 CE-04: Talk to the patient OFF until HQ switches it on (and 880 is applied), 20 questions per stage.
       scholarCaseConversation: "off", scholarCaseConversationTurns: 20,
+      // LEARNING-CLOSE-2026-11 CE-04: deterioration timeline, debrief review and attempt deletion OFF until HQ switches them on.
+      scholarCaseDeterioration: "off", scholarCaseDebriefReview: "off", scholarCaseAttemptDelete: "off",
       // EVALUATION-01 (Stage 6): every method and evidence source, five pieces of evidence, two sections, 90 days,
       // strong from 80 and developing from 50 -- descriptions, never a pass mark -- ten fresh questions, suggestions on.
       scholarEvaluationMethods: ["existing", "fresh", "combined"],
