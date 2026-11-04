@@ -1,87 +1,93 @@
 import { describe, expect, it } from "vitest";
-import { checkLibraryMeta, fitsLearner, metaFromFields, metaOf, metaSummary, qualificationOf } from "./library-meta";
+import { carriedOf, checkLibraryMeta, fitsLearner, mappingStatus, metaFromFields, metaOf, metaSummary, qualificationOf } from "./library-meta";
 import { libraryCopyOf, validateLibraryQuestion } from "./library-format";
-import { fieldsFromQuestionContent, questionContentFromFields } from "@/lib/knowledge/question-format";
 import { adaptiveLibraryFits } from "./library-questions";
 
-// SQIE-CLOSE-2026-11 WS-E / WS-F: programme, qualification level and difficulty on library items, and reuse by learner fit.
+// SQIE-CLOSE-2026-11 WS-E / WS-F: programme, qualification level, difficulty and provenance on library items (the pilot
+// batch's key names), and reuse by learner fit.
+
+const pilotKeys = {
+  programme_code: "nursing-ug-diploma", programme_label: "Nursing (Uganda), diploma",
+  qualification_level: "pre_registration_diploma", qualification_label: "Pre-registration nursing, diploma", difficulty: "intermediate",
+  references: [{ id: "RM-10", supports: "MAP formula" }], source_verification: { status: "not_verified", label: "source not verified" },
+  competency_mapping: { status: "draft", validated: true, framework_code: "NUR-CCF", framework_version: "1.0.0", competency_code: "NUR-CCF-010", competency_name: "Hemodynamic Assessment", learning_objective: "Recognises changes in haemodynamic status", framework_pub_status_at_mapping: "draft" },
+  calculation: { value: 66, unit: "mmHg", decimals: 0, tolerance: { absolute: 0, percent: 0 } }, misconception_tags: ["unit-omitted"], topic: "Cardiovascular assessment", question_type: "calculation", pilot_batch: "SQIE-PILOT-2026-11-v1",
+};
 
 describe("checkLibraryMeta", () => {
-  it("absent or empty is no metadata, never a refusal", () => {
-    expect(checkLibraryMeta(undefined)).toEqual({ ok: true, meta: null });
-    expect(checkLibraryMeta({})).toEqual({ ok: true, meta: null });
-    expect(checkLibraryMeta({ programmes: [], level: "", difficulty: "" })).toEqual({ ok: true, meta: null });
-  });
-  it("normalises programmes (distinct, sorted) and keeps level and difficulty", () => {
-    expect(checkLibraryMeta({ programmes: ["bsc-nursing", "diploma-nursing", "bsc-nursing"], level: "degree", difficulty: 3 }))
-      .toEqual({ ok: true, meta: { programmes: ["bsc-nursing", "diploma-nursing"], level: "degree", difficulty: 3 } });
-  });
+  it("absent keys are no metadata, never a refusal", () => { expect(checkLibraryMeta({ stem: "x" })).toEqual({ ok: true, fields: {} }); });
+  it("keeps every pilot key", () => { expect(checkLibraryMeta(pilotKeys)).toEqual({ ok: true, fields: pilotKeys }); });
   it("refuses what 995 refuses", () => {
-    expect(checkLibraryMeta({ programmes: ["Not A Code"] }).ok).toBe(false);
-    expect(checkLibraryMeta({ programmes: Array.from({ length: 11 }, (_, i) => `p-${i}x`) }).ok).toBe(false);
-    expect(checkLibraryMeta({ level: "phd" }).ok).toBe(false);
-    expect(checkLibraryMeta({ difficulty: 4 }).ok).toBe(false);
-    expect(checkLibraryMeta({ difficulty: true }).ok).toBe(false);
-    expect(checkLibraryMeta(["x"]).ok).toBe(false);
+    for (const bad of [{ programme_code: "Not A Code" }, { qualification_level: "Pre Reg" }, { difficulty: "hard" }, { difficulty: 2 }, { references: "RM" }, { references: ["RM"] },
+      { competency_mapping: ["draft"] }, { calculation: 66 }, { misconception_tags: [1] }, { misconception_tags: [""] }, { question_type: "Calc!" }])
+      expect(checkLibraryMeta(bad).ok).toBe(false);
+  });
+});
+
+describe("metaOf and carriedOf", () => {
+  it("reads the metadata and the carried provenance apart", () => {
+    expect(metaOf(pilotKeys)).toEqual({ programmeCode: "nursing-ug-diploma", programmeLabel: "Nursing (Uganda), diploma", qualificationLevel: "pre_registration_diploma", qualificationLabel: "Pre-registration nursing, diploma", difficulty: "intermediate" });
+    expect(Object.keys(carriedOf(pilotKeys)).sort()).toEqual(["calculation", "competency_mapping", "misconception_tags", "pilot_batch", "question_type", "references", "source_verification", "topic"]);
   });
 });
 
 describe("qualificationOf", () => {
-  it("reads the same words as the generation difficulty rule", () => {
+  it("reads codes and words", () => {
+    expect(qualificationOf("pre_registration_diploma")).toBe("diploma");
     expect(qualificationOf("BSc Nursing", "Year 2")).toBe("degree");
-    expect(qualificationOf("Diploma in Nursing")).toBe("diploma");
     expect(qualificationOf("Enrolled Nurse certificate")).toBe("certificate");
     expect(qualificationOf("MSc Advanced Practice")).toBe("postgraduate");
     expect(qualificationOf("Nursing", null)).toBeNull();
-    expect(qualificationOf(null, undefined)).toBeNull();
   });
 });
 
 describe("fitsLearner: only a KNOWN mismatch excludes", () => {
-  const meta = { programmes: ["bsc-nursing"], level: "degree" as const };
+  const meta = { programmeCode: "nursing-ug-diploma", qualificationLevel: "pre_registration_diploma" };
   it("matches, unknowns and untagged items are offered", () => {
-    expect(fitsLearner(meta, { programmeCode: "bsc-nursing", level: "degree" })).toBe(true);
+    expect(fitsLearner(meta, { programmeCode: "nursing-ug-diploma", level: "diploma" })).toBe(true);
     expect(fitsLearner(meta, { programmeCode: null, level: null })).toBe(true);
     expect(fitsLearner(null, { programmeCode: "x-y", level: "certificate" })).toBe(true);
-    expect(fitsLearner(meta, null)).toBe(true);
   });
-  it("another programme or level is not offered", () => {
-    expect(fitsLearner(meta, { programmeCode: "diploma-nursing", level: null })).toBe(false);
-    expect(fitsLearner(meta, { programmeCode: null, level: "certificate" })).toBe(false);
+  it("another programme or qualification family is not offered", () => {
+    expect(fitsLearner(meta, { programmeCode: "bsc-nursing", level: null })).toBe(false);
+    expect(fitsLearner(meta, { programmeCode: null, level: "degree" })).toBe(false);
   });
 });
 
-const calcLike = {
-  format: "short", stem: "What is the normal adult resting respiratory rate range?", options: [], answerKey: { accepted: ["12 to 20 breaths per minute"] },
-  marking: "deterministic", rationale: "Adults normally breathe 12 to 20 times a minute at rest.",
+describe("mappingStatus: a draft mapping is never shown as evidence (owner decision 3)", () => {
+  it("a mapping that SAYS validated, on a draft framework, is a draft", () => { expect(mappingStatus(pilotKeys, "published").status).toBe("draft"); });
+  it("only a published version on a published framework version is validated", () => {
+    const c = { competency_mapping: { ...pilotKeys.competency_mapping, framework_pub_status_at_mapping: "published" } };
+    expect(mappingStatus(c, "submitted").status).toBe("draft");
+    expect(mappingStatus(c, "published")).toMatchObject({ status: "validated", framework: "NUR-CCF", version: "1.0.0", competency: "NUR-CCF-010 Hemodynamic Assessment" });
+  });
+  it("none recorded", () => { expect(mappingStatus({}, "published").status).toBe("none"); });
+});
+
+const shortQ = {
+  format: "short", stem: "Calculate the MAP for 102/48 mmHg, as a whole number with its unit.", options: [], answerKey: { accepted: ["66 mmHg"] },
+  marking: "deterministic", rationale: "MAP = (102 + 2 x 48) / 3 = 66 mmHg.",
 };
 
-describe("validateLibraryQuestion keeps meta and the learner copy is unchanged by it", () => {
-  it("a format question with meta: meta normalised and kept, copy identical to the untagged one", () => {
-    const tagged = validateLibraryQuestion({ ...calcLike, meta: { programmes: ["bsc-nursing"], level: "degree", difficulty: 2 } });
-    const plain = validateLibraryQuestion(calcLike);
+describe("validateLibraryQuestion keeps the metadata and provenance; the learner copy is unchanged", () => {
+  it("a format question keeps every pilot key, and its copy equals the untagged copy", () => {
+    const tagged = validateLibraryQuestion({ ...shortQ, ...pilotKeys });
+    const plain = validateLibraryQuestion(shortQ);
     expect(tagged.ok && plain.ok).toBe(true);
     if (!tagged.ok || !plain.ok) return;
-    expect(tagged.content.meta).toEqual({ programmes: ["bsc-nursing"], level: "degree", difficulty: 2 });
+    expect(tagged.content).toMatchObject(pilotKeys);
     expect(libraryCopyOf(tagged.content)).toEqual(libraryCopyOf(plain.content));
   });
-  it("a legacy 442 question: unchanged without meta, meta kept with it, bad meta refused", () => {
+  it("a legacy 442 question is unchanged, with or without the keys; a bad key is refused", () => {
     const legacy = { stem: "Which vein is used for most adult cannulations?", options: ["Cephalic", "Femoral", "Jugular", "Saphenous"], correct_index: 0, rationale: "The cephalic vein is commonly used." };
     const a = validateLibraryQuestion(legacy);
     expect(a.ok && a.content).toBe(legacy);
-    const b = validateLibraryQuestion({ ...legacy, meta: { difficulty: 1 } });
-    expect(b.ok && b.content.meta).toEqual({ difficulty: 1 });
-    expect(validateLibraryQuestion({ ...legacy, meta: { level: "nope" } }).ok).toBe(false);
+    expect(validateLibraryQuestion({ ...legacy, difficulty: "advanced" }).ok).toBe(true);
+    expect(validateLibraryQuestion({ ...legacy, difficulty: "nope" }).ok).toBe(false);
   });
-  it("the HQ form fields round-trip programme, level and difficulty", () => {
-    const content = questionContentFromFields({ format: "short", stem: calcLike.stem, accepted: "12 to 20 breaths per minute", rationale: calcLike.rationale, programmes: ["bsc-nursing"], level: "degree", difficulty: "3" });
-    const v = validateLibraryQuestion(content);
-    expect(v.ok && metaOf(v.content)).toEqual({ programmes: ["bsc-nursing"], level: "degree", difficulty: 3 });
-    expect(fieldsFromQuestionContent(v.ok ? v.content : {})).toMatchObject({ programmes: ["bsc-nursing"], level: "degree", difficulty: "3" });
-    expect(metaFromFields({ programmes: "", level: "", difficulty: "" })).toBeUndefined();
-  });
+  it("form fields with nothing set add nothing", () => { expect(metaFromFields({ programmeCode: "", qualificationLevel: "", difficulty: "" })).toEqual({}); });
   it("a short summary for lists", () => {
-    expect(metaSummary({ level: "degree", difficulty: 3, programmes: ["a-b", "c-d"] })).toBe("Degree (bachelor's) · Harder · 2 programmes");
+    expect(metaSummary(metaOf(pilotKeys))).toBe("Pre-registration nursing, diploma · Intermediate · nursing-ug-diploma");
     expect(metaSummary(null)).toBeNull();
   });
 });

@@ -3,7 +3,7 @@ import { clinicalState, versionStatus, type VersionStatus } from "./educator";
 import { libraryContentOf, type LibraryDisplay } from "./question-content";
 import { findDuplicatePairs, type SimilarPair } from "./question-similarity";
 import { sourceOf, type QuestionSource } from "./question-source";
-import { metaOf, type LibraryMeta } from "@/lib/individual/scholar/library-meta";
+import { mappingStatus, metaOf, qualificationOf, type LibraryMeta, type MappingView } from "@/lib/individual/scholar/library-meta";
 
 // ── HQ QUESTION LIBRARY CATALOGUE ── SQIE-COMPLETE-01 (owner GO 31 Oct 2026) ──────────────────────────────────────────────
 //
@@ -20,6 +20,8 @@ export type CatalogueVersion = {
   format: string; formatLabel: string; keyText: string; marking: string; rubric: LibraryDisplay["rubric"];
   /** SQIE-CLOSE-2026-11 WS-E (995): programmes, qualification level and difficulty, or null when the version records none. */
   meta: LibraryMeta | null;
+  /** Owner decision 3: the stored competency_mapping provenance, shown as draft unless published on a published framework version. */
+  mapping: MappingView;
   competencyIds: string[]; approvals: number; required: number | null; educatorReviewed: boolean;
   createdAt: string; submittedAt: string | null; publishedAt: string | null; trail: TrailEntry[];
 };
@@ -72,9 +74,9 @@ export function filterCatalogue(items: readonly CatalogueItem[], f: CatalogueFil
     // WS-E: format, programme, qualification level and difficulty of the latest version. "none" finds the untagged.
     const m = i.latest.meta;
     if (f.format && i.latest.format !== f.format) return false;
-    if (f.programme && (f.programme === "none" ? !!m?.programmes?.length : !m?.programmes?.includes(f.programme))) return false;
-    if (f.level && (f.level === "none" ? !!m?.level : m?.level !== f.level)) return false;
-    if (f.difficulty && (f.difficulty === "none" ? !!m?.difficulty : String(m?.difficulty ?? "") !== f.difficulty)) return false;
+    if (f.programme && (f.programme === "none" ? !!m?.programmeCode : m?.programmeCode !== f.programme)) return false;
+    if (f.level && (f.level === "none" ? !!m?.qualificationLevel : qualificationOf(m?.qualificationLevel, m?.qualificationLabel) !== f.level)) return false;
+    if (f.difficulty && (f.difficulty === "none" ? !!m?.difficulty : m?.difficulty !== f.difficulty)) return false;
     return true;
   });
 }
@@ -127,7 +129,7 @@ export async function loadCatalogue(admin: any): Promise<Catalogue | null> {
         id: v.id, versionNo: v.version_no, state: v.state, status: versionStatus(v.state, clinical), origin: v.origin, aiProvenance: v.ai_provenance ?? null,
         content: v.content, stem: c?.stem ?? "", options: c?.options ?? [], correctIndex: c?.correctIndex ?? null, rationale: c?.rationale ?? "", source: sourceOf(v.content),
         format: c?.format ?? "mcq", formatLabel: c?.formatLabel ?? "Single best answer", keyText: c?.keyText ?? "", marking: c?.marking ?? "Not recorded", rubric: c?.rubric ?? null,
-        meta: metaOf(v.content),
+        meta: metaOf(v.content), mapping: mappingStatus(v.content, v.state),
         competencyIds: (links.data ?? []).filter((l: any) => l.version_id === v.id).map((l: any) => l.competency_id),
         approvals: ds.filter((d: any) => d.decision === "approved").length, required,
         educatorReviewed: !!v.educator_reviewed_by && v.educator_reviewed_hash === v.content_hash,

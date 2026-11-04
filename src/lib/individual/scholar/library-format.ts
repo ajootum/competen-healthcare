@@ -117,20 +117,18 @@ export function validateLibraryQuestion(raw: unknown): Check {
   if (!stem) return { ok: false, error: format === "true_false" ? "Write the statement (10 to 2000 characters)." : "Write the question (10 to 2000 characters)." };
   if (!rationale) return { ok: false, error: "Write the explanation learners see after answering (10 to 4000 characters)." };
   const source = c.source !== undefined ? { source: c.source } : {};
-  // SQIE-CLOSE-2026-11 WS-E (995): programme, qualification level and difficulty, optional, in `meta` (library-meta.ts).
-  const m = checkLibraryMeta(c.meta);
+  // SQIE-CLOSE-2026-11 WS-E (995): programme, qualification level, difficulty and the provenance keys (references,
+  // source verification, competency mapping, ...), all optional, kept at the top level (library-meta.ts).
+  const m = checkLibraryMeta(c);
   if (!m.ok) return m;
-  const meta = m.meta ? { meta: m.meta } : {};
+  const meta = m.fields;
 
   if (c.format === undefined) {
-    // 442 exactly: four options, one correct. Nothing else is read or written (WS-E: `meta` normalised where given).
+    // 442 exactly: four options, one correct. Nothing else is read or written (WS-E: the metadata keys are checked).
     const options = strList(c.options, 4, 4, 500);
     if (!options) return { ok: false, error: "A single best answer question has four options, each written." };
     if (!isInt(c.correct_index, 0, 3)) return { ok: false, error: "Choose the correct option." };
-    if (c.meta === undefined) return { ok: true, format, content: c as LibraryContent };
-    const { meta: _drop, ...rest } = c;
-    void _drop;
-    return { ok: true, format, content: { ...rest, ...meta } as LibraryContent };
+    return { ok: true, format, content: c as LibraryContent };
   }
 
   const marking = (c.marking ?? FORMAT_MARKING[format][0]) as MarkingRule;

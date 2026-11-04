@@ -6,7 +6,7 @@ import { Msg, useResearchSend } from "./ResearchControls";
 import Link from "next/link";
 import { LIBRARY_FORM_OPTIONS } from "@/lib/individual/scholar/question-formats";
 import { SOURCE_KIND_LABEL, SOURCE_KINDS, normaliseSource, type SourceKind } from "@/lib/knowledge/question-source";
-import { DIFFICULTY_LABEL, LIBRARY_DIFFICULTIES, QUALIFICATION_LABEL, QUALIFICATION_LEVELS } from "@/lib/individual/scholar/library-meta";
+import { DIFFICULTY_LABEL, LIBRARY_DIFFICULTIES, QUALIFICATION_LABEL, QUALIFICATION_LEVELS, mappingStatus } from "@/lib/individual/scholar/library-meta";
 import { OsceStationFields, checkStationForm, stationFieldsFromForm, stationFormOf, type StationForm } from "./OsceStationEditor";
 
 // The educator half of K3 (COMPETEN-KNOWLEDGE-RESEARCH-01 s5). Posts to /api/hq/knowledge/educator, which re-checks the
@@ -34,15 +34,17 @@ type QForm = {
   keyPoints: string; back: string; pairs: { prompt: string; match: string }[]; steps: string; parts: { prompt: string; marks: number; accepted: string }[];
   rubric: { level: string; objective: string; keyPoints: string; misconceptions: string }; marking: string; rationale: string; source: SourceForm;
   /** SQIE-CLOSE-2026-11 WS-E: who it is written for, and its difficulty (library-meta.ts). All optional. */
-  programmes: string[]; level: string; difficulty: string;
+  programmeCode: string; programmeLabel: string; qualificationLevel: string; qualificationLabel: string; difficulty: string;
+  /** Provenance kept exactly as stored (references, source verification, competency mapping, calculation, ...). Not edited here. */
+  carried: Record<string, unknown>;
 };
 /** The programmes an item may name (individual_scholar_programme, 387), passed down from the server page. */
-export type ProgrammeChoice = { code: string; label: string };
+export type ProgrammeChoice = { code: string; label: string; level?: string | null };
 const EMPTY_Q: QForm = {
   format: "mcq", stem: "", options: ["", "", "", ""], correctIndex: 0, correct: [], accepted: "", truth: "", modelAnswer: "", marks: "", keyPoints: "", back: "",
   pairs: [{ prompt: "", match: "" }, { prompt: "", match: "" }, { prompt: "", match: "" }], steps: "", parts: [{ prompt: "", marks: 1, accepted: "" }, { prompt: "", marks: 1, accepted: "" }],
   rubric: { level: "", objective: "", keyPoints: "", misconceptions: "" }, marking: "", rationale: "", source: { includes: false, kind: "governed_reference", reference: "", licence: "", permissionNote: "" },
-  programmes: [], level: "", difficulty: "",
+  programmeCode: "", programmeLabel: "", qualificationLevel: "", qualificationLabel: "", difficulty: "", carried: {},
 };
 /** The form state of stored fields (the server's fieldsFromQuestionContent), over the empty form. */
 function qFormOf(f: Record<string, unknown> | undefined): QForm {
@@ -55,7 +57,8 @@ function qFormOf(f: Record<string, unknown> | undefined): QForm {
     parts: Array.isArray(f.parts) && f.parts.length ? (f.parts as QForm["parts"]) : EMPTY_Q.parts,
     rubric: { level: String(r.level ?? ""), objective: String(r.objective ?? ""), keyPoints: String(r.keyPoints ?? ""), misconceptions: String(r.misconceptions ?? "") },
     source: sourceFormOf(f.source),
-    programmes: Array.isArray(f.programmes) ? (f.programmes as string[]) : [], level: String(f.level ?? ""), difficulty: String(f.difficulty ?? ""),
+    programmeCode: String(f.programmeCode ?? ""), programmeLabel: String(f.programmeLabel ?? ""), qualificationLevel: String(f.qualificationLevel ?? ""), qualificationLabel: String(f.qualificationLabel ?? ""),
+    difficulty: String(f.difficulty ?? ""), carried: f.carried && typeof f.carried === "object" ? (f.carried as Record<string, unknown>) : {},
   };
 }
 const EMPTY_SOURCE: SourceForm = { includes: false, kind: "governed_reference", reference: "", licence: "", permissionNote: "" };
@@ -69,7 +72,8 @@ function toFields(kind: Kind, f: Fields) {
   if (kind === "revision_question") {
     const q = f.q ?? EMPTY_Q, src = q.source;
     const rubric = q.rubric.level || q.rubric.objective || q.rubric.keyPoints || q.rubric.misconceptions ? q.rubric : undefined;
-    return { ...q, rubric, source: src.includes ? { kind: src.kind, reference: src.reference, licence: src.licence, permissionNote: src.permissionNote } : { kind: "own_writing" } };
+    return { ...q, rubric, source: src.includes ? { kind: src.kind, reference: src.reference, licence: src.licence, permissionNote: src.permissionNote } : { kind: "own_writing" },
+    };
   }
   return { body: f.body ?? "", ...(kind === "targeted_resource" ? { links: (f.links ?? "").split(/\s+/).filter(Boolean) } : {}) };
 }
@@ -185,28 +189,35 @@ function QuestionFields({ q, set, programmes }: { q: QForm; set: (q: QForm) => v
   );
 }
 
-/** SQIE-CLOSE-2026-11 WS-E: programmes, qualification level and difficulty. All optional; an item naming none suits every learner. */
+/** SQIE-CLOSE-2026-11 WS-E: programme, qualification level and difficulty (all optional), and the provenance kept with it. */
 function MetaFields({ q, set, programmes }: { q: QForm; set: (q: QForm) => void; programmes: ProgrammeChoice[] }) {
-  const unknown = q.programmes.filter(c => !programmes.some(p => p.code === c));
+  const known = programmes.some(p => p.code === q.programmeCode);
+  const levelKnown = (QUALIFICATION_LEVELS as readonly string[]).includes(q.qualificationLevel);
+  const map = mappingStatus(q.carried, "draft");
+  const refs = Array.isArray(q.carried.references) ? q.carried.references.length : 0;
+  const sv = q.carried.source_verification as { label?: string; status?: string } | undefined;
   return (
     <fieldset className="grid gap-2 rounded-lg border border-gray-200 p-2 text-[12.5px]">
       <legend className="px-1 font-semibold text-gray-700">Who it is for (optional)</legend>
-      <p className="text-gray-600">Left empty, the question suits every learner whose competency links match. A learner whose programme or level is known and differs is not given it.</p>
-      <div className="grid gap-2 md:grid-cols-2">
-        <label>Qualification level<select value={q.level} onChange={e => set({ ...q, level: e.target.value })} className={`${input} w-full`}>
-          <option value="">Any level</option>{QUALIFICATION_LEVELS.map(l => <option key={l} value={l}>{QUALIFICATION_LABEL[l]}</option>)}</select></label>
+      <p className="text-gray-600">Left empty, the question suits every learner whose competency links match. A learner whose programme or qualification level is known and differs is not given it.</p>
+      <div className="grid gap-2 md:grid-cols-3">
+        <label>Programme<select value={q.programmeCode} onChange={e => set({ ...q, programmeCode: e.target.value, programmeLabel: programmes.find(p => p.code === e.target.value)?.label ?? "" })} className={`${input} w-full`}>
+          <option value="">Every programme</option>{programmes.map(p => <option key={p.code} value={p.code}>{p.label}</option>)}
+          {q.programmeCode && !known && <option value={q.programmeCode}>{q.programmeCode} (not an active programme)</option>}</select></label>
+        <label>Qualification level<select value={q.qualificationLevel} onChange={e => set({ ...q, qualificationLevel: e.target.value, qualificationLabel: (QUALIFICATION_LABEL as Record<string, string>)[e.target.value] ?? q.qualificationLabel })} className={`${input} w-full`}>
+          <option value="">Any level</option>{QUALIFICATION_LEVELS.map(l => <option key={l} value={l}>{QUALIFICATION_LABEL[l]}</option>)}
+          {q.qualificationLevel && !levelKnown && <option value={q.qualificationLevel}>{q.qualificationLabel || q.qualificationLevel}</option>}</select></label>
         <label>Difficulty<select value={q.difficulty} onChange={e => set({ ...q, difficulty: e.target.value })} className={`${input} w-full`}>
-          <option value="">Not set (counts as standard)</option>{LIBRARY_DIFFICULTIES.map(d => <option key={d} value={String(d)}>{DIFFICULTY_LABEL[d]}</option>)}</select></label>
+          <option value="">Not set (counts as standard)</option>{LIBRARY_DIFFICULTIES.map(d => <option key={d} value={d}>{DIFFICULTY_LABEL[d]}</option>)}</select></label>
       </div>
-      {programmes.length ? (
-        <fieldset><legend className="font-semibold text-gray-700">Programmes (up to 10; none ticked = every programme)</legend>
-          <div className="grid gap-x-3 md:grid-cols-2">{programmes.map(p => (
-            <label key={p.code} className="flex items-center gap-2"><input type="checkbox" checked={q.programmes.includes(p.code)} disabled={!q.programmes.includes(p.code) && q.programmes.length >= 10}
-              onChange={e => set({ ...q, programmes: e.target.checked ? [...q.programmes, p.code] : q.programmes.filter(x => x !== p.code) })} />{p.label} <code className="text-gray-600">{p.code}</code></label>
-          ))}</div>
-        </fieldset>
-      ) : <p className="text-gray-600">No Scholar programme is configured, so the question suits every programme.</p>}
-      {unknown.length > 0 && <p role="note" className="text-amber-950">Also names {unknown.join(", ")}, which is not an active programme now.</p>}
+      {(map.status !== "none" || refs > 0 || sv) && (
+        <div className="rounded border border-gray-200 bg-gray-50 p-2 text-gray-700">
+          <p className="font-semibold">Provenance kept with this draft (not edited here)</p>
+          {map.status !== "none" && <p>Competency mapping: {[map.framework, map.version ? `v${map.version}` : null, map.competency].filter(Boolean).join(" · ")}{map.objective ? ` · objective: ${map.objective}` : ""} <strong className="text-amber-950">Draft mapping, not validated evidence</strong></p>}
+          {refs > 0 && <p>{refs} reference{refs === 1 ? "" : "s"} recorded</p>}
+          {sv && <p>Source verification: {sv.label ?? sv.status ?? "recorded"}</p>}
+        </div>
+      )}
     </fieldset>
   );
 }

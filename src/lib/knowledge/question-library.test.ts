@@ -74,7 +74,7 @@ describe("publishVersion enforces rights on the application layer", () => {
 const ver = (id: string, status: CatalogueVersion["status"], over: Partial<CatalogueVersion> = {}): CatalogueVersion => ({
   id, versionNo: 1, state: "draft", status, origin: "educator", aiProvenance: null, content: {}, stem: `stem of ${id}`, options: [], correctIndex: 0, rationale: "", source: null,
   competencyIds: [], approvals: 0, required: null, educatorReviewed: false, createdAt: "", submittedAt: null, publishedAt: null, trail: [],
-  format: "mcq", formatLabel: "Single best answer", keyText: "", marking: "", rubric: null, meta: null, ...over,
+  format: "mcq", formatLabel: "Single best answer", keyText: "", marking: "", rubric: null, meta: null, mapping: { status: "none", framework: null, version: null, competency: null, objective: null }, ...over,
 });
 const item = (code: string, latest: CatalogueVersion, extra: Partial<CatalogueItem> = {}): CatalogueItem => ({
   resourceId: `r-${code}`, code, title: `Title ${code}`, resourceStatus: "active", createdAt: "", versions: [latest], latest, served: null, competencyIds: [], topics: [`Title ${code}`], ...extra,

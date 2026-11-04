@@ -5,7 +5,7 @@ import { currentTraceId } from "@/lib/trace";
 import { CKRI_OFF, ckriEnabled } from "@/lib/knowledge/governance";
 import { createResource, moveNeed, newVersion, publishVersion, raiseNeed, retireResource, retireVersion, reviewDraft, saveDraft, setCompetencies, submitDraft } from "@/lib/knowledge/educator";
 import { declineLearnerOffer, takeLearnerOffer } from "@/lib/knowledge/learner-offers";
-import { BULK_ACTIONS, bulkIds, loadCompetencyOptions, pickableCompetencies, runBulk, type BulkAction } from "@/lib/knowledge/library-admin";
+import { BULK_ACTIONS, bulkIds, importDrafts, importItems, importProvenance, loadCompetencyOptions, pickableCompetencies, runBulk, type BulkAction } from "@/lib/knowledge/library-admin";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -15,13 +15,13 @@ export const dynamic = "force-dynamic";
 //                                                            version_new, competencies_set, review, submit
 //                                                            offer_take, offer_decline (learner offers, 802)
 //   hq.quality.knowledge.publish  (Quality Council Member)   publish, retire, retire_version (one version, 801)
-// SQIE-CLOSE-2026-11 WS-E: bulk_submit and bulk_replace (educator), bulk_retire (publisher) -- each item through the single-item
+// SQIE-CLOSE-2026-11 WS-E: bulk_import, bulk_submit and bulk_replace (educator), bulk_publish and bulk_retire (publisher) -- each item through the single-item
 // function and audited on its own row. competencies_set takes only competencies of a PUBLISHED controlled catalogue (the picker).
 // Clinical approval is NOT here: it is /api/hq/clinical-review (hq.quality.clinical.approve) and the 442 trigger.
 // ⚠ NOTHING THE BROWSER SENDS PICKS AN AUTHOR, A REVIEWER, AN ORIGIN, A STATE OR EVIDENCE. Every action is audited.
 
-const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit", "offer_take", "offer_decline", "bulk_submit", "bulk_replace"] as const;
-const PUBLISH = ["publish", "retire", "retire_version", "bulk_retire"] as const;
+const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit", "offer_take", "offer_decline", "bulk_submit", "bulk_replace", "bulk_import"] as const;
+const PUBLISH = ["publish", "retire", "retire_version", "bulk_retire", "bulk_publish"] as const;
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 export async function POST(req: Request) {
@@ -34,6 +34,23 @@ export async function POST(req: Request) {
   if (!(await ckriEnabled(ctx.admin))) return NextResponse.json({ error: CKRI_OFF }, { status: 409 });
   const me = ctx.userId;
   const fields = body?.fields && typeof body.fields === "object" ? body.fields : {};
+  if (action === "bulk_import") {
+    // Drafts only: nothing is reviewed, submitted, approved or published by an import (owner decision 4 Nov, item 2).
+    const items = importItems(body?.items);
+    if (!items.ok) return NextResponse.json({ error: items.error }, { status: 400 });
+    const ai = importProvenance(body?.provenance);
+    if (ai === "invalid") return NextResponse.json({ error: "An AI-assisted import names its model and prompt version." }, { status: 400 });
+    const options = await loadCompetencyOptions(ctx.admin);
+    if (options === null) return NextResponse.json({ error: "The competency catalogues could not be read just now." }, { status: 503 });
+    const results = await importDrafts(ctx.admin, me, items.items, ai, options);
+    const trace = await currentTraceId();
+    for (const x of results) if (x.versionId) await ctx.admin.from("audit_log").insert({
+      trace_id: trace, actor_id: me, actor_name: ctx.fullName ?? null, action: "ckri_bulk_import", entity_type: "ckri_knowledge_version", entity_id: x.versionId,
+      new_value: { action, code: x.code, ok: x.ok, origin: ai ? "ai_draft" : "educator", of: results.length },
+    }).then((y: unknown) => y, () => {});
+    const done = results.filter(x => x.ok).length;
+    return NextResponse.json({ ok: done > 0, done, of: results.length, results }, { status: done > 0 ? 200 : 409 });
+  }
   if ((BULK_ACTIONS as readonly string[]).includes(action)) {
     const ids = bulkIds(body?.ids);
     if (!ids.ok) return NextResponse.json({ error: ids.error }, { status: 400 });

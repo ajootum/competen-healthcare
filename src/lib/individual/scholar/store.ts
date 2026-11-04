@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { DIFFICULTY_NUMBER } from "./library-meta";
 import { createHash } from "node:crypto";
 import { cache } from "react";
 import { sm2 } from "@/lib/delivery/reinforcement";
@@ -920,7 +921,7 @@ export async function insertLibraryCopies(admin: Admin, userId: string, picks: r
       review_status: "library_approved", library_resource_id: p.question.resourceId, library_version_id: p.question.versionId,
       competency_id: p.competencyId,
       // SQIE-CLOSE-2026-11 WS-E: the item's recorded difficulty (995 meta), so an adaptive exam can target it. Not guarded by 800.
-      ...(p.question.meta?.difficulty ? { difficulty: p.question.meta.difficulty } : {}),
+      ...(p.question.meta?.difficulty ? { difficulty: DIFFICULTY_NUMBER[p.question.meta.difficulty] } : {}),
     }));
     // One at a time: a version refused by the guard (unpublished since it was read) costs only itself.
     for (const row of rows) {

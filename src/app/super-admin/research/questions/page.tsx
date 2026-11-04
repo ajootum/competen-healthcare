@@ -120,7 +120,9 @@ function VersionCard({ v, names, perf, canRetire }: { v: CatalogueVersion; names
       <div className="flex flex-wrap items-center gap-2"><span className="font-semibold">Version {v.versionNo}</span><StatusChip status={v.status} /><span className="text-gray-600">{ORIGIN[v.origin] ?? v.origin}{v.required !== null ? ` · ${v.approvals} of ${v.required} clinical approvals` : ""}</span></div>
       <p className="whitespace-pre-wrap font-medium text-gray-900">{v.stem || "(no readable stem)"}</p>
       <p><span className="font-semibold text-gray-700">Format: </span>{v.formatLabel} · <span className="font-semibold text-gray-700">Marking: </span>{v.marking}</p>
-      <p><span className="font-semibold text-gray-700">Programme, level, difficulty: </span>{v.meta ? [v.meta.programmes?.length ? `programmes ${v.meta.programmes.join(", ")}` : "every programme", v.meta.level ? QUALIFICATION_LABEL[v.meta.level] : "any level", v.meta.difficulty ? DIFFICULTY_LABEL[v.meta.difficulty] : "difficulty not set (standard)"].join(" · ") : "Not recorded: offered to every programme and level, at standard difficulty"}</p>
+      <p><span className="font-semibold text-gray-700">Programme, level, difficulty: </span>{v.meta ? [v.meta.programmeLabel ?? v.meta.programmeCode ?? "every programme", v.meta.qualificationLabel ?? (v.meta.qualificationLevel ? (QUALIFICATION_LABEL as Record<string, string>)[v.meta.qualificationLevel] ?? v.meta.qualificationLevel : "any level"), v.meta.difficulty ? DIFFICULTY_LABEL[v.meta.difficulty] : "difficulty not set (standard)"].join(" · ") : "Not recorded: offered to every programme and level, at standard difficulty"}</p>
+      {v.mapping.status !== "none" && <p><span className="font-semibold text-gray-700">Competency mapping (provenance): </span>{[v.mapping.framework, v.mapping.version ? `version ${v.mapping.version}` : null, v.mapping.competency].filter(Boolean).join(" · ")}{v.mapping.objective ? ` · learning objective: ${v.mapping.objective}` : ""}{" "}
+        {v.mapping.status === "validated" ? <strong className="text-teal-900">Published on a published framework version</strong> : <strong className="rounded border border-amber-400 bg-amber-50 px-1.5 py-0.5 text-amber-950">Draft mapping, not validated competency evidence</strong>}</p>}
       <ol className="space-y-1">{v.options.map((o, i) => (
         <li key={i} className={`rounded border px-2 py-1 ${i === v.correctIndex ? "border-teal-600 bg-teal-50 text-teal-950" : "border-gray-200"}`}>
           <span className="mr-1 font-semibold">{String.fromCharCode(65 + i)}.</span>{o}{i === v.correctIndex && <strong className="ml-2">Correct answer (key)</strong>}
@@ -178,6 +180,7 @@ export default async function QuestionLibraryPage({ searchParams }: { searchPara
   const canRetire = ctx.capabilities.includes("hq.quality.knowledge.publish");
   const bulkRows: BulkRow[] = rows.map(i => ({
     resourceId: i.resourceId, title: i.title, code: i.code, draftVersionId: i.latest.state === "draft" ? i.latest.id : null,
+    approvedVersionId: i.resourceStatus === "active" && i.latest.status === "approved" ? i.latest.id : null,
     servedVersionId: i.resourceStatus === "active" && i.served ? i.served.id : null, replaceable: i.resourceStatus === "active" && i.latest.state !== "draft",
   }));
   const competencies = [...cat.competencyNames.entries()].sort((a, b) => a[1].localeCompare(b[1]));
@@ -196,7 +199,7 @@ export default async function QuestionLibraryPage({ searchParams }: { searchPara
         <label className="text-[12.5px]">Format<select name="format" defaultValue={f.format ?? ""} className={field}><option value="">Any</option>{LIBRARY_FORM_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}</select></label>
         <label className="text-[12.5px]">Programme<select name="programme" defaultValue={f.programme ?? ""} className={field}><option value="">Any</option><option value="none">Names no programme</option>{(programmes ?? []).map(p => <option key={p.code} value={p.code}>{p.label}</option>)}</select></label>
         <label className="text-[12.5px]">Qualification level<select name="level" defaultValue={f.level ?? ""} className={field}><option value="">Any</option><option value="none">Not set</option>{QUALIFICATION_LEVELS.map(l => <option key={l} value={l}>{QUALIFICATION_LABEL[l]}</option>)}</select></label>
-        <label className="text-[12.5px]">Difficulty<select name="difficulty" defaultValue={f.difficulty ?? ""} className={field}><option value="">Any</option><option value="none">Not set</option>{LIBRARY_DIFFICULTIES.map(d => <option key={d} value={String(d)}>{DIFFICULTY_LABEL[d]}</option>)}</select></label>
+        <label className="text-[12.5px]">Difficulty<select name="difficulty" defaultValue={f.difficulty ?? ""} className={field}><option value="">Any</option><option value="none">Not set</option>{LIBRARY_DIFFICULTIES.map(d => <option key={d} value={d}>{DIFFICULTY_LABEL[d]}</option>)}</select></label>
         <div className="flex items-end gap-3 md:col-span-2"><button type="submit" className="min-h-9 rounded-lg bg-teal-700 px-4 py-1.5 text-[13px] font-semibold text-white pointer-coarse:min-h-[var(--cmp-touch-min)]">Apply</button><Link href="?" className="text-[13px] font-semibold text-teal-800 underline">Clear</Link></div>
       </form>
       {open && <Detail item={open} names={cat.competencyNames} matches={matches} perf={perf} canRetire={canRetire} />}
