@@ -13,7 +13,7 @@ import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/c
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { learnerTimeZone } from "@/lib/individual/scholar/learning-definitions";
 import {
-  ACTIVITY_FILTER_LABEL, HISTORY_ACTIVITIES, HISTORY_PAGE_SIZE, HISTORY_PRIVACY, entryLinks, entryTitle, hasHistoryFilters, historyParams,
+  ACTIVITY_FILTER_LABEL, CONTINUE_NOTE, HISTORY_ACTIVITIES, HISTORY_PAGE_SIZE, HISTORY_PRIVACY, entryLinks, entryTitle, hasHistoryFilters, historyParams,
   parseHistoryQuery, saveTarget, type HistoryEntry, type HistoryQuery,
 } from "@/lib/individual/scholar/search-history";
 
@@ -24,7 +24,8 @@ export const dynamic = "force-dynamic";
 // A part of the Personal Learning Library (Saved learning), reachable from Learn's search and the library's search. One private
 // list, newest first, of the learner's submitted searches and Ask Scholar questions (from now on) and of what Scholar already
 // kept (their saved teaching and lessons, read at request time: nothing invented, nothing regenerated). Full-text search and
-// filters for activity, material, topic and date. Every link opens something kept, so opening uses NO AI. Pin, Save for
+// filters for activity, material, topic and date. Opening a saved answer or a lesson's saved teaching uses NO AI; continuing in
+// Learn is a separate, plainly worded link. Pin, Save for
 // revision (the 820 bookmark), Remove one, Clear all (confirmed). Database reads only, keyed on the caller. Policy
 // scholar_search_history (default off). Never shown to HQ, employers or educators, never AI memory.
 
@@ -79,7 +80,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   const header = (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow="Kept for you" title="My search history"
-        intro="Your searches, questions to Scholar, saved teaching and lessons, newest first. Search it, filter it and open what you found before. Opening anything here uses no AI." />
+        intro="Your searches, questions to Scholar, saved teaching and lessons, newest first. Search it, filter it and open what you found before." />
       <StudyNav dueCount={due} study={null} />
       <p className="mb-4 text-[13px]"><Link href={studyHref("saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to My learning library</Link></p>
     </>
@@ -109,7 +110,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
     const title = e.activity === "lesson" ? displaySessionTitle(e.label) : entryTitle(e, a => LEARN_ACTION_LABEL[a as LearnAction]);
     return {
       key: e.key, activity: e.activity, title, when: fmt.format(new Date(e.createdAt)), whenIso: e.createdAt, meta, headline: e.headline, pinned: !!e.pinnedAt,
-      links: entryLinks(e).map(l => ({ label: l.label, href: studyHref(l.path.replace(/^study\/?/, "")) })),
+      links: entryLinks(e).map(l => ({ label: l.label, href: studyHref(l.path.replace(/^study\/?/, "")), kind: l.kind })),
       save: saveTarget(e), ai: e.activity === "teaching" || e.activity === "research", askNotKept: e.activity === "ask",
     };
   };
@@ -119,7 +120,8 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   return (
     <>
       {header}
-      <p className="mb-3 text-[13px] text-gray-700">{HISTORY_PRIVACY}</p>
+      <p className="mb-1 text-[13px] text-gray-700">{HISTORY_PRIVACY}</p>
+      <p className="mb-3 text-[13px] text-gray-700">{CONTINUE_NOTE}</p>
 
       <form method="get" action={base} role="search" className="flex flex-wrap items-end gap-2">
         {(["activity", "material", "topic", "from", "to"] as const).map(k => (q[k] ? <input key={k} type="hidden" name={k} value={q[k]!} /> : null))}

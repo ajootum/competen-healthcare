@@ -138,6 +138,22 @@ async function main() {
   ok(/version/i.test(savedText) && savedText.length > 400, `2 the saved answer opened as saved (${savedHref?.replace(/^.*\?/, "?")})`);
   ok((await aiCalls(A.id)) === aiA0, `2 opening the saved answer made 0 AI calls (ledger + requests for A: ${aiA0} -> ${await aiCalls(A.id)})`);
   await a1.page.screenshot({ path: join(SHOTS, "02-saved-answer-reopened-1440.png"), fullPage: false });
+  // ... and a lesson's saved teaching: read in the library, with no AI call.
+  const events0 = (await counts(A.id)).events;
+  await go(a1.page, `${HIST}?activity=lesson`);
+  const openLesson = a1.page.locator(`[data-testid="history-list"] li[data-activity="lesson"] a`).filter({ hasText: "Open its saved lessons" }).first();
+  const lessonHref = await openLesson.getAttribute("href");
+  await openLesson.click();
+  if (!(await a1.page.waitForURL(/study\/saved\?session=/, { timeout: 60_000 }).then(() => true, () => false))) await go(a1.page, `${BASE}${lessonHref}`);
+  await a1.page.waitForLoadState("networkidle", { timeout: 60_000 }).catch(() => {});
+  await a1.page.waitForTimeout(3000);
+  ok((await aiCalls(A.id)) === aiA0 && (await a1.page.locator("main").innerText()).length > 400, `2 a lesson's saved teaching opened in the library with 0 AI calls (${aiA0} -> ${await aiCalls(A.id)})`);
+  info(`2 learning events for A across that open: ${events0} -> ${(await counts(A.id)).events}`);
+  await a1.page.screenshot({ path: join(SHOTS, "02b-lesson-saved-teaching-1440.png"), fullPage: false });
+  // every open link stays out of Learn's lesson; only the worded Continue link goes there
+  await go(a1.page, `${HIST}?activity=lesson`);
+  const opens = await a1.page.locator(`[data-testid="history-list"] a[data-link="open"]`).evaluateAll(els => els.map(e => e.getAttribute("href")!));
+  ok(opens.length > 0 && opens.every(h => !h.includes("/study/learn?session=")), "2 no open link goes into a Learn lesson; only Continue the lesson does");
 
   // 3. NEW SEARCHES APPEAR (Learn material search, a reload of the same results, and a library search)
   await go(a1.page, `${BASE}/individual/scholar/study/learn`);
@@ -327,6 +343,9 @@ async function main() {
   ok(afterB.notes === beforeB.notes && afterA.notes - beforeA.notes <= 1, `10 notes unchanged but A's one Save for revision bookmark (A ${beforeA.notes} -> ${afterA.notes}, B ${beforeB.notes} -> ${afterB.notes})`);
   ok((await aiCalls(A.id)) === aiA0 && (await aiCalls(B.id)) === aiB0, "10 the whole walk made 0 AI calls for either learner");
 
+  ok(afterB.hidden === beforeB.current_artefacts + beforeB.sessions, `10 B's clear marked their ${beforeB.current_artefacts + beforeB.sessions} recovered records removed, in the history table only`);
+  // Put back B's history (the marks only) so the next run starts the same.
+  await db.query(`delete from individual_scholar_search_history where user_id = $1 and origin = 'recovered'`, [B.id]);
   // Put back the one lesson this walk removed from A's history (its mark only, history table only), so the next run starts the same.
   await db.query(`delete from individual_scholar_search_history where user_id = $1 and request_key = $2 and origin = 'recovered'`, [A.id, lessonKey]);
   ok(consoleErrors.length === 0, `no application console errors${consoleErrors.length ? `: ${consoleErrors.join(" | ")}` : ""}`);

@@ -70,16 +70,19 @@ describe("SCHOLAR-SEARCH-HISTORY-01: the page", () => {
     expect(parseEntryKey(`lesson:${C}x`)).toBeNull();
     expect(markKey({ kind: "artefact", id: B })).toBe(`artefact:${B}`);
   });
-  it("links open what is kept, never a new AI answer", () => {
+  it("open links open what is kept, never a new AI answer; continuing Learn is a separate, last link", () => {
     const base = { query: null, materialId: null, chunkId: null, artefactId: null, sessionId: null, step: null };
     expect(entryLinks({ ...base, activity: "teaching", artefactId: A, sessionId: B, step: 1 })).toEqual([
-      { label: "Open the saved answer", path: `study/saved?version=${A}` }, { label: "Open the lesson", path: `study/learn?session=${B}#lesson-1` }]);
-    expect(entryLinks({ ...base, activity: "lesson", sessionId: B })).toEqual([{ label: "Open the lesson", path: `study/learn?session=${B}` }]);
-    expect(entryLinks({ ...base, activity: "ask", materialId: A, chunkId: C })).toEqual([{ label: "Open the section", path: `study/${A}#c-${C}` }]);
-    expect(entryLinks({ ...base, activity: "material_search", query: "preload & afterload" })).toEqual([{ label: "Search again", path: "study/learn?q=preload%20%26%20afterload" }]);
-    expect(entryLinks({ ...base, activity: "library_search", query: "sepsis" })).toEqual([{ label: "Search again", path: "study/saved?q=sepsis" }]);
-    // no link anywhere starts a Learn action or an Ask
-    for (const l of entryLinks({ ...base, activity: "ask", query: "why?", sessionId: B, step: 0 })) expect(l.path).not.toMatch(/teach=|action=|panel=ask|fresh/);
+      { label: "Open the saved answer", path: `study/saved?version=${A}`, kind: "open" }, { label: "Continue the lesson", path: `study/learn?session=${B}#lesson-1`, kind: "continue" }]);
+    expect(entryLinks({ ...base, activity: "lesson", sessionId: B })).toEqual([
+      { label: "Open its saved lessons", path: `study/saved?session=${B}`, kind: "open" }, { label: "Continue the lesson", path: `study/learn?session=${B}`, kind: "continue" }]);
+    expect(entryLinks({ ...base, activity: "ask", materialId: A, chunkId: C })).toEqual([{ label: "Open the section", path: `study/${A}#c-${C}`, kind: "open" }]);
+    expect(entryLinks({ ...base, activity: "material_search", query: "preload & afterload" })).toEqual([{ label: "Search again", path: "study/learn?q=preload%20%26%20afterload", kind: "open" }]);
+    expect(entryLinks({ ...base, activity: "library_search", query: "sepsis" })).toEqual([{ label: "Search again", path: "study/saved?q=sepsis", kind: "open" }]);
+    // every "open" link stays on the pages that cannot call a model, and no link starts a Learn action or an Ask
+    const all = (["ask", "teaching", "research", "lesson", "material_search", "library_search"] as const).flatMap(activity => entryLinks({ query: "why?", materialId: A, chunkId: C, artefactId: B, sessionId: C, step: 0, activity }));
+    for (const l of all) expect(l.path).not.toMatch(/teach=|action=|panel=ask|fresh|study=new|[?&]s=/);
+    for (const l of all.filter(x => x.kind === "open")) expect(l.path).not.toMatch(/study\/learn\?session=/);
     expect(ASK_NOT_KEPT).toMatch(/does not keep Ask answers/);
   });
   it("save is the 820 bookmark on the saved teaching or the one lesson, and nothing else", () => {

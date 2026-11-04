@@ -11,8 +11,9 @@
 //   CAPTURE      only a SUBMITTED search or question of 2 to 300 characters with a letter or digit: never a keystroke, an
 //                empty query or a click. One client request key per submission, so a retry is the same entry. The same
 //                words again within two minutes are one entry (a double submit), never two.
-//   OPENING      a saved answer reopens as saved (the library's version view) and a lesson as recorded: no AI call. Ask
-//                answers were never kept (owner ruling D10), so an Ask entry says so and offers where it was asked.
+//   OPENING      a saved answer reopens as saved (the library's version view) and a lesson's saved teaching through the library:
+//                no AI call. Ask answers were never kept (owner ruling D10), so an Ask entry says so and offers where it was
+//                asked. Continuing a lesson in Learn is a separate, plainly worded link (CONTINUE_NOTE).
 //   PRIVACY      learner owned. Never shown to HQ, employers or educators, never Personal AI memory. Removing an entry or
 //                clearing never deletes saved teaching, lessons, attempts, learning evidence or materials.
 
@@ -38,6 +39,7 @@ export const TOPIC_MAX = 120;
 /** The same words of the same activity again within this window are one submission (a double click or a resend). */
 export const COLLAPSE_MS = 120_000;
 export const ASK_NOT_KEPT = "Scholar does not keep Ask answers, so this answer cannot be reopened. Your question and where you asked it are kept.";
+export const CONTINUE_NOTE = "Opening a saved answer or a saved lesson uses no AI. Continue the lesson carries on in Learn, which writes new teaching only for a part you have not reached yet.";
 export const HISTORY_PRIVACY = "Private to you. Never shown to HQ, employers or educators, and never used as AI memory. Removing something here never deletes your saved learning, lessons, answers or materials.";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -155,23 +157,24 @@ export type HistoryEntry = {
   materialId: string | null; chunkId: string | null; artefactId: string | null; sessionId: string | null; step: number | null;
   resultCount: number | null; label: string; headline: string | null; pinnedAt: string | null; createdAt: string;
 };
-export type EntryLink = { label: string; path: string };
+export type EntryLink = { label: string; path: string; kind: "open" | "continue" };
 
 const enc = encodeURIComponent;
 /**
- * Pure. Where an entry leads, as paths in the Scholar area. Every one opens something kept (no AI on open): a saved answer
- * through the library's version view, a lesson through Learn's recorded session, a search by running it again (full text,
- * no AI). An Ask entry has no answer to open (ASK_NOT_KEPT): its lesson or section is offered instead.
+ * Pure. Where an entry leads, as paths in the Scholar area. "open" links open something kept and can never call an AI: a saved
+ * answer through the library's version view, a lesson's saved teaching through the library filtered to it, a section of the
+ * notes, a search run again (full text). An Ask entry has no answer to open (ASK_NOT_KEPT). "continue" is the one exception and
+ * says so: it carries on in Learn, whose saved teaching opens as saved, but which writes teaching for a part not yet reached,
+ * and records the visit. It is always the learner's click, never where an entry opens first.
  */
 export function entryLinks(e: Pick<HistoryEntry, "activity" | "query" | "materialId" | "chunkId" | "artefactId" | "sessionId" | "step">): EntryLink[] {
   const out: EntryLink[] = [];
-  if (e.artefactId) out.push({ label: "Open the saved answer", path: `study/saved?version=${enc(e.artefactId)}` });
-  if (e.activity === "lesson" && e.sessionId) out.push({ label: "Open the lesson", path: `study/learn?session=${enc(e.sessionId)}` });
-  else if (e.sessionId && e.step !== null) out.push({ label: "Open the lesson", path: `study/learn?session=${enc(e.sessionId)}#lesson-${e.step}` });
-  else if (e.sessionId) out.push({ label: "Open the lesson", path: `study/learn?session=${enc(e.sessionId)}` });
-  if (e.activity === "ask" && !e.sessionId && e.materialId && e.chunkId) out.push({ label: "Open the section", path: `study/${enc(e.materialId)}#c-${e.chunkId}` });
-  if (e.activity === "material_search" && e.query) out.push({ label: "Search again", path: `study/learn?q=${enc(e.query.slice(0, 200))}` });
-  if (e.activity === "library_search" && e.query) out.push({ label: "Search again", path: `study/saved?q=${enc(e.query.slice(0, 200))}` });
+  if (e.artefactId) out.push({ label: "Open the saved answer", path: `study/saved?version=${enc(e.artefactId)}`, kind: "open" });
+  if (e.activity === "lesson" && e.sessionId) out.push({ label: "Open its saved lessons", path: `study/saved?session=${enc(e.sessionId)}`, kind: "open" });
+  if (e.activity === "ask" && e.materialId && e.chunkId) out.push({ label: "Open the section", path: `study/${enc(e.materialId)}#c-${e.chunkId}`, kind: "open" });
+  if (e.activity === "material_search" && e.query) out.push({ label: "Search again", path: `study/learn?q=${enc(e.query.slice(0, 200))}`, kind: "open" });
+  if (e.activity === "library_search" && e.query) out.push({ label: "Search again", path: `study/saved?q=${enc(e.query.slice(0, 200))}`, kind: "open" });
+  if (e.sessionId) out.push({ label: "Continue the lesson", path: `study/learn?session=${enc(e.sessionId)}${e.step !== null ? `#lesson-${e.step}` : ""}`, kind: "continue" });
   return out;
 }
 

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars -- evidence script: shares the walk helpers, not all of them used here */
 // SCHOLAR-SEARCH-HISTORY-01: the STAGING acceptance walk for My Search History, as two fixture learners.
 //   A = harness-guided-browser@competen.test (13 saved teachings, 4 lessons), B = scholar-demo@competen.demo (1 and 1).
 // Signed in with a magic-link session minted by the STAGING service role (no password is read, typed or printed). Refuses

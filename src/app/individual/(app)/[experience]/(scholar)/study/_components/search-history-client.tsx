@@ -11,13 +11,14 @@ import { focusRing } from "../../../../../_components/chrome";
 
 // SCHOLAR-SEARCH-HISTORY-01 -- the interactive parts of My Search History (study/saved/searches) and its two capture pieces.
 // Everything shown is decided on the server (the page). Pin, Save for revision (the library's own 820 bookmark), Remove and
-// Clear go to the learner's own routes and refresh the page. Nothing here calls an AI: every link opens something kept.
+// Clear go to the learner's own routes and refresh the page. Nothing here calls an AI. Every "open" link opens something kept;
+// "Continue the lesson" is the one link into Learn, always the learner's click (search-history.ts entryLinks).
 // Design: the Scholar Learning Design System (docs/design/SCHOLAR-LEARNING-DESIGN-SYSTEM.md): each activity names a learning
 // tone and an icon, and carries its meaning in words; one edge per level (the rows sit on white inside one section).
 
 export type ClientEntry = {
   key: string; activity: HistoryActivity; title: string; when: string; whenIso: string; meta: string[];
-  headline: string | null; pinned: boolean; links: { label: string; href: string }[];
+  headline: string | null; pinned: boolean; links: { label: string; href: string; kind: "open" | "continue" }[];
   save: { targetKind: "artefact"; artefactId: string } | { targetKind: "lesson"; sessionId: string; step: number } | null;
   ai: boolean; askNotKept: boolean;
 };
@@ -70,7 +71,7 @@ function Row({ e, notesOn }: { e: ClientEntry; notesOn: boolean }) {
       {e.ai && <DisclaimerBadge className="mt-1.5">AI-generated from your notes, not clinically reviewed</DisclaimerBadge>}
       {e.askNotKept && <p className="mt-1 text-[12.5px] text-gray-600">{ASK_NOT_KEPT}</p>}
       <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-        {e.links.map(l => <Link key={l.href} href={l.href} className={linkCls}>{l.label}</Link>)}
+        {e.links.map(l => <Link key={l.href} href={l.href} prefetch={false} className={linkCls} data-link={l.kind}>{l.label}</Link>)}
         <span className="flex flex-wrap items-center gap-2">
           <button type="button" className={btn} disabled={!!busy} aria-pressed={e.pinned} onClick={() => act("pin")}>{busy === "pin" ? "…" : e.pinned ? "Unpin" : "Pin"}</button>
           {notesOn && e.save && <button type="button" className={btn} disabled={!!busy || saved} onClick={() => act("save")}>{saved ? "Saved for revision" : busy === "save" ? "Saving…" : "Save for revision"}</button>}
