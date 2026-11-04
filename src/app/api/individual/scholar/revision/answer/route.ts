@@ -24,6 +24,7 @@ import { extendedMarks, extendedSpecOf, isExtendedQuestion, isScenarioQuestion }
 import { rubricSnapshotOf, withRubricSnapshot } from "@/lib/individual/scholar/rubric-snapshot";
 import { keepAttemptSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 import { aiMarkingAllowed } from "@/lib/individual/scholar/library-format";
+import { questionCapPolicy } from "@/lib/individual/scholar/safety-caps";
 import { answerSpelling, vocabularyOf } from "@/lib/individual/scholar/spelling";
 import { parseSpellingVariant } from "@/lib/individual/scholar/spelling-variant";
 
@@ -135,7 +136,8 @@ export async function POST(req: Request) {
   let mark = markResponse(q, r);
   // SQIE-CLOSE-2026-11 WS-A: a calculation is marked under the published tolerance gate (the line above used the strict code default: tolerances inactive).
   // SQIE-CLOSE-2026-11 WS-B (rules v3): the clinical scoring caps change marks only where HQ policy scholar_clinical_scoring_caps is on.
-  const caps = { capsActive: policy.scholarClinicalScoringCaps === "on" };
+  // Owner decision 1 (4 Nov 2026, migration 998): and only on a library copy whose markers the clinical reviewers explicitly approved.
+  const caps = await questionCapPolicy(ctx.admin, q, policy.scholarClinicalScoringCaps === "on");
   if (r.kind === "calc") mark = markResponse(q, r, { calculation: { tolerancesActive: policy.scholarCalculationTolerances === "on" }, caps });
   if (gaveUp) mark = { correct: false, score: 0, marking: "deterministic" };
   const calc: CalculationMark | null = "calc" in mark ? mark.calc ?? null : null;
@@ -320,7 +322,8 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
 
   const judged = results as PartResult[];
   // SQIE-CLOSE-2026-11 WS-B (rules v3): each part capped at its own scope, never the others, only where scholar_clinical_scoring_caps is on.
-  const capped = capStructured(parts, judged, { capsActive: policy.scholarClinicalScoringCaps === "on" });
+  // Owner decision 1 (998): only on a library copy whose markers were explicitly approved (safety-caps.ts).
+  const capped = capStructured(parts, judged, await questionCapPolicy(ctx.admin, q, policy.scholarClinicalScoringCaps === "on"));
   const final = capped.results;
   const m = practiceMarks(parts, final);
   const marking = final.some(x => x.by === "self") ? "self_graded" as const : evaluator ? "ai_evaluation" as const : "deterministic" as const;
