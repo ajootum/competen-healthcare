@@ -1,0 +1,12 @@
+INFO 1440: notes text not measured
+PASS 1440: no horizontal overflow (1440 <= 1440)
+PASS 1440: axe wcag2a/2aa/21aa on main with every section open: 0 violations
+INFO 390: notes text not measured
+PASS 390: no horizontal overflow (390 <= 390)
+PASS 390: section controls at least 44px on touch
+PASS 390: axe wcag2a/2aa/21aa on main with every section open: 0 violations
+PASS 820: no horizontal overflow (820 <= 820)
+PASS 820: section controls at least 44px on touch
+PASS 820: axe wcag2a/2aa/21aa on main with every section open: 0 violations
+PASS 200% zoom (720 CSS px), every section open: no horizontal overflow (720 <= 720)
+PASS 0 console errors (0) []
