@@ -93,10 +93,14 @@ export function storedPartResults(response: unknown, marking: string | null | un
   if (!by || by.length !== partCount || !by.every(b => b === "blank" || b === "code" || b === "ai")) return null;
   const f = formativeOf(response, marking);
   const byPart = new Map((f?.items ?? []).filter(i => i.part !== null).map(i => [i.part as number, i]));
+  // SQIE-CLOSE-2026-11 WS-C: the weighted criteria each part was found to meet, where it was marked against criteria (rules v2).
+  const crit = Array.isArray(r.criteria) && r.criteria.length === partCount ? r.criteria : null;
+  const met = (i: number): number[] | null => { const c = crit?.[i]; return Array.isArray(c) && c.length <= 8 && c.every(n => Number.isInteger(n) && (n as number) >= 0 && (n as number) < 8) ? (c as number[]) : null; };
   return awarded.map((a, i) => {
     const how = by[i] as "blank" | "code" | "ai";
     if (how !== "ai") return { awarded: a as number, by: how };
     const fi = byPart.get(i + 1);
-    return { awarded: a as number, by: "ai" as const, feedback: fi ? formativeText(fi) : null, parts: fi?.parts ?? null };
+    const m = met(i);
+    return { awarded: a as number, by: "ai" as const, feedback: fi ? formativeText(fi) : null, parts: fi?.parts ?? null, ...(m ? { matched: m } : {}) };
   });
 }

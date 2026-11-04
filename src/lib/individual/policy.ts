@@ -115,6 +115,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "passport_recipient_label" | "passport_presentation" | "passport_validity_display" | "passport_export" | "passport_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
+  | "scholar_calculation_tolerances"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_case_conversation" | "scholar_case_conversation_turns" | "scholar_evaluation_recommendations"
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
@@ -1173,6 +1174,18 @@ export const POLICIES: readonly PolicyDef[] = [
     // "ai_then_self" turns it on, and the model-eligibility gate (#99) still decides.
     fallback: "self",
     limitReason: "A match with an accepted answer is always marked by code first. AI evaluation is always labelled. Default: the student's own judgement.",
+  },
+  // ── SQIE-CLOSE-2026-11 WS-A: CALCULATION QUESTIONS (scoring-rules.ts; owner decision 4 Nov 2026, item 1) ──
+  // ⚠ OWNER / CLINICAL DECISION: non-zero tolerances stay INACTIVE for clinical calculations until the clinical calculation policy is
+  // approved. Until then every calculation is an exact match (with its question-defined rounding and validated equivalent units). A tenfold
+  // or greater error is unsafe whatever this says: that check never depends on tolerance.
+  {
+    key: "scholar_calculation_tolerances", kind: "choice", product: "Scholar",
+    label: "Calculation tolerances",
+    help: "Whether the absolute or percentage tolerance a calculation question sets is used. Off: every calculation must be exact. Turn on only once the clinical calculation policy is approved.",
+    options: [{ value: "off", label: "Off: exact answers only (until the clinical calculation policy is approved)" }, { value: "on", label: "On: use each question's own tolerance" }],
+    fallback: "off",
+    limitReason: "Clinical calculation policy approval required before on. A tenfold error is unsafe either way. Default: off.",
   },
   {
     key: "scholar_revision_recommendations", kind: "choice", product: "Scholar",
@@ -2291,6 +2304,8 @@ export type IndividualPolicy = {
   scholarRevisionFeedback: "immediate" | "end";
   scholarRevisionGeneration: "generate" | "saved_only";
   scholarShortAnswerMarking: "ai_then_self" | "self";
+  /** SQIE-CLOSE-2026-11 WS-A: whether question tolerances are used (off until the clinical calculation policy is approved). */
+  scholarCalculationTolerances: "off" | "on";
   scholarRevisionRecommendations: "on" | "off";
   /** SCHOLAR-PRACTICE-EXAMS-01: adaptive exams. */
   scholarAdaptiveExams: "on" | "off";
@@ -2516,6 +2531,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarRevisionFeedback: clampChoice(policyDef("scholar_revision_feedback") as ChoicePolicy, published.get(policyPath("scholar_revision_feedback"))) as "immediate" | "end",
     scholarRevisionGeneration: clampChoice(policyDef("scholar_revision_generation") as ChoicePolicy, published.get(policyPath("scholar_revision_generation"))) as "generate" | "saved_only",
     scholarShortAnswerMarking: clampChoice(policyDef("scholar_short_answer_marking") as ChoicePolicy, published.get(policyPath("scholar_short_answer_marking"))) as "ai_then_self" | "self",
+    scholarCalculationTolerances: clampChoice(policyDef("scholar_calculation_tolerances") as ChoicePolicy, published.get(policyPath("scholar_calculation_tolerances"))) as "off" | "on",
     scholarRevisionRecommendations: clampChoice(policyDef("scholar_revision_recommendations") as ChoicePolicy, published.get(policyPath("scholar_revision_recommendations"))) as "on" | "off",
     scholarAdaptiveExams: clampChoice(policyDef("scholar_adaptive_exams") as ChoicePolicy, published.get(policyPath("scholar_adaptive_exams"))) as "on" | "off",
     scholarAdaptiveMaxLength: int("scholar_adaptive_max_length"),

@@ -8,7 +8,7 @@ import { useCallback, useMemo, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import {
-  EXTENDED_LABEL, EXTENDED_RESPONSE_MAX, MARKED_AGAINST_NOTES, MOCK_LABEL, SCENARIO_LABEL, TRUE_FALSE_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
+  CALCULATION_LABEL, EXTENDED_LABEL, EXTENDED_RESPONSE_MAX, MARKED_AGAINST_NOTES, MOCK_LABEL, SCENARIO_LABEL, TRUE_FALSE_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
   type RevisionFormat, type RevisionMode,
 } from "@/lib/individual/scholar/config";
 import type { RevisionFeedback, RevisionItemView } from "@/lib/individual/scholar/revision-view";
@@ -28,6 +28,7 @@ import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
+import { ROLE_LABEL, VARIANT_LABEL, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -369,6 +370,9 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   const [selfGrade, setSelfGrade] = useState<{ accepted: string[]; reason: string; label: string; extended?: { modelAnswer: string; keyPoints: string[]; marks: number }; spelling?: AnswerSpelling | null } | null>(null);
   // SCHOLAR-SQIE-CLOSE-01: a structured question's answers, one per part, and the student's own marking of each part.
   const [texts, setTexts] = useState<string[]>((item.parts ?? []).map(() => ""));
+  // SQIE-CLOSE-2026-11 WS-A: a calculation's number as typed, and the unit chosen (preselected only when there is just one).
+  const [calcValue, setCalcValue] = useState("");
+  const [calcUnit, setCalcUnit] = useState(item.calculation?.units.length === 1 ? item.calculation.units[0] : "");
   const [partGrade, setPartGrade] = useState<{ reason: string; label: string; parts: PartToGrade[] } | null>(null);
   const [grades, setGrades] = useState<(boolean | null)[]>([]);
   // SCHOLAR-SQIE-02: a withheld AI evaluation opens evidence recovery beneath the student's answer, which is kept as typed.
@@ -438,9 +442,11 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
     setBack(r.json as typeof back);
   }
   const responseOf = (): unknown => item.kind === "mcq" || item.kind === "case" ? { index: choice } : item.kind === "mrq" ? { indexes: set }
-    : item.kind === "short" || item.kind === "cloze" || item.kind === "extended" ? { text } : item.kind === "match" ? { matches } : item.kind === "sequence" ? { order } : item.kind === "structured" ? { texts } : null;
+    : item.kind === "short" || item.kind === "cloze" || item.kind === "extended" ? { text } : item.kind === "match" ? { matches } : item.kind === "sequence" ? { order } : item.kind === "structured" ? { texts }
+    : item.kind === "calculation" ? { value: calcValue, unit: item.calculation?.unitless ? "" : calcUnit } : null;
   const ready = item.kind === "mcq" || item.kind === "case" ? choice !== null : item.kind === "mrq" ? set.length > 0 : item.kind === "short" || item.kind === "cloze" || item.kind === "extended" ? text.trim().length > 0
-    : item.kind === "match" ? matches.every(Boolean) : item.kind === "sequence" ? true : item.kind === "structured" ? texts.some(t => t.trim()) : false;
+    : item.kind === "match" ? matches.every(Boolean) : item.kind === "sequence" ? true : item.kind === "structured" ? texts.some(t => t.trim())
+    : item.kind === "calculation" ? !!calcValue.trim() && (!!item.calculation?.unitless || !!calcUnit) : false;
   const partLetter = (i: number) => String.fromCharCode(97 + i);
   const letter = (i: number) => String.fromCharCode(65 + i);
   const fb = answered?.feedback ?? null;
@@ -615,14 +621,34 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               </div>
             </fieldset>
           )}
+          {item.kind === "structured" && item.structured?.variant && <p className="mb-2 text-[12.5px] font-semibold text-gray-700">{VARIANT_LABEL[item.structured.variant]}</p>}
+          {/* SQIE-CLOSE-2026-11 WS-C: an interpretation item shows its findings first; the parts ask what they mean. */}
+          {item.kind === "structured" && !!item.structured?.findings.length && <FindingsTable findings={item.structured.findings} />}
           {item.kind === "structured" && (
             <ol className="space-y-3">
               {(item.parts ?? []).map((pt, i) => (
                 <li key={i}>
-                  <label className="block text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
-                    <textarea id={`rv-part-${item.id}-${i}`} rows={2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
-                  </label>
-                  <DictateButton fieldId={`rv-part-${item.id}-${i}`} onValue={v => setTexts(t => t.map((x, k) => (k === i ? v : x)))} disabled={busy} className="mt-1" />
+                  {pt.options ? (
+                    // WS-C: a choice part (answer + justify): one option, marked by code; the next part asks why.
+                    <fieldset>
+                      <legend className="text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span></legend>
+                      <div className="mt-1 grid gap-2 lg:grid-cols-2">
+                        {pt.options.map((o, k) => (
+                          <label key={k} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${texts[i] === o ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
+                            <input type="radio" name={`rv-part-${item.id}-${i}`} checked={texts[i] === o} onChange={() => setTexts(t => t.map((x, j) => (j === i ? o : x)))} className="mt-1 h-4 w-4 shrink-0" />
+                            <span><span className="font-semibold">{letter(k)}.</span> {o}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
+                  ) : (
+                    <>
+                      <label className="block text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.role ? <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11.5px] font-semibold text-gray-700">{ROLE_LABEL[pt.role]}</span> : null}{pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
+                        <textarea id={`rv-part-${item.id}-${i}`} rows={pt.role === "justify" || pt.role === "interpret" ? 3 : 2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
+                      </label>
+                      <DictateButton fieldId={`rv-part-${item.id}-${i}`} onValue={v => setTexts(t => t.map((x, k) => (k === i ? v : x)))} disabled={busy} className="mt-1" />
+                    </>
+                  )}
                 </li>
               ))}
             </ol>
@@ -656,6 +682,24 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                 {text.trim() ? text.trim().split(/\s+/).length : 0} words
                 {item.extended ? ` · marked against ${item.extended.points} key points in your notes, up to ${item.extended.marks} practice marks` : ""}. {EXTENDED_LABEL}
               </p>
+            </div>
+          )}
+          {item.kind === "calculation" && (
+            // SQIE-CLOSE-2026-11 WS-A: a number and its unit, marked by code (the unit is part of the answer).
+            <div className="flex flex-wrap items-end gap-3">
+              <label className="block text-[13px] font-semibold text-gray-800">Your answer
+                <input type="text" inputMode="decimal" autoComplete="off" maxLength={40} value={calcValue} onChange={e => setCalcValue(e.target.value)} aria-describedby={`calc-${item.id}`}
+                  className={`${field} mt-1 block w-40 tabular-nums`} />
+              </label>
+              {!item.calculation?.unitless && (
+                <label className="block text-[13px] font-semibold text-gray-800">Unit
+                  <select value={calcUnit} onChange={e => setCalcUnit(e.target.value)} className={`${field} mt-1 block min-w-[9rem]`}>
+                    <option value="">Choose…</option>
+                    {(item.calculation?.units ?? []).map(u => <option key={u} value={u}>{u}</option>)}
+                  </select>
+                </label>
+              )}
+              <p id={`calc-${item.id}`} className="w-full text-[12px] text-gray-600">{item.calculation?.rounding ? `Give your answer ${roundingText(item.calculation.rounding)}. ` : ""}Write the number with a decimal point (0.5, not .5). {CALCULATION_LABEL}</p>
             </div>
           )}
           {item.kind === "short" && (
@@ -777,6 +821,32 @@ function AttemptRecordNotes({ f }: { f: RevisionFeedback }) {
   );
 }
 
+/** SQIE-CLOSE-2026-11 WS-C: an interpretation item's findings, as a table (label, value, unit). */
+function FindingsTable({ findings }: { findings: Finding[] }) {
+  return (
+    <div className="mb-3 overflow-x-auto rounded-lg border border-gray-200">
+      <table className="w-full text-left text-[13.5px]">
+        <caption className="sr-only">Findings</caption>
+        <thead className="bg-gray-50 text-[12px] uppercase tracking-[0.06em] text-gray-600"><tr><th scope="col" className="px-3 py-1.5">Finding</th><th scope="col" className="px-3 py-1.5">Value</th></tr></thead>
+        <tbody>{findings.map((x, i) => <tr key={i} className="border-t border-gray-100"><th scope="row" className="px-3 py-1.5 font-semibold text-gray-900">{x.label}</th><td className="px-3 py-1.5 tabular-nums text-gray-900">{x.value}{x.unit ? ` ${x.unit}` : ""}</td></tr>)}</tbody>
+      </table>
+    </div>
+  );
+}
+
+/** SQIE-CLOSE-2026-11 WS-B: an unsafe answer, or a safety-critical point missed: said plainly, with what, and that the marks were capped. */
+function SafetyBlock({ s }: { s: NonNullable<RevisionFeedback["safety"]> }) {
+  return (
+    <div role="note" data-testid="safety-outcome" className="mt-2 rounded-lg border-2 border-red-700 bg-white px-3 py-2">
+      <p className="text-[13px] font-bold text-red-900">{s.label}</p>
+      <p className="mt-0.5 text-[13px] text-gray-900">{s.explainer}</p>
+      {s.statement && <p className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Unsafe in your answer:</span> &ldquo;{s.statement}&rdquo;</p>}
+      {s.missed.length > 0 && <div className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Missed:</span><ul className="list-disc pl-5">{s.missed.map(m => <li key={m}>{m}</li>)}</ul></div>}
+      <p className="mt-1 text-[11.5px] text-gray-600">{s.byLabel}</p>
+    </div>
+  );
+}
+
 export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string; stem?: string | null }) {
   const basis = f.library ? "the Competen library answer" : "your notes";
   return (
@@ -791,6 +861,17 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
       {f.structured && <p className="text-[12px] text-gray-700">{f.structured.practiceMarks.label}</p>}
       {f.extended && <p className="text-[12px] text-gray-700">{f.extended.marks.label}</p>}
       {f.rubricNote && <p className="mt-1 text-[12px] text-gray-700">{f.rubricNote}</p>}
+      {f.safety && <SafetyBlock s={f.safety} />}
+      {f.calculation && (
+        // SQIE-CLOSE-2026-11 WS-A: what was given, the answer, and why (a wrong unit is said plainly).
+        <div data-testid="calculation-outcome" className="mt-2 rounded-lg bg-white/70 px-3 py-2 text-[13.5px] text-gray-900">
+          <p><span className="font-semibold">Your answer:</span> {f.calculation.given.value ?? "—"}{f.calculation.given.unit ? ` ${f.calculation.given.unit}` : ""} · <span className="font-semibold">The answer:</span> {f.calculation.expected.value}{f.calculation.expected.unit ? ` ${f.calculation.expected.unit}` : ""}</p>
+          <p className="mt-0.5">{f.calculation.feedback}</p>
+          {f.calculation.warnings.map(w => <p key={w} className="mt-0.5 text-[12.5px] text-amber-900">{w}</p>)}
+          {!compact && f.calculation.working && <p className="mt-1"><span className="font-semibold">Working from your notes:</span> {f.calculation.working}</p>}
+          <p className="mt-1 text-[12px] text-gray-700">Tolerance: {f.calculation.tolerance}. {f.calculation.unitRule}</p>
+        </div>
+      )}
       <AttemptRecordNotes f={f} />
       {f.library &&<p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{f.markingLabel}.</span> {f.marking === "deterministic" ? MARKED_AGAINST_NOTES : ""}</p>
@@ -825,11 +906,25 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
           ))}
         </ol>
       ) : f.structured ? (
+        <>
+        {!compact && !!f.structured.findings?.length && <FindingsTable findings={f.structured.findings} />}
         <ol className="mt-2 space-y-2">
           {f.structured.parts.map((pt, i) => (
             <li key={i} className="rounded-lg bg-white/70 p-2.5 text-[13.5px] text-gray-900">
-              <p className="font-semibold">({String.fromCharCode(97 + i)}) {pt.prompt} <span className="font-normal text-gray-700">· {pt.awarded === null ? "—" : pt.awarded} of {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span></p>
-              <p className="mt-0.5"><span className="font-semibold">Your notes:</span> {pt.accepted}</p>
+              <p className="font-semibold">({String.fromCharCode(97 + i)}) {pt.roleLabel ? <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11.5px] text-gray-700">{pt.roleLabel}</span> : null}{pt.prompt} <span className="font-normal text-gray-700">· {pt.awarded === null ? "—" : pt.awarded} of {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
+                {pt.safetyCritical && <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[11.5px] font-semibold text-red-900">Safety-critical</span>}</p>
+              <p className="mt-0.5"><span className="font-semibold">{pt.options ? "The answer:" : "Your notes:"}</span> {pt.accepted}</p>
+              {/* WS-C: rubric-based partial credit: each weighted criterion, and whether the answer met it (formative). */}
+              {pt.criteria && (
+                <ul className="mt-1 space-y-0.5 text-[13px] text-gray-800" aria-label="Marking criteria">
+                  {pt.criteria.map((c, k) => (
+                    <li key={k} className="flex gap-2">
+                      <span aria-hidden className="w-4 shrink-0 font-bold">{c.met === null ? "·" : c.met ? "✓" : "✗"}</span>
+                      <span>{c.text} <span className="text-gray-600">(weight {c.weight}{c.safetyCritical ? ", safety-critical" : ""}{c.met === null ? "" : c.met ? ", met" : ", not met"})</span></span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {!compact && pt.keyPoints.length > 0 && <ul className="mt-1 list-disc pl-5 text-[13px] text-gray-800">{pt.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>}
               {pt.evaluation && (
                 <div className="mt-1 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
@@ -841,6 +936,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
             </li>
           ))}
         </ol>
+        </>
       ) : f.extended ? (
         <div className="mt-2 text-[13.5px] text-gray-900">
           <p className="font-semibold">The points a full answer makes</p>

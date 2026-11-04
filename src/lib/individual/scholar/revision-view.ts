@@ -17,6 +17,18 @@ import { applySnapshot, rubricChanged, rubricHash, snapshotOf, type RubricSnapsh
 import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, effectiveResult, outcomeOf, questionChanged, type AttemptIntegrity, type Outcome } from "./attempt-snapshot";
 import { formativeOf, formativeText, storedPartResults } from "./written-feedback";
 import { GENERATION_DIFFICULTIES as STEPS, GROUNDING_LABEL, LEVEL_LABEL, rubricOf, type FeedbackParts, type GenerationDifficulty } from "./question-intel";
+import {
+  ROLE_LABEL, SAFETY_EXPLAINER, SAFETY_LABEL, VARIANT_LABEL, calculationSpecOf, findingsOf, markCalculation, roundingText, storedSafety, structuredVariantOf, toleranceText,
+  type CalculationMark, type Finding, type PartRole, type SafetyRecord, type StructuredVariant,
+} from "./scoring-rules";
+import { CALCULATION_LABEL } from "./config";
+
+/** SQIE-CLOSE-2026-11 WS-B: how a safety outcome is shown (rules v2). Never shown for an attempt marked before those rules. */
+export type SafetyView = { outcome: SafetyRecord["outcome"]; label: string; explainer: string; statement: string | null; missed: string[]; by: SafetyRecord["by"]; byLabel: string };
+export const safetyView = (s: SafetyRecord | null | undefined): SafetyView | null => !s ? null : {
+  outcome: s.outcome, label: SAFETY_LABEL[s.outcome], explainer: SAFETY_EXPLAINER[s.outcome], statement: s.statement ?? null, missed: s.missed ?? [], by: s.by,
+  byLabel: s.by === "code" ? "Recognised by code against the question's marking guide." : `${MARKING_LABEL.ai_evaluation}: formative, not a verified judgement.`,
+};
 
 export type RevisionItemView = LearnerItem & {
   materialId: string; materialTitle: string; chunkId: string; citation: string; label: string;
@@ -48,6 +60,11 @@ export function revisionItemView(q: QuestionRow): RevisionItemView {
 export type StructuredPartFeedback = {
   prompt: string; marks: number; awarded: number | null; by: PartResult["by"] | null; accepted: string; keyPoints: string[];
   evaluation: { feedback: string; label: string; parts: FeedbackParts | null; formative?: string } | null;
+  /** WS-C: what the part asks for, the options of a choice part (the key is `accepted`), and its weighted criteria with which were met (null: not AI-judged). */
+  role?: PartRole; roleLabel?: string; options?: string[];
+  criteria?: { text: string; weight: number; safetyCritical: boolean; met: boolean | null }[];
+  /** WS-B: the part is safety-critical. */
+  safetyCritical?: boolean;
 };
 
 /** CE-05: one stage of a scenario after marking. `score` is null for an attempt that kept no per-stage record. */
@@ -86,8 +103,21 @@ export type RevisionFeedback = {
   scenario?: { stages: ScenarioStageFeedback[]; practiceMarks: { awarded: number; total: number; label: string }; label: string };
   /** SCHOLAR-SQIE-LEARNER-01: the attempt was marked against a guide the question no longer has; what is shown is the guide at the time. */
   rubricNote?: string;
-  /** SCHOLAR-SQIE-CLOSE-01: a structured question, part by part, and its practice marks (formative). */
-  structured?: { parts: StructuredPartFeedback[]; practiceMarks: { awarded: number; total: number; label: string } };
+  /** SCHOLAR-SQIE-CLOSE-01: a structured question, part by part, and its practice marks (formative). WS-C: its variant and findings table. */
+  structured?: { parts: StructuredPartFeedback[]; practiceMarks: { awarded: number; total: number; label: string }; variant?: StructuredVariant; variantLabel?: string; findings?: Finding[] };
+  /**
+   * SQIE-CLOSE-2026-11 WS-B (rules v2): the answer was clinically unsafe, or missed a safety-critical point: what, said plainly, and
+   * that its marks were capped. Absent for a safe answer and for every attempt marked before the v2 rules (nothing is invented for it).
+   */
+  safety?: SafetyView;
+  /**
+   * SQIE-CLOSE-2026-11 WS-A: a calculation, marked by code: what was given, the answer, why it was marked so (a wrong unit is said
+   * plainly), the tolerance and unit rule it was marked under, any number-writing warnings, and the working from the notes.
+   */
+  calculation?: {
+    given: { value: number | null; unit: string }; expected: { value: number; unit: string }; reason: CalculationMark["reason"]; feedback: string;
+    inKeyUnit: number | null; tolerance: string; unitRule: string; warnings: string[]; working: string | null; label: string;
+  };
   /**
    * SCHOLAR-CONTINUITY-01 (791): the question has changed since it was answered. `asAnswered` is the stem and options as they
    * were shown (the key, rationale and answer above are the ones at the time too).
@@ -112,6 +142,28 @@ export function keptAttemptView(q: QuestionRow, a: { response?: Record<string, u
 
 function keptView(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string }) {
   const snapshot = snapshotOf(a.response);
+  // SQIE-CLOSE-2026-11 WS-B: the safety outcome the attempt kept (rules v2 only; an older attempt has none and shows none).
+  const safety = storedSafety(a.response);
+  const kept = keptKind(q, a, snapshot);
+  return safety ? { ...kept, safety } : kept;
+}
+
+/**
+ * Pure (WS-A). A calculation attempt's code mark, re-derived from what it kept: the number and unit given and the tolerance and unit rule
+ * it was marked under, against its key as it was (the rubric snapshot laid over the row). null for an attempt that kept none (legacy).
+ */
+export function keptCalculation(q: QuestionRow, response: unknown, snapshot: RubricSnapshot | null): CalculationMark | null {
+  const spec = calculationSpecOf(applySnapshot(q, snapshot).answer);
+  const r = (response ?? {}) as Record<string, unknown>;
+  const rec = (r.calc ?? null) as Record<string, unknown> | null;
+  if (!spec || r.kind !== "calc" || typeof r.value !== "string" || typeof r.unit !== "string" || !rec || typeof rec !== "object") return null;
+  if (typeof rec.tolerancesActive !== "boolean") return null;
+  return markCalculation(spec, { value: r.value, unit: r.unit }, { tolerancesActive: rec.tolerancesActive });
+}
+
+function keptKind(q: QuestionRow, a: { response?: Record<string, unknown> | null; marking: string }, snapshot: RubricSnapshot | null) {
+  const calc = keptCalculation(q, a.response, snapshot);
+  if (calc) return { snapshot, calc };
   const parts = structuredParts(applySnapshot(q, snapshot));
   if (parts.length) { const structured = storedPartResults(a.response, a.marking, parts.length); return { snapshot, ...(structured ? { structured } : {}) }; }
   // CE-05: a scenario keeps its per-stage record (what was answered and scored at each stage) on the attempt's response.
@@ -139,6 +191,10 @@ export function feedbackView(row: QuestionRow, m: {
   justMarked?: boolean;
   /** SCHOLAR-CONTINUITY-01 (791): what the attempt was assessed against (its snapshot) and any corrections of its result. */
   assessed?: AttemptIntegrity | null;
+  /** SQIE-CLOSE-2026-11 WS-B: the safety outcome (just marked, or kept on the attempt). */
+  safety?: SafetyRecord | null;
+  /** SQIE-CLOSE-2026-11 WS-A: a calculation's code mark (just marked, or re-derived from what the attempt kept). */
+  calc?: CalculationMark | null;
 }): RevisionFeedback {
   // SCHOLAR-CONTINUITY-01: the question as it was presented when answered (791 snapshot), where it has changed since.
   const live = row;
@@ -158,16 +214,27 @@ export function feedbackView(row: QuestionRow, m: {
     const results = m.structured ?? null;
     const total = parts.reduce((n, p) => n + p.marks, 0);
     // Resumed later, only the share is stored with the attempt: the marks are that share of the total.
-    const awarded = results ? practiceMarks(parts, results).awarded : Math.round((m.score ?? 0) * total);
+    // WS-B (rules v2): a capped answer shows its capped marks (the share it was recorded at), never the parts' sum.
+    const summed = results ? practiceMarks(parts, results).awarded : Math.round((m.score ?? 0) * total);
+    const awarded = m.safety ? Math.min(summed, Math.floor((m.score ?? 0) * total + 1e-9)) : summed;
+    const variant = structuredVariantOf(q.answer), findings = findingsOf(q.answer);
     structured = {
       parts: parts.map((p, i) => {
         const r = results?.[i] ?? null;
+        const c = p.contract;
         return {
           prompt: p.prompt, marks: p.marks, awarded: r ? r.awarded : null, by: r ? r.by : null, accepted: p.accepted.join("; "), keyPoints: p.rubric?.keyPoints ?? [],
           evaluation: r?.by === "ai" && r.feedback ? { feedback: r.feedback, label: MARKING_LABEL.ai_evaluation, parts: r.parts ?? null, formative: FORMATIVE_FEEDBACK_LABEL } : null,
+          // SQIE-CLOSE-2026-11 WS-C / WS-B: only what the part carries (a plain part adds nothing, so older feedback is unchanged).
+          ...(c.role !== "answer" ? { role: c.role, roleLabel: ROLE_LABEL[c.role] } : {}),
+          ...(c.options ? { options: c.options } : {}),
+          ...(c.criteria ? { criteria: c.criteria.map((x, k) => ({ ...x, met: r?.matched ? r.matched.includes(k) : null })) } : {}),
+          ...(c.safetyCritical ? { safetyCritical: true } : {}),
         };
       }),
       practiceMarks: { awarded, total, label: PRACTICE_MARKS_LABEL },
+      ...(variant ? { variant, variantLabel: VARIANT_LABEL[variant] } : {}),
+      ...(findings.length ? { findings } : {}),
     };
   }
   let extended: RevisionFeedback["extended"];
@@ -175,8 +242,10 @@ export function feedbackView(row: QuestionRow, m: {
   if (spec) {
     const total = spec.keyPoints.length * spec.marksPerPoint;
     const made = m.extendedMatched ? extendedMarks(spec, m.extendedMatched) : null;
+    const shareMarks = Math.round((m.score ?? 0) * total);
     extended = {
-      marks: { awarded: made ? made.awarded : Math.round((m.score ?? 0) * total), total, label: PRACTICE_MARKS_LABEL },
+      // WS-B (rules v2): a capped answer shows the marks it was recorded at.
+      marks: { awarded: made ? (m.safety ? Math.min(made.awarded, shareMarks) : made.awarded) : shareMarks, total, label: PRACTICE_MARKS_LABEL },
       modelAnswer: spec.modelAnswer, label: EXTENDED_LABEL,
       points: spec.keyPoints.map((text, i) => ({ text, matched: made ? made.matched.includes(i) : null })),
     };
@@ -197,7 +266,7 @@ export function feedbackView(row: QuestionRow, m: {
         };
       }),
       // Resumed later without a per-stage record, only the share is stored with the attempt: the marks are that share of the total.
-      practiceMarks: { awarded: marks ? marks.awarded : Math.round((m.score ?? 0) * sc.totalWeight * 100) / 100, total: sc.totalWeight, label: PRACTICE_MARKS_LABEL },
+      practiceMarks: { awarded: marks && !m.safety ? marks.awarded : Math.round((m.score ?? 0) * sc.totalWeight * 100) / 100, total: sc.totalWeight, label: PRACTICE_MARKS_LABEL },
       label: SCENARIO_LABEL,
     };
   }
@@ -228,6 +297,13 @@ export function feedbackView(row: QuestionRow, m: {
     ...(q.library ? { library: { ...q.library, label: LIBRARY_QUESTION_LABEL } } : {}),
     ...(structured ? { structured } : {}),
     ...(extended ? { extended } : {}),
+    ...(m.safety ? { safety: safetyView(m.safety)! } : {}),
+    ...(m.calc ? { calculation: {
+      given: m.calc.given, expected: m.calc.expected, reason: m.calc.reason, feedback: m.calc.feedback, inKeyUnit: m.calc.inKeyUnit,
+      tolerance: toleranceText(m.calc.tolerance ?? { kind: "none" }, m.calc.expected.unit) + (m.calc.toleranceInactive ? " (this question sets a tolerance, which is not in use until the clinical calculation policy is approved)" : ""),
+      unitRule: [m.calc.rounding ? `Give the answer ${roundingText(m.calc.rounding)}.` : null, "The answer must be in the unit the question asks for, or an equivalent it accepts."].filter(Boolean).join(" "),
+      warnings: m.calc.warnings, working: calculationSpecOf(q.answer)?.working ?? null, label: CALCULATION_LABEL,
+    } } : {}),
     ...(!changed && rubricChanged(row, m.snapshot ?? null) ? { rubricNote: "This question's marking guide has been updated since you answered. What is shown here is the guide your answer was marked against." } : {}),
     ...(changed ? { questionChanged: { note: QUESTION_CHANGED_NOTE, asAnswered: { stem: row.stem, options: [...row.options] } } } : {}),
     ...(eff && m.assessed ? { corrections: { original, entries: m.assessed.corrections.map(c => ({ at: c.createdAt, reason: c.reason, basis: CORRECTION_BASIS_LABEL[c.basis], from: c.previousOutcome, to: c.correctedOutcome })) } } : {}),
