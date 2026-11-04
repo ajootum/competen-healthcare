@@ -38,7 +38,7 @@ export async function loadCompetencyOptions(admin: any): Promise<CompetencyOptio
   if (published.length) {
     const entries = await rows(admin.from("competency_catalogue_entry").select("catalogue_id, competency_id, sort_order").in("catalogue_id", published.map((f: any) => f.id)).limit(10000));
     if (entries === null) return null;
-    const comps = await competencies(admin, [...new Set(entries.map((e: any) => e.competency_id as string))]);
+    const comps = await competencies(admin, [...new Set<string>(entries.map((e: any) => String(e.competency_id)))]);
     if (comps === null) return null;
     for (const e of [...entries].sort((a: any, b: any) => fwName.get(a.catalogue_id)!.localeCompare(fwName.get(b.catalogue_id)!) || (a.sort_order ?? 0) - (b.sort_order ?? 0))) {
       const c = comps.get(e.competency_id);

@@ -234,7 +234,7 @@ export default async function QuestionLibraryPage({ searchParams }: { searchPara
       <FormatTable f={formats} />
       <section className={card} aria-labelledby="mp-h">
         <h2 id="mp-h" className="text-[15px] font-bold text-gray-900">Misconception patterns <span className="text-[12px] font-normal text-gray-600">published questions shown above · consenting learners</span></h2>
-        <p className="text-[12.5px] text-gray-600">The misconceptions the library's own rubrics name, weighted by how many consenting learners got those questions wrong at their first attempt. Questions under the minimum cohort ({perf.floor}) are left out. Nothing a learner wrote is read.</p>
+        <p className="text-[12.5px] text-gray-600">The misconceptions named in the library rubrics, weighted by how many consenting learners got those questions wrong at their first attempt. Questions under the minimum cohort ({perf.floor}) are left out. Nothing a learner wrote is read.</p>
         {!perf.measured ? <p role="status" className="text-[13px] text-gray-700">{perf.reason}</p> : !patterns.length ? <p className="text-[13px] text-gray-600">No pattern to report: no published question shown above names a misconception and has enough consenting learners.</p> : (
           <ol className="ml-4 list-decimal text-[13px]">{patterns.map(m => <li key={m.misconception}>{m.misconception} <span className="text-gray-600">· {m.missedLearners} learner{m.missedLearners === 1 ? "" : "s"} missed · {m.versions} question{m.versions === 1 ? "" : "s"}</span></li>)}</ol>
         )}
