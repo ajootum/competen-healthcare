@@ -7,6 +7,7 @@ import { isTransferOutside, type TransferOutside } from "./transfer";
 import type { TopicCard } from "./retrieval-schedule";
 import type { MasteryLevel } from "./mastery";
 import type { IndividualPolicy } from "../policy";
+import type { EvidenceRecord } from "./application-evidence";
 
 // ── SALE-2026-11 R1 / SALE-04: THE READ BEHIND THE LEARNING STATE ─────────────────────────────────────────────────────────
 //
@@ -36,6 +37,8 @@ export type StateSources = {
   materials: readonly { id: string; title: string }[];
   /** The topics of each section (Progress already read them). Null: none, so every row falls back to its material. */
   concepts: ReadonlyMap<string, readonly string[]> | null;
+  /** SALE-2026-11 R4 (SALE-13): case records already read (only where scholar_application_evidence is on). A case made from a material counts as applying it. */
+  application?: readonly EvidenceRecord[] | null;
 };
 export type StateInputs = {
   topics: StateTopic[]; evidence: StateEvidence[]; exposure: ExposureRow[];
@@ -103,6 +106,14 @@ export async function readStateInputs(admin: unknown, userId: string, policy: In
     const key = place(s.materialId, s.chunkId, null);
     if (!key) continue;
     evidence.push({ itemId: `osce:${s.id}`, attemptId: null, topicKey: key, chunkId: s.chunkId, materialId: s.materialId, source: "osce", level: "application", outcome: Math.max(0, Math.min(1, r.score)), marking: r.marking === "ai_evaluation" ? "ai_evaluation" : "self", at: r.at, confidence: null, misconceptions: [] });
+  }
+  // SALE-13: a completed case made from the learner's notes is application evidence on that material's topic. A library case has no material
+  // of the learner's and stays in the application section only. Its outcome is the case's own (application-evidence.ts caseRecord).
+  for (const r of o.application ?? []) {
+    if (r.source !== "case" || !r.materialId) continue;
+    const key = place(r.materialId, null, null);
+    if (!key) continue;
+    evidence.push({ itemId: r.activityId, attemptId: null, topicKey: key, chunkId: null, materialId: r.materialId, source: "case", level: "application", outcome: r.outcome, marking: r.marking, at: r.at, confidence: null, misconceptions: [] });
   }
   const exposure: ExposureRow[] = [];
   for (const e of exp.data) {

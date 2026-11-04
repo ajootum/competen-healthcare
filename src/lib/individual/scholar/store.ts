@@ -5242,3 +5242,115 @@ export async function sessionAttemptIds(admin: Admin, userId: string, sessionIds
   }
   return { ok: true, data: out };
 }
+
+// ── SALE-2026-11 R4 (SALE-13 / SALE-14): THE ROWS BEHIND APPLICATION EVIDENCE AND THE LEARNING-EVIDENCE VIEW ── read only ──
+//
+// Owner-keyed throughout, bounded, newest first. Nothing is written. A source whose migration is absent reads as none
+// (810 kept case attempts, 720 OSCE, 791/990/991 snapshots); a failed read is not ok (the caller says "could not be read").
+// application-evidence-data.ts turns these rows into records; application-evidence.ts holds every rule.
+
+export type ApplicationCaseRow = {
+  snapshotId: string; kind: "private" | "library"; sessionId: string; caseRef: string; completedAt: string;
+  title: string | null; decisions: any[]; escalations: any[] | null; competencies: any[] | null;
+  corrections: { decisionPointId: string; correctedOutcome: string; correctedScore: number | null }[];
+};
+export type ApplicationRows = {
+  cases: ApplicationCaseRow[];
+  /** private session id -> its case (material and the competencies the case was made for, 435 individual_scholar_case_competency). */
+  privateCases: Map<string, { caseId: string; materialId: string | null; competencyIds: string[] }>;
+  osce: { attemptId: string; stationId: string; score: number | null; marking: string | null; finishedAt: string }[];
+  stations: Map<string, { title: string; competencyId: string | null; materialId: string | null; chunkId: string | null }>;
+};
+
+const noRows = () => Promise.resolve({ data: [] as unknown, error: null as any });
+
+export async function applicationEvidenceRows(admin: Admin, userId: string, o: { maxCases: number; maxOsce: number }): Promise<Read<ApplicationRows>> {
+  const soft = async (q: PromiseLike<{ data: unknown; error: any }>) => { const r = await q; return r.error && isNotProvisioned(r.error) ? { data: [], error: null } : r; };
+  const [snaps, osce] = await Promise.all([
+    soft(admin.from("individual_scholar_case_attempt_snapshot")
+      .select("id, session_kind, private_session_id, library_session_id, case_ref, completed_at, title:record->>title, decisions:record->decisions, escalations:record->simulation->escalations, competencies:record->competencies")
+      .eq("user_id", userId).order("completed_at", { ascending: false }).limit(Math.min(Math.max(1, o.maxCases), 200))),
+    soft(admin.from("individual_scholar_osce_attempt").select("id, station_id, score, marking, finished_at").eq("user_id", userId).eq("status", "finished")
+      .not("finished_at", "is", null).order("finished_at", { ascending: false }).limit(Math.min(Math.max(1, o.maxOsce), 200))),
+  ]);
+  if (snaps.error) return fail(snaps.error);
+  if (osce.error) return fail(osce.error);
+  const snapRows = (snaps.data ?? []) as any[];
+  const osceRows = (osce.data ?? []) as any[];
+  const snapIds = snapRows.map(r => r.id).filter(isUuid);
+  const privSessions = [...new Set(snapRows.map(r => r.private_session_id).filter(isUuid))];
+  const stationIds = [...new Set(osceRows.map(r => r.station_id).filter(isUuid))];
+  const [corr, sess, st] = await Promise.all([
+    snapIds.length ? soft(admin.from("individual_scholar_case_attempt_correction").select("snapshot_id, decision_point_id, corrected_outcome, corrected_score, created_at")
+      .eq("user_id", userId).in("snapshot_id", snapIds).order("created_at")) : noRows(),
+    privSessions.length ? soft(admin.from("individual_scholar_case_session").select("id, private_case_id").eq("user_id", userId).in("id", privSessions)) : noRows(),
+    stationIds.length ? soft(admin.from("individual_scholar_osce_station").select("id, title, competency_id, material_id, chunk_id").eq("user_id", userId).in("id", stationIds)) : noRows(),
+  ]);
+  const err = [corr, sess, st].find(r => r.error)?.error;
+  if (err) return fail(err);
+  const caseOf = new Map(((sess.data ?? []) as any[]).map(r => [r.id as string, r.private_case_id as string]));
+  const caseIds = [...new Set([...caseOf.values()].filter(isUuid))];
+  const [cases, comps] = await Promise.all([
+    caseIds.length ? soft(admin.from("individual_scholar_case").select("id, material_id").eq("user_id", userId).in("id", caseIds)) : noRows(),
+    caseIds.length ? soft(admin.from("individual_scholar_case_competency").select("case_id, competency_id").eq("user_id", userId).in("case_id", caseIds)) : noRows(),
+  ]);
+  const err2 = [cases, comps].find(r => r.error)?.error;
+  if (err2) return fail(err2);
+  const material = new Map(((cases.data ?? []) as any[]).map(r => [r.id as string, (r.material_id ?? null) as string | null]));
+  const compsOf = new Map<string, string[]>();
+  for (const r of (comps.data ?? []) as any[]) if (isUuid(r.competency_id)) compsOf.set(r.case_id, [...(compsOf.get(r.case_id) ?? []), r.competency_id]);
+  const corrOf = new Map<string, ApplicationCaseRow["corrections"]>();
+  for (const r of (corr.data ?? []) as any[]) corrOf.set(r.snapshot_id, [...(corrOf.get(r.snapshot_id) ?? []), { decisionPointId: String(r.decision_point_id), correctedOutcome: String(r.corrected_outcome), correctedScore: r.corrected_score === null || r.corrected_score === undefined ? null : Number(r.corrected_score) }]);
+  const privateCases = new Map<string, { caseId: string; materialId: string | null; competencyIds: string[] }>();
+  for (const [sid, cid] of caseOf) privateCases.set(sid, { caseId: cid, materialId: material.get(cid) ?? null, competencyIds: compsOf.get(cid) ?? [] });
+  return {
+    ok: true,
+    data: {
+      cases: snapRows.map(r => ({
+        snapshotId: r.id, kind: r.session_kind === "library" ? "library" as const : "private" as const, sessionId: r.private_session_id ?? r.library_session_id, caseRef: String(r.case_ref ?? ""),
+        completedAt: r.completed_at, title: typeof r.title === "string" ? r.title : null, decisions: Array.isArray(r.decisions) ? r.decisions : [],
+        escalations: Array.isArray(r.escalations) ? r.escalations : null, competencies: Array.isArray(r.competencies) ? r.competencies : null, corrections: corrOf.get(r.id) ?? [],
+      })),
+      privateCases,
+      osce: osceRows.map(r => ({ attemptId: r.id, stationId: r.station_id, score: r.score === null || r.score === undefined ? null : Number(r.score), marking: r.marking ?? null, finishedAt: r.finished_at })),
+      stations: new Map(((st.data ?? []) as any[]).map(r => [r.id as string, { title: String(r.title ?? ""), competencyId: isUuid(r.competency_id) ? r.competency_id as string : null, materialId: r.material_id ?? null, chunkId: r.chunk_id ?? null }])),
+    },
+  };
+}
+
+/**
+ * SALE-14: the caller's kept question snapshots that name a competency (791, with 990/991 provenance where present), newest first,
+ * with the latest correction of each (an append-only correction replaces the result shown; the original is never overwritten).
+ */
+export type CompetencySnapshotRow = {
+  attemptId: string; questionId: string; stem: string | null; assessedAt: string; outcome: string; score: number | null; marking: string | null;
+  competencyIds: string[]; provenance: any[] | null;
+};
+export async function competencyAttemptSnapshots(admin: Admin, userId: string, limit = 200): Promise<Read<CompetencySnapshotRow[]>> {
+  const read = (cols: string) => admin.from("individual_scholar_attempt_snapshot").select(cols).eq("user_id", userId).neq("competency_ids", "{}")
+    .order("assessed_at", { ascending: false }).limit(Math.min(Math.max(1, limit), 500));
+  const base = "attempt_id, question_id, assessed_at, outcome, score, marking, competency_ids, stem:presented->>stem";
+  let { data, error } = await read(`${base}, competency_provenance`);
+  if (error && isMissingColumn(error)) ({ data, error } = await read(base));
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  const rows = (data ?? []) as any[];
+  const ids = rows.map(r => r.attempt_id).filter(isUuid);
+  const latest = new Map<string, { outcome: string; score: number | null }>();
+  if (ids.length) {
+    const c = await admin.from("individual_scholar_attempt_correction").select("attempt_id, corrected_outcome, corrected_score, created_at").eq("user_id", userId).in("attempt_id", ids).order("created_at");
+    if (c.error && !isNotProvisioned(c.error)) return fail(c.error);
+    for (const r of (c.data ?? []) as any[]) latest.set(r.attempt_id, { outcome: String(r.corrected_outcome), score: r.corrected_score === null || r.corrected_score === undefined ? null : Number(r.corrected_score) });
+  }
+  return {
+    ok: true,
+    data: rows.map(r => {
+      const fix = latest.get(r.attempt_id);
+      return {
+        attemptId: r.attempt_id, questionId: String(r.question_id ?? r.attempt_id), stem: typeof r.stem === "string" ? r.stem : null, assessedAt: r.assessed_at,
+        outcome: fix?.outcome ?? String(r.outcome ?? "unmarked"), score: fix ? fix.score : r.score === null || r.score === undefined ? null : Number(r.score),
+        marking: r.marking ?? null, competencyIds: Array.isArray(r.competency_ids) ? (r.competency_ids as unknown[]).filter(isUuid) as string[] : [],
+        provenance: Array.isArray(r.competency_provenance) ? r.competency_provenance : null,
+      };
+    }),
+  };
+}

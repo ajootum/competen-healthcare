@@ -18,7 +18,8 @@ import type { MasteryLevel } from "./mastery";
 import type { TransferOutside } from "./transfer";
 
 export type StateMarking = "code" | "ai_evaluation" | "self" | "unmarked";
-export type StateSource = "check" | "practice" | "review" | "osce";
+/** SALE-2026-11 R4: "case" is a completed clinical case made from the learner's notes (810), only where scholar_application_evidence is on. */
+export type StateSource = "check" | "practice" | "review" | "osce" | "case";
 /** One answer, already joined to its topic (learning-state-data.ts uses the same join as Progress by topic). */
 export type StateEvidence = {
   itemId: string; attemptId: string | null; topicKey: string; chunkId: string | null; materialId: string;
@@ -77,7 +78,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const right = (e: StateEvidence) => e.outcome !== null && e.outcome >= 0.75;
 const partly = (e: StateEvidence) => e.outcome !== null && e.outcome >= 0.25 && e.outcome < 0.75;
 const marked = (e: StateEvidence) => e.outcome !== null && e.marking !== "unmarked";
-const SOURCE_WORD: Record<StateSource, string> = { check: "lesson check", practice: "practice question", review: "card review", osce: "OSCE practice" };
+const SOURCE_WORD: Record<StateSource, string> = { check: "lesson check", practice: "practice question", review: "card review", osce: "OSCE practice", case: "clinical case" };
 const MARK_WORD: Record<StateMarking, string> = { code: "marked by the app", ai_evaluation: "AI-evaluated", self: "self-rated", unmarked: "not marked" };
 const TEACHING = new Set(["teach", "explain", "simplify", "deeper", "examples", "summary", "read", "revisit", "resume", "check", "clarify"]);
 
@@ -152,8 +153,8 @@ export function topicLearningState(topic: StateTopic, rows: readonly StateEviden
 
   // application and reasoning
   // A2 (SALE-2026-11 R2 / SALE-10): an answer in a transfer check -- a question outside the lesson where the topic was taught -- is
-  // application evidence whatever its level, and is said apart.
-  const app = markedRows.filter(r => r.level === "application" || r.level === "reasoning" || r.source === "osce" || !!r.transfer);
+  // application evidence whatever its level, and is said apart. R4 (SALE-13): a completed case made from the notes is application evidence too.
+  const app = markedRows.filter(r => r.level === "application" || r.level === "reasoning" || r.source === "osce" || r.source === "case" || !!r.transfer);
   const appRight = distinctRight(app);
   const tr = markedRows.filter(r => !!r.transfer);
   const trRight = distinctRight(tr);

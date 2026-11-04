@@ -1,0 +1,16 @@
+{
+  "width": 390,
+  "stationId": "8f9bc16e-e00c-4b1a-b162-a6e8e036e14f",
+  "competencyId": "6f2ae8cb-1a58-43e9-89ec-8501af9cd11c",
+  "skills": [
+    "practical=thin"
+  ],
+  "status": [
+    "draft"
+  ],
+  "errors": [
+    "Encountered a script tag while rendering React component. Scripts inside React components are never executed when rendering on the client. Consider using template tag instead (https://developer.mozilla.org/en-US/docs/Web/HTML/Element/template)."
+  ],
+  "fivexx": [],
+  "at": "2026-11-04T18:09:34.232Z"
+}

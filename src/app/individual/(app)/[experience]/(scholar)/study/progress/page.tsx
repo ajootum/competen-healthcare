@@ -32,8 +32,12 @@ import { loadTopicProgress, mergeStudyNext, topicProgressEnabled } from "@/lib/i
 import { isStudyId } from "@/lib/individual/scholar/study-carry";
 import { StudyNextCard, TopicProgressSection } from "../_components/topic-progress-view";
 import { LearningStateSection } from "../_components/learning-state-view";
-import { loadLearningState, readStateInputs } from "@/lib/individual/scholar/learning-state-data";
+import { loadLearningState, readStateInputs, stateThresholds } from "@/lib/individual/scholar/learning-state-data";
 import { loadRetentionView, withRetrieval } from "@/lib/individual/scholar/retention-data";
+import { ApplicationEvidenceSection } from "../_components/application-evidence-view";
+import { loadApplicationEvidence } from "@/lib/individual/scholar/application-evidence-data";
+import { applicationBySkill } from "@/lib/individual/scholar/application-evidence";
+import { loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
 import { Fold, NotMeasuredLine } from "../_components/progress-parts";
 import { activitySummary, enoughForTrend, listSummary, practisedDetail, TREND_NEEDS, withoutEngagementInsight, type ActivitySummary } from "@/lib/individual/scholar/progress-simplify";
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
@@ -170,9 +174,12 @@ export default async function ProgressPage({ params, searchParams }: { params: P
       studyId: study && isStudyId(sp.study) ? sp.study : null,
     })
     : null;
+  // SALE-2026-11 R4 (SALE-13): completed cases and OSCE runs as application evidence, behind scholar_application_evidence (default off). No AI, nothing stored.
+  const appOn = policy.scholarApplicationEvidence === "on" && rows.ok;
+  const app = appOn ? await loadApplicationEvidence(ctx.admin, ctx.userId).catch(() => null) : null;
   // SALE-2026-11 R1 (SALE-04): the learning state per topic, from the same evidence read (request-cached) plus the learning events. No AI, nothing stored.
   // SALE-2026-11 R2: the same join feeds due retrieval (SALE-08), prerequisite reviews (SALE-09) and transfer offers (SALE-10), each behind its own key (default off).
-  const stateSources = rows.ok && p && p.materials.length > 0 ? { materials: rows.data.materials, concepts: allRows?.ok ? allRows.data.concepts : null } : null;
+  const stateSources = rows.ok && p && p.materials.length > 0 ? { materials: rows.data.materials, concepts: allRows?.ok ? allRows.data.concepts : null, application: app?.ok ? app.data : null } : null;
   const r2On = policy.scholarRetrievalSchedule === "on" || policy.scholarPrerequisiteSuggestions === "on" || policy.scholarTransferChecks === "on";
   const stateInputs = stateSources && (policy.scholarLearningState === "on" || r2On) ? await readStateInputs(ctx.admin, ctx.userId, policy, new Date().toISOString(), stateSources).catch(() => null) : null;
   const ls = policy.scholarLearningState === "on" && stateSources
@@ -180,6 +187,11 @@ export default async function ProgressPage({ params, searchParams }: { params: P
     : null;
   const retention = stateSources && r2On && stateInputs?.ok ? await loadRetentionView(ctx.admin, ctx.userId, policy, new Date().toISOString(), { today, sources: stateSources, inputs: stateInputs.data }) : null;
   const ownNext = tp?.ok ? withRetrieval(tp.data.studyNext, retention?.schedule ?? null) : [];
+  const competencyTitles = new Map((learner?.competencies ?? []).map(c => [c.id, c.code ? `${c.code} ${c.title}` : c.title]));
+  // A record may link to a competency outside the learner's programme: it is named from its own label (never left unnamed when readable).
+  const outside = app?.ok ? [...new Set(app.data.flatMap(r => r.competencies.map(l => l.competencyId)))].filter(id => !competencyTitles.has(id)).slice(0, 50) : [];
+  if (outside.length) for (const [id, l] of await loadCompetencyLabels(ctx.admin, outside)) competencyTitles.set(id, `${l.code ? `${l.code} ` : ""}${l.title} (outside your current programme)`);
+  const competencyTitle = (id: string) => competencyTitles.get(id) ?? "A competency outside your current programme";
   // SCHOLAR-MONTHLY-REVIEW-01: the study calendar (one calendar, extending the plan) and the monthly review's banner and last-result card.
   // The calendar reads the plan the card above is built from; both fail closed, and an unreadable one is said, never drawn empty.
   const calendarOn = policy.scholarStudyCalendar === "on" && !myPlan;
@@ -297,6 +309,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} offered={programmesOffered} />
 
             {showTopicProgress && tp?.ok && <TopicProgressSection m={tp.data} />}
+            {appOn && <ApplicationEvidenceSection records={app?.ok ? app.data : null} skills={app?.ok ? applicationBySkill(app.data, stateThresholds(policy)) : []} competencyTitle={competencyTitle} />}
             {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} retention={retention} accent={x.accent} />}
 
             {liShown ? <LearningIntelligence li={liShown} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
