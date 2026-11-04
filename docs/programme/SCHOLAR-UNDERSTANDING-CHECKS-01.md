@@ -76,3 +76,39 @@ sources), never a verdict.
    (`study-context.ts` already reads `not_yet` verdicts). Needs the owner's decision on storing what the learner typed:
    Learn's contract today stores nothing the learner types; the revision attempt table (416: `response`, `marking`,
    `evaluator_*`) is the existing place for a written answer and its marking.
+
+## Wave 1 (LEARNING-CLOSE-2026-11, WS01 CYU-01..04, owner decision D01, 4 Nov 2026)
+
+Branch `scholar/cyu-wave1-01`. Migration 950 (`docs/evidence/SCHOLAR-CYU/950-build-record.md`): state 2, staging only.
+
+**Model (reuse, no second engine).** A check question is an `individual_scholar_question` of the section it cites (416 kind `short`;
+the extended format where the judgement gave three or more key learning points, which are its rubric; `answer.check.source =
+"lesson"`), written once per section and stem. An answer is an `individual_scholar_attempt`: `response` holds the typed text and
+the judgement (`learn-check-record.ts checkResponse`) and, for an AI judgement, the written-feedback copy the study session already
+reads; `marking` is `ai_evaluation` (the clarify model and prompt), `self_graded` (the learner's own grade against the key
+points) or `unmarked` (950). The clarify learning event references the attempt (950 `attempt_id`). A missed check (not yet, or
+"I missed most of them") makes or resets the question's 372 card, so Revise and My Plan see the gap as they see a missed
+practice question.
+
+- **CYU-01** `placeChecks` + policy `scholar_learn_check_placement` (default distributed): on a substantial lesson (two
+  questions, teaching paragraphs of 160+ words) the first check is shown after the teaching paragraphs and the second after the
+  lesson; a short lesson, one question, an older lesson or the lesson_end policy keeps them at the end. Never one per paragraph
+  or slide; every check optional.
+- **CYU-02** the check question is a governed question kind (416 short / extended) and its answer is marked by the kind's rules:
+  judgement where AI is allowed (clarify, `ai_evaluation`), else the learner's own grade (`self_graded`) or none (`unmarked`);
+  a typed answer never matches the key by code. The quick MCQ check (`learn-inline-check.tsx`) is unchanged.
+- **CYU-03** the act route keeps a judged answer under the same gate as its event (recorded session, shown, grounded, history on);
+  `POST /api/individual/scholar/learn/checks` keeps a self-graded or unmarked answer (the question must be one the lesson's
+  saved teaching wrote; screened for identifiers); `GET` lists a lesson's or session's kept checks. The Learn page loads the
+  session's kept checks on the server, so they survive refresh, sign-out and a change of device.
+- **CYU-04** "Your previous checks" in the lesson (each attempt its own, Try again reopens it with the answer); the Saved
+  learning page lists the latest kept checks with a way back to the lesson and the section; the kept checks of a lesson join
+  TAUGHT SO FAR as prior checks for every later lesson action (any device); the written-feedback copy reaches the study-session
+  block and the Personal AI through the existing readers; a missed check reaches Revise / My Plan through the existing card.
+- **Harness** K24 updated deliberately: the kept check is written only inside the D01 block under its full gate; 414 and 950
+  hold no conversation column; P41 goes red when the gate loses `shown`/grounded or history-on, or when the event row carries
+  anything beyond `attempt_id`.
+
+Not done in Wave 1 (stays for later increments): checks of other kinds (true/false, cloze, scenario) offered inside a lesson;
+restructuring-safe re-keying of kept checks (LE-03 / LE-05); competency evidence views beyond what `competency_id` on the
+question row already feeds.
