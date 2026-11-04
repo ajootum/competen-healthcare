@@ -18,15 +18,15 @@ Open **My Learning → Learn**. Below the search box, click **My search history*
 | # | Do | Expect | Pass |
 |---|---|---|---|
 | 1 | Read the list | Their saved teaching and lessons, newest first. Earlier searches and Ask questions are **not** there: they were never kept | ☐ |
-| 2 | On a Saved teaching row, click **Open the saved answer** | The saved answer as it was, with no "writing" or waiting for AI | ☐ |
-| 3 | Back. On a Lesson row, click **Open its saved lessons** | The lesson's saved teaching in the library, no AI | ☐ |
+| 2 | Click a Saved teaching row (the title or the chevron) | The saved answer as it was, with no "writing" or waiting for AI | ☐ |
+| 3 | Back. Click a Previous lesson row | The lesson's saved teaching in the library, no AI | ☐ |
 | 4 | In Learn, search `history check` and click **Search my library**, then reload the results | The search is at the top of the history, **once** | ☐ |
-| 5 | In My Library, search `history check two` | It appears as Searched your library | ☐ |
-| 6 | In a lesson with saved teaching, ask Ask Scholar one short question (uses one AI call) | It appears as Asked Scholar, tells them the answer was not kept, and offers Continue the lesson | ☐ |
+| 5 | In My Library, search `history check two` | It appears as Library search | ☐ |
+| 6 | In a lesson with saved teaching, ask Ask Scholar one short question (uses one AI call) | It appears as Ask Scholar, says "Answer not kept", and its ⋯ menu offers Continue the lesson | ☐ |
 | 7 | In the history, search `history` | Only matching entries, words marked | ☐ |
-| 8 | Filter by Activity, then Material, then a date range of today | Each narrows the list correctly. Topic lists appear where a lesson or question has a topic | ☐ |
-| 9 | **Pin** the search from step 4, then **Unpin** it | It shows under Pinned, then leaves | ☐ |
-| 10 | **Remove** the search from step 5 | It goes. Nothing else changes | ☐ |
+| 8 | Click the chips Searches, Ask Scholar, Lessons, Research, then All. Then open **Filters** and try a material and a date range of today | Each narrows the list correctly. Topics are listed where a lesson or question has one | ☐ |
+| 9 | In the row's ⋯ menu, **Pin** the search from step 4, then **Unpin** it | It shows under Pinned, then leaves | ☐ |
+| 10 | In the row's ⋯ menu, **Remove** the search from step 5 | It goes. Nothing else changes | ☐ |
 | 11 | Open the history on a second device or browser | The same entries in the same order. A search made there appears on the first after a reload | ☐ |
 
 ## One learner cannot see the other
@@ -42,7 +42,7 @@ Open **My Learning → Learn**. Below the search box, click **My search history*
 
 | # | Do | Expect | Pass |
 |---|---|---|---|
-| 14 | Click **Clear search history…**, then **Cancel** | Nothing changes | ☐ |
+| 14 | Click **Clear all**, then **Cancel** | Nothing changes | ☐ |
 | 15 | Only with the learner's agreement: click it again, then **Yes, clear my search history** | The list is empty. Their My Library, lessons and progress are as before | ☐ |
 
 ## After

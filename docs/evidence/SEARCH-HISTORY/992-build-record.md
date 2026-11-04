@@ -127,3 +127,17 @@ Final `walk-*.log`: **ALL PASS, 59/59**, 0 AI calls, 0 application console error
 - On fixture A: a few captured entries and one 820 bookmark from Save for revision.
 - 2 AI calls on A from the Ask proof, and the earlier debugging runs of that script.
 - Walk rows from earlier runs were removed (history table only).
+
+## Follow-up: the owner's mock-up (branch `scholar/search-history-mockup`, after #287)
+
+Page only. **Migration 992 is unchanged**: same file, same sha256, same VERIFY and ROLLBACK. No new migration, policy key, route or table.
+
+- One card: "My Search History", its subtitle, Clear all and a history icon in the header, a rounded search box ("Search your history..."), chips All, Searches, Ask Scholar, Lessons, Research, and a Filters control holding material, topic, date and pinned.
+- Rows: an icon tile, a bold title, a muted line with the activity and date, a ⋯ menu (Continue the lesson, Pin, Save for revision, Remove) and a chevron. The whole row opens the saved item through its first "open" link, never Continue. The mock-up's sample rows are not used: only real records, with an honest empty state.
+- The Activity filter became the chips. `?activity=` became `?show=`. Searches and Lessons each span two activities: 992 lists one activity at a time, so `listSearchHistory` reads each list as far as the page needs and `mergeHistoryPages` merges them. This avoids a second migration. It is bounded by the page cap.
+- Row labels follow the mock-up: Ask Scholar, Materials search, Library search, Previous lesson. **Deliberately not "Research search":** research keywords were never kept, so the row says Teaching with research.
+- The AI disclaimer badge now shows where AI-written words are on a row (a search snippet), not on every saved-teaching row. Opening the answer still shows the library's label. The Research chip could not be exercised with real rows on staging: fixture A has no teaching with research, so the walk proves only that it shows nothing else.
+- `LearningIcon` gains `clock`, `search` and `chevron` (additive).
+- **Defect found by looking at the screenshot, not by the assertions:** later rows' ⋯ buttons painted through an open menu. Fixed. The first version of the check passed on the broken code, so it was replaced by a grid across the panel: 7 of 585 points covered on the old stacking (red), 0 on the fix.
+
+Proof: the walk logs in `walk/` from this branch. Earlier logs are from #287.

@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import {
-  ASK_NOT_KEPT, QUERY_MAX, REQUEST_KEY, entryLinks, entryTitle, hasHistoryFilters, historyParams, markKey, newRequestKey, normaliseQuery,
-  parseEntryKey, parseHistoryQuery, repeatsLatest, saveTarget, validateCapture,
+  ASK_NOT_KEPT, HISTORY_ACTIVITIES, HISTORY_EMPTY, QUERY_MAX, REQUEST_KEY, SHOW_ACTIVITIES, entryLinks, entryTitle, hasHistoryFilters, historyParams, markKey, mergeHistoryPages, newRequestKey, normaliseQuery,
+  panelFilterCount, parseEntryKey, parseHistoryQuery, repeatsLatest, saveTarget, splitEntryLinks, validateCapture, type HistoryEntry,
 } from "./search-history";
 import { clearSearchHistory, historySchema, listSearchHistory, recordSearchCapture, resetSearchHistorySchema } from "./store";
 
@@ -55,12 +55,36 @@ describe("SCHOLAR-SEARCH-HISTORY-01: what is kept", () => {
 
 describe("SCHOLAR-SEARCH-HISTORY-01: the page", () => {
   it("reads its filters and drops anything unknown", () => {
-    expect(parseHistoryQuery({ q: "  fluid   balance ", activity: "ask", material: A.toUpperCase(), topic: "Fluids", from: "2026-11-05", to: "2026-11-01", pinned: "1", page: "3" }))
-      .toEqual({ q: "fluid balance", activity: "ask", material: A, topic: "Fluids", from: "2026-11-01", to: "2026-11-05", pinned: true, page: 3 });
-    expect(parseHistoryQuery({ activity: "keystrokes", material: "x", topic: "a", from: "yesterday", page: "0", pinned: "yes" }))
-      .toEqual({ q: "", activity: null, material: null, topic: null, from: null, to: null, pinned: false, page: 1 });
+    expect(parseHistoryQuery({ q: "  fluid   balance ", show: "ask", material: A.toUpperCase(), topic: "Fluids", from: "2026-11-05", to: "2026-11-01", pinned: "1", page: "3" }))
+      .toEqual({ q: "fluid balance", show: "ask", material: A, topic: "Fluids", from: "2026-11-01", to: "2026-11-05", pinned: true, page: 3 });
+    expect(parseHistoryQuery({ show: "keystrokes", material: "x", topic: "a", from: "yesterday", page: "0", pinned: "yes" }))
+      .toEqual({ q: "", show: null, material: null, topic: null, from: null, to: null, pinned: false, page: 1 });
     expect(hasHistoryFilters(parseHistoryQuery({}))).toBe(false);
-    expect(historyParams(parseHistoryQuery({ q: "a b", activity: "lesson", page: "2" }), { page: "3" })).toBe("?q=a+b&activity=lesson&page=3");
+    expect(historyParams(parseHistoryQuery({ q: "a b", show: "lessons", page: "2" }), { page: "3" })).toBe("?q=a+b&show=lessons&page=3");
+    expect(panelFilterCount(parseHistoryQuery({ q: "a b", show: "ask" }))).toBe(0);
+    expect(panelFilterCount(parseHistoryQuery({ material: A, from: "2026-11-01", to: "2026-11-02", pinned: "1" }))).toBe(3);
+  });
+  it("every activity sits under exactly one chip", () => {
+    const placed = Object.values(SHOW_ACTIVITIES).flat();
+    expect([...placed].sort()).toEqual([...HISTORY_ACTIVITIES].sort());
+  });
+  it("a chip across two activities is one newest-first page, with no row lost or repeated between pages", () => {
+    const row = (key: string, createdAt: string) => ({ key, createdAt }) as HistoryEntry;
+    const lessons = [row("lesson:b", "2026-11-04T10:00:03.000Z"), row("lesson:a", "2026-11-04T10:00:01.000Z")];
+    const teaching = [row("artefact:c", "2026-11-04T10:00:04.000Z"), row("artefact:d", "2026-11-04T10:00:02.000Z"), row("artefact:e", "2026-11-04T10:00:01.000Z")];
+    const page = (o: number) => mergeHistoryPages([lessons, teaching], o, 2).map(e => e.key);
+    expect(page(0)).toEqual(["artefact:c", "lesson:b"]);
+    expect(page(2)).toEqual(["artefact:d", "artefact:e"]);
+    expect(page(4)).toEqual(["lesson:a"]);
+  });
+  it("the chevron is the first open link, never Continue the lesson; the rest go in the row's menu", () => {
+    const open = { kind: "open" as const, label: "Open" }, cont = { kind: "continue" as const, label: "Continue" };
+    expect(splitEntryLinks([open, cont])).toEqual({ primary: open, rest: [cont] });
+    expect(splitEntryLinks([cont])).toEqual({ primary: null, rest: [cont] });
+    expect(splitEntryLinks([])).toEqual({ primary: null, rest: [] });
+  });
+  it("the empty state never implies earlier searches exist", () => {
+    expect(HISTORY_EMPTY).toMatch(/were not kept/);
   });
   it("entry keys are exactly h:, artefact: or lesson: and a uuid", () => {
     expect(parseEntryKey(`h:${A}`)).toEqual({ kind: "captured", id: A });

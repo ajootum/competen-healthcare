@@ -24,7 +24,7 @@ export const learnBox = (t: LearningTone) => `cmp-learn-${kebab(t)} cmp-learn-bo
 // ── Icons ─────────────────────────────────────────────────────────────────────────────────────────────────
 
 export type LearningIconName = "teach" | "question" | "robot" | "book" | "compass" | "bolt" | "target" | "check" | "notes" | "library"
-  | "list" | "chat" | "arrow" | "lesson" | "spark" | "miss" | "warn" | "cards" | "bulb" | "key" | "summary" | "example" | "record" | "layers";
+  | "list" | "chat" | "arrow" | "lesson" | "spark" | "miss" | "warn" | "cards" | "bulb" | "key" | "summary" | "example" | "record" | "layers" | "clock" | "search" | "chevron";
 
 /** A line icon in currentColor. Always decorative: the words beside it say what it is. */
 export function LearningIcon({ name, className = "h-5 w-5" }: { name: LearningIconName; className?: string }) {
@@ -55,6 +55,9 @@ export function LearningIcon({ name, className = "h-5 w-5" }: { name: LearningIc
       {name === "example" && <path d="M4 5h16v11H10l-5 4v-4H4z" />}
       {name === "record" && <><path d="M6 3h8l4 4v14H6z" /><path d="M9 11h6M9 15h6" /></>}
       {name === "layers" && <><path d="M12 3l9 5-9 5-9-5z" /><path d="M3 13l9 5 9-5" /></>}
+      {name === "clock" && <><path d="M3.5 12a8.5 8.5 0 108.5-8.5A8.5 8.5 0 005.6 6.4L3.5 8.5" /><path d="M3.5 4v4.5H8" /><path d="M12 7.5V12l3 2" /></>}
+      {name === "search" && <><circle cx="11" cy="11" r="7" /><path d="M20.5 20.5L16 16" /></>}
+      {name === "chevron" && <path d="M9 5l7 7-7 7" />}
     </svg>
   );
 }
