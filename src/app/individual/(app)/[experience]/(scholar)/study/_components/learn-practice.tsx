@@ -194,7 +194,7 @@ export function OwnCard({ materialId, chunkId, draft, onPractised }: { materialI
           <label htmlFor={`${id}-f`} className="block text-[13px] font-semibold text-gray-900">Front (a question)</label>
           <textarea id={`${id}-f`} rows={2} maxLength={300} value={front} onChange={e => setFront(e.target.value)} className={`w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
           <label htmlFor={`${id}-b`} className="block text-[13px] font-semibold text-gray-900">Back</label>
-          <textarea id={`${id}-b`} rows={3} maxLength={600} value={back} onChange={e => setBack(e.target.value)} className={`w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
+          <textarea id={`${id}-b`} rows={Math.min(10, Math.max(3, back.split("\n").length + 1))} maxLength={600} value={back} onChange={e => setBack(e.target.value)} className={`w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} />
           {msg && <p role="alert" className="text-[13px] text-red-800">{msg}</p>}
           <button type="submit" className={learnAction.primary} disabled={state !== "edit" || !front.trim() || !back.trim()}>{state === "saving" ? "Saving…" : "Save to my flashcards"}</button>
         </form>
