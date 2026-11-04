@@ -1,5 +1,16 @@
 import { LIBRARY_FORMAT_LABEL, MARKING_LABEL, MARKING_RULES, libraryFormatOf, type LibraryFormat, type MarkingRule } from "@/lib/individual/scholar/library-format";
 import { SOURCE_KIND_LABEL, sourceOf } from "./question-source";
+import { ROLE_LABEL, VARIANT_LABEL, calculationSpecOf, criteriaOf, findingsOf, roundingText, toleranceText, unitLabel } from "@/lib/individual/scholar/scoring-rules";
+
+// SQIE-CLOSE-2026-11 (997): what a reviewer must see to approve a calculation, a safety-marked item or a justification /
+// interpretation question -- the unit and accepted units, the rounding rule, the tolerance and whether it is in use (it is not,
+// until the clinical calculation policy is approved), what is safety-critical and which answers are unsafe, the findings, each
+// part's role, choice and weighted criteria.
+const TOLERANCE_OFF = "recorded, NOT in use: answers must be exact until the clinical calculation policy is approved and HQ turns calculation tolerances on";
+function safetyLines(x: Record<string, unknown>, critical = "Safety-critical: an answer that misses it is never marked correct"): string[] {
+  const unsafe = Array.isArray(x.unsafe) ? x.unsafe.filter((u): u is string => typeof u === "string" && !!u.trim()) : [];
+  return [...(x.safetyCritical === true ? [critical] : []), ...unsafe.map(u => `Unsafe answer (scores nothing, and is named in the feedback): ${u}`)];
+}
 
 // ── A LIBRARY QUESTION, READ AS A QUESTION ── SQIE-LIBRARY-GAPS-01 ────────────────────────────────────────────────────────
 //
@@ -87,6 +98,7 @@ export function presentQuestion(content: unknown): PresentedQuestion | null {
     case "short":
       blocks.push({ kind: "text", heading: "Question", text: stem });
       if (texts(k.accepted).length) blocks.push({ kind: "list", heading: "Accepted answers", items: texts(k.accepted) });
+      if (safetyLines(k).length) blocks.push({ kind: "list", heading: "Clinical safety", items: safetyLines(k) });
       break;
     case "cloze":
       blocks.push({ kind: "text", heading: "Sentence with the blank", text: stem });
@@ -103,6 +115,12 @@ export function presentQuestion(content: unknown): PresentedQuestion | null {
       blocks.push({ kind: "text", heading: "Question", text: stem });
       if (text(k.modelAnswer)) blocks.push({ kind: "text", heading: "Model answer", text: text(k.modelAnswer) });
       if (typeof k.marks === "number") blocks.push({ kind: "text", heading: "Practice marks", text: String(k.marks) });
+      {
+        const kp = Array.isArray((content.rubric as Record<string, unknown> | undefined)?.keyPoints) ? ((content.rubric as Record<string, unknown>).keyPoints as unknown[]).map(String) : [];
+        const scp = Array.isArray(k.safetyCriticalPoints) ? (k.safetyCriticalPoints as unknown[]).filter((i): i is number => typeof i === "number" && i >= 0 && i < kp.length) : [];
+        const lines = [...scp.map(i => `Safety-critical key point: ${kp[i]}`), ...safetyLines({ unsafe: k.unsafe })];
+        if (lines.length) blocks.push({ kind: "list", heading: "Clinical safety", items: lines });
+      }
       break;
     }
     case "flashcard":
@@ -126,8 +144,37 @@ export function presentQuestion(content: unknown): PresentedQuestion | null {
       const parts = Array.isArray(k.parts) ? k.parts.filter(isObj) : [];
       if (parts.length) blocks.push({
         kind: "parts", heading: "Parts",
-        items: parts.map((p, i) => ({ label: `Part ${String.fromCharCode(97 + i)}`, prompt: text(p.prompt), marks: typeof p.marks === "number" ? p.marks : null, accepted: texts(p.accepted), rubric: rubricBlocks(p.rubric) })),
+        items: parts.map((p, i) => {
+          const role = typeof p.role === "string" && p.role in ROLE_LABEL ? ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] : null;
+          const opts = texts(p.options), crit = criteriaOf(p.criteria);
+          const extra: QBlock[] = [
+            ...(opts.length ? [{ kind: "options" as const, heading: "Choice", items: opts.map((t, j) => ({ text: t, key: j === p.correct })) }] : []),
+            ...(crit ? [{ kind: "list" as const, heading: "Criteria it is marked against (weight)", items: crit.map(c => `${c.text} (${c.weight})${c.safetyCritical ? " -- safety-critical" : ""}`) }] : []),
+            ...(safetyLines(p).length ? [{ kind: "list" as const, heading: "Clinical safety", items: safetyLines(p) }] : []),
+          ];
+          return { label: `Part ${String.fromCharCode(97 + i)}${role ? ` · ${role}` : ""}`, prompt: text(p.prompt), marks: typeof p.marks === "number" ? p.marks : null, accepted: texts(p.accepted), rubric: [...extra, ...rubricBlocks(p.rubric)] };
+        }),
       });
+      if (typeof k.variant === "string" && k.variant in VARIANT_LABEL) blocks.splice(blocks.length - 1, 0, { kind: "text", heading: "Kind", text: VARIANT_LABEL[k.variant as keyof typeof VARIANT_LABEL] });
+      {
+        const f = findingsOf(k);
+        if (f.length) blocks.splice(blocks.length - 1, 0, { kind: "list", heading: "Findings shown before the parts", items: f.map(r => `${r.label}: ${r.value}${r.unit ? ` ${r.unit}` : ""}`) });
+      }
+      break;
+    }
+    case "calculation": {
+      blocks.push({ kind: "text", heading: "Question", text: stem });
+      const spec = calculationSpecOf(k);
+      if (!spec) { blocks.push({ kind: "text", heading: "Answer key", text: "Not a sound calculation key: it cannot be offered to learners." }); break; }
+      blocks.push({ kind: "list", heading: "Answer, marked by code", items: [
+        `Answer: ${spec.display}`,
+        `Units accepted: ${[spec.unit ? unitLabel(spec.unit) : "no unit", ...spec.equivalentUnits.map(unitLabel)].join(", ")}`,
+        `Rounding: ${spec.rounding ? roundingText(spec.rounding) : "the value exactly as written"}`,
+        `Tolerance: ${spec.tolerance && spec.tolerance.kind !== "none" ? `${toleranceText(spec.tolerance, spec.unit)} -- ${TOLERANCE_OFF}` : "none (exact)"}`,
+        spec.safetyCritical ? "Safety-critical: a tenfold or greater error is unsafe, whatever any tolerance says" : "Not marked safety-critical",
+      ] });
+      if (spec.working) blocks.push({ kind: "text", heading: "Worked answer shown after answering", text: spec.working });
+      if (safetyLines({ unsafe: k.unsafe }).length) blocks.push({ kind: "list", heading: "Unsafe answers", items: safetyLines({ unsafe: k.unsafe }) });
       break;
     }
   }
