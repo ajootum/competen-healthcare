@@ -166,6 +166,8 @@ export async function POST(req: Request) {
           await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
             question_id: q.id, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
             model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+            // SQIE-CLOSE-2026-11 WS-B: how many unsafe statements the evaluator quoted (a count, never the words).
+            unsafe: e.ok && e.evaluation.ok ? e.evaluation.unsafe?.length ?? 0 : null,
           });
           // SCHOLAR-SQIE-02: a safe withhold (the evaluator could not judge it against the notes) is typed, kept with the
           // student's answer, and counted apart from an answered evaluation -- codes only, never the answer.
@@ -266,6 +268,7 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
             await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
               question_id: q.id, part: i + 1, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
               model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+              unsafe: e.ok && e.evaluation.ok ? e.evaluation.unsafe?.length ?? 0 : null, // SQIE-CLOSE-2026-11 WS-B: a count only
             });
             if (!refused && e.ok) {
               const o = answerOutcome(e.evaluation.ok ? null : e.evaluation.reason);

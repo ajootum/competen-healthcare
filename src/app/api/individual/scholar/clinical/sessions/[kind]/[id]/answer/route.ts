@@ -73,6 +73,7 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, {
       outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
       model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+      unsafe: e.ok && e.evaluation.ok ? e.evaluation.unsafe?.length ?? 0 : null, // SQIE-CLOSE-2026-11 WS-B: a count only
     });
     if (refused || !e.ok || !e.evaluation.ok) return { kind: "self" };
     return { kind: "ai", correct: e.evaluation.verdict === "correct", score: e.evaluation.score, feedback: e.evaluation.feedback, evaluator: { model: e.model, promptVersion: e.promptVersion } };

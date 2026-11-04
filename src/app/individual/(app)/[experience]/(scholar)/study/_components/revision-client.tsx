@@ -16,7 +16,7 @@ import type { ScenarioStageView } from "@/lib/individual/scholar/scenario";
 import { MakeEvaluation } from "./evaluation-client";
 import { RecoveryFlow, type ExplainOutcome } from "./evidence-recovery";
 import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
-import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
+import { FEEDBACK_HEADINGS, GROUNDING_LABEL, UNSAFE_NOTE } from "@/lib/individual/scholar/config";
 import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
 import { carry, studyField } from "./study-active";
 import { SpellingNote } from "./spelling-note";
@@ -740,6 +740,14 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
   ];
   return (
     <dl className={`mt-1 space-y-1 text-[13.5px] ${ink}`}>
+      {/* SQIE-CLOSE-2026-11 WS-B: an unsafe statement first, in the learner's own words, apart from the five parts. */}
+      {parts.unsafe?.length ? (
+        <div role="note" className="rounded-lg border-2 border-red-700 bg-red-50 px-3 py-2 text-red-950">
+          <dt className="font-semibold">{FEEDBACK_HEADINGS.unsafe}</dt>
+          <dd>{parts.unsafe.length > 1 ? <ul className="list-disc pl-5">{parts.unsafe.map(x => <li key={x}>{x}</li>)}</ul> : parts.unsafe[0]}</dd>
+          <dd className="mt-1 text-[12.5px]">{UNSAFE_NOTE}</dd>
+        </div>
+      ) : null}
       {rows.filter(([, xs]) => xs.length).map(([h, xs]) => (
         <div key={h}><dt className="font-semibold">{h}</dt><dd>{xs.length > 1 ? <ul className="list-disc pl-5">{xs.map(x => <li key={x}>{x}</li>)}</ul> : xs[0]}</dd></div>
       ))}
