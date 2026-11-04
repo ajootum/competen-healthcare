@@ -1,7 +1,9 @@
-# Build record: migration 991 and branch `scholar/sqie-records` (SQIE-CLOSE-2026-11 WS-D, WS-H, WS-I)
+# Build record: migration 991 and branch `scholar/sqie-records` (SQIE-CLOSE-2026-11 WS-D, WS-I)
 
-**Authority:** owner directive SQIE-CLOSE-2026-11 (4 Nov 2026) sections 3, 5 and 7; owner decisions 4 Nov 2026 item 3 (competency mapping: published framework version, competency and learning objective on learner attempts; draft mappings permitted but never represented as validated competency evidence; formative performance never becomes verified competence or a Benner stage). Tracker `docs/programme/SQIE-CLOSE-2026-11-TRACKER.md` (PR #269): WS-D (rank 3), WS-H (rank 2), WS-I (rank 8); rows SQIE-04, SQIE-07, SQIE-08, SQIE-11, C-13.
+**Authority:** owner directive SQIE-CLOSE-2026-11 (4 Nov 2026) sections 3, 5 and 7; owner decisions 4 Nov 2026 item 3 (competency mapping: published framework version, competency and learning objective on learner attempts; draft mappings permitted but never represented as validated competency evidence; formative performance never becomes verified competence or a Benner stage). Tracker `docs/programme/SQIE-CLOSE-2026-11-TRACKER.md` (PR #269): WS-D (rank 3), WS-I (rank 8); rows SQIE-04, SQIE-07, SQIE-08, C-13. WS-H is NOT in this branch: it ships in the reconciliation session's own PR (`scholar/sqie-ws-h-quality-guards`, with WS-J), by coordinator decision.
 **State of 991 (CLAUDE.md four states):** 2, applied and verified on staging (ezhvpgtcqcdsgylrxgdb) twice, rollback rehearsed. **Not applied to production.** When merged, `main` holds 990 and 991 while production does not. The code fails closed without either (below).
+
+**Staging (ezhvpgtcqcdsgylrxgdb) holds exactly:** the 990 definitions of `990-individual-scholar-snapshot-completeness.sql` (sha256 `46a47483...eefcc5`, applied by session local_0e0244d2 after rolling back this branch's earlier 990), then 991 (sha256 `0873d2db...29533e`, applied twice here). The provenance CHECK on staging is 991's; the shape CHECK is 990's. VERIFY-990 and VERIFY-991 both pass on it.
 
 ## What this branch holds, and whose work it is
 
@@ -9,8 +11,7 @@
 |---|---|---|
 | WS-D attempt records, migration 990 | merged from `sqie/ws-d-attempt-record-01` @ `07d4fd00` (session local_0e0244d2) | Its build record, PRECHECK, VERIFY and ROLLBACK: `docs/evidence/SQIE-WS-D/`. 990 sha256 `46a474837293e95e27f417fb58cc1715c8a859444bd3fa2a3bebe0a793eefcc5` |
 | WS-D owner decision 3, migration 991 | this branch | this record |
-| WS-H quality guards | merged from `scholar/sqie-ws-h-quality-guards` @ `74753273` | `answer-leak.ts`, `answer-leak.test.ts`, `stage-boundary.test.ts`. This branch's own first WS-H build was dropped in favour of it (reuse, not rebuild) |
-| WS-H stage pin, extra | this branch | `question-score-stage.test.ts` (below) |
+| WS-H quality guards | not in this branch | ships separately in `scholar/sqie-ws-h-quality-guards`. This branch's own first WS-H build was removed (one implementation only); its extra stage-pin test was handed to the coordinator as a note |
 | WS-I unified per-question history | this branch | no migration, no new store |
 
 This branch first built its own WS-D with a different 990 (sha `230b86a4...acb8986`, applied twice on staging and verified at about 13:05 EAT). When the stopped session's 990 was found, that one was adopted: it had since been applied on staging over this branch's (same constraint names, so staging holds its definitions), and this branch's 990 file, verify, rollback and provenance module were removed. Nothing of the dropped 990 remains on staging except the shared column name `competency_provenance`, which both define the same way (nullable jsonb).
@@ -48,15 +49,11 @@ Why a new migration rather than editing 990: 990 was already applied on staging 
 - `question-history.ts` (pure): every attempt at one question, newest first, by source (practice, Revise session, adaptive exam, mock exam, Check your understanding) plus the exam-paper answers the question was made from; the effective result with the original beside a correction; the marking; what it was marked against (question version, content hash, guide hash, each competency's framework version with its mapping status, the objective) and notes where the live question or guide changed since. An attempt without a snapshot says so and invents no version. An unmarked check reads "Kept without a mark". A draft mapping always reads "draft mapping, publication pending: not validated competency evidence".
 - `GET /api/individual/scholar/questions/[id]/history` and the page `study/saved/history` (linked from Saved learning, and from each kept check). Database reads only, no AI, no write.
 
-## WS-H stage pin (in addition to the merged `stage-boundary.test.ts`)
-
-`question-score-stage.test.ts`: no Scholar module imports the stage mapping or the Benner scale; no module on the question-attempt path imports the assessment layer or names a stage table or column (`competency_stage*`, `competency_verification_decision`, `asmt_progression_decision`, `asmt_scholar_stage_band`, `stage_code`); a perfect score of every marking writes a snapshot with exactly its 791/990 columns. Each scanner is first shown to catch a planted violation.
-
 ## Staging walk (4 Nov 2026)
 
 The HTTP walk (`records-walk.ts`, shared notes `SQIE-RECORDS/`) signs in as the fixture learner on a staging-pointed dev server and is then refused by the Individual guard: "Accept the terms for this experience before using it" (the fixture has not accepted the current Scholar terms). Accepting terms on an account was not done without the owner. The walk was therefore run on the same server code paths against the staging database as that learner (`records-walk-db.ts`, log `walk-db-run.log`): 16 PASS, 0 FAIL.
 
-- WS-H: the real generation loop with scripted model replies (no AI call): the first draft's stem states the keyed option and is dropped (`answer_in_stem`); the one regeneration is told why; only the sound question is kept.
+- (The walk's first three checks exercised WS-H code from the other branch while it was merged here; they are not evidence for this branch, which no longer holds WS-H.)
 - WS-D: an unmarked and a self-graded check answer (`recordCheckAttempt` then `keepCheckSnapshot`, as `learn/checks` does) each keep a snapshot: unmarked marking and outcome with no score and the typed answer; self-graded with its question version and guide hash.
 - WS-D 990/991: a real answer snapshotted with a real staging framework competency attached in memory (the question row unchanged): `{id, content_hash (32 hex), framework_id, framework_version "1.0.0", mapping_status "published", objective}`, matching the framework's `pub_status` (published).
 - WS-I: a question answered in a mock exam and again in practice shows both sources, each with what it was marked against; the check question's history shows the new answers with snapshots and the older ones (kept before snapshots) each saying no record was kept; a question that is not the learner's gives no history.
@@ -66,4 +63,4 @@ Staging rows written by the walk: check attempts and practice attempts of the fi
 
 ## Not competence
 
-A snapshot, its framework version, its mapping status and the history are the learner's own record of private practice. A published mapping is learning evidence only; a draft mapping is not validated evidence and says so. No stage table or mapping is read or written on this path, and two tests keep it so.
+A snapshot, its framework version, its mapping status and the history are the learner's own record of private practice. A published mapping is learning evidence only; a draft mapping is not validated evidence and says so. No stage table or mapping is read or written on this path (the WS-H branch carries the stage-boundary test).
