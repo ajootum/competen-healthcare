@@ -31,6 +31,8 @@ import { learningActivityByCompetency } from "@/lib/individual/scholar/store";
 import { loadTopicProgress, mergeStudyNext, topicProgressEnabled } from "@/lib/individual/scholar/study-next";
 import { isStudyId } from "@/lib/individual/scholar/study-carry";
 import { StudyNextCard, TopicProgressSection } from "../_components/topic-progress-view";
+import { LearningStateSection } from "../_components/learning-state-view";
+import { loadLearningState } from "@/lib/individual/scholar/learning-state-data";
 import { Fold, NotMeasuredLine } from "../_components/progress-parts";
 import { activitySummary, enoughForTrend, listSummary, practisedDetail, TREND_NEEDS, withoutEngagementInsight, type ActivitySummary } from "@/lib/individual/scholar/progress-simplify";
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
@@ -167,6 +169,10 @@ export default async function ProgressPage({ params, searchParams }: { params: P
       studyId: study && isStudyId(sp.study) ? sp.study : null,
     })
     : null;
+  // SALE-2026-11 R1 (SALE-04): the learning state per topic, from the same evidence read (request-cached) plus the learning events. No AI, nothing stored.
+  const ls = policy.scholarLearningState === "on" && rows.ok && p && p.materials.length > 0
+    ? await loadLearningState(ctx.admin, ctx.userId, policy, new Date().toISOString(), { materials: rows.data.materials, concepts: allRows?.ok ? allRows.data.concepts : null }).catch(() => null)
+    : null;
   // SCHOLAR-MONTHLY-REVIEW-01: the study calendar (one calendar, extending the plan) and the monthly review's banner and last-result card.
   // The calendar reads the plan the card above is built from; both fail closed, and an unreadable one is said, never drawn empty.
   const calendarOn = policy.scholarStudyCalendar === "on" && !myPlan;
@@ -284,6 +290,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} offered={programmesOffered} />
 
             {showTopicProgress && tp?.ok && <TopicProgressSection m={tp.data} />}
+            {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} />}
 
             {liShown ? <LearningIntelligence li={liShown} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
 

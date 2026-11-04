@@ -19,10 +19,13 @@
 // bad one teaches them something their notes do not say.
 
 import type { DraftQuestion } from "./generation";
+import { choiceLeaks } from "./answer-leak";
 
 export type QualityReason =
   | "not_a_question" | "unmarked_negative" | "banned_option" | "options_overlap"
-  | "unsupported_term" | "correct_not_supported" | "too_long";
+  | "unsupported_term" | "correct_not_supported" | "too_long"
+  // SQIE-CLOSE-2026-11 WS-H: the stem already says the keyed option (answer-leak.ts, the scenario rule).
+  | "answer_in_stem";
 
 const STOP = new Set((
   "a an and are as at be been but by can could do does for from had has have how if in into is it its may might " +
@@ -87,6 +90,9 @@ export function qualityProblems(q: DraftQuestion, passage: string): { reason: Qu
   // TERMINOLOGY -- every option, right or wrong, is built from the passage's own terms.
   const foreign = q.options.flatMap(o => unsupportedTerms(o, passage));
   if (foreign.length) out.push({ reason: "unsupported_term", detail: [...new Set(foreign)].slice(0, 6).join(", ") });
+
+  // NO GIVE-AWAY -- the stem does not already state the keyed option while naming no other (answer-leak.ts choiceLeaks).
+  if (choiceLeaks(stem, q.options, [q.correctIndex])) out.push({ reason: "answer_in_stem" });
 
   // SOURCE SUPPORT -- the keyed answer's content is in the quoted source sentence itself.
   const missing = unsupportedTerms(q.options[q.correctIndex] ?? "", q.sourceQuote);

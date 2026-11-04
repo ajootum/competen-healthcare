@@ -53,6 +53,9 @@ import { STYLE_DEFAULTS, effectiveStyle, mistakeOffer, moreItems, styleChoices, 
 import { CHECK_BUTTON, CHECK_FEEDBACK_HEADING, CHECK_NO_AI_WHY, CHECK_PROCESSING, CHECK_SELF_REVIEW_LABEL, CHECK_SELF_REVIEW_NOTE, parseCheckFeedback, referenceAnswer, type CheckFeedbackParts, type CheckNoAiReason } from "@/lib/individual/scholar/learn-check";
 import { CHECK_MARKING_LABEL, CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_LABEL, SELF_GRADE_SAID, checkOutcomeLabel, isCheckVerdict, placeChecks, type CheckHistoryItem, type CheckPlacement, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
 import { CHECK_VERDICT_LABEL } from "@/lib/individual/scholar/config";
+import { AdaptiveNext, type AdaptiveUi, type AdaptiveView } from "./learn-adaptive";
+import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, pickDifferentQuestion, type StatedConfidence } from "@/lib/individual/scholar/learning-need";
+import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -131,6 +134,8 @@ type Reply = {
   spelling?: { original: string; display: string; corrections: { from: string; to: string }[] } | null;
   /** LEARNING-CLOSE-2026-11 D01: a judged check answer was kept in the learner's learning record (its attempt), or null. */
   kept?: { attemptId: string; answeredAt: string; questionId: string; marking: string; chunkId: string; materialId: string } | null;
+  /** SALE-2026-11 R1: the next teaching step for a kept check, with its reason (kept on the same attempt). */
+  adaptive?: AdaptiveView | null;
   /** SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper found nothing further of value in the notes (or its round limit): no lesson, the next activity suggested. */
   depthReached?: { message: string; suggestion: string | null; next: readonly { key: string; label: string }[]; rounds?: number; cap?: boolean } | null;
   /** SCHOLAR-CUMULATIVE-TEACHING-01: on an open, the lesson's other saved teaching (Go deeper rounds, examples ...), oldest first, no AI. */
@@ -147,8 +152,10 @@ type CheckState = {
   step: number; question: string; raw: string | null; answer: string; feedback: Reply | null; cardId: number | null; noAi: CheckNoAiReason | null; reviewing: boolean;
   /** LEARNING-CLOSE-2026-11 D01: whether this answer is kept in the learning record (the act route keeps a judged one; the checks route a self-graded or unmarked one). */
   saved: "saving" | "saved" | "failed" | null; selfGrade: SelfGrade | null;
+  /** SALE-2026-11 R1: how sure the learner said they were (optional), and the question's level where a Challenge set it. */
+  confidence?: StatedConfidence | null; level?: CognitiveLevel | null;
 };
-const openCheck = (step: number, raw: string, answer = ""): CheckState => ({ step, question: questionText(raw), raw, answer, feedback: null, cardId: null, noAi: null, reviewing: false, saved: null, selfGrade: null });
+const openCheck = (step: number, raw: string, answer = "", level: CognitiveLevel | null = null): CheckState => ({ step, question: questionText(raw), raw, answer, feedback: null, cardId: null, noAi: null, reviewing: false, saved: null, selfGrade: null, confidence: null, level });
 
 /** One request. `signal`: the journey cancels a lesson request it no longer needs (an abort answers { aborted: true }). */
 async function call(url: string, body: unknown, method = "POST", headers: Record<string, string> = {}, signal?: AbortSignal): Promise<{ ok: boolean; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -288,6 +295,8 @@ export function LearnWorkspace(props: {
   /** LEARNING-CLOSE-2026-11 D01: the kept checks per lesson, newest first -- the server's at open, plus what this visit keeps. */
   const [checks, setChecks] = useState<Record<number, CheckHistoryItem[]>>(props.initialChecks ?? {});
   const [lastCheck, setLastCheck] = useState<Record<number, { question: string; answer: string }>>({});
+  /** SALE-2026-11 R1 (SALE-06/07): the next teaching step per lesson after a kept check, until the learner skips or closes it. */
+  const [adaptive, setAdaptive] = useState<Record<number, AdaptiveUi>>({});
   const [ask, setAsk] = useState("");
   const [askThread, setAskThread] = useState<Card[]>([]);
   // Owner D3: the shared personal AI on this step. Its own thread, never mixed into a Learn answer, never saved.
@@ -925,6 +934,8 @@ export function LearnWorkspace(props: {
       return { ...c, feedback: r, cardId, noAi: null, saved: r.kept ? "saved" : null };
     });
     if (r && !r.error && !r.continuity && !r.withheld && check) setLastCheck(m => ({ ...m, [check.step]: { question: check.question, answer: check.answer.trim() } }));
+    // SALE-2026-11 R1: the next teaching step the server kept with this answer replaces the lesson's previous one.
+    if (r?.kept && r.adaptive && check) { const c = check, d = r.adaptive, k = r.kept; setAdaptive(m => ({ ...m, [c.step]: { decision: d, attemptId: k.attemptId, question: c.question, answer: c.answer.trim(), ran: false, running: false, asked: false } })); }
     // D01: a judged answer the server kept joins this lesson's history at once (the server's own row, by id).
     if (r?.kept && check && r.answer) {
       const k = r.kept, c = check, verdict = r.verdict?.value;
@@ -941,8 +952,17 @@ export function LearnWorkspace(props: {
     const c = check, answer = c.answer.trim();
     // D01: the section the question cites (its first [S n]), so the kept question is filed under it.
     const cited = citedTags(c.raw ?? "")[0];
-    const r = await act("clarify", { checkQuestion: c.question, answer, ...(cited ? { checkCited: cited } : {}) }, "lesson", `Your answer: ${answer}`, c.step);
+    const r = await act("clarify", { checkQuestion: c.question, answer, ...(cited ? { checkCited: cited } : {}), ...adaptiveBody(c) }, "lesson", `Your answer: ${answer}`, c.step);
     applyCheckResult(r);
+  }
+  /** SALE-2026-11 R1: what a check answer carries for the next-step decision -- the stated confidence, the Challenge level, the step it follows, and whether Apply exists here. */
+  function adaptiveBody(c: CheckState): Record<string, unknown> {
+    const a = adaptive[c.step], st = session?.steps.find(x => x.step === c.step);
+    return {
+      ...(c.confidence ? { confidence: c.confidence } : {}), ...(c.level ? { checkLevel: c.level } : {}),
+      ...(a ? { followUp: { afterAttemptId: a.attemptId, approach: a.ran ? a.decision.approach : "skipped" } } : {}),
+      applyAvailable: !!st && !!session && applyEligible(session.scopeKind, st.sections.map(x => x.chunkId), new Set(props.applyChunkIds ?? [])),
+    };
   }
   /** D01 (CYU-03), the self-review path: keep the answer with the learner's own grade against the key points (or without a mark). No AI. */
   async function saveCheck(st: Step, grade: SelfGrade | null) {
@@ -950,9 +970,10 @@ export function LearnWorkspace(props: {
     if (!c || c.step !== st.step || !session?.id || !c.answer.trim()) return;
     setCheck(x => (x ? { ...x, saved: "saving", selfGrade: grade } : x));
     const cited = citedTags(c.raw ?? "")[0];
-    const r = await call("/api/individual/scholar/learn/checks", { sessionId: session.id, step: st.step, question: c.question, answer: c.answer.trim(), selfGrade: grade, ...(cited ? { checkCited: cited } : {}) });
+    const r = await call("/api/individual/scholar/learn/checks", { sessionId: session.id, step: st.step, question: c.question, answer: c.answer.trim(), selfGrade: grade, ...(cited ? { checkCited: cited } : {}), ...adaptiveBody(c), aiAvailable: props.consent && !offReason("clarify") });
     const k = r.ok && r.json.kept ? r.json.kept as { attemptId: string; answeredAt: string; questionId: string; chunkId: string; materialId: string } : null;
     setCheck(x => (x ? { ...x, saved: k ? "saved" : "failed" } : x));
+    if (k && r.json.adaptive) { const d = r.json.adaptive as AdaptiveView; setAdaptive(m => ({ ...m, [st.step]: { decision: d, attemptId: k.attemptId, question: c.question, answer: c.answer.trim(), ran: false, running: false, asked: false } })); }
     if (k) setChecks(m => ({ ...m, [st.step]: [{
       attemptId: k.attemptId, questionId: k.questionId, answeredAt: k.answeredAt, question: c.question, marking: grade ? "self_graded" : "unmarked", correct: grade === "covered", score: null,
       model: null, promptVersion: null, contentVersion: null, sessionId: session.id, step: st.step, chunkId: k.chunkId, materialId: k.materialId,
@@ -966,6 +987,43 @@ export function LearnWorkspace(props: {
     setCheck(null); setErrorAt(null); setPending(null);
     setTimeout(() => (document.getElementById("journey-next-h") ?? document.getElementById(lessonAnchorId(st.step, "act")))?.scrollIntoView({ block: "start", behavior: "smooth" }), 0);
   };
+  // ── SALE-2026-11 R1 (SALE-06/07): the next teaching step. The learner runs it (an existing Learn action), then answers a DIFFERENT
+  // question, or skips. Nothing runs by itself, and the different question is the lesson's own or an earlier one before any new one.
+  const patchAdaptive = (stepNo: number, p: Partial<AdaptiveUi>) => setAdaptive(m => (m[stepNo] ? { ...m, [stepNo]: { ...m[stepNo], ...p } } : m));
+  const closeAdaptive = (stepNo: number) => setAdaptive(m => { const n = { ...m }; delete n[stepNo]; return n; });
+  async function runAdaptive(st: Step) {
+    const a = adaptive[st.step];
+    if (!a || !session) return;
+    const d = a.decision.approach;
+    if (d === "continue" || d === "review") { closeAdaptive(st.step); continueAfterCheck(st); return; }
+    if (d === "foundation") { const prev = [...session.steps].reverse().find(x => x.step < st.step); patchAdaptive(st.step, { ran: true }); if (prev) select(indexOf(prev.step)); return; }
+    if (d === "apply") { const first = st.sections[0]; patchAdaptive(st.step, { ran: true }); if (first) router.push(carry(`/individual/scholar/study/apply?section=${first.chunkId}&from=teach`)); return; }
+    patchAdaptive(st.step, { running: true });
+    setCheck(null);
+    const extra = d === "mistake" ? { question: a.question, learnerAnswer: a.answer } : d === "guide" ? { hintLevel: 1, attempt: a.answer, question: a.question } : d === "challenge" ? { level: "application" } : {};
+    const r = await act(d, extra, "lesson", undefined, st.step);
+    const ok = !!r && !r.withheld && !r.error && !r.continuity;
+    patchAdaptive(st.step, { running: false, ran: ok });
+    // Challenge me writes the harder question itself: it opens as the lesson's next check, at its level.
+    if (d === "challenge" && r?.checkQuestion) { patchAdaptive(st.step, { asked: true }); setCheck(openCheck(st.step, r.checkQuestion, "", "application")); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); }
+  }
+  const differentFor = (st: Step) => {
+    const a = adaptive[st.step];
+    if (!a) return null;
+    const own = teachQuestionsOf(st);
+    return { own, pick: pickDifferentQuestion({ lessonQuestions: own.map(questionText), answered: [a.question, ...(checks[st.step] ?? []).map(c => c.question)], earlier: a.decision.earlierQuestions }) };
+  };
+  async function adaptiveDifferent(st: Step) {
+    const f = differentFor(st);
+    if (!f) return;
+    patchAdaptive(st.step, { asked: true });
+    if (f.pick) { checkThis(st, f.pick.source === "lesson" ? f.own.find(q => questionText(q) === f.pick!.stem) ?? f.pick.stem : f.pick.stem); return; }
+    // None left: the existing Ask me action writes one (the learner's click, the same route, metering and model routing).
+    patchAdaptive(st.step, { running: true });
+    const r = await act("ask_me", { level: "understanding" }, "lesson", undefined, st.step);
+    patchAdaptive(st.step, { running: false, asked: !!r?.checkQuestion });
+    if (r?.checkQuestion) checkThis(st, r.checkQuestion);
+  }
   async function submitAsk(e: React.FormEvent) {
     e.preventDefault();
     const q = ask.trim();
@@ -1107,6 +1165,18 @@ export function LearnWorkspace(props: {
         {!answered && <p className="mt-1 text-[12px] text-gray-600">{INFORMAL_CHECK_LABEL}</p>}
         {!answered && unavailable && <p className="mt-1 text-[12.5px] text-gray-700">{aiReasonCopy(unavailable, "scholar").text}</p>}
         {working && <p role="status" aria-live="polite" className="mt-2 flex items-center gap-2 text-[13px] text-gray-700"><span aria-hidden="true" className="inline-block h-2 w-2 rounded-full motion-safe:animate-pulse" style={{ background: accent }} />{CHECK_PROCESSING}</p>}
+        {/* SALE-2026-11 R1: the learner may say how sure they are. Optional, kept beside the answer, never counted as understanding. */}
+        {!answered && !working && (
+          <div className="mt-2" role="group" aria-label="How sure are you? Optional">
+            <p className="text-[12.5px] text-gray-700">How sure are you? Optional. It is kept beside your answer and never counted as understanding.</p>
+            <div className="mt-1 flex flex-wrap gap-2">
+              {CONFIDENCE_VALUES.map(v => (
+                <button key={v} type="button" aria-pressed={c.confidence === v} onClick={() => setCheck({ ...c, confidence: c.confidence === v ? null : v })}
+                  className={`${chip} ${c.confidence === v ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-900 hover:bg-gray-100"}`}>{CONFIDENCE_LABEL[v]}</button>
+              ))}
+            </div>
+          </div>
+        )}
         {!answered && !working && (
           <div className="mt-2 flex flex-wrap gap-2">
             <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !c.answer.trim() || !!unavailable}>{CHECK_BUTTON.submit}</button>
@@ -1229,6 +1299,12 @@ export function LearnWorkspace(props: {
     const styleList = styleChoices(stylePolicy, av);
     const moreList = moreItems(stylePolicy, av, more);
     const mistake = mistakeOffer(av, verdict, !!lastCheck[st.step]);
+    // SALE-2026-11 R1: the lesson's next teaching step, what its different question will be, and why an AI step cannot run now.
+    const adaptiveHere = adaptive[st.step] ?? null;
+    const different = adaptiveHere ? pickDifferentQuestion({ lessonQuestions: teachQuestions.map(questionText), answered: [adaptiveHere.question, ...(checks[st.step] ?? []).map(c => c.question)], earlier: adaptiveHere.decision.earlierQuestions }) : null;
+    const differentLabel = different ? (different.source === "lesson" ? "Try a different question from this lesson" : "Try a question from an earlier lesson")
+      : props.actions.includes("ask_me") && props.consent && !offReason("ask_me") ? "Ask me a different question" : null;
+    const adaptiveOff = !adaptiveHere ? null : !props.consent ? (props.offMessage ?? "AI help is off.") : offReason(adaptiveHere.decision.approach) ? aiReasonCopy(offReason(adaptiveHere.decision.approach)!, "scholar").text : null;
     const style = effectiveStyle(styleChosen, styleList);
     const parts = lastTeach ? parseTeachAnswer(lastTeach.reply.answer!) : null;
     const draft = {
@@ -1302,6 +1378,11 @@ export function LearnWorkspace(props: {
           {busy && busyAt === st.step && busy !== "ask" && busy !== "clarify" && <p role="status" className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
         </div>
         {myCheck && !checkInline && <div className="mt-4">{checkPanel(st, false)}</div>}
+        {/* SALE-2026-11 R1 (SALE-06/07): the next teaching step after a kept check, with its reason. Skippable; nothing runs by itself. */}
+        {adaptiveHere && (
+          <AdaptiveNext ui={adaptiveHere} step={st.step} accent={accent} offReason={adaptiveOff} differentLabel={differentLabel}
+            onRun={() => void runAdaptive(st)} onDifferent={() => void adaptiveDifferent(st)} onSkip={() => closeAdaptive(st.step)} />
+        )}
         {offerCheck && offReason("check") && <p id={`learn-check-why-${st.step}`} className="mt-2 text-[12.5px] text-gray-600">{aiReasonCopy(offReason("check")!, "scholar").text}</p>}
         {settingsChanged && group.primary && props.consent && (
           <button type="button" className={`${ghost} mt-3`} disabled={busyHere || !!offReason(group.primary)} onClick={() => void teachLesson(st.step, { mode, depth })}>Teach this lesson again with these settings</button>

@@ -3274,10 +3274,43 @@ async function competencyProgressRowsRead(admin: Admin, userId: string): Promise
 
 // ── MASTERY: THE EVIDENCE ROWS (SCHOLAR-COMPANION-01 P1) ─────────────────────────────────────────────
 
+/** A jsonb array of strings read through a select path (the client returns it parsed): the strings, at most 8, else []. */
+const jsonStrings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 8).map(x => x.trim().slice(0, 300)) : []);
+
+/**
+ * SALE-2026-11 R1 (SALE-04): EXPOSURE. The caller's learning actions in the window (newest `maxRows`), each with the sections it used
+ * (414 event_source) and those sections' materials. Actions and sections only: no text. A store without 414 reads as none.
+ */
+export async function learningExposure(admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<{ action: string; at: string; chunkId: string; materialId: string }[]>> {
+  const { data: evs, error } = await admin.from("individual_scholar_learning_event").select("id, action, created_at").eq("user_id", userId)
+    .gte("created_at", o.sinceIso).order("created_at", { ascending: false }).limit(o.maxRows);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  const byId = new Map(((evs ?? []) as any[]).map(e => [String(e.id), { action: String(e.action), at: String(e.created_at) }]));
+  const ids = [...byId.keys()];
+  const links: { eventId: string; chunkId: string }[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error: sErr } = await admin.from("individual_scholar_learning_event_source").select("event_id, chunk_id").eq("user_id", userId).in("event_id", ids.slice(i, i + 150));
+    if (sErr) return fail(sErr);
+    for (const r of (data ?? []) as any[]) links.push({ eventId: String(r.event_id), chunkId: String(r.chunk_id) });
+  }
+  const chunkIds = [...new Set(links.map(l => l.chunkId))];
+  const mat = new Map<string, string>();
+  for (let i = 0; i < chunkIds.length; i += 150) {
+    const { data, error: cErr } = await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).in("id", chunkIds.slice(i, i + 150));
+    if (cErr) return fail(cErr);
+    for (const r of (data ?? []) as any[]) mat.set(String(r.id), String(r.material_id));
+  }
+  return { ok: true, data: links.flatMap(l => { const e = byId.get(l.eventId), m = mat.get(l.chunkId); return e && m ? [{ action: e.action, at: e.at, chunkId: l.chunkId, materialId: m }] : []; }) };
+}
+
 /** Raw rows for src/lib/individual/scholar/mastery-data.ts. Bounded: the newest `maxRows` of each source within `sinceIso`. */
 export type MasteryRaw = {
-  questions: { id: string; chunkId: string; materialId: string; kind: string; difficulty: number | null; competencyId: string | null; level: string | null; topic: string | null }[];
-  attempts: { questionId: string; correct: boolean | null; score: number | null; marking: "deterministic" | "ai_evaluation" | "self_graded"; answeredAt: string }[];
+  questions: { id: string; chunkId: string; materialId: string; kind: string; difficulty: number | null; competencyId: string | null; level: string | null; topic: string | null;
+    /** SALE-2026-11 R1: the rubric's misconception tags, and whether it is a lesson check (950 answer.check.source = lesson). */
+    misconceptions?: string[]; check?: boolean }[];
+  attempts: { questionId: string; correct: boolean | null; score: number | null; marking: "deterministic" | "ai_evaluation" | "self_graded" | "unmarked"; answeredAt: string;
+    /** SALE-2026-11 R1: the attempt id, the learner's stated confidence and the misconceptions its judgement named (lesson checks), where present. */
+    id?: string; confidence?: string | null; misconceptions?: string[] }[];
   reviews: { cardId: string; quality: number; reviewedAt: string }[];
   cards: { id: string; questionId: string; materialId: string; status: string; nextReviewAt: string }[];
   osce: { stationId: string; score: number; marking: "self_graded" | "ai_evaluation"; at: string }[];
@@ -3298,15 +3331,19 @@ async function masteryEvidenceRead(admin: Admin, userId: string, o: { sinceIso: 
   // 416/388/710 columns may be absent: fall back to the 372 columns, as the other readers here do.
   const readQuestions = async () => {
     let q: { data: any; error: any } = await admin.from("individual_scholar_question")
+      .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic, rubric_misconceptions:answer->rubric->misconceptions, check_source:answer->check->>source`).eq("user_id", userId).limit(5000);
+    if (q.error) q = await admin.from("individual_scholar_question")
       .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic`).eq("user_id", userId).limit(5000);
     if (q.error) q = await admin.from("individual_scholar_question").select(`${base}, difficulty, competency_id`).eq("user_id", userId).limit(5000);
     if (q.error) q = await admin.from("individual_scholar_question").select(base).eq("user_id", userId).limit(5000);
     return q;
   };
   const readAttempts = async () => {
-    let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
+    let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("id, question_id, correct, score, marking, answered_at, stated_confidence:response->>confidence, fb_misconceptions:response->feedback->misconceptions")
       .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
-    if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
+    if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
+      .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
+    if (a.error) a =await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
       .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
     return a;
   };
@@ -3327,10 +3364,12 @@ async function masteryEvidenceRead(admin: Admin, userId: string, o: { sinceIso: 
       questions: ((q.data ?? []) as any[]).map(r => ({
         id: r.id, chunkId: r.chunk_id, materialId: r.material_id, kind: r.kind, difficulty: r.difficulty ?? null, competencyId: r.competency_id ?? null,
         level: typeof r.rubric_level === "string" ? r.rubric_level : null, topic: typeof r.rubric_topic === "string" && r.rubric_topic.trim() ? r.rubric_topic.trim() : null,
+        misconceptions: jsonStrings(r.rubric_misconceptions), check: r.check_source === "lesson",
       })),
       attempts: ((a.data ?? []) as any[]).map(r => ({
         questionId: r.question_id, correct: r.correct ?? null, score: r.score === null || r.score === undefined ? null : Number(r.score),
         marking: r.marking ?? "deterministic", answeredAt: r.answered_at,
+        ...(r.id ? { id: String(r.id) } : {}), confidence: typeof r.stated_confidence === "string" ? r.stated_confidence : null, misconceptions: jsonStrings(r.fb_misconceptions),
       })),
       reviews: ((rv.data ?? []) as any[]).map(r => ({ cardId: r.card_id, quality: r.quality, reviewedAt: r.reviewed_at })),
       cards: ((cards.data ?? []) as any[]).map(r => ({ id: r.id, questionId: r.question_id, materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),

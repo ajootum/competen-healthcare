@@ -24,6 +24,7 @@ import { markShortAnswer } from "./revision";
 import { rubricHash } from "./rubric-snapshot";
 import { asksQuestion, feedbackPartsFrom, type FeedbackParts } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
+import { containsAnswer } from "./answer-leak";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
@@ -344,14 +345,7 @@ const words = (t: string): string[] => t.toLowerCase().replace(/[^a-z0-9]+/g, " 
 /** Pure. The content words of an answer (articles and the like dropped). Synonyms are NOT considered: only the words themselves. */
 const contentWords = (t: string): string[] => words(t).filter(w => !STOP.has(w));
 
-/** Pure. Whether the words of `answer` appear, in order and all together, in `text`. */
-function containsAnswer(text: string, answer: string): boolean {
-  const need = contentWords(answer);
-  if (need.length < 2) return false; // a single word is not held to this rule
-  const have = contentWords(text);
-  for (let i = 0; i + need.length <= have.length; i++) if (need.every((w, k) => have[i + k] === w)) return true;
-  return false;
-}
+// containsAnswer (an answer's words, in order, in earlier text) lives in answer-leak.ts since SQIE WS-H, unchanged, so every format uses one rule.
 
 /** Pure. The answers a stage is marked against, as text: the correct option(s) of a choice, or the accepted answers. */
 export const stageAnswers = (st: ScenarioStage): string[] => (st.kind === "mcq" || st.kind === "mrq" ? st.correct.map(i => st.options[i]) : st.accepted);
