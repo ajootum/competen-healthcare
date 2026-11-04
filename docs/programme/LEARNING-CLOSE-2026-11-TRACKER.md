@@ -35,7 +35,7 @@
 | CE-04B | CE | P1 | Engineering (CE) | Live — verification pending | — | — |
 | CE-04C | CE | P1 | Engineering (CE) | Not started | Depends on CE-04A | — |
 | CE-04D | CE | P0 | Engineering (CE) | Ready for release | Production 880 state not read | — |
-| CE-05 | CE | P0 | Engineering (CE) + clinical reviewer | Ready for review | Clinician read of scenario content; owner scenario-policy decision | — |
+| CE-05 | CE | P0 | Engineering (CE) + clinical reviewer | Ready for review | Clinician read of scenario content; owner scenario-policy decision (owner asked for an explanation; pending) | — |
 | CE-06A | CE | P1 | Engineering (CE) | Live — verification pending | — | — |
 | CE-06A-1 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-06B | CE | P1 | Engineering (CE) | Not started | — | — |
@@ -52,12 +52,13 @@
 | AI-03 | AI | P1 | Coordinator (read-only runs) | Blocked | AI-02 | — |
 | AI-04 | AI | P1 *(proposed)* | Coordinator | Not started | AI-03 | — |
 | AI-05 | AI | P1 *(proposed)* | Coordinator | Not started | AI-03 | — |
-| GOV-01 | Governance | P1 | Owner | Blocked | Owner decision D-1 | — |
-| GOV-02 | Governance | P1 | Owner | Blocked | Owner decision D-2 | — |
+| GOV-01 | Governance | P1 | Owner | Ready for release | Owner grants the right to six positions in Organisation & Appointments; coordinator verifies | — |
+| GOV-02 | Governance | P1 | Owner | Blocked | Owner: activate after 20 Nov 2026 (decided: stay off during the pilot) | — |
+| GOV-04 | Governance | P2 *(proposed)* | Owner | Complete | — | 4 Nov 2026 |
 | GOV-03 **PARALLEL** | Governance | P1 | Clinical governance (nursing audit scoring) | Blocked | Clinical-governance approvals | — |
-| REL-01 **PARALLEL** | Release | P1 | Owner | Ready for release | Owner GO | — |
-| REL-02 **PARALLEL** | Release | P1 | Owner | Blocked | Staging ×2 not yet recorded; owner GO | — |
-| REL-03 **PARALLEL** | Release | P1 | Owner | Blocked | Credentials, webhook, identities | — |
+| REL-01 **PARALLEL** | Release | P1 | Owner | Live — verification pending | — (owner GO given; production already has 550) | — |
+| REL-02 **PARALLEL** | Release | P1 | Owner | Live — verification pending | — (owner GO given; production already has 610) | — |
+| REL-03 **PARALLEL** | Release | P1 | Owner | Blocked | Owner: payments deferred, revisit 18 Nov 2026 | — |
 | REL-04 **PARALLEL** | Release | P2 | Owner | Blocked | **On hold by owner directive** (keep on hold) | — |
 | OPS-01 **PARALLEL** | Release | P1 | Owner (DNS) | Blocked | DNS record scheduled 5 Nov | — |
 | CLOSE-01 | Learning Engine | P0 | Coordinator + this session | Implementing | — | — |
@@ -230,7 +231,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### CE-05 — Clinical scenario quality and policy activation
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE) with a clinical reviewer
 - **Deliverable:** Existing scenarios meet clinical content requirements; no answer leakage; no "student notes" framing; unfolding information; server-controlled progression; scenario policy confirmed before learner-wide activation.
-- **Current state:** Delivered in #236 (2 Nov) and tuned in later commits: one format registry; evolving scenario stored as `short` with `answer.format = 'scenario'` (no migration); stage-by-stage route where each later stage is sent only after a valid answer, with an HMAC progress token over learner, question, marking guide and results (`scenario.ts`); per-stage marking and snapshots; "marked against" line on every format; scenario-v3 prompt (a decision about this person at every stage, 2-4 stages, cited, nothing invented); validation refuses leakage of a later answer into an earlier stage, "notes/passage/learner/revising" framing, uncited or unsupported findings and figures (`scenario-quality.test.ts`); a stored scenario is re-held to today's rules before it is offered. **Not active for learners:** `scholar_revision_formats` code default excludes scenario ("OFF by default", owner cost decision 3 Nov), production excludes it (coordinator). The `scenarios` AI activity (Opus, falls back to `questions`) is in code (#259). No clinician read of generated scenarios is recorded in the repository.
+- **Current state:** Delivered in #236 (2 Nov) and tuned in later commits: one format registry; evolving scenario stored as `short` with `answer.format = 'scenario'` (no migration); stage-by-stage route where each later stage is sent only after a valid answer, with an HMAC progress token over learner, question, marking guide and results (`scenario.ts`); per-stage marking and snapshots; "marked against" line on every format; scenario-v3 prompt (a decision about this person at every stage, 2-4 stages, cited, nothing invented); validation refuses leakage of a later answer into an earlier stage, "notes/passage/learner/revising" framing, uncited or unsupported findings and figures (`scenario-quality.test.ts`); a stored scenario is re-held to today's rules before it is offered. **Not active for learners:** `scholar_revision_formats` code default excludes scenario ("OFF by default", owner cost decision 3 Nov), production excludes it (coordinator). The `scenarios` AI activity (Opus, falls back to `questions`) is in code (#259). No clinician read of generated scenarios is recorded in the repository. Production `scholar_revision_formats` excludes "scenario" (coordinator read, 4 Nov). The owner has asked for an explanation of the activation choice; the decision is still pending.
 - **Dependency:** owner decision D-3; clinician read of a sample of generated scenarios · **Environment:** production (code, format off)
 - **Acceptance criteria:** clinician confirms a sample has accurate clinical content, no leakage, patient-centred framing; progression cannot be skipped from the browser; the policy decision is recorded.
 - **Evidence:** PR #236; `scenario.ts`, `scenario-service.ts`, `scenario-quality.test.ts`, `scenario-sessions-wiring.test.ts`; `docs/evidence/SCHOLAR-INDEPENDENT/p3-cost.md` (scenarios 59 % of Scholar AI cost); policy `scholar_revision_formats` in `policy.ts`.
@@ -364,21 +365,30 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 
 ### GOV-01 — Identifiable learner analytics access policy
 - **Programme:** Governance · **Priority:** P1 · **Owner:** Owner
-- **Deliverable:** Decision on who may read identifiable learner names in analytics, then position assignment.
-- **Current state:** Analytics dashboard live (#248, migration 910). `hq.scholar.analytics.view` is granted to the Individual Product Administrator and Reviewer; `hq.scholar.analytics.identifiable.read` is granted to **no position** by design (owners only; each identifiable read writes an `audit_log` row). Production grants not re-read (Q6).
-- **Dependency:** none · **Environment:** production
-- **Acceptance criteria:** the decision is recorded; the right is granted through HQ Positions to named positions only; audit rows visible.
-- **Evidence:** PR #248; `docs/evidence/SCHOLAR-ENGAGEMENT-ANALYTICS-01/910-build-record.md`, `VERIFY-910.sql`, `walk-3nov.txt`.
-- **Status:** Blocked · **Blocker:** owner decision D-1 · **Completed:** —
+- **Deliverable:** Grant the identifiable-names right at the level the owner decided, through HQ.
+- **Current state:** **Decided 4 Nov 2026: "Executive level".** Analytics dashboard live (#248, migration 910). The capability `hq.scholar.analytics.identifiable.read` exists in production with **no grants today** (coordinator read-only check, 4 Nov). None of the five 940 executive positions is held yet; only the legacy `chief_executive` (mullenokaisu) is. The action is a configuration step with no code: the owner grants it to **six positions** (the five 940 executive positions plus the legacy `chief_executive` seat, held by mullenokaisu) in HQ Organisation & Appointments, and the coordinator verifies. Each identifiable read writes an `audit_log` row.
+- **Dependency:** the executive positions being appointed (940) · **Environment:** production (configuration)
+- **Acceptance criteria:** the capability is granted to exactly those six positions; a holder can open an identifiable answer and the audit row appears; non-holders still get 403 before any read.
+- **Evidence:** PR #248; `docs/evidence/SCHOLAR-ENGAGEMENT-ANALYTICS-01/910-build-record.md`, `VERIFY-910.sql`, `walk-3nov.txt`; owner decision and production fact via the coordinator, 4 Nov.
+- **Status:** Ready for release · **Blocker:** owner grants; coordinator verification pending · **Completed:** —
 
 ### GOV-02 — AI metering activation
 - **Programme:** Governance · **Priority:** P1 · **Owner:** Owner
-- **Deliverable:** Decide whether to activate metering and the initial limits.
-- **Current state:** Dark until the platform flag `ai_fair_use` (`practice_platform_flags`) is switched on; with it off the policy's routing and model eligibility still apply (`allowance.ts`, fail-closed for clinical risk). Flag value in production: not read (Q5).
+- **Deliverable:** Activate metering with initial limits.
+- **Current state:** **Decided 4 Nov 2026: stay OFF during the pilot; revisit on or after 20 Nov 2026.** Metering is dark until the platform flag `ai_fair_use` (`practice_platform_flags`) is switched on; with it off the policy's routing and model eligibility still apply, fail-closed for clinical risk (`allowance.ts`). Initial limits are not yet decided.
 - **Dependency:** none · **Environment:** production
-- **Acceptance criteria:** decision recorded with initial limits; activation verified with a before/after read.
-- **Evidence:** `src/lib/ai/allowance.ts`; `docs/evidence/AI-FAIR-USE/`, `AI-CONSUMPTION/`; migration 410.
-- **Status:** Blocked · **Blocker:** owner decision D-2 · **Completed:** —
+- **Acceptance criteria:** on or after 20 Nov the owner decides activation and initial limits; activation verified with a before/after read.
+- **Evidence:** `src/lib/ai/allowance.ts`; `docs/evidence/AI-FAIR-USE/`, `AI-CONSUMPTION/`; migration 410; owner decision via the coordinator, 4 Nov.
+- **Status:** Blocked (by date) · **Blocker:** owner: activate after 20 Nov 2026 · **Completed:** —
+
+### GOV-04 — Approver may also publish under DA-000001 (new row; decision register item)
+- **Programme:** Governance · **Priority:** P2 *(proposed)* · **Owner:** Owner
+- **Deliverable:** Owner ruling on whether an approver may also publish.
+- **Current state:** **Decided 4 Nov 2026: keep the current state.** The 940 guard allows the approver to publish when the author differs. Observed: DA-000001 v1 was published 4 Nov 06:26Z by competenelisha, who approved it; the author is elisha.okaisu.
+- **Dependency:** none · **Environment:** production
+- **Acceptance criteria:** the ruling is recorded; no change to the 940 guard.
+- **Evidence:** migration 940 (`docs/evidence` unified-governance record); DA-000001 v1 publication of 4 Nov 06:26Z (production read by the coordinator).
+- **Status:** Complete · **Blocker:** — · **Completed:** 4 Nov 2026
 
 ### GOV-03 — Nursing audit scoring and catalogue readiness — PARALLEL, not a Learning Engine feature
 - **Programme:** Governance · **Priority:** P1 · **Owner:** Clinical governance (nursing audit scoring)
@@ -391,30 +401,30 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 
 ### REL-01 — Production package 550 — PARALLEL, legacy release
 - **Programme:** Release · **Priority:** P1 · **Owner:** Owner
-- **Deliverable:** Apply migration 550 (Professional progress and documents) to production.
-- **Current state:** Code merged (#132, Stage 8); `supabase/migrations/550-individual-professional-progress-and-documents.sql` is on `main`. Per the directive: awaiting owner GO. Production application: not in scope of this tracker's reads.
-- **Dependency:** owner GO with OPS-001 safeguards · **Environment:** production
-- **Acceptance criteria:** applied by the owner with recovery reference and rollback SQL; VERIFY run.
-- **Evidence:** PR #132; `docs/evidence/COMPETEN-PROFESSIONAL-PROGRESS-01/`; migration 550.
-- **Status:** Ready for release · **Blocker:** owner GO · **Completed:** —
+- **Deliverable:** Migration 550 (Professional progress and documents) in production.
+- **Current state:** Owner GO given. The coordinator's read-only check (4 Nov) found production **already has 550** (all four `individual_professional_progress_*` tables present). **Nothing to apply.** Code merged (#132); file `supabase/migrations/550-individual-professional-progress-and-documents.sql`.
+- **Dependency:** none · **Environment:** production
+- **Acceptance criteria:** the objects are present and VERIFY-550 passes (not yet re-run).
+- **Evidence:** PR #132; `docs/evidence/COMPETEN-PROFESSIONAL-PROGRESS-01/`; production check via the coordinator, 4 Nov.
+- **Status:** Live — verification pending · **Blocker:** — · **Completed:** —
 
 ### REL-02 — Governance migration 610 — PARALLEL, legacy release
 - **Programme:** Release · **Priority:** P1 · **Owner:** Owner
-- **Deliverable:** Staging ×2 verification then production release of 610.
-- **Current state:** Code and migration on `main` (#152). The 610 build record lists staging ×2 as **pending** and production as not applied.
-- **Dependency:** staging ×2, then owner GO · **Environment:** staging, production
-- **Acceptance criteria:** four-state path completed and recorded.
-- **Evidence:** PR #152; `docs/evidence/SCHOLAR-GOV-IMPLEMENT-01/610-build-record.md`.
-- **Status:** Blocked · **Blocker:** staging ×2 not recorded; owner GO · **Completed:** —
+- **Deliverable:** Migration 610 in production.
+- **Current state:** Owner GO given. The coordinator's read-only check (4 Nov) found production **already has 610** (`hq_gov_body`, `hq_gov_seat`, `hq_gov_seat_exclusion`, `hq_gov_seat_appointment` present). **Nothing to apply.** The repository's 610 build record still lists staging ×2 as pending and production as not applied; that record is stale.
+- **Dependency:** none · **Environment:** production
+- **Acceptance criteria:** objects present; VERIFY run; the build record updated to say so.
+- **Evidence:** PR #152; `docs/evidence/SCHOLAR-GOV-IMPLEMENT-01/610-build-record.md`; production check via the coordinator, 4 Nov.
+- **Status:** Live — verification pending · **Blocker:** — · **Completed:** —
 
 ### REL-03 — LEARNING-01 payment integration — PARALLEL, legacy release
 - **Programme:** Release · **Priority:** P1 · **Owner:** Owner
-- **Deliverable:** Payment credentials, webhook and identities for LEARNING-01.
-- **Current state:** Phase 2 merged (#113), migrations 460-464 on `main`; staging acceptance steps and owner actions are documented; flags OFF.
-- **Dependency:** credentials, webhook, five identities and an estate-role decision (owner) · **Environment:** production
-- **Acceptance criteria:** per `staging-acceptance-owner-actions.md`.
-- **Evidence:** PR #113; `docs/evidence/LEARNING-01/`.
-- **Status:** Blocked · **Blocker:** owner actions · **Completed:** —
+- **Deliverable:** Payment test setup for LEARNING-01.
+- **Current state:** Production has the `learning_*` tables (460-464 applied); the app switches `learning_app` and `learning_commerce` are OFF. Phase 2 merged (#113). **Deferred by the owner (4 Nov): revisit 18 Nov 2026.** The payment test setup will then need the owner: Flutterwave TEST keys (`FLW_SECRET_KEY`, `FLW_SECRET_HASH`) on staging, a reachable staging webhook, and 5 synthetic staging identities.
+- **Dependency:** owner actions · **Environment:** staging, then production
+- **Acceptance criteria:** per `docs/evidence/LEARNING-01/staging-acceptance-owner-actions.md`.
+- **Evidence:** PR #113; `docs/evidence/LEARNING-01/`; production check via the coordinator, 4 Nov.
+- **Status:** Blocked · **Blocker:** owner: revisit 18 Nov 2026 (then test keys, webhook, identities) · **Completed:** —
 
 ### REL-04 — Migration 430 / PR #86 — PARALLEL, on hold
 - **Programme:** Release · **Priority:** P2 · **Owner:** Owner
@@ -444,19 +454,19 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 
 ---
 
-## Decision register (directive §7 — owner decisions not resolved by the directive)
+## Decision register (directive §7)
 
-Nothing below is assumed approved. Migration 430 stays on hold. For audit scoring, the separately approved nursing audit scoring specification governs.
+Items decided on 4 Nov 2026 are recorded as decided (they do not resurface). Migration 430 stays on hold. For audit scoring, the separately approved nursing audit scoring specification governs.
 
-| # | Decision needed | Affects | What exists today | Owner |
+| # | Decision | Status | Outcome / what exists | Tracker row |
 |---|---|---|---|---|
-| D-1 | Who may access **identifiable learner names** in analytics | GOV-01 | `identifiable.read` granted to no position; owners only; each read audited | Owner |
-| D-2 | Whether to **activate AI metering**, and under which initial limits | GOV-02 | Flag `ai_fair_use` dark by default; policy routing and eligibility apply regardless | Owner |
-| D-3 | **CE-05 scenario policy** activation (add the evolving scenario to `scholar_revision_formats`, learner-wide) | CE-05 | Code and production default exclude it; it is 59 % of Scholar AI cost on Opus | Owner, after the clinician read |
-| D-4 | Whether an **approver may also publish** under DA-000001 | Governance (not a tracker row) | Unified governance V1 enforces two-person author/publisher and reviewer/approver in the database | Owner |
-| D-5 | **Production package 550** release | REL-01 | Awaiting GO | Owner |
-| D-6 | **Governance migration 610** release | REL-02 | Staging ×2 pending, then GO | Owner |
-| D-7 | **LEARNING-01 payment** credentials and webhook setup | REL-03 | Owner actions documented | Owner |
+| D-1 | Who may access **identifiable learner names** in analytics | **Decided 4 Nov: executive level (six positions)** | Capability exists in production with no grants; owner grants it to six positions (five 940 executive positions plus the legacy chief_executive seat) in Organisation & Appointments, coordinator verifies | GOV-01 |
+| D-2 | **AI metering** activation and initial limits | **Decided 4 Nov: stay OFF during the pilot; revisit on/after 20 Nov 2026** | Flag `ai_fair_use` dark; routing and eligibility apply regardless; initial limits still to be set at revisit | GOV-02 |
+| D-3 | **CE-05 scenario policy** activation (learner-wide) | **Pending.** Owner asked for an explanation | Production `scholar_revision_formats` excludes scenario; scenarios were 59 % of Scholar AI cost on Opus; no clinician read recorded | CE-05 |
+| D-4 | Whether an **approver may also publish** under DA-000001 | **Decided 4 Nov: keep current state** | The 940 guard allows it when the author differs; DA-000001 v1 published 4 Nov 06:26Z by competenelisha (approver), author elisha.okaisu | GOV-04 |
+| D-5 | **Production package 550** release | **GO given; production already has 550** | Nothing to apply | REL-01 |
+| D-6 | **Governance migration 610** release | **GO given; production already has 610** | Nothing to apply | REL-02 |
+| D-7 | **LEARNING-01 payment** credentials and webhook setup | **Deferred by owner; revisit 18 Nov 2026** | 460-464 applied; switches off; needs Flutterwave TEST keys, staging webhook, 5 staging identities | REL-03 |
 
 Decisions already taken in the directive (D01-D06) are not reopened here. Two points that may need the owner's attention when they arise: D04 says Opus stays for question generation, and the proposed package changes only flashcards (Sonnet for clinical flashcards, Haiku for standard-educational only); and D05 asks that simulation conversations are deleted with the attempt "subject to retention requirements", for which no retention rule is recorded (CE-04D).
 
@@ -466,10 +476,17 @@ File: `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator fold
 
 ## Production facts (recorded as received)
 
-None yet.
+Reported by the coordinator after read-only checks, 4 Nov 2026 (not the Q1-Q6 result rows; those are still to come):
+- Capability `hq.scholar.analytics.identifiable.read` exists in production with no grants; none of the five 940 executive positions is held; only the legacy `chief_executive` (mullenokaisu) is.
+- Production has 550 (four `individual_professional_progress_*` tables) and 610 (`hq_gov_body`, `hq_gov_seat`, `hq_gov_seat_exclusion`, `hq_gov_seat_appointment`).
+- Production has the `learning_*` tables (460-464); `learning_app` and `learning_commerce` are OFF.
+- Production `scholar_revision_formats` excludes "scenario".
+- DA-000001 v1 published 4 Nov 06:26Z by competenelisha (approver); author elisha.okaisu.
+- Still unread: migration 880 and the conversation switch (CE-04A/D), the flashcards AI package (AI-02), the `ai_fair_use` flag value.
 
 ## Change log
 
 | Date | Change |
 |---|---|
 | 4 Nov 2026 | Created from directive §4 and the repository at `e19a363a`; rows added: CE-01-1..3, CE-02-1..2, CE-03, CE-06A-1, LE-05, AI-04, AI-05; no row Complete |
+| 4 Nov 2026 | Coordinator inputs: GOV-01 decided executive level (Ready for release); GOV-02 stays off until 20 Nov (Blocked by date); GOV-04 added and Complete; REL-01 and REL-02 Live — verification pending (production already has 550 and 610); REL-03 owner actions; CE-05 activation pending; decision register updated; production facts recorded. GOV-04 is the only Complete row. Later 4 Nov: REL-03 deferred to 18 Nov; GOV-01 grant is to six positions (five 940 executive positions plus chief_executive), Ready for release until the coordinator verifies |
