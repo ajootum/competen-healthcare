@@ -111,6 +111,12 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
         </Link>
       )}
 
+      {/* SQIE-CLOSE-2026-11 WS-I: every answer to one question, wherever it was asked, with what each was marked against. */}
+      <Link href={studyHref("saved/history")} className={`mb-6 flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+        <span className="text-[14.5px] font-semibold text-gray-900">Question history</span>
+        <span className="text-[12.5px] text-gray-600">Every answer to a question, across Revise, exams and your lessons</span>
+      </Link>
+
       {checks && checks.length > 0 && (
         <section aria-labelledby="checks-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
           <h2 id="checks-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your understanding checks</h2>
@@ -125,6 +131,7 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
                   <span>{CHECK_MARKING_LABEL[c.marking]}</span>
                   {c.sessionId && <Link href={`${experienceHref("scholar", "study/learn")}?session=${c.sessionId}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Open the lesson</Link>}
                   <Link href={sourceHref(c.materialId, c.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>The section</Link>
+                  <Link href={`${studyHref("saved/history")}?q=${c.questionId}`} className={`underline underline-offset-2 ${focusRing}`}>Its history</Link>
                 </p>
               </li>
             ))}

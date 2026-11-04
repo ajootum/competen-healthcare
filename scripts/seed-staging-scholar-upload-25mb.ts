@@ -54,7 +54,7 @@ async function main() {
   if (mode === "set" && Number(before.bucketFileSizeLimit) < TARGET_MB * 1024 * 1024)
     throw new Error("REFUSING: the bucket is not at 25 MB here (migration 413 not applied), so a larger file could not be stored.");
   await assertNoOtherDrafts();
-  if (mode === "remove") await resetOverride(admin, ACTOR, SCOPE, PATH);
+  if (mode === "remove") { const rr = await resetOverride(admin, ACTOR, SCOPE, PATH); if (!rr.ok) throw new Error(`resetOverride: ${rr.error}`); }
   else { const set = await setOverride(admin, ACTOR, SCOPE, PATH, { value: TARGET_MB }); if (!set.ok) throw new Error(`setOverride: ${set.error}`); }
   const pub = await publishScope(admin, ACTOR, SCOPE, { label: "Competen Individual policy",
     note: mode === "remove" ? "Scholar upload limit back to the default (10 MB) on staging" : "Scholar upload limit raised to 25 MB on staging (413 applied)" });

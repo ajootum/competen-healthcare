@@ -36,7 +36,8 @@ import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type
 import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
 import { newestSavedLesson, type LessonRecord } from "./learn-journey";
 import { baseKey, keysetFilter, orderVersions, pageOf, supersededKey, type Cursor, type NoteInput, type NoteKind, type NoteTarget } from "./saved-library";
-import { correctionFromRow, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
+import { readFrameworkProvenance } from "@/lib/competency/framework-provenance";
+import { correctionFromRow, provenance990Keys, provenanceOf, snapshotFromRow, snapshotInsertRow, withMappingStatus, type AttemptIntegrity, type CompetencyProvenance, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -3273,10 +3274,43 @@ async function competencyProgressRowsRead(admin: Admin, userId: string): Promise
 
 // ── MASTERY: THE EVIDENCE ROWS (SCHOLAR-COMPANION-01 P1) ─────────────────────────────────────────────
 
+/** A jsonb array of strings read through a select path (the client returns it parsed): the strings, at most 8, else []. */
+const jsonStrings = (v: unknown): string[] => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string" && !!x.trim()).slice(0, 8).map(x => x.trim().slice(0, 300)) : []);
+
+/**
+ * SALE-2026-11 R1 (SALE-04): EXPOSURE. The caller's learning actions in the window (newest `maxRows`), each with the sections it used
+ * (414 event_source) and those sections' materials. Actions and sections only: no text. A store without 414 reads as none.
+ */
+export async function learningExposure(admin: Admin, userId: string, o: { sinceIso: string; maxRows: number }): Promise<Read<{ action: string; at: string; chunkId: string; materialId: string }[]>> {
+  const { data: evs, error } = await admin.from("individual_scholar_learning_event").select("id, action, created_at").eq("user_id", userId)
+    .gte("created_at", o.sinceIso).order("created_at", { ascending: false }).limit(o.maxRows);
+  if (error) return isNotProvisioned(error) ? { ok: true, data: [] } : fail(error);
+  const byId = new Map(((evs ?? []) as any[]).map(e => [String(e.id), { action: String(e.action), at: String(e.created_at) }]));
+  const ids = [...byId.keys()];
+  const links: { eventId: string; chunkId: string }[] = [];
+  for (let i = 0; i < ids.length; i += 150) {
+    const { data, error: sErr } = await admin.from("individual_scholar_learning_event_source").select("event_id, chunk_id").eq("user_id", userId).in("event_id", ids.slice(i, i + 150));
+    if (sErr) return fail(sErr);
+    for (const r of (data ?? []) as any[]) links.push({ eventId: String(r.event_id), chunkId: String(r.chunk_id) });
+  }
+  const chunkIds = [...new Set(links.map(l => l.chunkId))];
+  const mat = new Map<string, string>();
+  for (let i = 0; i < chunkIds.length; i += 150) {
+    const { data, error: cErr } = await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).in("id", chunkIds.slice(i, i + 150));
+    if (cErr) return fail(cErr);
+    for (const r of (data ?? []) as any[]) mat.set(String(r.id), String(r.material_id));
+  }
+  return { ok: true, data: links.flatMap(l => { const e = byId.get(l.eventId), m = mat.get(l.chunkId); return e && m ? [{ action: e.action, at: e.at, chunkId: l.chunkId, materialId: m }] : []; }) };
+}
+
 /** Raw rows for src/lib/individual/scholar/mastery-data.ts. Bounded: the newest `maxRows` of each source within `sinceIso`. */
 export type MasteryRaw = {
-  questions: { id: string; chunkId: string; materialId: string; kind: string; difficulty: number | null; competencyId: string | null; level: string | null; topic: string | null }[];
-  attempts: { questionId: string; correct: boolean | null; score: number | null; marking: "deterministic" | "ai_evaluation" | "self_graded"; answeredAt: string }[];
+  questions: { id: string; chunkId: string; materialId: string; kind: string; difficulty: number | null; competencyId: string | null; level: string | null; topic: string | null;
+    /** SALE-2026-11 R1: the rubric's misconception tags, and whether it is a lesson check (950 answer.check.source = lesson). */
+    misconceptions?: string[]; check?: boolean }[];
+  attempts: { questionId: string; correct: boolean | null; score: number | null; marking: "deterministic" | "ai_evaluation" | "self_graded" | "unmarked"; answeredAt: string;
+    /** SALE-2026-11 R1: the attempt id, the learner's stated confidence and the misconceptions its judgement named (lesson checks), where present. */
+    id?: string; confidence?: string | null; misconceptions?: string[] }[];
   reviews: { cardId: string; quality: number; reviewedAt: string }[];
   cards: { id: string; questionId: string; materialId: string; status: string; nextReviewAt: string }[];
   osce: { stationId: string; score: number; marking: "self_graded" | "ai_evaluation"; at: string }[];
@@ -3297,15 +3331,19 @@ async function masteryEvidenceRead(admin: Admin, userId: string, o: { sinceIso: 
   // 416/388/710 columns may be absent: fall back to the 372 columns, as the other readers here do.
   const readQuestions = async () => {
     let q: { data: any; error: any } = await admin.from("individual_scholar_question")
+      .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic, rubric_misconceptions:answer->rubric->misconceptions, check_source:answer->check->>source`).eq("user_id", userId).limit(5000);
+    if (q.error) q = await admin.from("individual_scholar_question")
       .select(`${base}, difficulty, competency_id, rubric_level:answer->rubric->>level, rubric_topic:answer->rubric->>topic`).eq("user_id", userId).limit(5000);
     if (q.error) q = await admin.from("individual_scholar_question").select(`${base}, difficulty, competency_id`).eq("user_id", userId).limit(5000);
     if (q.error) q = await admin.from("individual_scholar_question").select(base).eq("user_id", userId).limit(5000);
     return q;
   };
   const readAttempts = async () => {
-    let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
+    let a: { data: any; error: any } = await admin.from("individual_scholar_attempt").select("id, question_id, correct, score, marking, answered_at, stated_confidence:response->>confidence, fb_misconceptions:response->feedback->misconceptions")
       .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
-    if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
+    if (a.error) a = await admin.from("individual_scholar_attempt").select("question_id, correct, score, marking, answered_at")
+      .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
+    if (a.error) a =await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at")
       .eq("user_id", userId).gte("answered_at", o.sinceIso).order("answered_at", { ascending: false }).limit(o.maxRows);
     return a;
   };
@@ -3326,10 +3364,12 @@ async function masteryEvidenceRead(admin: Admin, userId: string, o: { sinceIso: 
       questions: ((q.data ?? []) as any[]).map(r => ({
         id: r.id, chunkId: r.chunk_id, materialId: r.material_id, kind: r.kind, difficulty: r.difficulty ?? null, competencyId: r.competency_id ?? null,
         level: typeof r.rubric_level === "string" ? r.rubric_level : null, topic: typeof r.rubric_topic === "string" && r.rubric_topic.trim() ? r.rubric_topic.trim() : null,
+        misconceptions: jsonStrings(r.rubric_misconceptions), check: r.check_source === "lesson",
       })),
       attempts: ((a.data ?? []) as any[]).map(r => ({
         questionId: r.question_id, correct: r.correct ?? null, score: r.score === null || r.score === undefined ? null : Number(r.score),
         marking: r.marking ?? "deterministic", answeredAt: r.answered_at,
+        ...(r.id ? { id: String(r.id) } : {}), confidence: typeof r.stated_confidence === "string" ? r.stated_confidence : null, misconceptions: jsonStrings(r.fb_misconceptions),
       })),
       reviews: ((rv.data ?? []) as any[]).map(r => ({ cardId: r.card_id, quality: r.quality, reviewedAt: r.reviewed_at })),
       cards: ((cards.data ?? []) as any[]).map(r => ({ id: r.id, questionId: r.question_id, materialId: r.material_id, status: r.status, nextReviewAt: r.next_review_at })),
@@ -4498,8 +4538,14 @@ export async function clearStudyPlan(admin: Admin, userId: string): Promise<"ok"
 
 let position790: boolean | null = null;
 let snapshot791: boolean | null = null;
+/** SQIE WS-D: whether 990 (the snapshot's competency_provenance column, unmarked outcomes) is applied. null: not yet known. */
+let provenance990: boolean | null = null;
+/** SQIE-CLOSE-2026-11 owner decision 3: whether 991 (mapping_status and objective on each provenance element) is applied. */
+let provenance991: boolean | null = null;
 /** Tests only: forget what was detected. */
-export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; };
+export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; provenance990 = null; provenance991 = null; };
+/** Whether 990 is known to be absent (the provenance lookup is then skipped: nothing would keep it). */
+export const snapshotProvenanceAbsent = () => provenance990 === false || snapshot791 === false;
 const isMissingRpc = (error: any) => isNotProvisioned(error) || String(error?.code ?? "") === "42883";
 
 /** The caller's position in one of their Learn sessions, or null (none yet). notProvisioned where 790 is absent. */
@@ -4543,15 +4589,50 @@ export async function questionContentVersion(admin: Admin, userId: string, quest
   return error || !Number.isInteger(data?.content_version) ? 1 : data.content_version;
 }
 
-/** Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else. */
-export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow): Promise<"ok" | "absent" | "failed"> {
+/**
+ * Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else.
+ * SQIE WS-D (990): the row carries competency_provenance where the snapshot has it. 990 absent (the column unknown): a snapshot
+ * that `needs990` (an understanding check: unmarked is a 990 marking, and today no check keeps a snapshot) is not kept, "absent"
+ * -- exactly as before 990 -- and any other is kept as before, without the provenance.
+ */
+export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow, opts: { needs990?: boolean } = {}): Promise<"ok" | "absent" | "failed"> {
   if (snapshot791 === false) return "absent";
+  if (opts.needs990 && provenance990 === false) return "absent";
   try {
-    const { error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...snapshotInsertRow(s), user_id: userId });
+    const full: Record<string, unknown> = { ...snapshotInsertRow(s), user_id: userId };
+    // 991 absent: the elements are sent with the four 990 keys only (the 990 CHECK refuses any other key).
+    if (provenance991 === false && Array.isArray(full.competency_provenance)) full.competency_provenance = provenance990Keys(full.competency_provenance as CompetencyProvenance[]);
+    const { competency_provenance: _p, ...without } = full;
+    void _p;
+    let withProvenance = "competency_provenance" in full && provenance990 !== false;
+    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...(withProvenance ? full : without), user_id: userId });
+    const has991Keys = withProvenance && Array.isArray(full.competency_provenance) && (full.competency_provenance as Record<string, unknown>[]).some(p => "mapping_status" in p || "objective" in p);
+    if (error && has991Keys && String((error as any)?.code ?? "") === "23514" && /provenance_check/.test(String((error as any)?.message ?? ""))) {
+      provenance991 = false;
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...full, competency_provenance: provenance990Keys(full.competency_provenance as CompetencyProvenance[]), user_id: userId }));
+    } else if (!error && has991Keys) provenance991 = true;
+    if (error && withProvenance && isMissingColumn(error)) {
+      provenance990 = false; withProvenance = false;
+      if (opts.needs990) return "absent";
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...without, user_id: userId }));
+    }
     if (error) { if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; } return "failed"; }
     snapshot791 = true;
+    if (withProvenance) provenance990 = true;
     return "ok";
   } catch { return "failed"; }
+}
+
+/**
+ * SQIE WS-D (990). What each competency said when the answer was given: its competency_content_hash (395, 761), its framework
+ * and that framework's version (012). Never throws: a part it cannot read is null (provenanceOf), never guessed.
+ */
+export async function competencyProvenance(admin: Admin, competencyIds: readonly string[]): Promise<CompetencyProvenance[]> {
+  const ids = [...new Set(competencyIds)].filter(isUuid).slice(0, 20);
+  if (!ids.length) return [];
+  // The framework tables are read in the competency layer (Scholar reads competencies only through the catalogue, harness K2).
+  const read = await readFrameworkProvenance(admin, ids);
+  return withMappingStatus(provenanceOf(ids, read), read.statusOf);
 }
 
 /** What the caller's attempts were assessed against, and their corrections (oldest first). Empty where 791 is absent or unreadable. */
@@ -4569,6 +4650,106 @@ export async function attemptIntegrity(admin: Admin, userId: string, attemptIds:
   for (const r of (snaps.error ? [] : snaps.data ?? []) as any[]) { const s = snapshotFromRow(r); if (s) at(s.attemptId).snapshot = s; }
   for (const r of (corr.error ? [] : corr.data ?? []) as any[]) { const c = correctionFromRow(r); if (c) at(c.attemptId).corrections.push(c); }
   return out;
+}
+
+// ── SQIE-CLOSE-2026-11 WS-I: ONE QUESTION'S HISTORY ACROSS REVISE, CYU AND EXAMS (no new store) ──────────────────────
+//
+// The rows question-history.ts assembles: every attempt at one of the caller's questions (416/417/950 individual_scholar_attempt),
+// the revision session each was made in (417, and its set where 720 is absent, to tell an adaptive exam from a mock), the clarify
+// event that kept a check (950), and the exam-paper answers this question was made from (570 revision_question_id). The snapshot
+// and corrections come from attemptIntegrity (791/990). Owner-keyed throughout. Every read falls back: a column or table that is
+// absent gives what the rest can say, never an error page.
+
+export type HistoryAttemptRow = {
+  id: string; questionId: string; answeredAt: string; correct: boolean; score: number | null; chosenIndex: number | null; marking: string;
+  response: Record<string, unknown> | null; evaluatorModel: string | null; evaluatorPromptVersion: string | null; contentVersion: number | null;
+  revisionSessionId: string | null;
+};
+export type HistorySessionRow = { id: string; mode: string; adaptive: boolean };
+export type HistoryCheckEvent = { attemptId: string; sessionId: string; step: number };
+export type HistoryExamAnswer = { id: string; materialId: string; examQuestionId: string | null; examStem: string | null; attempt: Record<string, unknown> | null; model: string; promptVersion: string; createdAt: string };
+
+const HISTORY_ATTEMPT_COLS = "id, question_id, answered_at, correct, score, chosen_index, marking, response, evaluator_model, evaluator_prompt_version, revision_session_id";
+const toHistoryAttempt = (a: any): HistoryAttemptRow => ({
+  id: a.id, questionId: a.question_id, answeredAt: a.answered_at, correct: !!a.correct, score: a.score === null || a.score === undefined ? null : Number(a.score),
+  chosenIndex: Number.isInteger(a.chosen_index) ? a.chosen_index : null, marking: String(a.marking ?? "deterministic"),
+  response: a.response && typeof a.response === "object" && !Array.isArray(a.response) ? a.response : null,
+  evaluatorModel: a.evaluator_model ?? null, evaluatorPromptVersion: a.evaluator_prompt_version ?? null,
+  contentVersion: Number.isInteger(a.content_version) ? a.content_version : null, revisionSessionId: a.revision_session_id ?? null,
+});
+
+/** The caller's attempts at one question, newest first (at most `limit`). 950 absent: read without content_version. */
+export async function questionAttemptRows(admin: Admin, userId: string, questionId: string, limit = 100): Promise<Read<HistoryAttemptRow[]>> {
+  if (!isUuid(questionId)) return { ok: true, data: [] };
+  const read = (cols: string) => admin.from("individual_scholar_attempt").select(cols).eq("user_id", userId).eq("question_id", questionId).order("answered_at", { ascending: false }).limit(Math.min(200, Math.max(1, limit)));
+  let { data, error } = await read(`${HISTORY_ATTEMPT_COLS}, content_version`);
+  if (error && isMissingColumn(error)) ({ data, error } = await read(HISTORY_ATTEMPT_COLS));
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toHistoryAttempt) };
+}
+
+/** The questions the caller most recently answered, newest first (distinct, at most `limit`), with when and how often. */
+export async function recentlyAnsweredQuestions(admin: Admin, userId: string, limit = 30): Promise<Read<{ questionId: string; lastAt: string; count: number }[]>> {
+  const { data, error } = await admin.from("individual_scholar_attempt").select("question_id, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(1000);
+  if (error) return fail(error);
+  const out = new Map<string, { questionId: string; lastAt: string; count: number }>();
+  for (const r of (data ?? []) as any[]) {
+    const e = out.get(r.question_id);
+    if (e) e.count++; else out.set(r.question_id, { questionId: r.question_id, lastAt: r.answered_at, count: 1 });
+  }
+  return { ok: true, data: [...out.values()].slice(0, Math.max(1, Math.min(100, limit))) };
+}
+
+/** A light read of the caller's questions (stem, kind, key and guide): for a history list, never the practice surfaces. */
+export async function questionHeads(admin: Admin, userId: string, ids: readonly string[]): Promise<Read<{ id: string; kind: string; stem: string; answer: unknown; materialId: string }[]>> {
+  const list = [...new Set(ids)].filter(isUuid).slice(0, 200);
+  if (!list.length) return { ok: true, data: [] };
+  const { data, error } = await admin.from("individual_scholar_question").select("id, kind, stem, answer, material_id").eq("user_id", userId).in("id", list);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(q => ({ id: q.id, kind: q.kind, stem: q.stem, answer: q.answer ?? null, materialId: q.material_id })) };
+}
+
+/** The revision sessions these attempts were made in: their mode, and whether it is an adaptive exam (720 mode, or the set's marker). */
+export async function historySessions(admin: Admin, userId: string, ids: readonly string[]): Promise<Map<string, HistorySessionRow>> {
+  const out = new Map<string, HistorySessionRow>();
+  const list = [...new Set(ids)].filter(isUuid).slice(0, 200);
+  if (!list.length) return out;
+  const { data, error } = await admin.from("individual_scholar_revision_session").select("id, mode, set_id").eq("user_id", userId).in("id", list);
+  if (error) return out;
+  const rows = (data ?? []) as any[];
+  const setIds = [...new Set(rows.filter(r => r.mode === "mock" && r.set_id).map(r => r.set_id as string))];
+  const adaptiveSets = new Set<string>();
+  if (setIds.length) {
+    const { data: sets } = await admin.from("individual_scholar_revision_set").select("id, scope").eq("user_id", userId).in("id", setIds);
+    for (const st of (sets ?? []) as any[]) if (isAdaptiveScope(st.scope)) adaptiveSets.add(st.id);
+  }
+  for (const r of rows) out.set(r.id, { id: r.id, mode: String(r.mode ?? ""), adaptive: r.mode === "adaptive" || (!!r.set_id && adaptiveSets.has(r.set_id)) });
+  return out;
+}
+
+/** The clarify events that kept these attempts as understanding checks (950). Empty without 950. */
+export async function historyCheckEvents(admin: Admin, userId: string, attemptIds: readonly string[]): Promise<Map<string, HistoryCheckEvent>> {
+  const out = new Map<string, HistoryCheckEvent>();
+  const list = [...new Set(attemptIds)].filter(isUuid).slice(0, 200);
+  if (!list.length) return out;
+  const { data, error } = await admin.from("individual_scholar_learning_event").select("attempt_id, session_id, step").eq("user_id", userId).in("attempt_id", list);
+  if (error) return out;
+  for (const e of (data ?? []) as any[]) if (e.attempt_id && !out.has(e.attempt_id)) out.set(e.attempt_id, { attemptId: e.attempt_id, sessionId: e.session_id, step: e.step });
+  return out;
+}
+
+/** The exam-paper answers this practice question was made from (570 revision_question_id), with the printed question. Empty without 570. */
+export async function historyExamAnswers(admin: Admin, userId: string, questionId: string): Promise<HistoryExamAnswer[]> {
+  if (!isUuid(questionId)) return [];
+  const { data, error } = await admin.from("individual_scholar_exam_answer").select("id, material_id, question_id, attempt, model, prompt_version, created_at").eq("user_id", userId).eq("revision_question_id", questionId).order("created_at", { ascending: false }).limit(20);
+  if (error || !data?.length) return [];
+  const qIds = [...new Set((data as any[]).map(a => a.question_id).filter(Boolean))];
+  const { data: qs } = qIds.length ? await admin.from("individual_scholar_exam_question").select("id, stem").eq("user_id", userId).in("id", qIds) : { data: [] };
+  const stem = new Map(((qs ?? []) as any[]).map(q => [q.id as string, String(q.stem ?? "")]));
+  return (data as any[]).map(a => ({
+    id: a.id, materialId: a.material_id, examQuestionId: a.question_id ?? null, examStem: a.question_id ? stem.get(a.question_id) ?? null : null,
+    attempt: a.attempt && typeof a.attempt === "object" ? a.attempt : null, model: a.model, promptVersion: a.prompt_version, createdAt: a.created_at,
+  }));
 }
 
 /**

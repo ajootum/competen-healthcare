@@ -80,7 +80,9 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
   | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
-  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max";
+  | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max"
+  | "scholar_learning_state_min_evidence" | "scholar_learning_state_distinct_questions" | "scholar_learning_state_delay_days" | "scholar_learning_state_stale_days"
+  | "scholar_adaptive_reteach_max" | "scholar_adaptive_prerequisite_misses";
 export type SetPolicyKey = "passport_achievement_kinds" | "scholar_onboarding_fields" | "professional_registration_required" | "professional_document_kinds"
   | "professional_verification_kinds" | "professional_reminder_kinds" | "professional_reminder_offsets" | "professional_reminder_standings" | "professional_share_sections"
   | "professional_need_sources" | "professional_competency_share_parts" | "passport_shareable_kinds" | "scholar_upload_formats" | "scholar_learning_actions"
@@ -130,7 +132,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
-  | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal";
+  | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal"
+  | "scholar_learning_state" | "scholar_adaptive_teaching";
 /** PRIVATE MODULE DEVELOPMENT ACCESS (owner GO 2 Nov 2026): who may see a Scholar module that is still being developed. */
 export type ModuleAccessPolicyKey = "scholar_module_courses_access" | "scholar_module_competencies_access";
 /** CHECKLIST STUDIO S3: which assessment instruments (by permanent code) Scholar offers a learner. Empty by default: nothing is offered. */
@@ -2041,6 +2044,66 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "One to ten rounds. Default: three.",
   },
   {
+    // SALE-2026-11 R1 (SALE-04): the learner's learning state per topic, derived from existing records (Progress). Word states only.
+    key: "scholar_learning_state", kind: "choice", product: "Scholar",
+    label: "Progress: what your evidence shows, by topic",
+    help: "Whether Progress shows, for each topic, the learner's evidence across exposure, understanding, misconceptions, recall, delayed recall, application, stated confidence, activity and evidence quality. Words only, never a score. Not enough evidence is said when evidence is thin. Never verified competence.",
+    options: [{ value: "on", label: "Show it" }, { value: "off", label: "Do not show" }],
+    fallback: "on",
+    limitReason: "Derived each time from records that already exist: nothing new is stored. Default: on.",
+  },
+  {
+    key: "scholar_learning_state_min_evidence", kind: "int", product: "Scholar", unit: "answers",
+    label: "Learning state: evidence needed before anything is concluded",
+    help: "Marked answers' worth of evidence a topic needs before its learning state says more than not enough evidence. App-marked answers count 1, AI-evaluated 0.5, self-rated 0.35, unmarked 0.",
+    fallback: 2, min: 1, max: 20,
+    limitReason: "One to twenty. Default: two.",
+  },
+  {
+    key: "scholar_learning_state_distinct_questions", kind: "int", product: "Scholar", unit: "questions",
+    label: "Learning state: different questions for some evidence of understanding",
+    help: "How many DIFFERENT questions answered well a topic needs before understanding shows some evidence. One right answer is limited evidence.",
+    fallback: 2, min: 2, max: 10,
+    limitReason: "Two to ten. Default: two.",
+  },
+  {
+    key: "scholar_learning_state_delay_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Learning state: days before a right answer counts as delayed recall",
+    help: "A right answer this many days or more after the learner first met the topic (or after the previous answer to the same question) counts as delayed recall, which supports retention.",
+    fallback: 3, min: 1, max: 60,
+    limitReason: "One to sixty days. Default: three.",
+  },
+  {
+    key: "scholar_learning_state_stale_days", kind: "int", product: "Scholar", unit: "days",
+    label: "Learning state: days after which evidence is not recent",
+    help: "When the newest marked answer on a topic is older than this, its evidence is called not recent.",
+    fallback: 30, min: 7, max: 365,
+    limitReason: "Seven to 365 days. Default: thirty.",
+  },
+  {
+    // SALE-2026-11 R1 (SALE-05..07): after a lesson check, the next teaching step chosen by the rule table, with its reason. Skippable.
+    key: "scholar_adaptive_teaching", kind: "choice", product: "Scholar",
+    label: "Learn: suggest the next teaching step after a check",
+    help: "After a lesson check, Scholar names the likely need (a missing fact, a gap in reasoning, a misconception, a missing foundation, or understood) and suggests one existing way of learning for it, with the reason, then a different question. The learner can always skip. Nothing runs until they choose it.",
+    options: [{ value: "on", label: "Suggest it" }, { value: "off", label: "Do not suggest" }],
+    fallback: "on",
+    limitReason: "Uses only the existing Learn actions. Model eligibility and routing are unchanged. Default: on.",
+  },
+  {
+    key: "scholar_adaptive_reteach_max", kind: "int", product: "Scholar", unit: "rounds",
+    label: "Learn: corrective rounds per lesson before suggesting review",
+    help: "How many corrective teaching steps in a row one lesson gets. Beyond it Scholar suggests leaving the topic for review (the missed check is already a revision card) instead of explaining it again.",
+    fallback: 2, min: 1, max: 5,
+    limitReason: "One to five rounds. Default: two.",
+  },
+  {
+    key: "scholar_adaptive_prerequisite_misses", kind: "int", product: "Scholar", unit: "questions",
+    label: "Learn: different questions missed before suggesting the earlier lesson",
+    help: "How many different questions on a lesson's sections must be not answered well before Scholar suggests returning to the earlier lesson it builds on. Never from one miss.",
+    fallback: 3, min: 2, max: 10,
+    limitReason: "Two to ten. Default: three.",
+  },
+  {
     key: "scholar_plan_rule_order", kind: "sequence", product: "Scholar",
     label: "My Plan: what comes first",
     help: "The order the planning rules are applied in when choosing the next activity. Revision that is due, topics showing gaps, unfinished lessons, the exam date, a deadline the student put in their calendar, consolidating what was recently studied, and covering all accepted notes. Rules left out are not used.",
@@ -2455,6 +2518,15 @@ export type IndividualPolicy = {
   scholarPlanSectionMinutes: number;
   /** LE-04: cumulative Go deeper rounds one lesson gets by AI (D02 default three). */
   scholarLearnDeeperRoundsMax: number;
+  /** SALE-2026-11 R1: the learning state on Progress, its thresholds, and the adaptive next step after a lesson check. */
+  scholarLearningState: "on" | "off";
+  scholarLearningStateMinEvidence: number;
+  scholarLearningStateDistinctQuestions: number;
+  scholarLearningStateDelayDays: number;
+  scholarLearningStateStaleDays: number;
+  scholarAdaptiveTeaching: "on" | "off";
+  scholarAdaptiveReteachMax: number;
+  scholarAdaptivePrerequisiteMisses: number;
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
   scholarPlanRuleOrder: string[];
   scholarPlanWeeklyReflection: "on" | "off";
@@ -2652,6 +2724,14 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarPlanStartedSignal: clampChoice(policyDef("scholar_plan_started_signal") as ChoicePolicy, published.get(policyPath("scholar_plan_started_signal"))) as "learning" | "practice",
     scholarPlanSectionMinutes: int("scholar_plan_section_minutes"),
     scholarLearnDeeperRoundsMax: int("scholar_learn_deeper_rounds_max"),
+    scholarLearningState: clampChoice(policyDef("scholar_learning_state") as ChoicePolicy, published.get(policyPath("scholar_learning_state"))) as "on" | "off",
+    scholarLearningStateMinEvidence: int("scholar_learning_state_min_evidence"),
+    scholarLearningStateDistinctQuestions: int("scholar_learning_state_distinct_questions"),
+    scholarLearningStateDelayDays: int("scholar_learning_state_delay_days"),
+    scholarLearningStateStaleDays: int("scholar_learning_state_stale_days"),
+    scholarAdaptiveTeaching: clampChoice(policyDef("scholar_adaptive_teaching") as ChoicePolicy, published.get(policyPath("scholar_adaptive_teaching"))) as "on" | "off",
+    scholarAdaptiveReteachMax: int("scholar_adaptive_reteach_max"),
+    scholarAdaptivePrerequisiteMisses: int("scholar_adaptive_prerequisite_misses"),
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
     scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),
