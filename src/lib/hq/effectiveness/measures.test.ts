@@ -30,6 +30,13 @@ describe("SALE-15 effectiveness cells", () => {
     expect(figureText(none, 10)).not.toMatch(/0/);
   });
 
+  it("transfer without the R2 table reads not measured, never none or zero", () => {
+    const c = cellOf({ measure: "transfer", arm: "all", cell_state: "not_measured", learners: 9, denominator: 9, numerator: 9, rate: 100 }, 10)!;
+    expect(c).toMatchObject({ state: "not_measured", learners: null, denominator: null, numerator: null, rate: null });
+    expect(figureText(c, 10)).toBe("Not measured");
+    expect(c.sample).toMatch(/not installed/);
+  });
+
   it("ignores rows outside the catalogue (no unknown column can reach the page)", () => {
     expect(cellOf({ measure: "user_id", arm: "x", cell_state: "reported" }, 10)).toBeNull();
   });

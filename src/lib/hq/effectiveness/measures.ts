@@ -12,12 +12,13 @@ import { floorOf, type CohortRules } from "@/lib/knowledge/question-performance"
 // and no content. Nothing in this module can see a learner.
 // ⚠ NOT MEASURED IS NOT ZERO. Without 985 (or on a read error) the readout is { measured: false, reason } and shows no
 // figure. A cell nobody contributed to is "none", a cell under the floor is "fewer than N learners", never a number.
+// A cell whose source is not installed (transfer before R2 migration 970, read by 986) is "not_measured".
 // ⚠ NO TARGETS. The directive says the first pilot sets the baselines. Nothing here has a goal, a threshold of success or a
 // red/green colour. Every result carries its sample size and its caution text.
 // ⚠ ENGAGEMENT IS NOT LEARNING. Friction signals describe the experience. They are never read as evidence of learning,
 // and the outcome measures are never read as evidence of verified competence.
 
-export type CellState = "reported" | "below_floor" | "none";
+export type CellState = "reported" | "below_floor" | "none" | "not_measured";
 export type MeasureKind = "rate" | "per100" | "per_hour";
 export type MeasureGroup = "outcome" | "comparison" | "friction";
 
@@ -53,8 +54,8 @@ export const MEASURES: readonly MeasureDef[] = [
     counts: "Card reviews rated remembered when the previous review of that card was 5 to 10 days earlier.",
     caution: "Remembered is the learner's own rating of the card, not a marked answer." },
   { measure: "transfer", arm: "all", group: "outcome", kind: "rate", label: "Transfer to a new situation",
-    counts: "First answers to questions the retention release (R2) marks as transfer checks, judged correct.",
-    caution: "Recorded once transfer checks are released (SALE R2). Until then it reads none." },
+    counts: "Answers to transfer checks (SALE R2: a question set outside the original lesson), answered well: score at least 0.75, or correct where unscored.",
+    caution: "Read from the R2 transfer checks (migration 970): not measured until they are installed. The learner chose to take a transfer check, so the group selects itself. Short answers are usually graded by the learner against key points." },
   { measure: "independent_reasoning", arm: "all", group: "outcome", kind: "rate", label: "Independent reasoning",
     counts: "First answers to open reasoning formats (extended, scenario, structured, justification, interpretation, calculation) judged correct.",
     caution: `A first answer is given before any key is shown. Marking may be by AI or by the learner against key points. ${FORMATIVE}` },
@@ -113,6 +114,7 @@ const num = (v: unknown): number | null => (typeof v === "number" && Number.isFi
 
 /** Pure. The sample-size caution every result carries. Thresholds describe the evidence, they are not targets. */
 export function sampleCaution(state: CellState, learners: number | null, floor: number): string {
+  if (state === "not_measured") return "Not measured: the records this measure needs are not installed on this environment (no data, not zero).";
   if (state === "none") return "No data yet: nobody who has agreed to collective analytics has a record of this kind in the window.";
   if (state === "below_floor" || learners === null) return `Suppressed: fewer than ${floor} consenting learners. No figure is shown so no learner can be identified.`;
   if (learners < 30) return `Very small sample (about ${learners} learners): describe, do not generalise.`;
@@ -124,7 +126,7 @@ export function sampleCaution(state: CellState, learners: number | null, floor: 
 export function cellOf(row: any, floor: number): EffectivenessCell | null {
   const def = MEASURES.find(m => m.measure === row?.measure && m.arm === row?.arm);
   if (!def) return null;
-  const state: CellState = row?.cell_state === "reported" ? "reported" : row?.cell_state === "below_floor" ? "below_floor" : "none";
+  const state: CellState = row?.cell_state === "reported" ? "reported" : row?.cell_state === "below_floor" ? "below_floor" : row?.cell_state === "not_measured" ? "not_measured" : "none";
   const shown = state === "reported";
   const learners = shown ? num(row?.learners) : null;
   return {
@@ -155,7 +157,7 @@ export function compareFlows(cells: readonly EffectivenessCell[]): Comparison {
   const s = cells.find(c => c.measure === "corrective_followup" && c.arm === "standard");
   const base = { basis: COMPARISON_BASIS, caution: COMPARISON_CAUTION };
   if (!a || !s || a.state !== "reported" || s.state !== "reported" || a.rate === null || s.rate === null) {
-    const why = [a, s].filter((c): c is EffectivenessCell => !!c).map(c => `${c.arm}: ${c.state === "none" ? "no data" : c.state === "below_floor" ? "suppressed" : "no rate"}`);
+    const why = [a, s].filter((c): c is EffectivenessCell => !!c).map(c => `${c.arm}: ${c.state === "none" ? "no data" : c.state === "below_floor" ? "suppressed" : c.state === "not_measured" ? "not measured" : "no rate"}`);
     return { ...base, differencePoints: null, reason: `Not compared: both flows must be reported over the minimum cohort (${why.join(", ")}).` };
   }
   return { ...base, differencePoints: a.rate - s.rate, reason: null };
@@ -163,6 +165,7 @@ export function compareFlows(cells: readonly EffectivenessCell[]): Comparison {
 
 /** Pure. A cell figure in words, never a bare zero for something unmeasured. */
 export function figureText(c: Pick<EffectivenessCell, "state" | "kind" | "rate" | "value" | "numerator" | "denominator">, floor: number): string {
+  if (c.state === "not_measured") return "Not measured";
   if (c.state === "none") return "No data yet";
   if (c.state === "below_floor") return `Fewer than ${floor} learners`;
   if (c.kind === "per_hour") return c.value === null ? "Not computable" : `${c.value} per active hour`;

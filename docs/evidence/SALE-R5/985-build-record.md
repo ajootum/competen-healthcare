@@ -73,4 +73,4 @@ as withdrawn). No other staging row was changed.
 ## Open
 
 - Owner GO: merge, and 985 in production (with VERIFY-985-prod).
-- Transfer: reads `response.transfer` (object or true). Asked the R2 session to confirm or name its marker; no reply yet.
+- Transfer: RESOLVED by migration 986 (`986-build-record.md`). R2 sets no `response.transfer` marker: transfer is read from the 970 join, `not_measured` while 970 is absent. VERIFY-986 and VERIFY-986-prod supersede VERIFY-985 and VERIFY-985-prod once 986 is applied.
