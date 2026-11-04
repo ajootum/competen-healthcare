@@ -193,13 +193,24 @@ Only what is still open. None of these blocks the 4 Nov release. The existing cl
 |---|---|---|---|
 | 1 | Assign an independent clinician for the flashcard sample (AI-01); activate AI settings (AI-02) once the review meets the acceptance criteria | Owner | SALE-16 flashcards activation |
 | 2 | Independent reviewer explicitly approves safety-critical and unsafe-response markers and their scoring scope for library questions | Independent clinical reviewer | Scoring caps on library questions (SALE-02) |
-| 3 | Independent clinical review, source verification, Ugandan-practice review and authorised publication of the 60 pilot questions | Clinical reviewers, owner | Publishing the pilot questions |
+| 3 | Independent clinical review (reviewer Okaisu Mullen), source verification, Ugandan-practice review and authorised publication (publisher Elisha Okaisu) of the 60 pilot questions. **Appointments done 4 Nov; the production-import author blocker is cleared** (author Competen Elisha) | Clinical reviewers, owner | Publishing the pilot questions |
 | 4 | Case author supplies a patient script; independent clinician approves the complete case and permitted responses | Case author, clinician | Patient-voice switch (CE-04A, SALE-13) |
 | 5 | Verify the attempt-delete implementation, then enable learner deletion per the documented policy (CE-04D) | Engineering, then owner | Learner deletion |
 | 6 | Independent clinical review of about ten representative generated scenarios | Clinician | Scenario format (CE-05, SALE-10) |
 | 7 | Separately approved policy for any non-zero clinical calculation tolerance | Owner + clinical approval | Non-zero tolerance (none planned) |
 | 8 | Release: #272 (995-997) CI, merge, owner applies and verifies; #275 merge; then deploy | Coordinator, owner | SQIE records and library; Wave 2 |
 | 9 | AI metering revisit on or after 20 Nov; payments revisit 18 Nov | Owner | SALE-16 / parallel commitment |
+
+**Appointments (made 4 Nov 2026, read-only production check by the coordinator):**
+
+| Role | Holder(s) | Use |
+|---|---|---|
+| `knowledge_educator` (library author) | Competen Elisha | Author of the pilot questions |
+| `clinical_content_reviewer` | Elisha Okaisu, Okaisu Mullen (already held) | Okaisu Mullen reviews |
+| `quality_council_member` (publisher) | Elisha Okaisu | Publishes |
+| `scholar_clinical_lead` | Elisha Okaisu, Okaisu Mullen | Clinical lead |
+
+The same person must not both approve and publish a question. Appointing people is not a review: nothing is reviewed or published yet.
 
 ## Final acceptance map (§15)
 
@@ -221,6 +232,7 @@ Only what is still open. None of these blocks the 4 Nov release. The existing cl
 
 | Date | Change |
 |---|---|
+| 4 Nov 2026 | Library appointments recorded (author Competen Elisha, reviewer Okaisu Mullen, publisher Elisha Okaisu, clinical leads Elisha Okaisu and Okaisu Mullen); pilot-import author blocker cleared; reviews and publication still outstanding |
 | 4 Nov 2026 | Owner decisions recorded (R1 defaults, scoring caps and tolerance, pilot import, patient voice, flashcards, retention, scenarios, conditional GO 990/991/995/996/997): gates updated, outstanding-approvals table added. #276 merged: SALE-04..07 Ready for release. Merged #271, #273, #270, #277; 990/991 applied in production. No row Complete |
 | 4 Nov 2026 | R1 Adaptive Core built: PR #276 (head 45605bd2, open, no migration). SALE-04..07 Ready for review; 390 px staging walk passed (wrong answer to "Explain my mistake" with reason; a different question right to "Challenge me"; Progress 14 to 15). Eight new HQ policy keys default ON (owner decision recorded as a gate); thresholds uncalibrated starting rules to be recalibrated against SALE-15/18. SALE-08/09/10 not in R1 |
 | 4 Nov 2026 | Wave 2 and SQIE update: SALE-13 partly delivered by PR #275 (open, no migration, keys default off); SALE-02 notes SQIE PRs #269 (tracker), #270, #271, #272 (995/996), #273 (990/991), scoring still building. SQIE-CLOSE path confirmed `docs/programme/SQIE-CLOSE-2026-11-TRACKER.md`. LEARNING-CLOSE tracker updates now ride on this branch, so one PR carries both trackers |
