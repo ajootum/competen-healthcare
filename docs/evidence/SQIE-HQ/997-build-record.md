@@ -148,8 +148,6 @@ the HQ form fields, with programme, level and difficulty.
     `sqie-scoring.test.ts` now expects the calculation library entry.
   - The full run's other failures are 5-second timeouts under machine load, in files this branch does not touch. Each passes
     alone.
-- `ci-harnesses.ts`: 67/68. **`role-authorization-ratchet-harness` is red: role-name literals 118 against a ceiling of 114.**
-  - All 4 extra matches come from the merged `scholar/sqie-scoring` code (`revision-client.tsx`, `revision-view.ts`). They are
-    WS-C part roles, not authorization checks, but the regex counts them.
-  - This branch's own 4 matches were rewritten to read the field first.
-  - The scoring session has been told. The harness goes green when they change those lines.
+- `ci-harnesses.ts`: **68/68 green**, after merging `scholar/sqie-scoring` c14f6ffd. Their da0ca8ff routes part roles
+  through `isReasoningPart`, which brings the role-authorization ratchet to 114/114. The contracts are unchanged.
+- After that merge, the SQIE-HQ and scoring tests pass: 12 files, 168 tests. This includes WS-B's `unsafe-response.test.ts`.
