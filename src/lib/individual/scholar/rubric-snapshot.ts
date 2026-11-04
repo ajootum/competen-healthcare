@@ -27,6 +27,7 @@ import { EXTENDED_MARKS_MAX } from "./config";
 import { extendedSpecOf, isExtendedQuestion } from "./formats";
 import { scenarioSpecOf, stageKeyText } from "./scenario";
 import { RESPONSE_BUDGET } from "./written-feedback";
+import { calculationSpecOf, roundingOf, toleranceOf, unitInfo, type Rounding, type Tolerance } from "./scoring-rules";
 
 export const SNAPSHOT_VERSION = 1 as const;
 /** The most bytes a full snapshot's JSON may take before it is cut back (within the 791 snapshot's 16384-byte budget). */
@@ -37,7 +38,9 @@ export const SNAPSHOT_COMPACT_BYTES = 1500;
 export const SNAPSHOT_TEXT_MAX = 300;
 
 export type SnapshotPart = { marks: number; accepted: string[] };
-export type RubricSnapshot = { v: typeof SNAPSHOT_VERSION; hash: string; keyPoints?: string[]; accepted?: string[]; marks?: number; parts?: SnapshotPart[] };
+/** SQIE-CLOSE-2026-11 WS-A: a calculation's numeric key as it was marked against (value, unit, and any authored tolerance and unit rule). */
+export type SnapshotCalc = { value: number; unit: string; equivalentUnits?: string[]; rounding?: Rounding; tolerance?: Tolerance; safetyCritical?: false };
+export type RubricSnapshot = { v: typeof SNAPSHOT_VERSION; hash: string; keyPoints?: string[]; accepted?: string[]; marks?: number; parts?: SnapshotPart[]; calc?: SnapshotCalc };
 
 const bytes = (v: unknown) => new TextEncoder().encode(JSON.stringify(v)).length;
 
@@ -87,6 +90,12 @@ export function rubricSnapshotOf(q: { kind: string; answer: unknown }): RubricSn
     snap.parts = scenario.stages.map(st => ({ marks: st.weight, accepted: [stageKeyText(st).slice(0, SNAPSHOT_TEXT_MAX)] }));
     snap.marks = scenario.totalWeight;
   }
+  // WS-A: a calculation's numeric key (an attempt marked against it reads it back exactly, whatever the question says later).
+  const calc = calculationSpecOf(q.answer);
+  if (calc) snap.calc = {
+    value: calc.value, unit: calc.unit.slice(0, 40), ...(calc.equivalentUnits.length ? { equivalentUnits: calc.equivalentUnits.map(u => u.slice(0, 40)) } : {}),
+    ...(calc.rounding ? { rounding: calc.rounding } : {}), ...(calc.tolerance ? { tolerance: calc.tolerance } : {}), ...(calc.safetyCritical ? {} : { safetyCritical: false as const }),
+  };
   return compactSnapshot(snap, SNAPSHOT_MAX_BYTES);
 }
 
@@ -132,6 +141,12 @@ export function snapshotOf(response: unknown): RubricSnapshot | null {
     const parts = (r.parts as Record<string, unknown>[]).slice(0, 4).map(p => ({ marks: Number.isInteger(p?.marks) ? (p.marks as number) : 0, accepted: cut(p?.accepted, 4, SNAPSHOT_TEXT_MAX) }));
     if (parts.length && parts.every(p => p.marks >= 1 && p.marks <= 5 && p.accepted.length)) out.parts = parts;
   }
+  const c = r.calc as Record<string, unknown> | undefined;
+  if (c && typeof c === "object" && typeof c.value === "number" && Number.isFinite(c.value) && typeof c.unit === "string" && unitInfo(c.unit)) {
+    const tol = c.tolerance === undefined ? null : toleranceOf(c.tolerance), rnd = c.rounding === undefined ? null : roundingOf(c.rounding);
+    const eq = Array.isArray(c.equivalentUnits) ? (c.equivalentUnits as unknown[]).filter((u): u is string => typeof u === "string").slice(0, 6) : [];
+    out.calc = { value: c.value, unit: c.unit, ...(eq.length ? { equivalentUnits: eq } : {}), ...(rnd ? { rounding: rnd } : {}), ...(tol ? { tolerance: tol } : {}), ...(c.safetyCritical === false ? { safetyCritical: false as const } : {}) };
+  }
   return out;
 }
 
@@ -151,6 +166,11 @@ export function applySnapshot<T extends { kind: string; answer: unknown }>(q: T,
   if (isExtendedQuestion(q) && snap.marks !== undefined && snap.keyPoints?.length) {
     a.marks = Math.min(EXTENDED_MARKS_MAX, snap.marks);
     a.partialCredit = { rule: "per_key_point", marksPerPoint: Math.max(1, Math.floor(snap.marks / snap.keyPoints.length)) };
+  }
+  // WS-A: a calculation is read against the numeric key it was marked against (an authored tolerance absent then stays absent).
+  if (snap.calc && a.format === "calculation") {
+    a.value = snap.calc.value; a.unit = snap.calc.unit;
+    for (const k of ["equivalentUnits", "rounding", "tolerance", "safetyCritical"] as const) { if (snap.calc[k] !== undefined) a[k] = snap.calc[k]; else delete a[k]; }
   }
   if (snap.parts && Array.isArray(a.parts) && a.parts.length === snap.parts.length)
     a.parts = (a.parts as Record<string, unknown>[]).map((p, i) => ({ ...p, marks: snap.parts![i].marks, accepted: snap.parts![i].accepted }));

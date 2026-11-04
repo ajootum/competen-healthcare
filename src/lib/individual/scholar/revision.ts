@@ -21,7 +21,7 @@ import {
 import { findPatientIdentifiers } from "./extract";
 import { isClozeQuestion, markCloze } from "./cloze";
 import {
-  extendedSpecOf, isExtendedQuestion, isScenarioQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
+  extendedSpecOf, isCalculationQuestion, isExtendedQuestion, isScenarioQuestion, isTrueFalseQuestion, marksPerPointOf, markTrueFalse, parseExtendedRaw, parseTrueFalseRaw, truthOf,
 } from "./formats";
 import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenarioAnswer, shapeScenario, scenarioFlaw, scenarioGroundingFlaw, scenarioIsMeta, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
@@ -30,6 +30,11 @@ import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
 import { choiceLeaks, writtenLeaks } from "./answer-leak";
 import type { Passage } from "./generation";
+import {
+  CALCULATION_DEFAULTS, CAPS_DEFAULT, capPartMarks, isReasoningPart, calculationAccepted, calculationSpecOf, calculationUnitChoices, capForSafety, findingsOf, markCalculation, matchUnsafe, numbersIn, parseCalculationResponse, partContractOf,
+  safetyMarkersOf, safetyRecord, structuredVariantOf, unitInfo, worstOutcome,
+  type CalculationMark, type CalculationPolicy, type CapPolicy, type Finding, type PartContract, type PartRole, type SafetyOutcome, type SafetyRecord, type StructuredVariant,
+} from "./scoring-rules";
 import {
   asksQuestion, difficultyFits, difficultyOf, distractorProblem, flashcardDraftProblem, flashcardFrontAsks, keyConsistent, parseRubric, referenceGrounding, rubricOf, stemKey,
   type FeedbackParts, type GenerationDifficulty, type PromptReference, type Rubric,
@@ -56,7 +61,7 @@ export type RevisionKind = RevisionFormat | "case";
  * own format to a session (the stored kinds are the 416/710 ones; answer.format tells the rest apart).
  */
 export const effectiveKind = (q: { kind: RevisionKind; answer: unknown }): RevisionKind =>
-  isClozeQuestion(q) ? "cloze" : isTrueFalseQuestion(q) ? "true_false" : isExtendedQuestion(q) ? "extended" : isScenarioQuestion(q) ? "scenario" : q.kind;
+  isClozeQuestion(q) ? "cloze" : isTrueFalseQuestion(q) ? "true_false" : isExtendedQuestion(q) ? "extended" : isScenarioQuestion(q) ? "scenario" : isCalculationQuestion(q) ? "calculation" : q.kind;
 
 /** Pure. The kind a format is stored as (migrations 416/710): cloze, true_false, extended and scenario are all `short` (the registry says so). */
 export const storedKind = (f: RevisionKind): RevisionKind => storedKindOfFormat(f) as RevisionKind;
@@ -70,7 +75,11 @@ export type RevisionQuestion = {
 // ── THE KEY OF EACH KIND (migration 416 `answer`) ──
 
 /** SCHOLAR-SQIE-CLOSE-01 (710): one part of a structured question -- its prompt, its marks, what it accepts, its rubric. */
-export type StructuredPart = { prompt: string; marks: number; accepted: string[]; rubric: Rubric | null };
+export type StructuredPart = {
+  prompt: string; marks: number; accepted: string[]; rubric: Rubric | null;
+  /** SQIE-CLOSE-2026-11 WS-B/WS-C (scoring-rules.ts partContractOf): its role, a choice it may be, weighted criteria, safety markers. */
+  contract: PartContract;
+};
 
 export type Key =
   | { kind: "choice"; index: number } | { kind: "set"; indexes: number[] } | { kind: "accepted"; answers: string[] }
@@ -86,7 +95,7 @@ function partsOf(v: unknown): StructuredPart[] | null {
     const x = (raw ?? {}) as Record<string, unknown>;
     const accepted = strs(x.accepted);
     return typeof x.prompt === "string" && x.prompt.trim() && isMarks(x.marks) && accepted && accepted.length
-      ? { prompt: x.prompt, marks: x.marks, accepted, rubric: rubricOf({ rubric: x.rubric }) } : null;
+      ? { prompt: x.prompt, marks: x.marks, accepted, rubric: rubricOf({ rubric: x.rubric }), contract: partContractOf(x, accepted) } : null;
   });
   return parts.every(Boolean) ? (parts as StructuredPart[]) : null;
 }
@@ -100,9 +109,11 @@ export function keyOf(q: RevisionQuestion): Key | null {
   switch (q.kind) {
     case "mcq": case "case": return q.correctIndex !== null && q.correctIndex >= 0 && q.correctIndex < q.options.length ? { kind: "choice", index: q.correctIndex } : null;
     case "mrq": { const c = nums(a.correct); return c && c.length && c.every(i => i >= 0 && i < q.options.length) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
-    case "short": case "cloze": case "true_false": case "extended": case "scenario": {
+    case "short": case "cloze": case "true_false": case "extended": case "scenario": case "calculation": {
       const c = strs(a.accepted);
       if (!c || !c.length) return null;
+      // SQIE-CLOSE-2026-11 WS-A: a calculation without a sound numeric key (value, a recognised unit) is not offered.
+      if (isCalculationQuestion(q) && !calculationSpecOf(q.answer)) return null;
       // A scenario without sound stages is not offered.
       if (isScenarioQuestion(q) && !scenarioSpecOf(q.answer)) return null;
       // A true/false key is one of the two values, and an extended item without a sound marking key is not offered.
@@ -131,6 +142,7 @@ export function answerText(q: RevisionQuestion): string {
       if (isTrueFalseQuestion(q)) return truthOf(k.answers[0]) === "true" ? "True" : "False";
       if (isExtendedQuestion(q)) return extendedSpecOf(q.answer)?.modelAnswer ?? k.answers[0];
       if (isScenarioQuestion(q)) return k.answers.join("; ");
+      if (isCalculationQuestion(q)) return calculationSpecOf(q.answer)?.display ?? k.answers[0];
       return isClozeQuestion(q) ? k.answers[0] : k.answers.length > 1 ? `${k.answers[0]} (also accepted: ${k.answers.slice(1).join("; ")})` : k.answers[0];
     case "back": return k.text;
     case "matches": return q.options.map((p, i) => `${p} → ${k.matches[i]}`).join("; ");
@@ -147,12 +159,16 @@ export type LearnerItem = {
   options: string[];
   /** match only: the items to match, shuffled. */
   choices?: string[];
-  /** structured only: each part's prompt and its marks. Never what it accepts or its rubric. */
-  parts?: { prompt: string; marks: number }[];
+  /** structured only: each part's prompt and its marks. Never what it accepts or its rubric. WS-C: its role, and the options of a choice part (never which is right). */
+  parts?: { prompt: string; marks: number; role?: PartRole; options?: string[] }[];
+  /** WS-C structured only: what kind of structured item it is, and an interpretation item's findings table (shown before the parts). */
+  structured?: { variant: StructuredVariant | null; findings: Finding[] };
   /** extended only: the practice marks it carries, how many key points it is marked against (never what they are), and the longest answer. */
   extended?: { marks: number; points: number; maxChars: number };
   /** scenario only: how many stages, the weights' total, and the FIRST stage (the others are sent as each is answered). */
   scenario?: ScenarioLearnerView;
+  /** WS-A calculation only: the units the unit select offers (the key's own and others of the same dimension, alphabetical), or none for a unitless answer. Never the value. */
+  calculation?: { units: string[]; unitless: boolean; rounding?: { mode: "decimal_places" | "significant_figures"; places: number } };
 };
 
 /** A deterministic shuffle by seed. Stable for one question, so a resumed session shows the same order. */
@@ -172,11 +188,19 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
     const m = k?.kind === "matches" ? k.matches : [];
     return { ...base, choices: seededOrder(m.length, `${q.id}:choices`).map(i => m[i]) };
   }
-  if (q.kind === "structured") return { ...base, parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks })) };
+  if (q.kind === "structured") {
+    const variant = structuredVariantOf(q.answer), findings = findingsOf(q.answer);
+    return {
+      ...base,
+      parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks, ...(isReasoningPart(p.contract.role) ? { role: p.contract.role } : {}), ...(p.contract.options ? { options: [...p.contract.options] } : {}) })),
+      ...(variant || findings.length ? { structured: { variant, findings } } : {}),
+    };
+  }
   // SCHOLAR-COMPANION-01: a cloze item is stored as `short` and shown as its own format (a blank to fill, not a free answer).
   // SCHOLAR-SQIE-LEARNER-01: so are true/false (two buttons) and extended response (a long answer, marked against key points).
   if (isExtendedQuestion(q)) { const e = extendedSpecOf(q.answer); return { ...base, kind: "extended", ...(e ? { extended: { marks: e.marks, points: e.keyPoints.length, maxChars: EXTENDED_RESPONSE_MAX } } : {}) }; }
   if (isScenarioQuestion(q)) { const v = scenarioLearnerView(q.answer); return { ...base, kind: "scenario", ...(v ? { scenario: v } : {}) }; }
+  if (isCalculationQuestion(q)) { const c = calculationSpecOf(q.answer); return { ...base, kind: "calculation", calculation: { units: c ? calculationUnitChoices(c) : [], unitless: !c?.unit, ...(c?.rounding ? { rounding: c.rounding } : {}) } }; }
   return isClozeQuestion(q) ? { ...base, kind: "cloze" } : isTrueFalseQuestion(q) ? { ...base, kind: "true_false" } : base;
 }
 
@@ -185,7 +209,9 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
 export type Response =
   | { kind: "choice"; index: number } | { kind: "set"; indexes: number[] } | { kind: "text"; text: string }
   | { kind: "recall"; quality: number } | { kind: "matches"; matches: string[] } | { kind: "order"; order: number[] }
-  | { kind: "parts"; texts: string[] };
+  | { kind: "parts"; texts: string[] }
+  /** SQIE-CLOSE-2026-11 WS-A: a calculation's number as typed and the unit chosen. */
+  | { kind: "calc"; value: string; unit: string };
 
 /** Pure. The answer a body carries for this question's kind, bounded, or null. */
 export function parseResponse(q: RevisionQuestion, raw: unknown): Response | null {
@@ -195,8 +221,9 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
     case "mcq": case "case": return Number.isInteger(r.index) && (r.index as number) >= 0 && (r.index as number) < n ? { kind: "choice", index: r.index as number } : null;
     case "mrq": { const c = nums(r.indexes); return c && c.length <= n && c.every(i => i >= 0 && i < n) ? { kind: "set", indexes: [...new Set(c)].sort() } : null; }
     case "scenario": return null; // answered stage by stage (api/.../revision/scenario), never as one response
-    case "short": case "cloze": case "true_false": case "extended": {
+    case "short": case "cloze": case "true_false": case "extended": case "calculation": {
       if (isScenarioQuestion(q)) return null; // stored as `short`, but a scenario is never one short answer
+      if (isCalculationQuestion(q)) { const c = parseCalculationResponse(r); return c ? { kind: "calc", ...c } : null; }
       if (typeof r.text !== "string" || !r.text.trim()) return null;
       if (isTrueFalseQuestion(q)) { const t = truthOf(r.text); return t ? { kind: "text", text: t } : null; }
       return r.text.length <= (isExtendedQuestion(q) ? EXTENDED_RESPONSE_MAX : 1000) ? { kind: "text", text: r.text.trim() } : null;
@@ -206,8 +233,10 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
     case "sequence": { const c = nums(r.order); return c && c.length === n && new Set(c).size === n && c.every(i => i >= 0 && i < n) ? { kind: "order", order: c } : null; }
     case "structured": {
       // One answer per part, each bounded. A part left blank is allowed (it earns no marks), all blank is not an answer.
-      const c = strs(r.texts), parts = structuredParts(q).length;
-      return c && parts && c.length === parts && c.every(t => t.length <= 1000) && c.some(t => t.trim()) ? { kind: "parts", texts: c.map(t => t.trim()) } : null;
+      const ps = structuredParts(q), c = strs(r.texts), parts = ps.length;
+      // WS-C: a choice part's answer is one of its options (or blank), never free text.
+      const choiceOk = (t: string, i: number) => !ps[i].contract.options || !t.trim() || ps[i].contract.options!.includes(t.trim());
+      return c && parts && c.length === parts && c.every(t => t.length <= 1000) && c.some(t => t.trim()) && c.every(choiceOk) ? { kind: "parts", texts: c.map(t => t.trim()) } : null;
     }
   }
 }
@@ -215,16 +244,82 @@ export function parseResponse(q: RevisionQuestion, raw: unknown): Response | nul
 // ── STRUCTURED: PRACTICE MARKS, PART BY PART ── SCHOLAR-SQIE-CLOSE-01 (710) ──
 
 /** How one part was marked: blank, by code against what it accepts, by AI evaluation, or by the student. */
-export type PartResult = { awarded: number; by: "blank" | "code" | "ai" | "self"; feedback?: string | null; parts?: FeedbackParts | null };
+export type PartResult = {
+  awarded: number; by: "blank" | "code" | "ai" | "self"; feedback?: string | null; parts?: FeedbackParts | null;
+  /** WS-B: the unsafe statement this part made (an authored unsafe answer, by code, or the evaluator's UNSAFE line). */
+  unsafe?: string | null;
+  /** WS-C: the weighted criteria the evaluator found met (indexes), where the part is marked against criteria. */
+  matched?: number[] | null;
+};
 
-/** Pure. The parts code can mark: blank earns nothing, a match with an accepted answer earns its marks. null: needs judgement. */
+/**
+ * Pure. The parts code can mark: blank earns nothing, a match with an accepted answer earns its marks. null: needs judgement.
+ * WS-B: an authored unsafe answer is recognised first and earns nothing. WS-C: a CHOICE part is marked by code either way.
+ */
 export function codeMarkParts(parts: readonly StructuredPart[], texts: readonly string[]): (PartResult | null)[] {
   return parts.map((p, i) => {
     const t = (texts[i] ?? "").trim();
     if (!t) return { awarded: 0, by: "blank" };
-    return markShortAnswer(t, p.accepted) ? { awarded: p.marks, by: "code" } : null;
+    const unsafe = matchUnsafe(t, p.contract.unsafe);
+    if (unsafe) return { awarded: 0, by: "code", unsafe };
+    if (markShortAnswer(t, p.accepted)) return { awarded: p.marks, by: "code" };
+    return p.contract.options ? { awarded: 0, by: "code" } : null;
   });
 }
+
+/**
+ * Pure (WS-B). One structured part's own safety outcome: unsafe where it made an unsafe statement (code or AI); critical_missed where the
+ * part is safety-critical and did not earn its full marks (missed or wrong) -- a part the learner marked themselves is their own
+ * judgement and never counted here; else safe.
+ */
+export function partOutcome(p: StructuredPart, r: PartResult | null | undefined): SafetyOutcome {
+  if (r?.unsafe) return "unsafe";
+  return p.contract.safetyCritical && r?.by !== "self" && (r?.awarded ?? 0) < p.marks ? "critical_missed" : "safe";
+}
+
+/**
+ * Pure (WS-B, rules v3). A structured answer's parts with the caps applied AT EACH PART (the rubric's scope) -- an unsafe part keeps at
+ * most half its marks, a safety-critical failure none -- and never to the other parts. Only where the caps are active; the outcome is
+ * always detected. The record kept with the attempt names the worst outcome, the first unsafe statement and what was missed.
+ */
+export function capStructured(parts: readonly StructuredPart[], results: readonly PartResult[], policy: CapPolicy = CAPS_DEFAULT): { results: PartResult[]; safety: SafetyRecord | null } {
+  const outcomes = parts.map((p, i) => partOutcome(p, results[i]));
+  const capped = results.map((r, i) => ({ ...r, awarded: capPartMarks(parts[i].marks, r.awarded, outcomes[i], policy) }));
+  const worst = outcomes.reduce<SafetyOutcome>((w, o) => worstOutcome(w, o), "safe");
+  const u = outcomes.indexOf("unsafe");
+  const flagged = outcomes.map((o, i) => (o === "safe" ? -1 : i)).filter(i => i >= 0);
+  const by: "code" | "ai" = flagged.some(i => results[i]?.by === "ai") ? "ai" : "code";
+  return {
+    results: capped,
+    safety: safetyRecord(worst, { statement: u >= 0 ? results[u].unsafe ?? null : null, missed: parts.filter((_, i) => outcomes[i] === "critical_missed").map(p => p.prompt), by, capped: policy.capsActive }),
+  };
+}
+
+/**
+ * Pure (WS-B, rules v2). The safety outcome of a short or extended answer marked by the evaluator: unsafe where it quoted an
+ * unsafe statement of the answer; critical_missed where the item is safety-critical and the verdict is not correct, or (extended)
+ * a safety-critical key point was not made. `matched` is the extended answer's key points made (null for a short answer).
+ */
+export function writtenSafety(q: RevisionQuestion, ai: { correct: boolean; unsafe: string | null; matched: readonly number[] | null }): { outcome: SafetyOutcome; statement: string | null; missed: string[] } {
+  if (ai.unsafe) return { outcome: "unsafe", statement: ai.unsafe, missed: [] };
+  const a = (q.answer ?? {}) as Record<string, unknown>;
+  if (isExtendedQuestion(q)) {
+    const kp = extendedSpecOf(q.answer)?.keyPoints ?? [];
+    const critical = Array.isArray(a.safetyCriticalPoints) ? (a.safetyCriticalPoints as unknown[]).filter((i): i is number => Number.isInteger(i) && (i as number) >= 0 && (i as number) < kp.length) : [];
+    const missed = ai.matched ? critical.filter(i => !ai.matched!.includes(i)).map(i => kp[i]) : [];
+    return { outcome: missed.length ? "critical_missed" : "safe", statement: null, missed };
+  }
+  return { outcome: safetyMarkersOf(a).safetyCritical && !ai.correct ? "critical_missed" : "safe", statement: null, missed: [] };
+}
+
+/**
+ * Pure (rules v3). A single-answer item's mark (short, extended, calculation: the item is the rubric's scope) with the cap applied where the
+ * caps are active, and the record kept with the attempt (null for a safe answer).
+ */
+export function withSafety<T extends { correct: boolean; score: number }>(m: T, s: { outcome: SafetyOutcome; statement?: string | null; missed?: readonly string[] }, by: "code" | "ai", policy: CapPolicy = CAPS_DEFAULT): { mark: T; safety: SafetyRecord | null } {
+  return { mark: capForSafety(m, s.outcome, policy), safety: safetyRecord(s.outcome, { statement: s.statement ?? null, missed: s.missed ?? [], by, capped: policy.capsActive }) };
+}
+export { worstOutcome };
 
 /** Pure. A part's marks from an evaluation verdict: all of them, half (rounded down), or none. Formative only. */
 export const partMarks = (marks: number, verdict: "correct" | "partly" | "incorrect"): number =>
@@ -237,15 +332,26 @@ export function practiceMarks(parts: readonly StructuredPart[], results: readonl
   return { awarded, total, score: total ? awarded / total : 0, correct: total > 0 && awarded === total };
 }
 
-export type Mark = { correct: boolean; score: number; marking: "deterministic" | "self_graded" } | { needsJudgement: true };
+export type Mark = { correct: boolean; score: number; marking: "deterministic" | "self_graded"; safety?: SafetyRecord | null; calc?: CalculationMark } | { needsJudgement: true };
+
+/** What marking needs from the published policy (absent: the strict code defaults). WS-A: a calculation's default tolerance and unit rule. */
+export type MarkOptions = { calculation?: CalculationPolicy; caps?: CapPolicy };
 
 /**
  * Pure. Deterministic marking. A short answer that matches no accepted answer is not marked here: code cannot tell,
  * so it needs AI evaluation or the student's own judgement. A flashcard is the student's own recall grade.
  */
-export function markResponse(q: RevisionQuestion, r: Response): Mark {
+export function markResponse(q: RevisionQuestion, r: Response, opts: MarkOptions = {}): Mark {
   const k = keyOf(q);
   if (!k) return { correct: false, score: 0, marking: "deterministic" };
+  // SQIE-CLOSE-2026-11 WS-A: a calculation is marked by code only -- the number, its unit, the tolerance (the item's own, else the policy's, else exact).
+  if (k.kind === "accepted" && r.kind === "calc") {
+    const spec = calculationSpecOf(q.answer);
+    if (!spec) return { correct: false, score: 0, marking: "deterministic" };
+    // Owner decision 4 Nov 2026: a tenfold error is unsafe independently of tolerance (cm.safety), recorded as any unsafe answer is.
+    const cm = markCalculation(spec, r, opts.calculation ?? CALCULATION_DEFAULTS);
+    return { correct: cm.correct, score: cm.score, marking: "deterministic", calc: cm, ...(cm.safety ? { safety: { ...cm.safety, capped: !!opts.caps?.capsActive } } : {}) };
+  }
   if (k.kind === "choice" && r.kind === "choice") return { correct: r.index === k.index, score: r.index === k.index ? 1 : 0, marking: "deterministic" };
   if (k.kind === "set" && r.kind === "set") {
     const hits = r.indexes.filter(i => k.indexes.includes(i)).length, wrong = r.indexes.length - hits;
@@ -258,6 +364,10 @@ export function markResponse(q: RevisionQuestion, r: Response): Mark {
   if (k.kind === "accepted" && r.kind === "text" && isExtendedQuestion(q)) return { needsJudgement: true };
   // SCHOLAR-COMPANION-01: a cloze answer is a single term, so code marks it either way (normalised match, accepted variants).
   if (k.kind === "accepted" && r.kind === "text" && isClozeQuestion(q)) { const ok = markCloze(r.text, k.answers); return { correct: ok, score: ok ? 1 : 0, marking: "deterministic" }; }
+  // SQIE-CLOSE-2026-11 WS-B: an authored unsafe answer is recognised by code before anything else. It is a known WRONG answer (never
+  // accepted), so it is marked incorrect by code whether or not the caps are active; the flag is recorded either way.
+  const unsafe = k.kind === "accepted" && r.kind === "text" ? matchUnsafe(r.text, safetyMarkersOf(q.answer).unsafe) : null;
+  if (unsafe) return { correct: false, score: 0, marking: "deterministic", safety: safetyRecord("unsafe", { statement: unsafe, by: "code", capped: !!opts.caps?.capsActive }) };
   if (k.kind === "accepted" && r.kind === "text") return markShortAnswer(r.text, k.answers) ? { correct: true, score: 1, marking: "deterministic" } : { needsJudgement: true };
   if (k.kind === "back" && r.kind === "recall") return { correct: r.quality >= 3, score: r.quality / 5, marking: "self_graded" };
   if (k.kind === "matches" && r.kind === "matches") {
@@ -272,8 +382,10 @@ export function markResponse(q: RevisionQuestion, r: Response): Mark {
     // Marked by code only when every part is blank or matches what it accepts. Otherwise each remaining part is judged.
     const coded = codeMarkParts(k.parts, r.texts);
     if (coded.some(x => x === null)) return { needsJudgement: true };
-    const m = practiceMarks(k.parts, coded as PartResult[]);
-    return { correct: m.correct, score: m.score, marking: "deterministic" };
+    // WS-B (rules v3): every part judged as before, then each part capped at its own scope (where the caps are active).
+    const c = capStructured(k.parts, coded as PartResult[], opts.caps);
+    const m = practiceMarks(k.parts, c.results);
+    return { correct: m.correct, score: m.score, marking: "deterministic", ...(c.safety ? { safety: c.safety } : {}) };
   }
   return { correct: false, score: 0, marking: "deterministic" };
 }
@@ -431,6 +543,19 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
       if (new Set(pairs.map(p => norm(p.left!))).size !== pairs.length || new Set(pairs.map(p => norm(p.right!))).size !== pairs.length) return { ok: false, reason: "duplicate" };
       d = { stem, options: pairs.map(p => p.left!), answer: { matches: pairs.map(p => p.right!) }, rationale, sourceQuote: quote, difficulty };
     }
+  } else if (kind === "calculation") {
+    // SQIE-CLOSE-2026-11 WS-A: a calculation from the passage's own figures. EVERY number in the stem is one the passage contains (the
+    // generator copies figures, never invents them); the key is a number and a recognised clinical unit; a tolerance the model writes is
+    // dropped (tolerance is authored, or the policy default). The key itself is checked by a blind second solve (generation.ts).
+    const stem = text(r.stem, 400), rationale = text(r.rationale, 1200), working = typeof r.working === "string" ? r.working.trim().slice(0, 600) : "";
+    const value = typeof r.value === "number" ? r.value : typeof r.value === "string" && /^[+-]?\d+(\.\d+)?$/.test(r.value.trim()) ? Number(r.value.trim()) : NaN;
+    const unit = typeof r.unit === "string" ? r.unit.trim() : "";
+    const u = unitInfo(unit);
+    if (stem && rationale && quote && Number.isFinite(value) && u && u.known) {
+      const have = new Set(numbersIn(passage.content));
+      if (numbersIn(stem).some(n => !have.has(n))) return { ok: false, reason: "ungrounded_number" };
+      d = { stem, options: [], answer: { format: "calculation", accepted: calculationAccepted(value, unit), value, unit, ...(working ? { working } : {}) }, rationale, sourceQuote: quote, difficulty };
+    }
   } else if (kind === "structured") {
     // SCHOLAR-SQIE-CLOSE-01 (710): a lead-in and 2 to 4 parts, each a genuine prompt with whole marks and what it accepts.
     const stem = text(r.stem, 800), rationale = text(r.rationale, 1200);
@@ -467,7 +592,13 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   const all = [d.stem, ...d.options, ...Object.values(answerBody).flatMap(v => (Array.isArray(v) ? v.filter(x => typeof x === "string") : typeof v === "string" ? [v] : [])), ...partTexts, ...extendedPoints, ...scenarioWords, d.rationale].join("\n");
   if (findPatientIdentifiers(all).length) return { ok: false, reason: "identifier" };
   const grounding = [passage.content, ...referenceGrounding(checks.references ?? [])];
-  if (kind !== "scenario" && groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
+  if (kind === "calculation") {
+    // The stem is held to the passage whole (words and figures). The explanation and working are arithmetic on those figures: their words
+    // are held to the passage, their numbers are checked by the blind solve, not here.
+    if (groundingViolations(d.stem, grounding).length) return { ok: false, reason: "ungrounded" };
+    const words = [d.rationale, String((d.answer as Record<string, unknown>).working ?? "")].join("\n").replace(/\d+(?:[.,]\d+)*/g, " ");
+    if (groundingViolations(words, grounding).length) return { ok: false, reason: "ungrounded_rationale" };
+  } else if (kind !== "scenario" && groundingViolations(all, grounding).length) return { ok: false, reason: "ungrounded" };
 
   // ── SCHOLAR-QUESTION-INTELLIGENCE-01: the item asks, is new, has real distractors, agrees with itself ──
   // A structured lead-in may set the scene: it is its PARTS that must each ask.
@@ -487,7 +618,7 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     if (unsupportedTerms(d.stem, passageText).length) return { ok: false, reason: "ungrounded" };
     // (It may add the topic's own name, at most two terms, from elsewhere in the passage.)
     if ((d.answer.accepted as string[])[0] === "true" && unsupportedTerms(d.stem, d.sourceQuote).length > 2) return { ok: false, reason: "inconsistent" };
-  } else if (kind !== "match" && kind !== "sequence" && kind !== "structured" && kind !== "extended" && kind !== "scenario" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
+  } else if (kind !== "match" && kind !== "sequence" && kind !== "structured" && kind !== "extended" && kind !== "scenario" && kind !== "calculation" && !keyConsistent(expected, `${d.rationale}\n${d.stem}`, d.sourceQuote)) return { ok: false, reason: "inconsistent" };
   if (!difficultyFits(d.difficulty, checks.difficulty ?? null)) return { ok: false, reason: "off_difficulty" };
   if (kind === "structured") {
     // Each part's rubric is grounded as every revision rubric is: an entry the notes do not hold is left out.
@@ -532,6 +663,7 @@ function expectedOf(kind: Exclude<RevisionFormat, "mcq">, d: RevisionDraft): str
   if (kind === "true_false") return String(a.explanation ?? "");
   if (kind === "extended") return String(a.modelAnswer ?? "");
   if (kind === "scenario") return ((a.accepted as string[] | undefined) ?? []).join("; ");
+  if (kind === "calculation") return String((a.accepted as string[] | undefined)?.[0] ?? "");
   if (kind === "flashcard") return String(a.back ?? "");
   if (kind === "mrq") return (a.correct as number[]).map(i => d.options[i]).join("; ");
   if (kind === "match") return d.options.map((o, i) => `${o}: ${(a.matches as string[])[i]}`).join("; ");

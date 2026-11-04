@@ -117,6 +117,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "passport_recipient_label" | "passport_presentation" | "passport_validity_display" | "passport_export" | "passport_ai"
   | "scholar_default_action" | "scholar_beyond_notes" | "scholar_explanation_depth" | "scholar_check_behaviour" | "scholar_learning_objectives" | "scholar_learning_history"
   | "scholar_revision_difficulty" | "scholar_revision_feedback" | "scholar_revision_generation" | "scholar_revision_recommendations" | "scholar_short_answer_marking"
+  | "scholar_calculation_tolerances" | "scholar_clinical_scoring_caps"
   | "scholar_case_generation" | "scholar_case_mode" | "scholar_case_reasoning_feedback" | "scholar_case_conversation" | "scholar_case_conversation_turns" | "scholar_evaluation_recommendations"
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
@@ -1176,6 +1177,30 @@ export const POLICIES: readonly PolicyDef[] = [
     // "ai_then_self" turns it on, and the model-eligibility gate (#99) still decides.
     fallback: "self",
     limitReason: "A match with an accepted answer is always marked by code first. AI evaluation is always labelled. Default: the student's own judgement.",
+  },
+  // ── SQIE-CLOSE-2026-11 WS-A: CALCULATION QUESTIONS (scoring-rules.ts; owner decision 4 Nov 2026, item 1) ──
+  // ⚠ OWNER / CLINICAL DECISION: non-zero tolerances stay INACTIVE for clinical calculations until the clinical calculation policy is
+  // approved. Until then every calculation is an exact match (with its question-defined rounding and validated equivalent units). A tenfold
+  // or greater error is unsafe whatever this says: that check never depends on tolerance.
+  // ── SQIE-CLOSE-2026-11 WS-B: THE CLINICAL SCORING CAPS (scoring-rules.ts rules v3; owner release decision 4 Nov 2026) ──
+  // ⚠ OWNER / CLINICAL DECISION: the caps (an unsafe response at most 50% of the applicable score, a safety-critical failure 0%, each at the
+  // scope the approved rubric defines) become active only after clinical approval of the safety-critical classifications. Until then the
+  // flags are still detected, recorded and shown; only the marks wait.
+  {
+    key: "scholar_clinical_scoring_caps", kind: "choice", product: "Scholar",
+    label: "Clinical scoring caps",
+    help: "Whether an unsafe response (at most half the marks of that part, stage or item) and a missed or wrong safety-critical point (no marks for that part, stage or item) change practice marks. Turn on only once the safety-critical classifications are clinically approved. Off: the answer is still flagged and explained.",
+    options: [{ value: "off", label: "Off: flag and explain only (until clinical approval)" }, { value: "on", label: "On: apply the caps at the rubric's scope" }],
+    fallback: "off",
+    limitReason: "Clinical approval of the safety-critical classifications required before on. Never applied to unrelated parts. Default: off.",
+  },
+  {
+    key: "scholar_calculation_tolerances", kind: "choice", product: "Scholar",
+    label: "Calculation tolerances",
+    help: "Whether the absolute or percentage tolerance a calculation question sets is used. Off: every calculation must be exact. Turn on only once the clinical calculation policy is approved.",
+    options: [{ value: "off", label: "Off: exact answers only (until the clinical calculation policy is approved)" }, { value: "on", label: "On: use each question's own tolerance" }],
+    fallback: "off",
+    limitReason: "Clinical calculation policy approval required before on. A tenfold error is unsafe either way. Default: off.",
   },
   {
     key: "scholar_revision_recommendations", kind: "choice", product: "Scholar",
@@ -2354,6 +2379,10 @@ export type IndividualPolicy = {
   scholarRevisionFeedback: "immediate" | "end";
   scholarRevisionGeneration: "generate" | "saved_only";
   scholarShortAnswerMarking: "ai_then_self" | "self";
+  /** SQIE-CLOSE-2026-11 WS-A: whether question tolerances are used (off until the clinical calculation policy is approved). */
+  scholarCalculationTolerances: "off" | "on";
+  /** SQIE-CLOSE-2026-11 WS-B: whether the rules-v3 clinical scoring caps change marks (off until clinical approval). */
+  scholarClinicalScoringCaps: "off" | "on";
   scholarRevisionRecommendations: "on" | "off";
   /** SCHOLAR-PRACTICE-EXAMS-01: adaptive exams. */
   scholarAdaptiveExams: "on" | "off";
@@ -2588,6 +2617,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarRevisionFeedback: clampChoice(policyDef("scholar_revision_feedback") as ChoicePolicy, published.get(policyPath("scholar_revision_feedback"))) as "immediate" | "end",
     scholarRevisionGeneration: clampChoice(policyDef("scholar_revision_generation") as ChoicePolicy, published.get(policyPath("scholar_revision_generation"))) as "generate" | "saved_only",
     scholarShortAnswerMarking: clampChoice(policyDef("scholar_short_answer_marking") as ChoicePolicy, published.get(policyPath("scholar_short_answer_marking"))) as "ai_then_self" | "self",
+    scholarCalculationTolerances: clampChoice(policyDef("scholar_calculation_tolerances") as ChoicePolicy, published.get(policyPath("scholar_calculation_tolerances"))) as "off" | "on",
+    scholarClinicalScoringCaps: clampChoice(policyDef("scholar_clinical_scoring_caps") as ChoicePolicy, published.get(policyPath("scholar_clinical_scoring_caps"))) as "off" | "on",
     scholarRevisionRecommendations: clampChoice(policyDef("scholar_revision_recommendations") as ChoicePolicy, published.get(policyPath("scholar_revision_recommendations"))) as "on" | "off",
     scholarAdaptiveExams: clampChoice(policyDef("scholar_adaptive_exams") as ChoicePolicy, published.get(policyPath("scholar_adaptive_exams"))) as "on" | "off",
     scholarAdaptiveMaxLength: int("scholar_adaptive_max_length"),

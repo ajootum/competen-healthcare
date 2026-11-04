@@ -26,6 +26,7 @@ import { asksQuestion, feedbackPartsFrom, type FeedbackParts } from "./question-
 import { unsupportedTerms } from "./question-quality";
 import { containsAnswer } from "./answer-leak";
 import { textGroundingViolations } from "@/lib/ai/grounding";
+import { CAPS_DEFAULT, capForSafety, matchUnsafe, safetyMarkersOf, safetyRecord, worstOutcome, type CapPolicy, type SafetyOutcome, type SafetyRecord } from "./scoring-rules";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
@@ -48,6 +49,9 @@ export type ScenarioStage = {
   source: string;
   /** The tags of approved references this stage also draws on (mode: your notes + approved references). */
   refs: string[];
+  /** SQIE-CLOSE-2026-11 WS-B (scoring-rules.ts): the stage must not be missed, and the answers (or option texts) that would be unsafe. */
+  safetyCritical?: boolean;
+  unsafe?: string[];
 };
 export type ScenarioSpec = { stages: ScenarioStage[]; totalWeight: number };
 
@@ -67,7 +71,8 @@ function stageOf(raw: unknown): ScenarioStage | null {
   const correct = Array.isArray(x.correct) && x.correct.every(i => Number.isInteger(i)) ? (x.correct as number[]) : [];
   const source = typeof x.source === "string" ? x.source.trim().slice(0, 500) : "";
   const refs = (strs(x.refs) ?? []).map(t => t.trim()).filter(Boolean).slice(0, 4);
-  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs };
+  const markers = safetyMarkersOf(x);
+  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs, ...(markers.safetyCritical ? { safetyCritical: true } : {}), ...(markers.unsafe.length ? { unsafe: markers.unsafe } : {}) };
   if (kind === "mcq") return options.length === 4 && correct.length === 1 && correct[0] >= 0 && correct[0] < 4 ? { ...base, options, correct, accepted: [] } : null;
   if (kind === "mrq") {
     const set = [...new Set(correct)].sort();
@@ -146,7 +151,11 @@ export function parseStageAnswer(stage: ScenarioStage, raw: unknown): StageAnswe
  * it is then judged by AI or by the learner, as a short answer always is). mcq right or wrong; mrq fractional as revision.ts marks it;
  * cloze a normalised match either way.
  */
-export function markStageByCode(stage: ScenarioStage, a: StageAnswer): { score: number } | null {
+export function markStageByCode(stage: ScenarioStage, a: StageAnswer): { score: number; unsafe?: string } | null {
+  // WS-B (rules v2): an answer (or a chosen option) the stage names as unsafe is recognised by code first, and scores nothing.
+  const unsafe = stage.unsafe?.length ? matchUnsafe(a.kind === "text" ? a.text : a.kind === "choice" ? stage.options[a.index] ?? "" : "", stage.unsafe)
+    ?? (a.kind === "set" ? a.indexes.map(i => matchUnsafe(stage.options[i] ?? "", stage.unsafe!)).find(Boolean) ?? null : null) : null;
+  if (unsafe) return { score: 0, unsafe };
   if (stage.kind === "mcq" && a.kind === "choice") return { score: a.index === stage.correct[0] ? 1 : 0 };
   if (stage.kind === "mrq" && a.kind === "set") {
     const hits = a.indexes.filter(i => stage.correct.includes(i)).length, wrong = a.indexes.length - hits;
@@ -175,8 +184,33 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 // ── THE MARKS: stage scores summed with the stage weights ──
 
-/** `parts`: SQIE WS-D, the five-part feedback (question-intel.ts FeedbackParts) an AI-judged stage was shown, kept with the attempt. */
-export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; parts?: FeedbackParts | null };
+/** `parts`: SQIE WS-D, the five-part feedback (question-intel.ts FeedbackParts) an AI-judged stage was shown, kept with the attempt.
+ *  `unsafe`: SQIE WS-B, the unsafe statement this stage's answer made (code or AI), carried to the end of the scenario. */
+export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; parts?: FeedbackParts | null; unsafe?: string | null };
+
+/** Pure (WS-B). One stage's own safety outcome: unsafe where its answer was; critical_missed where the stage is safety-critical and did
+ * not score in full (a stage the learner marked themselves is their own judgement, never counted here); else safe. */
+export function stageOutcome(stage: ScenarioStage, r: StageResult | undefined): SafetyOutcome {
+  if (r?.unsafe) return "unsafe";
+  return stage.safetyCritical && r && r.by !== "self" && r.score < 1 ? "critical_missed" : "safe";
+}
+
+/**
+ * Pure (WS-B, rules v3). The stage results with the caps applied AT EACH STAGE (the rubric's scope) -- an unsafe stage keeps at most half
+ * its score, a safety-critical failure none -- never to the other stages. Only where the caps are active; the outcome is always detected.
+ * The record names the worst outcome, the first unsafe statement and the key points of the stages missed.
+ */
+export function capScenario(spec: ScenarioSpec, results: readonly StageResult[], policy: CapPolicy = CAPS_DEFAULT): { results: StageResult[]; safety: SafetyRecord | null } {
+  const outcomes = spec.stages.map((st, i) => stageOutcome(st, results[i]));
+  const capped = results.map((r, i) => ({ ...r, score: capForSafety({ correct: r.score === 1, score: r.score }, outcomes[i] ?? "safe", policy).score }));
+  const worst = outcomes.reduce<SafetyOutcome>((w, o) => worstOutcome(w, o), "safe");
+  const u = outcomes.indexOf("unsafe");
+  const by: "code" | "ai" = outcomes.some((o, i) => o !== "safe" && results[i]?.by === "ai") ? "ai" : "code";
+  return {
+    results: capped,
+    safety: safetyRecord(worst, { statement: u >= 0 ? results[u].unsafe ?? null : null, missed: spec.stages.filter((_, i) => outcomes[i] === "critical_missed").map(st => st.keyPoint), by, capped: policy.capsActive }),
+  };
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -215,7 +249,7 @@ export function storedStageResults(response: unknown, count: number): StageResul
 
 export const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 export type Progress = { next: number; results: StageResult[]; evaluator: { model: string; promptVersion: string } | null };
-type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; p?: FeedbackParts }[]; e: Progress["evaluator"] };
+type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; p?: FeedbackParts; x?: string }[]; e: Progress["evaluator"] };
 /** The longest token readProgress accepts. */
 export const TOKEN_MAX_CHARS = 12000;
 /** SQIE WS-D: the five-part feedback rides in the token only while the token stays under this (oldest stages' parts go first; their summary stays). */
@@ -233,7 +267,7 @@ export function signProgress(key: string, who: { userId: string; questionId: str
     u: who.userId, q: who.questionId, h: rubricHash(who.answer), t: now, n: p.next,
     r: p.results.map(x => {
       const parts = x.by === "ai" ? feedbackPartsFrom(x.parts) : null;
-      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}), ...(parts ? { p: parts } : {}) };
+      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}), ...(parts ? { p: parts } : {}), ...(x.unsafe ? { x: x.unsafe.slice(0, 300) } : {}) };
     }), e: p.evaluator,
   };
   let body = b64(JSON.stringify(claims));
@@ -258,7 +292,7 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
   try { c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Claims; } catch { return null; }
   if (c.u !== who.userId || c.q !== who.questionId || c.h !== rubricHash(who.answer) || !Number.isFinite(c.t) || now - c.t > TOKEN_TTL_MS || now < c.t - 60_000) return null;
   if (!Number.isInteger(c.n) || c.n < 1 || !Array.isArray(c.r) || c.r.length !== c.n) return null;
-  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, parts: x.b === "ai" ? feedbackPartsFrom(x.p) : null })), evaluator: c.e ?? null };
+  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, parts: x.b === "ai" ? feedbackPartsFrom(x.p) : null, ...(typeof x.x === "string" && x.x ? { unsafe: x.x } : {}) })), evaluator: c.e ?? null };
 }
 
 // ── NEW SCENARIOS FROM A PASSAGE ──
