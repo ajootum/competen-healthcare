@@ -197,7 +197,7 @@ async function setPolicy(k: string, v: unknown): Promise<string | null> {
 async function restorePolicy() {
   if (!snaps.length) return;
   for (const s of [...snaps].reverse()) {
-    if (s.row === null) await resetOverride(admin, ACTOR, POLICY_SCOPE, s.path);
+    if (s.row === null) { const rr = await resetOverride(admin, ACTOR, POLICY_SCOPE, s.path); if (!rr.ok) console.error(`restore: ${s.path} NOT removed (${rr.error})`); }
     else await admin.from("workspace_config_overrides").update({ draft: s.row.draft, published: s.row.published, updated_at: new Date().toISOString() }).eq("scope_type", POLICY_SCOPE.scopeType).eq("scope_ref", POLICY_SCOPE.scopeRef).eq("config_path", s.path);
   }
   snaps.length = 0;

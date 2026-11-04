@@ -24,16 +24,18 @@ describe("the registry says what the code offered before it existed", () => {
     expect(new Set(KEYS).size).toBe(KEYS.length);
     for (const r of QUESTION_FORMATS) for (const m of Object.values(r.modules)) expect(fs.existsSync(path.join(SRC, m)), `${r.key}: ${m}`).toBe(true);
   });
-  it("the derived lists are the lists of before CE-05, in their order (plus the scenario in Revision)", () => {
-    expect([...REVISION_FORMATS]).toEqual(["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false", "extended", "scenario"]);
+  it("the derived lists are the lists of before CE-05, in their order (plus the scenario, and SQIE-CLOSE-2026-11 WS-A's calculation, in Revision)", () => {
+    expect([...REVISION_FORMATS]).toEqual(["mcq", "mrq", "short", "flashcard", "match", "sequence", "structured", "cloze", "true_false", "extended", "scenario", "calculation"]);
     expect([...VERIFY_FORMATS]).toEqual(["mcq", "case", "mrq", "short", "structured", "match", "sequence", "flashcard", "true_false", "extended"]);
     expect([...VERIFY_FORMATS_DEFAULT]).toEqual(["mcq", "case", "mrq", "short"]);
     expect([...ADAPTIVE_FORMATS]).toEqual(["mcq", "mrq", "short", "match", "sequence", "structured"]);
     expect([...LIBRARY_FORMATS]).toEqual(["mcq", "mrq", "short", "cloze", "true_false", "extended", "flashcard", "match", "sequence", "structured"]);
-    expect([...BLIND_FORMATS]).toEqual(["true_false", "match", "sequence", "flashcard", "structured", "extended"]);
+    // WS-A: a calculation's key is always blind-solved (generation.ts), so it is a blind format but in no verify list.
+    expect([...BLIND_FORMATS]).toEqual(["true_false", "match", "sequence", "flashcard", "structured", "extended", "calculation"]);
     // SCHOLAR-AI-COST-CONFIG-01 (owner 3 Nov 2026): the evolving scenario is chosen deliberately, never by default.
-    expect([...REVISION_FORMATS_OFF_BY_DEFAULT].sort()).toEqual(["extended", "scenario"]);
-    expect([...SHORT_STORED_FORMATS]).toEqual(["cloze", "true_false", "extended", "scenario"]);
+    // SQIE-CLOSE-2026-11 WS-A: the calculation is off until the owner sets a clinical tolerance policy.
+    expect([...REVISION_FORMATS_OFF_BY_DEFAULT].sort()).toEqual(["calculation", "extended", "scenario"]);
+    expect([...SHORT_STORED_FORMATS]).toEqual(["cloze", "true_false", "extended", "scenario", "calculation"]);
   });
   it("the labels are the labels of before", () => {
     expect(REVISION_FORMAT_LABEL.mcq).toBe("Multiple choice");
@@ -46,7 +48,7 @@ describe("the registry says what the code offered before it existed", () => {
   it("a short-stored format maps to the short kind and the rest to themselves", () => {
     for (const f of SHORT_STORED_FORMATS) { expect(storedKindOfFormat(f)).toBe("short"); expect(storedKind(f)).toBe("short"); }
     expect(storedKindOfFormat("mrq")).toBe("mrq");
-    expect([...ANSWER_FORMATS_OF_SHORT]).toEqual(["cloze", "true_false", "extended", "scenario"]);
+    expect([...ANSWER_FORMATS_OF_SHORT]).toEqual(["cloze", "true_false", "extended", "scenario", "calculation"]);
   });
   it("only the answered-in-steps formats need feedback after each answer", () => {
     expect(QUESTION_FORMATS.filter(r => needsImmediateFeedback(r.key)).map(r => r.key)).toEqual(["structured", "scenario"]);

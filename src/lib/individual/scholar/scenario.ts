@@ -22,9 +22,11 @@ import { PROMPT_VERSIONS, SCENARIO_STAGES_MAX, SCENARIO_STAGES_MIN, SCENARIO_WEI
 import { CLOZE_BLANK, markCloze } from "./cloze";
 import { markShortAnswer } from "./revision";
 import { rubricHash } from "./rubric-snapshot";
-import { asksQuestion } from "./question-intel";
+import { asksQuestion, feedbackPartsFrom, type FeedbackParts } from "./question-intel";
 import { unsupportedTerms } from "./question-quality";
+import { containsAnswer } from "./answer-leak";
 import { textGroundingViolations } from "@/lib/ai/grounding";
+import { CAPS_DEFAULT, capForSafety, matchUnsafe, safetyMarkersOf, safetyRecord, worstOutcome, type CapPolicy, type SafetyOutcome, type SafetyRecord } from "./scoring-rules";
 
 export const STAGE_KINDS = ["mcq", "mrq", "short", "cloze"] as const;
 export type StageKind = (typeof STAGE_KINDS)[number];
@@ -47,6 +49,9 @@ export type ScenarioStage = {
   source: string;
   /** The tags of approved references this stage also draws on (mode: your notes + approved references). */
   refs: string[];
+  /** SQIE-CLOSE-2026-11 WS-B (scoring-rules.ts): the stage must not be missed, and the answers (or option texts) that would be unsafe. */
+  safetyCritical?: boolean;
+  unsafe?: string[];
 };
 export type ScenarioSpec = { stages: ScenarioStage[]; totalWeight: number };
 
@@ -66,7 +71,8 @@ function stageOf(raw: unknown): ScenarioStage | null {
   const correct = Array.isArray(x.correct) && x.correct.every(i => Number.isInteger(i)) ? (x.correct as number[]) : [];
   const source = typeof x.source === "string" ? x.source.trim().slice(0, 500) : "";
   const refs = (strs(x.refs) ?? []).map(t => t.trim()).filter(Boolean).slice(0, 4);
-  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs };
+  const markers = safetyMarkersOf(x);
+  const base = { reveal, prompt, kind, weight: weight as number, keyPoint, source, refs, ...(markers.safetyCritical ? { safetyCritical: true } : {}), ...(markers.unsafe.length ? { unsafe: markers.unsafe } : {}) };
   if (kind === "mcq") return options.length === 4 && correct.length === 1 && correct[0] >= 0 && correct[0] < 4 ? { ...base, options, correct, accepted: [] } : null;
   if (kind === "mrq") {
     const set = [...new Set(correct)].sort();
@@ -145,7 +151,11 @@ export function parseStageAnswer(stage: ScenarioStage, raw: unknown): StageAnswe
  * it is then judged by AI or by the learner, as a short answer always is). mcq right or wrong; mrq fractional as revision.ts marks it;
  * cloze a normalised match either way.
  */
-export function markStageByCode(stage: ScenarioStage, a: StageAnswer): { score: number } | null {
+export function markStageByCode(stage: ScenarioStage, a: StageAnswer): { score: number; unsafe?: string } | null {
+  // WS-B (rules v2): an answer (or a chosen option) the stage names as unsafe is recognised by code first, and scores nothing.
+  const unsafe = stage.unsafe?.length ? matchUnsafe(a.kind === "text" ? a.text : a.kind === "choice" ? stage.options[a.index] ?? "" : "", stage.unsafe)
+    ?? (a.kind === "set" ? a.indexes.map(i => matchUnsafe(stage.options[i] ?? "", stage.unsafe!)).find(Boolean) ?? null : null) : null;
+  if (unsafe) return { score: 0, unsafe };
   if (stage.kind === "mcq" && a.kind === "choice") return { score: a.index === stage.correct[0] ? 1 : 0 };
   if (stage.kind === "mrq" && a.kind === "set") {
     const hits = a.indexes.filter(i => stage.correct.includes(i)).length, wrong = a.indexes.length - hits;
@@ -174,7 +184,33 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 // ── THE MARKS: stage scores summed with the stage weights ──
 
-export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null };
+/** `parts`: SQIE WS-D, the five-part feedback (question-intel.ts FeedbackParts) an AI-judged stage was shown, kept with the attempt.
+ *  `unsafe`: SQIE WS-B, the unsafe statement this stage's answer made (code or AI), carried to the end of the scenario. */
+export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; parts?: FeedbackParts | null; unsafe?: string | null };
+
+/** Pure (WS-B). One stage's own safety outcome: unsafe where its answer was; critical_missed where the stage is safety-critical and did
+ * not score in full (a stage the learner marked themselves is their own judgement, never counted here); else safe. */
+export function stageOutcome(stage: ScenarioStage, r: StageResult | undefined): SafetyOutcome {
+  if (r?.unsafe) return "unsafe";
+  return stage.safetyCritical && r && r.by !== "self" && r.score < 1 ? "critical_missed" : "safe";
+}
+
+/**
+ * Pure (WS-B, rules v3). The stage results with the caps applied AT EACH STAGE (the rubric's scope) -- an unsafe stage keeps at most half
+ * its score, a safety-critical failure none -- never to the other stages. Only where the caps are active; the outcome is always detected.
+ * The record names the worst outcome, the first unsafe statement and the key points of the stages missed.
+ */
+export function capScenario(spec: ScenarioSpec, results: readonly StageResult[], policy: CapPolicy = CAPS_DEFAULT): { results: StageResult[]; safety: SafetyRecord | null } {
+  const outcomes = spec.stages.map((st, i) => stageOutcome(st, results[i]));
+  const capped = results.map((r, i) => ({ ...r, score: capForSafety({ correct: r.score === 1, score: r.score }, outcomes[i] ?? "safe", policy).score }));
+  const worst = outcomes.reduce<SafetyOutcome>((w, o) => worstOutcome(w, o), "safe");
+  const u = outcomes.indexOf("unsafe");
+  const by: "code" | "ai" = outcomes.some((o, i) => o !== "safe" && results[i]?.by === "ai") ? "ai" : "code";
+  return {
+    results: capped,
+    safety: safetyRecord(worst, { statement: u >= 0 ? results[u].unsafe ?? null : null, missed: spec.stages.filter((_, i) => outcomes[i] === "critical_missed").map(st => st.keyPoint), by, capped: policy.capsActive }),
+  };
+}
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -213,7 +249,11 @@ export function storedStageResults(response: unknown, count: number): StageResul
 
 export const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 export type Progress = { next: number; results: StageResult[]; evaluator: { model: string; promptVersion: string } | null };
-type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string }[]; e: Progress["evaluator"] };
+type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; p?: FeedbackParts; x?: string }[]; e: Progress["evaluator"] };
+/** The longest token readProgress accepts. */
+export const TOKEN_MAX_CHARS = 12000;
+/** SQIE WS-D: the five-part feedback rides in the token only while the token stays under this (oldest stages' parts go first; their summary stays). */
+const TOKEN_PARTS_BUDGET = 10500;
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
 const mac = (secret: string, body: string) => createHmac("sha256", secret).update(body).digest("base64url");
@@ -225,9 +265,16 @@ export const tokenKey = (secret: string): string => createHash("sha256").update(
 export function signProgress(key: string, who: { userId: string; questionId: string; answer: unknown }, p: Progress, now: number): string {
   const claims: Claims = {
     u: who.userId, q: who.questionId, h: rubricHash(who.answer), t: now, n: p.next,
-    r: p.results.map(x => ({ s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}) })), e: p.evaluator,
+    r: p.results.map(x => {
+      const parts = x.by === "ai" ? feedbackPartsFrom(x.parts) : null;
+      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}), ...(parts ? { p: parts } : {}), ...(x.unsafe ? { x: x.unsafe.slice(0, 300) } : {}) };
+    }), e: p.evaluator,
   };
-  const body = b64(JSON.stringify(claims));
+  let body = b64(JSON.stringify(claims));
+  for (const r of claims.r) {
+    if (body.length <= TOKEN_PARTS_BUDGET) break;
+    if (r.p) { delete r.p; body = b64(JSON.stringify(claims)); }
+  }
   return `${body}.${mac(key, body)}`;
 }
 
@@ -236,7 +283,7 @@ export function signProgress(key: string, who: { userId: string; questionId: str
  * been altered, or does not stand at the stage the caller expects (a token for stage 2 cannot answer stage 3).
  */
 export function readProgress(key: string, token: unknown, who: { userId: string; questionId: string; answer: unknown }, now: number): Progress | null {
-  if (typeof token !== "string" || token.length > 12000) return null;
+  if (typeof token !== "string" || token.length > TOKEN_MAX_CHARS) return null;
   const [body, sig, extra] = token.split(".");
   if (!body || !sig || extra !== undefined) return null;
   const want = Buffer.from(mac(key, body)), got = Buffer.from(sig);
@@ -245,7 +292,7 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
   try { c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Claims; } catch { return null; }
   if (c.u !== who.userId || c.q !== who.questionId || c.h !== rubricHash(who.answer) || !Number.isFinite(c.t) || now - c.t > TOKEN_TTL_MS || now < c.t - 60_000) return null;
   if (!Number.isInteger(c.n) || c.n < 1 || !Array.isArray(c.r) || c.r.length !== c.n) return null;
-  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null })), evaluator: c.e ?? null };
+  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, parts: x.b === "ai" ? feedbackPartsFrom(x.p) : null, ...(typeof x.x === "string" && x.x ? { unsafe: x.x } : {}) })), evaluator: c.e ?? null };
 }
 
 // ── NEW SCENARIOS FROM A PASSAGE ──
@@ -332,14 +379,7 @@ const words = (t: string): string[] => t.toLowerCase().replace(/[^a-z0-9]+/g, " 
 /** Pure. The content words of an answer (articles and the like dropped). Synonyms are NOT considered: only the words themselves. */
 const contentWords = (t: string): string[] => words(t).filter(w => !STOP.has(w));
 
-/** Pure. Whether the words of `answer` appear, in order and all together, in `text`. */
-function containsAnswer(text: string, answer: string): boolean {
-  const need = contentWords(answer);
-  if (need.length < 2) return false; // a single word is not held to this rule
-  const have = contentWords(text);
-  for (let i = 0; i + need.length <= have.length; i++) if (need.every((w, k) => have[i + k] === w)) return true;
-  return false;
-}
+// containsAnswer (an answer's words, in order, in earlier text) lives in answer-leak.ts since SQIE WS-H, unchanged, so every format uses one rule.
 
 /** Pure. The answers a stage is marked against, as text: the correct option(s) of a choice, or the accepted answers. */
 export const stageAnswers = (st: ScenarioStage): string[] => (st.kind === "mcq" || st.kind === "mrq" ? st.correct.map(i => st.options[i]) : st.accepted);

@@ -10,6 +10,7 @@
 //   flashcard   the reader answers the front.                                       Compared with the back by shared content words.
 //   structured  the reader answers each part.                          Each compared with what the part accepts, by shared content words.
 //   extended    the reader says whether the passage alone answers it, unambiguously.  (There is no single key to compare.)
+//   calculation the reader works the answer out (a number and a unit).      Compared with the key, units converted, within 1% (SQIE-CLOSE-2026-11 WS-A).
 //
 // Every kind also gets the three questions of the existing check: answerable from the passage alone, no outside facts in the
 // stem, not ambiguous. Fails closed, like the existing check: no readable verdict for an item rejects it. An item that
@@ -21,6 +22,7 @@
 import { stemKey } from "./question-intel";
 import { BLIND_FORMATS, type BlindFormat } from "./question-formats";
 import { seededOrder, type RevisionDraft } from "./revision";
+import { convertUnit, parseNumber, unitInfo } from "./scoring-rules";
 
 // SCHOLAR-CE-2026 CE-05: which formats have a second reader is a row of the registry (question-formats.ts blindRank).
 export { BLIND_FORMATS } from "./question-formats";
@@ -35,7 +37,8 @@ export type BlindItem =
   | { kind: "sequence"; stem: string; steps: string[]; keyed: number[] }
   | { kind: "flashcard"; stem: string; back: string }
   | { kind: "structured"; stem: string; parts: { prompt: string; accepted: string[] }[] }
-  | { kind: "extended"; stem: string };
+  | { kind: "extended"; stem: string }
+  | { kind: "calculation"; stem: string; value: number; unit: string };
 
 /** Pure. One checked draft as the blind reader is shown it (the key stays here, for the comparison). */
 export function blindItemOf(kind: BlindFormat, d: RevisionDraft): BlindItem {
@@ -51,6 +54,7 @@ export function blindItemOf(kind: BlindFormat, d: RevisionDraft): BlindItem {
     case "flashcard": return { kind, stem: d.stem, back: String(a.back ?? "") };
     case "structured": return { kind, stem: d.stem, parts: ((a.parts as { prompt: string; accepted: string[] }[]) ?? []).map(p => ({ prompt: p.prompt, accepted: p.accepted })) };
     case "extended": return { kind, stem: d.stem };
+    case "calculation": return { kind, stem: d.stem, value: typeof a.value === "number" ? a.value : NaN, unit: typeof a.unit === "string" ? a.unit : "" };
   }
 }
 
@@ -67,6 +71,7 @@ export const BLIND_SOLVE_SYSTEM = [
   '- a FLASHCARD or a SHORT QUESTION: "answer": the answer in a few words from the passage.',
   '- a MULTI-PART question: "answers": one short answer per part, in order.',
   '- an EXTENDED RESPONSE question: nothing more than the three checks above.',
+  '- a CALCULATION: "value": the number you work out from the passage figures (a number, rounded as the item says), and "unit": its unit ("" if none).',
   'Reply with JSON ONLY: [{"q": 1, "answerable": true, "stemAddsFacts": false, "ambiguous": false, "truth": "true"}]',
 ].join("\n");
 
@@ -81,6 +86,7 @@ export function blindSolvePrompt(passage: string, items: readonly BlindItem[]): 
       case "flashcard": return `${n}. FLASHCARD: ${it.stem}`;
       case "structured": return `${n}. MULTI-PART: ${it.stem}\n${it.parts.map((p, j) => `   (${String.fromCharCode(97 + j)}) ${p.prompt}`).join("\n")}`;
       case "extended": return `${n}. EXTENDED RESPONSE: ${it.stem}`;
+      case "calculation": return `${n}. CALCULATION: ${it.stem}`;
     }
   });
   return `PASSAGE:\n${passage}\n\nITEMS:\n${qs.join("\n\n")}`;
@@ -103,6 +109,22 @@ export function answerAgrees(solved: unknown, keys: string | readonly string[]):
     if (!want.length) return stemKey(k) === stemKey(solved);
     return want.filter(w => have.has(w)).length / want.length >= 0.5;
   });
+}
+
+/**
+ * Pure (WS-A). Whether a blind reader's worked answer agrees with a calculation's key: a number, in a unit compatible with the key's
+ * (converted), within 1% of it. This checks that the KEY is right; it is not how a learner is marked (scoring-rules.ts markCalculation).
+ */
+export function calculationAgrees(solvedValue: unknown, solvedUnit: unknown, value: number, unit: string): boolean {
+  if (!Number.isFinite(value)) return false;
+  const n = parseNumber(solvedValue);
+  if (!n.ok) return false;
+  const u = typeof solvedUnit === "string" ? solvedUnit : "";
+  const key = unitInfo(unit), got = unitInfo(u);
+  if (!key || !got) return false;
+  const inKey = key.canonical === got.canonical ? n.value : convertUnit(n.value, u, unit);
+  if (inKey === null) return false;
+  return Math.abs(inKey - value) <= Math.max(1e-9, Math.abs(value) * 0.01);
 }
 
 const lettersOf = (v: unknown, max: number): number[] | null =>
@@ -140,6 +162,8 @@ export function applyBlindVerification(items: readonly BlindItem[], raw: string)
       problems.push((!got || got.length !== it.keyed.length || got.some((g, k) => g !== it.keyed[k])) && "the order solved differs from the key");
     } else if (it.kind === "flashcard") {
       problems.push(!answerAgrees(v.answer, it.back) && "the answer solved differs from the back");
+    } else if (it.kind === "calculation") {
+      problems.push(!calculationAgrees(v.value, v.unit, it.value, it.unit) && "the value solved differs from the key");
     } else if (it.kind === "structured") {
       const ans = Array.isArray(v.answers) ? v.answers : null;
       problems.push((!ans || ans.length !== it.parts.length || it.parts.some((p, k) => !answerAgrees(ans[k], p.accepted))) && "a part solved differs from what it accepts");

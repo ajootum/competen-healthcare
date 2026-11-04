@@ -12,6 +12,8 @@ import {
 import { parseCheckFeedback } from "@/lib/individual/scholar/learn-check";
 import { VERDICT_SCORE, asFeedbackParts, checkResponse, historyToPriorChecks } from "@/lib/individual/scholar/learn-check-record";
 import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
+import { adaptiveDecision, type AdaptiveReply } from "@/lib/individual/scholar/learning-need-service";
+import { isStatedConfidence, parseCheckLevel } from "@/lib/individual/scholar/learning-need";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { purposeFrom } from "@/lib/individual/pilot-ai";
 
@@ -37,6 +39,7 @@ import { withheldNext } from "@/lib/individual/scholar/learn-view";
 import { groundingOutcome, keyTermsOf, parseRecoveryRequest, recordRecoveryResult, recoveredReply, rederiveRecovery, relatedSections, widerMode, type Grounding, type Rederived } from "@/lib/individual/scholar/evidence-recovery";
 import type { RecoveryMode } from "@/lib/individual/policy";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { keepCheckSnapshot } from "@/lib/individual/scholar/attempt-integrity";
 import { studySessionBlock } from "@/lib/individual/scholar/study-context";
 import {
   AI_LABEL, CHECK_VERDICT_LABEL, EXPLANATION_DEPTHS, INFORMAL_CHECK_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD, RESEARCH_READING_ONLY, RETRIEVAL_LIMIT, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL,
@@ -184,6 +187,7 @@ export async function POST(req: Request) {
   const sessionId = isUuid(body?.sessionId) ? body.sessionId as string : null;
   let stepIds: string[] = [], scopeIds: string[] = [], step = Number.isInteger(body?.step) ? Number(body.step) : 0;
   let recorded = false, stepTitle: string | null = null, sessionMaterials: string[] = [], sessionStep: number | null = null;
+  let sessionSteps: { step: number }[] = [];
   if (sessionId) {
     const s = await getLearningSession(ctx.admin, ctx.userId, sessionId);
     if (!s.ok) return NextResponse.json({ error: "Your session could not be read just now." }, { status: 503 });
@@ -202,6 +206,7 @@ export async function POST(req: Request) {
     step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = !prepare; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
     sessionMaterials = [...new Set(s.data.steps.flatMap(x => x.sections.map(y => y.materialId)))];
     sessionStep = s.data.session.currentStep;
+    sessionSteps = s.data.steps.map(x => ({ step: x.step }));
   } else if (prepare) {
     return notPrepared("no_session");
   } else {
@@ -624,22 +629,32 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   // ai_evaluation by this model and prompt, and the clarify event referencing it. Nothing is kept for a withheld judgement, a
   // refusal or a session the browser holds: the learner keeps those through the checks route, by their own choice.
   let keptCheck: { id: string; answeredAt: string; questionId: string } | null = null;
+  // SALE-2026-11 R1 (SALE-05..07): the next-step decision for this judged answer, kept on the same attempt (response.adaptive).
+  let adaptive: AdaptiveReply | null = null;
   if (action === "clarify" && recorded && sessionId && shown && r.check.ok && policy.scholarLearningHistory === "record") {
     const parts = parseCheckFeedback(r.check.text);
+    const confidence = isStatedConfidence(body?.confidence) ? body.confidence : null;
     const cited = Number.isInteger(body?.checkCited) && Number(body.checkCited) >= 1 ? Number(body.checkCited) : null;
     const src = (cited && passages[cited - 1]) || passages[0];
     const q = await ensureCheckQuestion(ctx.admin, ctx.userId, {
       materialId: src.materialId, chunkId: src.chunkId, stem: checkQuestion, keyPoints: parts?.keyPoints ?? [], modelAnswer: parts?.keyPoints.length ? parts.keyPoints.join(" ") : null,
       sourceQuote: src.content.slice(0, 1500), competencyId: risk.competencyIds?.[0] ?? null, model: r.model, provider: r.provider, promptVersion: r.promptVersion,
     });
+    adaptive = q ? await adaptiveDecision(ctx.admin, ctx.userId, policy, {
+      sessionId, step, steps: sessionSteps, chunkIds: passages.map(p => p.chunkId),
+      current: { questionId: q?.id ?? "", stem: checkQuestion, verdict: r.verdict, selfGrade: null, feedback: parts, level: parseCheckLevel(body?.checkLevel) },
+      followUp: body?.followUp, aiAvailable: true, applyAvailable: body?.applyAvailable === true,
+    }).catch(() => null) : null;
     const evaluator = { model: r.model, promptVersion: r.promptVersion };
-    const response = withFormative(checkResponse({ text: answer, question: checkQuestion, verdict: r.verdict, feedback: parts, summary: parts ? null : r.check.text }),
+    const response = withFormative(checkResponse({ text: answer, question: checkQuestion, verdict: r.verdict, feedback: parts, summary: parts ? null : r.check.text, confidence, adaptive }),
       parts ? formativeFeedback([{ part: null, feedback: null, parts: asFeedbackParts(parts) }], evaluator) : null);
     const kept = q && response ? await recordCheckAttempt(ctx.admin, ctx.userId, {
       questionId: q.id, contentVersion: q.contentVersion, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null,
       marking: "ai_evaluation", evaluator, missed: r.verdict === "not_yet",
     }) : null;
     keptCheck = kept && q ? { ...kept, questionId: q.id } : null;
+    // SQIE WS-D (990): the immutable 791 snapshot of the judged answer. Never fails the answer; without 990 nothing is kept, as before.
+    if (kept && q && response) await keepCheckSnapshot(ctx, kept, { questionId: q.id, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null, marking: "ai_evaluation" });
   }
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     await Promise.all([
@@ -692,6 +707,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     verdict: r.verdict ? { value: r.verdict, label: CHECK_VERDICT_LABEL[r.verdict], informal: INFORMAL_CHECK_LABEL } : null,
     // D01: whether this judged answer was kept in the learner's learning record (the lesson's history shows it; Saved learning lists it).
     ...(action === "clarify" ? { kept: keptCheck ? { attemptId: keptCheck.id, answeredAt: keptCheck.answeredAt, questionId: keptCheck.questionId, marking: "ai_evaluation", chunkId: passages[0].chunkId, materialId: passages[0].materialId } : null } : {}),
+    // SALE-2026-11 R1: the next teaching step and its reason, only where it was kept with the answer (a decision is never shown unrecorded).
+    ...(action === "clarify" && keptCheck && adaptive ? { adaptive } : {}),
     savedForLater: savedNow === "ok",
     ...teachingFields,
   });

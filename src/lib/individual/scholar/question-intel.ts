@@ -258,7 +258,11 @@ export const difficultyFits = (difficulty: 1 | 2 | 3, requested: GenerationDiffi
 
 // ── FEEDBACK ──
 
-export type FeedbackParts = { right: string[]; missing: string[]; misconceptions: string[]; why: string | null; next: string | null };
+export type FeedbackParts = {
+  right: string[]; missing: string[]; misconceptions: string[]; why: string | null; next: string | null;
+  /** SQIE-CLOSE-2026-11 WS-B: the learner's own words that would be unsafe if done in practice (evaluate v3, case reasoning v3). Absent: none found, or an evaluator that was not asked. */
+  unsafe?: string[];
+};
 
 /** The lines an evaluator writes after its VERDICT line. "none" where a part has nothing. */
 export const FEEDBACK_FORMAT = [
@@ -270,6 +274,17 @@ export const FEEDBACK_FORMAT = [
   "NEXT: one short thing to revise next, from the passage",
 ].join("\n");
 
+/**
+ * SQIE-CLOSE-2026-11 WS-B: the safety line an AI evaluator of a written answer must add (evaluate v3, case reasoning v3). The
+ * statements are QUOTED from the answer, never invented; generation.ts parseEvaluation keeps only quotes that are in the answer,
+ * and an answer with one is marked incorrect and earns nothing (an unsafe answer is not partly right).
+ */
+export const UNSAFE_RULE = [
+  "After the VERDICT line add exactly one line 'UNSAFE: ' followed by the exact words of any statement in MY ANSWER that would be unsafe for a patient if done in practice,",
+  "because it contradicts the passage on an action, a medicine, a route, a dose, a timing, an escalation or a contraindication. Quote the answer's own words, separate statements with ;",
+  "and write 'UNSAFE: none' when there is none. An answer that is only incomplete or vague is not unsafe. Never quote words the answer does not contain.",
+].join(" ");
+
 const LABELS: Record<string, keyof FeedbackParts> = { RIGHT: "right", MISSING: "missing", MISCONCEPTIONS: "misconceptions", MISCONCEPTION: "misconceptions", WHY: "why", NEXT: "next" };
 const isNone = (s: string) => /^(none|nothing|n\/a|-)\.?$/i.test(s.trim());
 const points = (s: string) => s.split(/\s*;\s*/).map(x => x.trim().replace(/\.$/, "")).filter(x => x && !isNone(x)).slice(0, 4);
@@ -280,6 +295,7 @@ export function parseFeedbackSections(text: string): FeedbackParts | null {
   let found = 0;
   for (const line of text.split("\n")) {
     const m = /^\s*\**\s*(RIGHT|MISSING|MISCONCEPTIONS?|WHY|NEXT)\s*\**\s*:\s*(.*)$/i.exec(line);
+    // (The UNSAFE line is not one of the five: generation.ts parseEvaluation reads it and checks it against the answer.)
     if (!m) continue;
     found++;
     const key = LABELS[m[1].toUpperCase()];
@@ -298,12 +314,15 @@ export function feedbackPartsFrom(raw: unknown): FeedbackParts | null {
     right: strs(r.right, 4, 300), missing: strs(r.missing, 4, 300), misconceptions: strs(r.misconceptions, 3, 300),
     why: str(r.why, 400), next: str(r.next, 400),
   };
-  return p.right.length || p.missing.length || p.misconceptions.length || p.why || p.next ? p : null;
+  const unsafe = strs(r.unsafe, 3, 300);
+  if (unsafe.length) p.unsafe = unsafe;
+  return p.right.length || p.missing.length || p.misconceptions.length || p.why || p.next || unsafe.length ? p : null;
 }
 
 /** Pure. The parts as one readable text (the audit-free stored feedback, and any surface that shows text only). */
 export function feedbackText(p: FeedbackParts): string {
   return [
+    p.unsafe?.length ? `${FEEDBACK_HEADINGS.unsafe}: ${p.unsafe.join("; ")}.` : null,
     p.right.length ? `${FEEDBACK_HEADINGS.right}: ${p.right.join("; ")}.` : null,
     p.missing.length ? `${FEEDBACK_HEADINGS.missing}: ${p.missing.join("; ")}.` : null,
     p.misconceptions.length ? `${FEEDBACK_HEADINGS.misconceptions}: ${p.misconceptions.join("; ")}.` : null,

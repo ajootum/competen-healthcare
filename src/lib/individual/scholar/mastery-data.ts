@@ -67,6 +67,8 @@ export async function loadMastery(admin: unknown, userId: string, policy: Indivi
   for (const a of attempts) {
     const q = qById.get(a.questionId);
     if (!q) continue;
+    // SALE-2026-11 R1: a check kept without a mark (950 `unmarked`) is not an answer to count: before this it read as an app-marked wrong one.
+    if (a.marking === "unmarked") continue;
     evidence.push({
       itemId: q.id, ...placeOf(q.materialId, q.chunkId, q.topic), competencyId: competencyOf(q), materialId: q.materialId, chunkId: q.chunkId,
       kind: "question", level: levelOf(q), at: a.answeredAt, marking: MARKING[a.marking] ?? "code",

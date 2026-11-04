@@ -147,7 +147,9 @@ export const PROMPT_VERSIONS = {
   learnClarify: "scholar-learn-clarify-v3",
   // COMPETEN-SCHOLAR-REVISION-01 R4: AI evaluation of a short answer (Holdings activity `evaluate`).
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
-  evaluate: "scholar-evaluate-v2",
+  // v3 (SQIE-CLOSE-2026-11 WS-B): a required UNSAFE line quoting any statement in the answer that would be unsafe if done in practice;
+  // an unsafe answer is marked incorrect and earns nothing (generation.ts parseEvaluation).
+  evaluate: "scholar-evaluate-v3",
   // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
   // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
   // v3 (SCHOLAR-QUESTION-INTELLIGENCE-01): every item asks (never a statement as a flashcard front), the rubric fields,
@@ -167,6 +169,9 @@ export const PROMPT_VERSIONS = {
   // v3: a decision at every stage, about THIS person (never plain recall); three stages when the material supports them: a person with a decision, a meaningful
   // change needing reassessment, further judgement.
   scenario: "scholar-scenario-v3",
+  // SQIE-CLOSE-2026-11 WS-A: a calculation from the figures in the passage -- a number and its unit, marked by code (scoring-rules.ts),
+  // its key always blind-solved by a second reader (blind-verify.ts). Its own version: a new prompt.
+  calculation: "scholar-calculation-v1",
   // COMPETEN-SCHOLAR-CLINICAL-REASONING-01: a private case drafted from the notes, and AI feedback on written reasoning.
   // v2: no counting, and no state or change words the passages do not use (the staging runs' refusal reasons).
   // v3 (SCHOLAR-AI-OPT-01 P2): the reply example shows expectedResponse on a free-text decision and says one decision per
@@ -175,7 +180,8 @@ export const PROMPT_VERSIONS = {
   // where the notes support it and never forced. Nothing else about the draft changes.
   caseBlueprint: "scholar-case-blueprint-v4",
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): the five feedback parts, clinically equivalent wording accepted.
-  caseReasoning: "scholar-case-reasoning-v2",
+  // v3 (SQIE-CLOSE-2026-11 WS-B): the same required UNSAFE line as evaluate v3.
+  caseReasoning: "scholar-case-reasoning-v3",
 } as const;
 
 // ── STAGE 4: REVISION ── COMPETEN-SCHOLAR-REVISION-01 (owner GO 2026-10-24) ─────────────────────────────────────
@@ -205,6 +211,8 @@ export const LEARN_TEACH_LEGACY: readonly string[] = ["scholar-learn-teach-v1", 
 export const SCENARIO_STAGES_MIN = 2;
 export const SCENARIO_STAGES_MAX = 4;
 export const SCENARIO_WEIGHT_MAX = 5;
+/** SQIE-CLOSE-2026-11 WS-A. */
+export const CALCULATION_LABEL = "Calculation from the figures in your notes. Marked by code: the number, its unit, and the tolerance the question allows. Formative practice only.";
 export const SCENARIO_LABEL = "Evolving scenario, written by AI from your notes. Each stage is marked by code where code can, then by AI or by you. Formative practice marks only.";
 /** SCHOLAR-SQIE-CLOSE-01: a structured question has 2 to 4 parts of 1 to 5 marks each (migration 710 CHECK). */
 export const STRUCTURED_PARTS_MIN = 2;
@@ -281,7 +289,11 @@ export const GROUNDING_LABEL = { notes: "From your notes", references: "From you
 /** SCHOLAR-QUESTION-INTELLIGENCE-01: the five parts of formative feedback (question-intel.ts FeedbackParts). */
 export const FEEDBACK_HEADINGS = {
   right: "What you got right", missing: "Missing concepts", misconceptions: "Misconceptions", why: "Why the answer holds", next: "What to revise next",
+  // SQIE-CLOSE-2026-11 WS-B: shown first, apart from the five parts.
+  unsafe: "Unsafe if done in practice",
 } as const;
+/** SQIE-CLOSE-2026-11 WS-B: under the unsafe statements. Formative: an AI check, never a verdict on the person's practice. */
+export const UNSAFE_NOTE = "An AI check (formative, not verified) found this would be unsafe if done in practice. Check it against your notes.";
 
 /** Owner D3: the shared personal AI, reached from Learn. Never a Learn answer: shown apart, under these words. */
 export const PERSONAL_AI_LABEL = "Personal AI assistant — general explanation, not checked against your notes, not clinically reviewed";

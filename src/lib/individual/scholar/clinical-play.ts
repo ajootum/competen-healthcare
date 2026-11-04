@@ -139,7 +139,8 @@ export async function revealPrivate(admin: any, userId: string, sessionId: strin
   return playView(x.c, x.session, x.answers);
 }
 
-export type ReasoningJudge = (d: { prompt: string; expected: string; facts: string[]; answer: string }) =>
+// SQIE-CLOSE-2026-11 WS-B: `criteria` is the decision's own rubric (its stored weights and safety flags), where it has one, for the judge to score.
+export type ReasoningJudge = (d: { prompt: string; expected: string; facts: string[]; answer: string; criteria?: { criterion: string; weight?: number; safetyCritical?: boolean }[] }) =>
   Promise<{ kind: "ai"; correct: boolean; score: number; feedback: string; evaluator: { model: string; promptVersion: string } } | { kind: "self" }>;
 
 /**
@@ -167,7 +168,7 @@ export async function answerPrivate(admin: any, userId: string, sessionId: strin
   let marking: "deterministic" | "self_graded" | "ai_evaluation" = "deterministic", aiFeedback: string | null = null, evaluator: { model: string; promptVersion: string } | null = null;
   if (d.kind === "free_text") {
     const visible = x.b.facts.filter(f => f.revealedAt === "start" || x.session.reachedStageIds.includes(f.revealedAt) || x.session.revealedFactIds.includes(f.id));
-    const j = await judge({ prompt: d.prompt, expected: d.expectedResponse ?? "", facts: visible.map(f => `${f.label}: ${f.value}${f.unit ? ` ${f.unit}` : ""}`), answer: text! });
+    const j = await judge({ prompt: d.prompt, expected: d.expectedResponse ?? "", facts: visible.map(f => `${f.label}: ${f.value}${f.unit ? ` ${f.unit}` : ""}`), answer: text!, ...(d.rubric?.length ? { criteria: d.rubric } : {}) });
     if (j.kind === "ai") { mark = { correct: j.correct, score: j.score }; marking = "ai_evaluation"; aiFeedback = j.feedback; evaluator = j.evaluator; }
     else { mark = { correct: null, score: null }; marking = "self_graded"; }
   }

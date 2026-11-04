@@ -1,0 +1,15 @@
+  PASS  1 loaded: 60 revision_question resources, one version each: 60 resources, 60 versions
+  PASS  2 none published: every version is a draft, never submitted or published: {"draft":60}
+  PASS  3 provenance: origin ai_draft with model and prompt version: ["ai_draft/claude-opus-5-5/sqie-pilot-batch-v1"]
+  PASS  4 mapping is draft with framework-version provenance, never validated: ["NUR-CCF 1.0.0 (draft)"]
+  PASS  5 every version marked 'source not verified': 60 of 60
+  PASS  6 one competency link per version (442 table, frozen at submission): 60 links
+  PASS  7 gate: ckri_knowledge_approved is false for every version: 0 approved
+  PASS  8 gate: Scholar loadLibraryQuestions offers none of them: 0 offered
+  PASS  9 gate: Scholar servableLibraryVersions serves none of them: 0 servable
+  PASS  10 gate: publication by an authorised publisher is refused for a draft: only a submitted, clinically approved version is published (this one is draft)
+  PASS  10b the refused version is still a draft: draft
+  PASS  11 gate: the 800 guard refuses a Scholar library copy of a draft: individual_scholar_question: only the published version of an active revision question is reused (this one is active revision_question, draft)
+  PASS  12 HQ catalogue (loadCatalogue, the /super-admin/research/questions read model) lists all 60 as Draft: 60 listed; statuses {"draft":60}; served 0
+
+all checks passed
