@@ -11,22 +11,45 @@
 //   questionChanged        the live question's content hash is not the snapshot's.
 //   applyAssessedSnapshot  a COPY of the live row reading as it did when answered (stem, options, key, rationale).
 //   effectiveResult        the latest correction, else the original. The original is never overwritten.
+//   provenanceOf           SQIE WS-D (990): per competency id, the competency_content_hash, the framework and its version
+//                          at answer time (framework_competencies rows are edited in place, so an id alone pins nothing).
 //
 // ⚠ FORMATIVE. A snapshot or a correction is a record of a private practice attempt, never competence or a Passport record.
 // ⚠ The 416 CHECK is unchanged: a choice attempt keeps chosen_index, and its snapshot is a separate row.
-//
-// SQIE-CLOSE-2026-11 WS-D (migration 990): an understanding check kept WITHOUT a mark (950 marking unmarked) keeps a snapshot too
-// (outcome incorrect, no score: a reader shows the marking first, never "wrong"), and a snapshot names, for each competency the
-// question practised, the framework version and competency content hash at the time (competency_provenance). Both fail closed
-// without 990: the store retries without the column, and an unmarked snapshot 791 refuses is simply not kept.
 
-import { rubricHash, rubricSnapshotOf, type RubricSnapshot } from "./rubric-snapshot";
+import { compactSnapshot, rubricHash, rubricSnapshotOf, type RubricSnapshot } from "./rubric-snapshot";
 import { keyOf, learnerItem } from "./revision";
 import { scenarioSpecOf } from "./scenario";
 import type { QuestionRow } from "./store";
 
 export const SNAPSHOT_TOTAL_MAX_BYTES = 16384;
 export type Outcome = "correct" | "partial" | "incorrect";
+/** A snapshot's outcome: 990 adds unmarked (an understanding check kept without a judgement). Never a correction outcome. */
+export type SnapshotOutcome = Outcome | "unmarked";
+/** SQIE WS-D (990): what one competency said when the answer was given. A part the server could not read is null, never guessed. */
+export type CompetencyProvenance = {
+  id: string; content_hash: string | null; framework_id: string | null; framework_version: string | null;
+  /**
+   * SQIE-CLOSE-2026-11 owner decision 3 (991): whether the framework version was published when the answer was given. A draft
+   * mapping (publication pending) is kept but is never presented as validated competency evidence. Null: not readable.
+   */
+  mapping_status?: MappingStatus | null;
+  /** 991: the learning objective the question tested (its rubric objective), bounded. */
+  objective?: string | null;
+};
+export type MappingStatus = "published" | "draft";
+export const OBJECTIVE_MAX = 300;
+/** Pure. Each entry with its framework's publication status (991). */
+export const withMappingStatus = (p: readonly CompetencyProvenance[], statusOf: ReadonlyMap<string, MappingStatus>): CompetencyProvenance[] =>
+  p.map(x => ({ ...x, mapping_status: x.framework_id ? statusOf.get(x.framework_id) ?? null : null }));
+/** Pure. Each entry with the question's learning objective (991), bounded; none where the question has none. */
+export const withObjective = (p: readonly CompetencyProvenance[], objective: unknown): CompetencyProvenance[] => {
+  const o = typeof objective === "string" && objective.trim() ? objective.trim().slice(0, OBJECTIVE_MAX) : null;
+  return p.map(x => ({ ...x, objective: o }));
+};
+/** Pure. The four 990 keys only: what an environment without 991 accepts. */
+export const provenance990Keys = (p: readonly CompetencyProvenance[]): CompetencyProvenance[] =>
+  p.map(x => ({ id: x.id, content_hash: x.content_hash, framework_id: x.framework_id, framework_version: x.framework_version }));
 export type CorrectionBasis = "rubric_error" | "key_error" | "marking_error" | "other";
 export const CORRECTION_BASES: readonly CorrectionBasis[] = ["rubric_error", "key_error", "marking_error", "other"];
 export const CORRECTION_BASIS_LABEL: Record<CorrectionBasis, string> = {
@@ -36,16 +59,13 @@ export const QUESTION_CHANGED_NOTE = "This question has changed since you answer
 
 type Opt = { i: number; text: string };
 export type Presented = { stem: string; options: Opt[]; choices?: Opt[]; parts?: string[] };
-/** 990: one competency the question practised, as its framework stood when the attempt was marked. Null fields were not readable. */
-export type CompetencyProvenance = { competencyId: string; frameworkId: string | null; frameworkCode: string | null; frameworkVersion: string | null; contentHash: string | null };
-export const PROVENANCE_MAX = 20;
 export type AttemptSnapshotRow = {
   attemptId: string; questionId: string; questionVersion: string; contentHash: string;
   presented: Presented; response: Record<string, unknown>; answerKey: Record<string, unknown>;
-  rubric: RubricSnapshot | null; rubricHash: string | null; score: number | null; outcome: Outcome; marking: string;
+  rubric: RubricSnapshot | null; rubricHash: string | null; score: number | null; outcome: SnapshotOutcome; marking: string;
   feedback: Record<string, unknown> | null; competencyIds: string[]; assessedAt: string;
-  /** 990. Null: not recorded (before 990, or the framework could not be read). */
-  competencyProvenance?: CompetencyProvenance[] | null;
+  /** 990: one entry per competencyIds entry, in order. Absent where it was not recorded (before 990, or 990 not applied). */
+  competencyProvenance?: CompetencyProvenance[];
 };
 export type CorrectionRow = {
   id: string; attemptId: string; previousScore: number | null; previousOutcome: Outcome; correctedScore: number | null; correctedOutcome: Outcome;
@@ -57,6 +77,31 @@ const cut = (s: unknown, n: number) => { const x = typeof s === "string" ? s : "
 
 /** Pure. The result as an outcome word: the same rule as migration 791's correction guard. */
 export const outcomeOf = (correct: boolean, score: number | null): Outcome => (correct ? "correct" : (score ?? 0) > 0 ? "partial" : "incorrect");
+
+/** Pure. A snapshot's outcome: an unmarked answer is unmarked (990 binds the two), never "incorrect". */
+export const snapshotOutcomeOf = (marking: string, correct: boolean, score: number | null): SnapshotOutcome => (marking === "unmarked" ? "unmarked" : outcomeOf(correct, score));
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const MD5 = /^[0-9a-f]{32}$/;
+
+/**
+ * Pure. The 990 provenance of each competency id, in order: its competency_content_hash (32 hex), its framework and that
+ * framework's version label (major.minor.revision), as read at answer time. Anything unreadable or malformed is null. At most 20.
+ */
+export function provenanceOf(ids: readonly string[], read: {
+  hashes: ReadonlyMap<string, string>; frameworkOf: ReadonlyMap<string, string>; versionOf: ReadonlyMap<string, { major: unknown; minor: unknown; revision: unknown }>;
+}): CompetencyProvenance[] {
+  const part = (v: unknown) => (Number.isInteger(v) && (v as number) >= 0 && (v as number) <= 9999 ? String(v) : null);
+  return ids.filter(id => UUID.test(id)).slice(0, 20).map(id => {
+    const h = read.hashes.get(id)?.toLowerCase() ?? null, fw = read.frameworkOf.get(id) ?? null;
+    const v = fw ? read.versionOf.get(fw) : undefined;
+    const label = v ? [part(v.major ?? 1), part(v.minor ?? 0), part(v.revision ?? 0)] : null;
+    return {
+      id, content_hash: h && MD5.test(h) ? h : null, framework_id: fw && UUID.test(fw) ? fw : null,
+      framework_version: fw && UUID.test(fw) && label && label.every(x => x !== null) ? label.join(".") : null,
+    };
+  });
+}
 
 /** Pure. The hash of what is assessed: stem, options, key, marking guide and rationale, canonical. Same content, same hash. */
 export function contentHashOf(q: Pick<QuestionRow, "kind" | "stem" | "options" | "correctIndex" | "answer" | "rationale">): string {
@@ -92,8 +137,8 @@ const presentedPos = (p: Presented, original: number) => p.options.findIndex(o =
 export function buildAttemptSnapshot(q: QuestionRow, a: {
   attemptId: string; answeredAt: string; chosenIndex: number | null; response: Record<string, unknown> | null;
   correct: boolean; score: number | null; marking: string; contentVersion?: number | null;
-  /** 990: the framework version of each competency practised (competency-provenance.ts), or null where unread. */
-  provenance?: readonly CompetencyProvenance[] | null;
+  /** 990: the provenance of the question's competency (provenanceOf). Undefined: not recorded (990 absent). */
+  provenance?: CompetencyProvenance[];
 }): AttemptSnapshotRow | null {
   const presented = presentedOf(q);
   const { rubric: _r, formative, ...answered } = a.response ?? {};
@@ -115,34 +160,25 @@ export function buildAttemptSnapshot(q: QuestionRow, a: {
     questionVersion: q.library ? `lib:${q.library.versionId}` : `own:${Math.max(1, Math.min(999999, Math.floor(a.contentVersion ?? 1)))}`,
     contentHash: contentHashOf(q), presented, response, answerKey,
     rubric, rubricHash: q.answer ? rubricHash(q.answer) : null,
-    score: a.score === null || !Number.isFinite(a.score) ? null : Math.max(0, Math.min(1, a.score)),
-    outcome: outcomeOf(a.correct, a.score), marking: a.marking,
+    score: a.marking === "unmarked" || a.score === null || !Number.isFinite(a.score) ? null : Math.max(0, Math.min(1, a.score)),
+    outcome: snapshotOutcomeOf(a.marking, a.correct, a.score), marking: a.marking,
     feedback: formative && typeof formative === "object" && !Array.isArray(formative) ? formative as Record<string, unknown> : null,
     competencyIds: q.competencyId ? [q.competencyId] : [], assessedAt: a.answeredAt,
-    competencyProvenance: provenanceFor(q.competencyId ? [q.competencyId] : [], a.provenance ?? null),
   };
+  // 990: the provenance names exactly the snapshot's competency ids, in order (the 990 CHECK refuses anything else).
+  if (a.provenance) row.competencyProvenance = row.competencyIds.map(id => a.provenance!.find(p => p.id === id) ?? { id, content_hash: null, framework_id: null, framework_version: null });
   return fitSnapshot(row);
-}
-
-const UUID = /^[0-9a-f-]{36}$/;
-const bounded = (v: unknown, n: number) => (typeof v === "string" && v.trim() ? v.trim().slice(0, n) : null);
-/** Pure. The provenance kept for these competency ids: only ids the question practised, only well-formed (the 990 CHECK), at most 20. */
-export function provenanceFor(competencyIds: readonly string[], read: readonly CompetencyProvenance[] | null): CompetencyProvenance[] | null {
-  if (!read || !competencyIds.length) return null;
-  const out = competencyIds.slice(0, PROVENANCE_MAX).flatMap(id => {
-    const p = read.find(x => x.competencyId === id);
-    return p && UUID.test(id) ? [{ competencyId: id, frameworkId: bounded(p.frameworkId, 36), frameworkCode: bounded(p.frameworkCode, 60), frameworkVersion: bounded(p.frameworkVersion, 40), contentHash: bounded(p.contentHash, 64) }] : [];
-  });
-  return out.length ? out : null;
 }
 
 const jsonBytes = (r: AttemptSnapshotRow) => bytes(r.presented) + bytes(r.response) + bytes(r.answerKey) + (r.rubric ? bytes(r.rubric) : 0) + (r.feedback ? bytes(r.feedback) : 0);
 
-/** Pure. Within the 791 size CHECK: the feedback goes first, then the rubric detail (its hash stays), then long text is cut. */
+/** Pure. Within the 791 size CHECK: the feedback goes first, then the rubric detail (compact, then gone: its hash stays), then long text is cut. */
 export function fitSnapshot(row: AttemptSnapshotRow): AttemptSnapshotRow | null {
   const r: AttemptSnapshotRow = { ...row, presented: { ...row.presented }, response: { ...row.response }, answerKey: { ...row.answerKey } };
   const steps: (() => void)[] = [
     () => { r.feedback = null; },
+    // SQIE WS-D: the full rubric is cut to its compact form before it goes (its hash stays in rubric_hash either way).
+    () => { if (r.rubric) r.rubric = compactSnapshot(r.rubric); },
     () => { r.rubric = null; },
     () => { if (typeof r.response.text === "string") r.response.text = cut(r.response.text, 1000); if (Array.isArray(r.response.texts)) r.response.texts = (r.response.texts as unknown[]).map(x => cut(x, 400)); },
     () => { r.answerKey.rationale = cut(r.answerKey.rationale, 300); },
@@ -188,24 +224,11 @@ export const snapshotInsertRow = (s: AttemptSnapshotRow) => ({
   attempt_id: s.attemptId, question_id: s.questionId, question_version: s.questionVersion, content_hash: s.contentHash,
   presented: s.presented, response: s.response, answer_key: s.answerKey, rubric: s.rubric, rubric_hash: s.rubricHash, score: s.score,
   outcome: s.outcome, marking: s.marking, feedback: s.feedback, competency_ids: s.competencyIds, assessed_at: s.assessedAt,
-  // 990: sent only where there is one, so an environment without the column takes the 791 row exactly as before.
-  ...(s.competencyProvenance?.length ? { competency_provenance: s.competencyProvenance.map(p => ({
-    competency_id: p.competencyId, framework_id: p.frameworkId, framework_code: p.frameworkCode, framework_version: p.frameworkVersion, content_hash: p.contentHash,
-  })) } : {}),
+  ...(s.competencyProvenance ? { competency_provenance: s.competencyProvenance } : {}),
 });
 
-/** Pure. A stored 990 competency_provenance read back (null where absent or not an array). */
-export function provenanceFromRow(v: unknown): CompetencyProvenance[] | null {
-  if (!Array.isArray(v)) return null;
-  const out = v.flatMap(x => {
-    const o = (x ?? {}) as Record<string, unknown>;
-    return typeof o.competency_id === "string" && UUID.test(o.competency_id)
-      ? [{ competencyId: o.competency_id, frameworkId: bounded(o.framework_id, 36), frameworkCode: bounded(o.framework_code, 60), frameworkVersion: bounded(o.framework_version, 40), contentHash: bounded(o.content_hash, 64) }] : [];
-  }).slice(0, PROVENANCE_MAX);
-  return out.length ? out : null;
-}
-
 const OUTCOMES: readonly Outcome[] = ["correct", "partial", "incorrect"];
+const SNAPSHOT_OUTCOMES: readonly SnapshotOutcome[] = [...OUTCOMES, "unmarked"];
 const num = (v: unknown) => (v === null || v === undefined || !Number.isFinite(Number(v)) ? null : Number(v));
 
 /** Pure. A stored 791 snapshot row, read back, or null when it is not one. */
@@ -219,10 +242,13 @@ export function snapshotFromRow(x: Record<string, unknown> | null | undefined): 
     response: (x.response && typeof x.response === "object" ? x.response : {}) as Record<string, unknown>,
     answerKey: (x.answer_key && typeof x.answer_key === "object" ? x.answer_key : {}) as Record<string, unknown>,
     rubric: (x.rubric && typeof x.rubric === "object" ? x.rubric : null) as RubricSnapshot | null, rubricHash: typeof x.rubric_hash === "string" ? x.rubric_hash : null,
-    score: num(x.score), outcome: OUTCOMES.includes(x.outcome as Outcome) ? x.outcome as Outcome : "incorrect", marking: String(x.marking ?? "deterministic"),
+    score: num(x.score), outcome: SNAPSHOT_OUTCOMES.includes(x.outcome as SnapshotOutcome) ? x.outcome as SnapshotOutcome : "incorrect", marking: String(x.marking ?? "deterministic"),
     feedback: (x.feedback && typeof x.feedback === "object" ? x.feedback : null) as Record<string, unknown> | null,
     competencyIds: Array.isArray(x.competency_ids) ? (x.competency_ids as unknown[]).filter((s): s is string => typeof s === "string") : [], assessedAt: String(x.assessed_at ?? ""),
-    competencyProvenance: provenanceFromRow(x.competency_provenance),
+    ...(Array.isArray(x.competency_provenance) ? { competencyProvenance: (x.competency_provenance as unknown[]).filter((p): p is CompetencyProvenance => !!p && typeof (p as CompetencyProvenance).id === "string")
+      .map(p => ({ id: p.id, content_hash: p.content_hash ?? null, framework_id: p.framework_id ?? null, framework_version: p.framework_version ?? null,
+        ...(p.mapping_status === "published" || p.mapping_status === "draft" ? { mapping_status: p.mapping_status } : "mapping_status" in p ? { mapping_status: null } : {}),
+        ...(typeof p.objective === "string" ? { objective: p.objective.slice(0, OBJECTIVE_MAX) } : "objective" in p ? { objective: null } : {}) })) } : {}),
   };
 }
 

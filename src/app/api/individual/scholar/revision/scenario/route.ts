@@ -110,7 +110,7 @@ export async function POST(req: Request) {
   const srs = { masteryReps: policy.scholarSrsMasteryReps, masteryDays: policy.scholarSrsMasteryDays, maxIntervalDays: policy.scholarSrsMaxIntervalDays, harderIntervalPercent: policy.scholarSrsHarderIntervalPercent };
   const m = scenarioMarks(spec, results);
   const marking = scenarioMarking(results);
-  // SQIE-CLOSE-2026-11 WS-D: each AI-judged stage keeps its five feedback parts (right, missing, misconceptions, why, next), as a short answer does.
+  // SQIE WS-D: each AI-judged stage keeps its five parts (right, missing, misconceptions, why, next), not only the summary.
   const formative = marking === "ai_evaluation" ? formativeFeedback(results.flatMap((r, i) => (r.by === "ai" ? [{ part: i + 1, feedback: r.feedback ?? null, parts: r.parts ?? null }] : [])), evaluator) : null;
   const kept = withFormative(withRubricSnapshot(storedStages(results), rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {

@@ -49,7 +49,8 @@ function Entry({ e }: { e: HistoryEntry }) {
       <div className="mt-1 rounded-lg bg-gray-50 px-3 py-2 text-[12px] text-gray-700">
         <p><span className="font-semibold">Marked against:</span> {version ?? "the question version was not recorded"}
           {m.contentHash ? ` · question ${m.contentHash}` : ""}{m.guideHash ? ` · marking guide ${m.guideHash}` : " · no marking guide kept"}</p>
-        {m.frameworks.length > 0 && <p className="mt-0.5"><span className="font-semibold">Competency framework:</span> {m.frameworks.join("; ")}</p>}
+        {m.frameworks.length > 0 && <p className="mt-0.5"><span className="font-semibold">Competency mapping:</span> {m.frameworks.join("; ")}</p>}
+        {m.objective && <p className="mt-0.5"><span className="font-semibold">Learning objective:</span> {m.objective}</p>}
         {m.notes.map(n => <p key={n} className="mt-0.5">{n}</p>)}
       </div>
     </li>

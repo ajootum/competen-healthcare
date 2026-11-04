@@ -13,7 +13,7 @@
 // ⚠ FORMATIVE. A history is a record of private practice: never an assessment, a stage, verified competence or a Passport record.
 // An unmarked check is shown as kept without a mark, never as wrong.
 
-import { effectiveResult, outcomeOf, questionChanged, type AttemptIntegrity, type Outcome } from "./attempt-snapshot";
+import { effectiveResult, outcomeOf, questionChanged, type AttemptIntegrity, type CompetencyProvenance, type Outcome } from "./attempt-snapshot";
 import { MARKING_LABEL } from "./config";
 import { CHECK_MARKING_LABEL, parseCheckResponse } from "./learn-check-record";
 import { rubricChanged, snapshotOf } from "./rubric-snapshot";
@@ -34,8 +34,10 @@ export type MarkedAgainst = {
   questionVersion: string | null;
   /** First 8 hex of the 791 content hash and of the guide hash (791, else the 416 rubric snapshot). Null where not kept. */
   contentHash: string | null; guideHash: string | null;
-  /** Each competency practised, as its framework stood (990): "NMC-FN 2.1.0". Empty where not recorded. */
+  /** Each competency practised, as its framework stood (990/991), in words, with the mapping status. Empty where not recorded. */
   frameworks: string[];
+  /** 991: the learning objective the question tested, where kept. */
+  objective: string | null;
   snapshotKept: boolean; questionChangedSince: boolean; guideChangedSince: boolean;
   notes: string[];
 };
@@ -85,7 +87,8 @@ export function markedAgainstOf(q: Pick<QuestionRow, "kind" | "stem" | "options"
   const guide = s?.rubricHash ?? rubric?.hash ?? null;
   const questionChangedSince = questionChanged(q, s);
   const guideChangedSince = s?.rubricHash ? !!q.answer && rubricChanged(q, { v: 1, hash: s.rubricHash }) : rubricChanged(q, rubric);
-  const frameworks = (s?.competencyProvenance ?? []).map(p => [p.frameworkCode ?? "Framework", p.frameworkVersion ? `version ${p.frameworkVersion}` : "version not recorded"].join(" "));
+  const frameworks = (s?.competencyProvenance ?? []).map(frameworkLine);
+  const objective = (s?.competencyProvenance ?? []).map(p => p.objective).find((o): o is string => typeof o === "string" && !!o.trim()) ?? null;
   const notes = [
     ...(s ? [] : [NO_SNAPSHOT_NOTE]),
     ...(questionChangedSince ? [CHANGED_NOTE] : []),
@@ -93,8 +96,19 @@ export function markedAgainstOf(q: Pick<QuestionRow, "kind" | "stem" | "options"
   ];
   return {
     questionVersion: s?.questionVersion ?? (a.contentVersion ? `own:${a.contentVersion}` : null),
-    contentHash: short(s?.contentHash), guideHash: short(guide), frameworks, snapshotKept: !!s, questionChangedSince, guideChangedSince, notes,
+    contentHash: short(s?.contentHash), guideHash: short(guide), frameworks, objective, snapshotKept: !!s, questionChangedSince, guideChangedSince, notes,
   };
+}
+
+export const DRAFT_MAPPING_NOTE = "draft mapping, publication pending: not validated competency evidence";
+/**
+ * Pure. One competency's provenance in words (990/991). A draft mapping says so every time it is shown (owner decision 3); a
+ * published one is still learning evidence, never verified competence. Nothing unread is filled in.
+ */
+export function frameworkLine(p: CompetencyProvenance): string {
+  const v = p.framework_version ? `framework version ${p.framework_version}` : "framework version not recorded";
+  const status = p.mapping_status === "published" ? "published" : p.mapping_status === "draft" ? DRAFT_MAPPING_NOTE : "publication status not recorded";
+  return `${v} (${status})`;
 }
 
 /** Pure. A question version in words: "your version 2", "Competen library version", or null. */

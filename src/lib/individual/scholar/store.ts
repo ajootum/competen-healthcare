@@ -36,7 +36,7 @@ import { isStudyLinkKind, isStudySpace, studyFields, type StudyFieldsInput, type
 import { positionFromRow, type PositionPut, type ServerPosition } from "./learn-position";
 import { newestSavedLesson, type LessonRecord } from "./learn-journey";
 import { baseKey, keysetFilter, orderVersions, pageOf, supersededKey, type Cursor, type NoteInput, type NoteKind, type NoteTarget } from "./saved-library";
-import { correctionFromRow, snapshotFromRow, snapshotInsertRow, type AttemptIntegrity, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
+import { correctionFromRow, provenance990Keys, provenanceOf, snapshotFromRow, snapshotInsertRow, withMappingStatus, type AttemptIntegrity, type CompetencyProvenance, type MappingStatus, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
 //
@@ -4498,10 +4498,14 @@ export async function clearStudyPlan(admin: Admin, userId: string): Promise<"ok"
 
 let position790: boolean | null = null;
 let snapshot791: boolean | null = null;
-/** SQIE-CLOSE-2026-11 WS-D: whether 990 (unmarked snapshots, competency_provenance) is applied. null: not yet known. */
-let snapshot990: boolean | null = null;
+/** SQIE WS-D: whether 990 (the snapshot's competency_provenance column, unmarked outcomes) is applied. null: not yet known. */
+let provenance990: boolean | null = null;
+/** SQIE-CLOSE-2026-11 owner decision 3: whether 991 (mapping_status and objective on each provenance element) is applied. */
+let provenance991: boolean | null = null;
 /** Tests only: forget what was detected. */
-export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; snapshot990 = null; };
+export const resetContinuitySchema = () => { position790 = null; snapshot791 = null; provenance990 = null; provenance991 = null; };
+/** Whether 990 is known to be absent (the provenance lookup is then skipped: nothing would keep it). */
+export const snapshotProvenanceAbsent = () => provenance990 === false || snapshot791 === false;
 const isMissingRpc = (error: any) => isNotProvisioned(error) || String(error?.code ?? "") === "42883";
 
 /** The caller's position in one of their Learn sessions, or null (none yet). notProvisioned where 790 is absent. */
@@ -4547,31 +4551,71 @@ export async function questionContentVersion(admin: Admin, userId: string, quest
 
 /**
  * Keep one attempt's snapshot (791). absent: 791 is not applied (nothing is kept, nothing is wrong). failed: anything else.
- * SQIE-CLOSE-2026-11 WS-D (990): where 990 is absent, a row with competency_provenance is refused for the column and kept without
- * it (the 791 row exactly), and an unmarked snapshot is refused by 791's marking CHECK: "absent" (the attempt stands, no error).
+ * SQIE WS-D (990): the row carries competency_provenance where the snapshot has it. 990 absent (the column unknown): a snapshot
+ * that `needs990` (an understanding check: unmarked is a 990 marking, and today no check keeps a snapshot) is not kept, "absent"
+ * -- exactly as before 990 -- and any other is kept as before, without the provenance.
  */
-export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow): Promise<"ok" | "absent" | "failed"> {
+export async function insertAttemptSnapshot(admin: Admin, userId: string, s: AttemptSnapshotRow, opts: { needs990?: boolean } = {}): Promise<"ok" | "absent" | "failed"> {
   if (snapshot791 === false) return "absent";
-  if (s.marking === "unmarked" && snapshot990 === false) return "absent";
+  if (opts.needs990 && provenance990 === false) return "absent";
   try {
-    const row: Record<string, unknown> = { ...snapshotInsertRow(s), user_id: userId };
-    if (snapshot990 === false) delete row.competency_provenance;
-    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert(row);
-    if (error && "competency_provenance" in row && isMissingColumn(error)) {
-      snapshot990 = false; delete row.competency_provenance;
-      if (s.marking === "unmarked") return "absent";
-      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert(row));
+    const full: Record<string, unknown> = { ...snapshotInsertRow(s), user_id: userId };
+    // 991 absent: the elements are sent with the four 990 keys only (the 990 CHECK refuses any other key).
+    if (provenance991 === false && Array.isArray(full.competency_provenance)) full.competency_provenance = provenance990Keys(full.competency_provenance as CompetencyProvenance[]);
+    const { competency_provenance: _p, ...without } = full;
+    void _p;
+    let withProvenance = "competency_provenance" in full && provenance990 !== false;
+    let { error } = await admin.from("individual_scholar_attempt_snapshot").insert(withProvenance ? full : without);
+    const has991Keys = withProvenance && Array.isArray(full.competency_provenance) && (full.competency_provenance as Record<string, unknown>[]).some(p => "mapping_status" in p || "objective" in p);
+    if (error && has991Keys && String((error as any)?.code ?? "") === "23514" && /provenance_check/.test(String((error as any)?.message ?? ""))) {
+      provenance991 = false;
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert({ ...full, competency_provenance: provenance990Keys(full.competency_provenance as CompetencyProvenance[]) }));
+    } else if (!error && has991Keys) provenance991 = true;
+    if (error && withProvenance && isMissingColumn(error)) {
+      provenance990 = false; withProvenance = false;
+      if (opts.needs990) return "absent";
+      ({ error } = await admin.from("individual_scholar_attempt_snapshot").insert(without));
     }
-    if (error) {
-      if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; }
-      // 990 absent: 791's marking CHECK knows no unmarked. Remembered, so the next unmarked check is not tried.
-      if (s.marking === "unmarked" && String((error as any)?.code ?? "") === "23514") { snapshot990 = false; return "absent"; }
-      return "failed";
-    }
+    if (error) { if (isNotProvisioned(error)) { snapshot791 = false; return "absent"; } return "failed"; }
     snapshot791 = true;
-    if ("competency_provenance" in row || s.marking === "unmarked") snapshot990 = true;
+    if (withProvenance) provenance990 = true;
     return "ok";
   } catch { return "failed"; }
+}
+
+/**
+ * SQIE WS-D (990). What each competency said when the answer was given: its competency_content_hash (395, 761), its framework
+ * and that framework's version (012). Never throws: a part it cannot read is null (provenanceOf), never guessed.
+ */
+export async function competencyProvenance(admin: Admin, competencyIds: readonly string[]): Promise<CompetencyProvenance[]> {
+  const ids = [...new Set(competencyIds)].filter(isUuid).slice(0, 20);
+  const hashes = new Map<string, string>(), frameworkOf = new Map<string, string>(), versionOf = new Map<string, { major: unknown; minor: unknown; revision: unknown }>();
+  const statusOf = new Map<string, MappingStatus>();
+  if (!ids.length) return [];
+  try {
+    const [h, c] = await Promise.all([
+      admin.rpc("competency_content_hashes", { p_ids: ids }),
+      admin.from("framework_competencies").select("id, domain_id").in("id", ids),
+    ]);
+    for (const r of (h.error ? [] : h.data ?? []) as any[]) if (typeof r?.competency_id === "string" && typeof r?.content_hash === "string") hashes.set(r.competency_id, r.content_hash);
+    const domainOf = new Map<string, string>(((c.error ? [] : c.data ?? []) as any[]).filter(r => isUuid(r?.domain_id)).map(r => [String(r.id), String(r.domain_id)]));
+    const domainIds = [...new Set(domainOf.values())];
+    if (domainIds.length) {
+      const d = await admin.from("framework_domains").select("id, framework_id").in("id", domainIds);
+      const fwOfDomain = new Map<string, string>(((d.error ? [] : d.data ?? []) as any[]).filter(r => isUuid(r?.framework_id)).map(r => [String(r.id), String(r.framework_id)]));
+      for (const [comp, dom] of domainOf) { const fw = fwOfDomain.get(dom); if (fw) frameworkOf.set(comp, fw); }
+      const fwIds = [...new Set(frameworkOf.values())];
+      if (fwIds.length) {
+        const f = await admin.from("frameworks").select("id, version_major, version_minor, version_revision, pub_status").in("id", fwIds);
+        for (const r of (f.error ? [] : f.data ?? []) as any[]) {
+          versionOf.set(String(r.id), { major: r.version_major, minor: r.version_minor, revision: r.version_revision });
+          // Owner decision 3 (991): published, or draft (publication pending: never validated evidence). Unreadable stays null.
+          if (typeof r.pub_status === "string") statusOf.set(String(r.id), r.pub_status === "published" ? "published" : "draft");
+        }
+      }
+    }
+  } catch { /* provenance is never worth a failed answer: what was not read stays null */ }
+  return withMappingStatus(provenanceOf(ids, { hashes, frameworkOf, versionOf }), statusOf);
 }
 
 /** What the caller's attempts were assessed against, and their corrections (oldest first). Empty where 791 is absent or unreadable. */

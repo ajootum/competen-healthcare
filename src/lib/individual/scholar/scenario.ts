@@ -174,7 +174,7 @@ export function stageKeyText(stage: ScenarioStage): string {
 
 // ── THE MARKS: stage scores summed with the stage weights ──
 
-/** SQIE-CLOSE-2026-11 WS-D: `parts`, an AI-judged stage's five feedback parts (question-intel.ts), carried to the attempt's formative record. */
+/** `parts`: SQIE WS-D, the five-part feedback (question-intel.ts FeedbackParts) an AI-judged stage was shown, kept with the attempt. */
 export type StageResult = { score: number; by: "code" | "ai" | "self"; answer: string; feedback?: string | null; parts?: FeedbackParts | null };
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -215,16 +215,12 @@ export function storedStageResults(response: unknown, count: number): StageResul
 export const TOKEN_TTL_MS = 6 * 60 * 60 * 1000;
 export type Progress = { next: number; results: StageResult[]; evaluator: { model: string; promptVersion: string } | null };
 type Claims = { u: string; q: string; h: string; t: number; n: number; r: { s: number; b: StageResult["by"]; a: string; f?: string; p?: FeedbackParts }[]; e: Progress["evaluator"] };
+/** The longest token readProgress accepts. */
+export const TOKEN_MAX_CHARS = 12000;
+/** SQIE WS-D: the five-part feedback rides in the token only while the token stays under this (oldest stages' parts go first; their summary stays). */
+const TOKEN_PARTS_BUDGET = 10500;
 
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64url");
-/** The encoded claims are kept under this (readProgress refuses a token over 12000 characters). */
-export const TOKEN_BODY_MAX = 11000;
-const clip = (xs: readonly string[], n: number) => xs.slice(0, n).map(x => x.slice(0, 160));
-/** Pure. A stage's five parts as the token carries them: bounded (feedbackPartsFrom), then cut to three points of 160 characters each. */
-function tokenParts(raw: FeedbackParts | null | undefined): FeedbackParts | null {
-  const p = raw ? feedbackPartsFrom(raw) : null;
-  return p ? { right: clip(p.right, 3), missing: clip(p.missing, 3), misconceptions: clip(p.misconceptions, 2), why: p.why ? p.why.slice(0, 240) : null, next: p.next ? p.next.slice(0, 240) : null } : null;
-}
 const mac = (secret: string, body: string) => createHmac("sha256", secret).update(body).digest("base64url");
 
 /** Pure. A key for the token from a server-only secret (the caller supplies it; tests supply their own). */
@@ -235,13 +231,15 @@ export function signProgress(key: string, who: { userId: string; questionId: str
   const claims: Claims = {
     u: who.userId, q: who.questionId, h: rubricHash(who.answer), t: now, n: p.next,
     r: p.results.map(x => {
-      const parts = tokenParts(x.parts);
-      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, parts ? 400 : 600) } : {}), ...(parts ? { p: parts } : {}) };
+      const parts = x.by === "ai" ? feedbackPartsFrom(x.parts) : null;
+      return { s: round2(x.score), b: x.by, a: x.answer.slice(0, 200), ...(x.feedback ? { f: x.feedback.slice(0, 600) } : {}), ...(parts ? { p: parts } : {}) };
     }), e: p.evaluator,
   };
-  // The token stays well inside readProgress's bound: the parts of the earliest stages are dropped first (their text `f` stays).
-  for (const x of claims.r) { if (b64(JSON.stringify(claims)).length <= TOKEN_BODY_MAX) break; delete x.p; }
-  const body = b64(JSON.stringify(claims));
+  let body = b64(JSON.stringify(claims));
+  for (const r of claims.r) {
+    if (body.length <= TOKEN_PARTS_BUDGET) break;
+    if (r.p) { delete r.p; body = b64(JSON.stringify(claims)); }
+  }
   return `${body}.${mac(key, body)}`;
 }
 
@@ -250,7 +248,7 @@ export function signProgress(key: string, who: { userId: string; questionId: str
  * been altered, or does not stand at the stage the caller expects (a token for stage 2 cannot answer stage 3).
  */
 export function readProgress(key: string, token: unknown, who: { userId: string; questionId: string; answer: unknown }, now: number): Progress | null {
-  if (typeof token !== "string" || token.length > 12000) return null;
+  if (typeof token !== "string" || token.length > TOKEN_MAX_CHARS) return null;
   const [body, sig, extra] = token.split(".");
   if (!body || !sig || extra !== undefined) return null;
   const want = Buffer.from(mac(key, body)), got = Buffer.from(sig);
@@ -259,7 +257,7 @@ export function readProgress(key: string, token: unknown, who: { userId: string;
   try { c = JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as Claims; } catch { return null; }
   if (c.u !== who.userId || c.q !== who.questionId || c.h !== rubricHash(who.answer) || !Number.isFinite(c.t) || now - c.t > TOKEN_TTL_MS || now < c.t - 60_000) return null;
   if (!Number.isInteger(c.n) || c.n < 1 || !Array.isArray(c.r) || c.r.length !== c.n) return null;
-  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, ...(x.p ? { parts: feedbackPartsFrom(x.p) } : {}) })), evaluator: c.e ?? null };
+  return { next: c.n, results: c.r.map(x => ({ score: x.s, by: x.b, answer: x.a, feedback: x.f ?? null, parts: x.b === "ai" ? feedbackPartsFrom(x.p) : null })), evaluator: c.e ?? null };
 }
 
 // ── NEW SCENARIOS FROM A PASSAGE ──

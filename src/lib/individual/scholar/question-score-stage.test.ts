@@ -74,7 +74,7 @@ describe("a question score never sets a competency stage (WS-H)", () => {
     for (const marking of ["deterministic", "self_graded", "ai_evaluation"]) {
       const s = buildAttemptSnapshot(q, {
         attemptId: "33333333-3333-4333-8333-333333333333", answeredAt: "2026-11-04T10:00:00Z", chosenIndex: 0, response: null, correct: true, score: 1, marking,
-        provenance: [{ competencyId: q.competencyId!, frameworkId: "44444444-4444-4444-8444-444444444444", frameworkCode: "NMC", frameworkVersion: "2.1.0", contentHash: "abc" }],
+        provenance: [{ id: q.competencyId!, content_hash: null, framework_id: "44444444-4444-4444-8444-444444444444", framework_version: "2.1.0", mapping_status: "published", objective: "Recognise the first sign" }],
       });
       expect(s).not.toBeNull();
       const row = snapshotInsertRow(s!);
