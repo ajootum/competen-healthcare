@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { LessonStatus } from "@/lib/individual/scholar/learn-journey";
 import { Mark } from "./learn-journey-nav";
-import { ActionBand, LearningIcon, learnBox, learnTone, type BandAction } from "@/components/ui/scholar-learning";
+import { ActionBand, LearningIcon, learnAction, learnBox, learnTone, type BandAction } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-COMPANION-01 P0b: THE PIECES OF THE CONTINUOUS JOURNEY. Presentation only: every button here runs an action
 // learn-client.tsx already has (Teach, Go deeper, Examples, the check, Practise, Apply, Finish); nothing here calls a
@@ -57,10 +57,10 @@ export type Activity = { key: string; label: string; onClick?: () => void; href?
 export function ActivityRow({ items, label, id }: { items: Activity[]; label: string; id?: string }) {
   if (!items.length) return null;
   return (
-    <div id={id} role="group" aria-label={label} className="mt-4 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-3">
+    <div id={id} role="group" aria-label={label} className={`${learnTone("next")} mt-4 flex flex-wrap gap-2 rounded-2xl border border-gray-200 bg-white p-3`}>
       {items.map(a => {
-        const text = <>{a.label}{a.done && <span className="sr-only"> (done)</span>}{a.done && <span aria-hidden="true" className="ml-1 text-gray-500">✓</span>}</>;
-        const cls = `${chip} ${a.pressed ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800 hover:bg-gray-50"}`;
+        const text = <>{a.label}{a.done && <span className="sr-only"> (done)</span>}{a.done && <span aria-hidden="true" className="cmp-learn-accent ml-0.5">✓</span>}</>;
+        const cls = a.pressed ? learnAction.primary : learnAction.secondary;
         return a.href
           ? <Link key={a.key} href={a.href} onClick={a.onClick} className={cls}>{text}</Link>
           : <button key={a.key} type="button" onClick={a.onClick} disabled={a.disabled} aria-pressed={a.pressed} aria-describedby={a.describedBy} className={cls}>{text}</button>;
