@@ -1,0 +1,39 @@
+sign-in attempt 1: still on /login
+sign-in attempt 2: ok
+PASS Today shows 'Next learning actions'
+INFO suggestions: [{"kind":"prerequisite","action":"Revisit a prerequisite before going on","reason":"Several different questions in Quality Improvement Science and Methods, lesson 8 were not answered well yet. Lesson 7, which it builds on, is the place to start."},{"kind":"misconception","action":"Review this misconception","reason":"Your answer in Quality Improvement Science and Methods, lesson 7 on 2026-11-04 suggested \"Nothing to correct — your answer stayed close to the notes this time, unlike before.\", and it has not been put right there yet."},{"kind":"retrieval","action":"15-minute retrieval exercise","reason":"40 cards have reached their review date. Recalling them now, without looking, is what makes them stick."}]
+PASS every suggestion names an action and gives a short reason
+PASS actions are actions, not only a topic
+PASS Today fits 390px
+INFO snooze "Revisit a prerequisite before going on": Snoozed until 2026-11-05.
+PASS snooze "Revisit a prerequisite before going on": the plan and calendar are unchanged
+PASS snooze recorded (next_action deferred until 2026-11-05)
+PASS the snoozed suggestion is not shown again today
+INFO dismiss "Review this misconception": Dismissed. It comes back only if your evidence changes.
+PASS dismiss "Review this misconception": the plan and calendar are unchanged
+PASS dismiss recorded (next_action declined with its evidence fingerprint)
+INFO accept "15-minute retrieval exercise": Added to today in your calendar.
+PASS accept "15-minute retrieval exercise": exactly one entry added to the learner's own calendar, plan settings unchanged
+PASS accept recorded with its entry (15-minute retrieval exercise: 40 cards due · 2026-11-04 · 15 min)
+PASS the accepted suggestion shows as in your plan
+PASS annotated a saved explanation (note saved on the saved lesson)
+PASS the Notebook view opens from the library
+PASS misconceptions to revisit are shown
+INFO misconceptions listed: 10
+FAIL wrote a personal summary
+PASS the summary is in the Notebook, as a summary
+PASS the annotation is in the Notebook
+PASS each keeps its cited source
+INFO related to the annotation: Saved lesson: This lesson covers essential nursing care of the critically ill, with personal hygiene… · Taught from the same section | Saved lesson: You have already covered where care begins with skin and tissue assessment, the grading… · Taught from the same section | Saved lesson: This lesson covers the full chain of essential nursing care for critically ill patients,… · Taught from the same section | Saved lesson: You have already built the chain from skin assessment through bathing and skin tears… · Taught from the same section | Saved lesson: You have already worked through skin and tissue assessment, the bed bath, skin tears,… · Taught from the same section
+PASS related materials offered where they exist (shown)
+PASS the Notebook fits 390px
+PASS make practice offered: "Make practice from these notes (10 sections)"
+page.waitForURL: Timeout 120000ms exceeded.
+=========================== logs ===========================
+waiting for navigation until "load"
+============================================================
+    at main (C:\Users\elish\Documents\Competen\competen-sale-r3\docs\evidence\SALE-R3\walk\sale-r3-walk.ts:196:14) {
+  log: [],
+  name: 'TimeoutError'
+}
+exit=1

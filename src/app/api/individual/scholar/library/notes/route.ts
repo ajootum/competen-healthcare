@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal, type IndividualContext } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { addNote, deleteNote, isUuid, librarySchema, listNotes, sectionsOf, topicsOfSections, updateNote } from "@/lib/individual/scholar/store";
+import { addNote, deleteNote, isUuid, librarySchema, listNotes, sectionsOf, topicsOfSections, updateNote, workspaceSchema } from "@/lib/individual/scholar/store";
 import { locationLabel } from "@/lib/individual/scholar/library-organise";
 import { NOTE_BODY_MAX, NOTE_PROBLEM, validateNote } from "@/lib/individual/scholar/saved-library";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 //   GET    ?artefact=<id> | ?session=<id>   their notes on one saved teaching or one session's lessons
 //   GET    ?sections=<materialId>           CE-02: the sections of one of their materials, to choose one to write a note on ({ id, label })
 //   POST   { kind, targetKind, artefactId? | sessionId+step | materialId (+chunkId), body?, quote? }   (saved-library validateNote)
+//          kind "summary" (SALE-2026-11 R3): also needs scholar_active_notebook on (403) and migration 975 (409)
 //   PATCH  { id, body }                      change a note's or a highlight's text
 //   DELETE ?id=<id>                          remove one
 // Every target is the caller's own (the store keys every statement on their id and 820's composite foreign keys refuse
@@ -63,6 +64,11 @@ export async function POST(req: Request) {
   if (refused) return refused;
   const v = validateNote(await req.json().catch(() => null));
   if (!v.ok) return NextResponse.json({ error: v.message, reason: v.problem }, { status: 400 });
+  // SALE-2026-11 R3 (SALE-12): a personal summary only where HQ offers the Notebook, and only once migration 975 accepts the kind.
+  if (v.note.kind === "summary") {
+    if ((await loadIndividualPolicy(ctx.admin)).scholarActiveNotebook !== "on") return NextResponse.json({ error: "Summaries are not offered here." }, { status: 403 });
+    if (!(await workspaceSchema(ctx.admin))) return NextResponse.json({ error: "Summaries are not available here yet." }, { status: 409 });
+  }
   if (identifies(v.note.body, v.note.quote)) return NextResponse.json({ error: IDENTIFIER }, { status: 422 });
   const r = await addNote(ctx.admin, ctx.userId, v.note);
   if (!r.ok) {
