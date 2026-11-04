@@ -11,6 +11,8 @@ import { nextSteps, type NextRule } from "@/lib/individual/scholar/progress-next
 import { EVALUATION_CONFIDENCE_LABEL, EVALUATION_METHOD_LABEL, SELF_DIRECTED_LABEL } from "@/lib/individual/scholar/config";
 import { EvaluationView } from "../../_components/evaluation-view";
 import { nextHref } from "../../_components/progress-view";
+import { toneAction } from "../../_components/progress-parts";
+import { LearningSectionHead, SectionCard } from "@/components/ui/scholar-learning";
 import { evaluationHref, sourceHref, studyHref } from "../../_components/question-view";
 
 // Request-time only: it reads the release gate and the evidence, and must never be prerendered at build.
@@ -64,11 +66,11 @@ export default async function ExplorePage({ params, searchParams }: { params: Pr
   return (
     <>
       {header(r.scope.label)}
-      <p className="mb-5 rounded-lg bg-gray-50 px-3 py-2 text-[12.5px] text-gray-700">{SELF_DIRECTED_LABEL} Observed practice on your own notes: not the level your framework expects, and not verified competence.</p>
+      <p className="cmp-learn-summary cmp-learn-box mb-5 px-3 py-2 text-[13.5px] text-gray-800">{SELF_DIRECTED_LABEL} Observed practice on your own notes: not the level your framework expects, and not verified competence.</p>
       <div className="space-y-5">
-        <section aria-labelledby="ex-ev-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h2 id="ex-ev-h" className="text-[14px] font-bold text-gray-900">The evidence behind it</h2>
-          <ul className="mt-2 space-y-1 text-[13.5px] text-gray-800">
+        <section aria-labelledby="ex-ev-h" className="cmp-learn-record cmp-learn-box p-4 sm:p-5">
+          <LearningSectionHead icon="record" level={2} id="ex-ev-h" caps={false} title="The evidence behind it" />
+          <ul className="mt-2.5 space-y-1.5 text-[13.5px] leading-relaxed text-gray-800">
             <li><span className="font-semibold">Relevant materials:</span> {materials.length ? materials.map(([id, t], i) => <span key={id}>{i ? ", " : ""}<Link href={studyHref(id)} className={`underline ${focusRing}`}>{t}</Link></span>) : "none linked yet"}</li>
             <li><span className="font-semibold">Sections:</span> {r.sections.slice(0, 12).map((s, i) => <span key={s.chunkId}>{i ? " · " : ""}<Link href={sourceHref(s.materialId, s.chunkId)} className={`underline ${focusRing}`}>{s.label}</Link></span>)}{r.sections.length > 12 ? ` and ${r.sections.length - 12} more` : ""}</li>
             <li><span className="font-semibold">Topics explored:</span> {topicList.length ? topicList.join(", ") : "none recorded for these materials yet"}</li>
@@ -80,19 +82,19 @@ export default async function ExplorePage({ params, searchParams }: { params: Pr
 
         <EvaluationView r={{ ...e, recommendations: [] }} confidence={e.confidence} limitations={e.limitations} cfca={e.cfca} />
 
-        <section aria-labelledby="ex-next-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h2 id="ex-next-h" className="text-[14px] font-bold text-gray-900">What to do next here</h2>
-          {steps.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing to suggest from the evidence here.</p> : (
-            <ul className="mt-2 space-y-2">{steps.map((s, i) => (
-              <li key={i} className="flex flex-wrap items-center gap-2"><Link href={nextHref(s)} className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-300 bg-white px-3 py-2 text-[13.5px] font-semibold pointer-coarse:min-h-[48px] ${focusRing}`} style={{ color: x.accent }}>{s.label}</Link><span className="text-[12.5px] text-gray-600">{s.reason}</span></li>
+        <section aria-labelledby="ex-next-h" className="cmp-learn-next cmp-learn-box p-4 sm:p-5">
+          <LearningSectionHead icon="target" level={2} id="ex-next-h" caps={false} title="What to do next here" />
+          {steps.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">Nothing to suggest from the evidence here.</p> : (
+            <ul className="mt-3 space-y-2">{steps.map((s, i) => (
+              <SectionCard key={i} as="li" className="flex flex-wrap items-center gap-x-3 gap-y-2"><Link href={nextHref(s)} className={i === 0 ? toneAction.primary : toneAction.secondary}>{s.label}</Link><span className="min-w-0 flex-1 basis-[14rem] text-[13.5px] leading-relaxed text-gray-800">{s.reason}</span></SectionCard>
             ))}</ul>
           )}
         </section>
 
-        <section aria-labelledby="ex-kept-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h2 id="ex-kept-h" className="text-[14px] font-bold text-gray-900">Evaluations of this area</h2>
-          {same.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">None kept yet. You can evaluate it from Evaluate.</p> : (
-            <ul className="mt-2 space-y-1 text-[13.5px]">{same.map(k => (
+        <section aria-labelledby="ex-kept-h" className="cmp-learn-sources cmp-learn-box p-4 sm:p-5">
+          <LearningSectionHead icon="library" level={2} id="ex-kept-h" caps={false} title="Evaluations of this area" />
+          {same.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">None kept yet. You can evaluate it from Evaluate.</p> : (
+            <ul className="mt-2 space-y-1 text-[13.5px] pointer-coarse:space-y-3">{same.map(k => (
               <li key={k.id}><Link href={evaluationHref(k.id)} className={`underline ${focusRing}`}>{new Date(k.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</Link> <span className="text-gray-600">· {EVALUATION_METHOD_LABEL[k.method]} · {EVALUATION_CONFIDENCE_LABEL[k.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? k.confidence}</span></li>
             ))}</ul>
           )}

@@ -1,0 +1,30 @@
+PASS progress 1440: no horizontal overflow (0px)
+PASS progress 1440: axe 0 violations
+PASS progress 1440, folds open: no horizontal overflow (0px)
+FAIL progress 1440, folds open: axe definition-list(3: .py-3.px-4:nth-child(1) > details > .divide-gray-100 ; .py-3.px-4:nth-child(2) > details > .divide-gray-100), dlitem(45: .py-3.px-4:nth-child(1) > details > .divide-gray-100 > .px-3[data-dimension="exposure"][data-word="some"] > .flex-wrap.j)
+PASS progress 820: no horizontal overflow (0px)
+PASS progress 820: axe 0 violations
+PASS progress 820, folds open: no horizontal overflow (0px)
+FAIL progress 820, folds open: axe definition-list(3: .py-3.px-4:nth-child(1) > details > .divide-gray-100 ; .py-3.px-4:nth-child(2) > details > .divide-gray-100), dlitem(45: .py-3.px-4:nth-child(1) > details > .divide-gray-100 > .px-3[data-dimension="exposure"][data-word="some"] > .flex-wrap.j)
+FAIL progress 820: touch targets >= 44px (small: How this was worked out=36 | How this was worked out=36 | How this was worked out=36 | Essential Nursing Care of the =38 | Quality Improvement Science an=38 | recognising-deterioration-note=38)
+PASS progress 390: no horizontal overflow (0px)
+PASS progress 390: axe 0 violations
+PASS progress 390, folds open: no horizontal overflow (0px)
+FAIL progress 390, folds open: axe definition-list(3: .py-3.px-4:nth-child(1) > details > .divide-gray-100 ; .py-3.px-4:nth-child(2) > details > .divide-gray-100), dlitem(45: .py-3.px-4:nth-child(1) > details > .divide-gray-100 > .px-3[data-dimension="exposure"][data-word="some"] > .flex-wrap.j)
+FAIL progress 390: touch targets >= 44px (small: How this was worked out=36 | How this was worked out=36 | How this was worked out=36)
+PASS explore 1440: no horizontal overflow (0px)
+PASS explore 1440: axe 0 violations
+PASS explore 1440, folds open: no horizontal overflow (0px)
+PASS explore 1440, folds open: axe 0 violations
+PASS explore 820: no horizontal overflow (0px)
+PASS explore 820: axe 0 violations
+PASS explore 820, folds open: no horizontal overflow (0px)
+PASS explore 820, folds open: axe 0 violations
+PASS explore 820: touch targets >= 44px
+PASS explore 390: no horizontal overflow (0px)
+PASS explore 390: axe 0 violations
+PASS explore 390, folds open: no horizontal overflow (0px)
+PASS explore 390, folds open: axe 0 violations
+PASS explore 390: touch targets >= 44px
+PASS console errors: 0
+PASS 5xx responses: 0

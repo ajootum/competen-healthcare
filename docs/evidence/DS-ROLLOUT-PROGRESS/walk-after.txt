@@ -1,0 +1,30 @@
+PASS progress 1440: no horizontal overflow (0px)
+PASS progress 1440: axe 0 violations
+PASS progress 1440, folds open: no horizontal overflow (0px)
+PASS progress 1440, folds open: axe 0 violations
+PASS progress 820: no horizontal overflow (0px)
+PASS progress 820: axe 0 violations
+PASS progress 820, folds open: no horizontal overflow (0px)
+PASS progress 820, folds open: axe 0 violations
+PASS progress 820: touch targets >= 44px
+PASS progress 390: no horizontal overflow (0px)
+PASS progress 390: axe 0 violations
+PASS progress 390, folds open: no horizontal overflow (0px)
+PASS progress 390, folds open: axe 0 violations
+PASS progress 390: touch targets >= 44px
+PASS explore 1440: no horizontal overflow (0px)
+PASS explore 1440: axe 0 violations
+PASS explore 1440, folds open: no horizontal overflow (0px)
+PASS explore 1440, folds open: axe 0 violations
+PASS explore 820: no horizontal overflow (0px)
+PASS explore 820: axe 0 violations
+PASS explore 820, folds open: no horizontal overflow (0px)
+PASS explore 820, folds open: axe 0 violations
+PASS explore 820: touch targets >= 44px
+PASS explore 390: no horizontal overflow (0px)
+PASS explore 390: axe 0 violations
+PASS explore 390, folds open: no horizontal overflow (0px)
+PASS explore 390, folds open: axe 0 violations
+PASS explore 390: touch targets >= 44px
+PASS console errors: 0
+PASS 5xx responses: 0

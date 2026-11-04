@@ -38,7 +38,8 @@ import { ApplicationEvidenceSection } from "../_components/application-evidence-
 import { loadApplicationEvidence } from "@/lib/individual/scholar/application-evidence-data";
 import { applicationBySkill } from "@/lib/individual/scholar/application-evidence";
 import { loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
-import { Fold, NotMeasuredLine } from "../_components/progress-parts";
+import { Fold, NotMeasuredLine, sectionLead, toneAction } from "../_components/progress-parts";
+import { LearningSection } from "@/components/ui/scholar-learning";
 import { activitySummary, enoughForTrend, listSummary, practisedDetail, TREND_NEEDS, withoutEngagementInsight, type ActivitySummary } from "@/lib/individual/scholar/progress-simplify";
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
 import { buildStudyPlan, unstartedMappedSections } from "@/lib/individual/scholar/study-plan";
@@ -54,12 +55,11 @@ import { getEvaluation } from "@/lib/individual/scholar/store";
  * P6 Option A: practice by TOPIC -- the topics Classify found in the sections, and practice on those sections. It needs
  * no programme or catalogue, so it reads well where none is configured. Practice, never knowledge or competence.
  */
-function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] | null; unreadable: boolean; accent: string }) {
+function TopicSection({ topics, unreadable }: { topics: TopicPractice[] | null; unreadable: boolean }) {
   if (!topics && !unreadable) return null;
   return (
-    <section aria-labelledby="topics-h" className="mt-8">
-      <h2 id="topics-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By topic</h2>
-      <p className="mt-1 text-[13px] text-gray-600">The topics Scholar found in your notes, and your practice on the sections they appear in.</p>
+    <LearningSection caps={false} tone="practice" icon="bolt" level={2} headingId="topics-h" title="By topic" className="mt-6">
+      <p className={sectionLead}>The topics Scholar found in your notes, and your practice on the sections they appear in.</p>
       <div className="mt-3">
         {unreadable ? <Unreadable what="practice by topic" />
           : !topics?.length ? (
@@ -73,12 +73,12 @@ function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] 
                 <li key={t.name} className="flex flex-wrap items-baseline justify-between gap-2 p-4">
                   <span className="min-w-0">
                     <span className="block text-[14.5px] font-semibold text-gray-900">{t.name}</span>
-                    <span className="text-[12.5px] text-gray-600">{t.sections} section{t.sections === 1 ? "" : "s"} · {t.questions} practice question{t.questions === 1 ? "" : "s"}</span>
+                    <span className="text-[13px] text-gray-700">{t.sections} section{t.sections === 1 ? "" : "s"} · {t.questions} practice question{t.questions === 1 ? "" : "s"}</span>
                   </span>
                   <span className="flex items-baseline gap-3 text-[13px]">
-                    {t.answered === 0 ? <span className="font-semibold text-gray-500">Not practised yet</span>
+                    {t.answered === 0 ? <span className="font-semibold text-gray-600">Not practised yet</span>
                       : <span className="font-semibold tabular-nums text-gray-900">{t.rightLatest} of {t.answered} right on the latest try</span>}
-                    <Link href={experienceHref("scholar", `study/learn?topic=${encodeURIComponent(t.name)}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: accent }}>Learn</Link>
+                    <Link href={experienceHref("scholar", `study/learn?topic=${encodeURIComponent(t.name)}`)} className={toneAction.link}>Learn</Link>
                   </span>
                 </li>
               ))}
@@ -86,7 +86,7 @@ function TopicSection({ topics, unreadable, accent }: { topics: TopicPractice[] 
             </Fold>
           )}
       </div>
-    </section>
+    </LearningSection>
   );
 }
 
@@ -251,9 +251,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             {/* PROGRESS-01 (Stage 8 of 8): the learning command centre, above the detail by material. */}
             {myPlan ? (
               <Link href={experienceHref("scholar", "study/plan")} data-testid="plan-moved"
-                className={`mb-6 flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+                className={`cmp-learn-next cmp-learn-box mb-6 flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-3 hover:opacity-90 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
                 <span className="text-[14.5px] font-semibold text-gray-900">Your plan, calendar and what to study next are in My Plan</span>
-                <span className="text-[13px] font-semibold underline underline-offset-2" style={{ color: x.accent }}>Open My Plan</span>
+                <span className="cmp-learn-ink text-[13.5px] font-semibold underline underline-offset-2">Open My Plan</span>
               </Link>
             ) : (<>
             {planRead?.ok ? (tp?.ok
@@ -286,7 +286,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
             {calendarOn && (calendar
               ? <StudyCalendar view={calendar.view} accent={x.accent} prevHref={calHref(prevMonth(calMonth))} nextHref={calHref(nextMonth(calMonth))} todayHref={calHref(null)} />
               : <div className="mb-6"><Unreadable what="your study calendar" /></div>)}
-            {showTopicProgress && !myPlan && (tp?.ok ? <StudyNextCard items={merged ? merged.items : ownNext} accent={x.accent} />
+            {showTopicProgress && !myPlan && (tp?.ok ? <StudyNextCard items={merged ? merged.items : ownNext} />
               : tp ? <div className="mb-6"><Unreadable what="what to study next" /></div> : null)}
             {pv?.ok ? <ProgressWorkspace v={pv} sections={policy.scholarProgressSections} period={period} activity={learnActivity} hideNext={myPlan} />
               : pv ? <StatePanel title="Your learning progress could not be read just now"><p>{pv.error} The detail below is still shown.</p></StatePanel> : null}
@@ -298,25 +298,24 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 { k: "Cards due now", v: String(p.totals.cardsDue) },
                 { k: "Cards on long intervals", v: `${p.totals.cardsLongInterval} of ${p.totals.cardsActive + p.totals.cardsLongInterval}` },
               ].map(s => (
-                <div key={s.k} className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <dt className="text-[12.5px] font-semibold text-gray-500">{s.k}</dt>
+                <div key={s.k} className="cmp-learn-record cmp-learn-box p-4">
+                  <dt className="text-[13px] font-semibold text-gray-700">{s.k}</dt>
                   <dd className="mt-1 text-[22px] font-bold text-gray-900 tabular-nums">{s.v}</dd>
                 </div>
               ))}
             </dl>
 
-            <TopicSection topics={topics} unreadable={!!allRows && !allRows.ok} accent={x.accent} />
+            <TopicSection topics={topics} unreadable={!!allRows && !allRows.ok} />
             <CompetencySection learner={learner} progress={cp} coverage={li?.ok ? li.data.coverage : null} unreadable={cUnreadable} accent={x.accent} activity={activity} offered={programmesOffered} />
 
             {showTopicProgress && tp?.ok && <TopicProgressSection m={tp.data} />}
             {appOn && <ApplicationEvidenceSection records={app?.ok ? app.data : null} skills={app?.ok ? applicationBySkill(app.data, stateThresholds(policy)) : []} competencyTitle={competencyTitle} />}
             {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} retention={retention} accent={x.accent} />}
 
-            {liShown ? <LearningIntelligence li={liShown} accent={x.accent} /> : <div className="mt-8"><Unreadable what="learning intelligence" /></div>}
+            {liShown ? <LearningIntelligence li={liShown} /> : <div className="mt-6"><Unreadable what="learning intelligence" /></div>}
 
-            <section aria-labelledby="accuracy-h" className="mt-8">
-              <h2 id="accuracy-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">By material</h2>
-              <p className="mt-1 text-[13px] text-gray-600">Practice accuracy is the share of a material&apos;s AI-written practice questions you got right the last time you answered them.</p>
+            <LearningSection caps={false} tone="notes" icon="notes" level={2} headingId="accuracy-h" title="By material" className="mt-6">
+              <p className={sectionLead}>Practice accuracy is the share of a material&apos;s AI-written practice questions you got right the last time you answered them.</p>
               <div className="mt-3 space-y-3">
                 {!p.materials.some(m => m.latestAccuracy !== null) && <NotMeasuredLine text="No material has a practice accuracy yet. It appears once you have answered its questions." />}
                 <Fold summary={listSummary({ one: "material" }, p.materials.length, practisedDetail(p.materials.filter(m => m.latestAccuracy !== null).length, p.materials.length))}>
@@ -325,14 +324,14 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                       <li key={m.id} className="p-4 sm:p-5">
                         <div className="flex flex-wrap items-baseline justify-between gap-2">
                           <Link href={experienceHref("scholar", `study/${m.id}`)} className={`text-[15px] font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{m.title}</Link>
-                          {m.latestAccuracy !== null && <span className="text-[14px] font-bold tabular-nums" style={{ color: x.accent }}>{`${m.latestAccuracy}% practice accuracy`}</span>}
+                          {m.latestAccuracy !== null && <span className="cmp-learn-ink text-[14px] font-bold tabular-nums">{`${m.latestAccuracy}% practice accuracy`}</span>}
                         </div>
                         {m.latestAccuracy !== null && (
                           <div className="mt-2 h-2 rounded-full bg-gray-100" role="img" aria-label={`${m.latestAccuracy}% practice accuracy`}>
-                            <div className="h-2 rounded-full" style={{ width: `${m.latestAccuracy}%`, background: x.accent }} />
+                            <div className="h-2 rounded-full bg-[var(--learn-ink)]" style={{ width: `${m.latestAccuracy}%` }} />
                           </div>
                         )}
-                        <p className="mt-2 text-[12.5px] text-gray-600 tabular-nums">
+                        <p className="mt-2 text-[13px] text-gray-700 tabular-nums">
                           {m.questions === 0 ? "No questions written yet" : `${m.answered} of ${m.questions} question${m.questions === 1 ? "" : "s"} answered${m.latestCorrect !== null ? `, ${m.latestCorrect} right on the latest try` : ""}`}
                           {" · "}{m.cardsDue} card{m.cardsDue === 1 ? "" : "s"} due · {m.cardsLongInterval} on long intervals
                         </p>
@@ -341,32 +340,32 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                   </ul>
                 </Fold>
               </div>
-            </section>
+            </LearningSection>
 
-            <section aria-labelledby="passport-h" className="mt-8">
-              <h2 id="passport-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your Passport</h2>
-              <p className="mt-1 text-[13px] text-gray-600">
+            <LearningSection caps={false} tone="record" icon="record" level={2} headingId="passport-h" title="Your Passport" className="mt-6">
+              <p className={sectionLead}>
                 You can choose to show what you have practised in your Competen Passport, one achievement at a time. It is labelled
                 &ldquo;{EVIDENCE_LABEL.self_directed}&rdquo;. Only the title you give it, the number you answered and when you last studied are shown. Your notes, your answers, whether they were right and anything the AI wrote are never shown.
+              </p>
+              <p className={sectionLead}>
                 Choosing it only puts it on your Passport. It reaches someone else only if you tick it on a Passport link you share (from the Share page in Scholar, or in Competen Professional), and only on that link: links you made before do not show it. Removing it takes it off your Passport and off any link that carries it, and your study history stays as it is.
               </p>
               {!choices?.ok ? (choices?.notProvisioned
-                ? <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Showing study achievements in your Passport is not available here yet.</p>
+                ? <p className="mt-3 rounded-xl border border-dashed border-gray-300 bg-white p-4 text-[14px] text-gray-700">Showing study achievements in your Passport is not available here yet.</p>
                 : <div className="mt-3"><Unreadable what="Passport choices" /></div>)
                 : eligible.length === 0 && allEligible.length > 0 ? (
-                  <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Adding study achievements to your Passport is not offered at the moment. Your study history is unchanged.</p>
+                  <p className="mt-3 rounded-xl border border-dashed border-gray-300 bg-white p-4 text-[14px] text-gray-700">Adding study achievements to your Passport is not offered at the moment. Your study history is unchanged.</p>
                 ) : eligible.length === 0 ? (
-                  <p className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">Nothing to show yet. Answer multiple-choice, multiple-response, matching or sequencing questions, or scenarios, from a material and it can be shown here. Written answers marked by the AI or by you stay private feedback and are not counted.</p>
+                  <p className="mt-3 rounded-xl border border-dashed border-gray-300 bg-white p-4 text-[14px] text-gray-700">Nothing to show yet. Answer multiple-choice, multiple-response, matching or sequencing questions, or scenarios, from a material and it can be shown here. Written answers marked by the AI or by you stay private feedback and are not counted.</p>
                 ) : <PassportChoices items={eligible} />}
-            </section>
+            </LearningSection>
 
             {enoughForTrend(p.trend.map(w => w.attempts)) ? (
-            <section aria-labelledby="trend-h" className="mt-8">
-              <h2 id="trend-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Last 8 weeks</h2>
-              <p className="mt-1 text-[13px] text-gray-600">Answers given each week, and the share that were right. A week with no answers has no bar.</p>
-              <table className="mt-3 w-full overflow-hidden rounded-2xl border border-gray-200 bg-white text-left text-[13.5px]">
+            <LearningSection caps={false} tone="summary" icon="summary" level={2} headingId="trend-h" title="Last 8 weeks" className="mt-6">
+              <p className={sectionLead}>Answers given each week, and the share that were right. A week with no answers has no bar.</p>
+              <table className="mt-3 w-full overflow-hidden rounded-xl bg-white text-left text-[13.5px] ring-1 ring-[var(--learn-border)]">
                 <caption className="sr-only">Answers and accuracy by week</caption>
-                <thead className="bg-gray-50 text-[12px] font-semibold text-gray-600">
+                <thead className="bg-gray-50 text-[12.5px] font-semibold text-gray-700">
                   <tr><th scope="col" className="px-3 py-2">Week of</th><th scope="col" className="px-3 py-2 text-right">Answers</th><th scope="col" className="px-3 py-2">Right</th></tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -375,9 +374,9 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                       <th scope="row" className="whitespace-nowrap px-3 py-2 font-medium text-gray-800">{fmtWeek(w.weekStart)}</th>
                       <td className="px-3 py-2 text-right tabular-nums text-gray-800">{w.attempts}</td>
                       <td className="w-1/2 px-3 py-2">
-                        {w.accuracy === null ? <span className="text-gray-400">No answers</span> : (
+                        {w.accuracy === null ? <span className="text-gray-600">No answers</span> : (
                           <div className="flex items-center gap-2">
-                            <div className="h-2 flex-1 rounded-full bg-gray-100"><div className="h-2 rounded-full" style={{ width: `${w.accuracy}%`, background: x.accent }} /></div>
+                            <div className="h-2 flex-1 rounded-full bg-gray-100"><div className="h-2 rounded-full bg-[var(--learn-ink)]" style={{ width: `${w.accuracy}%` }} /></div>
                             <span className="w-10 text-right tabular-nums text-gray-800">{w.accuracy}%</span>
                           </div>
                         )}
@@ -386,12 +385,11 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                   ))}
                 </tbody>
               </table>
-            </section>
+            </LearningSection>
             ) : (
-              <section aria-labelledby="trend-h" className="mt-8">
-                <h2 id="trend-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Last 8 weeks</h2>
+              <LearningSection caps={false} tone="summary" icon="summary" level={2} headingId="trend-h" title="Last 8 weeks" className="mt-6">
                 <div className="mt-2"><NotMeasuredLine text={TREND_NEEDS} /></div>
-              </section>
+              </LearningSection>
             )}
           </>
         )}

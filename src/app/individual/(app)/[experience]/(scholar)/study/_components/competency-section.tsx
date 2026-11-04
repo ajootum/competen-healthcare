@@ -10,11 +10,12 @@ import { listSummary } from "@/lib/individual/scholar/progress-simplify";
 import { StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import { LayerTag } from "./competency-client";
 import { ContentStatusTag } from "./client";
-import { Fold } from "./progress-parts";
+import { LearningSection } from "@/components/ui/scholar-learning";
+import { Fold, sectionLead, toneAction } from "./progress-parts";
 
 // ── PROGRESS BY COMPETENCY: ONE SECTION, TWO PLACES ── extracted from study/progress/page.tsx (scholar modules) ──
 // Read by My Learning > Progress and by My Competencies > My Competency Profile, so the two cannot drift.
-// Formative practice only: never a judgement of competence.
+// Formative practice only: never a judgement of competence. DS rollout: the sources tone, as the framework view in Evaluate.
 
 const STATUS_TEXT: Record<CompetencyProgressRow["status"], string> = {
   no_notes: "No notes linked yet",
@@ -37,11 +38,8 @@ export function CompetencySection({ learner, progress, coverage, unreadable, acc
 }) {
   if (!learner?.provisioned) return null;
   return (
-    <section aria-labelledby="competency-h" className="mt-8">
-      <h2 id="competency-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">
-        By competency{learner.programme ? ` · ${learner.programme.label}` : ""}
-      </h2>
-      <p className="mt-1 text-[13px] text-gray-600">
+    <LearningSection caps={false} tone="sources" icon="layers" level={2} headingId="competency-h" title={`By competency${learner.programme ? ` · ${learner.programme.label}` : ""}`} className="mt-6">
+      <p className={sectionLead}>
         Which competencies of your programme your notes cover, and how you did on practice questions written for each. Practice counts once you have accepted the link from a section to a competency, so suggestions you have not decided on, and rejected links, are not counted.
       </p>
       <div className="mt-3">
@@ -73,9 +71,9 @@ export function CompetencySection({ learner, progress, coverage, unreadable, acc
                 </p>
               )}
               <Fold summary={listSummary({ one: "competency", many: "competencies" }, progress.totals.competencies, `notes linked to ${progress.totals.withNotes}`)}>
-              <div className="space-y-3 p-3">
+              <div className="divide-y divide-gray-100">
                 {progress.layers.map(l => (
-                  <details key={l.layer} open={l.rows.some(r => r.status !== "no_notes")} className="rounded-2xl border border-gray-200 bg-white">
+                  <details key={l.layer} open={l.rows.some(r => r.status !== "no_notes")}>
                     <summary className={`flex cursor-pointer flex-wrap items-center gap-2 p-4 ${focusRing}`}>
                       <LayerTag layer={l.layer} />
                       <span className="text-[14px] font-semibold text-gray-900">{LAYER_LABEL[l.layer]} competencies</span>
@@ -86,8 +84,8 @@ export function CompetencySection({ learner, progress, coverage, unreadable, acc
                         <li key={r.id} className="px-4 py-3">
                           <div className="flex flex-wrap items-baseline justify-between gap-2">
                             <span className="flex flex-wrap items-center gap-2 text-[14px] font-semibold text-gray-900">{r.code ? `${r.code} ` : ""}{r.title}<ContentStatusTag status={r.contentStatus} /></span>
-                            <span className="text-[13px] font-semibold tabular-nums" style={{ color: r.latestAccuracy === null ? undefined : accent }}>
-                              {r.latestAccuracy === null ? <span className="text-gray-500">{STATUS_TEXT[r.status]}</span> : `${r.latestAccuracy}% practice accuracy`}
+                            <span className={`text-[13px] font-semibold tabular-nums ${r.latestAccuracy === null ? "" : "cmp-learn-ink"}`}>
+                              {r.latestAccuracy === null ? <span className="text-gray-600">{STATUS_TEXT[r.status]}</span> : `${r.latestAccuracy}% practice accuracy`}
                             </span>
                           </div>
                           <p className="mt-0.5 text-[12.5px] text-gray-600 tabular-nums">
@@ -97,7 +95,7 @@ export function CompetencySection({ learner, progress, coverage, unreadable, acc
                           {(r.sectionsAccepted + r.sectionsProposed > 0 || activity?.get(r.id)) && (
                             <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12.5px] text-gray-700">
                               {r.sectionsAccepted + r.sectionsProposed > 0 && (
-                                <Link href={experienceHref("scholar", `study/learn?competency=${r.id}`)} className={`font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: accent }}>Learn this competency</Link>
+                                <Link href={experienceHref("scholar", `study/learn?competency=${r.id}`)} className={toneAction.link}>Learn this competency</Link>
                               )}
                               {activity?.get(r.id) && (
                                 <span>
@@ -117,6 +115,6 @@ export function CompetencySection({ learner, progress, coverage, unreadable, acc
             </>
           )}
       </div>
-    </section>
+    </LearningSection>
   );
 }

@@ -1,0 +1,24 @@
+H1 Progress
+H2 AI help with your material
+H2 AI help with your notes
+H3 AI-assisted learning and your information
+H2 Last monthly review
+H2 My learning progress
+H2 Your learning activity
+H3 Knowledge coverage
+H3 Understanding
+H3 Retention
+H3 Evidence confidence
+H2 Development over time
+H2 By material
+H2 By topic
+H1 No topics found yet
+H2 By competency
+H1 No programme chosen
+H2 Learning progress by topic
+H2 What your evidence shows, by topic
+H2 Learning intelligence
+H3 Knowledge performance
+H2 By material
+H2 Your Passport
+H2 Last 8 weeks
