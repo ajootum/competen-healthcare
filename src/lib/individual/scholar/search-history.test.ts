@@ -1,10 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join, relative } from "node:path";
 import {
   ASK_NOT_KEPT, QUERY_MAX, REQUEST_KEY, entryLinks, entryTitle, hasHistoryFilters, historyParams, markKey, newRequestKey, normaliseQuery,
   parseEntryKey, parseHistoryQuery, repeatsLatest, saveTarget, validateCapture,
 } from "./search-history";
+import { clearSearchHistory, historySchema, listSearchHistory, recordSearchCapture, resetSearchHistorySchema } from "./store";
 
 const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222", C = "33333333-3333-4333-8333-333333333333";
 const KEY = "c:0123456789abcdef0123";
@@ -92,6 +93,36 @@ describe("SCHOLAR-SEARCH-HISTORY-01: the page", () => {
     expect(entryTitle({ activity: "teaching", query: null, label: "teach" }, lbl)).toBe("Teach me");
     expect(entryTitle({ activity: "research", query: null, label: "odd" }, lbl)).toBe("Saved teaching");
     expect(entryTitle({ activity: "lesson", query: null, label: "Cardiac output" }, lbl)).toBe("Cardiac output");
+  });
+});
+
+// FAILS CLOSED WITHOUT 992: the list function is missing, so nothing is read, kept, changed or cleared, and no table is touched.
+describe("SCHOLAR-SEARCH-HISTORY-01: without migration 992", () => {
+  const missing = (code: string) => {
+    const touched: string[] = [];
+    const admin = { rpc: async () => ({ data: null, error: { code } }), from: (t: string) => { touched.push(t); throw new Error(`no table may be touched: ${t}`); } };
+    return { admin, touched };
+  };
+  const entry = { activity: "ask" as const, query: "why?", requestKey: KEY, materialId: null, chunkId: null, artefactId: null, sessionId: null, step: null, topic: null, resultCount: null };
+  const q = parseHistoryQuery({});
+  afterEach(() => resetSearchHistorySchema(null));
+  for (const code of ["42883", "PGRST202", "42P01"]) {
+    it(`error ${code}: reads say not provisioned and a capture keeps nothing`, async () => {
+      resetSearchHistorySchema(null);
+      const { admin, touched } = missing(code);
+      expect(await historySchema(admin)).toBe(false);
+      expect(await listSearchHistory(admin, A, q)).toEqual({ ok: false, notProvisioned: true });
+      expect(await recordSearchCapture(admin, A, entry, "2026-11-04T10:00:00.000Z")).toBe("not_provisioned");
+      expect(await clearSearchHistory(admin, A)).toEqual({ ok: false });
+      expect(touched).toEqual([]);
+    });
+  }
+  it("a transient error is 'no' for now and is asked again, never remembered as absent", async () => {
+    resetSearchHistorySchema(null);
+    let calls = 0;
+    const admin = { rpc: async () => { calls++; return calls === 1 ? { data: null, error: { code: "57014" } } : { data: [], error: null }; } };
+    expect(await historySchema(admin)).toBe(false);
+    expect(await historySchema(admin)).toBe(true);
   });
 });
 

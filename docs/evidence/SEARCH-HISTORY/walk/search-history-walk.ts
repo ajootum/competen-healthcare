@@ -3,7 +3,7 @@
 // Signed in with a magic-link session minted by the STAGING service role (no password is read, typed or printed). Refuses
 // production. Database reads are STAGING only and are counts and keys, never content. No account is reset, no lesson is
 // repeated. Run:  npx tsx docs/evidence/SEARCH-HISTORY/walk/search-history-walk.ts   (dev server on 3199 pointed at staging)
-import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
+import { chromium, type Browser, type Page } from "@playwright/test";
 import { createRequire } from "node:module";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -125,6 +125,7 @@ async function main() {
   await overflow(a1.page, "1440 history");
 
   // 2. A SAVED ANSWER REOPENS WITH NO AI CALL
+  await go(a1.page, `${HIST}?activity=teaching`);
   const openSaved = a1.page.locator(`[data-testid="history-list"] li[data-activity="teaching"] a, [data-testid="history-list"] li[data-activity="research"] a`).filter({ hasText: "Open the saved answer" }).first();
   const savedHref = await openSaved.getAttribute("href");
   info(`2 link: ${savedHref}`);
@@ -171,7 +172,7 @@ async function main() {
   await go(a1.page, HIST);
   const top3 = await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first().innerText();
   ok(top3.includes("Asked Scholar") && top3.includes(`walk${STAMP}`), "3 the newest entry is the Ask question, at the top");
-  const keysA = await rowKeys(a1.page);
+  info(`3 first page holds ${(await rowKeys(a1.page)).length} entries`);
   ok((await a1.page.locator(`[data-testid="history-list"]`).innerText()).includes(QA) && (await a1.page.locator(`[data-testid="history-list"]`).innerText()).includes(QL), "3 both searches are in the history");
   await a1.page.screenshot({ path: join(SHOTS, "03-history-new-entries-1440.png"), fullPage: false });
 
@@ -214,10 +215,11 @@ async function main() {
   await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first().getByRole("button", { name: "Unpin" }).waitFor({ timeout: 30_000 }).catch(() => {});
   await go(a1.page, HIST);
   ok((await a1.page.getByTestId("history-pinned").innerText()).includes(QA), "5 a pinned search shows under Pinned");
+  await go(a1.page, `${HIST}?activity=teaching`);
   const teachRow = a1.page.locator(`[data-testid="history-list"] li[data-activity="teaching"]`).first();
   const teachKey = await teachRow.getAttribute("data-entry");
   await teachRow.getByRole("button", { name: "Pin" }).click();
-  await a1.page.locator(`[data-testid="history-pinned"] li[data-entry="${teachKey}"]`).waitFor({ timeout: 30_000 }).catch(() => {});
+  await teachRow.getByRole("button", { name: "Unpin" }).waitFor({ timeout: 30_000 }).catch(() => {});
   await go(a1.page, HIST);
   ok((await rowKeys(a1.page, "history-pinned")).includes(teachKey!), "5 a recovered saved teaching can be pinned too");
   const notes0 = (await counts(A.id)).notes;

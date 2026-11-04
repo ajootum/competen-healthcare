@@ -514,8 +514,8 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
     if (!r.ok) { setError(r.json.error ?? "No explanation could be produced."); return; }
     setItems(list => [{ q: text, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary }, ...list]);
     setQ("");
-    // SCHOLAR-SEARCH-HISTORY-01: an answered question is kept once in the learner's own history (their words, never the answer).
-    if (r.json.answer) void recordHistory({ activity: "ask", query: text, materialId: materialId ?? null });
+    // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to is kept once in the learner's own history (their words, never the reply).
+    void recordHistory({ activity: "ask", query: text, materialId: materialId ?? null });
   }
   return (
     <section aria-labelledby="explain-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">

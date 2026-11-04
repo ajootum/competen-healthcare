@@ -85,10 +85,10 @@ function Row({ e, notesOn }: { e: ClientEntry; notesOn: boolean }) {
 /** The history list in one section (one edge), newest first, each row an entry. */
 export function HistoryList({ entries, title, notesOn, empty, id }: { entries: ClientEntry[]; title: string; notesOn: boolean; empty: string; id: string }) {
   // data-ready once hydrated, so a scripted walk never clicks a control before it works.
-  const [ready, setReady] = useState(false);
-  useEffect(() => setReady(true), []);
+  const ref = useRef<HTMLElement>(null);
+  useEffect(() => { ref.current?.setAttribute("data-ready", "1"); }, []);
   return (
-    <section aria-labelledby={`${id}-h`} className={`${learnBox("next")} p-4 sm:p-5`} data-testid={id} data-ready={ready ? "1" : undefined}>
+    <section ref={ref} aria-labelledby={`${id}-h`} className={`${learnBox("next")} p-4 sm:p-5`} data-testid={id}>
       <LearningSectionHead id={`${id}-h`} icon="list" title={title} level={2} />
       {entries.length === 0
         ? <p className="mt-3 rounded-xl bg-[var(--cmp-app-surface)] p-4 text-[14px] text-gray-700">{empty}</p>
