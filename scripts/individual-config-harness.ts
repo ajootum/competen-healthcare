@@ -51,6 +51,10 @@ const FILES = {
   engRoute: "src/app/api/hq/individual/scholar-analytics/route.ts",
   engPage: "src/app/super-admin/individual/scholar/analytics/page.tsx",
   engBuilder: "src/lib/hq/scholar-analytics/dashboard.ts",
+  // SALE-2026-11 R5 (migration 985): the pilot evaluation door under /api/hq/individual, the same capability, aggregates only.
+  effRoute: "src/app/api/hq/individual/scholar-analytics/effectiveness/route.ts",
+  effPage: "src/app/super-admin/individual/scholar/analytics/effectiveness/page.tsx",
+  effLoader: "src/lib/hq/effectiveness/measures.ts",
 } as const;
 type K = keyof typeof FILES;
 
@@ -208,7 +212,10 @@ const checkKnownDoors = (routes: string[]): R => {
     && f !== "src/app/api/hq/individual/scholar-preview/route.ts"
     // scholar-analytics/ (SCHOLAR-ENGAGEMENT-ANALYTICS-01, migration 910) is pinned by G7 here: its own capability, GET only,
     // identity decided on the server by the identifiable right, mapped and in the nav.
-    && f !== FILES.engRoute);
+    && f !== FILES.engRoute
+    // scholar-analytics/effectiveness/ (SALE-2026-11 R5, migration 985) is pinned by G8 here: the same view capability first,
+    // GET only, learning figures from the 985 function alone.
+    && f !== FILES.effRoute);
   return { ok: routes.includes(FILES.route) && extra.length === 0, detail: `unpinned: ${extra.join(", ")}` };
 };
 
@@ -230,6 +237,22 @@ const checkEngagementDoor = (src: Src): R => {
     && nav.includes(`href: "/super-admin/individual/scholar/analytics"`);
   return { ok: gateFirst && getOnly && pageFirst && identity && mapped,
     detail: `gate first ${gateFirst}, GET only ${getOnly}, page gated first ${pageFirst}, identity on the server ${identity}, mapped before the preview prefix and in the nav ${mapped}` };
+};
+
+// ── G8. the pilot evaluation door (SALE-2026-11 R5, migration 985) ──
+// The route is hqApiGate(["hq.scholar.analytics.view"]) before any other await and exports GET only. The page is
+// requireHqCapability of the same code first and sits under the analytics prefix the route map already gates. The loader
+// reads learning figures ONLY through the consented, floored 985 function: no direct read of a Scholar learner table.
+const checkEvaluationDoor = (src: Src): R => {
+  const r = code(src, "effRoute"), p = code(src, "effPage"), l = code(src, "effLoader");
+  const body = r.slice(r.indexOf("export async function GET"));
+  const gateFirst = body.indexOf("await ") >= 0 && body.indexOf("await ") === body.indexOf(`await hqApiGate(["hq.scholar.analytics.view"])`);
+  const getOnly = /export async function GET/.test(r) && !/export async function (POST|PUT|PATCH|DELETE)/.test(r);
+  const pageFirst = p.indexOf("await ") >= 0 && p.indexOf("await ") === p.indexOf(`await requireHqCapability("hq.scholar.analytics.view")`);
+  const viaFunction = l.includes(`rpc("ckri_scholar_effectiveness_stats"`) && !/\.from\("individual_scholar_/.test(l + r + p);
+  const underPrefix = FILES.effPage.startsWith("src/app/super-admin/individual/scholar/analytics/");
+  return { ok: gateFirst && getOnly && pageFirst && viaFunction && underPrefix,
+    detail: `gate first ${gateFirst}, GET only ${getOnly}, page gated first ${pageFirst}, 985 only ${viaFunction}, under the analytics prefix ${underPrefix}` };
 };
 
 // ── A. no activation ──
@@ -265,6 +288,7 @@ function main() {
   run("G5. every route under /api/hq/individual is a pinned grants route, this config route or the catalogue route", checkKnownDoors(listRoutes("src/app/api/hq/individual")));
   run("G6. the controlled-catalogue door: same capability first, POST only, page gated first, mapped, never publishes", checkCatalogueDoor(RAW));
   run("G7. the engagement analytics door: its own capability first, GET only, page gated first, identity decided on the server, mapped", checkEngagementDoor(RAW));
+  run("G8. the pilot evaluation door: the view capability first, GET only, page gated first, learning figures from 985 only", checkEvaluationDoor(RAW));
   run("A1. ⚠ nothing on this surface names individual_app", checkNoActivation(RAW));
 
   console.log("");
@@ -305,6 +329,9 @@ function main() {
   red("G7 on a page gated by the preview right", checkEngagementDoor(plant("engPage", `const ctx = await requireHqCapability("hq.scholar.analytics.view");`, `const ctx = await requireHqCapability("hq.individual.scholar.preview");`)));
   red("G7 on identity decided by ownership alone", checkEngagementDoor(plant("engBuilder", `c.isOwner || c.capabilities.includes(IDENTIFIABLE)`, `c.isOwner`)));
   red("G7 on the route-map entry placed after the preview prefix", checkEngagementDoor(plant("spaces", `  { prefix: "/super-admin/individual/scholar/analytics", capability: "hq.scholar.analytics.view" },\n`, "")));
+  red("G8 on a route gated by the home right", checkEvaluationDoor(plant("effRoute", `const ctx = await hqApiGate(["hq.scholar.analytics.view"]);`, `const ctx = await hqApiGate(["hq.platform.home.view"]);`)));
+  red("G8 on a page gated by the preview right", checkEvaluationDoor(plant("effPage", `const ctx = await requireHqCapability("hq.scholar.analytics.view");`, `const ctx = await requireHqCapability("hq.individual.scholar.preview");`)));
+  red("G8 on a loader that reads attempts directly", checkEvaluationDoor(plant("effLoader", `const r = await admin.rpc("ckri_scholar_effectiveness_stats"`, `await admin.from("individual_scholar_attempt").select("correct"); const r = await admin.rpc("ckri_scholar_effectiveness_stats"`)));
   red("A1 on the route touching the release gate", checkNoActivation(plant("route", "switch (body?.action) {", `await ctx.admin.from("practice_platform_flags").select("enabled");\n  switch (body?.action) {`)));
 
   console.log(fails.length ? `\nRED -- ${pass} passed, ${fails.length} failed` : `\nALL GREEN -- ${pass} passed, 0 failed`);

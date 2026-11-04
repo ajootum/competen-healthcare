@@ -1,0 +1,25 @@
+INFO consenting learners on staging now: 2 (under the floor, so every cell with data must be suppressed)
+PASS anonymous export refused (status 401)
+INFO sign-in attempt 1: ok
+INFO active HQ context: individual_product_administrator appointment selected
+PASS readout heading renders
+INFO cells: immediate_understanding:all=below_floor, misconception_resolution:adaptive=below_floor, delayed_recall:questions=none, delayed_recall:flashcards=none, transfer:all=none, independent_reasoning:all=below_floor, study_efficiency:all=below_floor, corrective_followup:adaptive=below_floor, corrective_followup:standard=below_floor, friction:skips=below_floor, friction:not_yet=below_floor, friction:simplify=below_floor, friction:unmarked_checks=below_floor, friction:reteach_cap=below_floor, friction:stalled_sessions=below_floor
+PASS all 15 catalogue cells shown (15)
+PASS 12 cell(s) under the floor are suppressed with no figure
+PASS cells with no data read 'No data yet', never 0
+PASS nothing is reported while the cohort is under the floor
+PASS metering off: 'Metering off, no data' is shown
+PASS no '$0' anywhere on the page
+PASS engagement-is-not-learning and no-targets notes shown
+PASS no consenting learner id in the page HTML
+PASS standard against adaptive: not compared below the floor
+INFO reuse: Reuse against new generation: 81% of 150 lessons delivered were served from a saved lesson with no AI (121 served, 29 generated).
+PASS Markdown export downloads (200)
+PASS Markdown keeps suppression and metering off, no $0
+PASS CSV export downloads with suppressed rows (200)
+PASS no consenting learner id in either export
+PASS phone width (390) has no horizontal page scroll
+PASS Learner Engagement links to Pilot Evaluation
+INFO platform report-only CSP notices (not counted): 5
+PASS 0 console errors (0)
+PASS no 5xx (0)
