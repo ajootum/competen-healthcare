@@ -35,6 +35,11 @@ describe("SALE-11 next best actions: each names an ACTION with a short reason", 
     expect(chooseNextActions(base({ checks: [check({ at: "2026-09-01T10:00:00Z" })] })).items).toEqual([]);
   });
 
+  it("a kept 'misconception' whose words say there is none is not suggested (found by the staging walk)", () => {
+    expect(chooseNextActions(base({ checks: [check({ adaptive: { need: "misconception", misconception: "Nothing to correct — your answer stayed close to the notes this time, unlike before." } })] })).items).toEqual([]);
+    expect(chooseNextActions(base({ topics: [topic({ misconceptions: "stronger", repeatedMisconception: "None spotted" })] })).items).toEqual([]);
+  });
+
   it("a possible missing foundation becomes 'Revisit a prerequisite' pointing at the lesson before; never on the first lesson", () => {
     const r = chooseNextActions(base({ checks: [check({ adaptive: { need: "prerequisite_gap", misconception: null } })] }));
     expect(r.items[0].kind).toBe("prerequisite");

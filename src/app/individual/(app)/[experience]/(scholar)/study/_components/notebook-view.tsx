@@ -81,7 +81,7 @@ export async function NotebookView({ admin, userId, materials, summariesOn }: {
     const open = art ? `study/saved?version=${encodeURIComponent(art.id)}` : ses && n.step !== null ? lessonHrefPath(ses.id, n.step) : null;
     return {
       id: n.id, kind: n.kind as NotebookItem["kind"], body: n.body, quote: n.quote, createdAt: n.createdAt, updatedAt: n.updatedAt, step: n.step, artefactId: n.artefactId,
-      title, materialId: a.materialId, chunkIds: a.chunkIds,
+      title, materialId: a.materialId, chunkIds: [...a.chunkIds],
       attached: noteAttachedTo({ targetKind: n.targetKind, materialTitle: a.materialId ? titles.get(a.materialId) ?? null : null, lessonTitle: art ? lessonTitleOf(art.content) || null : null,
         sessionTitle: ses ? displaySessionTitle(ses.title) : null, step: n.step, location }),
       openHref: open ? href(withNotebook(open, back)) : null,

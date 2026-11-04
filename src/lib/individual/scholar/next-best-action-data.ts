@@ -104,13 +104,14 @@ export type NbaDecision = (typeof NBA_DECISIONS)[number];
 const REF = /^nba:[a-z]+(:[A-Za-z0-9._-]{1,80}){0,2}$/;
 
 /** POST plan/next-action { ref, decision: accept | snooze | dismiss, days? (snooze 1, 3 or 7), date? (accept: "today" | "tomorrow") }. */
-export async function nextActionService(ctx: Ctx, body: any, headers: Headers, now = new Date()): Promise<Reply> {
+export async function nextActionService(ctx: Ctx, raw: unknown, headers: Headers, now = new Date()): Promise<Reply> {
+  const body = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarMyPlan !== "on" || policy.scholarNextBestAction !== "on") return refuse(403, "Next learning actions are not offered here.");
-  const ref = typeof body?.ref === "string" ? body.ref : "";
-  const decision = body?.decision;
+  const ref = typeof body.ref === "string" ? body.ref : "";
+  const decision = body.decision;
   if (!REF.test(ref)) return refuse(400, "That suggestion could not be found.");
-  if (!(NBA_DECISIONS as readonly string[]).includes(decision)) return refuse(400, "Choose add to today, later or dismiss.");
+  if (!(NBA_DECISIONS as readonly unknown[]).includes(decision)) return refuse(400, "Choose add to today, later or dismiss.");
   const today = localDay(now, learnerTimeZone(headers));
   if (!(await learningPlanSchema(ctx.admin, ctx.userId)) || !(await workspaceSchema(ctx.admin))) return refuse(409, "Your choice cannot be remembered here yet. Your plan is unchanged.");
   const view = await loadNextActions(ctx, policy, { now, today });
@@ -127,7 +128,7 @@ export async function nextActionService(ctx: Ctx, body: any, headers: Headers, n
     return reply(200, { ok: true, decision });
   }
   if (decision === "snooze") {
-    const until = snoozeUntil(today, body?.days);
+    const until = snoozeUntil(today, body.days);
     if (!until) return refuse(400, "Choose tomorrow, in three days or next week.");
     const r = await appendPlanEvent(ctx.admin, ctx.userId, "scholar", { kind: "next_action", ref, status: "deferred", value: { fingerprint: rec.fingerprint, action: rec.kind, until, on: today } });
     if (r !== "ok") return r === "not_provisioned" ? refuse(409, "Your choice cannot be remembered here yet.") : failed();
@@ -137,7 +138,7 @@ export async function nextActionService(ctx: Ctx, body: any, headers: Headers, n
   // accept: the learner's own calendar entry first, then the record; the entry is taken back if the record cannot be kept
   if (rec.state === "planned") return reply(200, { ok: true, decision, already: true, date: rec.plannedFor });
   if (!view.canPlan) return refuse(409, "Your calendar is not available here yet, so this cannot be added. You can still start it now.");
-  const date = body?.date === "tomorrow" ? plusDays(today, 1) : today;
+  const date = body.date === "tomorrow" ? plusDays(today, 1) : today;
   const safe = (s: string | null) => (s && !findPatientIdentifiers(s).length ? s : null);
   const about = safe(rec.about);
   const title = `${rec.action}${about ? `: ${about}` : ""}`.slice(0, 200);

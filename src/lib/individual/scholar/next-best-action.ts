@@ -2,7 +2,7 @@ import { experienceHref } from "../experiences";
 import { dayNumber } from "../learning-plan/recurrence";
 import { latestPerRef, type EntryLink, type GoalType, type PlanEvent } from "../learning-plan/types";
 import type { EvidenceWord } from "./learning-state";
-import type { LearningNeed } from "./learning-need";
+import { isNoMisconception, type LearningNeed } from "./learning-need";
 import { topicKey } from "./plan-proposal";
 import { lessonHrefPath } from "./saved-library";
 import { applyHref, refKey, reviseHref } from "./study-plan";
@@ -127,7 +127,9 @@ export function nbaCandidates(i: NbaInput): Draft[] {
   for (const c of i.checks) if (c.sessionId && c.step !== null) byLesson.set(`${c.sessionId}:${c.step}`, [...(byLesson.get(`${c.sessionId}:${c.step}`) ?? []), c]);
   for (const [, list] of [...byLesson.entries()].sort(([a], [b]) => a.localeCompare(b))) {
     const sorted = [...list].sort((a, b) => b.at.localeCompare(a.at) || a.attemptId.localeCompare(b.attemptId));
-    const open = sorted.find(c => c.adaptive && (c.adaptive.need === "misconception" || c.adaptive.need === "prerequisite_gap"));
+    // A kept "misconception" whose words say there is none ("Nothing to correct ...", kept before R1's own isNoMisconception fix) is not one.
+    const open = sorted.find(c => c.adaptive && (c.adaptive.need === "prerequisite_gap"
+      || (c.adaptive.need === "misconception" && !(c.adaptive.misconception && isNoMisconception(c.adaptive.misconception)))));
     if (!open || !recent(open.at)) continue;
     // put right since: a right answer kept after it in the same lesson
     if (sorted.some(c => c.at > open.at && c.outcome === "right")) continue;
@@ -151,11 +153,12 @@ export function nbaCandidates(i: NbaInput): Draft[] {
   }
   // the learning state: a misconception named on DIFFERENT questions of a topic (R1 M1 "stronger")
   for (const t of [...i.topics].sort((a, b) => a.key.localeCompare(b.key))) {
-    if (t.misconceptions !== "stronger" || !t.repeatedMisconception || !t.lastAt || !recent(t.lastAt)) continue;
-    if (out.some(o => o.kind === "misconception" && o.about === `"${clip(t.repeatedMisconception, 120)}"`)) continue;
+    const rm = t.repeatedMisconception;
+    if (t.misconceptions !== "stronger" || !rm || isNoMisconception(rm) || !t.lastAt || !recent(t.lastAt)) continue;
+    if (out.some(o => o.kind === "misconception" && o.about === `"${clip(rm, 120)}"`)) continue;
     out.push({
-      ref: `nba:mis:t-${refKey(t.key)}`, kind: "misconception", action: NBA_ACTION.misconception, about: `"${clip(t.repeatedMisconception, 120)}" in ${t.label}`,
-      reason: `"${clip(t.repeatedMisconception, 120)}" came up on different questions about ${t.label}: a likely misconception to correct.`,
+      ref: `nba:mis:t-${refKey(t.key)}`, kind: "misconception", action: NBA_ACTION.misconception, about: `"${clip(rm, 120)}" in ${t.label}`,
+      reason: `"${clip(rm, 120)}" came up on different questions about ${t.label}: a likely misconception to correct.`,
       minutes: MINUTES.misconception, href: href("study/revise/mistakes"), fingerprint: `mis:${t.key}:${t.lastAt}`,
       link: { kind: "topic", id: clip(t.key, 120), label: clip(t.label, 120) }, topic: t.label, at: t.lastAt,
     });
@@ -244,8 +247,10 @@ export function chooseNextActions(i: NbaInput): NbaResult {
       state = "planned"; plannedFor = on;
     }
     const { score, because } = scoreOf(d, i);
-    const { topic: _t, at: _a, ...rest } = d;
-    items.push({ ...rest, score, because: [d.reason, ...because], state, plannedFor });
+    items.push({
+      ref: d.ref, kind: d.kind, action: d.action, about: d.about, reason: d.reason, minutes: d.minutes, href: d.href, fingerprint: d.fingerprint, link: d.link,
+      score, because: [d.reason, ...because], state, plannedFor,
+    });
   }
   items.sort((a, b) => b.score - a.score || NBA_KINDS.indexOf(a.kind) - NBA_KINDS.indexOf(b.kind) || a.ref.localeCompare(b.ref));
   return { items: items.slice(0, Math.max(1, Math.min(5, i.max))), dismissed, snoozed };
