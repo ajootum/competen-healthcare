@@ -6,9 +6,12 @@ import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  findArtefact, getLearningPreference, getLearningSession, getPassage, isUuid, listArtefacts, listExamPapers, recordLearningEvent, saveArtefact, searchCandidates, toPassages, updateLearningSession,
+  ensureCheckQuestion, findArtefact, getLearningPreference, getLearningSession, getPassage, isUuid, listArtefacts, listCheckAttempts, listExamPapers, recordCheckAttempt, recordLearningEvent, saveArtefact, searchCandidates, toPassages, updateLearningSession,
   type ArtefactRow,
 } from "@/lib/individual/scholar/store";
+import { parseCheckFeedback } from "@/lib/individual/scholar/learn-check";
+import { VERDICT_SCORE, asFeedbackParts, checkResponse, historyToPriorChecks } from "@/lib/individual/scholar/learn-check-record";
+import { formativeFeedback, withFormative } from "@/lib/individual/scholar/written-feedback";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { purposeFrom } from "@/lib/individual/pilot-ai";
 
@@ -18,7 +21,7 @@ import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, cumulativePromptVersion, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
   type LessonBrief, type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
-import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
+import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, PRIOR_CHECKS_MAX, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
 import { coversLesson } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
@@ -163,8 +166,9 @@ export async function POST(req: Request) {
   const treq = isTeachingAction(action) ? parseTeachingRequest(action, body) : null;
   if (treq && !treq.ok) return NextResponse.json({ error: treq.error }, { status: 400 });
   const teachingRequest = treq?.ok ? treq.value : null;
-  // SCHOLAR-CUMULATIVE-TEACHING-01: the checks the learner answered this visit (context for the next request; never stored).
-  const priorChecks = CONTEXT_ACTIONS.includes(action) ? parsePriorChecks(body?.priorChecks) : [];
+  // SCHOLAR-CUMULATIVE-TEACHING-01: the checks the learner answered this visit (context for the next request). LEARNING-CLOSE-2026-11
+  // D01: the lesson's KEPT checks (any visit, any device) join them once the session is read below.
+  let priorChecks = CONTEXT_ACTIONS.includes(action) ? parsePriorChecks(body?.priorChecks) : [];
   // SCHOLAR-PERSISTENT-LEARNING-01 item 8 (Learn side): an Ask question's obvious everyday-word slips, corrected
   // deterministically (spelling.ts, no AI). The question as TYPED is what is screened, stored and shown beside the reading;
   // the search reads both, and the lesson terms and the prompt read the corrected one (re-read below against the
@@ -215,6 +219,12 @@ export async function POST(req: Request) {
   } else passages = await ownPassages(ctx.admin, ctx.userId, stepIds);
   if (!passages?.length) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
   if (!sessionMaterials.length) sessionMaterials = [...new Set(passages.map(p => p.materialId))];
+  // LEARNING-CLOSE-2026-11 D01 (CYU-04): this lesson's kept checks are TAUGHT SO FAR context too, so the next teaching builds on
+  // what the learner answered on any device. Their texts were screened when they were kept; the newest PRIOR_CHECKS_MAX are used.
+  if (recorded && sessionId && CONTEXT_ACTIONS.includes(action)) {
+    const kept = await listCheckAttempts(ctx.admin, ctx.userId, { sessionId, step, limit: PRIOR_CHECKS_MAX }).catch(() => null);
+    if (kept?.ok && kept.data.length) priorChecks = parsePriorChecks([...historyToPriorChecks(kept.data, PRIOR_CHECKS_MAX), ...priorChecks]);
+  }
   if (spelt) spelt = normaliseLearnerText(question, { vocabulary: vocabularyOf(passages.map(p => p.content)), variant });
   /** What the learner meant: the corrected reading of an Ask question (the question as typed when nothing was corrected). */
   const meant = spelt?.display || question;
@@ -609,9 +619,31 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
 
   // ── the record: structure only, and only what was shown ──
   const shown = action === "check" ? !!r.question?.ok : r.check.ok && (!asksQuestion || !!askedQuestion);
+  // LEARNING-CLOSE-2026-11 D01 (CYU-03): a JUDGED check answer is kept with its judgement, under the same gate as its event --
+  // the question as a 416 question of the section it cites (the key learning points its key), the answer as an attempt marked
+  // ai_evaluation by this model and prompt, and the clarify event referencing it. Nothing is kept for a withheld judgement, a
+  // refusal or a session the browser holds: the learner keeps those through the checks route, by their own choice.
+  let keptCheck: { id: string; answeredAt: string; questionId: string } | null = null;
+  if (action === "clarify" && recorded && sessionId && shown && r.check.ok && policy.scholarLearningHistory === "record") {
+    const parts = parseCheckFeedback(r.check.text);
+    const cited = Number.isInteger(body?.checkCited) && Number(body.checkCited) >= 1 ? Number(body.checkCited) : null;
+    const src = (cited && passages[cited - 1]) || passages[0];
+    const q = await ensureCheckQuestion(ctx.admin, ctx.userId, {
+      materialId: src.materialId, chunkId: src.chunkId, stem: checkQuestion, keyPoints: parts?.keyPoints ?? [], modelAnswer: parts?.keyPoints.length ? parts.keyPoints.join(" ") : null,
+      sourceQuote: src.content.slice(0, 1500), competencyId: risk.competencyIds?.[0] ?? null, model: r.model, provider: r.provider, promptVersion: r.promptVersion,
+    });
+    const evaluator = { model: r.model, promptVersion: r.promptVersion };
+    const response = withFormative(checkResponse({ text: answer, question: checkQuestion, verdict: r.verdict, feedback: parts, summary: parts ? null : r.check.text }),
+      parts ? formativeFeedback([{ part: null, feedback: null, parts: asFeedbackParts(parts) }], evaluator) : null);
+    const kept = q && response ? await recordCheckAttempt(ctx.admin, ctx.userId, {
+      questionId: q.id, contentVersion: q.contentVersion, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null,
+      marking: "ai_evaluation", evaluator, missed: r.verdict === "not_yet",
+    }) : null;
+    keptCheck = kept && q ? { ...kept, questionId: q.id } : null;
+  }
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     await Promise.all([
-      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId) }),
+      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId), attemptId: keptCheck?.id ?? null }),
       advances ? updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }) : Promise.resolve("ok" as const),
     ]);
   }
@@ -658,6 +690,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     background: !b || (!b.ok && b.reason === "not_this_mode") ? null : b.ok ? { text: b.text, label: SUPPLEMENTARY_LABEL } : { withheld: SUPPLEMENTARY_WITHHELD[b.reason as Exclude<typeof b.reason, "not_this_mode">] },
     flags: r.flags.kept,
     verdict: r.verdict ? { value: r.verdict, label: CHECK_VERDICT_LABEL[r.verdict], informal: INFORMAL_CHECK_LABEL } : null,
+    // D01: whether this judged answer was kept in the learner's learning record (the lesson's history shows it; Saved learning lists it).
+    ...(action === "clarify" ? { kept: keptCheck ? { attemptId: keptCheck.id, answeredAt: keptCheck.answeredAt, questionId: keptCheck.questionId, marking: "ai_evaluation", chunkId: passages[0].chunkId, materialId: passages[0].materialId } : null } : {}),
     savedForLater: savedNow === "ok",
     ...teachingFields,
   });

@@ -24,6 +24,8 @@ import { passportEvaluationOf, type PassportEvaluation } from "./passport-evalua
 import type { ExamOption, PaperFlag, ParsedQuestion, QuestionFlag } from "./exam-paper";
 import { stemKey } from "./question-intel";
 import { formativeOf, type FormativeFeedback } from "./written-feedback";
+import { EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN } from "./config";
+import { parseCheckResponse, type CheckHistoryItem } from "./learn-check-record";
 import { servableLibraryVersions, type LibraryPick } from "./library-questions";
 import type { ResearchSource } from "./exam-research";
 import type { OsceDefinition, OsceItem, OsceSource, OsceStationDraft, OsceTick } from "./osce";
@@ -2182,9 +2184,12 @@ export async function listStudyLinks(admin: Admin, userId: string, sessionId: st
 }
 
 /** One learning action, with the sections it used and, for a clarification, the informal verdict. Structure only. */
-export async function recordLearningEvent(admin: Admin, userId: string, input: { sessionId: string; step: number; action: string; verdict: string | null; chunkIds: readonly string[] }): Promise<"ok" | "failed"> {
-  const { data, error } = await admin.from("individual_scholar_learning_event")
-    .insert({ session_id: input.sessionId, user_id: userId, step: input.step, action: input.action, verdict: input.verdict }).select("id").single();
+export async function recordLearningEvent(admin: Admin, userId: string, input: { sessionId: string; step: number; action: string; verdict: string | null; chunkIds: readonly string[]; attemptId?: string | null }): Promise<"ok" | "failed"> {
+  // An event row is structure only (414): session, step, action, verdict and -- LEARNING-CLOSE-2026-11 D01 (950) -- the kept check
+  // attempt a clarify event judged, by id. Where 950 is absent the link is dropped and the event is kept as 414 keeps it.
+  const row = { session_id: input.sessionId, step: input.step, action: input.action, verdict: input.verdict };
+  let { data, error } = await admin.from("individual_scholar_learning_event").insert({ user_id: userId, ...row, ...(input.attemptId ? { attempt_id: input.attemptId } : {}) }).select("id").single();
+  if (error && input.attemptId && /column|schema cache/i.test(String((error as any)?.message ?? ""))) ({ data, error } = await admin.from("individual_scholar_learning_event").insert({ user_id: userId, ...row }).select("id").single());
   if (error) return "failed";
   const ids = [...new Set(input.chunkIds.filter(isUuid))];
   if (ids.length) {
@@ -2193,6 +2198,103 @@ export async function recordLearningEvent(admin: Admin, userId: string, input: {
   }
   await admin.from("individual_scholar_learning_session").update({ last_active_at: new Date().toISOString() }).eq("user_id", userId).eq("id", input.sessionId);
   return "ok";
+}
+
+// ── LEARNING-CLOSE-2026-11 WS01 (owner decision D01, 4 Nov 2026): A CHECK QUESTION IS A QUESTION ROW, ITS ANSWER AN ATTEMPT ──
+//
+// REUSE. A Teach Me check question becomes an individual_scholar_question of the lesson's section (416 kind short; the extended
+// format where the judgement gave at least EXTENDED_POINTS_MIN key learning points, which are its rubric), once per section and
+// stem. Each answer is an individual_scholar_attempt: `response` holds the typed text and the judgement (learn-check-record.ts
+// checkResponse) and, for an AI judgement, the written-feedback copy; marking says how it was judged. The clarify learning event
+// references the attempt (950 attempt_id). A missed check (not yet) makes or resets the question's 372 card, so Revise and
+// My Plan see the gap exactly as they see a missed practice question. FORMATIVE: never assessment, never competence.
+
+export type CheckQuestionInput = {
+  materialId: string; chunkId: string; stem: string; keyPoints: readonly string[]; modelAnswer: string | null; sourceQuote: string;
+  competencyId: string | null; model: string; provider: string; promptVersion: string;
+};
+
+/** The question row of a check (found by section and stem, else written). Null where it could not be kept (fail closed). */
+export async function ensureCheckQuestion(admin: Admin, userId: string, q: CheckQuestionInput): Promise<{ id: string; contentVersion: number; created: boolean } | null> {
+  const stem = q.stem.replace(/\s+/g, " ").trim().slice(0, 400);
+  if (!stem || !isUuid(q.materialId) || !isUuid(q.chunkId)) return null;
+  const { data: found } = await admin.from("individual_scholar_question").select("id, content_version").eq("user_id", userId).eq("chunk_id", q.chunkId).eq("kind", "short").eq("stem", stem)
+    .order("created_at", { ascending: false }).limit(1).maybeSingle();
+  if (found?.id) return { id: String(found.id), contentVersion: Number(found.content_version ?? 1), created: false };
+  const points = [...new Set(q.keyPoints.map(p => p.replace(/\s+/g, " ").trim()).filter(Boolean))].slice(0, EXTENDED_POINTS_MAX);
+  const model = ((q.modelAnswer ?? points.join(" ")).trim() || stem).slice(0, 1200);
+  // The 416 short key (accepted answers, 1 to 8) holds the model answer: a typed answer never matches it by code, so it is judged
+  // (AI or the learner's own grade), never guessed. With enough key points it is the extended format (formats.ts extendedSpecOf).
+  const answer = points.length >= EXTENDED_POINTS_MIN
+    ? { format: "extended", accepted: [model], modelAnswer: model, marks: points.length, partialCredit: { rule: "per_key_point", marksPerPoint: 1 }, rubric: { keyPoints: points }, check: { source: "lesson" } }
+    : { accepted: [model], modelAnswer: model, rubric: { keyPoints: points }, check: { source: "lesson" } };
+  const row = {
+    material_id: q.materialId, chunk_id: q.chunkId, kind: "short", stem, options: [], correct_index: null, answer, difficulty: 2, review_status: "private_formative",
+    rationale: model, source_quote: (q.sourceQuote.trim() || stem).slice(0, 1500), model: q.model.slice(0, 200), provider: q.provider.slice(0, 100), prompt_version: q.promptVersion.slice(0, 200),
+  };
+  let { data, error } = await admin.from("individual_scholar_question").insert({ user_id: userId, ...row, ...(q.competencyId ? { competency_id: q.competencyId } : {}) }).select("id, content_version").single();
+  // 388 absent, or the competency unknown here: the question is kept without it.
+  if (error && q.competencyId) ({ data, error } = await admin.from("individual_scholar_question").insert({ user_id: userId, ...row }).select("id, content_version").single());
+  if (error || !data?.id) return null;
+  return { id: String(data.id), contentVersion: Number(data.content_version ?? 1), created: true };
+}
+
+export type CheckAttemptInput = {
+  questionId: string; contentVersion: number | null; response: Record<string, unknown>; correct: boolean; score: number | null;
+  marking: "ai_evaluation" | "self_graded" | "unmarked"; evaluator: { model: string; promptVersion: string } | null;
+  /** A missed check (not yet): the question's card is made or reset, due today (Revise, My Plan). */
+  missed: boolean;
+};
+
+/** One kept answer. Null where it could not be kept (416 or 950 refusing: said to the learner, never silently dropped). */
+export async function recordCheckAttempt(admin: Admin, userId: string, a: CheckAttemptInput): Promise<{ id: string; answeredAt: string } | null> {
+  const base = {
+    question_id: a.questionId, chosen_index: null, response: a.response, correct: a.correct, score: a.score, marking: a.marking,
+    evaluator_model: a.evaluator?.model.slice(0, 200) ?? null, evaluator_prompt_version: a.evaluator?.promptVersion.slice(0, 200) ?? null,
+  };
+  let { data, error } = await admin.from("individual_scholar_attempt").insert({ user_id: userId, ...base, ...(a.contentVersion ? { content_version: a.contentVersion } : {}) }).select("id, answered_at").single();
+  // 950 absent: no version column (the attempt is kept without it), and no unmarked marking (such an answer cannot be kept: null).
+  if (error && a.contentVersion && /column|schema cache/i.test(String((error as any)?.message ?? ""))) ({ data, error } = await admin.from("individual_scholar_attempt").insert({ user_id: userId, ...base }).select("id, answered_at").single());
+  if (error || !data?.id) return null;
+  if (a.missed) { const q = await getQuestion(admin, userId, a.questionId); if (q) await missCard(admin, userId, q); }
+  return { id: String(data.id), answeredAt: String(data.answered_at ?? new Date().toISOString()) };
+}
+
+/**
+ * The learner's kept checks, newest first: by session and step (a lesson's history), by session, or the latest overall (Saved
+ * learning). Read through the clarify events that reference them (950). Without 950 the column is absent and the list is empty.
+ */
+export async function listCheckAttempts(admin: Admin, userId: string, opts: { sessionId?: string | null; step?: number | null; limit?: number } = {}): Promise<Read<CheckHistoryItem[]>> {
+  const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
+  let ev = admin.from("individual_scholar_learning_event").select("session_id, step, attempt_id, created_at").eq("user_id", userId).not("attempt_id", "is", null).order("created_at", { ascending: false }).limit(limit);
+  if (opts.sessionId) ev = ev.eq("session_id", opts.sessionId);
+  if (opts.step !== null && opts.step !== undefined) ev = ev.eq("step", opts.step);
+  const { data: evs, error } = await ev;
+  if (error) return isNotProvisioned(error) || /column|schema cache/i.test(String((error as any)?.message ?? "")) ? { ok: true, data: [] } : fail(error);
+  const byAttempt = new Map<string, { session_id: string; step: number }>();
+  for (const e of (evs ?? []) as any[]) if (e.attempt_id && !byAttempt.has(e.attempt_id)) byAttempt.set(e.attempt_id, { session_id: e.session_id, step: e.step });
+  const ids = [...byAttempt.keys()];
+  if (!ids.length) return { ok: true, data: [] };
+  const { data: atts, error: aErr } = await admin.from("individual_scholar_attempt").select("id, question_id, answered_at, correct, score, marking, evaluator_model, evaluator_prompt_version, response, content_version").eq("user_id", userId).in("id", ids);
+  if (aErr) return fail(aErr);
+  const qids = [...new Set(((atts ?? []) as any[]).map(a => a.question_id as string))];
+  const { data: qs, error: qErr } = await admin.from("individual_scholar_question").select("id, stem, chunk_id, material_id").eq("user_id", userId).in("id", qids);
+  if (qErr) return fail(qErr);
+  const qMap = new Map(((qs ?? []) as any[]).map(q => [q.id as string, q]));
+  const out: CheckHistoryItem[] = [];
+  for (const a of (atts ?? []) as any[]) {
+    const response = parseCheckResponse(a.response), q = qMap.get(a.question_id), e = byAttempt.get(a.id);
+    if (!response || !q) continue;
+    const marking = a.marking === "ai_evaluation" || a.marking === "self_graded" || a.marking === "unmarked" ? a.marking : "deterministic";
+    out.push({
+      attemptId: a.id, questionId: a.question_id, answeredAt: a.answered_at, question: response.question || q.stem, response, marking, correct: !!a.correct,
+      score: a.score === null || a.score === undefined ? null : Number(a.score), model: a.evaluator_model ?? null, promptVersion: a.evaluator_prompt_version ?? null,
+      contentVersion: a.content_version === null || a.content_version === undefined ? null : Number(a.content_version),
+      sessionId: e?.session_id ?? null, step: e?.step ?? null, chunkId: q.chunk_id, materialId: q.material_id,
+    });
+  }
+  out.sort((x, y) => (x.answeredAt < y.answeredAt ? 1 : x.answeredAt > y.answeredAt ? -1 : 0));
+  return { ok: true, data: out };
 }
 
 export type LearningEventRow = { step: number; action: string; verdict: string | null; createdAt: string };

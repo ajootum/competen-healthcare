@@ -2,7 +2,9 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { countDue, listArtefacts, listLearningSessions, listMaterials, listQuestions, mistakeToFixCount, type ArtefactRow } from "@/lib/individual/scholar/store";
+import { countDue, listArtefacts, listCheckAttempts, listLearningSessions, listMaterials, listQuestions, mistakeToFixCount, type ArtefactRow } from "@/lib/individual/scholar/store";
+import { CHECK_MARKING_LABEL, checkOutcomeLabel } from "@/lib/individual/scholar/learn-check-record";
+import { CHECK_VERDICT_LABEL } from "@/lib/individual/scholar/config";
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
@@ -76,6 +78,9 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
 
   const competencies = library ? (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies : null;
   const notesOn = library && (await librarySchema(ctx.admin, ctx.userId));
+  // LEARNING-CLOSE-2026-11 D01 (CYU-04): the learner's kept understanding checks, newest first, each a way back to its lesson. No AI.
+  const kept = await listCheckAttempts(ctx.admin, ctx.userId, { limit: 20 }).catch(() => null);
+  const checks = kept?.ok ? kept.data : null;
 
   return (
     <>
@@ -104,6 +109,27 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
           <span className="text-[14.5px] font-semibold text-gray-900">Mistake notebook ({toFix.data} to fix)</span>
           <span className="text-[12.5px] text-gray-600">Your wrong answers, with the answer and why</span>
         </Link>
+      )}
+
+      {checks && checks.length > 0 && (
+        <section aria-labelledby="checks-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+          <h2 id="checks-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your understanding checks</h2>
+          <p className="mt-1 text-[12.5px] text-gray-600">Your answers to the checks inside your lessons, with how each was judged. A learning record for you, not an assessment.</p>
+          <ul className="mt-3 divide-y divide-gray-200">
+            {checks.map(c => (
+              <li key={c.attemptId} className="py-3">
+                <p className="text-[12px] text-gray-500">{new Date(c.answeredAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{c.step !== null ? ` · Lesson ${c.step + 1}` : ""} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(c, CHECK_VERDICT_LABEL)}</span></p>
+                <p className="mt-0.5 break-words text-[14px] font-semibold text-gray-900">{c.question}</p>
+                <p className="mt-0.5 break-words text-[13.5px] text-gray-800"><span className="font-semibold">You:</span> {c.response.text.length > 220 ? `${c.response.text.slice(0, 220)}…` : c.response.text}</p>
+                <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-gray-600">
+                  <span>{CHECK_MARKING_LABEL[c.marking]}</span>
+                  {c.sessionId && <Link href={`${experienceHref("scholar", "study/learn")}?session=${c.sessionId}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Open the lesson</Link>}
+                  <Link href={sourceHref(c.materialId, c.chunkId)} className={`underline underline-offset-2 ${focusRing}`}>The section</Link>
+                </p>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {offerStatus && (
