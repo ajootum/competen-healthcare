@@ -10,7 +10,8 @@ import { focusRing } from "../../../../../_components/chrome";
  */
 export function Fold({ summary, children, open = false, label }: { summary: string; children: React.ReactNode; open?: boolean; label?: string }) {
   return (
-    <details open={open} className="rounded-2xl border border-gray-200 bg-white">
+    // SALE-2026-11 R1: the browser may restore a native disclosure's open state before hydration (back / revisit): not a content mismatch.
+    <details open={open} suppressHydrationWarning className="rounded-2xl border border-gray-200 bg-white">
       <summary className={`flex min-h-[44px] cursor-pointer items-center justify-between gap-3 px-4 py-2 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
         <span className="min-w-0">{summary}</span>
         <span className="shrink-0 text-[12.5px] font-normal text-gray-600">{label ?? "Show"}</span>

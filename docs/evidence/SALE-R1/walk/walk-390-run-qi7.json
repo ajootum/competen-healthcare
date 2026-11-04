@@ -1,0 +1,110 @@
+{
+  "base": "http://localhost:3181",
+  "width": 390,
+  "session": "8b37b80b-05dd-405d-9053-297b0adffe52",
+  "q1": "How does the Study phase go beyond simply checking whether predictions came true? [S6]",
+  "q2": "Why might a change go through several PDSA cycles rather than just one? [S2]",
+  "need1": "misconception",
+  "approach1": "mistake",
+  "reason1": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+  "need2": "misconception",
+  "approach2": "mistake",
+  "reason2": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+  "changed": [
+    {
+      "topic": "quality improvement science and methods",
+      "before": {
+        "headline": "Understanding: stronger evidence; a possible misconception; recall after time: not enough evidence; applying it: some evidence.",
+        "understanding": "Understanding shownStronger evidence15 different questions answered well out of 37 questions tried. Your latest answer here was not fully right yet.",
+        "enough": "Quality Improvement Science and MethodsSee the evidence"
+      },
+      "after": {
+        "headline": "Understanding: stronger evidence; a possible misconception; recall after time: not enough evidence; applying it: some evidence.",
+        "understanding": "Understanding shownStronger evidence15 different questions answered well out of 39 questions tried. Your latest answer here was not fully right yet.",
+        "enough": "Quality Improvement Science and MethodsSee the evidence"
+      }
+    }
+  ],
+  "decisions": [
+    {
+      "sent": {
+        "followUp": null,
+        "confidence": "sure"
+      },
+      "kept": "5632d767-4a54-4a31-9d29-21b22068b344",
+      "adaptive": {
+        "v": 1,
+        "need": "misconception",
+        "rule": "T2",
+        "approach": "mistake",
+        "reason": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+        "misconception": "The idea of \"giving the patient more medicine and waiting\" doesn't come from the passages. It's a natural guess if the aim seems to be fixing the patient, but …",
+        "evidence": [
+          "The feedback named something incorrect: \"The idea of \"giving the patient more medicine and waiting\" doesn't come from the passages. It's a natural guess if the aim seems to be fixing the patient, but …\"."
+        ],
+        "round": 1,
+        "capped": false,
+        "follows": null,
+        "differentQuestion": true,
+        "earlierQuestions": []
+      }
+    },
+    {
+      "sent": {
+        "followUp": {
+          "afterAttemptId": "5632d767-4a54-4a31-9d29-21b22068b344",
+          "approach": "mistake"
+        },
+        "confidence": null
+      },
+      "kept": "8e0b6c35-1cc2-400a-886c-21d9e4c1f62f",
+      "adaptive": {
+        "v": 1,
+        "need": "misconception",
+        "rule": "T2",
+        "approach": "mistake",
+        "reason": "Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+        "misconception": "Nothing to correct — your answer stayed close to the notes this time, unlike before.",
+        "evidence": [
+          "The feedback named something incorrect: \"Nothing to correct — your answer stayed close to the notes this time, unlike before.\"."
+        ],
+        "round": 2,
+        "capped": false,
+        "follows": {
+          "attemptId": "5632d767-4a54-4a31-9d29-21b22068b344",
+          "approach": "mistake",
+          "differentQuestion": true
+        },
+        "differentQuestion": true,
+        "earlierQuestions": []
+      }
+    }
+  ],
+  "log": [
+    "INFO learning state before: 3 topics",
+    "PASS SALE-04 Progress shows What your evidence shows, by topic",
+    "PASS Progress fits 390px with no sideways scroll",
+    "PASS SALE-04 the learning state shows no percentage",
+    "PASS SALE-04 the learning state says it is not verified competence",
+    "PASS SALE-04 the learner can correct the topics behind a topic's evidence",
+    "INFO resume: Go to lesson 7",
+    "INFO question 1: How does the Study phase go beyond simply checking whether predictions came true? [S6]",
+    "INFO after the wrong answer: need=misconception approach=mistake",
+    "INFO reason shown: Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+    "PASS SALE-05/06 a wrong answer changes the next teaching action (not the harder question)",
+    "PASS SALE-06 the reason for the next action is shown",
+    "PASS the lesson with the next step fits 390px",
+    "INFO running: Explain my mistake",
+    "PASS SALE-07 after the corrective step a different question is offered",
+    "INFO question 2: Why might a change go through several PDSA cycles rather than just one? [S2]",
+    "PASS SALE-07 the follow-up question is a different question",
+    "INFO after the second answer: need=misconception approach=mistake",
+    "INFO reason shown: Your answer suggests an incorrect idea, so the next step corrects that idea directly.",
+    "PASS SALE-07 the follow-up answer is recorded against the step it followed, with its reason",
+    "INFO state changed for \"quality improvement science and methods\": Understanding shownStronger evidence15 different questions answered well out of 37 questions tried. Your latest answer here was not fully right yet. => Understanding shownStronger evidence15 different questions answered well out of 39 questions tried. Your latest answer here was not fully right yet.",
+    "PASS SALE-04 the learning state reflects the new answers",
+    "PASS Progress still fits 390px",
+    "PASS 0 console errors (0)",
+    "PASS no 5xx ()"
+  ]
+}

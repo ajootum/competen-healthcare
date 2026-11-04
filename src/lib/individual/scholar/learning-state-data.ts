@@ -2,7 +2,7 @@ import { learningExposure, masteryEvidence, type Read } from "./store";
 import { MASTERY_MAX_ROWS, MASTERY_WINDOW_DAYS } from "./mastery-data";
 import { buildLearningState, type StateEvidence, type StateMarking, type StateTopic, type TopicLearningState, type ExposureRow } from "./learning-state";
 import { isCognitiveLevel } from "./question-intel";
-import { isStatedConfidence } from "./learning-need";
+import { isStatedConfidence, realMisconceptions } from "./learning-need";
 import type { MasteryLevel } from "./mastery";
 import type { IndividualPolicy } from "../policy";
 
@@ -64,7 +64,7 @@ export async function loadLearningState(admin: unknown, userId: string, policy: 
     evidence.push({
       itemId: q.id, attemptId: a.id ?? null, topicKey: key, chunkId: q.chunkId, materialId: q.materialId, source: q.check ? "check" : "practice", level: levelOf(q),
       outcome, marking, at: a.answeredAt, confidence: isStatedConfidence(a.confidence) ? a.confidence : null,
-      misconceptions: missed ? [...(a.misconceptions ?? []), ...(q.misconceptions ?? [])] : [],
+      misconceptions: missed ? realMisconceptions([...(a.misconceptions ?? []), ...(q.misconceptions ?? [])]) : [],
     });
   }
   const cardQ = new Map(cards.map(c => [c.id, c.questionId]));

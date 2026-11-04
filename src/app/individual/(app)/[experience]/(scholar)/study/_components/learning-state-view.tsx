@@ -30,7 +30,8 @@ function Word({ w, misconception }: { w: EvidenceWord; misconception?: boolean }
 function TopicState({ t, sections }: { t: TopicLearningState; sections: { chunkId: string; label: string; topics: string[] }[] }) {
   return (
     <li className="px-4 py-3" data-learning-state-topic={t.key}>
-      <details>
+      {/* The browser may restore a native disclosure's open state before hydration (back / revisit): not a content mismatch. */}
+      <details suppressHydrationWarning>
         <summary className={`flex cursor-pointer flex-wrap items-center justify-between gap-2 pointer-coarse:py-2 ${focusRing}`}>
           <span className="min-w-0 text-[14px] font-semibold text-gray-900">{t.label}</span>
           <span className="text-[12px] font-semibold text-gray-600">{t.enough ? "See the evidence" : "Not enough evidence"}</span>

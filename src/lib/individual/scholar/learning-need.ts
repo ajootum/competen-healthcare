@@ -70,6 +70,17 @@ export const outcomeOf = (o: Pick<CheckOutcome, "verdict" | "selfGrade">): "righ
 
 export type NeedResult = { need: LearningNeed; rule: string; misconception: string | null; evidence: string[] };
 
+/**
+ * Pure. A misconceptions entry that says there is none ("Nothing to correct — your answer stayed close to the notes", "None spotted",
+ * "No misconceptions in this answer"): not a misconception. learn-check.ts isNonePoint drops only the bare phrase; the staging walk
+ * found the judgement adding a clause after it, which must not be read as an incorrect idea.
+ */
+export const isNoMisconception = (s: string): boolean =>
+  /^\s*(?:none|n\/a)\b/i.test(s)
+  || /^\s*nothing(?:\s+(?:to\s+correct|to\s+fix|wrong|incorrect|spotted|here|important))?\s*(?:[.!,;:—–-]|$)/i.test(s)
+  || /^\s*no\s+(?:\w+\s+){0,2}(?:misconceptions?|errors?|mistakes?|incorrect\s+ideas?)\b/i.test(s);
+export const realMisconceptions = (xs: readonly string[]): string[] => xs.map(s => s.trim()).filter(s => s && !isNoMisconception(s));
+
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const clip = (s: string, n = 160) => (s.length > n ? `${s.slice(0, n - 1)}…` : s);
 
@@ -104,15 +115,15 @@ export function identifyNeed(current: CheckOutcome, prior: readonly PriorCheckOu
     ev.push("An earlier lesson of this session holds the ideas this one builds on.");
     return { need: "prerequisite_gap", rule: "N3", misconception: null, evidence: ev };
   }
-  const named = (current.feedback?.misconceptions ?? []).map(s => s.trim()).filter(Boolean);
+  const named = realMisconceptions(current.feedback?.misconceptions ?? []);
   if (named.length) {
     ev.push(`The feedback named something incorrect: "${clip(named[0])}".`);
-    const repeated = prior.find(p => p.questionId !== current.questionId && p.misconceptions.some(m => sameMisconception(m, named[0])));
+    const repeated = prior.find(p => p.questionId !== current.questionId && realMisconceptions(p.misconceptions).some(m => sameMisconception(m, named[0])));
     if (repeated) ev.push("The same idea came up on a different question before.");
     return { need: "misconception", rule: "N4", misconception: clip(named[0]), evidence: ev };
   }
   const tags = (current.tags ?? []).filter(Boolean);
-  const tagged = tags.find(t => prior.some(p => p.questionId !== current.questionId && (p.outcome === "wrong" || p.outcome === "partly") && p.misconceptions.some(m => sameMisconception(m, t))));
+  const tagged = tags.find(t => prior.some(p => p.questionId !== current.questionId && (p.outcome === "wrong" || p.outcome === "partly") && realMisconceptions(p.misconceptions).some(m => sameMisconception(m, t))));
   if (tagged) {
     ev.push(`A known misconception for this question ("${clip(tagged)}") was also missed on a different question.`);
     return { need: "misconception", rule: "N4", misconception: clip(tagged), evidence: ev };

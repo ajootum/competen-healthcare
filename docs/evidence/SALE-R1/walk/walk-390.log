@@ -1,0 +1,31 @@
+sign-in attempt 1: still on /login
+sign-in attempt 2: ok
+INFO learning state before: 3 topics
+PASS SALE-04 Progress shows What your evidence shows, by topic
+PASS Progress fits 390px with no sideways scroll
+PASS SALE-04 the learning state shows no percentage
+PASS SALE-04 the learning state says it is not verified competence
+PASS SALE-04 the learner can correct the topics behind a topic's evidence
+INFO resume: Go to lesson 8
+INFO question 1: How does the Study phase go beyond simply checking whether predictions came true? [S6]
+INFO check response 200: kept=true adaptive=true withheld=false 
+INFO after the wrong answer: need=misconception approach=mistake
+INFO reason shown: Your answer suggests an incorrect idea, so the next step corrects that idea directly.
+PASS SALE-05/06 a wrong answer changes the next teaching action (not the harder question)
+PASS SALE-06 the reason for the next action is shown
+PASS the lesson with the next step fits 390px
+INFO running: Explain my mistake
+PASS SALE-07 after the corrective step a different question is offered
+INFO question 2: 
+FAIL SALE-07 the follow-up question is a different question
+INFO answer 2 built from the lesson's teaching citing (no tag): 5793 chars
+INFO check response 200: kept=true adaptive=true withheld=false 
+INFO after the second answer: need=prerequisite_gap approach=foundation
+INFO reason shown: Several different questions here were not answered well yet, so the next step returns to the earlier lesson this one builds on.
+PASS SALE-07 the follow-up answer is recorded against the step it followed, with its reason
+INFO state changed for "quality improvement science and methods": Understanding shownStronger evidence15 different questions answered well out of 39 questions tried. => Understanding shownStronger evidence15 different questions answered well out of 40 questions tried. Your latest answer here was not fully right yet.
+PASS SALE-04 the learning state reflects the new answers
+PASS Progress still fits 390px
+PASS 0 console errors (0)
+PASS no 5xx ()
+exit 1

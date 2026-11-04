@@ -36,6 +36,12 @@ describe("SALE-05 identifyNeed", () => {
     // the same question missed before is not a repeat
     expect(identifyNeed(cur({ tags: ["confuses preload with afterload"] }), [prior({ questionId: "q1", misconceptions: ["confuses preload with afterload"] })], { hasFoundation: false }).need).toBe("factual_gap");
   });
+  it("an entry saying there is nothing to correct is not a misconception (found on the staging walk)", () => {
+    for (const s of ["Nothing to correct — your answer stayed close to the notes this time, unlike before.", "None spotted.", "No misconceptions in this answer.", "No real errors here"])
+      expect(identifyNeed(cur({ verdict: "partly", feedback: { right: ["a"], missing: ["b"], misconceptions: [s] } }), [], { hasFoundation: false }).need).toBe("reasoning_error");
+    expect(identifyNeed(cur({ feedback: { right: [], missing: [], misconceptions: ["Nothing suggests infection, so antibiotics are always needed"] } }), [], { hasFoundation: false }).need).toBe("misconception");
+    expect(identifyNeed(cur({ feedback: { right: [], missing: [], misconceptions: ["Believes PDSA is one cycle"] } }), [], { hasFoundation: false }).need).toBe("misconception");
+  });
   it("prerequisite gap only with an earlier lesson AND several different questions missed, never from one miss", () => {
     const two = [prior(), prior()];
     expect(identifyNeed(cur(), two, { hasFoundation: true }).need).toBe("prerequisite_gap");
