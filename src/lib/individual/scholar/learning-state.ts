@@ -17,7 +17,8 @@
 import type { MasteryLevel } from "./mastery";
 
 export type StateMarking = "code" | "ai_evaluation" | "self" | "unmarked";
-export type StateSource = "check" | "practice" | "review" | "osce";
+/** SALE-2026-11 R4: "case" is a completed clinical case made from the learner's notes (810), only where scholar_application_evidence is on. */
+export type StateSource = "check" | "practice" | "review" | "osce" | "case";
 /** One answer, already joined to its topic (learning-state-data.ts uses the same join as Progress by topic). */
 export type StateEvidence = {
   itemId: string; attemptId: string | null; topicKey: string; chunkId: string | null; materialId: string;
@@ -72,7 +73,7 @@ const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? o
 const right = (e: StateEvidence) => e.outcome !== null && e.outcome >= 0.75;
 const partly = (e: StateEvidence) => e.outcome !== null && e.outcome >= 0.25 && e.outcome < 0.75;
 const marked = (e: StateEvidence) => e.outcome !== null && e.marking !== "unmarked";
-const SOURCE_WORD: Record<StateSource, string> = { check: "lesson check", practice: "practice question", review: "card review", osce: "OSCE practice" };
+const SOURCE_WORD: Record<StateSource, string> = { check: "lesson check", practice: "practice question", review: "card review", osce: "OSCE practice", case: "clinical case" };
 const MARK_WORD: Record<StateMarking, string> = { code: "marked by the app", ai_evaluation: "AI-evaluated", self: "self-rated", unmarked: "not marked" };
 const TEACHING = new Set(["teach", "explain", "simplify", "deeper", "examples", "summary", "read", "revisit", "resume", "check", "clarify"]);
 
@@ -146,7 +147,7 @@ export function topicLearningState(topic: StateTopic, rows: readonly StateEviden
     summary: delayedItems.size ? `${plural(delayedItems.size, "question")} answered well ${T.delayDays} or more days after you first met ${delayedItems.size === 1 ? "it" : "them"}: this supports retention.` : `No right answer yet ${T.delayDays} or more days after first meeting this topic.` });
 
   // application and reasoning
-  const app = markedRows.filter(r => r.level === "application" || r.level === "reasoning" || r.source === "osce");
+  const app = markedRows.filter(r => r.level === "application" || r.level === "reasoning" || r.source === "osce" || r.source === "case");
   const appRight = distinctRight(app);
   dims.push({ key: "application", label: DIMENSION_LABEL.application, word: wordFor(appRight.length, app.filter(right).reduce((n, r) => n + STATE_MARKING_WEIGHT[r.marking], 0), T, app.length > 0), rule: "A1",
     summary: app.length ? `${plural(appRight.length, "application or reasoning task")} done well out of ${new Set(app.map(r => r.itemId)).size}.` : "No application, reasoning or case practice on this topic yet." });

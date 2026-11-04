@@ -134,7 +134,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal"
-  | "scholar_learning_state" | "scholar_adaptive_teaching";
+  | "scholar_learning_state" | "scholar_adaptive_teaching"
+  | "scholar_application_evidence" | "scholar_competency_evidence_views";
 /** PRIVATE MODULE DEVELOPMENT ACCESS (owner GO 2 Nov 2026): who may see a Scholar module that is still being developed. */
 export type ModuleAccessPolicyKey = "scholar_module_courses_access" | "scholar_module_competencies_access";
 /** CHECKLIST STUDIO S3: which assessment instruments (by permanent code) Scholar offers a learner. Empty by default: nothing is offered. */
@@ -2132,6 +2133,24 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "Two to ten. Default: three.",
   },
   {
+    // SALE-2026-11 R4 (SALE-13): case, OSCE and simulation results as APPLICATION evidence on Progress. No migration. Off until HQ switches it on.
+    key: "scholar_application_evidence", kind: "choice", product: "Scholar",
+    label: "Progress: applying what you learned (cases, OSCE, simulation)",
+    help: "Whether Progress shows completed clinical cases and OSCE practice as application evidence, by skill (clinical reasoning, prioritisation, interpreting findings, reassessing an evolving patient, structured handover, recognising deterioration, practical simulation), each linked to the competency and learning objective it was made for, with the framework version and whether that mapping was published. Cases made from the learner's notes also count towards Applying it in the learning state. When on, a completed case also keeps the competency provenance it was played against. Words only, never a score, never verified competence or a competency stage.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Derived from records that already exist. Off until HQ switches it on.",
+  },
+  {
+    // SALE-2026-11 R4 (SALE-14): the three separate views on My Competencies. No migration. Off until HQ switches it on.
+    key: "scholar_competency_evidence_views", kind: "choice", product: "Scholar",
+    label: "My Competencies: self-assessment, learning evidence and verified competence as three views",
+    help: "Whether My Competencies shows three separate views: what the learner believes they can do (their self-assessment), what their learning records show (each record with the competency, framework version and mapping status; a draft mapping is labelled and never counted as validated evidence) and what an authorised verification has established. Formative results never feed the verified view and never set a competency stage.",
+    options: [{ value: "off", label: "Off" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Read only, from records that already exist. Off until HQ switches it on.",
+  },
+  {
     key: "scholar_plan_rule_order", kind: "sequence", product: "Scholar",
     label: "My Plan: what comes first",
     help: "The order the planning rules are applied in when choosing the next activity. Revision that is due, topics showing gaps, unfinished lessons, the exam date, a deadline the student put in their calendar, consolidating what was recently studied, and covering all accepted notes. Rules left out are not used.",
@@ -2561,6 +2580,9 @@ export type IndividualPolicy = {
   scholarAdaptiveTeaching: "on" | "off";
   scholarAdaptiveReteachMax: number;
   scholarAdaptivePrerequisiteMisses: number;
+  /** SALE-2026-11 R4: application evidence on Progress (SALE-13) and the three competency views on My Competencies (SALE-14). Both off by default. */
+  scholarApplicationEvidence: "on" | "off";
+  scholarCompetencyEvidenceViews: "on" | "off";
   /** The planning rules in the order they apply (due_revision, gaps, unfinished, exam, consolidate, coverage). */
   scholarPlanRuleOrder: string[];
   scholarPlanWeeklyReflection: "on" | "off";
@@ -2769,6 +2791,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarAdaptiveTeaching: clampChoice(policyDef("scholar_adaptive_teaching") as ChoicePolicy, published.get(policyPath("scholar_adaptive_teaching"))) as "on" | "off",
     scholarAdaptiveReteachMax: int("scholar_adaptive_reteach_max"),
     scholarAdaptivePrerequisiteMisses: int("scholar_adaptive_prerequisite_misses"),
+    scholarApplicationEvidence: clampChoice(policyDef("scholar_application_evidence") as ChoicePolicy, published.get(policyPath("scholar_application_evidence"))) as "on" | "off",
+    scholarCompetencyEvidenceViews: clampChoice(policyDef("scholar_competency_evidence_views") as ChoicePolicy, published.get(policyPath("scholar_competency_evidence_views"))) as "on" | "off",
     scholarPlanRuleOrder: clampSequence(policyDef("scholar_plan_rule_order") as SequencePolicy, published.get(policyPath("scholar_plan_rule_order"))),
     scholarPlanWeeklyReflection: clampChoice(policyDef("scholar_plan_weekly_reflection") as ChoicePolicy, published.get(policyPath("scholar_plan_weekly_reflection"))) as "on" | "off",
     scholarPlanMaxWeeklyMinutes: int("scholar_plan_max_weekly_minutes"),
