@@ -48,7 +48,7 @@ import { COGNITIVE_LEVELS } from "./question-intel";
 import { FORMAT_ROW, LIBRARY_COPY_KIND, LIBRARY_FORMATS, LIBRARY_FORMAT_LABEL, LIBRARY_FORMAT_MARKING, type LibraryFormat } from "./question-formats";
 import { checkLibraryMeta } from "./library-meta";
 import {
-  CALCULATION_FORMAT, PART_ROLES, STRUCTURED_VARIANTS, calculationAccepted, calculationProblems, criteriaOf, findingsOf, partContractOf, roundingOf, toleranceOf,
+  CALCULATION_FORMAT, PART_ROLES, STRUCTURED_VARIANTS, calculationAccepted, calculationProblems, findingsOf, partContractOf, roundingOf, toleranceOf,
 } from "./scoring-rules";
 
 // SCHOLAR-CE-2026 CE-05: the library's format list, labels, marking rules and stored kinds come from the registry (question-formats.ts).

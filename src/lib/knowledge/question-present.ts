@@ -145,7 +145,8 @@ export function presentQuestion(content: unknown): PresentedQuestion | null {
       if (parts.length) blocks.push({
         kind: "parts", heading: "Parts",
         items: parts.map((p, i) => {
-          const role = typeof p.role === "string" && p.role in ROLE_LABEL ? ROLE_LABEL[p.role as keyof typeof ROLE_LABEL] : null;
+          const r = p["role"];
+          const role = typeof r === "string" && r in ROLE_LABEL ? ROLE_LABEL[r as keyof typeof ROLE_LABEL] : null;
           const opts = texts(p.options), crit = criteriaOf(p.criteria);
           const extra: QBlock[] = [
             ...(opts.length ? [{ kind: "options" as const, heading: "Choice", items: opts.map((t, j) => ({ text: t, key: j === p.correct })) }] : []),

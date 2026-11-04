@@ -201,13 +201,14 @@ const CALC = row({ stem: "A dose of 500 mg is prescribed. The suspension contain
   answer: { format: "calculation", accepted: ["10 mL"], value: 10, unit: "mL", working: "500 / 250 x 5 = 10" } });
 
 describe("WS-A calculation: a short item with answer.format calculation, marked by code", () => {
-  it("is its own format to a session and the registry; off by default; blind-solved; no library form yet", () => {
+  it("is its own format to a session and the registry; off by default; blind-solved; held by the library (997)", () => {
     expect(effectiveKind(CALC)).toBe("calculation");
     expect(REVISION_FORMATS).toContain("calculation");
     expect(REVISION_FORMATS_OFF_BY_DEFAULT).toContain("calculation");
     expect(resolvePolicy([]).scholarRevisionFormats).not.toContain("calculation");
     expect(BLIND_FORMATS).toContain("calculation");
-    expect(FORMAT_ROW.calculation.library).toBeNull();
+    // SQIE-CLOSE-2026-11 WS-E (migration 997) gave the calculation its library entry: marked by code, copied as `short`.
+    expect(FORMAT_ROW.calculation.library).toMatchObject({ marking: ["deterministic"], copyKind: "short" });
     expect(revisionPromptVersion("calculation")).toBe(PROMPT_VERSIONS.calculation);
   });
   it("the learner sees the unit select, never the value", () => {

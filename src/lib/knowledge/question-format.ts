@@ -21,6 +21,8 @@ const markers = (x: Record<string, unknown>) => {
   const unsafe = lines(x.unsafe, 6, 200);
   return { ...(x.safetyCritical === true || x.safetyCritical === "true" ? { safetyCritical: true } : {}), ...(unsafe.length ? { unsafe } : {}) };
 };
+/** A structured part's WS-C role (answer, justify, interpret) as text, or "". A question part, not an authorization role. */
+const partRole = (x: Record<string, unknown>): string => { const r = x["role"]; return typeof r === "string" ? r : ""; };
 /** An integer, where "" (an untouched field) is no value -- never 0. */
 const intOpt = (v: unknown): number | undefined => (v === "" || v === null || v === undefined ? undefined : int(v));
 const num = (v: unknown): number | undefined => { if (typeof v === "number") return v; const t = typeof v === "string" ? v.trim() : ""; const n = t ? Number(t) : NaN; return Number.isFinite(n) ? n : undefined; };
@@ -96,7 +98,7 @@ export function questionContentFromFields(f: Record<string, unknown>): Record<st
           .filter(c => c.text);
         return {
           prompt: s(x.prompt, 600), marks: int(x.marks) ?? Number(x.marks), accepted: choice ? [opts[correct!], ...accepted.filter(a => a !== opts[correct!])].slice(0, 4) : accepted,
-          ...(typeof x.role === "string" && x.role ? { role: x.role } : {}), ...(opts.length ? { options: opts, correct } : {}), ...(criteria.length ? { criteria } : {}), ...markers(x),
+          ...(partRole(x) ? { role: partRole(x) } : {}), ...(opts.length ? { options: opts, correct } : {}), ...(criteria.length ? { criteria } : {}), ...markers(x),
         };
       });
       const findings = (Array.isArray(f.findings) ? f.findings : []).slice(0, 12).map(r => { const y = (r ?? {}) as Record<string, unknown>; return { label: s(y.label, 120), value: s(y.value, 120), ...(s(y.unit, 30) ? { unit: s(y.unit, 30) } : {}) }; })
@@ -147,7 +149,7 @@ export function fieldsFromQuestionContent(c: Record<string, unknown>): Record<st
         const x = p as Record<string, unknown>;
         const opts = Array.isArray(x.options) ? x.options.map(String) : [];
         return { prompt: String(x.prompt ?? ""), marks: x.marks ?? 1, accepted: (Array.isArray(x.accepted) ? x.accepted.map(String) : []).filter(a => !opts.includes(a)).join("\n"),
-          role: typeof x.role === "string" ? x.role : "", options: opts.join("\n"), correct: typeof x.correct === "number" ? x.correct : "",
+          role: partRole(x), options: opts.join("\n"), correct: typeof x.correct === "number" ? x.correct : "",
           criteria: Array.isArray(x.criteria) ? x.criteria.map(c => { const y = c as Record<string, unknown>; return { text: String(y.text ?? ""), weight: Number(y.weight ?? 1), safetyCritical: y.safetyCritical === true }; }) : [],
           safetyCritical: x.safetyCritical === true, unsafe: Array.isArray(x.unsafe) ? x.unsafe.join("\n") : "" };
       }) };

@@ -17,11 +17,13 @@ const GOOD: Record<string, Record<string, unknown>> = {
   match: { format: "match", stem: "Match each drug to its class.", options: ["Amoxicillin", "Furosemide", "Metoprolol"], answerKey: { matches: ["Penicillin", "Loop diuretic", "Beta blocker"] }, rationale: R },
   sequence: { format: "sequence", stem: "Put the steps of hand hygiene in order.", options: ["Rinse", "Wet hands", "Apply soap"], answerKey: { order: [1, 2, 0] }, rationale: R },
   structured: { format: "structured", stem: "A patient presents with chest pain. Answer the parts.", options: [], answerKey: { parts: [{ prompt: "What test first?", marks: 1, accepted: ["ECG"] }, { prompt: "Which enzyme?", marks: 2, accepted: ["Troponin"], rubric: { level: "recall" } }] }, rationale: R },
+  // SQIE-CLOSE-2026-11 WS-E (997): the WS-A calculation joins the library (scoring-rules.ts contract).
+  calculation: { format: "calculation", stem: "500 mg is prescribed; the suspension is 250 mg in 5 mL. What volume is given?", options: [], answerKey: { value: 10, unit: "mL", working: "500 / 250 x 5 = 10" }, rationale: R },
 };
 const asQuestion = (c: unknown, id = "q1"): RevisionQuestion => { const x = libraryCopyOf(c)!; return { id, kind: x.kind, stem: x.stem, options: x.options, correctIndex: x.correctIndex, answer: x.answer, rationale: x.rationale, difficulty: null }; };
 
 describe("validateLibraryQuestion: every format, its key, its rubric and its marking rule", () => {
-  it("accepts a sound question of each of the ten formats, and its learner copy is a question Scholar can key and mark", () => {
+  it("accepts a sound question of each of the eleven formats, and its learner copy is a question Scholar can key and mark", () => {
     for (const f of LIBRARY_FORMATS) {
       const v = validateLibraryQuestion(GOOD[f]);
       expect(v, f).toMatchObject({ ok: true, format: f });
