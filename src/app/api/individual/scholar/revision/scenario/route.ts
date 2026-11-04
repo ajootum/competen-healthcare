@@ -24,7 +24,7 @@ import {
   type Progress, type ScenarioStage, type StageResult,
 } from "@/lib/individual/scholar/scenario";
 import { withSafety } from "@/lib/individual/scholar/revision";
-import { SCORING_RULES_VERSION } from "@/lib/individual/scholar/scoring-rules";
+import { SCORING_RULES_VERSION, unsafeStatement } from "@/lib/individual/scholar/scoring-rules";
 
 // Request-time only: it reads the session and the learner's policy, and signs with a server-only secret.
 export const dynamic = "force-dynamic";
@@ -165,6 +165,6 @@ async function judgeShort(
     const o = answerOutcome(e.evaluation.ok ? null : e.evaluation.reason);
     await recordScholarOutcome(ctx.admin, ai, { operation: "individual_scholar_evaluate", outputKind: "other", outcome: o.outcome, reasons: o.reasons, promptVersion: e.promptVersion });
   }
-  if (!refused && e.ok && e.evaluation.ok) return { ok: true, verdict: e.evaluation.verdict, feedback: e.evaluation.feedback, unsafe: e.evaluation.unsafe ?? null, evaluator: { model: e.model, promptVersion: e.promptVersion } };
+  if (!refused && e.ok && e.evaluation.ok) return { ok: true, verdict: e.evaluation.verdict, feedback: e.evaluation.feedback, unsafe: unsafeStatement(e.evaluation.unsafe), evaluator: { model: e.model, promptVersion: e.promptVersion } };
   return { ok: false, why: refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself." };
 }

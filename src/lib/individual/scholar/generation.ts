@@ -4,7 +4,7 @@ import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib
 import { CONTEXT_PREAMBLE } from "./learner-context";
 import { VERIFY_FORMATS_DEFAULT } from "./question-formats";
 import { SCENARIO_SCOPE_LINE } from "./scenario";
-import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
+import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, FEEDBACK_HEADINGS, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
 import { CHECK_LABEL } from "./learn-check";
 import { DEPTH_REACHED, parseDepthReached } from "./learn-context";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
@@ -17,14 +17,14 @@ import {
   type QualityReason, type RevisionVerifyItem,
 } from "./question-quality";
 import {
-  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, capCardLevel, difficultyFits, difficultyOf, feedbackText, generationContextBlock, levelMixLine, parseFeedbackSections,
+  FEEDBACK_FORMAT, NO_CONTEXT, RUBRIC_RULE, UNSAFE_RULE, capCardLevel, difficultyFits, difficultyOf, feedbackText, generationContextBlock, levelMixLine, parseFeedbackSections,
   parseRubric, planCardLevels, referenceGrounding, stemKey,
   type FeedbackParts, type GenerationContext, type LevelMix, type LevelPlan, type Rubric,
 } from "./question-intel";
 import { checkRevisionDraft, objectiveKey, type RevisionDraft } from "./revision";
 import { BLIND_SOLVE_SYSTEM, applyBlindVerification, blindItemOf, blindSolvePrompt, isBlindFormat } from "./blind-verify";
 import { balanceTrueFalse } from "./formats";
-import { EVALUATE_CRITERIA_RULE, EVALUATE_SAFETY_RULE, extractUnsafeLine, readUnsafeLine, type Criterion } from "./scoring-rules";
+import { EVALUATE_CRITERIA_RULE, type Criterion } from "./scoring-rules";
 import { blueprintFromDraft, checkPrivateCase } from "./clinical";
 import {
   OSCE_FEEDBACK_SYSTEM, OSCE_PROMPT_VERSIONS, checkOsceDraft, feedbackGroundingCheck, feedbackGroundingText, osceFeedbackPrompt, osceStationPrompt, osceStationSystem, parseOsceFeedback,
@@ -1154,6 +1154,8 @@ export const EVALUATE_SYSTEM = [
   "Judge the answer ONLY against the passage from their notes, the accepted answers and the key points given. Do not use outside knowledge.",
   "Accept an answer that says the same thing in other words, including clinically equivalent wording. Do not reward an answer for things the passage does not say.",
   "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
+  // SQIE-CLOSE-2026-11 WS-B (evaluate v3): the safety line, quoted from the answer.
+  UNSAFE_RULE,
   FEEDBACK_FORMAT,
   "Where common misconceptions are listed, say whether the answer shows one. Never give a mark, a score or a percentage.",
   "No new facts, numbers, doses, drugs or advice. No patient names. If the passage does not let you judge reliably, reply with exactly NOT_IN_NOTES.",
@@ -1170,40 +1172,24 @@ export const EVALUATE_EXTENDED_SYSTEM = [
 
 export type EvaluateVerdict = "correct" | "partly" | "incorrect";
 export type ShortAnswerEvaluation =
-  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string; parts?: FeedbackParts; matched?: number[]; unsafe?: string }
+  | { ok: true; verdict: EvaluateVerdict; score: number; feedback: string; parts?: FeedbackParts; matched?: number[]; unsafe?: string[] }
   | { ok: false; reason: "malformed" | "not_in_notes" | "ungrounded" | "identifier" };
 const VERDICT_SCORE: Record<EvaluateVerdict, number> = { correct: 1, partly: 0.5, incorrect: 0 };
 
-// SQIE-CLOSE-2026-11 WS-B: every evaluation (revision answers, structured parts, scenario stages, case reasoning) also writes one UNSAFE
-// line (scoring-rules.ts EVALUATE_SAFETY_RULE). It is APPENDED to the system prompts above (they are unchanged), and the prompt version
-// carries its own suffix, so an evaluation made with it is always told apart from one made before it.
-export const EVALUATE_SAFETY_VERSION = "scholar-evaluate-safety-v1";
-// WS-B/WS-C: an answer marked against numbered weighted CRITERIA (a case rubric, a justify or interpret part) lists those it meets.
+// SQIE-CLOSE-2026-11 WS-B/WS-C: an answer marked against numbered weighted CRITERIA (a case rubric, a justify or interpret part) lists those
+// it meets through the same MATCHED line an extended answer writes; code weighs them (scoring-rules.ts criteriaMarks).
 export const EVALUATE_CRITERIA_VERSION = "scholar-evaluate-criteria-v1";
 
 /**
  * Pure. The evaluator's reply, checked: a verdict, and feedback that adds nothing the grounding does not hold. The five
  * labelled parts where it wrote them (parts, and feedback as their readable text); the v1 free text otherwise.
- * WS-B: an UNSAFE line, where there is one, must quote the learner's own answer (opts.answer): a quote the answer does not contain
- * withholds the evaluation (malformed) rather than mark the learner on words they did not write. A flagged answer is never
- * "correct" or "partly": its verdict is incorrect, whatever the line before said.
  */
-export function parseEvaluation(raw: string, grounding: readonly string[], opts: { keyPoints?: number; answer?: string } = {}): ShortAnswerEvaluation {
+export function parseEvaluation(raw: string, grounding: readonly string[], opts: { keyPoints?: number; safety?: { answer: string } } = {}): ShortAnswerEvaluation {
   const text = raw.trim();
   if (text.replace(/[^A-Z_]/g, "") === NOT_IN_NOTES) return { ok: false, reason: "not_in_notes" };
   const m = /^\s*\**VERDICT:\s*(correct|partly|incorrect)\**\s*$/im.exec(text);
   if (!m) return { ok: false, reason: "malformed" };
   let rest = (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim();
-  let unsafe: string | undefined;
-  {
-    const u = extractUnsafeLine(rest);
-    rest = u.rest;
-    if (u.line !== null) {
-      const read = readUnsafeLine(u.line, opts.answer ?? "");
-      if ("invalid" in read) return { ok: false, reason: "malformed" };
-      if (read.flagged) unsafe = read.statement;
-    }
-  }
   // An extended response: which numbered key points the answer makes. Required there, and taken out of the feedback text.
   let matched: number[] | undefined;
   if (opts.keyPoints) {
@@ -1214,27 +1200,56 @@ export function parseEvaluation(raw: string, grounding: readonly string[], opts:
     matched = [...new Set(nums.map(n => n - 1))].sort((a, b) => a - b);
     rest = (rest.slice(0, mm.index) + rest.slice(mm.index + mm[0].length)).trim();
   }
+  // SQIE-CLOSE-2026-11 WS-B: the safety line (evaluate v3, case reasoning v3). Required where it was asked for (fail closed: a
+  // reply that does not say whether the answer is unsafe is not used). Only statements quoted from the answer are kept.
+  let unsafe: string[] | undefined;
+  if (opts.safety) {
+    const um = /^\s*\**UNSAFE\**\s*:\s*(.*)$/im.exec(rest);
+    if (!um) return { ok: false, reason: "malformed" };
+    unsafe = unsafeQuotes(um[1], opts.safety.answer);
+    rest = (rest.slice(0, um.index) + rest.slice(um.index + um[0].length)).trim();
+  }
   const body = rest;
-  const parts = parseFeedbackSections(body);
-  const feedback = parts ? feedbackText(parts) : body;
+  const sections = parseFeedbackSections(body);
+  const parts = sections && unsafe?.length ? { ...sections, unsafe } : sections;
+  const feedback = parts ? feedbackText(parts) : unsafe?.length ? `${FEEDBACK_HEADINGS.unsafe}: ${unsafe.join("; ")}.\n${body}` : body;
   if (!feedback || feedback.length > (parts ? 2000 : 800)) return { ok: false, reason: "malformed" };
   if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };
   if (groundingViolations(feedback, [...grounding]).length) return { ok: false, reason: "ungrounded" };
-  const verdict = (unsafe ? "incorrect" : m[1].toLowerCase()) as EvaluateVerdict;
-  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched } : {}), ...(unsafe ? { unsafe } : {}) };
+  // An unsafe answer is not partly right: it is marked incorrect, earns nothing, and an extended answer is credited no key point.
+  const verdict = unsafe?.length ? "incorrect" : m[1].toLowerCase() as EvaluateVerdict;
+  return { ok: true, verdict, score: VERDICT_SCORE[verdict], feedback, ...(parts ? { parts } : {}), ...(matched ? { matched: unsafe?.length ? [] : matched } : {}), ...(unsafe?.length ? { unsafe } : {}) };
+}
+
+const flatWords = (t: string) => t.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+/** Shown where the evaluator flagged the answer but quoted nothing it contains: the flag stands, the invented words do not. */
+export const UNSAFE_UNQUOTED = "A statement in your answer";
+
+/**
+ * Pure. SQIE-CLOSE-2026-11 WS-B: the evaluator's UNSAFE line -> the statements to show, each one the answer's own words (normalised
+ * match, at least three characters). "none" -> []. A flag whose quotes are not in the answer is kept as a flag (UNSAFE_UNQUOTED):
+ * failing safe means the answer is still treated as unsafe, but no words the learner did not write are put in front of them.
+ */
+export function unsafeQuotes(line: string, answer: string): string[] {
+  const body = line.trim().replace(/^["'\s]+|["'.\s]+$/g, "");
+  if (!body || /^(none|nothing|n\/a|-)\.?$/i.test(body)) return [];
+  const have = ` ${flatWords(answer)} `;
+  const quotes = body.split(/\s*;\s*/).map(q => q.trim().replace(/^["'‘“]+|["'’”.]+$/g, "").trim()).filter(q => flatWords(q).length >= 3);
+  const kept = [...new Set(quotes.filter(q => have.includes(` ${flatWords(q)} `)).map(q => q.slice(0, 300)))].slice(0, 3);
+  return kept.length ? kept : [UNSAFE_UNQUOTED];
 }
 
 /**
  * AI evaluation of one short answer. `run` is the metered runner (activity `evaluate`); the caller screened the answer.
- * SQIE-CLOSE-2026-11: the UNSAFE line is always asked for (WS-B); `numberedCriteria` (WS-B/WS-C) marks the answer against weighted
- * criteria through the same MATCHED line an extended answer writes -- the marks are computed by code (scoring-rules.ts criteriaMarks).
+ * SQIE-CLOSE-2026-11 WS-B/WS-C: `numberedCriteria` marks the answer against weighted criteria through the same MATCHED line an extended
+ * answer writes -- the marks are computed by code (scoring-rules.ts criteriaMarks). The UNSAFE line is evaluate v3's own.
  */
 export async function runEvaluate(userId: string, input: { question: string; accepted: readonly string[]; answer: string; passage: Passage; rubric?: Rubric | null; numberedKeyPoints?: readonly string[]; numberedCriteria?: readonly Criterion[] }, run: AiRun = direct) {
   const rubric = input.rubric;
   const criteria = input.numberedCriteria?.length ? input.numberedCriteria : null;
   const numbered = !criteria && input.numberedKeyPoints?.length ? input.numberedKeyPoints : null;
   const r = await run({
-    system: [numbered ? EVALUATE_EXTENDED_SYSTEM : EVALUATE_SYSTEM, ...(criteria ? [EVALUATE_CRITERIA_RULE] : []), EVALUATE_SAFETY_RULE].join("\n"),
+    system: criteria ? [EVALUATE_SYSTEM, EVALUATE_CRITERIA_RULE].join("\n") : numbered ? EVALUATE_EXTENDED_SYSTEM : EVALUATE_SYSTEM,
     user: [
       `PASSAGE FROM MY NOTES (${passageCitation(input.passage)}):\n${input.passage.content}`,
       `QUESTION: ${input.question}\nACCEPTED ANSWERS: ${input.accepted.join(" | ")}`,
@@ -1248,10 +1263,10 @@ export async function runEvaluate(userId: string, input: { question: string; acc
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_evaluate" },
   });
   if (!r.ok) return { ok: false as const, error: r.error };
-  const base = numbered ? `${PROMPT_VERSIONS.evaluate}+${PROMPT_VERSIONS.evaluateExtended}` : criteria ? `${PROMPT_VERSIONS.evaluate}+${EVALUATE_CRITERIA_VERSION}` : PROMPT_VERSIONS.evaluate;
   const list = criteria ? criteria.map(c => c.text) : numbered;
-  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: `${base}+${EVALUATE_SAFETY_VERSION}`,
-    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, ...(list ?? rubric?.keyPoints ?? []), ...(rubric?.misconceptions ?? []), input.answer, input.question], { ...(list ? { keyPoints: list.length } : {}), answer: input.answer }) };
+  return { ok: true as const, model: r.model, provider: r.provider,
+    promptVersion: numbered ? `${PROMPT_VERSIONS.evaluate}+${PROMPT_VERSIONS.evaluateExtended}` : criteria ? `${PROMPT_VERSIONS.evaluate}+${EVALUATE_CRITERIA_VERSION}` : PROMPT_VERSIONS.evaluate,
+    evaluation: parseEvaluation(r.text, [input.passage.content, ...input.accepted, ...(list ?? rubric?.keyPoints ?? []), ...(rubric?.misconceptions ?? []), input.answer, input.question], { ...(list ? { keyPoints: list.length } : {}), safety: { answer: input.answer } }) };
 }
 
 // ── STAGE 5A (CR1-CR3): A PRIVATE CASE FROM THE STUDENT'S NOTES ── written as a draft, made a blueprint by code ──
@@ -1330,6 +1345,8 @@ export const CASE_REASONING_SYSTEM = [
   "Judge the answer ONLY against the expected answer and the case facts and passages given. Do not use outside knowledge.",
   "Accept reasoning that says the same thing in other words, including clinically equivalent wording.",
   "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
+  // SQIE-CLOSE-2026-11 WS-B (case reasoning v3): the same safety line as evaluate v3.
+  UNSAFE_RULE,
   // SCHOLAR-QUESTION-INTELLIGENCE-01 (case reasoning v2): the same five parts as a revision answer's feedback.
   FEEDBACK_FORMAT.replace("the passage's own words", "the passages' own words"),
   "Never give a mark, a score or a percentage.",
@@ -1338,21 +1355,21 @@ export const CASE_REASONING_SYSTEM = [
 
 /**
  * AI feedback on one written decision (activity `evaluate`). Checked like any evaluation; labelled where shown.
- * SQIE-CLOSE-2026-11: the UNSAFE line is always asked for (WS-B), and where the decision has weighted rubric criteria they are
- * numbered and the reply lists those met (MATCHED), so code computes the weighted marks (WS-B case criteria, WS-C a reason).
+ * SQIE-CLOSE-2026-11: the UNSAFE line is case reasoning v3's own (WS-B). Where the decision has weighted rubric criteria they are numbered
+ * and the reply lists those met (MATCHED), so code computes the weighted marks (WS-B case criteria, WS-C a reason).
  */
 export async function runCaseReasoning(userId: string, input: { prompt: string; expected: string; facts: string[]; answer: string; passages: Passage[]; criteria?: readonly Criterion[] | null }, run: AiRun = direct) {
   const criteria = input.criteria?.length ? input.criteria : null;
   const r = await run({
-    system: [CASE_REASONING_SYSTEM, ...(criteria ? [EVALUATE_CRITERIA_RULE] : []), EVALUATE_SAFETY_RULE].join("\n"),
+    system: criteria ? [CASE_REASONING_SYSTEM, EVALUATE_CRITERIA_RULE].join("\n") : CASE_REASONING_SYSTEM,
     user: `CASE FACTS:\n${input.facts.join("\n")}\n\nPASSAGES:\n${input.passages.map((p, i) => `[${passageTag(i)}] ${p.content}`).join("\n\n")}\n\nDECISION: ${input.prompt}\nEXPECTED ANSWER: ${input.expected}${criteria ? `\nCRITERIA (numbered):\n${criteria.map((c, i) => `${i + 1}. ${c.text}`).join("\n")}` : ""}\nMY ANSWER: ${input.answer}`,
     tier: "reasoning",
     maxTokens: 500,
     context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_reasoning" },
   });
   if (!r.ok) return { ok: false as const, error: r.error };
-  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: `${PROMPT_VERSIONS.caseReasoning}${criteria ? `+${EVALUATE_CRITERIA_VERSION}` : ""}+${EVALUATE_SAFETY_VERSION}`,
-    evaluation: parseEvaluation(r.text, [...input.passages.map(p => p.content), input.expected, ...input.facts, ...(criteria ?? []).map(c => c.text), input.answer, input.prompt], { ...(criteria ? { keyPoints: criteria.length } : {}), answer: input.answer }) };
+  return { ok: true as const, model: r.model, provider: r.provider, promptVersion: `${PROMPT_VERSIONS.caseReasoning}${criteria ? `+${EVALUATE_CRITERIA_VERSION}` : ""}`,
+    evaluation: parseEvaluation(r.text, [...input.passages.map(p => p.content), input.expected, ...input.facts, ...(criteria ?? []).map(c => c.text), input.answer, input.prompt], { ...(criteria ? { keyPoints: criteria.length } : {}), safety: { answer: input.answer } }) };
 }
 
 /** S2 framing for the Holdings mapping engine. It names no profession: the programme's catalogue does that. */

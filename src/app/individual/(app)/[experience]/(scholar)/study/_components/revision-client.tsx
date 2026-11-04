@@ -16,7 +16,7 @@ import type { ScenarioStageView } from "@/lib/individual/scholar/scenario";
 import { MakeEvaluation } from "./evaluation-client";
 import { RecoveryFlow, type ExplainOutcome } from "./evidence-recovery";
 import { RECOVERY_EXPLANATION_LABEL } from "@/lib/individual/scholar/config";
-import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "@/lib/individual/scholar/config";
+import { FEEDBACK_HEADINGS, GROUNDING_LABEL, UNSAFE_NOTE } from "@/lib/individual/scholar/config";
 import type { FeedbackParts, SourceMode } from "@/lib/individual/scholar/question-intel";
 import { carry, studyField } from "./study-active";
 import { SpellingNote } from "./spelling-note";
@@ -28,7 +28,7 @@ import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
-import { ROLE_LABEL, VARIANT_LABEL, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
+import { ROLE_LABEL, VARIANT_LABEL, isReasoningPart, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -644,7 +644,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                   ) : (
                     <>
                       <label className="block text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.role ? <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11.5px] font-semibold text-gray-700">{ROLE_LABEL[pt.role]}</span> : null}{pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
-                        <textarea id={`rv-part-${item.id}-${i}`} rows={pt.role === "justify" || pt.role === "interpret" ? 3 : 2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
+                        <textarea id={`rv-part-${item.id}-${i}`} rows={isReasoningPart(pt.role) ? 3 : 2} maxLength={1000} value={texts[i] ?? ""} onChange={e => setTexts(t => t.map((x, k) => (k === i ? e.target.value : x)))} className={`${field} mt-1 block w-full font-normal`} />
                       </label>
                       <DictateButton fieldId={`rv-part-${item.id}-${i}`} onValue={v => setTexts(t => t.map((x, k) => (k === i ? v : x)))} disabled={busy} className="mt-1" />
                     </>
@@ -784,6 +784,14 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
   ];
   return (
     <dl className={`mt-1 space-y-1 text-[13.5px] ${ink}`}>
+      {/* SQIE-CLOSE-2026-11 WS-B: an unsafe statement first, in the learner's own words, apart from the five parts. */}
+      {parts.unsafe?.length ? (
+        <div role="note" className="rounded-lg border-2 border-red-700 bg-red-50 px-3 py-2 text-red-950">
+          <dt className="font-semibold">{FEEDBACK_HEADINGS.unsafe}</dt>
+          <dd>{parts.unsafe.length > 1 ? <ul className="list-disc pl-5">{parts.unsafe.map(x => <li key={x}>{x}</li>)}</ul> : parts.unsafe[0]}</dd>
+          <dd className="mt-1 text-[12.5px]">{UNSAFE_NOTE}</dd>
+        </div>
+      ) : null}
       {rows.filter(([, xs]) => xs.length).map(([h, xs]) => (
         <div key={h}><dt className="font-semibold">{h}</dt><dd>{xs.length > 1 ? <ul className="list-disc pl-5">{xs.map(x => <li key={x}>{x}</li>)}</ul> : xs[0]}</dd></div>
       ))}
@@ -840,7 +848,7 @@ function SafetyBlock({ s }: { s: NonNullable<RevisionFeedback["safety"]> }) {
     <div role="note" data-testid="safety-outcome" className="mt-2 rounded-lg border-2 border-red-700 bg-white px-3 py-2">
       <p className="text-[13px] font-bold text-red-900">{s.label}</p>
       <p className="mt-0.5 text-[13px] text-gray-900">{s.explainer}</p>
-      {s.statement && <p className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Unsafe in your answer:</span> &ldquo;{s.statement}&rdquo;</p>}
+      {s.statement && s.by === "code" && <p className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Unsafe in your answer:</span> &ldquo;{s.statement}&rdquo;</p>}
       {s.missed.length > 0 && <div className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Missed:</span><ul className="list-disc pl-5">{s.missed.map(m => <li key={m}>{m}</li>)}</ul></div>}
       <p className="mt-1 text-[11.5px] text-gray-600">{s.byLabel}</p>
     </div>

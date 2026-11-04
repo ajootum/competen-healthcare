@@ -2,8 +2,8 @@
 import { describe, expect, it } from "vitest";
 import {
   CALCULATION_DEFAULTS, CRITICAL_MISS_SCORE_CAP, LEGACY_RULES_VERSION, SCORING_RULES_VERSION, UNSAFE_SCORE_CAP,
-  applyRounding, calculationProblems, calculationSpecOf, capForSafety, convertUnit, magnitudeError, roundingOf, criteriaMarks, criteriaOf, extractUnsafeLine, findingsOf, marksFromShare, markCalculation, matchUnsafe,
-  numbersIn, parseCalculationResponse, parseNumber, partContractOf, readUnsafeLine, rulesOf, safetyRecord, storedSafety, toleranceOf,
+  applyRounding, calculationProblems, calculationSpecOf, capForSafety, convertUnit, magnitudeError, roundingOf, criteriaMarks, criteriaOf, findingsOf, marksFromShare, markCalculation, matchUnsafe,
+  numbersIn, parseCalculationResponse, parseNumber, partContractOf, rulesOf, safetyRecord, storedSafety, toleranceOf,
   unitChoices, unitInfo, withinTolerance,
 } from "./scoring-rules";
 
@@ -184,16 +184,6 @@ describe("WS-B unsafe answers and safety-critical misses", () => {
     expect(matchUnsafe("Do not give the IV potassium as a bolus", ["give the IV potassium as a bolus"])).toBeNull();
     expect(matchUnsafe("", ["x"])).toBeNull();
   });
-  it("the UNSAFE line must quote the learner's own words; none is none; a misquote is invalid", () => {
-    expect(readUnsafeLine("none", "anything")).toEqual({ flagged: false });
-    expect(readUnsafeLine(null, "anything")).toEqual({ flagged: false });
-    expect(readUnsafeLine('"push it as a bolus"', "I would push it as a bolus quickly")).toEqual({ flagged: true, statement: "push it as a bolus" });
-    expect(readUnsafeLine("give double the dose", "I would push it as a bolus")).toEqual({ invalid: true });
-    const x = extractUnsafeLine("VERDICT x\nUNSAFE: none\nRIGHT: a");
-    expect(x.line).toBe("none");
-    expect(x.rest).not.toMatch(/UNSAFE/);
-    expect(x.rest).toMatch(/RIGHT: a/);
-  });
   it("caps: unsafe earns nothing and is never correct; a critical miss is never correct and at most half", () => {
     expect(UNSAFE_SCORE_CAP).toBe(0); expect(CRITICAL_MISS_SCORE_CAP).toBe(0.5);
     expect(capForSafety({ correct: true, score: 1 }, "unsafe")).toEqual({ correct: false, score: 0 });
@@ -237,5 +227,30 @@ describe("WS-B / WS-C weighted criteria: rubric-based partial credit", () => {
     expect(partContractOf({ role: "justify", criteria: [{ text: "why", weight: 1 }] }, ["x"])).toMatchObject({ role: "justify", criteria: [{ text: "why", weight: 1, safetyCritical: false }] });
     expect(findingsOf({ findings: [{ label: "Heart rate", value: 128, unit: "/min" }] })).toEqual([{ label: "Heart rate", value: "128", unit: "/min" }]);
     expect(findingsOf({ findings: [{ label: "", value: "1" }] })).toEqual([]);
+  });
+});
+
+describe("WS-A: the pilot batch's eight calculation items (content/sqie-pilot-batch 8e35ae69) under the contract", () => {
+  // value, unit, decimals as the batch states them; exact match, unit required, no tolerance.
+  const PILOT: [string, number, string, number][] = [
+    ["cvs-04", 66, "mmHg", 0], ["cvs-08", 38, "mL/hour", 0], ["med-03", 2, "tablets", 0], ["med-04", 10, "mL", 0],
+    ["med-05", 4, "mL", 0], ["med-06", 0.5, "mL", 1], ["med-07", 125, "mL/hour", 0], ["med-08", 42, "drops/minute", 0],
+  ];
+  it("each is a sound key; the answer is right; its negative, a tenfold slip and a missing unit are not", () => {
+    for (const [code, value, unit, decimals] of PILOT) {
+      const a = { format: "calculation", accepted: [`${value} ${unit}`], value, unit, rounding: { mode: "decimal_places", places: decimals } };
+      expect(calculationProblems(a), code).toEqual([]);
+      const spec = calculationSpecOf(a)!;
+      expect(markCalculation(spec, { value: String(value), unit }).correct, code).toBe(true);
+      expect(markCalculation(spec, { value: `+${value}`, unit }).correct, code).toBe(true);
+      expect(markCalculation(spec, { value: `-${value}`, unit }).correct, code).toBe(false);
+      expect(markCalculation(spec, { value: String(value * 10), unit }).safety?.outcome, code).toBe("unsafe");
+      expect(markCalculation(spec, { value: String(value), unit: "" }).reason, code).toBe("unit_missing");
+    }
+  });
+  it("med-08: 41.67 drops/minute is not rounded as the question says (to a whole drop)", () => {
+    const spec = calculationSpecOf({ format: "calculation", accepted: ["42 drops/minute"], value: 42, unit: "drops/minute", rounding: { mode: "decimal_places", places: 0 } })!;
+    expect(markCalculation(spec, { value: "41.67", unit: "drops/min" }).reason).toBe("not_rounded");
+    expect(markCalculation(spec, { value: "42", unit: "gtt/min" }).correct).toBe(true);
   });
 });

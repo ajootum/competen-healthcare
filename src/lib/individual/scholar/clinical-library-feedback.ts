@@ -16,7 +16,7 @@ import { resolveOwner } from "@/lib/ai/consumption";
 import { caseSessionRecord, recordSessionFeedback, sessionFeedbackContext, sessionReasonContext } from "@/lib/cases/library";
 import { runCaseReasoning } from "./generation";
 import { scholarOwnedRunner } from "./http";
-import { CRITERION_WEIGHT_MAX, SAFETY_LABEL, criteriaMarks, criteriaOf, type CriteriaMarks, type Criterion } from "./scoring-rules";
+import { CRITERION_WEIGHT_MAX, SAFETY_LABEL, criteriaMarks, criteriaOf, unsafeStatement, type CriteriaMarks, type Criterion } from "./scoring-rules";
 
 /** SQIE-CLOSE-2026-11 WS-B: the weighted criteria of a case rubric (its stored weight and safety flag), or null where none is sound. */
 export function caseCriteria(rubric: readonly { criterion: string; weight?: number; safetyCritical?: boolean }[]): Criterion[] | null {
@@ -92,7 +92,7 @@ async function evaluateOwned(admin: any, args: { userId: string; sessionId: stri
   if (refused) return { ok: false, reason: `refused:${refused}` };
   if (!e.ok) return { ok: false, reason: `error:${e.error}` };
   if (!e.evaluation.ok) return { ok: false, reason: `withheld:${e.evaluation.reason}` };
-  const unsafe = e.evaluation.unsafe ?? null;
+  const unsafe = unsafeStatement(e.evaluation.unsafe);
   const marks = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe) : null;
   const text = recordedFeedbackText(e.evaluation.feedback, criteria, marks, unsafe);
   const saved = await recordSessionFeedback(admin, args.userId, args.sessionId, args.decisionToken,
