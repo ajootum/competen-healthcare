@@ -503,6 +503,8 @@ export const CONSENT_UPDATED = "We have updated how we describe AI help. Please 
 
 /** Consistency item 2: one attestation, one timestamp (pii_attested_at), covering both. */
 export const UPLOAD_ATTESTATION = "I confirm this file contains no identifiable patient information, and I have permission to upload and use it.";
+/** SCHOLAR-CE07C: the bytes in storage are not the bytes the browser had (a torn or mixed-up upload). Nothing is read. */
+export const UPLOAD_INTEGRITY_MESSAGE = "The file did not arrive complete, so it was not read or kept. Upload it again.";
 export const UPLOAD_ATTESTATION_REQUIRED = "Confirm the file contains no identifiable patient information and that you have permission to upload and use it.";
 
 export const PII_WARNING =
