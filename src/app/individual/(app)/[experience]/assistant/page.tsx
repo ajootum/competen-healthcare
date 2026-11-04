@@ -66,9 +66,10 @@ export default async function AssistantPage({ params, searchParams }: { params: 
         {standing.metered && <p className="mt-1"><a href={experienceHref(experience, "ai-allowance")} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Your AI allowance</a></p>}
       </div>
       {crossOffered && <CrossExperienceConsent granted={crossGranted} accent={x.accent} />}
-      {!availability.available && <AiUnavailableNote id="ai-unavailable" reason={availability.reason} experience={experience} className="mb-4" />}
-      {configured ? <AssistantPanel experience={experience} accent={x.accent} unavailable={!availability.available} ownCards={ownCards} link={link} />
-        : <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-[14px] text-amber-900">Personal AI is not available yet, so it cannot answer here.</p>}
+      {/* LEARNING-CLOSE-2026-11 D06 / LE-01: a provider that is not set up is said in the shared words (provider_unavailable), the same in Scholar and Professional. */}
+      {!configured ? <AiUnavailableNote id="ai-unavailable" reason="provider_unavailable" experience={experience} className="mb-4" />
+        : !availability.available && <AiUnavailableNote id="ai-unavailable" reason={availability.reason} experience={experience} className="mb-4" />}
+      {configured && <AssistantPanel experience={experience} accent={x.accent} unavailable={!availability.available} ownCards={ownCards} link={link} />}
     </>
   );
 }

@@ -95,7 +95,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
       const progress: Record<number, { actions: string[]; verdict: string | null }> = {};
       for (const e of events.ok ? events.data : []) { const p = (progress[e.step] ??= { actions: [], verdict: null }); if (!p.actions.includes(e.action)) p.actions.push(e.action); if (e.verdict) p.verdict = e.verdict; }
       const s = r.data.session;
-      resume = { session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles }), progress, position: position.ok ? position.data : null, records };
+      resume = { session: sessionView({ id: s.id, recorded: true, title: displaySessionTitle(s.title), scopeKind: s.scopeKind, currentStep: Math.min(s.currentStep, Math.max(0, r.data.steps.length - 1)), status: s.status, coverage: null, steps: r.data.steps, topics, profiles, titles: r.data.lessonTitles }), progress, position: position.ok ? position.data : null, records };
     }
   }
   const ids = (v?: string) => (v ?? "").split(",").filter(isUuid).slice(0, 10);

@@ -113,6 +113,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarVisualClassify: "on", scholarVisualTextWords: 40,
       scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanStartedSignal: "learning", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"], scholarAssessmentInstruments: [],
       scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
+      // LEARNING-CLOSE-2026-11 D02 / LE-04: three cumulative Go deeper rounds by default, configurable in HQ.
+      scholarLearnDeeperRoundsMax: 3,
       scholarFlashcardsPerGeneration: 10, scholarFlashcardDeckMax: 200, scholarFlashcardSourceModes: ["notes", "notes_and_references"],
       scholarFlashcardDifficulty: "any", scholarFlashcardExports: ["deck", "print", "guide"], scholarFlashcardLevelMix: "programme",
       // SCHOLAR-SESSION-AI-02: connected study sessions OFF until HQ switches them on (and 740 is applied).
@@ -443,6 +445,13 @@ describe("My Plan policy keys", () => {
   it("clamp the integers to their ranges and fall back on nonsense", () => {
     expect(p("scholar_plan_section_minutes", { value: 2 }).scholarPlanSectionMinutes).toBe(5);
     expect(p("scholar_plan_section_minutes", { value: 500 }).scholarPlanSectionMinutes).toBe(60);
+  });
+
+  it("LE-04: the Go deeper limit is an HQ policy (default three, one to ten)", () => {
+    expect(DEFAULT_POLICY.scholarLearnDeeperRoundsMax).toBe(3);
+    expect(p("scholar_learn_deeper_rounds_max", { value: 5 }).scholarLearnDeeperRoundsMax).toBe(5);
+    expect(p("scholar_learn_deeper_rounds_max", { value: 0 }).scholarLearnDeeperRoundsMax).toBe(1);
+    expect(p("scholar_learn_deeper_rounds_max", { value: 50 }).scholarLearnDeeperRoundsMax).toBe(10);
     expect(p("scholar_plan_max_weekly_minutes", { value: 10 }).scholarPlanMaxWeeklyMinutes).toBe(60);
     expect(p("scholar_plan_max_weekly_minutes", { value: 99999 }).scholarPlanMaxWeeklyMinutes).toBe(3000);
     expect(p("scholar_plan_max_weekly_minutes", { value: "abc" }).scholarPlanMaxWeeklyMinutes).toBe(600);

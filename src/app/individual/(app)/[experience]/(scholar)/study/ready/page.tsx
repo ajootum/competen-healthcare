@@ -171,7 +171,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
               </div>
 
               {proposal && (
-                <PlanProposalCard accent={x.accent} today={planWhen.today} proposal={proposal.proposal} decision={proposal.decision}
+                <PlanProposalCard accent={x.accent} today={planWhen.today} proposal={proposal.proposal} decision={proposal.decision} accepted={proposal.accepted}
                   hasPlan={proposal.hasPlan} recordable={proposal.recordable} extras={proposal.recordable} planHref={experienceHref("scholar", "study/plan")} />
               )}
 

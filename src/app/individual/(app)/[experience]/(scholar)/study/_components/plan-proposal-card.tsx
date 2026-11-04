@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useId, useMemo, useState } from "react";
+import { useId, useMemo, useRef, useState } from "react";
 import { hoursWords, type PlanProposal, type ProposalDecision } from "@/lib/individual/scholar/plan-proposal";
-import { estimateBasis, mergeUnits, splitUnit, toStored, toggleExcluded, togglePriority, unitTotals, type ProposedUnit } from "@/lib/individual/scholar/plan-units";
+import { applyStored, estimateBasis, mergeUnits, renameUnit, splitUnit, toStored, toggleExcluded, togglePriority, unitTotals, STORED_TITLE_MAX, type ProposedUnit, type StoredUnit } from "@/lib/individual/scholar/plan-units";
 import { minutesWords, sequencePreview } from "@/lib/individual/scholar/plan-view";
 import { fieldCls, hintCls, primaryBtn, quietBtn, secondaryBtn, tagCls } from "./plan-style";
 import { ErrorLine, callJson, errorOf } from "./plan-ui";
@@ -18,13 +18,19 @@ import { PlanSetup } from "./plan-setup";
 // (plan-units.ts): each unit's title, where it is in the notes, what it covers, and its estimated reading, learning, revision and practice
 // time with the basis stated. The learner can merge a unit with the next, split one before a section, leave one out or put one first, and
 // the totals follow, before "Add to My Plan". What is added is the units as reviewed. The sections themselves are untouched.
+//
+// LEARNING-CLOSE-2026-11 D03 / LE-02: the learner can RENAME a unit, and after acceptance can "Change the units" (rename, merge, split,
+// leave out, put first) and save: a new acceptance carries the units as changed. Nothing of the learner's work is moved: progress, notes,
+// saved explanations, questions, flashcards, attempts and citations belong to the sections, which no unit change touches.
 
 const API = "/api/individual/scholar/plan/proposal";
 const COMPLEXITY_WORD = { plain: "plain text", moderate: "moderately dense text", dense: "dense text" } as const;
 
-export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, recordable, extras, planHref }: {
+export function PlanProposalCard({ accent, today, proposal, decision, accepted = null, hasPlan, recordable, extras, planHref }: {
   accent: string; today: string;
   proposal: PlanProposal; decision: ProposalDecision | null;
+  /** LE-02: the units the latest acceptance carries, for a re-review (null: none). */
+  accepted?: StoredUnit[] | null;
   /** A plan (study plan settings) already exists: this is a later upload. */
   hasPlan: boolean;
   /** Migration 840 present: the answer can be remembered. */
@@ -38,9 +44,18 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
   const [error, setError] = useState("");
   const [setup, setSetup] = useState(false);
   const [saidNow, setSaidNow] = useState<ProposalDecision | null>(null);
-  const [units, setUnits] = useState<ProposedUnit[] | null>(proposal.units);
+  // After acceptance the card shows the units AS ACCEPTED (names, boundaries, flags), not the builder's fresh proposal.
+  const startUnits = useMemo(() => (decision === "accepted" && accepted && proposal.units
+    ? applyStored(proposal.units, accepted, { unit: proposal.unit, emptyUnits: proposal.units.flatMap(u => u.pictureOnly) }) ?? proposal.units
+    : proposal.units), [decision, accepted, proposal.units, proposal.unit]);
+  const [units, setUnits] = useState<ProposedUnit[] | null>(startUnits);
   const [splitting, setSplitting] = useState<{ index: number; before: number } | null>(null);
+  const [renaming, setRenaming] = useState<{ index: number; title: string } | null>(null);
   const [added, setAdded] = useState<number | null>(null);
+  // LE-02: "Change the units" after acceptance; Cancel returns to what was saved.
+  const [editing, setEditing] = useState(false);
+  const [changed, setChanged] = useState(false);
+  const saved = useRef<ProposedUnit[] | null>(startUnits);
   const shown = saidNow ?? decision;
   const later = hasPlan;
   const ctx = useMemo(() => ({ unit: proposal.unit, emptyUnits: (units ?? []).flatMap(u => u.pictureOnly) }), [proposal.unit, units]);
@@ -52,7 +67,7 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
   const { shown: steps, more } = sequencePreview(proposal.sequence.filter(s => s.minutes > 0 || s.coveredIn.length > 0), 6);
   const planned = totals?.planned ?? 0;
   const decisionWord: Record<ProposalDecision, string> = {
-    accepted: units ? `You added ${added ?? planned} learning ${(added ?? planned) === 1 ? "unit" : "units"} to My Plan.` : "You added this to My Plan.",
+    accepted: changed ? `Your learning units are saved: ${planned} planned in My Plan.` : units ? `You added ${added ?? planned} learning ${(added ?? planned) === 1 ? "unit" : "units"} to My Plan.` : "You added this to My Plan.",
     declined: "You chose not to plan this one.", deferred: "You said not now. It stays here for later.",
   };
 
@@ -62,9 +77,18 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
     const r = await callJson(API, "POST", body);
     setBusy(false);
     if (!r.ok) { setError(errorOf(r, "Your answer could not be saved just now.")); return false; }
-    if (d === "accepted") setAdded(planned);
+    if (d === "accepted") { setAdded(planned); saved.current = units; }
     setSaidNow(d); router.refresh();
     return true;
+  }
+  async function saveChanges() {
+    if (units && planned === 0) { setError("Keep at least one learning unit, or leave the units as they were."); return; }
+    setSplitting(null); setRenaming(null);
+    if (await answer("accepted")) { setChanged(true); setEditing(false); }
+  }
+  function cancelChanges() {
+    setSplitting(null); setRenaming(null); setError("");
+    setUnits(saved.current); setEditing(false);
   }
   async function accept() {
     if (units && planned === 0) { setError("Keep at least one learning unit, or choose not to plan these notes."); return; }
@@ -72,7 +96,7 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
     if (!hasPlan) { setSetup(true); return; }
     await answer("accepted");
   }
-  const editable = shown !== "accepted" && !setup && !busy;
+  const editable = (shown !== "accepted" || editing) && !setup && !busy;
 
   return (
     <section aria-labelledby={`${uid}-h`} className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4" data-testid="plan-proposal">
@@ -81,7 +105,9 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
 
       {units && totals ? (
         <>
-          <p className={`${hintCls} mt-1`}>Review the units before you add them: merge, split, leave one out, or put one first. The sections of your notes stay as they are.</p>
+          {editing
+            ? <p className={`${hintCls} mt-1`}>Rename, merge, split, leave out or put first, then save. Your progress, notes, saved explanations, questions and flashcards stay with the sections of your notes; only the units change.</p>
+            : shown !== "accepted" && <p className={`${hintCls} mt-1`}>Review the units before you add them: rename, merge, split, leave one out, or put one first. The sections of your notes stay as they are.</p>}
           <ol className="mt-3 space-y-2" aria-label="Proposed learning units">
             {units.map((u, i) => {
               const e = u.estimate;
@@ -104,6 +130,7 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
                     </div>
                     {editable && (
                       <div className="flex flex-wrap gap-1.5 md:max-w-[46%] md:justify-end">
+                        {!u.excluded && <button type="button" className={quietBtn} aria-expanded={renaming?.index === i} onClick={() => { setSplitting(null); setRenaming(renaming?.index === i ? null : { index: i, title: u.title }); }}>Rename</button>}
                         {!u.excluded && <button type="button" className={quietBtn} onClick={() => setUnits(togglePriority(units, i))}>{u.priority ? "Not first" : "Put first"}</button>}
                         {!u.excluded && i < units.length - 1 && <button type="button" className={quietBtn} onClick={() => { setSplitting(null); setUnits(mergeUnits(units, i, ctx)); }}>Merge with next</button>}
                         {!u.excluded && u.parts.length > 1 && <button type="button" className={quietBtn} aria-expanded={splitting?.index === i} onClick={() => setSplitting(splitting?.index === i ? null : { index: i, before: u.parts[Math.floor(u.parts.length / 2)].ordinal })}>Split</button>}
@@ -111,6 +138,20 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
                       </div>
                     )}
                   </div>
+                  {editable && renaming?.index === i && (
+                    <form className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-2 md:flex-row md:items-end" onSubmit={ev => { ev.preventDefault(); setUnits(renameUnit(units, i, renaming.title, ctx)); setRenaming(null); }}>
+                      <label className="block flex-1 text-[13px] font-semibold text-gray-800">
+                        Name of this unit
+                        <input className={`${fieldCls} mt-1 font-normal`} value={renaming.title} maxLength={STORED_TITLE_MAX} autoFocus
+                          onChange={ev => setRenaming({ index: i, title: ev.target.value })} aria-describedby={`${uid}-rename-${i}`} />
+                      </label>
+                      <p id={`${uid}-rename-${i}`} className="sr-only">Up to {STORED_TITLE_MAX} characters. Leave it empty to use the name from your notes.</p>
+                      <div className="flex gap-1.5">
+                        <button type="submit" className={secondaryBtn}>Save name</button>
+                        <button type="button" className={quietBtn} onClick={() => setRenaming(null)}>Cancel</button>
+                      </div>
+                    </form>
+                  )}
                   {editable && splitting?.index === i && (
                     <div className="mt-2 flex flex-col gap-2 border-t border-gray-100 pt-2 md:flex-row md:items-end">
                       <label className="block flex-1 text-[13px] font-semibold text-gray-800">
@@ -156,7 +197,17 @@ export function PlanProposalCard({ accent, today, proposal, decision, hasPlan, r
         <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[12.5px] text-gray-700">{basis.map((b, i) => <li key={i}>{b}</li>)}</ul>
       </details>
 
-      {shown && <p className="mt-3 text-[13.5px] font-semibold text-gray-800" aria-live="polite">{decisionWord[shown]}</p>}
+      {shown && !editing && <p className="mt-3 text-[13.5px] font-semibold text-gray-800" aria-live="polite">{decisionWord[shown]}</p>}
+      {shown === "accepted" && units && recordable && !setup && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {editing ? (
+            <>
+              <button type="button" className={primaryBtn} style={{ background: accent }} disabled={busy} onClick={() => void saveChanges()}>Save the units</button>
+              <button type="button" className={secondaryBtn} disabled={busy} onClick={cancelChanges}>Cancel</button>
+            </>
+          ) : <button type="button" className={secondaryBtn} disabled={busy} onClick={() => { setError(""); setEditing(true); }}>Change the units</button>}
+        </div>
+      )}
       {shown !== "accepted" && !setup && (
         <div className="mt-3 flex flex-wrap gap-2">
           <button type="button" className={primaryBtn} style={{ background: accent }} disabled={busy || !recordable} onClick={() => void accept()}>

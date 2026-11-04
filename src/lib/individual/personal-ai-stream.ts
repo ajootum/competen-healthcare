@@ -1,5 +1,6 @@
 import { later, stageTimer } from "./scholar/learn-flight";
 import { NDJSON_TYPE, type PersonalAiTiming, type StreamEvent } from "./personal-ai-options";
+import { AI_ERROR } from "./ai-error";
 
 // ── SCHOLAR-PAI-EXPERIENCE-01: A PERSONAL AI ANSWER, STREAMED ONLY AFTER EVERY GATE ──────────────────────────────
 //
@@ -57,7 +58,8 @@ export function personalAiFlight(now?: () => number) {
 }
 export type PersonalAiFlight = ReturnType<typeof personalAiFlight>;
 
-const FAILED = "The assistant could not answer just now. Try again shortly.";
+// LEARNING-CLOSE-2026-11 D06 / LE-01: the shared provider words (ai-error.ts).
+const FAILED = AI_ERROR.failed.error;
 
 /**
  * The route's response. `json` is what the route answered before streaming, for an outcome reached before any text

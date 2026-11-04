@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { currentTraceId } from "@/lib/trace";
 import type { IndividualContext } from "../guard";
+import { AI_ERROR, aiErrorBody, type AiErrorKind } from "../ai-error";
 
 // Small helpers shared by the Professional API routes. The GUARD is not here: every handler calls
 // requireIndividualContext("professional") itself, so scripts/individual-foundation-harness.ts 5a can see
@@ -10,6 +11,9 @@ import type { IndividualContext } from "../guard";
 export const todayUtc = () => new Date().toISOString().slice(0, 10);
 
 export const refuse = (error: string, status = 400) => NextResponse.json({ error }, { status });
+
+/** LEARNING-CLOSE-2026-11 D06 / LE-01: a provider outcome, in the words and with the code every Individual AI route uses (ai-error.ts). */
+export const refuseAi = (kind: AiErrorKind) => NextResponse.json(aiErrorBody(kind), { status: AI_ERROR[kind].status });
 
 /** The write failed. A constraint name is not a sentence, so the person gets one. */
 export const writeFailed = (what: string) =>

@@ -14,7 +14,8 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadCatalogueFor } from "@/lib/individual/catalogue";
 import { SUBJECTS_PER_CALL } from "@/lib/competency/mapping";
 import { isUuid } from "@/lib/individual/professional/validate";
-import { refuse, writeFailed, audit } from "@/lib/individual/professional/api";
+import { refuse, refuseAi, writeFailed, audit } from "@/lib/individual/professional/api";
+import { aiErrorKindOf } from "@/lib/individual/ai-error";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { addPersonMapping, decideMapping, isSubjectKind, listMappings, proposeForSubjects, type SubjectKind } from "@/lib/individual/professional/mapping-store";
 
@@ -87,7 +88,8 @@ export async function POST(req: Request) {
       const refusal = await pilotQuotaRefusal(ctx.admin, "professional", ctx.userId, quota, individualQuotaRefusal(quota, "questions"), "questions");
       if (refusal) return refuse(refusal.error, refusal.status);
     }
-    if (!aiStatus().configured) return refuse("The personal AI is not configured on this environment.", 503);
+    // LEARNING-CLOSE-2026-11 D06 / LE-01: the shared words and code (ai-error.ts), the same as Scholar's routes.
+    if (!aiStatus().configured) return refuseAi("not_configured");
 
     // Only the person's own entries: the record is read by user id, and an id not in it is skipped.
     const record = await loadProfessionalRecord(ctx.admin, ctx.userId);
@@ -123,8 +125,7 @@ export async function POST(req: Request) {
       if (r.error === "no_text") return refuse("Those entries have too little text to suggest links from.");
       // The patient-identifier screen: nothing was sent to the model, so nothing is counted against the quota.
       if (r.error === "identifier") return refuse("That entry looks as if it contains a patient identifier (an NHS number, a date of birth or a hospital number), so it was not sent to the AI. Remove it from the entry, then ask again.", 422);
-      const status = r.error === "not_configured" ? 503 : 502;
-      return refuse(r.error === "refusal" ? "The assistant declined that request." : "Suggestions could not be made just now. Try again shortly.", status);
+      return refuseAi(aiErrorKindOf(r.error));
     }
     return NextResponse.json({ ok: true, proposed: r.proposed, withheld: r.withheld });
   }

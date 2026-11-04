@@ -141,10 +141,23 @@ Owner instruction and GO 3 Nov 2026 (cross-cutting over CE-01, CE-02, CE-05, CE-
 
 ---
 
+## LEARNING-CLOSE-2026-11 WS03 — Learning Engine finalisation — Implementing
+
+Owner directive 4 Nov 2026 (LEARNING-CLOSE-2026-11, decisions D02, D03, D06). Branch `scholar/learning-close-ws03` from main e19a363a (4 Nov 2026) — not merged, not deployed.
+
+- **LE-01 Implementing**: one shared table of provider outcomes (`src/lib/individual/ai-error.ts`: not configured, declined, did not answer, each with a code) used by the Scholar routes (as before), the Professional assistant, mappings and document-draft routes (`professional/api.ts refuseAi`, `needs-ai.ts`), the Personal AI route and its stream, and the assistant page; the shared copy (`ai-availability.ts`) reads `failed` as "could not answer just now" and `not_configured` as "not available right now, nothing was sent", in the same words for both products. No raw "not configured on this environment" string reaches a learner. HQ Copilot and the case studio (landlord plane) keep their own words.
+- **LE-02 Implementing**: learning units can be named in the My Plan review step and, after acceptance, changed again ("Change the units": rename, merge, split, leave out, put first) — a new accepted `proposal` event (840) carries the units as changed, `plan-data.ts loadProposal` returns the accepted units (`accepted`), `plan-units.ts renameUnit / applyStored`. No migration: units hang off section ordinals and carry no progress.
+- **LE-03 Implementing**: a recorded Learn session's lessons can be renamed, merged or split ("Change the lessons" under the lesson list, `learn-recut-panel.tsx`, `POST sessions/[id]/recut`), through migration **955** (`individual_scholar_learning_session_recut`: the same sections regrouped in one transaction; events re-attributed by old-lesson containment — moved, copied on a split, detached on a merge; the 790 position, 820 lesson notes and artefact links and the current step re-pointed; `lesson_titles` on the session; `detached_at` on events). Staging ezhvpgtcqcdsgylrxgdb: applied twice, strict VERIFY passed; rollback `docs/evidence/LEARNING-CLOSE-WS03/ROLLBACK-955.sql`. Not in production (owner GO).
+- **LE-04 Implementing**: the Go deeper limit is the Individual policy `scholar_learn_deeper_rounds_max` (int, 1–10, fallback 3 = `DEEPER_ROUNDS_MAX`), read by the act route; editable on the HQ policy page like every Scholar key. Fair-use and cost controls unchanged.
+- **LE-05**: see the 955 build record (`docs/evidence/LEARNING-CLOSE-WS03/955-build-record.md`) for the staging proof that events, position, notes, artefacts, questions, flashcards and attempts survive a split and a merge with no orphaned rows.
+
+---
+
 ## Increment log
 
 | Date | Increment | Evidence | Workstreams |
 |---|---|---|---|
+| 4 Nov 2026 | LEARNING-CLOSE-2026-11 WS03 (LE-01..LE-05): shared AI-off wording for Scholar and Professional, learning-unit renaming and re-review in My Plan, Learn lesson re-cut (rename, merge, split) with progress preserved by containment, Go deeper limit as an HQ policy | branch scholar/learning-close-ws03; mig 955 (staging x2 + VERIFY, not production); docs/evidence/LEARNING-CLOSE-WS03/ | CE-01, CE-02, CE-03 |
 | 3 Nov 2026 | SCHOLAR-CUMULATIVE-TEACHING-01 (improvement of the existing Learning Engine, not a new workstream): UNDERSTANDING part in every lesson, TAUGHT SO FAR context for Go deeper / Explain again / Guide me / Challenge me / checks, additive Go deeper rounds with depth reached, Guide me dialogue, reasoning-judged clarification, saved rounds restored on open, heading-family lesson planning; branch scholar/cumulative-teaching-01 | `learn-context.test.ts`, `learn-cumulative.test.ts`; before/after on Bed bath (staging) in docs/evidence/SCHOLAR-CUMULATIVE-TEACHING-01/ | CE-01, CE-02, CE-05, CE-07 |
 | 3 Nov 2026 | My Competencies Explorer (HFE improvement of the existing Overview, not a new workstream): Framework -> Area -> Domain -> Competency in the saved Holdings order via the shared `framework-tree.ts` helper, seven independent progress indicators (accepted mapping = Material linked, never Practised), search/filters/sort, banded rows, detail drawer; branch scholar/competency-explorer-hfe-01 | `competency-explorer.test.ts`, `framework-tree.test.ts`; staging walk (PR) | Scholar competencies (CE-07 HFE) |
 | 2 Nov 2026 | CE-04 built on branch scholar/ce04-conversation-01 (not merged, not live): Talk to the patient (text), SBAR handover task, SBAR OSCE template, mig 880 authored (not applied) | docs/evidence/CASE-CONVERSATION/880-build-record.md | CE-04 |

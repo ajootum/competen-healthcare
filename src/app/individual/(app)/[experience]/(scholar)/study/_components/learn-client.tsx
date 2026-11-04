@@ -43,6 +43,7 @@ import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context"
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { LessonReader } from "./learn-reader";
+import { RecutPanel } from "./learn-recut-panel";
 import { WORKS_WITHOUT_AI } from "@/lib/individual/scholar/learn-reader";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
 import { INLINE_DEFAULTS, RECALL_WAIT_REASON, applicationAfter, applyEligible, blockPending, checkBlocks, inlineCheckPlacement, lessonCanContinue, marksFromActivities, quickFromCode, recallContent, recallFromCode, wordCount, type CheckBlock, type InlinePolicy } from "@/lib/individual/scholar/learn-inline";
@@ -1501,6 +1502,11 @@ export function LearnWorkspace(props: {
               otherTopicHref={experienceHref("scholar", "study/learn")} />
           )}
           <LessonList rows={rows.slice(curIdx + 1)} onSelect={select} label="Later lessons" />
+
+          {/* LEARNING-CLOSE-2026-11 D03 / LE-03: a recorded session's lessons can be renamed, merged or split (955), progress re-pointed by containment. */}
+          {session.recorded && session.id && session.steps.length > 0 && (
+            <RecutPanel sessionId={session.id} steps={session.steps} titles={session.lessonTitles ?? null} accent={accent} disabled={!!busy} />
+          )}
 
           {/* Below 66rem of content width: the compact sticky navigator; it reflects the ACTIVE lesson. */}
           <JourneyBar lessons={navLessons} current={curIdx} read={read} onJump={select}

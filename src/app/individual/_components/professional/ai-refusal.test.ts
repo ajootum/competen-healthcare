@@ -18,6 +18,16 @@ describe("aiNotice", () => {
   });
 });
 
+describe("LEARNING-CLOSE-2026-11 D06 / LE-01: a provider outcome is said in the shared words", () => {
+  it("not configured and failed carry codes the shared copy reads; the words never name an environment", () => {
+    const off = aiNotice({ error: "AI help is not available right now, so nothing was sent. Everything you have saved still works.", code: "not_configured" }, "x");
+    expect(off.text).toMatch(/saved still works/);
+    expect(off.text).not.toMatch(/environment|configured/i);
+    expect(off.next).toBeNull();
+    expect(aiNotice({ error: "x", code: "failed" }, "x").text).toMatch(/could not answer just now/);
+  });
+});
+
 describe("HFE-01 Wave 1: the shared reason words", () => {
   it("an unpublished policy says AI is not switched on yet, never 'not offered'", () => {
     const n = aiNotice({ error: "AI help is not switched on for Competen Individual yet.", code: "policy_unpublished" }, "x");
