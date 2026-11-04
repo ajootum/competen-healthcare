@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SCHOLAR } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
 import { carry, studyField } from "./study-active";
 import { SpellingNote } from "./spelling-note";
@@ -19,6 +18,7 @@ import { AskAbout } from "./ask-panel";
 import { CaseConversation, EMPTY_HANDOVER, HandoverBoxes, HandoverResult, handoverReady, type HandoverValue } from "./case-talk-client";
 import type { HandoverResultView } from "@/lib/cases/handover";
 import { DictateButton, ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
+import { LearningCallout, LearningIcon, LearningSectionHead, FeedbackParts, learnBox } from "@/components/ui/scholar-learning";
 
 // CLINICAL REASONING -- COMPETEN-SCHOLAR-CLINICAL-REASONING-01 (Stage 5A), the student's side.
 // A case shows only what the student has reached: the findings revealed so far and the decisions of the stages reached
@@ -27,10 +27,15 @@ import { DictateButton, ReadAloudButton } from "@/app/individual/_components/spe
 // Every case says what it is: a private practice case written by AI from the notes, or a governed library case.
 // One column below md (the CPR-MOB-001 single md edge); touch targets grow on coarse pointers.
 
-const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
+const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-[var(--learn-border)] bg-white px-4 py-2 text-[14px] font-semibold text-gray-900 hover:bg-[var(--learn-surface)] disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+// SCHOLAR LEARNING DESIGN SYSTEM (Apply): the case sits in the practice (teal) tone. One filled primary action in the tone's
+// ink, inner parts are white cards with one quiet ring (one edge per level), labels in small capitals, reading text at 15px.
+const primary = `inline-flex min-h-[48px] items-center justify-center gap-2 rounded-xl bg-[var(--learn-ink)] px-4 py-2 text-[14px] font-semibold text-[var(--learn-surface)] hover:opacity-90 disabled:opacity-50 ${focusRing}`;
+const inner = "rounded-xl bg-[var(--cmp-app-surface)] p-4 ring-1 ring-[var(--learn-border)]";
+const partLabel = "text-[12px] font-bold uppercase tracking-[0.08em] text-gray-700";
+const subHead = "cmp-learn-ink text-[15.5px] font-bold";
+const aiBox = "mt-2 rounded-lg border border-dashed border-[var(--cmp-role-revision-accent)] bg-[var(--cmp-role-revision-soft)] px-3 py-2";
 const field = `rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
 async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; status: number; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -111,9 +116,9 @@ export function CaseStart(props: {
   }
   const entries: (CaseEntry | "teach" | "revision")[] = chunkPreset?.chunkId ? [chunkPreset.from === "revision" ? "revision" : "teach"] : props.entries.filter(e => e !== "library" || props.libraryOn);
   return (
-    <section aria-labelledby="case-start-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-      <h2 id="case-start-h" className="text-[16px] font-bold text-gray-900">Clinical reasoning</h2>
-      <p className="mt-0.5 text-[13.5px] text-gray-600">Work through a patient case: recognise what matters, interpret findings, prioritise, decide and explain. Formative simulation from your own notes, not an assessment.</p>
+    <section aria-labelledby="case-start-h" className={`${learnBox("practice")} p-5 sm:p-6`}>
+      <LearningSectionHead icon="layers" level={2} id="case-start-h" caps={false} title="Clinical reasoning" />
+      <p className="mt-2 text-[14px] leading-relaxed text-gray-800">Work through a patient case: recognise what matters, interpret findings, prioritise, decide and explain. Formative simulation from your own notes, not an assessment.</p>
       <fieldset className="mt-3">
         <legend className="text-[13px] font-semibold text-gray-800">Start from</legend>
         <div className="mt-1 flex flex-wrap gap-3 text-[13.5px]">
@@ -144,13 +149,13 @@ export function CaseStart(props: {
         </label>
       </div>
       {entry === "competency" && !props.competencies.length && <p className="mt-2 text-[13px] text-gray-600">None of your notes is linked to a competency yet, so start from your notes instead. Cases work without a catalogue.</p>}
-      <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy || (entry === "notes" && !material && !chunkPreset?.chunkId) || (entry === "competency" && !competency)} onClick={() => begin(false)}>
+      <button type="button" className={`${primary} mt-4`} disabled={busy || (entry === "notes" && !material && !chunkPreset?.chunkId) || (entry === "competency" && !competency)} onClick={() => begin(false)}>
         {busy ? "Preparing the case…" : entry === "library" ? "Show library cases" : "Start the case"}
       </button>
       {props.aiNote && entry !== "library" && <p className="mt-2 text-[12.5px] text-gray-600">{props.aiNote}</p>}
       {offers && (
-        <div className="mt-4 rounded-xl border border-gray-200 p-4">
-          <p className="text-[13.5px] text-gray-800">{offers.note}</p>
+        <div className={`mt-4 ${inner}`}>
+          <p className="text-[14px] text-gray-800">{offers.note}</p>
           <ul className="mt-2 space-y-2">
             {offers.list.map(o => (
               <li key={o.versionId} className="flex flex-wrap items-center justify-between gap-2">
@@ -164,8 +169,8 @@ export function CaseStart(props: {
         </div>
       )}
       {saved && (
-        <div role="status" className="mt-4 rounded-xl border border-gray-200 p-4">
-          <p className="text-[13.5px] text-gray-800">{saved.note}</p>
+        <div role="status" className={`mt-4 ${inner}`}>
+          <p className="text-[14px] text-gray-800">{saved.note}</p>
           <div className="mt-3 flex flex-wrap items-center gap-3">
             <ReplayCase caseId={saved.caseId} title={`Play "${saved.title}" again`} />
             <button type="button" className={ghost} disabled={busy} onClick={() => begin(true, { fresh: true })}>Write a new case</button>
@@ -173,12 +178,12 @@ export function CaseStart(props: {
         </div>
       )}
       {readiness && (
-        <div role="status" className="mt-4 rounded-xl border border-amber-300 bg-amber-50/60 p-4">
-          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-amber-900">{readiness.canAttempt ? "A simpler activity may suit these notes" : "No case from these notes"}</p>
+        <div role="status" className={`mt-4 ${inner}`}>
+          <p className={`flex items-center gap-1.5 ${partLabel}`}><span className="cmp-learn-accent"><LearningIcon name="compass" className="h-4 w-4" /></span>{readiness.canAttempt ? "A simpler activity may suit these notes" : "No case from these notes"}</p>
           <p className="mt-1 text-[14px] text-gray-800">{readiness.error}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             {readiness.alternative === "case_question" && readiness.sectionIds?.[0] && (
-              <button type="button" className={btn} style={{ background: accent }} disabled={busy} onClick={() => caseQuestion(readiness.sectionIds![0])}>{busy ? "Writing…" : "Write a case question instead"}</button>
+              <button type="button" className={primary} disabled={busy} onClick={() => caseQuestion(readiness.sectionIds![0])}>{busy ? "Writing…" : "Write a case question instead"}</button>
             )}
             {readiness.materialId && readiness.sectionIds?.[0] && (
               <Link href={sourceHref(readiness.materialId, readiness.sectionIds[0])} className={ghost}>{readiness.alternative === "teach" ? "Learn from this section" : "Open the section"}</Link>
@@ -189,8 +194,8 @@ export function CaseStart(props: {
         </div>
       )}
       {continuity && (
-        <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">No new case right now</p>
+        <div role="status" className={`mt-3 ${inner}`}>
+          <p className={partLabel}>No new case right now</p>
           <p className="mt-1 text-[14px] text-gray-800">{continuity}</p>
         </div>
       )}
@@ -280,18 +285,18 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
   }
   const v = play.view;
   if (deleted) return (
-    <section aria-live="polite" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-      <h2 className="text-[16px] font-bold text-gray-900">Attempt deleted</h2>
+    <section aria-live="polite" className={`${learnBox("practice")} p-5 sm:p-6`}>
+      <h2 className="cmp-learn-ink text-[17px] font-bold">Attempt deleted</h2>
       <p className="mt-1 text-[14px] text-gray-800">The attempt, its conversation with the patient and its kept record have been removed.</p>
       <Link href={studyHref("apply")} className={`${ghost} mt-3`}>Try another case</Link>
     </section>
   );
   return (
-    <article aria-labelledby="case-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-      <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-500">{play.label}</p>
-      <h2 id="case-h" className="mt-1 text-[17px] font-bold text-gray-900">{v.title}</h2>
-      {v.intro && <p className="mt-1 text-[14.5px] leading-relaxed text-gray-800">{v.intro}</p>}
-      {v.patient && <p className="mt-1 text-[13px] text-gray-600">{[v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(" · ")}</p>}
+    <article aria-labelledby="case-h" className={`${learnBox("practice")} p-5 sm:p-6`}>
+      <p className="cmp-learn-ink text-[12px] font-bold uppercase tracking-[0.08em]">{play.label}</p>
+      <LearningSectionHead icon="layers" level={2} id="case-h" caps={false} title={v.title} className="mt-2" />
+      {v.intro && <p className="mt-2 text-[15.5px] leading-[1.7] text-gray-900">{v.intro}</p>}
+      {v.patient && <p className="mt-1 text-[13.5px] text-gray-700">{[v.patient.ageBand, v.patient.setting, v.patient.presentingComplaint].filter(Boolean).join(" · ")}</p>}
 
       {/* CE-06: the case so far (title, introduction, patient, findings), read by the browser's own voice. Never an answer: only what the learner can already see. */}
       <ReadAloudButton className="mt-2" label="Listen to the case" about="the case so far"
@@ -301,13 +306,13 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       {/* CE-04C: the simulated minute and what has happened so far. Nothing ahead is ever sent. */}
       {v.sim && <SimClock sim={v.sim} />}
 
-      <section aria-labelledby="findings-h" className="mt-4 rounded-xl bg-gray-50 p-4">
-        <h3 id="findings-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Findings so far</h3>
+      <section aria-labelledby="findings-h" className={`mt-4 ${inner}`}>
+        <h3 id="findings-h" className={`flex items-center gap-1.5 ${partLabel}`}><span className="cmp-learn-accent"><LearningIcon name="record" className="h-4 w-4" /></span>Findings so far</h3>
         {v.facts.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">None yet. Ask for what you need to know.</p> : (
           <dl className="mt-1 grid gap-x-4 gap-y-1 sm:grid-cols-2">
             {v.facts.map(f => (
-              <div key={f.token} className="text-[14px]">
-                <div className="flex flex-wrap gap-x-2"><dt className="font-semibold text-gray-800">{f.label}:</dt><dd className="text-gray-900">{f.value}{f.unit ? ` ${f.unit}` : ""}{f.trend?.length ? <span className="ml-1 rounded bg-amber-100 px-1.5 text-[11.5px] font-bold text-amber-900">changed</span> : null}</dd></div>
+              <div key={f.token} className="text-[14.5px] leading-relaxed">
+                <div className="flex flex-wrap gap-x-2"><dt className="font-semibold text-gray-800">{f.label}:</dt><dd className="text-gray-900">{f.value}{f.unit ? ` ${f.unit}` : ""}{f.trend?.length ? <span className="ml-1 rounded-full border border-[var(--cmp-role-revision-accent)] bg-[var(--cmp-role-revision-soft)] px-1.5 text-[11.5px] font-bold text-[var(--cmp-role-revision-ink)]">changed</span> : null}</dd></div>
                 {f.trend?.length ? <dd className="text-[12.5px] text-gray-700">Earlier: {f.trend.map(t => `${t.value}${f.unit ? ` ${f.unit}` : ""} (minute ${t.at})`).join(", then ")}</dd> : null}
               </div>
             ))}
@@ -320,9 +325,9 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
 
       <ol className="mt-4 space-y-4">
         {v.stages.map((st, si) => (
-          <li key={st.token} className="rounded-xl border border-gray-200 p-4">
-            <p className="text-[12px] font-bold uppercase tracking-[0.08em]" style={{ color: accent }}>Stage {si + 1}{st.categoryLabel ? ` · ${st.categoryLabel}` : ""}</p>
-            <h3 className="text-[15px] font-bold text-gray-900">{st.title}</h3>
+          <li key={st.token} className={inner}>
+            <p className="cmp-learn-ink text-[12px] font-bold uppercase tracking-[0.08em]">Stage {si + 1}{st.categoryLabel ? ` · ${st.categoryLabel}` : ""}</p>
+            <h3 className="mt-0.5 text-[16px] font-bold text-gray-900">{st.title}</h3>
             <ReadAloudButton className="mt-1" label="Listen to this stage" about={`stage ${si + 1}`}
               text={[st.title, ...st.decisionPoints.filter(d => !play.answered.includes(d.token)).map(d => d.prompt)].join("\n\n")} />
             {st.guidance && <StageGuidanceBox g={st.guidance} />}
@@ -330,9 +335,9 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
               const fb = feedbackFor(d.token);
               const done = play.answered.includes(d.token);
               return (
-                <div key={d.token} className="mt-3">
-                  <p className="text-[14.5px] font-semibold text-gray-900">{d.prompt}</p>
-                  {!done && d.hint && <p className="mt-1 rounded-lg bg-sky-50 px-3 py-1.5 text-[12.5px] text-sky-950">Hint: {d.hint}</p>}
+                <div key={d.token} className="mt-4 border-t border-[var(--learn-border)] pt-3 first:border-t-0 first:pt-0">
+                  <p className="text-[15px] font-semibold leading-relaxed text-gray-900">{d.prompt}</p>
+                  {!done && d.hint && <p className="cmp-learn-next mt-1.5 flex items-start gap-1.5 rounded-lg bg-[var(--learn-surface)] px-3 py-1.5 text-[13.5px] text-gray-900"><span className="cmp-learn-accent mt-0.5"><LearningIcon name="bulb" className="h-4 w-4" /></span><span><span className="cmp-learn-ink font-semibold">Hint:</span> {d.hint}</span></p>}
                   {!done && d.canReveal.length > 0 && (
                     <div className="mt-2 flex flex-wrap items-center gap-2 text-[13px]">
                       <span className="text-gray-600">Ask for:</span>
@@ -356,7 +361,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                           {d.options.map(o => {
                             const on = (choice[d.token] ?? []).includes(o.token);
                             return (
-                              <label key={o.token} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${on ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
+                              <label key={o.token} className={`flex cursor-pointer items-start gap-3 rounded-xl px-3.5 py-3 text-[14.5px] leading-relaxed pointer-coarse:min-h-[var(--cmp-touch-min)] ${on ? "bg-[var(--learn-surface)] ring-2 ring-[var(--learn-accent)]" : "ring-1 ring-[var(--learn-border)] hover:bg-[var(--learn-surface)]"}`}>
                                 <input type={d.kind === "multiple" ? "checkbox" : "radio"} name={`d-${d.token}`} checked={on} className="mt-1 h-4 w-4 shrink-0"
                                   onChange={() => setChoice(c => ({ ...c, [d.token]: d.kind === "multiple" ? (on ? (c[d.token] ?? []).filter(x => x !== o.token) : [...(c[d.token] ?? []), o.token]) : [o.token] }))} />
                                 <span>{o.text}</span>
@@ -376,17 +381,17 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
                     </>
                   )}
                   {!done && play.status === "active" && (
-                    <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={!!busy || (d.kind === "handover" ? !handoverReady(hv[d.token]) : d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
+                    <button type="button" className={`${primary} mt-3`} disabled={!!busy || (d.kind === "handover" ? !handoverReady(hv[d.token]) : d.kind === "free_text" ? !(text[d.token] ?? "").trim() : !(choice[d.token] ?? []).length)} onClick={() => answer(d.token, d.kind)}>
                       {busy === d.token ? "Recording…" : "Decide"}
                     </button>
                   )}
                   {done && spelt[d.token] && (
-                    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800">
+                    <div className="mt-2 rounded-lg bg-[var(--learn-surface)] px-3 py-1.5 text-[14px] text-gray-900">
                       <p className="whitespace-pre-wrap"><span className="font-semibold">Your reasoning:</span> {text[d.token]}</p>
                       <SpellingNote spelling={spelt[d.token]} what="reasoning" />
                     </div>
                   )}
-                  {done && d.askReason && reason[d.token]?.trim() && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[13px] text-gray-800"><span className="font-semibold">Your reason:</span> {reason[d.token]}</p>}
+                  {done && d.askReason && reason[d.token]?.trim() && <p className="mt-2 rounded-lg bg-[var(--learn-surface)] px-3 py-1.5 text-[14px] text-gray-900"><span className="font-semibold">Your reason:</span> {reason[d.token]}</p>}
                   {done && <DecisionFeedback d={d} fb={fb} materialId={play.materialId} note={play.handoverNotes?.[d.token] ?? null} />}
                 </div>
               );
@@ -407,7 +412,7 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
         prefill={askPrefill("case", {})} />}
       {/* SCHOLAR-AI-OPT-01 s7: optional feedback on an AI-written private case (a library case is clinically reviewed). */}
       {play.status !== "active" && play.kind === "private" && <AiFeedback kind="case" target="case" refId={play.caseId} />}
-      <nav aria-label="What next" className="mt-5 flex flex-wrap gap-2 border-t border-gray-100 pt-4">
+      <nav aria-label="What next" className="mt-5 flex flex-wrap gap-2 border-t border-[var(--learn-border)] pt-4 pointer-coarse:flex-col pointer-coarse:items-stretch">
         <Link href={studyHref("apply")} className={ghost}>Try another case</Link>
         <Link href={studyHref("revise")} className={ghost}>Revise related knowledge</Link>
         {play.canDelete && <button type="button" className={`${ghost} text-red-800`} disabled={!!busy} onClick={removeAttempt}>{busy === "delete" ? "Deleting…" : "Delete this attempt"}</button>}
@@ -421,9 +426,9 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
     <div className="mt-2">
       <p className="text-[13px] text-gray-600">Decision recorded.</p>
       {fb?.aiFeedback && (
-        <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
-          <p className="mt-1 whitespace-pre-line text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+        <div className={aiBox}>
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-[var(--cmp-role-revision-ink)]">{MARKING_LABEL.ai_evaluation}</p>
+          <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed text-gray-900">{fb.aiFeedback}</p>
           <FormativeAiLabel className="mt-1" />
         </div>
       )}
@@ -432,43 +437,50 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
   const a = fb.answered;
   const marking = fb.marking as keyof typeof MARKING_LABEL;
   return (
-    <div aria-live="polite" className={`mt-2 rounded-xl border p-3 ${fb.correct === true ? "border-emerald-300 bg-emerald-50" : fb.correct === false ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
-      {fb.correct !== undefined && fb.correct !== null && <p className={`text-[14px] font-bold ${fb.correct ? "text-emerald-900" : "text-red-900"}`}>{fb.correct ? "That is what the case calls for." : "Not what the case calls for."}</p>}
+    // Formative, never punitive: the verdict is a shape and words (a ring with a tick, a dashed ring), not a red or green box.
+    <div aria-live="polite" className="mt-3 rounded-xl bg-[var(--learn-surface)] p-3.5">
+      {fb.correct !== undefined && fb.correct !== null && (
+        <p className="flex items-center gap-2 text-[14.5px] font-bold text-gray-900">
+          <span className={fb.correct ? "cmp-learn-accent" : "text-[var(--cmp-role-revision-strong)]"}><LearningIcon name={fb.correct ? "check" : "miss"} className="h-5 w-5" /></span>
+          {fb.correct ? "That is what the case calls for." : "Not what the case calls for."}
+        </p>
+      )}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{fb.markingLabel ?? MARKING_LABEL[marking] ?? "Marked against the case"}.</span></p>
       {a.escalation && (
-        <p role={a.escalation.timeliness === "late" ? "alert" : undefined} className={`mt-2 rounded-lg px-3 py-1.5 text-[13.5px] font-semibold ${a.escalation.timeliness === "on_time" ? "bg-emerald-100 text-emerald-950" : "bg-red-100 text-red-950"}`}>
+        <p role={a.escalation.timeliness === "late" ? "alert" : undefined} className={`mt-2 rounded-lg px-3 py-1.5 text-[14px] font-semibold ${a.escalation.timeliness === "on_time" ? "bg-[var(--cmp-app-surface)] text-gray-900 ring-1 ring-[var(--learn-border)]" : "cmp-learn-caution border-l-4 border-[var(--learn-accent)] bg-[var(--learn-surface)] text-[var(--learn-ink)]"}`}>
           {a.escalation.timeliness === "late" ? "Late escalation. " : ""}{a.escalation.text}
         </p>
       )}
       {d.kind === "handover" && (fb.handover ?? a.handover) && <HandoverResult r={(fb.handover ?? a.handover)!} note={note} />}
       {d.kind !== "free_text" && d.kind !== "handover" && (
-        <ul className="mt-2 space-y-1 text-[13.5px]">
+        <ul className="mt-2 space-y-1.5 text-[14px] leading-relaxed">
           {a.options.map(o => {
             const text = d.options.find(x => x.token === o.token)?.text ?? "";
-            return <li key={o.token} className={o.correct ? "font-semibold text-emerald-900" : o.chosen ? "text-red-900" : "text-gray-700"}>{o.correct ? "✓ " : o.chosen ? "✗ " : "· "}{text}{o.rationale ? <span className="block pl-4 font-normal text-gray-700">{o.rationale}</span> : null}</li>;
+            return <li key={o.token} className={o.correct ? "font-semibold text-gray-900" : o.chosen ? "text-[var(--cmp-role-revision-ink)]" : "text-gray-700"}>{o.correct ? "✓ " : o.chosen ? "✗ " : "· "}{text}{o.rationale ? <span className="block pl-4 font-normal text-gray-700">{o.rationale}</span> : null}</li>;
           })}
         </ul>
       )}
-      {a.rationale && <p className="mt-2 text-[13.5px] text-gray-800">{a.rationale}</p>}
-      {fb.expected && <p className="mt-2 text-[13.5px] text-gray-800"><span className="font-semibold">What a good answer contains:</span> {fb.expected}</p>}
+      {a.rationale && <p className="mt-2 text-[14.5px] leading-relaxed text-gray-900">{a.rationale}</p>}
+      {fb.expected && <p className="mt-2 text-[14.5px] leading-relaxed text-gray-900"><span className="font-semibold">What a good answer contains:</span> {fb.expected}</p>}
       {fb.aiFeedback && (
-        <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{MARKING_LABEL.ai_evaluation}</p>
-          <p className="mt-1 whitespace-pre-line text-[13.5px] text-amber-950">{fb.aiFeedback}</p>
+        <div className={aiBox}>
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-[var(--cmp-role-revision-ink)]">{MARKING_LABEL.ai_evaluation}</p>
+          <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed text-gray-900">{fb.aiFeedback}</p>
           <FormativeAiLabel className="mt-1" />
         </div>
       )}
       {fb.reasonFeedback && (
-        <div className="mt-2 rounded-lg border border-dashed border-amber-400 bg-amber-50 px-3 py-2">
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-amber-900">{fb.reasonFeedback.label}: your reason</p>
-          <p className="mt-1 whitespace-pre-line text-[13.5px] text-amber-950">{fb.reasonFeedback.text}</p>
+        <div className={aiBox}>
+          <p className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-[var(--cmp-role-revision-ink)]">{fb.reasonFeedback.label}: your reason</p>
+          <p className="mt-1 whitespace-pre-line text-[14px] leading-relaxed text-gray-900">{fb.reasonFeedback.text}</p>
           <FormativeAiLabel className="mt-1" />
         </div>
       )}
       {a.safetyEvents.length > 0 && (
-        <div role="alert" className="mt-2 rounded-lg border-2 border-red-400 bg-white px-3 py-2">
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-red-900">Safety-critical</p>
-          <ul className="mt-1 list-disc pl-5 text-[13.5px] text-red-950">{a.safetyEvents.map(s => <li key={s}>{s}</li>)}</ul>
+        <div role="alert" className="mt-2">
+          <LearningCallout tone="caution" icon="warn" label="Safety-critical" emphasis="safety">
+            <ul className="list-disc pl-5">{a.safetyEvents.map(s => <li key={s}>{s}</li>)}</ul>
+          </LearningCallout>
         </div>
       )}
       {fb.correct === false && (fb.chunkIds ?? []).length > 0 && materialId && (
@@ -488,10 +500,10 @@ const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.ge
 /** SCHOLAR-CASE-INTEGRITY-01: the finished attempt is kept as it was completed, and any correction is shown beside the original. */
 function AttemptRecord({ a }: { a: Attempt }) {
   return (
-    <section aria-labelledby="attempt-h" className="mt-5 rounded-xl border border-gray-200 p-4">
-      <h3 id="attempt-h" className="text-[15px] font-bold text-gray-900">Your completed attempt</h3>
+    <section aria-labelledby="attempt-h" className={`mt-5 ${inner}`}>
+      <h3 id="attempt-h" className={subHead}>Your completed attempt</h3>
       <p className="mt-1 text-[13px] text-gray-700">Kept as you completed it{a.completedAt ? ` on ${day(a.completedAt)}` : ""}. {a.label}</p>
-      {a.changed && <p role="status" className="mt-2 rounded-lg bg-amber-50 px-3 py-1.5 text-[13px] text-amber-950">This case has changed since you completed it. Your attempt is kept against the case as you played it.</p>}
+      {a.changed && <p role="status" className="mt-2 rounded-lg bg-[var(--cmp-role-revision-soft)] px-3 py-1.5 text-[13.5px] text-[var(--cmp-role-revision-ink)]">This case has changed since you completed it. Your attempt is kept against the case as you played it.</p>}
       {a.corrected.length > 0 && (
         <div className="mt-3">
           <p className="text-[12.5px] font-bold text-gray-800">Corrections</p>
@@ -513,9 +525,9 @@ function AttemptRecord({ a }: { a: Attempt }) {
 /** CE-04C: the simulated clock, labelled as simulation. Only the minute now and the events already passed. */
 function SimClock({ sim }: { sim: NonNullable<LearnerView["sim"]> }) {
   return (
-    <section aria-labelledby="sim-h" className="mt-4 rounded-xl border border-sky-200 bg-sky-50 p-4">
-      <h3 id="sim-h" className="text-[12px] font-bold uppercase tracking-[0.08em] text-sky-900">Simulated time: minute <span className="tabular-nums">{sim.minute}</span></h3>
-      <p className="mt-1 text-[12.5px] text-sky-950">{sim.label}</p>
+    <section aria-labelledby="sim-h" className="cmp-learn-next mt-4 rounded-xl bg-[var(--learn-surface)] p-4">
+      <h3 id="sim-h" className="cmp-learn-ink text-[12px] font-bold uppercase tracking-[0.08em]">Simulated time: minute <span className="tabular-nums">{sim.minute}</span></h3>
+      <p className="mt-1 text-[13px] text-gray-800">{sim.label}</p>
       {sim.happened.length > 0 && (
         <ol aria-label="What has happened" className="mt-2 space-y-1 text-[13.5px] text-gray-900">
           {sim.happened.map(e => <li key={`${e.at}-${e.label}`}><span className="font-semibold tabular-nums">Minute {e.at}:</span> {e.label}</li>)}
@@ -527,37 +539,44 @@ function SimClock({ sim }: { sim: NonNullable<LearnerView["sim"]> }) {
 
 /** CE-04: the debrief in three lists, built by code from the attempt. Formative, labelled so. */
 function CaseReviewBox({ r }: { r: Review }) {
-  const list = (title: string, items: string[], tone: string, empty: string) => (
-    <div className="mt-3">
-      <p className={`text-[12.5px] font-bold ${tone}`}>{title}</p>
-      {items.length ? <ul className="list-disc pl-5 text-[13.5px] text-gray-900">{items.map(x => <li key={x}>{x}</li>)}</ul> : <p className="text-[13px] text-gray-600">{empty}</p>}
-    </div>
-  );
+  const body = (items: string[], empty: string) => items.length
+    ? <ul className="mt-1 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{items.map(x => <li key={x}>{x}</li>)}</ul>
+    : <p className="mt-1 text-[13.5px] text-gray-700">{empty}</p>;
+  // Each part is a heading with its own icon (FeedbackParts), so the parts read apart without colour. Unsafe is the
+  // clinical-caution callout, the strongest styling, whenever anything unsafe was recorded.
   return (
-    <section aria-labelledby="review-h" className="mt-5 rounded-xl border border-gray-200 p-4">
-      <h3 id="review-h" className="text-[15px] font-bold text-gray-900">Debrief</h3>
-      <p className="text-[12px] text-gray-600">{r.label}</p>
-      {list("What went well", r.wentWell, "text-emerald-900", "Nothing the case checks for went as expected this time.")}
-      {list("What was missed", r.missed, "text-amber-900", "Nothing the case checks for was missed.")}
-      {list("What was unsafe", r.unsafe, "text-red-900", "Nothing unsafe was recorded.")}
+    <section aria-labelledby="review-h" className={`mt-5 ${inner}`}>
+      <h3 id="review-h" className={subHead}>Debrief</h3>
+      <p className="text-[12.5px] text-gray-600">{r.label}</p>
+      <div className="mt-3">
+        <FeedbackParts parts={[
+          { kind: "right", heading: "What went well", body: body(r.wentWell, "Nothing the case checks for went as expected this time.") },
+          { kind: "missing", heading: "What was missed", body: body(r.missed, "Nothing the case checks for was missed.") },
+        ]} />
+      </div>
+      <div className="mt-3">
+        {r.unsafe.length
+          ? <LearningCallout tone="caution" icon="warn" label="What was unsafe" emphasis="safety"><ul className="list-disc pl-5">{r.unsafe.map(x => <li key={x}>{x}</li>)}</ul></LearningCallout>
+          : <p className="text-[13.5px] text-gray-700"><span className={`block ${partLabel}`}>What was unsafe</span>Nothing unsafe was recorded.</p>}
+      </div>
     </section>
   );
 }
 
 function CaseDebrief({ d }: { d: Debrief }) {
   return (
-    <section aria-labelledby="debrief-h" className="mt-5 rounded-xl border border-gray-200 p-4">
-      <h3 id="debrief-h" className="text-[15px] font-bold text-gray-900">How your reasoning went</h3>
+    <section aria-labelledby="debrief-h" className={`mt-5 ${inner}`}>
+      <h3 id="debrief-h" className={subHead}>How your reasoning went</h3>
       <p className="text-[12px] text-gray-600">{d.label}</p>
-      <p className="mt-2 text-[14px] text-gray-900">{d.correct} of {d.answered - d.dimensions.reduce((n, x) => n + x.written, 0)} choices were what the case called for{d.dimensions.some(x => x.written) ? `; ${d.dimensions.reduce((n, x) => n + x.written, 0)} written answer(s) reviewed apart` : ""}.</p>
-      <table className="mt-2 w-full text-[13px]">
+      <p className="mt-2 text-[14.5px] text-gray-900">{d.correct} of {d.answered - d.dimensions.reduce((n, x) => n + x.written, 0)} choices were what the case called for{d.dimensions.some(x => x.written) ? `; ${d.dimensions.reduce((n, x) => n + x.written, 0)} written answer(s) reviewed apart` : ""}.</p>
+      <table className="mt-2 w-full text-[13.5px]">
         <caption className="sr-only">By reasoning dimension</caption>
-        <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col">Dimension</th><th scope="col">Answered</th><th scope="col">As the case called for</th></tr></thead>
-        <tbody>{d.dimensions.map(x => <tr key={x.dimension} className="border-t border-gray-100"><td>{CASE_DIMENSION_LABEL[x.dimension] ?? "Reasoning"}</td><td className="tabular-nums">{x.answered}</td><td className="tabular-nums">{x.written === x.answered ? "Written: see feedback" : x.correct}</td></tr>)}</tbody>
+        <thead><tr className="text-left text-[12px] text-gray-600"><th scope="col">Dimension</th><th scope="col">Answered</th><th scope="col">As the case called for</th></tr></thead>
+        <tbody>{d.dimensions.map(x => <tr key={x.dimension} className="border-t border-[var(--learn-border)]"><td>{CASE_DIMENSION_LABEL[x.dimension] ?? "Reasoning"}</td><td className="tabular-nums">{x.answered}</td><td className="tabular-nums">{x.written === x.answered ? "Written: see feedback" : x.correct}</td></tr>)}</tbody>
       </table>
-      {d.safetyEvents.length > 0 && <div className="mt-3"><p className="text-[12.5px] font-bold text-red-900">Safety-critical points missed</p><ul className="list-disc pl-5 text-[13.5px] text-red-950">{d.safetyEvents.map(s => <li key={s}>{s}</li>)}</ul></div>}
-      {d.missedFindings.length > 0 && <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Findings you could have asked for</p><ul className="list-disc pl-5 text-[13.5px] text-gray-800">{d.missedFindings.map(f => <li key={f.label}>{f.label}</li>)}</ul></div>}
-      {d.objectives.length > 0 && <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">What this case was about</p><ul className="list-disc pl-5 text-[13.5px] text-gray-800">{d.objectives.map(o => <li key={o.text}>{o.text}</li>)}</ul></div>}
+      {d.safetyEvents.length > 0 && <div className="mt-3"><LearningCallout tone="caution" icon="warn" label="Safety-critical points missed" emphasis="safety"><ul className="list-disc pl-5">{d.safetyEvents.map(s => <li key={s}>{s}</li>)}</ul></LearningCallout></div>}
+      {d.missedFindings.length > 0 && <div className="mt-3"><p className={partLabel}>Findings you could have asked for</p><ul className="mt-1 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{d.missedFindings.map(f => <li key={f.label}>{f.label}</li>)}</ul></div>}
+      {d.objectives.length > 0 && <div className="mt-3"><p className={partLabel}>What this case was about</p><ul className="mt-1 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{d.objectives.map(o => <li key={o.text}>{o.text}</li>)}</ul></div>}
     </section>
   );
 }
@@ -565,16 +584,16 @@ function CaseDebrief({ d }: { d: Debrief }) {
 /** What a stage's own category adds as the learner reaches it (cases/blueprint.ts stageGuidance): never an answer to the decision in front of them. */
 function StageGuidanceBox({ g }: { g: NonNullable<LearnerView["stages"][number]["guidance"]> }) {
   return (
-    <div className="mt-2 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-800">
+    <div className="mt-2 rounded-lg bg-[var(--learn-surface)] px-3 py-2 text-[14px] leading-relaxed text-gray-900">
       {g.differentials && (
         <>
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Differentials to weigh</p>
+          <p className={partLabel}>Differentials to weigh</p>
           <ul className="mt-1 list-disc pl-5">{g.differentials.map(x => <li key={x.label}><span className="font-semibold">{x.label}</span>{x.reasoning ? <span className="block font-normal text-gray-700">{x.reasoning}</span> : null}</li>)}</ul>
         </>
       )}
       {g.managementPrinciples && (
         <>
-          <p className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-600">Management principles</p>
+          <p className={`mt-2 first:mt-0 ${partLabel}`}>Management principles</p>
           <ul className="mt-1 list-disc pl-5">{g.managementPrinciples.map(x => <li key={x}>{x}</li>)}</ul>
         </>
       )}
@@ -589,20 +608,20 @@ function ClosingNotes({ closing, reasons, view }: { closing: Closing | null; rea
   const c = closing;
   if (!c?.differentials.length && !c?.managementPrinciples.length && !c?.expectedReasoning && !mine.length) return null;
   return (
-    <section aria-labelledby="closing-h" className="mt-5 rounded-xl border border-gray-200 p-4">
-      <h3 id="closing-h" className="text-[15px] font-bold text-gray-900">How the case can be reasoned</h3>
-      {c?.expectedReasoning && <p className="mt-2 text-[14px] text-gray-900">{c.expectedReasoning}</p>}
+    <section aria-labelledby="closing-h" className={`mt-5 ${inner}`}>
+      <h3 id="closing-h" className={subHead}>How the case can be reasoned</h3>
+      {c?.expectedReasoning && <p className="mt-2 text-[15.5px] leading-[1.7] text-gray-900">{c.expectedReasoning}</p>}
       {!!c?.differentials.length && (
-        <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Differentials</p>
-          <ul className="list-disc pl-5 text-[13.5px] text-gray-800">{c.differentials.map(d => <li key={d.label}><span className="font-semibold">{d.label}</span>: {d.reasoning}</li>)}</ul></div>
+        <div className="mt-3"><p className={partLabel}>Differentials</p>
+          <ul className="mt-1 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{c.differentials.map(d => <li key={d.label}><span className="font-semibold">{d.label}</span>: {d.reasoning}</li>)}</ul></div>
       )}
       {!!c?.managementPrinciples.length && (
-        <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Management principles</p>
-          <ul className="list-disc pl-5 text-[13.5px] text-gray-800">{c.managementPrinciples.map(m => <li key={m}>{m}</li>)}</ul></div>
+        <div className="mt-3"><p className={partLabel}>Management principles</p>
+          <ul className="mt-1 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{c.managementPrinciples.map(m => <li key={m}>{m}</li>)}</ul></div>
       )}
       {mine.length > 0 && (
-        <div className="mt-3"><p className="text-[12.5px] font-bold text-gray-800">Your reasons</p>
-          <ul className="list-disc pl-5 text-[13.5px] text-gray-800">{mine.map(([t, r]) => <li key={t}><span className="font-semibold">{prompts.get(t)}</span> {r}</li>)}</ul></div>
+        <div className="mt-3"><p className={partLabel}>Your reasons</p>
+          <ul className="mt-1 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{mine.map(([t, r]) => <li key={t}><span className="font-semibold">{prompts.get(t)}</span> {r}</li>)}</ul></div>
       )}
     </section>
   );
@@ -618,11 +637,11 @@ function ReflectionCard({ prompt, revisit, materialId }: { prompt: string | null
   const [note, setNote] = useState("");
   const links = revisit.filter(r => r.chunkIds.length).slice(0, 3);
   return (
-    <section aria-labelledby="reflect-h" className="mt-5 rounded-xl border border-gray-200 bg-gray-50 p-4">
-      <h3 id="reflect-h" className="text-[15px] font-bold text-gray-900">Reflect on this case</h3>
+    <section aria-labelledby="reflect-h" className="cmp-learn-notes mt-5 rounded-xl bg-[var(--learn-surface)] p-4 ring-1 ring-[var(--learn-border)]">
+      <h3 id="reflect-h" className={subHead}>Reflect on this case</h3>
       <p className="text-[12.5px] font-semibold text-gray-700">Not saved — for your own reflection.</p>
-      {prompt && <p className="mt-2 text-[14px] text-gray-900">{prompt}</p>}
-      <ul className="mt-2 list-disc pl-5 text-[13.5px] text-gray-800">{REFLECTION_PROMPTS.map(p => <li key={p}>{p}</li>)}</ul>
+      {prompt && <p className="mt-2 text-[15px] leading-relaxed text-gray-900">{prompt}</p>}
+      <ul className="mt-2 list-disc pl-5 text-[14px] leading-relaxed text-gray-900">{REFLECTION_PROMPTS.map(p => <li key={p}>{p}</li>)}</ul>
       <label className="mt-2 block text-[13px] font-semibold text-gray-800">Your reflection
         <textarea id="case-reflection" rows={4} maxLength={2000} value={note} onChange={e => setNote(e.target.value)} className={`${field} mt-1 block w-full bg-white`} />
       </label>
@@ -669,10 +688,10 @@ export function CaseOfferPanel(props: { libraryOn: boolean; /** Whether offering
     setBusy(""); setMsg(r.ok ? "Withdrawn." : r.json.error ?? "That could not be withdrawn."); if (r.ok) router.refresh();
   }
   return (
-    <section aria-labelledby="offer-panel-h" className="rounded-2xl border border-gray-200 bg-white p-5">
-      <h2 id="offer-panel-h" className="text-[15px] font-bold text-gray-900">Offer your cases to the case library</h2>
-      <p className="text-[12.5px] text-gray-600">Optional, and separate from your AI help setting. Nothing is offered unless you choose a case. Offering never uses your AI allowance.</p>
-      {!props.offering && <p role="status" className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-[13px] text-amber-950">Offering cases is switched off here. You can still withdraw a permission or an offer you made.</p>}
+    <section aria-labelledby="offer-panel-h" className={`${learnBox("sources")} p-5`}>
+      <LearningSectionHead icon="library" level={2} id="offer-panel-h" caps={false} title="Offer your cases to the case library" />
+      <p className="mt-2 text-[13.5px] text-gray-700">Optional, and separate from your AI help setting. Nothing is offered unless you choose a case. Offering never uses your AI allowance.</p>
+      {!props.offering && <p role="status" className="mt-2 rounded-lg border border-[var(--cmp-role-revision-accent)] bg-[var(--cmp-role-revision-soft)] px-3 py-2 text-[13.5px] text-[var(--cmp-role-revision-ink)]">Offering cases is switched off here. You can still withdraw a permission or an offer you made.</p>}
       {!props.granted ? (
         !props.offering ? null :
         props.text && (
@@ -687,7 +706,7 @@ export function CaseOfferPanel(props: { libraryOn: boolean; /** Whether offering
         )
       ) : (
         <>
-          <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
+          <ul className="mt-2 divide-y divide-[var(--learn-border)] rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]">
             {props.cases.map(c => { const o = offered.get(`scholar:case:${c.id}`); return (
               <li key={c.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 text-[14px]">
                 <span className="min-w-0 flex-1">{c.title}{o ? <span className="text-[12.5px] text-gray-500"> · {o.status}{o.reasons.length ? ` (${o.reasons.join(", ")})` : ""}</span> : null}</span>

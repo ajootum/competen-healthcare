@@ -21,6 +21,7 @@ import { evaluationHref, studyHref } from "../_components/question-view";
 import { MonthlyReviewPanel } from "../_components/monthly-review-panel";
 import { loadMonthlyOverview, monthlyReviewOn } from "@/lib/individual/scholar/monthly-review-data";
 import { monthOf } from "@/lib/individual/scholar/monthly-review";
+import { LearningSectionHead } from "@/components/ui/scholar-learning";
 
 // Request-time only: it reads the release gate and the evidence, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -83,11 +84,12 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
               }))} />
           ) : <StatePanel title="Your monthly review could not be read just now"><p>Your study records could not be read. The rest of Evaluate is still here.</p></StatePanel>)}
 
-          <section aria-labelledby="ev-now-h">
+          {/* SCHOLAR LEARNING DESIGN SYSTEM (Evaluate): page sections carry their tone and an icon heading; the cards sit inside. */}
+          <section aria-labelledby="ev-now-h" className="cmp-learn-check">
             <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 id="ev-now-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Evaluate my understanding</h2>
-                <p className="mt-1 text-[13px] text-gray-600">All your learning, as your evidence shows it today. It updates as you learn: no extra examination, and no AI.</p>
+              <div className="min-w-0 flex-1">
+                <LearningSectionHead icon="target" level={2} id="ev-now-h" caps={false} title="Evaluate my understanding" />
+                <p className="mt-1.5 text-[13.5px] text-gray-700">All your learning, as your evidence shows it today. It updates as you learn: no extra examination, and no AI.</p>
               </div>
               {live.ok && <KeepContinuous />}
             </div>
@@ -97,14 +99,14 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
             </div>
           </section>
 
-          <section aria-labelledby="ev-evidence-h">
-            <h2 id="ev-evidence-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Review existing evidence</h2>
+          <section aria-labelledby="ev-evidence-h" className="cmp-learn-record">
+            <LearningSectionHead icon="record" level={2} id="ev-evidence-h" caps={false} title="Review existing evidence" />
             {counts ? (
-              <ul className="mt-2 grid gap-2 text-[13.5px] text-gray-800 sm:grid-cols-2">
-                <li className="rounded-xl border border-gray-200 bg-white p-3"><span className="font-semibold tabular-nums">{counts.independentQuestions}</span> questions answered ({counts.attempts} answers in all) · <Link href={studyHref("revise")} className={`underline ${focusRing}`}>Revise</Link></li>
-                <li className="rounded-xl border border-gray-200 bg-white p-3"><span className="font-semibold tabular-nums">{counts.reviews}</span> spaced recalls after a gap · <Link href={studyHref("revise")} className={`underline ${focusRing}`}>Review cards</Link></li>
-                <li className="rounded-xl border border-gray-200 bg-white p-3"><span className="font-semibold tabular-nums">{counts.independentDecisions}</span> clinical case decisions ({counts.decisions} in all) · <Link href={studyHref("apply")} className={`underline ${focusRing}`}>Apply</Link></li>
-                <li className="rounded-xl border border-gray-200 bg-white p-3"><span className="font-semibold tabular-nums">{counts.checks}</span> Teach Me checks (informal) · <Link href={studyHref("learn")} className={`underline ${focusRing}`}>Teach Me</Link></li>
+              <ul className="mt-3 grid gap-2.5 text-[14px] text-gray-900 sm:grid-cols-2">
+                <li className="rounded-xl bg-[var(--cmp-app-surface)] p-3.5 ring-1 ring-[var(--learn-border)]"><span className="font-semibold tabular-nums">{counts.independentQuestions}</span> questions answered ({counts.attempts} answers in all) · <Link href={studyHref("revise")} className={`underline ${focusRing}`}>Revise</Link></li>
+                <li className="rounded-xl bg-[var(--cmp-app-surface)] p-3.5 ring-1 ring-[var(--learn-border)]"><span className="font-semibold tabular-nums">{counts.reviews}</span> spaced recalls after a gap · <Link href={studyHref("revise")} className={`underline ${focusRing}`}>Review cards</Link></li>
+                <li className="rounded-xl bg-[var(--cmp-app-surface)] p-3.5 ring-1 ring-[var(--learn-border)]"><span className="font-semibold tabular-nums">{counts.independentDecisions}</span> clinical case decisions ({counts.decisions} in all) · <Link href={studyHref("apply")} className={`underline ${focusRing}`}>Apply</Link></li>
+                <li className="rounded-xl bg-[var(--cmp-app-surface)] p-3.5 ring-1 ring-[var(--learn-border)]"><span className="font-semibold tabular-nums">{counts.checks}</span> Teach Me checks (informal) · <Link href={studyHref("learn")} className={`underline ${focusRing}`}>Teach Me</Link></li>
               </ul>
             ) : <p className="mt-2 text-[13px] text-gray-600">Your evidence could not be read just now.</p>}
           </section>
@@ -116,14 +118,14 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
               defaultScope={evaluationPrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
           </section>
 
-          <section aria-labelledby="ev-hist-h">
-            <h2 id="ev-hist-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Previous evaluations</h2>
+          <section aria-labelledby="ev-hist-h" className="cmp-learn-next">
+            <LearningSectionHead icon="list" level={2} id="ev-hist-h" caps={false} title="Previous evaluations" />
             {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">{history.notProvisioned ? "Evaluations are not kept here yet." : "Your evaluations could not be read just now."}</p>
               : history.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet. An evaluation you start, or one you keep, is listed here.</p> : (
-                <ul className="mt-2 space-y-1.5">{history.data.map(h => (
-                  <li key={h.id} className="text-[13.5px]">
+                <ul className="mt-3 space-y-2">{history.data.map(h => (
+                  <li key={h.id} className="rounded-lg bg-[var(--cmp-app-surface)] px-3 py-2 text-[14px] ring-1 ring-[var(--learn-border)]">
                     <Link href={evaluationHref(h.id)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{h.scope?.label ?? "An evaluation"}</Link>
-                    <span className="text-[12px] text-gray-500"> · {h.kind === "continuous" ? "kept from Evaluate my understanding" : EVALUATION_METHOD_LABEL[h.method]} · {EVALUATION_CONFIDENCE_LABEL[h.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? h.confidence} · {new Date(h.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
+                    <span className="block text-[12.5px] text-gray-600">{h.kind === "continuous" ? "kept from Evaluate my understanding" : EVALUATION_METHOD_LABEL[h.method]} · {EVALUATION_CONFIDENCE_LABEL[h.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? h.confidence} · {new Date(h.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
                   </li>
                 ))}</ul>
               )}

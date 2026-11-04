@@ -1,0 +1,27 @@
+PASS apply 1440: no horizontal overflow (0px)
+PASS apply 1440: axe 0 violations
+PASS apply 820: no horizontal overflow (0px)
+PASS apply 820: axe 0 violations
+FAIL apply 820: touch targets >= 44px (small: Learn | Revise44 cards due | Apply | Evaluate)
+PASS apply 390: no horizontal overflow (0px)
+PASS apply 390: axe 0 violations
+FAIL apply 390: touch targets >= 44px (small: Learn | Revise44 cards due | Apply | Evaluate)
+PASS evaluate 1440: no horizontal overflow (0px)
+PASS evaluate 1440: axe 0 violations
+PASS evaluate 820: no horizontal overflow (0px)
+PASS evaluate 820: axe 0 violations
+FAIL evaluate 820: touch targets >= 44px (small: Learn | Revise44 cards due | Apply | Evaluate)
+PASS evaluate 390: no horizontal overflow (0px)
+PASS evaluate 390: axe 0 violations
+FAIL evaluate 390: touch targets >= 44px (small: Learn | Revise44 cards due | Apply | Evaluate)
+INFO no stored case in the fixture's Your cases list: the case page was not shot
+FAIL console errors: 4 -- apply@1440: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof windo | apply@820: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof windo | evaluate@1440: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof windo | evaluate@820: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof windo
+PASS 5xx responses: 0

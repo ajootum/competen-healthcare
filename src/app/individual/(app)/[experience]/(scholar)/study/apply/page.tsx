@@ -24,7 +24,8 @@ import { offeringOn } from "@/lib/cases/offering-switch";
 import { caseSessionView } from "@/lib/cases/library";
 import { consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
-import { CaseOfferPanel, CaseStart, ReplayCase } from "../_components/case-client";
+import { CaseOfferPanel, CaseStart, ReplayCase } from "../_components/case-client"
+import { LearningSectionHead } from "@/components/ui/scholar-learning";;
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -103,21 +104,22 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       <PaneGrid bp="lg" className="mb-8" fallbackMain="minmax(0,3fr)"
         end={{ storageKey: "scholar.apply.side.w", defaultPx: { ratio: 0.4 }, fallback: "minmax(0,2fr)", label: "Resize the your cases panel", node: (
         <aside aria-labelledby="case-history-h" className="space-y-4">
-          <section className="rounded-2xl border border-gray-200 bg-white p-4">
-            <h2 id="case-history-h" className="text-[14px] font-bold text-gray-900">Your cases</h2>
-            <p className="text-[12px] text-gray-600">Formative simulation: never an assessment, never evidence of competence. Stored cases replay with no AI.</p>
+          {/* SCHOLAR LEARNING DESIGN SYSTEM (Apply): the learner's cases list in the next (cyan) tone. */}
+          <section className="cmp-learn-next cmp-learn-box p-4 sm:p-5">
+            <LearningSectionHead icon="list" level={2} id="case-history-h" caps={false} title="Your cases" />
+            <p className="mt-1.5 text-[13px] text-gray-700">Formative simulation: never an assessment, never evidence of competence. Stored cases replay with no AI.</p>
             {!history.ok ? <p className="mt-2 text-[13px] text-gray-600">Clinical reasoning history is not available here yet.</p>
               : history.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet.</p> : (
-                <ul className="mt-2 space-y-1.5">{history.data.map(h => (
-                  <li key={`${h.kind}${h.id}`} className="text-[13.5px]">
+                <ul className="mt-3 space-y-2">{history.data.map(h => (
+                  <li key={`${h.kind}${h.id}`} className="rounded-lg bg-[var(--cmp-app-surface)] px-3 py-2 text-[14px] ring-1 ring-[var(--learn-border)]">
                     <Link href={withStudy(`${experienceHref("scholar", "study/apply/case")}?kind=${h.kind}&session=${h.id}`, sid)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{h.title ?? libTitles.get(h.id) ?? "Library case"}</Link>
-                    <span className="text-[12px] text-gray-500"> · {h.kind === "library" ? "library" : "your case"} · {h.status === "completed" ? (h.kept ? "finished, record kept" : "finished") : "in progress"}</span>
+                    <span className="block text-[12.5px] text-gray-600">{h.kind === "library" ? "library" : "your case"} · {h.status === "completed" ? (h.kept ? "finished, record kept" : "finished") : "in progress"}</span>
                   </li>
                 ))}</ul>
               )}
             {privateCases.ok && privateCases.data.length > 0 && (
               <>
-                <h3 className="mt-3 text-[13px] font-bold text-gray-800">Play one of your stored cases again</h3>
+                <h3 className="cmp-learn-ink mt-4 text-[12px] font-bold uppercase tracking-[0.08em]">Play one of your stored cases again</h3>
                 <ul className="mt-1 space-y-1">{privateCases.data.slice(0, 8).map(c => <li key={c.id}><ReplayCase caseId={c.id} title={c.title} /></li>)}</ul>
               </>
             )}
@@ -136,9 +138,9 @@ export default async function Apply({ params, searchParams }: { params: Promise<
         </div>
       </PaneGrid>
 
-      <section aria-labelledby="own-cases-h">
-        <h2 id="own-cases-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Your practice scenarios</h2>
-        <p className="mt-1 text-[13px] text-gray-600">Written by AI from your own notes. They are practice, not clinically reviewed cases, and each one says so.</p>
+      <section aria-labelledby="own-cases-h" className="cmp-learn-practice">
+        <LearningSectionHead icon="layers" level={2} id="own-cases-h" caps={false} title="Your practice scenarios" />
+        <p className="mt-1.5 text-[13.5px] text-gray-700">Written by AI from your own notes. They are practice, not clinically reviewed cases, and each one says so.</p>
         <div className="mt-3">
           {!questions.ok ? (questions.notProvisioned
             ? <StatePanel title="Case practice is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
@@ -165,8 +167,8 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       </section>
 
       <section aria-labelledby="shared-h" className="mt-10">
-        <h2 id="shared-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Clinically approved cases</h2>
-        <div className="mt-3 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+        <LearningSectionHead icon="library" level={2} id="shared-h" caps={false} title="Clinically approved cases" />
+        <div className="cmp-learn-sources cmp-learn-box mt-3 p-5 sm:p-6">
           {libraryOn ? (
             <p className="text-[14px] leading-relaxed text-gray-700">
               The case library holds cases an independent clinical reviewer approved, each for its exact version. Choose <span className="font-semibold">Choose an existing case</span> above to play one: it uses no AI.
