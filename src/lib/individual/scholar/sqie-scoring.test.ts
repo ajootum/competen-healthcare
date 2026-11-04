@@ -12,7 +12,7 @@ import { markStageByCode, readProgress, scenarioSafety, scenarioSpecOf, signProg
 import { applyBlindVerification, blindItemOf, calculationAgrees } from "./blind-verify";
 import { PROMPT_VERSIONS } from "./config";
 import { REVISION_FORMATS, REVISION_FORMATS_OFF_BY_DEFAULT, BLIND_FORMATS, FORMAT_ROW } from "./question-formats";
-import { SCORING_RULES_VERSION, storedCalculation, markCalculation, calculationSpecOf } from "./scoring-rules";
+import { SCORING_RULES_VERSION, storedCalculation, markCalculation, calculationSpecOf, unsafeStatement } from "./scoring-rules";
 import { caseCriteria, criteriaMarksLine, recordedFeedbackText } from "./clinical-library-feedback";
 import { criteriaMarks } from "./scoring-rules";
 import { reasonContextFrom } from "@/lib/cases/library";
@@ -47,26 +47,20 @@ describe("WS-B short answers: an unsafe answer is recognised, capped and named",
     expect(markResponse(SHORT_UNSAFE, { kind: "text", text: "by infusion" })).toEqual({ correct: true, score: 1, marking: "deterministic" });
     expect(markResponse(SHORT_UNSAFE, { kind: "text", text: "slowly, diluted, over time" })).toEqual({ needsJudgement: true });
   });
-  it("the evaluator's UNSAFE line makes it incorrect, never partly; a safety-critical item answered partly is a critical miss", () => {
-    const e = parseEvaluation("VERDICT: partly\nUNSAFE: push it as an IV bolus\nRIGHT: none\nMISSING: diluted infusion\nMISCONCEPTIONS: none\nWHY: Potassium chloride must never be given as an intravenous bolus.\nNEXT: none", [NOTE], { answer: "I would push it as an IV bolus" });
-    expect(e).toMatchObject({ ok: true, verdict: "incorrect", score: 0, unsafe: "push it as an IV bolus" });
-    expect((e as any).feedback).not.toMatch(/UNSAFE/);
-    const s = writtenSafety(SHORT_UNSAFE, { correct: false, unsafe: (e as any).unsafe, matched: null });
+  it("the evaluator's UNSAFE line (WS-B evaluate v3) makes it incorrect, never partly; a safety-critical item answered partly is a critical miss", () => {
+    const e = parseEvaluation("VERDICT: partly\nUNSAFE: push it as an IV bolus\nRIGHT: none\nMISSING: diluted infusion\nMISCONCEPTIONS: none\nWHY: Potassium chloride must never be given as an intravenous bolus.\nNEXT: none", [NOTE], { safety: { answer: "I would push it as an IV bolus" } });
+    expect(e).toMatchObject({ ok: true, verdict: "incorrect", score: 0, unsafe: ["push it as an IV bolus"] });
+    const s = writtenSafety(SHORT_UNSAFE, { correct: false, unsafe: unsafeStatement((e as any).unsafe), matched: null });
     expect(withSafety({ correct: false, score: 0.5 }, s, "ai")).toEqual({ mark: { correct: false, score: 0 }, safety: { outcome: "unsafe", statement: "push it as an IV bolus", by: "ai" } });
     expect(writtenSafety(SHORT_UNSAFE, { correct: false, unsafe: null, matched: null }).outcome).toBe("critical_missed");
     expect(writtenSafety(row({ answer: { accepted: ["x"] } }), { correct: false, unsafe: null, matched: null }).outcome).toBe("safe");
   });
-  it("an UNSAFE line quoting words the learner did not write withholds the evaluation (never marks them on it)", () => {
-    expect(parseEvaluation("VERDICT: incorrect\nUNSAFE: give it as a bolus\nRIGHT: none", [NOTE], { answer: "by infusion over an hour" })).toEqual({ ok: false, reason: "malformed" });
-    expect(parseEvaluation("VERDICT: correct\nUNSAFE: none\nRIGHT: by infusion", [NOTE], { answer: "by infusion" })).toMatchObject({ ok: true, verdict: "correct" });
-    // An older reply with no UNSAFE line still parses (nothing flagged).
-    expect(parseEvaluation("VERDICT: correct\nRIGHT: by infusion", [NOTE], { answer: "by infusion" })).toMatchObject({ ok: true, verdict: "correct" });
-  });
-  it("the evaluator is always asked for the UNSAFE line, and the prompt version says so", async () => {
+  it("the evaluator's own prompt carries the UNSAFE line (WS-B evaluate v3); this branch adds no suffix to it", async () => {
     const ai = fakeRun(["VERDICT: correct\nUNSAFE: none\nRIGHT: by infusion"]);
     const e = await runEvaluate("u", { question: "How?", accepted: ["by infusion"], answer: "by infusion", passage }, ai.run) as any;
-    expect(ai.systems[0]).toMatch(/UNSAFE: /);
-    expect(e.promptVersion).toBe(`${PROMPT_VERSIONS.evaluate}+scholar-evaluate-safety-v1`);
+    expect(ai.systems[0]).toMatch(/UNSAFE/);
+    expect(e.promptVersion).toBe(PROMPT_VERSIONS.evaluate);
+    expect(unsafeStatement(["a", "b"])).toBe("a; b"); expect(unsafeStatement([])).toBeNull();
   });
   it("an extended answer that misses a safety-critical key point is a critical miss naming it", () => {
     const ext = row({ answer: { format: "extended", accepted: ["m"], modelAnswer: "Dilute it and infuse it; never as a bolus; check the prescription.", marks: 3, partialCredit: { rule: "per_key_point", marksPerPoint: 1 },
@@ -137,9 +131,9 @@ describe("WS-B case criteria: weight and safetyCritical are scored", () => {
   it("case reasoning numbers the criteria and asks for MATCHED and UNSAFE; code weighs them", async () => {
     const ai = fakeRun(["VERDICT: partly\nMATCHED: 1\nUNSAFE: none\nRIGHT: recognises sepsis\nMISSING: escalation\nMISCONCEPTIONS: none\nWHY: Sepsis needs urgent escalation to the medical team.\nNEXT: none"]);
     const e = await runCaseReasoning("u", { prompt: "What now?", expected: "Escalate", facts: [], answer: "this is sepsis", passages: [passage], criteria: caseCriteria(rubric) }, ai.run) as any;
-    expect(ai.systems[0]).toMatch(/CRITERIA are numbered/); expect(ai.systems[0]).toMatch(/UNSAFE: /);
+    expect(ai.systems[0]).toMatch(/CRITERIA are numbered/); expect(ai.systems[0]).toMatch(/UNSAFE/);
     expect(e.evaluation).toMatchObject({ ok: true, matched: [0] });
-    expect(e.promptVersion).toBe(`${PROMPT_VERSIONS.caseReasoning}+scholar-evaluate-criteria-v1+scholar-evaluate-safety-v1`);
+    expect(e.promptVersion).toBe(`${PROMPT_VERSIONS.caseReasoning}+scholar-evaluate-criteria-v1`);
   });
 });
 

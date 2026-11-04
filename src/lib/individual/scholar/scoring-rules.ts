@@ -27,8 +27,8 @@
 //   scenario stage                stages[i].safetyCritical: boolean, stages[i].unsafe: string[]
 //   case free-text criterion      blueprint RubricCriterion { weight, safetyCritical } (already stored; now SCORED)
 //   Outcomes (SafetyOutcome):
-//     unsafe           the answer states something an authored `unsafe` answer names (code), or the evaluator's UNSAFE line
-//                      quotes a statement of the answer (AI, formative). Score capped at UNSAFE_SCORE_CAP, never correct,
+//     unsafe           the answer states something an authored `unsafe` answer names (code), or the evaluator's required UNSAFE line
+//                      (evaluate v3 / case reasoning v3, branch WS-B) flags it (AI, formative). Score capped at UNSAFE_SCORE_CAP, never correct,
 //                      never "partly": the feedback names the unsafe statement.
 //     critical_missed  a safety-critical part / key point / stage / criterion was not earned in full. Never correct, score
 //                      capped at CRITICAL_MISS_SCORE_CAP, and the feedback names what was missed.
@@ -114,19 +114,8 @@ export function matchUnsafe(answer: string, unsafe: readonly string[]): string |
   return unsafe.find(u => normalise(u) === a) ?? null;
 }
 
-/**
- * Pure. The evaluator's UNSAFE line read back: `none` (or absent) is not flagged; a statement is kept only if it is the
- * learner's OWN words (a normalised substring of the answer, at least three characters). A flag that quotes something the answer
- * does not say is `invalid` (the caller withholds the evaluation rather than trust it).
- */
-export function readUnsafeLine(raw: string | null | undefined, answer: string): { flagged: false } | { flagged: true; statement: string } | { invalid: true } {
-  if (raw === null || raw === undefined) return { flagged: false };
-  const body = raw.trim().replace(/^["'“”]+|["'“”.]+$/g, "").trim();
-  if (!body || /^(none|nothing|n\/a|-|no)\.?$/i.test(body)) return { flagged: false };
-  const q = normalise(body);
-  if (q.length < 3 || !normalise(answer).includes(q)) return { invalid: true };
-  return { flagged: true, statement: body.slice(0, 300) };
-}
+/** Pure. The evaluator's unsafe statements (WS-B evaluate v3: the learner's own words, or a flag) as the one statement a record keeps, or null. */
+export const unsafeStatement = (unsafe: readonly string[] | null | undefined): string | null => (unsafe?.length ? unsafe.join("; ").slice(0, 300) : null);
 
 export type SafetyRecord = { outcome: Exclude<SafetyOutcome, "safe">; statement?: string; missed?: string[]; by: "code" | "ai" };
 
@@ -161,22 +150,6 @@ export function storedSafety(response: unknown): SafetyRecord | null {
     ...(typeof s.statement === "string" && s.statement.trim() ? { statement: s.statement.slice(0, 300) } : {}),
     ...(strList(s.missed, 4, 200).length ? { missed: strList(s.missed, 4, 200) } : {}),
   };
-}
-
-/** The evaluator's extra instruction (generation.ts appends it): one UNSAFE line, the learner's own words or none. */
-export const EVALUATE_SAFETY_RULE = [
-  "After the VERDICT line add exactly one line 'UNSAFE: ' followed by the words of the answer, copied exactly from the answer, that would be unsafe for a patient if acted on according to the passage (for example giving or doing what the passage says must not be given or done), or 'UNSAFE: none'.",
-  "Flag only what the answer itself says, never something it leaves out. An answer with an unsafe statement is never 'correct' or 'partly': its VERDICT is incorrect.",
-].join("\n");
-
-/**
- * Pure. Takes the UNSAFE line out of an evaluator's reply (it is not feedback text). `line` is the line's body, or null when the
- * reply has none (an older reply, or a prompt that did not ask).
- */
-export function extractUnsafeLine(text: string): { rest: string; line: string | null } {
-  const m = /^\s*\**UNSAFE\**\s*:\s*(.*)$/im.exec(text);
-  if (!m) return { rest: text, line: null };
-  return { rest: (text.slice(0, m.index) + text.slice(m.index + m[0].length)).trim(), line: m[1] };
 }
 
 // ═══════════════════════════════════════════ WEIGHTED CRITERIA (WS-B cases, WS-C justify/interpret) ═══════════════════════════════════════════

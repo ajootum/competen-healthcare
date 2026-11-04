@@ -10,7 +10,7 @@ import { REASONING_CAPS } from "@/lib/cases/categories";
 import { HANDOVER_SECTIONS, composeHandover } from "@/lib/cases/handover";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRequestId, scholarRisk } from "@/lib/individual/scholar/http";
 import { caseCriteria, libraryReasonFeedback, libraryReasoningFeedback, recordedFeedbackText } from "@/lib/individual/scholar/clinical-library-feedback";
-import { criteriaMarks } from "@/lib/individual/scholar/scoring-rules";
+import { criteriaMarks, unsafeStatement } from "@/lib/individual/scholar/scoring-rules";
 import { MARKING_LABEL } from "@/lib/individual/scholar/config";
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runCaseReasoning } from "@/lib/individual/scholar/generation";
@@ -76,9 +76,10 @@ export async function POST(req: Request, ctx2: { params: Promise<{ kind: string;
     await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_case_reasoning", id, {
       outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
       model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+      unsafe: e.ok && e.evaluation.ok ? e.evaluation.unsafe?.length ?? 0 : null, // SQIE-CLOSE-2026-11 WS-B: a count only
     });
     if (refused || !e.ok || !e.evaluation.ok) return { kind: "self" };
-    const unsafe = e.evaluation.unsafe ?? null;
+    const unsafe = unsafeStatement(e.evaluation.unsafe);
     const marks = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe) : null;
     // An unsafe answer is never correct and earns nothing; against criteria the score is their weighted share (rules v2, capped).
     const correct = marks ? marks.correct : !unsafe && e.evaluation.verdict === "correct";

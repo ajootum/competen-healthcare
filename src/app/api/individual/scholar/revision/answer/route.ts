@@ -10,7 +10,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, scholarAiRunner, scholarRi
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { runEvaluate } from "@/lib/individual/scholar/generation";
 import { codeMarkParts, keyOf, markResponse, parseResponse, partMarks, practiceMarks, storedResponse, structuredParts, structuredSafety, withSafety, writtenSafety, type PartResult } from "@/lib/individual/scholar/revision";
-import { SCORING_RULES_VERSION, criteriaMarks, marksFromShare, storedCalculation, type CalculationMark, type SafetyRecord } from "@/lib/individual/scholar/scoring-rules";
+import { SCORING_RULES_VERSION, criteriaMarks, marksFromShare, storedCalculation, unsafeStatement, type CalculationMark, type SafetyRecord } from "@/lib/individual/scholar/scoring-rules";
 import { citationOf, feedbackView } from "@/lib/individual/scholar/revision-view";
 import { questionLinks } from "@/lib/individual/scholar/revision-links";
 import { MARKING_LABEL, QUESTION_MAX, RECOVERY_STILL_WITHHELD } from "@/lib/individual/scholar/config";
@@ -173,6 +173,8 @@ export async function POST(req: Request) {
           await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
             question_id: q.id, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
             model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+            // SQIE-CLOSE-2026-11 WS-B: how many unsafe statements the evaluator quoted (a count, never the words).
+            unsafe: e.ok && e.evaluation.ok ? e.evaluation.unsafe?.length ?? 0 : null,
           });
           // SCHOLAR-SQIE-02: a safe withhold (the evaluator could not judge it against the notes) is typed, kept with the
           // student's answer, and counted apart from an answered evaluation -- codes only, never the answer.
@@ -187,7 +189,7 @@ export async function POST(req: Request) {
             if (extSpec && e.evaluation.matched) { const xm = extendedMarks(extSpec, e.evaluation.matched); extendedMatched = xm.matched; mark = { correct: xm.correct, score: xm.score, marking: "deterministic" }; }
             else mark = { correct: e.evaluation.verdict === "correct", score: e.evaluation.score, marking: "deterministic" };
             // WS-B: an unsafe statement the evaluator quoted, or a safety-critical point missed, caps the marks (never "partly correct").
-            const capped = withSafety(mark, writtenSafety(q, { correct: mark.correct, unsafe: e.evaluation.unsafe ?? null, matched: extendedMatched }), "ai");
+            const capped = withSafety(mark, writtenSafety(q, { correct: mark.correct, unsafe: unsafeStatement(e.evaluation.unsafe), matched: extendedMatched }), "ai");
             mark = capped.mark; safety = capped.safety;
             evaluation = e.evaluation.feedback; evaluationParts = e.evaluation.parts ?? null; evaluator = { model: e.model, promptVersion: e.promptVersion };
           } else why = refused ? "AI evaluation is not available for this right now, so compare your answer yourself." : "The AI could not judge this answer against your notes, so compare it yourself.";
@@ -281,6 +283,7 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
             await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_evaluate", sessionId, {
               question_id: q.id, part: i + 1, outcome: refused ? `refused:${refused.error}` : !e.ok ? `error:${e.error}` : e.evaluation.ok ? `shown:${e.evaluation.verdict}` : `withheld:${e.evaluation.reason}`,
               model: e.ok ? e.model : null, prompt_version: e.ok ? e.promptVersion : null,
+              unsafe: e.ok && e.evaluation.ok ? e.evaluation.unsafe?.length ?? 0 : null, // SQIE-CLOSE-2026-11 WS-B: a count only
             });
             if (!refused && e.ok) {
               const o = answerOutcome(e.evaluation.ok ? null : e.evaluation.reason);
@@ -288,9 +291,10 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
             }
             if (!refused && e.ok && e.evaluation.ok) {
               // WS-C: against criteria, the part's whole marks are its share of the criteria's weight (rounded down); otherwise the verdict (all, half, none).
-              const cm = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!e.evaluation.unsafe) : null;
-              const awarded = e.evaluation.unsafe ? 0 : cm ? marksFromShare(part.marks, cm.score) : partMarks(part.marks, e.evaluation.verdict);
-              results[i] = { awarded, by: "ai", feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null, unsafe: e.evaluation.unsafe ?? null, matched: cm ? cm.matched : null };
+              const unsafe = unsafeStatement(e.evaluation.unsafe);
+              const cm = criteria && e.evaluation.matched ? criteriaMarks(criteria, e.evaluation.matched, !!unsafe) : null;
+              const awarded = unsafe ? 0 : cm ? marksFromShare(part.marks, cm.score) : partMarks(part.marks, e.evaluation.verdict);
+              results[i] = { awarded, by: "ai", feedback: e.evaluation.feedback, parts: e.evaluation.parts ?? null, unsafe, matched: cm ? cm.matched : null };
               evaluator = { model: e.model, promptVersion: e.promptVersion };
             } else {
               // No more AI is spent on the rest: the student compares every part code could not mark.
