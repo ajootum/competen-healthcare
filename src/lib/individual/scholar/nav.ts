@@ -20,8 +20,8 @@ export type NavLeaf = {
   segment: string;
   /** Other paths below /individual/scholar on which this leaf is current. */
   also?: readonly string[];
-  /** "myPlan": drawn only while My Plan is on (the layout decides). */
-  gate?: "myPlan";
+  /** "myPlan": drawn only while My Plan is on. "searchHistory": only while HQ offers My Search History. The layout decides both. */
+  gate?: "myPlan" | "searchHistory";
   status: "live" | "future";
   /** My Learning leaves carry ?study=<id> while a connected study session is open. */
   carriesStudy?: boolean;
@@ -36,10 +36,12 @@ const LEARNING_LABEL: Record<ScholarSpaceKey, string> = {
 
 const learning: NavModule = {
   key: "learning", label: "My Learning", icon: "▤",
-  items: SCHOLAR_SPACES.map<NavLeaf>(s => ({
+  items: SCHOLAR_SPACES.flatMap<NavLeaf>(s => [{
     key: s.key, label: LEARNING_LABEL[s.key], segment: s.segment, ...(s.also ? { also: s.also } : {}),
-    ...(s.key === "plan" ? { gate: "myPlan" as const } : {}), status: "live", carriesStudy: true,
-  })),
+    ...(s.key === "plan" ? { gate: "myPlan" as const } : {}), status: "live" as const, carriesStudy: true,
+  },
+  // Owner 5 Nov 2026: My Search History must be easy to find, so it has its own leaf beside the library it belongs to. It is a page, not a space.
+  ...(s.key === "library" ? [{ key: "search-history", label: "My Search History", segment: "study/saved/searches", gate: "searchHistory" as const, status: "live" as const, carriesStudy: true }] : [])]),
 };
 
 const courses: NavModule = {
@@ -127,4 +129,4 @@ export const visibleModules = (allowed: readonly string[]): NavModule[] =>
   SCHOLAR_NAV.modules.filter(m => m.key === "learning" || allowed.includes(m.key));
 
 /** The leaves a module shows: the gated ones only while their gate is on. */
-export const visibleItems = (m: NavModule, gates: { myPlan: boolean }): NavLeaf[] => m.items.filter(l => !l.gate || gates[l.gate]);
+export const visibleItems = (m: NavModule, gates: { myPlan: boolean; searchHistory?: boolean }): NavLeaf[] => m.items.filter(l => !l.gate || gates[l.gate]);

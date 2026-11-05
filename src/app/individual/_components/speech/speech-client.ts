@@ -95,6 +95,8 @@ export type ReadAloud = {
   /** idle unless THIS button's text is the one being read. */
   state: ReadState;
   play(text: string): void; pause(): void; resume(): void; stop(): void;
+  /** Move by one sentence, or to a sentence. Only while reading or paused. */
+  back(): void; forward(): void; seek(index: number): void;
 };
 
 /** One shared voice for the whole page: starting one reading stops any other. Stops on unmount (navigation, a closed dialog). */
@@ -118,6 +120,9 @@ export function useReadAloud(): ReadAloud {
     pause: () => { if (active.owner === id) getEngine()?.pause(); },
     resume: () => { if (active.owner === id) getEngine()?.resume(); },
     stop: () => { if (active.owner === id) getEngine()?.stop(); },
+    back: () => { if (active.owner === id) getEngine()?.back(); },
+    forward: () => { if (active.owner === id) getEngine()?.forward(); },
+    seek: i => { if (active.owner === id) getEngine()?.seek(i); },
   };
 }
 

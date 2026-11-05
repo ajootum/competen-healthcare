@@ -1297,7 +1297,7 @@ export const POLICIES: readonly PolicyDef[] = [
   {
     key: "scholar_search_history", kind: "choice", product: "Scholar",
     label: "Library: My search history",
-    help: "Whether the learning library offers My search history: one private, searchable list of the learner's own submitted searches and Ask Scholar questions, with their saved teaching and lessons, newest first, filtered by activity, material, topic and date. Saved answers reopen as saved (no AI). The learner can pin, save for revision, remove one entry or clear it all. Offering it keeps nothing by itself: each learner reads the notice and turns it on, apart from AI help, and with it off no new search or question is kept. No HQ surface reads it, and it is never used as AI memory.",
+    help: "Whether the learning library offers My search history: one private, searchable list of the learner's own submitted searches and Ask Scholar questions, with their saved teaching and lessons, newest first, filtered by activity, material, topic and date. Saved answers reopen as saved (no AI). The learner can pin, save for revision, remove one entry or clear it all. Offering it starts it for each learner once they have seen a one-time notice, on by default and apart from AI help. Nothing is kept before they have seen it, and a learner who turns it off stays off. No HQ surface reads it, and it is never used as AI memory.",
     options: [{ value: "on", label: "Offer search history" }, { value: "off", label: "Do not offer" }],
     fallback: "off",
     limitReason: "Needs migration 992 (without it the history says it is not available yet and records nothing). Keeps the learner's words and references, never an answer. Kept until the learner deletes it. Default: off.",

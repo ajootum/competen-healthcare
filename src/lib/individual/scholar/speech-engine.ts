@@ -5,13 +5,16 @@
 // here creates a network request, and no audio ever reaches Competen.
 
 import {
-  DICTATION_IDLE, DICTATION_SILENCE_MS, chunkForSpeech, dictationReducer, insertAtCursor, mapRecognitionError, mergeFinalSegments, pickVoice,
+  CHUNK_MAX, DICTATION_IDLE, DICTATION_SILENCE_MS, chunkForSpeech, dictationReducer, insertAtCursor, mapRecognitionError, mergeFinalSegments, pickVoice,
   type DictationEvent, type DictationState, type ReadRate, type VoiceLike,
 } from "./speech";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /* ------------------------------------------------------------------ read-aloud */
+
+/** How long one utterance may run on a voice stored on the device. A long lesson still breaks here, so a very long utterance cannot stall. */
+const LOCAL_VOICE_MAX = 900;
 
 export type ReadStatus = "idle" | "speaking" | "paused";
 export type ReadState = { status: ReadStatus; index: number; total: number };
@@ -28,7 +31,10 @@ export type SynthEnv = {
 };
 
 /**
- * Speaks a text one chunk (one sentence) at a time. PAUSE IS "stop here, remember where": the current utterance is cancelled and
+ * Speaks a text as utterances of several sentences (owner, 5 Nov 2026: fewer pauses), up to CHUNK_MAX characters each on an online voice, because a long utterance
+ * is cut off by some browsers. The sentence stays the unit of position: index and total count sentences, so Back, Forward and the slider move by
+ * sentence. Where the browser sends no word boundaries the position only moves when an utterance ends, and pause restarts that utterance.
+ * PAUSE IS "stop here, remember where": the current utterance is cancelled and
  * speaking again continues from the last word the browser reported (a boundary event) inside that chunk; if it reported none,
  * the current sentence restarts. That is slightly less smooth than a native pause but it behaves the same in every browser
  * (native pause is unreliable on Android and some desktop engines). A generation number makes the end/error/boundary events of a
@@ -83,6 +89,18 @@ export class ReadAloudEngine {
     if (this.state.status !== "idle") this.set(READ_IDLE);
   }
 
+  /** Move to a sentence: reading carries on from there, and a paused reading stays paused there. */
+  seek(index: number) {
+    if (this.state.status === "idle" || !this.chunks.length) return;
+    const to = Math.max(0, Math.min(this.chunks.length - 1, Math.floor(index)));
+    this.cancelCurrent();
+    this.index = to; this.pos = 0;
+    this.set({ ...this.state, index: to });
+    if (this.state.status === "speaking") this.speakCurrent();
+  }
+  back() { this.seek(this.index - 1); }
+  forward() { this.seek(this.index + 1); }
+
   /** A new rate or voice takes effect now (the current chunk continues from the last spoken word) while speaking, or on resume while paused. */
   configure(opts: { rate?: ReadRate; voiceURI?: string | null }) {
     if (opts.rate) this.rate = opts.rate;
@@ -101,14 +119,27 @@ export class ReadAloudEngine {
     if (chunk === undefined) { this.finish(); return; }
     // Continue from the remembered word. A boundary's charIndex is relative to the text this utterance speaks, so `start` turns
     // it back into a position in the chunk.
-    const text = chunk.slice(Math.min(this.pos, chunk.length)).trimStart();
-    if (!text) { this.advance(); return; }
-    const start = chunk.length - text.length;
+    const first = chunk.slice(Math.min(this.pos, chunk.length)).trimStart();
+    if (!first) { this.advance(); return; }
+    const start = chunk.length - first.length;
     this.pos = start;
-    let u: any;
-    try { u = this.env.makeUtterance(text); } catch { this.finish(); return; }
     const lang = this.env.pageLang();
     const voice = pickVoice(this.voices(), lang, this.voiceURI);
+    // An online voice can be cut off on a long utterance, so it keeps the short limit. A voice on the device has no such limit, so it runs longer with fewer gaps.
+    const limit = voice?.localService ? LOCAL_VOICE_MAX : CHUNK_MAX;
+    // Later sentences join this utterance up to the limit. Each span says where a sentence begins in the spoken text, so a boundary maps back to a sentence and a word.
+    const spans: { index: number; at: number; offset: number }[] = [{ index: this.index, at: 0, offset: start }];
+    let text = first;
+    for (let i = this.index + 1; i < this.chunks.length; i++) {
+      const glue = /[.!?…:;"')\]]$/.test(text) ? " " : ". ";
+      if (text.length + glue.length + this.chunks[i].length > limit) break;
+      text += glue;
+      spans.push({ index: i, at: text.length, offset: 0 });
+      text += this.chunks[i];
+    }
+    const last = spans[spans.length - 1].index;
+    let u: any;
+    try { u = this.env.makeUtterance(text); } catch { this.finish(); return; }
     try {
       u.rate = this.rate;
       u.lang = voice?.lang || lang || "en-GB";
@@ -117,9 +148,14 @@ export class ReadAloudEngine {
     u.onboundary = (ev: any) => {
       if (gen !== this.gen || (ev?.name && ev.name !== "word")) return;
       const at = Number(ev?.charIndex);
-      if (Number.isFinite(at) && at >= 0 && start + at < chunk.length) this.pos = Math.max(this.pos, start + at);
+      if (!Number.isFinite(at) || at < 0 || at >= text.length) return;
+      let span = spans[0];
+      for (const s of spans) if (s.at <= at) span = s;
+      const pos = span.offset + (at - span.at);
+      if (span.index === this.index) this.pos = Math.max(this.pos, pos);
+      else if (span.index > this.index) { this.index = span.index; this.pos = pos; this.set({ ...this.state, index: this.index }); }
     };
-    u.onend = () => { if (gen === this.gen) this.advance(); };
+    u.onend = () => { if (gen === this.gen) { this.index = last; this.advance(); } };
     u.onerror = () => { if (gen === this.gen) this.finish(); };
     try { this.env.synth.speak(u); } catch { this.finish(); }
   }

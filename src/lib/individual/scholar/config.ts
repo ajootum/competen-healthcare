@@ -485,13 +485,28 @@ export const CROSS_EXPERIENCE_NOTICE = {
   off: "You can turn this off at any time. Your assistant stops reading them straight away. Nothing is deleted.",
 } as const;
 /**
- * MY SEARCH HISTORY (owner decision 5 Nov 2026, conditional approval, migration 993). The learner's own choice, OFF until they turn it on and
- * apart from AI help: AI help never reads this row, and this notice changing asks nobody about AI help. A grant counts only for this version.
- * SUBJECT TO LEGAL REVIEW, and waiting for the owner's approval (docs/legal/drafts/13). Do not edit a word without a new version.
+ * MY SEARCH HISTORY (owner decisions 5 Nov 2026, migrations 993 and 994). The learner's own choice, apart from AI help: AI help never reads this row,
+ * and this notice changing asks nobody about AI help. On by default once the learner has seen the one-time notice (v2). A choice made under any
+ * version in SEARCH_HISTORY_GRANT_VERSIONS stands, and turning it off stands whatever the version.
+ * SUBJECT TO LEGAL REVIEW (docs/legal/drafts/13, 16). Do not edit a word without a new version. Keep each old version: its supplement is permanent.
  */
 export const SEARCH_HISTORY_FEATURE = "scholar_search_history";
-export const SEARCH_HISTORY_NOTICE_VERSION = "scholar-search-history-notice-v1";
+export const SEARCH_HISTORY_NOTICE_V1_VERSION = "scholar-search-history-notice-v1";
+export const SEARCH_HISTORY_NOTICE_VERSION = "scholar-search-history-notice-v2";
+export const SEARCH_HISTORY_GRANT_VERSIONS: readonly string[] = [SEARCH_HISTORY_NOTICE_V1_VERSION, SEARCH_HISTORY_NOTICE_VERSION];
 export const SEARCH_HISTORY_NOTICE = {
+  heading: "What My Search History keeps, and your choice",
+  kept: "My Search History is on by default. Once you have seen this notice, the searches you submit and the questions you put to Ask Scholar are kept in My Search History, with the date and where you asked. Anything you type but do not submit is not kept.",
+  notKept: "Answers are not kept here. A saved answer or lesson stays in My learning library, and your history links to it.",
+  howLong: "Entries stay until you remove them, clear your history, delete a material they rely on, or your account is closed. Deleted entries can remain in encrypted backups until those backups are replaced on their rolling schedule. Backups are restored only for recovery.",
+  who: "Your history is not ordinarily visible to other learners, educators or employers. Authorised Competen staff and service providers may have access where needed to operate, secure or support the service, or where the law requires it. Personal AI does not use it.",
+  patient: "Please do not type identifiable patient information into a search or question.",
+  off: "This is separate from AI help. You can turn it off at any time. With it off, AI help, lessons and searching work the same, and new searches and questions are not kept. Turning it off does not remove what is already kept. You can remove entries or clear your history at any time.",
+  review: "You can review the applicable Privacy Notice and Terms of Use before continuing.",
+  awaitingLegal: "My Search History can start once our Privacy Notice and Terms of Use are published.",
+} as const;
+/** Notice v1 (the pilot, opt-in), word for word. Permanent: its supplement page still serves it. */
+export const SEARCH_HISTORY_NOTICE_V1 = {
   heading: "What My Search History keeps, and your choice",
   kept: "If you turn this on, the searches you submit and the questions you put to Ask Scholar are kept in My Search History, with the date and where you asked. Anything you type but do not submit is not kept.",
   notKept: "Answers are not kept here. A saved answer or lesson stays in My learning library, and your history links to it.",

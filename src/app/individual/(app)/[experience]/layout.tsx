@@ -182,7 +182,7 @@ export default async function ExperienceLayout({ children, params }: {
   // Private module development access: the private Scholar modules this person may see, computed once and handed to every navigation surface. Any failure is none.
   const modulesP: Promise<Set<ScholarModuleKey>> | Set<ScholarModuleKey> = scholar ? scholarModulesOnce(shell.ctx.admin, shell.ctx.userId) : new Set<ScholarModuleKey>();
   // My Search History (993): the learner's own choice, once per page, for the notices and for what a page may send. Any failure is off: nothing is kept.
-  const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false }; } })() : { offered: false, on: false };
+  const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false, pending: false }; } })() : { offered: false, on: false, pending: false };
   const [learning, ai, myPlanOn, moduleSet, historyChoice] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP]);
   const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
@@ -193,7 +193,7 @@ export default async function ExperienceLayout({ children, params }: {
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
       <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
-          {scholar && <ScholarDrawer myPlan={myPlanOn} modules={scholarModules} learning={learning} />}
+          {scholar && <ScholarDrawer myPlan={myPlanOn} searchHistory={historyChoice.offered} modules={scholarModules} learning={learning} />}
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
@@ -209,7 +209,7 @@ export default async function ExperienceLayout({ children, params }: {
 
       <div className="flex">
         <aside className={`hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] ${scholar ? "w-[256px]" : "w-[236px]"} shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]`}>
-          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} scholarModules={scholarModules} />
+          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} searchHistory={historyChoice.offered} scholarModules={scholarModules} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>
             <p>One account, one Passport.</p>
@@ -220,7 +220,7 @@ export default async function ExperienceLayout({ children, params }: {
         <main id="main" className="min-w-0 flex-1 pb-24 md:pb-10">
           <ShellActionProvider action={action}>
           <AiAvailabilityProvider standing={aiSlim}>
-          <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on }}>
+          <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}>
           <MyPlanNavProvider on={myPlanOn}>
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"

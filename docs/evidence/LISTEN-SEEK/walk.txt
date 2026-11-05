@@ -1,0 +1,26 @@
+PASS 1440: Listen present
+PASS 1440: idle row has no Back
+PASS 1440: slider across 57 sentences
+PASS 1440: position said in words
+PASS 1440: first utterance within the device-voice limit (787 chars)
+PASS 1440: first utterance joins more than one sentence
+PASS 1440: Forward moves one sentence
+PASS 1440: Back moves one sentence
+PASS 1440: slider moves to sentence 29
+PASS 1440: reading restarts from there
+PASS 1440: skipping while paused stays paused
+PASS 1440: axe 0 violations
+PASS 390: Listen present
+PASS 390: idle row has no Back
+PASS 390: slider across 57 sentences
+PASS 390: position said in words
+PASS 390: first utterance within the device-voice limit (787 chars)
+PASS 390: first utterance joins more than one sentence
+PASS 390: Forward moves one sentence
+PASS 390: Back moves one sentence
+PASS 390: slider moves to sentence 29
+PASS 390: reading restarts from there
+PASS 390: skipping while paused stays paused
+PASS 390: axe 0 violations
+PASS 390: controls at least 44px (44, 44, 44)
+PASS 390: no sideways scroll (0px)

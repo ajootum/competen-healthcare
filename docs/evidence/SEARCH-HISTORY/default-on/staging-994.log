@@ -1,0 +1,20 @@
+=== VERIFY-994 before 994 (expected red)
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: VERIFY-994: the status CHECK does not hold notified
+=== apply 994
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-994
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== apply 994 again
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-994
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-994-prod
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== ROLLBACK-994
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-994-prod after rollback (expected red)
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: VERIFY-994-prod: the status CHECK does not hold granted, revoked and notified
+=== apply 994 again
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-994
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
