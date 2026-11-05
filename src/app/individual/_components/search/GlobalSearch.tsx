@@ -84,7 +84,6 @@ export function GlobalSearch() {
   }
   useEffect(() => { if (active >= 0) panel.current?.querySelector(`[data-result="${active}"]`)?.scrollIntoView({ block: "nearest" }); }, [active]);
 
-  let index = -1;
   return (
     <>
       <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Search everything in Scholar" data-global-search
@@ -134,8 +133,7 @@ export function GlobalSearch() {
                       <p className="px-1 text-[12px] font-semibold text-gray-600">{t.label}</p>
                       <ul>
                         {t.results.map(r => {
-                          index += 1;
-                          const i = index;
+                          const i = results.indexOf(r);
                           return (
                             <li key={`${g.module}-${r.id}`} role="presentation">
                               <button type="button" id={`global-result-${i}`} role="option" aria-selected={active === i} data-result={i} onMouseEnter={() => setActive(i)} onClick={() => go(r.path)}

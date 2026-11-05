@@ -223,7 +223,6 @@ export function rowMatchesFilter(r: ExplorerRow, f: ExplorerFilter): boolean {
   }
 }
 
-const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
 /** Pure: every word of the query must occur in the competency's title, code, domain, Area or framework. */
 export function rowMatchesQuery(r: ExplorerRow, context: { domain: string; area: string | null; framework: string; frameworkCode: string | null }, q: string): boolean {

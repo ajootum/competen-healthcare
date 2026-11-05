@@ -41,7 +41,6 @@ export function parsePracticeFilters(p: Record<string, string | undefined>): Pra
   };
 }
 
-const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 /** Pure. Every word must appear in the title, a topic or concept, a competency, a source or a gap. */
 export function matchesPractice(r: PracticeRow, q: string): boolean {
   return matchesSearch([r.title, ...r.concepts, ...r.competencies, ...r.sources, ...r.gaps], q);
