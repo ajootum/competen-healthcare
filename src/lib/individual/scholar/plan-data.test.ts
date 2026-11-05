@@ -103,6 +103,14 @@ describe("loadToday", () => {
     expect(appliedEvents()).toHaveLength(1);
     expect(first.week?.thisWeek.flatMap(d => d.activities).some(a => a.title === "Learn Renal")).toBe(true);
   });
+  it("reading the plan for Revise records nothing, and My Plan still records the carry-over afterwards (SCHOLAR-REVISE-WORKSPACE-01)", async () => {
+    const seen = await loadToday(ctx(), policy, { ...O, readOnly: true });
+    if (!seen.ok) throw new Error("setup");
+    expect(seen.week?.thisWeek.length).toBeGreaterThan(0);
+    expect(appliedEvents()).toHaveLength(0);
+    await loadToday(ctx(), policy, O);
+    expect(appliedEvents()).toHaveLength(1);
+  });
   it("after an undo the activity is not carried: it is left out of the plan and shown as Missed, with no undo note", async () => {
     await loadToday(ctx(), policy, O);
     const key = `learn:${refKey("renal")}@2026-11-01`;

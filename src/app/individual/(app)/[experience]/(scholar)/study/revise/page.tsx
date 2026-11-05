@@ -6,7 +6,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import {
-  countDue, dueCards, getAdaptiveSet, getRevisionSession, listAdaptiveExams, listMaterials, listRevisionSessions, listRevisionSets, mistakeToFixCount, readConsent, revisionInsightRows, revisionPool, sqieSchema, type QuestionRow, isUuid } from "@/lib/individual/scholar/store";
+  countDue, dueCards, getAdaptiveSet, getRevisionSession, libraryTopics, listAdaptiveExams, listLearningSessions, listMappings, listMaterials, listRevisionSessions, listRevisionSets, mistakeToFixCount, readConsent, revisionInsightRows, revisionPool, sessionStepSummaries, sqieSchema, type QuestionRow, isUuid } from "@/lib/individual/scholar/store";
 import { citeChunk } from "@/lib/individual/scholar/extract";
 import { answerText, buildRevisionInsights } from "@/lib/individual/scholar/revision";
 import { feedbackView, keptAttemptView, revisionItemView } from "@/lib/individual/scholar/revision-view";
@@ -15,7 +15,6 @@ import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { ADAPTIVE_HELP, ADAPTIVE_RULE, REVISION_FORMATS, REVISION_MODE_LABEL, type Marking, type RevisionMode } from "@/lib/individual/scholar/config";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice, EmptyState } from "../../../../../_components/chrome";
-import { PaneGrid } from "@/components/ui/pane-grid";
 import StudyNav from "../_components/StudyNav";
 import { ExamPapersSection } from "../_components/papers-section";
 import { FORMATIVE_NOTICE, scholarSpace } from "@/lib/individual/scholar/spaces";
@@ -26,7 +25,13 @@ import { ReviseNav, flashcardsHref } from "../_components/revise-nav";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { revisePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { headers } from "next/headers";
-import { learnerToday } from "@/lib/individual/scholar/learning-definitions";
+import { learnerTimeZone, learnerToday, localDay } from "@/lib/individual/scholar/learning-definitions";
+import { loadToday } from "@/lib/individual/scholar/plan-data";
+import { materialTopics } from "@/lib/individual/scholar/library";
+import { retrievalLine } from "@/lib/individual/scholar/retrieval-schedule";
+import { planRefOfKey } from "@/lib/individual/scholar/plan-today-view";
+import { CATALOGUE_STATUSES, CATALOGUE_STATUS_LABEL, buildCatalogue, buildStudiedThisMonth, buildTodayQueue, daysLeftLabel, filterCatalogue, hasCatalogueFilters, parseCatalogueFilters, parseReviseView, shortDate, type ReviseView } from "@/lib/individual/scholar/revise-workspace";
+import { CatalogueRowView, ReviseShortcuts, ReviseViewNav, StudiedMonthView, TodayQueue, reviseHref } from "../_components/revise-workspace-parts";
 import { loadRetentionView } from "@/lib/individual/scholar/retention-data";
 import { listTransferChecks } from "@/lib/individual/scholar/store";
 import { TRANSFER_NOTE } from "@/lib/individual/scholar/transfer";
@@ -41,12 +46,13 @@ export const dynamic = "force-dynamic";
 
 // REVISION -- COMPETEN-SCHOLAR-REVISION-01 (Stage 4), on COMPETEN-IND-004 s4.
 //
-// The workspace: Start Today's Revision; Quick Practice, Spaced Revision, Weak Areas, Mock Practice, Flashcards;
-// the student's own choice of scope, formats, quantity, difficulty and feedback; Saved Revision Sets; the review cards
-// due (the 372 cards on the shared SM-2, self-graded, as before); and Revision Intelligence (R5): due and upcoming,
-// recall and its trend, what keeps being missed, coverage, revision activity per competency -- practised, never
-// achieved -- and recommendations from the student's own answers. ?session=<id> runs or resumes one session.
-// Everything here is formative. Nothing needs new AI to be read: saved sets, cards and history stay available.
+// SCHOLAR-REVISE-WORKSPACE-01 (owner GO, 5 Nov 2026): one view at a time. TODAY opens on what needs attention, why, and how to
+// begin: one queue (unfinished revision, due cards, due retrieval, weak areas, mistakes, today's plan, a suggestion), then how to
+// revise. MY PRIORITIES reads My Plan and changes nothing. STUDIED THIS MONTH comes from records of learning, never upload dates.
+// ALL TOPICS is the catalogue, with saved sets. REVISION INSIGHTS keeps Revision Intelligence (R5): due and upcoming, recall and its
+// trend, what keeps being missed, coverage, revision activity per competency -- practised, never achieved. ?session=<id> runs or
+// resumes one session. ?material, ?topic or ?competency chooses what, then how. Everything here is formative. Nothing needs new
+// AI to be read: saved sets, cards and history stay available.
 
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Revise" });
@@ -61,13 +67,13 @@ function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method:
   } catch { return null; }
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string; intent?: string; followUp?: string }> }) {
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string; intent?: string; followUp?: string; view?: string; topic?: string; competency?: string; practice?: string; review?: string; resume?: string; q?: string; m?: string; t?: string; c?: string; status?: string; from?: string; page?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
   const q = await searchParams;
-  const [due, navPolicy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
+  const [due, navPolicy] = await Promise.all([countDue(ctx.admin, ctx.userId, learnerToday(await headers())), loadIndividualPolicy(ctx.admin)]);
   const reviseNavAdaptive = navPolicy.scholarAdaptiveExams === "on";
   // SCHOLAR-SESSION-AI-02: the open study session (database reads only): its bar, carried links, and "what to revise" chosen.
   const study = await loadStudy(ctx.admin, ctx.userId, q.study, "revise", navPolicy);
@@ -115,10 +121,12 @@ export default async function Revise({ params, searchParams }: { params: Promise
     );
   }
 
-  // ── the workspace ──
+  // ── the workspace ── SCHOLAR-REVISE-WORKSPACE-01: one view at a time, opening on what needs attention ──
+  const hdrs = await headers();
+  const today = learnerToday(hdrs), tz = learnerTimeZone(hdrs), now = new Date();
   const [policy, materials, sets, sessions, rows, cards, learner, consent, sqie, exams] = await Promise.all([
     loadIndividualPolicy(ctx.admin), listMaterials(ctx.admin, ctx.userId), listRevisionSets(ctx.admin, ctx.userId), listRevisionSessions(ctx.admin, ctx.userId, 10),
-    revisionInsightRows(ctx.admin, ctx.userId), dueCards(ctx.admin, ctx.userId), loadLearnerCatalogue(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId),
+    revisionInsightRows(ctx.admin, ctx.userId), dueCards(ctx.admin, ctx.userId, today), loadLearnerCatalogue(ctx.admin, ctx.userId), readConsent(ctx.admin, ctx.userId),
     sqieSchema(ctx.admin, ctx.userId), listAdaptiveExams(ctx.admin, ctx.userId, 5),
   ]);
   // SCHOLAR-PRACTICE-EXAMS-01: adaptive exams are resumed from their own card, not from "Carry on".
@@ -133,17 +141,14 @@ export default async function Revise({ params, searchParams }: { params: Promise
       : !standing.available ? `${standing.message ?? "New AI help is limited right now."} Revision uses your saved questions, cards and sets.` : null;
   const mats = materials.ok ? materials.data.map(m => ({ id: m.id, title: m.title })) : [];
   const insights = rows.ok ? buildRevisionInsights({
-    today: new Date().toISOString().slice(0, 10), windowDays: policy.scholarInsightWindowDays, minAnswers: policy.scholarInsightMinAnswers,
+    today, windowDays: policy.scholarInsightWindowDays, minAnswers: policy.scholarInsightMinAnswers,
     attempts: rows.data.attempts, questions: rows.data.questions, reviews: rows.data.reviews, cards: rows.data.cards, materials: mats,
   }) : null;
-  const compNames = insights?.competencyActivity.length
-    ? await competencyLabels(ctx.admin, learner.competencies, insights.competencyActivity.map(c => c.competencyId), new Map()) : new Map();
-  const cardViews: CardView[] = cards.ok ? cards.data.map(c => ({
-    id: c.id, stem: c.question.stem, answer: answerText(c.question), rationale: c.question.rationale, quote: c.question.sourceQuote,
-    citation: `${c.question.materialTitle}, ${c.question.ordinal !== null ? citeChunk({ ordinal: c.question.ordinal, pageFrom: c.question.pageFrom, pageTo: c.question.pageTo }, c.question.unit) : "source section"}`,
-    href: sourceHref(c.question.materialId, c.question.chunkId),
-  })) : [];
-  const active = sessions.ok ? sessions.data.filter(s => s.status === "active" && s.mode !== "adaptive" && !examIds.has(s.id)).slice(0, 5) : [];
+  const active = sessions.ok ? sessions.data.filter(s => s.status === "active" && s.mode !== "adaptive" && !examIds.has(s.id)) : [];
+  const carryOn = [
+    ...active.map(s => ({ key: s.id, title: REVISION_MODE_LABEL[s.mode as RevisionMode] ?? "Revision", position: s.position, total: s.total as number | null, lastActiveAt: s.lastActiveAt, href: `${studyHref("revise")}?session=${s.id}` })),
+    ...examsActive.map(e => ({ key: e.session.id, title: `Adaptive exam: ${e.title}`, position: e.session.position, total: null, lastActiveAt: e.session.lastActiveAt, href: adaptiveHref(e.session.id) })),
+  ].sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
 
   // HFE-01 Wave 4 (F10): before there is anything to revise, one message and one action -- not a dashboard of zeros.
   const nothingYet = materials.ok && mats.length === 0 && rows.ok && rows.data.attempts.length === 0
@@ -160,146 +165,330 @@ export default async function Revise({ params, searchParams }: { params: Promise
     );
   }
 
-  // SCHOLAR-COMPANION-01 P1: the mistake notebook's entry (database reads only; absent when the policy is off or unreadable).
-  const toFix = policy.scholarMistakeNotebook === "on" ? await mistakeToFixCount(ctx.admin, ctx.userId) : null;
-  // SALE-2026-11 R2: due retrieval (SALE-08), prerequisite reviews (SALE-09) and transfer checks (SALE-10). Null while all three keys are off.
-  const retention = await loadRetentionView(ctx.admin, ctx.userId, policy, new Date().toISOString(), { today: learnerToday(await headers()) });
-
-  return (
+  const shortcuts = [
+    { label: "Flashcards", href: withStudy(flashcardsHref(), sid) }, { label: "Practice Questions", href: withStudy(reviseHref("today", { practice: "1" }), sid) },
+    ...(policy.scholarAdaptiveExams === "on" ? [{ label: "Adaptive Exams", href: withStudy(adaptiveHref(), sid) }] : []),
+    { label: "Revision History", href: flashcardsHref({ view: "history" }) },
+    ...(policy.scholarMistakeNotebook === "on" ? [{ label: "Mistake Notebook", href: withStudy(studyHref("revise/mistakes"), sid) }] : []),
+    { label: "My Decks", href: flashcardsHref({ view: "decks" }) },
+  ];
+  const view = parseReviseView(q.view);
+  const frame = (current: ReviseView | null, body: React.ReactNode) => (
     <>
-      {header}
-      {papers}
-      <PaneGrid bp="lg" fallbackMain="minmax(0,3fr)"
-        end={{ storageKey: "scholar.revise.side.w", defaultPx: { ratio: 0.4 }, fallback: "minmax(0,2fr)", label: "Resize the revision progress panel", node: (
-        <aside aria-labelledby="intel-h" className="space-y-4">
-          <h2 id="intel-h" className="text-[17px] font-bold text-gray-900">How your revision is going</h2>
-          <p className="text-[13px] leading-relaxed text-gray-700">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>
-          {!insights ? <Unreadable what="your revision history" /> : (
+      <PageHeader accent={x.accent} eyebrow={scholarSpace("revise").eyebrow} title="Revise" />
+      <StudyNav dueCount={due} study={study?.bar ?? null} />
+      <ReviseViewNav current={current} carry={sid} />
+      <ReviseShortcuts items={shortcuts} />
+      {body}
+      <div className="mt-5"><BoundaryNotice notice={FORMATIVE_NOTICE} /></div>
+    </>
+  );
+  const startForm = (formOpen: boolean, title: string, preset: React.ComponentProps<typeof RevisionStart>["preset"], scope: React.ComponentProps<typeof RevisionStart>["scope"]) => (
+    <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
+      difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
+      competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
+      preset={preset} scope={scope} heading={title} compact formOpen={formOpen} />
+  );
+
+  // ── choose what, then how: a material, topic or competency the learner picked, or a lesson's notes ──
+  const chosenTopic = (q.topic ?? "").trim().slice(0, 120);
+  const chosenCompetency = isUuid(q.competency) ? q.competency : null;
+  if (q.material || chosenTopic || chosenCompetency || q.practice) {
+    const name = q.material ? mats.find(m => m.id === q.material)?.title ?? null : chosenTopic || (chosenCompetency ? (learner.competencies ?? []).find(c => c.id === chosenCompetency)?.title ?? null : null);
+    return frame(null, (
+      <div className="space-y-3" data-revise-choose>
+        <p className="text-[14px] text-gray-800"><Link href={withStudy(reviseHref("today"), sid)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to Today</Link>{name ? <> · Revising <span className="font-semibold text-gray-900">{name}</span></> : null}</p>
+        {/* SCHOLAR-INDEPENDENT-LEARNING-01 P1: from a Learn lesson's notes, only that lesson's sections (the learner may widen it to the material). */}
+        {startForm(!!q.practice || !!q.sections, name ? "How do you want to revise it?" : "How do you want to revise?",
+          q.material ? { materialId: q.material, difficulty: q.difficulty ?? null, chunkIds: (q.sections ?? "").split(",").filter(isUuid).slice(0, 24) } : null,
+          chosenTopic ? { kind: "topic", topic: chosenTopic } : chosenCompetency ? { kind: "competency", competencyId: chosenCompetency } : q.material ? null
+            : revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) }))}
+      </div>
+    ));
+  }
+
+  // ── every unfinished session, from the queue's "See them all" ──
+  if (q.resume === "all") {
+    return frame("today", (
+      <section aria-labelledby="carry-h" className="space-y-2" data-revise-resume-all>
+        <p className="text-[14px]"><Link href={withStudy(reviseHref("today"), sid)} className={`font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`}>Back to Today</Link></p>
+        <h2 id="carry-h" className="text-[17px] font-bold text-gray-900">Carry on where you left off</h2>
+        {carryOn.length === 0 ? <p className="text-[14px] text-gray-800">Nothing is unfinished.</p> : (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-gray-200">
+            {carryOn.map(s => (
+              <li key={s.key} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-3">
+                <div className="min-w-0 flex-1 basis-[14rem]">
+                  <p className="break-words text-[14.5px] font-semibold text-gray-900">{s.title}</p>
+                  <p className="text-[13px] text-gray-700">{s.total === null ? `${s.position} answered` : `${s.position} of ${s.total} answered`}, last worked on {shortDate(localDay(s.lastActiveAt, tz))}.</p>
+                </div>
+                <Link href={s.href} prefetch={false} className={toneAction.secondary}>Resume</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    ));
+  }
+
+  // ── the due cards, on their own: the one queue's "Review cards" ──
+  if (q.review === "cards") {
+    const cardViews: CardView[] = cards.ok ? cards.data.map(c => ({
+      id: c.id, stem: c.question.stem, answer: answerText(c.question), rationale: c.question.rationale, quote: c.question.sourceQuote,
+      citation: `${c.question.materialTitle}, ${c.question.ordinal !== null ? citeChunk({ ordinal: c.question.ordinal, pageFrom: c.question.pageFrom, pageTo: c.question.pageTo }, c.question.unit) : "source section"}`,
+      href: sourceHref(c.question.materialId, c.question.chunkId),
+    })) : [];
+    return frame("today", (
+      <section aria-labelledby="cards-h" className="space-y-2">
+        <p className="text-[14px]"><Link href={withStudy(reviseHref("today"), sid)} className={`font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`}>Back to Today</Link></p>
+        <h2 id="cards-h" className="text-[17px] font-bold text-gray-900">Review cards due</h2>
+        {!cards.ok ? (cards.notProvisioned
+          ? <StatePanel title="Revision is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
+          : <Unreadable what="review cards" />)
+          : <CardReview cards={cardViews} />}
+      </section>
+    ));
+  }
+
+  const planToday = view === "today" || view === "priorities" ? await loadToday(ctx, policy, { now, tz, today, readOnly: true }).catch(() => null) : null;
+  const plan = planToday?.ok ? planToday : null;
+
+  // ── Today ──
+  if (view === "today") {
+    const toFix = policy.scholarMistakeNotebook === "on" ? await mistakeToFixCount(ctx.admin, ctx.userId) : null;
+    // SALE-2026-11 R2: due retrieval (SALE-08). Null while its key is off. Prerequisite reviews and transfer checks are in Insights.
+    const retention = await loadRetentionView(ctx.admin, ctx.userId, policy, now.toISOString(), { today });
+    const titles = new Map(mats.map(m => [m.id, m.title]));
+    const dueNow = (retention?.schedule?.due ?? []).filter(i => i.suggestedOn <= today);
+    const later = (retention?.schedule?.due ?? []).filter(i => i.suggestedOn > today);
+    const planItems = (plan?.todayItems ?? []).filter(i => (i.kind === "planned" && !!i.href) || (i.kind === "personal" && i.occurrence?.entryType !== "busy" && i.occurrence?.entryType !== "placement"));
+    const queue = buildTodayQueue({
+      resume: carryOn.map(s => ({ ...s, lastActiveDay: localDay(s.lastActiveAt, tz) })), resumeAllHref: withStudy(reviseHref("today", { resume: "all" }), sid),
+      dueCards: cards.ok ? cards.data.length : 0, dueCardsHref: withStudy(reviseHref("today", { review: "cards" }), sid),
+      retrieval: dueNow.slice(0, 5).map(i => ({ key: i.topicKey, label: i.label, status: retrievalLine(i, today), why: i.reasons[0], more: [...i.reasons.slice(1), `Rules ${i.rules.join(", ")}.`], href: i.action.href, actionLabel: i.action.label, priorityFlag: i.flags.priority })),
+      repeated: (insights?.repeatedDifficulties ?? []).map(d => ({ materialTitle: titles.get(d.materialId) ?? null })),
+      weakOffered: policy.scholarRevisionModes.includes("weak"),
+      mistakes: toFix?.ok ? toFix.data : null, mistakesHref: withStudy(studyHref("revise/mistakes"), sid),
+      // The cards are already one row: a plan activity or suggestion about the same cards would only say it again.
+      plan: planItems.filter(i => !planRefOfKey(i.key)?.startsWith("revise:due") && !/\b(flash)?cards?\b/i.test(i.title)).slice(0, 3).map(i => ({ key: i.key, title: i.title, why: `On your plan for today${i.minutes ? `, about ${i.minutes} min` : ""}.`, href: i.href ?? studyHref("plan") })),
+      recommended: policy.scholarRevisionRecommendations === "on" ? (insights?.recommendations ?? []).filter(r => !["due", "spaced", "weak", "difficult"].includes(r.id)).slice(0, 1).map(r => ({
+        key: r.id, title: r.title, why: r.reason,
+        action: "learnSection" in r.action ? { kind: "link" as const, href: `${studyHref("learn")}?section=${r.action.learnSection}`, label: "Teach me this" } : { kind: "link" as const, href: withStudy(reviseHref("today", { practice: "1" }), sid), label: "Choose how" },
+      })) : [],
+      priorities: plan?.settings.priorities ?? [],
+    });
+    return frame("today", (
+      <div className="space-y-4">
+        {!rows.ok && <Unreadable what="your revision history" />}
+        <TodayQueue items={queue}
+          clear={<>{insights && insights.upcoming7 > 0 ? `${insights.upcoming7} ${insights.upcoming7 === 1 ? "card comes" : "cards come"} due in the next 7 days. ` : ""}You can revise anything you like below.</>} />
+        {later.length > 0 && <p className="text-[13px] text-gray-700">{later.length} more {later.length === 1 ? "topic is" : "topics are"} placed on a later day, so today stays manageable. See them in <Link href={withStudy(reviseHref("insights"), sid)} className={toneAction.link}>Revision Insights</Link>.</p>}
+        {(() => {
+          // SCHOLAR-SESSION-AI-02: a study session's focus is chosen already, so the form opens on it, as it always has.
+          const scope = revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) });
+          return startForm(!!scope, "Or choose how to revise", null, scope);
+        })()}
+      </div>
+    ));
+  }
+
+  // ── My Priorities: the learner's own, from My Plan. Read here, changed only there ──
+  if (view === "priorities") {
+    const planHref = withStudy(studyHref("plan"), sid);
+    if (!planToday?.ok) return frame("priorities", <StatePanel title="My Plan is not available here" actions={<Link href={withStudy(reviseHref("today"), sid)} className={toneAction.secondary}>Back to Today</Link>}><p>{planToday ? "Your priorities come from My Plan, which is not offered here." : "Your plan could not be read just now."} Revision itself is not affected.</p></StatePanel>);
+    const s = planToday.settings, exam = s.examDate && s.examDate >= today ? s.examDate : null;
+    return frame("priorities", (
+      <div className="space-y-4" data-revise-priorities>
+        <LearningSection tone="next" icon="target" title="What you are working towards" level={2} headingId="goal-h" caps={false}>
+          {planToday.starting ? <p className={sectionLead}>You have not set a plan yet, so nothing here is yours to prioritise. <Link href={planHref} className={toneAction.link}>Set your goal and exam date in My Plan</Link></p> : (
+            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+              <div className="cmp-learn-box p-3"><dt className="text-[12.5px] font-semibold text-gray-700">Goal</dt><dd className="text-[14.5px] font-semibold text-gray-900">{s.goal ?? "None set"}</dd></div>
+              <div className="cmp-learn-box p-3" data-revise-exam><dt className="text-[12.5px] font-semibold text-gray-700">{s.examLabel ?? "Exam or assessment"}</dt>
+                <dd className="text-[14.5px] font-semibold text-gray-900">{exam ? `${shortDate(exam)}, ${daysLeftLabel(exam, today)}` : "No date set"}</dd></div>
+            </dl>
+          )}
+          {s.priorities.length > 0 && (
             <>
-              {policy.scholarRevisionRecommendations === "on" && insights.recommendations.length > 0 && (
-                <LearningSection tone="next" icon="target" title="What to revise next" headingId="rec-h" caps={false}>
-                  <ul className="mt-2 space-y-2">
-                    {insights.recommendations.map(r => (
-                      <li key={r.id} className="text-[13.5px]">
-                        {"learnSection" in r.action
-                          ? <Link href={`${studyHref("learn")}?section=${r.action.learnSection}`} className={toneAction.link}>{r.title}</Link>
-                          : <span className="font-semibold text-gray-900">{r.title}</span>}
-                        <span className="block text-[13px] text-gray-800">{r.reason}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </LearningSection>
-              )}
-              <dl className="cmp-learn-summary grid grid-cols-2 gap-3">
-                <Stat label="Cards due now" value={String(insights.due)} />
-                <Stat label="Due in the next 7 days" value={String(insights.upcoming7)} />
-                <Stat label={`Reviews, last ${policy.scholarInsightWindowDays} days`} value={insights.completedReviews.state === "measured" ? String(insights.completedReviews.reviews) : "Not measured"} note={insights.completedReviews.state === "measured" ? null : insights.completedReviews.reason} />
-                <Stat label="Recall" value={insights.recall.state === "measured" ? `${insights.recall.recalledShare}%` : insights.recall.state === "insufficient" ? "Not enough yet" : "Not measured"}
-                  note={insights.recall.state === "measured" ? `of ${insights.recall.reviews} reviews graded Okay or better` : insights.recall.state === "insufficient" ? `${insights.recall.have} of ${insights.recall.need} reviews needed` : insights.recall.reason} />
-                <Stat label="Materials revised" value={`${insights.coverage.revised} of ${insights.coverage.of}`} />
-                <Stat label="Answers marked" value={`${insights.marking.deterministic + insights.marking.self_graded + insights.marking.ai_evaluation}`}
-                  note={`by code ${insights.marking.deterministic} · by you ${insights.marking.self_graded} · by AI evaluation ${insights.marking.ai_evaluation}`} />
-              </dl>
-              <LearningSection tone="summary" icon="clock" title="Recall over six weeks" headingId="ret-h" caps={false}>
-                {insights.retention.state !== "measured" ? <p className="mt-1 text-[13px] text-gray-600">{insights.retention.state === "insufficient" ? `Not enough reviews yet (${insights.retention.have} of ${insights.retention.need}).` : insights.retention.reason}</p> : (
-                  <table className="mt-2 w-full rounded-lg bg-[var(--cmp-app-surface)] text-[13px]">
-                    <caption className="sr-only">Reviews and the share graded Okay or better, by week</caption>
-                    <thead><tr className="text-left text-[12px] text-gray-700"><th scope="col" className="font-semibold">Week of</th><th scope="col" className="font-semibold">Reviews</th><th scope="col" className="font-semibold">Recalled</th></tr></thead>
-                    <tbody>{insights.retention.weeks.map(w => (
-                      <tr key={w.weekStart} className="border-t border-gray-100"><td>{new Date(`${w.weekStart}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</td>
-                        <td className="tabular-nums">{w.reviews}</td><td className="tabular-nums">{w.recalledShare === null ? "No reviews" : `${w.recalledShare}%`}</td></tr>
-                    ))}</tbody>
-                  </table>
-                )}
-              </LearningSection>
-              <LearningSection tone="record" icon="record" title="What you keep missing" headingId="hard-h" caps={false}>
-                {insights.repeatedDifficulties.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing missed more than once.</p> : (
-                  <ul className="mt-2 space-y-2">{insights.repeatedDifficulties.map(d => (
-                    <li key={d.questionId} className="text-[13px]"><span className="text-gray-900">{d.stem}</span> <span className="text-gray-700">· missed {d.misses} times</span>
-                      <Link href={`${studyHref("learn")}?section=${d.chunkId}`} className={`ml-2 ${toneAction.link}`}>Teach me this</Link></li>
-                  ))}</ul>
-                )}
-              </LearningSection>
-              <LearningSection tone="sources" icon="library" title="Revision by competency" headingId="comp-h" caps={false}>
-                <p className="mt-2 text-[13px] text-gray-700">Questions answered on competencies your notes are linked to. Practised, not achieved.</p>
-                {insights.competencyActivity.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Not measured: none of your revision questions is linked to a competency yet. Revision works without a catalogue.</p> : (
-                  <ul className="mt-2 space-y-1">{insights.competencyActivity.slice(0, 8).map(c => (
-                    <li key={c.competencyId} className="flex justify-between gap-2 text-[13px]"><span className="text-gray-900">{compNames.get(c.competencyId)?.title ?? "A competency"}</span><span className="tabular-nums text-gray-600">{c.answered} answered</span></li>
-                  ))}</ul>
-                )}
-              </LearningSection>
+              <h3 className="mt-3 text-[14px] font-bold text-gray-900">Your priority topics</h3>
+              <ul className="mt-1.5 flex flex-wrap gap-2" data-revise-priority-topics>
+                {s.priorities.map(p => <li key={p}><Link href={withStudy(reviseHref("today", { topic: p }), sid)} prefetch={false} className={toneAction.secondary}>{p}</Link></li>)}
+              </ul>
             </>
           )}
-        </aside>
-        ) }}>
-        <div className="space-y-5">
-          {retention && <RetentionPanel v={retention} />}
-          <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
-            difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
-            competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
-            // SCHOLAR-INDEPENDENT-LEARNING-01 P1: from a Learn lesson's notes, only that lesson's sections (the learner may widen it to the material).
-            preset={q.material ? { materialId: q.material, difficulty: q.difficulty ?? null, chunkIds: (q.sections ?? "").split(",").filter(isUuid).slice(0, 24) } : null}
-            scope={q.material ? null : revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
-
-          {toFix?.ok && (
-            <Link href={withStudy(studyHref("revise/mistakes"), sid)} className={`cmp-learn-record cmp-learn-box flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-3 hover:opacity-90 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-              <span className="cmp-learn-ink text-[14.5px] font-semibold">Mistake notebook ({toFix.data} to fix)</span>
-              <span className="text-[13px] text-gray-800">Your wrong answers, with the answer and why</span>
-            </Link>
+          {!planToday.starting && <p className="mt-2 text-[13px]"><Link href={planHref} className={toneAction.link}>Change these in My Plan</Link></p>}
+        </LearningSection>
+        <LearningSection tone="summary" icon="clock" title="Coming up in the next 7 days" level={2} headingId="soon-h" caps={false}>
+          {planToday.comingUp.length === 0 && !planToday.upcomingMonthlyReview ? <p className={sectionLead}>Nothing is scheduled. Add revision or a deadline in <Link href={planHref} className={toneAction.link}>My Plan</Link>.</p> : (
+            <ul className="mt-2 divide-y divide-gray-100 overflow-hidden rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-gray-200">
+              {planToday.upcomingMonthlyReview && <li className="px-3.5 py-2.5 text-[14px]"><Link href={planToday.upcomingMonthlyReview.startHref} className={toneAction.link}>Monthly review</Link><span className="text-[13px] text-gray-700"> · {planToday.upcomingMonthlyReview.late ? "Overdue" : shortDate(planToday.upcomingMonthlyReview.recommendedDate)}</span></li>}
+              {planToday.comingUp.map(i => (
+                <li key={i.key} className="px-3.5 py-2.5 text-[14px]">
+                  {i.href ? <Link href={i.href} prefetch={false} className={toneAction.link}>{i.title}</Link> : <span className="font-semibold text-gray-900">{i.title}</span>}
+                  <span className="text-[13px] text-gray-700"> · {shortDate(i.date)}{i.when ? ` · ${i.when}` : ""} · {i.label}</span>
+                </li>
+              ))}
+            </ul>
           )}
+        </LearningSection>
+        {(planToday.next || planToday.alternatives.length > 0) && (
+          <LearningSection tone="quickCheck" icon="compass" title="Suggestions" level={2} headingId="suggest-h" caps={false}>
+            <p className={sectionLead}>From your plan and your records. Nothing here changes your plan unless you choose it there.</p>
+            <ul className="mt-2 space-y-2">
+              {[planToday.next, ...planToday.alternatives].filter((r): r is NonNullable<typeof r> => !!r).slice(0, 3).map(r => (
+                <li key={r.ref} className="text-[14px]">{r.href ? <Link href={r.href} prefetch={false} className={toneAction.link}>{r.title}</Link> : <span className="font-semibold text-gray-900">{r.title}</span>}<span className="block text-[13px] text-gray-800">{r.why}</span></li>
+              ))}
+            </ul>
+          </LearningSection>
+        )}
+      </div>
+    ));
+  }
 
-          {policy.scholarAdaptiveExams === "on" && (
-            <LearningSection tone="check" icon="question" title="Adaptive exam" level={2} headingId="adaptive-h" caps={false}>
-              <p className={sectionLead}>{ADAPTIVE_HELP}</p>
-              <p className="mt-2 rounded-lg bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] px-3 py-2 text-[13px] text-gray-800"><span className="font-semibold">How it adapts: </span>{ADAPTIVE_RULE}</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link href={withStudy(adaptiveHref(), sid)} className={toneAction.primary}>Set up an adaptive exam</Link>
-                {examsActive.map(e => (
-                  <Link key={e.session.id} href={adaptiveHref(e.session.id)} className={`text-[13.5px] ${toneAction.link}`}>Carry on: {e.title} ({e.session.position} answered)</Link>
-                ))}
-              </div>
-            </LearningSection>
-          )}
+  // ── Studied This Month ──
+  if (view === "month") {
+    if (!rows.ok || !materials.ok) return frame("month", <Unreadable what="your learning this month" />);
+    const learning = await listLearningSessions(ctx.admin, ctx.userId, 100);
+    const list = learning.ok ? learning.data : [];
+    const steps = await sessionStepSummaries(ctx.admin, ctx.userId, list.map(s => s.id));
+    const v = buildStudiedThisMonth({
+      today, tz, materials: materials.data, questions: rows.data.questions, attempts: rows.data.attempts, reviews: rows.data.reviews, cards: rows.data.cards,
+      sessions: list.map(s => ({ id: s.id, title: s.title, status: s.status, lastActiveAt: s.lastActiveAt, materialIds: steps.get(s.id)?.materialIds ?? [] })),
+    });
+    return frame("month", <StudiedMonthView v={v} today={today} />);
+  }
 
-          {policy.scholarFlashcards === "on" && (
-            <LearningSection tone="quickCheck" icon="cards" title="Flashcards" level={2} headingId="flashcards-h" caps={false}>
-              <p className={sectionLead}>Recall the answer, flip the card, and say whether you remembered: it comes back sooner or later on your spaced review schedule. From your notes, the Competen library and your learning gaps, or cards you write yourself, in decks you can download.</p>
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link href={withStudy(flashcardsHref(), sid)} className={toneAction.primary}>Open Flashcards</Link>
-                <Link href={flashcardsHref({ view: "decks" })} className={toneAction.secondary}>My Decks</Link>
-              </div>
-            </LearningSection>
-          )}
+  // ── All Topics ──
+  if (view === "topics") {
+    if (!rows.ok || !materials.ok) return frame("topics", <Unreadable what="your revision catalogue" />);
+    const [topics, maps] = await Promise.all([libraryTopics(ctx.admin, ctx.userId), listMappings(ctx.admin, ctx.userId)]);
+    const f = parseCatalogueFilters(q as Record<string, string | undefined>);
+    const accepted = new Map<string, Set<string>>();
+    if (maps.ok) for (const m of maps.data.mappings) if (m.state !== "rejected") { if (!accepted.has(m.materialId)) accepted.set(m.materialId, new Set()); accepted.get(m.materialId)!.add(m.competencyId); }
+    const catalogue = buildCatalogue({
+      today, tz, materials: materials.data, questions: rows.data.questions, attempts: rows.data.attempts, reviews: rows.data.reviews, cards: rows.data.cards,
+      topicsOf: id => materialTopics(topics?.get(id) ?? []).map(t => t.topic), competenciesOf: id => [...(accepted.get(id) ?? [])],
+    });
+    const shown = filterCatalogue(catalogue, f);
+    const allTopics = [...new Set(catalogue.flatMap(r => r.topics))].sort((a, b) => a.localeCompare(b)).slice(0, 200);
+    const compIds = [...new Set(catalogue.flatMap(r => r.competencyIds))];
+    const compNames = compIds.length ? await competencyLabels(ctx.admin, learner.competencies, compIds, new Map()) : new Map();
+    const field = `w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-[14px] text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+    const page = Math.min(f.page, shown.pages);
+    const pageHref = (n: number) => reviseHref("topics", { q: f.q, m: f.material, t: f.topic, c: f.competency, status: f.status, from: f.from, page: n > 1 ? String(n) : null, study: sid });
+    return frame("topics", (
+      <section aria-labelledby="topics-h" className="cmp-learn-sources space-y-3">
+        <h2 id="topics-h" className="text-[18px] font-bold text-gray-900">All topics</h2>
+        <form method="get" action={studyHref("revise")} className="space-y-2" role="search">
+          <input type="hidden" name="view" value="topics" />
+          {sid && <input type="hidden" name="study" value={sid} />}
+          <div className="flex gap-2">
+            <input name="q" defaultValue={f.q} aria-label="Search your topics and materials" placeholder="Search your topics and materials" className={field} />
+            <button type="submit" className={`${toneAction.primary} shrink-0`}>Search</button>
+          </div>
+          <details open={hasCatalogueFilters(f) && !f.q} className="text-[13.5px]" suppressHydrationWarning>
+            <summary className={`cursor-pointer font-semibold text-gray-800 pointer-coarse:py-3.5 ${focusRing}`}>Filters</summary>
+            <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+              <label className="block text-[12.5px] font-semibold text-gray-700">Material<select name="m" defaultValue={f.material ?? ""} className={`${field} mt-0.5 font-normal`}><option value="">Any</option>{mats.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}</select></label>
+              <label className="block text-[12.5px] font-semibold text-gray-700">Topic<select name="t" defaultValue={f.topic ?? ""} className={`${field} mt-0.5 font-normal`}><option value="">Any</option>{allTopics.map(t => <option key={t} value={t}>{t}</option>)}</select></label>
+              <label className="block text-[12.5px] font-semibold text-gray-700">Competency<select name="c" defaultValue={f.competency ?? ""} className={`${field} mt-0.5 font-normal`}><option value="">Any</option>{compIds.map(id => <option key={id} value={id}>{compNames.get(id)?.title ?? "A competency"}</option>)}</select></label>
+              <label className="block text-[12.5px] font-semibold text-gray-700">Review status<select name="status" defaultValue={f.status ?? ""} className={`${field} mt-0.5 font-normal`}><option value="">Any</option>{CATALOGUE_STATUSES.map(st => <option key={st} value={st}>{CATALOGUE_STATUS_LABEL[st]}</option>)}</select></label>
+              <label className="block text-[12.5px] font-semibold text-gray-700">Studied since<input type="date" name="from" defaultValue={f.from ?? ""} className={`${field} mt-0.5 font-normal`} /></label>
+            </div>
+            <div className="mt-2 flex flex-wrap items-center gap-3"><button type="submit" className={toneAction.secondary}>Apply filters</button>{hasCatalogueFilters(f) && <Link href={reviseHref("topics", { study: sid })} className={toneAction.link}>Clear</Link>}</div>
+          </details>
+        </form>
+        <p className="text-[13px] text-gray-700" role="status">{shown.total} {shown.total === 1 ? "material" : "materials"}, oldest learning included.</p>
+        {shown.rows.length === 0 ? <p className="rounded-xl bg-[var(--cmp-app-surface)] p-4 text-[14px] text-gray-800 ring-1 ring-gray-200">Nothing matches. Try fewer words or clear the filters.</p> : (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-gray-200">{shown.rows.map(r => <CatalogueRowView key={r.materialId} r={r} />)}</ul>
+        )}
+        {shown.pages > 1 && <nav aria-label="Pages" className="flex items-center justify-between text-[13.5px]">{page > 1 ? <Link href={pageHref(page - 1)} className={toneAction.link}>Previous</Link> : <span />}<span className="text-gray-700">Page {page} of {shown.pages}</span>{page < shown.pages ? <Link href={pageHref(page + 1)} className={toneAction.link}>Next</Link> : <span />}</nav>}
+        <details className="rounded-xl bg-[var(--cmp-app-surface)] p-3.5 ring-1 ring-gray-200" suppressHydrationWarning data-revise-sets>
+          <summary className={`cursor-pointer text-[14px] font-semibold text-gray-900 pointer-coarse:py-3.5 ${focusRing}`}>Saved revision sets{sets.ok ? ` (${sets.data.length})` : ""}</summary>
+          <p className="mt-1 text-[13px] text-gray-700">Revising a saved set again uses its stored questions and answers: no new AI, so it is always available.</p>
+          {!sets.ok ? (sets.notProvisioned ? <p className="mt-2 text-[13.5px] text-gray-800">Saved sets are not available here yet.</p> : <Unreadable what="saved revision sets" />)
+            : sets.data.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">None yet. After a session, you can save its questions as a set.</p>
+              : <SavedSets sets={sets.data.map(s => ({ id: s.id, title: s.title, questions: s.questionIds.length, lastUsedAt: s.lastUsedAt }))} />}
+        </details>
+      </section>
+    ));
+  }
 
-          {active.length > 0 && (
-            <LearningSection tone="next" icon="arrow" title="Carry on where you left off" level={2} headingId="resume-h" caps={false}>
-              <ul className="mt-2 space-y-1.5">
-                {active.map(s => (
-                  <li key={s.id}><Link href={`${studyHref("revise")}?session=${s.id}`} className={`text-[14px] ${toneAction.link}`}>{REVISION_MODE_LABEL[s.mode as RevisionMode] ?? "Revision"}</Link>
-                    <span className="text-[13px] text-gray-700"> · {s.position} of {s.total} answered · {new Date(s.lastActiveAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></li>
+  // ── Revision Insights: the detail, apart ──
+  const retentionAll = await loadRetentionView(ctx.admin, ctx.userId, policy, now.toISOString(), { today });
+  const compNames = insights?.competencyActivity.length
+    ? await competencyLabels(ctx.admin, learner.competencies, insights.competencyActivity.map(c => c.competencyId), new Map()) : new Map();
+  return frame("insights", (
+    <div className="space-y-4" data-revise-insights>
+      <h2 className="text-[18px] font-bold text-gray-900">How your revision is going</h2>
+      <p className="max-w-[68ch] text-[13px] leading-relaxed text-gray-700">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>
+      <p className="text-[13.5px]"><Link href={flashcardsHref({ view: "history" })} className={toneAction.link}>Open Revision History</Link></p>
+      {!insights ? <Unreadable what="your revision history" /> : (
+        <>
+          {policy.scholarRevisionRecommendations === "on" && insights.recommendations.length > 0 && (
+            <LearningSection tone="next" icon="target" title="What to revise next" headingId="rec-h" caps={false}>
+              <ul className="mt-2 space-y-2">
+                {insights.recommendations.map(r => (
+                  <li key={r.id} className="text-[13.5px]">
+                    {"learnSection" in r.action
+                      ? <Link href={`${studyHref("learn")}?section=${r.action.learnSection}`} className={toneAction.link}>{r.title}</Link>
+                      : <span className="font-semibold text-gray-900">{r.title}</span>}
+                    <span className="block text-[13px] text-gray-800">{r.reason}</span>
+                  </li>
                 ))}
               </ul>
             </LearningSection>
           )}
-
-          <LearningSection tone="notes" icon="layers" title="Saved revision sets" level={2} headingId="sets-h" caps={false}>
-            <p className={sectionLead}>Revising a saved set again uses its stored questions and answers: no new AI, so it is always available.</p>
-            {!sets.ok ? (sets.notProvisioned ? <p className="mt-2 text-[13.5px] text-gray-800">Saved sets are not available here yet.</p> : <Unreadable what="saved revision sets" />)
-              : sets.data.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">None yet. After a session, you can save its questions as a set.</p>
-                : <SavedSets sets={sets.data.map(s => ({ id: s.id, title: s.title, questions: s.questionIds.length, lastUsedAt: s.lastUsedAt }))} />}
-          </LearningSection>
-
-          <section aria-labelledby="cards-h">
-            <h2 id="cards-h" className="mb-2 text-[17px] font-bold text-gray-900">Review cards due</h2>
-            {!cards.ok ? (cards.notProvisioned
-              ? <StatePanel title="Revision is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
-              : <Unreadable what="review cards" />)
-              : <CardReview cards={cardViews} />}
-          </section>
-        </div>
-      </PaneGrid>
-    </>
-  );
+          <dl className="cmp-learn-summary grid grid-cols-2 gap-3 lg:grid-cols-3">
+            <Stat label="Cards due now" value={String(insights.due)} />
+            <Stat label="Due in the next 7 days" value={String(insights.upcoming7)} />
+            <Stat label={`Reviews, last ${policy.scholarInsightWindowDays} days`} value={insights.completedReviews.state === "measured" ? String(insights.completedReviews.reviews) : "Not measured"} note={insights.completedReviews.state === "measured" ? null : insights.completedReviews.reason} />
+            <Stat label="Recall" value={insights.recall.state === "measured" ? `${insights.recall.recalledShare}%` : insights.recall.state === "insufficient" ? "Not enough yet" : "Not measured"}
+              note={insights.recall.state === "measured" ? `of ${insights.recall.reviews} reviews graded Okay or better` : insights.recall.state === "insufficient" ? `${insights.recall.have} of ${insights.recall.need} reviews needed` : insights.recall.reason} />
+            <Stat label="Materials revised" value={`${insights.coverage.revised} of ${insights.coverage.of}`} />
+            <Stat label="Answers marked" value={`${insights.marking.deterministic + insights.marking.self_graded + insights.marking.ai_evaluation}`}
+              note={`by code ${insights.marking.deterministic} · by you ${insights.marking.self_graded} · by AI evaluation ${insights.marking.ai_evaluation}`} />
+          </dl>
+          {retentionAll && <RetentionPanel v={retentionAll} />}
+          <div className="grid gap-4 lg:grid-cols-2">
+            <LearningSection tone="summary" icon="clock" title="Recall over six weeks" headingId="ret-h" caps={false}>
+              {insights.retention.state !== "measured" ? <p className="mt-1 text-[13px] text-gray-600">{insights.retention.state === "insufficient" ? `Not enough reviews yet (${insights.retention.have} of ${insights.retention.need}).` : insights.retention.reason}</p> : (
+                <table className="mt-2 w-full rounded-lg bg-[var(--cmp-app-surface)] text-[13px]">
+                  <caption className="sr-only">Reviews and the share graded Okay or better, by week</caption>
+                  <thead><tr className="text-left text-[12px] text-gray-700"><th scope="col" className="font-semibold">Week of</th><th scope="col" className="font-semibold">Reviews</th><th scope="col" className="font-semibold">Recalled</th></tr></thead>
+                  <tbody>{insights.retention.weeks.map(w => (
+                    <tr key={w.weekStart} className="border-t border-gray-100"><td>{new Date(`${w.weekStart}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</td>
+                      <td className="tabular-nums">{w.reviews}</td><td className="tabular-nums">{w.recalledShare === null ? "No reviews" : `${w.recalledShare}%`}</td></tr>
+                  ))}</tbody>
+                </table>
+              )}
+            </LearningSection>
+            <LearningSection tone="record" icon="record" title="What you keep missing" headingId="hard-h" caps={false}>
+              {insights.repeatedDifficulties.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing missed more than once.</p> : (
+                <ul className="mt-2 space-y-2">{insights.repeatedDifficulties.map(d => (
+                  <li key={d.questionId} className="text-[13px]"><span className="text-gray-900">{d.stem}</span> <span className="text-gray-700">· missed {d.misses} times</span>
+                    <Link href={`${studyHref("learn")}?section=${d.chunkId}`} className={`ml-2 ${toneAction.link}`}>Teach me this</Link></li>
+                ))}</ul>
+              )}
+            </LearningSection>
+            <LearningSection tone="sources" icon="library" title="Revision by competency" headingId="comp-h" caps={false}>
+              <p className="mt-2 text-[13px] text-gray-700">Questions answered on competencies your notes are linked to. Practised, not achieved.</p>
+              {insights.competencyActivity.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Not measured: none of your revision questions is linked to a competency yet. Revision works without a catalogue.</p> : (
+                <ul className="mt-2 space-y-1">{insights.competencyActivity.slice(0, 8).map(c => (
+                  <li key={c.competencyId} className="flex justify-between gap-2 text-[13px]"><span className="text-gray-900">{compNames.get(c.competencyId)?.title ?? "A competency"}</span><span className="tabular-nums text-gray-600">{c.answered} answered</span></li>
+                ))}</ul>
+              )}
+            </LearningSection>
+            {policy.scholarAdaptiveExams === "on" && (
+              <LearningSection tone="check" icon="question" title="Adaptive exams" level={2} headingId="adaptive-h" caps={false}>
+                <details className="mt-1" suppressHydrationWarning><summary className={`cursor-pointer text-[13px] font-semibold text-gray-800 pointer-coarse:py-3.5 ${focusRing}`}>How it adapts</summary><p className="mt-1 text-[13px] text-gray-800">{ADAPTIVE_HELP} {ADAPTIVE_RULE}</p></details>
+                <Link href={withStudy(adaptiveHref(), sid)} className={`mt-2 ${toneAction.secondary}`}>Set up an adaptive exam</Link>
+              </LearningSection>
+            )}
+          </div>
+        </>
+      )}
+      {papers}
+    </div>
+  ));
 }
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string | null }) {

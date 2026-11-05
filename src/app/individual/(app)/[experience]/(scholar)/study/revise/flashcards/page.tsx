@@ -1,3 +1,4 @@
+import { dueLabel } from "@/lib/individual/scholar/revise-workspace";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -199,7 +200,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
     const filtered = filterCards(cards, decks, { q: q.q ?? null, state: (q.state as ReviewState) || null, origin: (q.origin as CardOrigin) || null, bookmarked: q.bookmarked === "1", deck: q.deck ?? null });
     const rows: CardRow[] = filtered.map(c => ({
       id: c.id, front: c.front, origin: c.origin, originLabel: c.originLabel, materialTitle: c.material.title, topic: c.topic, competency: c.competency?.title ?? null,
-      difficulty: c.difficulty, state: c.review.state, stateLabel: REVIEW_STATE_LABEL[c.review.state], nextReviewAt: c.review.nextReviewAt, lastReviewedAt: c.review.lastReviewedAt,
+      difficulty: c.difficulty, state: c.review.state, stateLabel: c.review.state === "due" ? dueLabel(c.review.nextReviewAt, lib.data.today) : REVIEW_STATE_LABEL[c.review.state], nextReviewAt: c.review.nextReviewAt, lastReviewedAt: c.review.lastReviewedAt,
       reviews: c.review.reviews, intervalDays: c.review.intervalDays, ease: c.review.ease, recent: c.review.history.slice(0, 5).map(h => h.recall),
       bookmarked: c.bookmarked, note: c.note, issue: c.issue, editable: c.editable, deckIds: c.deckIds, createdAt: c.createdAt, version: c.version,
     }));

@@ -1,0 +1,80 @@
+PASS Today opens on what needs attention
+PASS the first thing says where to start
+PASS the action is near the top of the page (409 px)
+PASS the views are the owner's (Today, My Priorities, Studied This Month, All Topics, Revision Insights)
+PASS direct shortcuts stay
+PASS no Due today beside a later date
+PASS Quick Recall can be chosen on Today
+PASS Deep Understanding can be chosen on Today
+PASS Clinical Reasoning can be chosen on Today
+PASS Mixed Challenge can be chosen on Today
+PASS the detailed statistics are not on Today
+PASS the due cards are one row (1)
+PASS unfinished sessions take at most two rows and one gathering the rest (3)
+PASS See them all lists every unfinished session
+PASS saved sets are not on Today
+PASS unfinished revision comes first (resume)
+PASS Resume opens the session
+PASS due cards open on their own, with a way back
+PASS Studied This Month names the month
+PASS it says uploads do not count
+PASS a studied material shows studied dates apart from its upload date
+PASS no Due today beside a later date there
+PASS the catalogue lists materials (3 on the page)
+PASS it says older learning is included
+PASS search finds "Essential" only (1)
+PASS the status filter works (0)
+PASS a date filter with nothing says so
+PASS saved sets stay reachable
+PASS an intention starts on the material chosen
+PASS Practice Questions opens the full choice of what and how
+PASS the plan can be read
+PASS a plan with a priority saves on staging (200)
+PASS a matching queue row says In your priorities (Learn your notes "Quality Improvement Science and Methods")
+PASS My Priorities reads the plan
+PASS it shows the goal, the exam and the days left
+PASS it shows the priority topic
+PASS following a priority topic names it and asks how to revise it
+PASS an intention starts on the priority topic
+PASS it shows what is coming up
+PASS opening Revise leaves the plan settings as they were
+PASS opening Revise records no plan event (0-0/11 then 0-0/11)
+PASS the fixture's plan is put back (200)
+PASS Insights keeps How your revision is going
+PASS Insights keeps Recall over six weeks
+PASS Insights keeps What you keep missing
+PASS Insights keeps Revision by competency
+PASS Insights keeps the formative distinction
+PASS competency revision stays practised, not achieved
+PASS Flashcards still opens
+PASS Adaptive Exams still opens
+PASS Mistake Notebook still opens
+PASS Revision History still opens
+PASS My Decks still opens
+PASS a session still opens
+PASS the card list has no Due today beside a later date
+PASS no page errors ()
+PASS today at 820: no sideways scroll
+PASS today at 820: nothing scrolls inside the page (0)
+PASS today at 820: where to start is on the first screen (528 px)
+PASS today at 820: view and shortcut links are at least 44 px on touch ()
+PASS month at 820: no sideways scroll
+PASS month at 820: nothing scrolls inside the page (0)
+PASS topics at 820: no sideways scroll
+PASS topics at 820: nothing scrolls inside the page (0)
+PASS priorities at 820: no sideways scroll
+PASS priorities at 820: nothing scrolls inside the page (0)
+PASS insights at 820: no sideways scroll
+PASS insights at 820: nothing scrolls inside the page (0)
+PASS today at 390: no sideways scroll
+PASS today at 390: nothing scrolls inside the page (0)
+PASS today at 390: where to start is on the first screen (440 px)
+PASS today at 390: view and shortcut links are at least 44 px on touch ()
+PASS month at 390: no sideways scroll
+PASS month at 390: nothing scrolls inside the page (0)
+PASS topics at 390: no sideways scroll
+PASS topics at 390: nothing scrolls inside the page (0)
+PASS priorities at 390: no sideways scroll
+PASS priorities at 390: nothing scrolls inside the page (0)
+PASS insights at 390: no sideways scroll
+PASS insights at 390: nothing scrolls inside the page (0)
