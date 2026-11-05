@@ -8,7 +8,9 @@
 // gives (the existing WCE engine, versioned and audited). Nothing is copied: an evaluation record names the
 // evidence it read by id.
 
-import { isUuid, listMaterials, sectionLinks, sectionsOf, evaluationEvidence, type SectionRef } from "./store";
+import { sectionName } from "./evaluate-goals";
+import { headingOf } from "./plan-data";
+import { isUuid, listMaterials, sectionLinks, sectionsOf, evaluationEvidence, type SectionRef, chunkConceptRows, chunkTextRows } from "./store";
 import { resolveScope, type LearningScope } from "./learn";
 import { loadLearnerCatalogue } from "./competency-view";
 import { CASE_CONTEXT_LABEL, CASE_CONTEXTS, type CaseContext } from "./config";
@@ -75,6 +77,9 @@ export async function evaluateScope(admin: any, userId: string, policy: Individu
   })) : null;
   const ev = await evaluationEvidence(admin, userId);
   if (!ev.ok) return { ok: false, status: 503, error: "Your learning evidence could not be read just now." };
+  // SCHOLAR-EVALUATE-GOALS-01: a section is named by its topic or heading. Its chunk id still links to the exact section.
+  const answeredChunks = [...new Set(ev.data.questions.map(q => q.chunkId))].slice(0, 300);
+  const [concepts, texts] = await Promise.all([chunkConceptRows(admin, userId), chunkTextRows(admin, userId, answeredChunks)]);
 
   let sections: SectionRef[] = [], view: ScopeView;
   let decisions = ev.data.decisions;
@@ -116,7 +121,7 @@ export async function evaluateScope(admin: any, userId: string, policy: Individu
     .filter(l => scope.kind !== "outcome" || (l.competencyId === scope.competencyId && l.outcome === scope.outcome));
   const fresh = opts.method === "existing" ? null : opts.freshSessionId ?? null;
   const set: EvidenceSet = {
-    sections: sections.map(s => ({ chunkId: s.chunkId, materialId: s.materialId, materialTitle: s.materialTitle, label: sectionLabel(s) })),
+    sections: sections.map(s => ({ chunkId: s.chunkId, materialId: s.materialId, materialTitle: s.materialTitle, label: sectionName(concepts.get(s.chunkId), headingOf(texts.get(s.chunkId) ?? ""), sectionLabel(s)) })),
     questions: ev.data.questions,
     attempts: opts.method === "fresh" ? ev.data.attempts.filter(a => a.sessionId === fresh) : ev.data.attempts,
     reviews: opts.method === "fresh" ? [] : ev.data.reviews,

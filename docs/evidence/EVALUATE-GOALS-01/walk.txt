@@ -1,0 +1,47 @@
+PASS Evaluate's entries (My Plan goals, My Competencies, My Learning, Clinical Reasoning, Monthly Review)
+PASS My Plan comes first
+PASS an evaluation can be started on the first screen
+PASS the evidence available is shown
+PASS past evaluations are shown
+PASS Evaluate links to My Progress
+PASS each way of evaluating says what it means as evidence
+PASS no competency percentage or stage on Evaluate
+PASS goals come from My Plan (3)
+PASS a goal with nothing behind it says so, not as a failure
+PASS nothing is called failed
+PASS choosing a goal fills in what to evaluate (Personal hygiene)
+PASS the bars can be seen (rgb(14, 116, 144))
+PASS a review of existing evidence is saved (200)
+PASS it is one more saved evaluation
+PASS it reopens
+PASS history says it adds no new evidence
+PASS two evaluations of the same thing can be compared
+PASS competencies opens
+PASS competencies reads its records
+PASS learning opens
+PASS learning reads its records
+PASS reasoning opens
+PASS reasoning reads its records
+PASS monthly opens
+PASS monthly reads its records
+PASS My Progress opens on progress against My Plan
+PASS measures are not averaged into a score
+PASS evidence confidence is shown
+PASS activity over time is shown
+PASS framework coverage is shown
+PASS no competency percentage or stage on My Progress
+PASS My Progress starts or saves nothing ()
+PASS it links back to Evaluate
+PASS My Progress goals opens
+PASS My Progress competencies opens
+PASS My Progress learning opens
+PASS My Progress history opens
+PASS My Progress practice opens
+PASS a saved evaluation shows in My Progress without repeating it
+PASS planned activity and outcome evidence are kept apart
+PASS not assessed is not failure
+PASS no page errors ()
+PASS evaluate at 820: no sideways scroll
+PASS progress at 820: no sideways scroll
+PASS evaluate at 390: no sideways scroll
+PASS progress at 390: no sideways scroll
