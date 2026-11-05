@@ -40,6 +40,8 @@ import { applicationBySkill } from "@/lib/individual/scholar/application-evidenc
 import { loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
 import { Fold, NotMeasuredLine, sectionLead, toneAction } from "../_components/progress-parts";
 import { LearningSection } from "@/components/ui/scholar-learning";
+import { gapsOfDebrief } from "@/lib/individual/scholar/practice-library";
+import { practiceCaseRows } from "@/lib/individual/scholar/store";
 import { activitySummary, enoughForTrend, listSummary, practisedDetail, TREND_NEEDS, withoutEngagementInsight, type ActivitySummary } from "@/lib/individual/scholar/progress-simplify";
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
 import { buildStudyPlan, unstartedMappedSections } from "@/lib/individual/scholar/study-plan";
@@ -116,7 +118,8 @@ export default async function ProgressPage({ params, searchParams }: { params: P
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
-  const [rows, reviews] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId)]);
+  const [rows, reviews, practiceRecords] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId), practiceCaseRows(ctx.admin, ctx.userId)]);
+  const practiceGaps = [...new Set(practiceRecords.sessions.filter(s => s.status === "completed").flatMap(s => gapsOfDebrief(s.debrief)))];
   // PLP-01..04: today is the learner's own local day (x-vercel-ip-timezone, UTC when absent), the same one My Plan uses.
   const hdrs = await headers();
   const tz = learnerTimeZone(hdrs);
@@ -341,6 +344,15 @@ export default async function ProgressPage({ params, searchParams }: { params: P
                 </Fold>
               </div>
             </LearningSection>
+
+            {/* SCHOLAR-APPLY-CONNECTED-01: learning gaps from practice, shown here and apart. Simulated performance is not competence. */}
+            {practiceGaps.length > 0 && (
+              <LearningSection caps={false} tone="practice" icon="target" level={2} headingId="practice-gaps-h" title="To revisit from your practice" className="mt-6">
+                <p className={sectionLead}>From cases you finished. This is simulated practice, kept apart from verified clinical competence.</p>
+                <ul className="mt-2 list-disc space-y-0.5 pl-5 text-[13.5px] text-gray-800">{practiceGaps.slice(0, 5).map(g => <li key={g}>{g}</li>)}</ul>
+                <p className="mt-2 text-[13.5px]"><Link href={experienceHref("scholar", "study/apply?view=library&gap=1")} className={toneAction.link}>Open these in My Practice Library</Link></p>
+              </LearningSection>
+            )}
 
             <LearningSection caps={false} tone="record" icon="record" level={2} headingId="passport-h" title="Your Passport" className="mt-6">
               <p className={sectionLead}>

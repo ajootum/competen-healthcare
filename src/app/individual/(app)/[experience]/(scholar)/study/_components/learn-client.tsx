@@ -1562,6 +1562,8 @@ export function LearnWorkspace(props: {
                   </div>
                 );
               })}
+              {/* SCHOLAR-APPLY-CONNECTED-01: practice from this learning stays findable in My Practice Library. */}
+              <p className="mt-3 text-[12.5px]"><Link href="/individual/scholar/study/apply?view=library" className={`cmp-learn-ink inline-flex min-h-[32px] items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>My Practice Library</Link></p>
               {/* CLINICAL-REASONING-01 CR1: from Teach Me, a case written from this step's own section. */}
               <p className="mt-3 text-[12.5px]"><Link href={`/individual/scholar/study/apply?section=${step.sections[0].chunkId}&from=teach`} className={`cmp-learn-ink inline-flex min-h-[32px] items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Practise this in a clinical case</Link></p>
             </div>

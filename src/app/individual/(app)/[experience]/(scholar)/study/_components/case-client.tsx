@@ -9,6 +9,7 @@ import { SpellingNote } from "./spelling-note";
 import type { AnswerSpelling } from "@/lib/individual/scholar/spelling";
 import { readSpellingChoice, spellingField } from "@/lib/individual/scholar/spelling-variant";
 import type { CaseFrom } from "@/lib/individual/scholar/study-carry";
+import { DRAW_CHOICES, DRAW_LABEL } from "@/lib/individual/scholar/apply-context";
 import { CASE_CONTEXT_LABEL, CASE_DIMENSION_LABEL, CASE_ENTRY_LABEL, MARKING_LABEL, type CaseContext, type CaseEntry } from "@/lib/individual/scholar/config";
 import type { LearnerView } from "@/lib/cases/blueprint";
 import { AiFeedback } from "./ai-feedback";
@@ -61,11 +62,14 @@ export function CaseStart(props: {
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; aiNote: string | null;
   /** SCHOLAR-SESSION-AI-02 adds `entry` with a material or competency: the open study session's focus, chosen first. */
   preset?: { chunkId?: string; from?: CaseFrom } | { entry: "notes"; materialId: string } | { entry: "competency"; competencyId: string } | null;
+  /** SCHOLAR-APPLY-CONNECTED-01: draw on all previous learning first. Absent: the earlier form. */
+  connected?: boolean; heading?: string;
 }) {
   const router = useRouter();
+  const [draw, setDraw] = useState<(typeof DRAW_CHOICES)[number]>("all");
   const chunkPreset = props.preset && "chunkId" in props.preset && props.preset.chunkId ? props.preset : null;
   const focus = props.preset && "entry" in props.preset && props.entries.includes(props.preset.entry) ? props.preset : null;
-  const [entry, setEntry] = useState<CaseEntry | "teach" | "revision">(chunkPreset ? (chunkPreset.from === "revision" ? "revision" : "teach") : focus?.entry ?? props.entries.find(e => e !== "library" || props.libraryOn) ?? "notes");
+  const [entry, setEntry] = useState<CaseEntry | "teach" | "revision" | "connected">(chunkPreset ? (chunkPreset.from === "revision" ? "revision" : "teach") : focus?.entry ?? (props.connected ? "connected" : undefined) ?? props.entries.find(e => e !== "library" || props.libraryOn) ?? "notes");
   const [material, setMaterial] = useState(focus?.entry === "notes" ? focus.materialId : props.materials[0]?.id ?? "");
   const [competency, setCompetency] = useState(focus?.entry === "competency" ? focus.competencyId : props.competencies[0]?.id ?? "");
   const [context, setContext] = useState<CaseContext>(props.contexts[0] ?? "general");
@@ -89,9 +93,9 @@ export function CaseStart(props: {
       setOffers({ list: r.json.offers ?? [], note: r.json.offers?.length ? "Clinically approved cases. Playing one uses no AI." : r.json.reason ?? "No library case fits yet." });
       return;
     }
-    const scope = chunkPreset?.chunkId ? { kind: "section", chunkId: chunkPreset.chunkId }
+    const scope = entry === "connected" ? null : chunkPreset?.chunkId ? { kind: "section", chunkId: chunkPreset.chunkId }
       : entry === "competency" ? { kind: "competency", competencyId: competency } : entry === "surprise" ? null : { kind: "document", materialId: material };
-    const r = await call("/api/individual/scholar/clinical/cases", { entry, scope, context, mode, generateAnyway, ...opts, ...studyField() });
+    const r = await call("/api/individual/scholar/clinical/cases", { entry, scope, ...(entry === "connected" ? { draw: { from: draw } } : {}), context, mode, generateAnyway, ...opts, ...studyField() });
     setBusy(false);
     if (r.ok && r.json.offers) { setOffers({ list: r.json.offers, note: r.json.note }); return; }
     if (r.ok && r.json.saved) { setSaved({ ...r.json.saved, note: r.json.note }); return; }
@@ -117,11 +121,12 @@ export function CaseStart(props: {
   const entries: (CaseEntry | "teach" | "revision")[] = chunkPreset?.chunkId ? [chunkPreset.from === "revision" ? "revision" : "teach"] : props.entries.filter(e => e !== "library" || props.libraryOn);
   return (
     <section aria-labelledby="case-start-h" className={`${learnBox("practice")} p-5 sm:p-6`}>
-      <LearningSectionHead icon="layers" level={2} id="case-start-h" caps={false} title="Clinical reasoning" />
+      <LearningSectionHead icon="layers" level={2} id="case-start-h" caps={false} title={props.heading ?? "Clinical reasoning"} />
       <p className="mt-2 text-[14px] leading-relaxed text-gray-800">Work through a patient case: recognise what matters, interpret findings, prioritise, decide and explain. Formative simulation from your own notes, not an assessment.</p>
       <fieldset className="mt-3">
-        <legend className="text-[13px] font-semibold text-gray-800">Start from</legend>
+        <legend className="text-[13px] font-semibold text-gray-800">{props.connected ? "Draw learning from" : "Start from"}</legend>
         <div className="mt-1 flex flex-wrap gap-3 text-[13.5px]">
+          {props.connected && !chunkPreset?.chunkId && DRAW_CHOICES.map(d => <label key={d} className="inline-flex items-center gap-1.5 pointer-coarse:min-h-[var(--cmp-touch-min)]"><input type="radio" name="case-entry" checked={entry === "connected" && draw === d} onChange={() => { setEntry("connected"); setDraw(d); }} />{DRAW_LABEL[d]}</label>)}
           {entries.map(e => <label key={e} className="inline-flex items-center gap-1.5"><input type="radio" name="case-entry" checked={entry === e} onChange={() => setEntry(e)} />{e === "teach" || e === "revision" ? FROM_LABEL[chunkPreset?.from ?? e] : CASE_ENTRY_LABEL[e]}</label>)}
         </div>
       </fieldset>
@@ -401,6 +406,14 @@ export function CasePlayer({ initial, hints }: { initial: Play; hints: boolean }
       </ol>
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {play.status !== "active" && (play.debrief ? <CaseDebrief d={play.debrief} /> : <p className="mt-4 text-[14px] font-semibold text-gray-900">Case finished.</p>)}
+      {/* SCHOLAR-APPLY-CONNECTED-01: feedback, then what next. These are suggestions: nothing changes until the learner chooses. */}
+      {play.status !== "active" && (
+        <p className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px]" data-case-next>
+          {play.materialId && <Link href={`${studyHref("revise")}?material=${play.materialId}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Revise what this case used</Link>}
+          <Link href={`${studyHref("apply")}?view=library`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Find it in My Practice Library</Link>
+          <Link href={studyHref("plan")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Plan it in My Plan</Link>
+        </p>
+      )}
       {play.status !== "active" && play.review && <CaseReviewBox r={play.review} />}
       {v.talk && play.status !== "active" && <CaseConversation base={base} speaker={v.talk.speaker} active={false} />}
       {play.status !== "active" && play.attempt && <AttemptRecord a={play.attempt} />}
@@ -724,6 +737,30 @@ export function CaseOfferPanel(props: { libraryOn: boolean; /** Whether offering
 }
 
 /** Replay one of the student's own stored cases: a new session on the same case, with no AI. */
+/** SCHOLAR-APPLY-CONNECTED-01: one integrated case from what the learner chose, on the existing engine. A library case that fits, a saved case or a reason comes back as words. */
+export function ConnectedStart({ draw, label, mode, className, buildHref }: { draw: { from: string; topic?: string | null; sessionId?: string | null }; label: string; mode: "guided" | "independent"; className: string; buildHref: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ caseId: string; title: string } | null>(null);
+  async function go(fresh = false) {
+    setBusy(true); setNote(null); setSaved(null);
+    const r = await call("/api/individual/scholar/clinical/cases", { entry: "connected", draw, mode, fresh, ...studyField() });
+    setBusy(false);
+    if (r.ok && r.json.play?.sessionId) { router.push(carry(caseHref("private", r.json.play.sessionId))); return; }
+    if (r.ok && r.json.saved) { setSaved(r.json.saved); setNote(r.json.note ?? "You already have a case from this learning."); return; }
+    if (r.ok && r.json.offers) { router.push(carry(buildHref)); return; }
+    setNote(r.json.error ?? "A case could not be started just now.");
+  }
+  return (
+    <span className="inline-flex max-w-full flex-col items-start gap-1.5">
+      <button type="button" onClick={() => void go()} disabled={busy} className={className}>{busy ? "Preparing your case…" : label}</button>
+      {note && <span role="status" className="text-[13px] text-gray-800">{note}</span>}
+      {saved && <span className="flex flex-wrap items-center gap-3 text-[13.5px]"><ReplayCase caseId={saved.caseId} title="Play it again" /><button type="button" onClick={() => void go(true)} disabled={busy} className={`font-semibold underline underline-offset-2 disabled:opacity-50 ${focusRing}`}>Write a new one</button></span>}
+    </span>
+  );
+}
+
 export function ReplayCase({ caseId, title }: { caseId: string; title: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);

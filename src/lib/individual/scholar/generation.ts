@@ -1326,9 +1326,15 @@ export function caseBlueprintPrompt(passages: readonly Passage[], competencies: 
   return `CLINICAL CONTEXT: ${context}\n\nPASSAGES FROM MY NOTES:\n\n${blocks}${comps}`;
 }
 
+export const CASE_INTEGRATED_SUFFIX = "+connected-v1";
+/** Pure. SCHOLAR-APPLY-CONNECTED-01: one patient, drawing several things studied together. The passages remain the only source of fact, under the same checks. */
+export const integratedCaseLine = (areas: readonly string[]): string => `\n\nINTEGRATED PRACTICE. These passages come from different things I have studied (${areas.slice(0, 6).join("; ")}). Write ONE patient's unfolding case that needs at least two of them together. Ask me to recognise, interpret, prioritise, decide, communicate and reassess, rather than recall a fact. Every fact still comes only from the passages. If they cannot make one coherent patient, use the ones that can.`;
+
 /** One private case from some passages: drafted, made a blueprint and checked, with one retry on its reasons. */
 export async function runCaseBlueprint(userId: string, input: {
   passages: Passage[]; competencies: { id: string; title: string; outcomes?: string[] }[]; context: string; dimensions: readonly string[]; asked?: string | null;
+  /** SCHOLAR-APPLY-CONNECTED-01: the areas of the learner's studied learning this one case should bring together. */
+  integrated?: readonly string[] | null;
 }, run: AiRun = direct) {
   let feedback = "";
   let model = "", provider = "";
@@ -1336,7 +1342,7 @@ export async function runCaseBlueprint(userId: string, input: {
   for (let attempt = 1; attempt <= 2; attempt++) {
     const r = await run({
       system: CASE_BLUEPRINT_SYSTEM,
-      user: caseBlueprintPrompt(input.passages, input.competencies, input.context) + (feedback ? `\n\nA previous attempt was rejected for: ${feedback}. Write the case again without these problems.` : ""),
+      user: caseBlueprintPrompt(input.passages, input.competencies, input.context) + (input.integrated?.length ? integratedCaseLine(input.integrated) : "") + (feedback ? `\n\nA previous attempt was rejected for: ${feedback}. Write the case again without these problems.` : ""),
       tier: "reasoning",
       maxTokens: 4000,
       context: { userId, attribution: { scope: "person" }, operation: "individual_scholar_case_blueprint" },

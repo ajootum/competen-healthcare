@@ -8,6 +8,7 @@ import { isPlayKind, viewPlay } from "@/lib/individual/scholar/clinical-routes";
 import { PageHeader, StatePanel, focusRing } from "../../../../../../_components/chrome";
 import StudyNav from "../../_components/StudyNav";
 import { CasePlayer, type Play } from "../../_components/case-client";
+import { CaseProvenance } from "../../_components/apply-parts";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -35,6 +36,7 @@ export default async function CasePage({ params, searchParams }: { params: Promi
       <PageHeader accent={SCHOLAR.accent} eyebrow="My Learning" title="Clinical case"
         intro="Assess, interpret, prioritise, decide and explain. The case shows you what you have reached; ask for what you need to know." />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
+      {play && q.kind === "private" && q.session && <CaseProvenance admin={ctx.admin} userId={ctx.userId} sessionId={q.session} />}
       {play ? <CasePlayer initial={play as unknown as Play} hints={hints} /> : (
         <StatePanel title="That case could not be found" actions={<Link href={experienceHref("scholar", "study/apply")} className={focusRing}>Back to Apply</Link>}>
           <p>It may have been removed with the materials it was written from, or it is not available here.</p>
