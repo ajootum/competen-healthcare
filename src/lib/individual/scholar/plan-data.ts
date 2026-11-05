@@ -422,6 +422,8 @@ export type InsightsView = {
   settings: ScholarPlanSettings;
   starting: boolean;
   features: Pick<PlanFeatures, "settingsExtras" | "decisions" | "learnerCalendar">;
+  /** SCHOLAR-EVALUATE-GOALS-01: the learner's own entries and recorded study days, so a goal's planned work is counted by the same rule as the tile. */
+  occurrences: readonly Occurrence[]; studyDays: readonly string[];
 } | NotReady;
 /** Study consistency, practice performance and retention evidence for the learner, each "not measured" without evidence, never zero; the four tiles and the adjustments. */
 export async function loadInsights(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<InsightsView> {
@@ -458,6 +460,7 @@ export async function loadInsights(ctx: PlanCtx, policy: IndividualPolicy, o: { 
     adjustments: buildAdjustments({ insights, dueCards: c.dueCards, today: c.today, hrefs, settings: c.settings, canAddEntry: c.features.learnerCalendar, declined }),
     settings: c.settings, starting: c.starting,
     features: { settingsExtras: c.features.settingsExtras, decisions: c.features.decisions, learnerCalendar: c.features.learnerCalendar },
+    occurrences: c.occurrences, studyDays,
   };
 }
 

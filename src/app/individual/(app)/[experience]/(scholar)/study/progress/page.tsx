@@ -1,3 +1,4 @@
+import { countDue } from "@/lib/individual/scholar/store";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
@@ -41,6 +42,10 @@ import { loadCompetencyLabels } from "@/lib/assessment/adapters/scholar/store";
 import { Fold, NotMeasuredLine, sectionLead, toneAction } from "../_components/progress-parts";
 import { LearningSection } from "@/components/ui/scholar-learning";
 import { gapsOfDebrief } from "@/lib/individual/scholar/practice-library";
+import { parseProgressTab } from "@/lib/individual/scholar/evaluate-goals";
+import { ProgressTabsNav } from "../_components/evaluate-parts";
+import { CompetenciesDashboard, GoalsDashboard, HistoryDashboard, LearningDashboard, OverviewDashboard } from "../_components/progress-dashboards";
+import { studyHref } from "../_components/question-view";
 import { practiceCaseRows } from "@/lib/individual/scholar/store";
 import { activitySummary, enoughForTrend, listSummary, practisedDetail, TREND_NEEDS, withoutEngagementInsight, type ActivitySummary } from "@/lib/individual/scholar/progress-simplify";
 import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
@@ -112,12 +117,33 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const fmtWeek = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
 
-export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string; study?: string; month?: string }> }) {
+export default async function ProgressPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ period?: string; study?: string; month?: string; tab?: string; q?: string; from?: string; a?: string; b?: string }> }) {
   const sp = await searchParams;
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
+  // SCHOLAR-EVALUATE-GOALS-01: read-only dashboards from the same records and rules as Evaluate. The page below stays as Practice & achievements.
+  const tab = parseProgressTab(sp.tab);
+  if (tab !== "practice") {
+    const [hdrs0, policy0] = await Promise.all([headers(), loadIndividualPolicy(ctx.admin)]);
+    const [due0, study0] = await Promise.all([countDue(ctx.admin, ctx.userId), loadStudy(ctx.admin, ctx.userId, sp.study, null, policy0)]);
+    const o = { now: new Date(), tz: learnerTimeZone(hdrs0), today: learnerToday(hdrs0) };
+    return (
+      <>
+        <PageHeader accent={x.accent} eyebrow={scholarSpace("progress").eyebrow} title="Progress" intro={scholarSpace("progress").intro} />
+        <StudyNav dueCount={due0} study={study0?.bar ?? null} />
+        <ProgressTabsNav current={tab} study={study0?.session.id ?? null} />
+        {tab === "overview" && <OverviewDashboard ctx={ctx} policy={policy0} o={o} due={due0} />}
+        {tab === "goals" && <GoalsDashboard ctx={ctx} policy={policy0} o={o} sid={study0?.session.id ?? null} />}
+        {tab === "competencies" && <CompetenciesDashboard ctx={ctx} policy={policy0} o={o} />}
+        {tab === "learning" && <LearningDashboard ctx={ctx} policy={policy0} o={o} />}
+        {tab === "history" && <HistoryDashboard ctx={ctx} q={sp.q} from={sp.from} a={sp.a} b={sp.b} sid={study0?.session.id ?? null} action={studyHref("progress")} hidden={{ name: "tab", value: "history" }} />}
+        <p className="mt-4 text-[13.5px]"><Link href={studyHref("evaluate")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Open Evaluate</Link></p>
+        <div className="mt-5"><Notice>{FORMATIVE_NOTICE} · <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> This is observed practice on your own notes, not an assessment of competence and not verified competence.</Notice></div>
+      </>
+    );
+  }
   const [rows, reviews, practiceRecords] = await Promise.all([progressRows(ctx.admin, ctx.userId), reviewRows(ctx.admin, ctx.userId), practiceCaseRows(ctx.admin, ctx.userId)]);
   const practiceGaps = [...new Set(practiceRecords.sessions.filter(s => s.status === "completed").flatMap(s => gapsOfDebrief(s.debrief)))];
   // PLP-01..04: today is the learner's own local day (x-vercel-ip-timezone, UTC when absent), the same one My Plan uses.
@@ -237,6 +263,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
     <>
       <PageHeader accent={x.accent} eyebrow={scholarSpace("progress").eyebrow} title="Progress" intro={scholarSpace("progress").intro} />
       <StudyNav dueCount={p?.totals.cardsDue ?? null} study={study?.bar ?? null} />
+      <ProgressTabsNav current={tab} study={study?.session.id ?? null} />
       <Notice>
         {FORMATIVE_NOTICE} · <span className="font-semibold">{SELF_DIRECTED_LABEL}</span> This is observed practice on your own notes, not an assessment of competence and not verified competence: that is decided only by an independently governed assessment. None of it is added to your Passport or shared with anyone unless you choose an achievement below.
       </Notice>

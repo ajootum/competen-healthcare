@@ -45,20 +45,22 @@ export function EvaluationStart(props: {
   methods: Method[]; materials: { id: string; title: string }[]; competencies: { id: string; title: string; outcomes: string[] }[];
   contexts: { value: string; label: string }[]; freshQuantity: number;
   /** SCHOLAR-SESSION-AI-02: the open study session's focus as the scope chosen first. The learner still chooses and starts. */
-  defaultScope?: EvaluationDefault | null;
+  defaultScope?: EvaluationDefault | { kind: "context"; context: string } | null;
+  /** SCHOLAR-EVALUATE-GOALS-01: reached from "Take a fresh check". The learner can still change it. */
+  defaultMethod?: Method;
 }) {
   const router = useRouter();
   const kinds = (Object.keys(SCOPE_LABEL) as ScopeKind[]).filter(k => (k !== "competency" && k !== "outcome") || props.competencies.length > 0)
     .filter(k => (k !== "document" && k !== "documents") || props.materials.length > 0);
   const d = props.defaultScope && kinds.includes(props.defaultScope.kind) ? props.defaultScope : null;
   const [kind, setKind] = useState<ScopeKind>(d?.kind ?? "all");
-  const [method, setMethod] = useState<Method>(props.methods[0] ?? "existing");
+  const [method, setMethod] = useState<Method>(props.defaultMethod && props.methods.includes(props.defaultMethod) ? props.defaultMethod : props.methods[0] ?? "existing");
   const [topic, setTopic] = useState(d?.kind === "topic" ? d.topic : "");
   const [material, setMaterial] = useState(d?.kind === "document" ? d.materialId : props.materials[0]?.id ?? "");
   const [chosen, setChosen] = useState<string[]>(d?.kind === "documents" ? d.materialIds : []);
   const [competency, setCompetency] = useState(d?.kind === "competency" || d?.kind === "outcome" ? d.competencyId : props.competencies[0]?.id ?? "");
   const [outcome, setOutcome] = useState(d?.kind === "outcome" ? d.outcome : "");
-  const [context, setContext] = useState(props.contexts[0]?.value ?? "general");
+  const [context, setContext] = useState(d?.kind === "context" ? d.context : props.contexts[0]?.value ?? "general");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [continuity, setContinuity] = useState("");
@@ -146,20 +148,20 @@ export function EvaluationStart(props: {
 }
 
 /** Keep the continuous evaluation as a record, so it can be looked back on. */
-export function KeepContinuous() {
+export function KeepContinuous({ scope = { kind: "all" }, label = "Keep this evaluation" }: { scope?: Record<string, unknown>; label?: string }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   async function keep() {
     setBusy(true); setError("");
-    const r = await call("/api/individual/scholar/evaluations", { scope: { kind: "all" }, method: "existing", continuous: true });
+    const r = await call("/api/individual/scholar/evaluations", { scope, method: "existing", continuous: true });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "It could not be kept just now."); return; }
     router.push(evaluationHref(r.json.id));
   }
   return (
     <div>
-      <button type="button" className={ghost} disabled={busy} onClick={keep}>{busy ? "Keeping…" : "Keep this evaluation"}</button>
+      <button type="button" className={ghost} disabled={busy} onClick={keep}>{busy ? "Keeping…" : label}</button>
       {error && <p role="alert" className="mt-2 text-[13px] font-semibold text-red-800">{error}</p>}
     </div>
   );

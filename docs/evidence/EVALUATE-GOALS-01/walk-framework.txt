@@ -1,0 +1,16 @@
+PASS a published framework is applied to the test learner (nursing-ug-diploma: 200)
+PASS the framework's competencies are offered (13)
+PASS sections the learner studied are linked to competencies (200,200,200,200)
+PASS the framework is seen
+PASS competencies with evidence are listed (4)
+PASS no percentage or stage on Evaluate
+PASS choosing a competency fills in the form
+PASS a review of a competency is saved (200)
+PASS My Progress shows competency rows (4)
+PASS each keeps self-assessment, approved stage and verification apart
+PASS each shows the four dimensions
+PASS verification is not claimed
+PASS no percentage or stage on My Progress
+PASS coverage is not called achievement
+PASS the overview shows real framework coverage
+PASS no page errors ()
