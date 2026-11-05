@@ -17,6 +17,8 @@
 //   PRIVACY      learner owned. No HQ surface reads it, never Personal AI memory. Removing an entry or clearing never deletes saved
 //                teaching, lessons, attempts, learning evidence or materials. Nothing new is kept until the learner has seen the notice (994), or after they turn it off.
 
+import { parseAskSources, type AskSource } from "./ask-sources";
+
 export const HISTORY_ACTIVITIES = ["material_search", "library_search", "ask", "teaching", "research", "lesson"] as const;
 export type HistoryActivity = (typeof HISTORY_ACTIVITIES)[number];
 export const CAPTURED_ACTIVITIES = ["material_search", "library_search", "ask"] as const;
@@ -90,6 +92,8 @@ export type CaptureInput = {
   activity: CapturedActivity; query: string; requestKey: string;
   materialId: string | null; chunkId: string | null; artefactId: string | null; sessionId: string | null; step: number | null;
   topic: string | null; resultCount: number | null;
+  /** SCHOLAR-ASK-SOURCES-01: an Ask question's chosen source categories. Absent when none were given. */
+  sources?: AskSource[];
 };
 export type CaptureProblem = "activity" | "query" | "key";
 
@@ -103,9 +107,11 @@ export function validateCapture(raw: unknown): { ok: true; entry: CaptureInput }
   const step = Number.isInteger(r.step) && (r.step as number) >= 0 && (r.step as number) < 200 ? (r.step as number) : null;
   const sessionId = isId(r.sessionId) ? r.sessionId.toLowerCase() : null;
   const count = Number.isInteger(r.resultCount) && (r.resultCount as number) >= 0 ? Math.min(r.resultCount as number, 100000) : null;
+  const sources = r.activity === "ask" ? parseAskSources(r.sources) : [];
   return {
     ok: true,
     entry: {
+      ...(sources.length ? { sources } : {}),
       activity: r.activity as CapturedActivity, query, requestKey: r.requestKey,
       materialId: isId(r.materialId) ? r.materialId.toLowerCase() : null, chunkId: isId(r.chunkId) ? r.chunkId.toLowerCase() : null,
       artefactId: isId(r.artefactId) ? r.artefactId.toLowerCase() : null, sessionId, step: sessionId ? step : null,
@@ -175,6 +181,8 @@ export type HistoryEntry = {
   key: string; origin: "captured" | "recovered"; activity: HistoryActivity; query: string | null; topic: string | null;
   materialId: string | null; chunkId: string | null; artefactId: string | null; sessionId: string | null; step: number | null;
   resultCount: number | null; label: string; headline: string | null; pinnedAt: string | null; createdAt: string;
+  /** SCHOLAR-ASK-SOURCES-01: where an Ask question looked. */
+  sources?: AskSource[];
 };
 export type EntryLink = { label: string; path: string; kind: "open" | "continue" };
 

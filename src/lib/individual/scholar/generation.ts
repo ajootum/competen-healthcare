@@ -687,6 +687,87 @@ export function learnUserPrompt(question: string, passages: Passage[], reference
   return `${about}PASSAGES FROM MY NOTES:\n\n${blocks.join("\n\n")}${refs}${ext}${convo}\n\n${history.length ? "MY REPLY" : "MY REQUEST"}: ${question}${both}`;
 }
 
+// ── SCHOLAR-ASK-SOURCES-01: ONE QUESTION, THE SOURCES THE LEARNER CHOSE ──────────────────────────────────
+//
+// The Explain engine and its modes, unchanged, with each chosen source kept in its own part: [S n] the learner's own
+// (materials and saved learning, by checkExplanation), [C n] approved Competen Library content, [E n] published research
+// (both by the research part's check). A tag in the wrong part withholds that part alone.
+export const ASK_ACROSS_PROMPT_SUFFIX = "+across-v1";
+export const LIBRARY_MARKER = "FROM COMPETEN LIBRARY:";
+export const ASK_LIBRARY_LABEL = "From approved Competen Library content. Not your notes.";
+export const ASK_RESEARCH_LABEL = "From published research, as abstracts only. Not your notes, and not reviewed by Competen. Check with your course and supervisors.";
+export type AskLibraryItem = { title: string; text: string; status: string };
+
+/** Pure. A part held back, in the words the research part uses, for the source it belongs to. */
+export const askPartWithheld = (sourceLabel: string, reason: ResearchReason): string => RESEARCH_WITHHELD[reason].replace(/The research summary/g, `The ${sourceLabel} part`).replace(/External research/g, "Other sources");
+
+/** Pure. What to write for the sources chosen. Said last, where it is read just before writing. */
+export function askAcrossInstruction(has: { passages: boolean; library: boolean; research: boolean }): string {
+  return [
+    "SOURCES THE STUDENT CHOSE. Each source has its own part, in this order, and the tags of one part never appear in another.",
+    has.passages ? `PART ONE, from the passages, under every rule above: cite [S n]. If the passages do not cover the request, PART ONE is exactly ${NOT_IN_NOTES}.`
+      : `There are no passages for this question, so PART ONE is exactly ${NOT_IN_NOTES}.`,
+    ...(has.library ? [`Then a line that reads exactly ${LIBRARY_MARKER} and then, under 150 words, what the approved Competen Library entries say that helps, using only those entries and ending EVERY sentence with the [C n] it comes from. If they do not help, leave this part out.`] : []),
+    ...(has.research ? [`Then a line that reads exactly ${RESEARCH_MARKER} and then, under 200 words, what the abstracts say that helps, using only those abstracts and ending EVERY sentence with the [E n] it comes from. Do not write a heading or an introduction. If they do not help, leave this part out.`] : []),
+  ].join("\n");
+}
+
+export function askAcrossUserPrompt(question: string, passages: readonly Passage[], library: readonly AskLibraryItem[], research: readonly ResearchEvidence[]): string {
+  const notes = passages.length ? passages.map((p, i) => `[${passageTag(i)}] (${passageCitation(p)})\n${p.content}`).join("\n\n") : "(none for this question)";
+  const lib = library.length ? `\n\nAPPROVED COMPETEN LIBRARY ENTRIES (not my notes):\n\n${library.map((l, i) => `[C${i + 1}] ${l.title} (${l.status})\n${l.text}`).join("\n\n")}` : "";
+  const ext = research.length ? `\n\nEXTERNAL RESEARCH (published abstracts, not my notes):\n\n${research.map((e, i) => `[E${i + 1}] ${e.title}${e.journal ? `. ${e.journal}` : ""}${e.year ? ` (${e.year})` : ""}\nAbstract: ${e.abstract}`).join("\n\n")}` : "";
+  return `PASSAGES FROM MY NOTES:\n\n${notes}${lib}${ext}\n\nMY QUESTION: ${question}`;
+}
+
+/** Pure. The reply's parts, in any order. */
+export function splitAskParts(raw: string): { main: string; background: string | null; library: string | null; research: string | null } {
+  const found = ([["background", /^[\s*_#>-]*BEYOND THE NOTES:?[\s*_]*/im], ["library", /^[\s*_#>-]*FROM COMPETEN LIBRARY:?[\s*_]*/im], ["research", /^[\s*_#>-]*FROM RESEARCH:?[\s*_]*/im]] as const)
+    .map(([k, re]) => { const m = re.exec(raw); return m ? { k, at: m.index, end: m.index + m[0].length } : null; });
+  const cuts = found.filter((x): x is { k: "background" | "library" | "research"; at: number; end: number } => !!x).sort((a, b) => a.at - b.at);
+  const out = { main: (cuts.length ? raw.slice(0, cuts[0].at) : raw).trim(), background: null as string | null, library: null as string | null, research: null as string | null };
+  cuts.forEach((c, i) => { out[c.k] = raw.slice(c.end, cuts[i + 1]?.at ?? raw.length).trim() || null; });
+  return out;
+}
+
+/** Pure. The Competen Library part, under the research part's check, with its own tag and nothing of any other source's. */
+export function checkLibraryPart(raw: string, library: readonly AskLibraryItem[], passages: readonly Passage[], asked: string): ResearchCheck {
+  if (/\[E\d+\]/.test(raw)) return { ok: false, reason: "mixed" };
+  const r = checkResearchPart(raw.replace(/\[C(\d+)\]/g, "[E$1]"), library.map(l => ({ title: l.title, journal: null, year: null, abstract: l.text })), passages, asked);
+  return r.ok ? { ...r, text: r.text.replace(/\[E(\d+)\]/g, "[C$1]") } : r;
+}
+
+/** Pure. A saved teaching or the learner's own note, as a passage: only its notes part, without the tags of its first answer. */
+export function savedLearningPassage(row: { id: string; kind: "artefact" | "note"; materialId: string | null; createdAt: string; content: string }): Passage {
+  const end = /^[\s*_#>-]*(FROM RESEARCH|BEYOND THE NOTES|CHECK THIS):?/im.exec(row.content);
+  const body = (end ? row.content.slice(0, end.index) : row.content).replace(/\s*\[[SRE]\d+\]/g, "").trim();
+  return {
+    chunkId: row.id, materialId: row.materialId ?? "", materialTitle: `${row.kind === "note" ? "Your note" : "Saved teaching"}, ${row.createdAt.slice(0, 10)}`,
+    ordinal: 0, pageFrom: null, pageTo: null, content: body.slice(0, 1800),
+  };
+}
+
+export async function runAskAcross(userId: string, args: { question: string; mode: ExplainMode; passages: Passage[]; library: AskLibraryItem[]; research: ResearchEvidence[] }, run: AiRun = generate) {
+  const { question, mode, passages, library, research } = args;
+  const r = await run({
+    system: `${explainSystem(mode)}\n\n${askAcrossInstruction({ passages: passages.length > 0, library: library.length > 0, research: research.length > 0 })}`,
+    user: askAcrossUserPrompt(question, passages, library, research),
+    tier: "reasoning",
+    maxTokens: (mode === "explain" ? 700 : 900) + (library.length ? 300 : 0) + (research.length ? 400 : 0),
+    // Research answers count towards the learner's research allowance, as Learn's do.
+    context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_explain" },
+  });
+  if (!r.ok) return { ok: false, error: r.error } as AiFailure;
+  const split = splitAskParts(r.text);
+  const check: ExplainCheck = !passages.length || /\[[CE]\d+\]/.test(split.main) && split.main.replace(/[^A-Z_]/g, "") !== NOT_IN_NOTES
+    ? { ok: false, reason: passages.length ? "ungrounded" : "not_in_notes" } : checkExplanation(split.main, question, passages);
+  return {
+    ok: true as const, check,
+    library: library.length && split.library ? checkLibraryPart(split.library, library, passages, question) : null,
+    research: research.length && split.research ? (/\[C\d+\]/.test(split.research) ? { ok: false as const, reason: "mixed" as const } : checkResearchPart(split.research, research, passages, question)) : null,
+    model: r.model, provider: r.provider, promptVersion: `${explainPromptVersion(mode)}${ASK_ACROSS_PROMPT_SUFFIX}`,
+  };
+}
+
 /** Pure. The answer, its background (BEYOND THE NOTES:), its research part (FROM RESEARCH:) and its flags (CHECK THIS:), in any order. */
 export function splitLearnAnswer(raw: string): { main: string; background: string | null; flags: string | null; research: string | null } {
   const found = ([["background", /^[\s*_#>-]*BEYOND THE NOTES:?[\s*_]*/im], ["flags", /^[\s*_#>-]*CHECK THIS:?[\s*_]*/im], ["research", /^[\s*_#>-]*FROM RESEARCH:?[\s*_]*/im]] as const)

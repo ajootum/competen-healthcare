@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { parseAskSources } from "./ask-sources";
 import { DIFFICULTY_NUMBER } from "./library-meta";
 import { createHash } from "node:crypto";
 import { cache } from "react";
@@ -3172,6 +3173,32 @@ export async function librarySearch(admin: Admin, userId: string, query: string,
   return { ok: true, data: { rows, total: Number((data ?? [])[0]?.total ?? 0) } };
 }
 
+/** SCHOLAR-ASK-SOURCES-01: a saved teaching or a note of the caller's own that a search found, with its text. Current versions only. */
+export type SavedLearningRow = { id: string; kind: "artefact" | "note"; materialId: string | null; createdAt: string; content: string };
+export async function savedLearningRows(admin: Admin, userId: string, query: string, limit: number): Promise<Read<SavedLearningRow[]>> {
+  const hits = await librarySearch(admin, userId, query, limit * 4, 0);
+  if (!hits.ok) return hits;
+  const artefactIds = hits.data.rows.filter(h => h.kind === "artefact").map(h => h.artefactId ?? h.id);
+  const noteIds = hits.data.rows.filter(h => h.kind === "note").map(h => h.id);
+  const artefacts = await artefactsByIds(admin, userId, artefactIds, { currentOnly: true });
+  if (!artefacts.ok) return artefacts;
+  const notes = noteIds.length ? await admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds) : { data: [], error: null };
+  if (notes.error) return fail(notes.error);
+  const byArtefact = new Map(artefacts.data.map(a => [a.id, a]));
+  const byNote = new Map(((notes.data ?? []) as { id: string; material_id: string | null; body: string | null; created_at: string }[]).map(n => [n.id, n]));
+  const out: SavedLearningRow[] = [];
+  for (const h of hits.data.rows) {
+    if (h.kind === "artefact") {
+      const a = byArtefact.get(h.artefactId ?? h.id);
+      if (a && !out.some(o => o.id === a.id)) out.push({ id: a.id, kind: "artefact", materialId: a.materialId, createdAt: a.createdAt, content: a.content });
+    } else if (h.kind === "note") {
+      const n = byNote.get(h.id);
+      if (n?.body) out.push({ id: n.id, kind: "note", materialId: n.material_id, createdAt: n.created_at, content: n.body });
+    }
+  }
+  return { ok: true, data: out.slice(0, limit) };
+}
+
 /**
  * After a material is deleted, what it emptied goes too:
  * - a Learn session with no step left has nothing to teach (414 cascades its steps);
@@ -5419,6 +5446,16 @@ const shEntry = (r: any): HistoryEntry => ({
 });
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
+/** SCHOLAR-ASK-SOURCES-01: where each captured question looked, on the entries shown. Reading aid only: unreadable or before 999, none. */
+export async function withHistorySources(admin: Admin, userId: string, entries: HistoryEntry[]): Promise<HistoryEntry[]> {
+  const ids = entries.filter(e => e.origin === "captured" && e.activity === "ask" && e.key.startsWith("h:")).map(e => e.key.slice(2));
+  if (!ids.length) return entries;
+  const { data, error } = await admin.from(SH_TABLE).select("id, sources").eq("user_id", userId).in("id", ids);
+  if (error) return entries;
+  const by = new Map(((data ?? []) as { id: string; sources: unknown }[]).map(r => [`h:${r.id}`, parseAskSources(r.sources)]));
+  return entries.map(e => by.get(e.key)?.length ? { ...e, sources: by.get(e.key) } : e);
+}
+
 /** One page of the caller's history, newest first, with the total that matches. */
 export async function listSearchHistory(admin: Admin, userId: string, q: HistoryQuery, opts: { pinnedOnly?: boolean; limit?: number } = {}): Promise<Read<{ entries: HistoryEntry[]; total: number }>> {
   if (!(await historySchema(admin))) return { ok: false, notProvisioned: true };
@@ -5497,7 +5534,9 @@ export async function recordSearchCapture(admin: Admin, userId: string, e: Captu
     chunk_id: c?.id ?? null, artefact_id: (artefact?.data as { id: string } | null)?.id ?? null, session_id: s?.id ?? null,
     step: s ? e.step : null, result_count: e.resultCount, request_key: e.requestKey,
   };
-  const { data, error } = await admin.from(SH_TABLE).upsert(row, { onConflict: "user_id,request_key", ignoreDuplicates: true }).select("id");
+  // SCHOLAR-ASK-SOURCES-01: where the question looked (999). Before 999 is applied the question is still kept, without them.
+  let { data, error } = await admin.from(SH_TABLE).upsert(e.sources?.length ? { ...row, sources: e.sources } : row, { onConflict: "user_id,request_key", ignoreDuplicates: true }).select("id");
+  if (error && e.sources?.length && /sources/i.test(String(error.message ?? ""))) ({ data, error } = await admin.from(SH_TABLE).upsert(row, { onConflict: "user_id,request_key", ignoreDuplicates: true }).select("id"));
   if (error) { if (isNotProvisioned(error)) history992 = false; return isNotProvisioned(error) ? "not_provisioned" : "error"; }
   return (data ?? []).length ? "kept" : "existing";
 }
