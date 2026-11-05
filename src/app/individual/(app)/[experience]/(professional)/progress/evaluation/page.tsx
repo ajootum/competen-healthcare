@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
+import { PageSearch } from "../../../../../_components/search/PageSearch";
+import { matchesSearch } from "@/lib/individual/search/match";
+import { pageQuery } from "@/lib/individual/search/page-query";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { compareEvaluations, evaluate, type Evaluation, type Point } from "@/lib/individual/professional/evaluation";
 import { loadEvaluationInput } from "@/lib/individual/professional/evaluation-sources";
@@ -66,6 +69,7 @@ export default async function EvaluationPage({ params, searchParams }: { params:
     loadEvaluationInput(ctx.admin, ctx.userId, today), loadEvaluationHistory(ctx.admin, ctx.userId, policy.historyShown),
   ]);
   const evaluations = history.evaluations ?? [];
+  const q = pageQuery(sp.q);
   const evalId = one(sp.eval);
   const compare = one(sp.compare) ? one(sp.compare)!.split(",").filter(Boolean) : one(sp.a) && one(sp.b) ? [one(sp.a)!, one(sp.b)!] : [];
   const view = evalId ? "snapshot" : compare.length === 2 ? "compare" : (TABS.some(([v]) => v === one(sp.view)) ? one(sp.view)! : "evaluate");
@@ -225,12 +229,17 @@ export default async function EvaluationPage({ params, searchParams }: { params:
   function HistoryView() {
     if (history.evaluations === null) return <Unreadable what="previous evaluations" />;
     const correctedBy = (id: string) => evaluations.filter(e => e.supersedes_id === id);
+    const shownEvals = evaluations.filter(e => !q || matchesSearch([e.scope_label, SCOPE_LABEL[e.scope_kind] ?? ""], q));
     return (
       <Section id="history-h" title="Previous evaluations" note="Each is kept exactly as it was recorded. A later evaluation or a correction is a new one.">
+        {evaluations.length > 0 && (
+          <PageSearch scope="Searching your previous evaluations" action={experienceHref("professional", "progress/evaluation")} hidden={{ view: "history" }} value={q} placeholder="What was evaluated" clearHref={`${experienceHref("professional", "progress/evaluation")}?view=history`} />
+        )}
         {evaluations.length === 0 ? <Empty>No evaluations recorded yet. Evaluate something, then record it.</Empty> : (
           <>
+            {shownEvals.length === 0 && <Empty>No evaluation matches &ldquo;{q}&rdquo;.</Empty>}
             <ul className="divide-y divide-gray-100">
-              {evaluations.map(e => (
+              {shownEvals.map(e => (
                 <li key={e.id} className="flex flex-wrap items-baseline justify-between gap-2 py-2.5">
                   <div>
                     <Link href={`?eval=${e.id}`} className={`text-[14px] font-semibold text-gray-900 underline-offset-2 hover:underline ${focusRing}`}>{e.scope_label}</Link>

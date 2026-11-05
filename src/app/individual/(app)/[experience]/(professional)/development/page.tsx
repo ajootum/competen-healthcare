@@ -1,4 +1,8 @@
-import { EXPERIENCES } from "@/lib/individual/experiences";
+import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
+import { PageSearch } from "../../../../_components/search/PageSearch";
+import { matchesSearch } from "@/lib/individual/search/match";
+import { pageQuery } from "@/lib/individual/search/page-query";
+import { professionalSearchModule } from "@/lib/individual/search/registry-professional";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
@@ -80,6 +84,7 @@ export default async function DevelopmentPage({ params, searchParams }: { params
   // Before it, the MVP section renders exactly as it did.
   const sp = await searchParams;
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as string | undefined;
+  const q = pageQuery(sp.q);
   const view = (VIEWS.some(([v]) => v === one(sp.view)) ? one(sp.view) : "all") as View;
   const np = policy.professionalNeeds;
   const stage2 = ws.provisioned && ws.needs !== null;
@@ -116,6 +121,12 @@ export default async function DevelopmentPage({ params, searchParams }: { params
   const pp = policy.professionalPlan;
   const stage3 = pw.provisioned && pw.goals !== null;
   const planView = (PLAN_VIEWS.some(([v]) => v === one(sp.plan)) ? one(sp.plan) : "open") as PlanView;
+  const needsShown = (stage2 ? ws.needs! : []).filter(n => inView(n, view, today, np.reviewDays)).filter(n => !q || matchesSearch([n.title, n.detail ?? ""], q));
+  const goalsShown = (stage3 ? pw.goals! : []).filter(g => inPlanView(g, planView)).filter(g => !q || matchesSearch([g.title, g.detail ?? ""], q));
+  const legacyNeeds = (needs ?? []).filter(n => !q || matchesSearch([n.title, n.detail ?? ""], q));
+  const legacyGoals = (goals ?? []).filter(g => !q || matchesSearch([g.title, g.detail ?? ""], q));
+  const here = experienceHref("professional", "development");
+  const searchable = (needs?.length ?? 0) + (goals?.length ?? 0) > 0;
   const goal = stage3 ? pw.goals!.find(g => g.id === one(sp.goal)) ?? null : null;
   const needIdsOf = (goalId: string, legacy: string | null) => [...new Set([legacy, ...(ws.goalLinks ?? []).filter(l => l.goal_id === goalId).map(l => l.need_id)].filter(Boolean))] as string[];
   const activitiesOf = (goalId: string) => (pw.activityGoals ?? []).filter(l => l.goal_id === goalId).sort((a, b) => a.position - b.position)
@@ -144,6 +155,8 @@ export default async function DevelopmentPage({ params, searchParams }: { params
         intro="Name what you want to develop, then plan how. Your needs and goals are private to you." />
       {!record.provisioned && <NotProvisioned />}
 
+      {searchable && <PageSearch scope={`Searching ${professionalSearchModule("development").scope}`} action={here} value={q} placeholder="A need or goal" clearHref={here} hidden={{ view: one(sp.view), plan: one(sp.plan) }} />}
+
       {stage2 && (
         <>
           {open && (
@@ -158,12 +171,12 @@ export default async function DevelopmentPage({ params, searchParams }: { params
               learning={{ enabled: learning.enabled, items: learningItems }} stage3={stage3} />
           )}
           <Section id="needs-h" title="My development needs" note="What you want to develop, in your own words. A need is never a judgement about your competence, and it is private to you.">
-            <NeedsOverview needs={ws.needs!} view={view} today={today} policy={np} accent={x.accent} />
-            {ws.needs!.filter(n => inView(n, view, today, np.reviewDays)).length === 0
-              ? <Empty>{ws.needs!.length === 0 ? "No development needs yet. Add your first one below: a short description is enough." : "Nothing in this view."}</Empty>
+            <NeedsOverview needs={ws.needs!} view={view} today={today} policy={np} accent={x.accent} q={q} />
+            {needsShown.length === 0
+              ? <Empty>{ws.needs!.length === 0 ? "No development needs yet. Add your first one below: a short description is enough." : q ? <>No need in this view matches &ldquo;{q}&rdquo;.</> : "Nothing in this view."}</Empty>
               : (
                 <ul className="divide-y divide-gray-100">
-                  {ws.needs!.filter(n => inView(n, view, today, np.reviewDays)).map(n => (
+                  {needsShown.map(n => (
                     <NeedRow key={n.id} n={n} today={today} policy={np} accent={x.accent} competencies={linksOf(n.id).filter(l => !l.unlinked_at).length} goals={goalIdsOf(n.id).size} />
                   ))}
                 </ul>
@@ -188,9 +201,9 @@ export default async function DevelopmentPage({ params, searchParams }: { params
       )}
 
       {!stage2 && <Section id="needs-h" title="Development needs" note="What you want to develop. Each one is recorded by you.">
-        {needs === null ? <Unreadable what="development needs" /> : needs.length === 0 ? <Empty>No development needs yet. Add your first one below.</Empty> : (
+        {needs === null ? <Unreadable what="development needs" /> : needs.length === 0 ? <Empty>No development needs yet. Add your first one below.</Empty> : legacyNeeds.length === 0 ? <Empty>No need matches &ldquo;{q}&rdquo;.</Empty> : (
           <ul className="divide-y divide-gray-100">
-            {needs.map(n => (
+            {legacyNeeds.map(n => (
               <li key={n.id} className="flex flex-wrap items-start justify-between gap-3 py-3">
                 <div className="min-w-0">
                   <p className="text-[14.5px] font-semibold text-gray-900">{n.title}</p>
@@ -259,12 +272,12 @@ export default async function DevelopmentPage({ params, searchParams }: { params
       {stage3 && (
         <Section id="plan-h" title="My development plan" note="Your goals, and how you plan to reach them. Private to you: never shared, never sent to an employer, never added to your Passport.">
           <PlanReminders reminders={reminders} />
-          <PlanOverview goals={pw.goals!} view={planView} accent={x.accent} />
-          {pw.goals!.filter(g => inPlanView(g, planView)).length === 0
-            ? <Empty>{pw.goals!.length === 0 ? "No goals yet. Add your first one below: a short description is enough." : "Nothing in this view."}</Empty>
+          <PlanOverview goals={pw.goals!} view={planView} accent={x.accent} q={q} />
+          {goalsShown.length === 0
+            ? <Empty>{pw.goals!.length === 0 ? "No goals yet. Add your first one below: a short description is enough." : q ? <>No goal in this view matches &ldquo;{q}&rdquo;.</> : "Nothing in this view."}</Empty>
             : (
               <ul className="divide-y divide-gray-100">
-                {pw.goals!.filter(g => inPlanView(g, planView)).map(g => (
+                {goalsShown.map(g => (
                   <GoalRow key={g.id} g={g} accent={x.accent} activities={activitiesOf(g.id).length}
                     needs={needIdsOf(g.id, g.need_id).map(id => needTitle.get(id) ?? (ws.needs ?? []).find(n => n.id === id)?.title).filter((t): t is string => !!t)} />
                 ))}
@@ -283,11 +296,11 @@ export default async function DevelopmentPage({ params, searchParams }: { params
       )}
 
       {!stage3 && <Section id="plan-h" title="Learning plan" note="Goals with target dates. Link a goal to the need it serves.">
-        {goals === null ? <Unreadable what="learning plan" /> : goals.length === 0 ? <Empty>No goals yet. {openNeeds.length ? "Add a goal for one of your needs below." : "Add a need first, or a goal on its own."}</Empty> : (
+        {goals === null ? <Unreadable what="learning plan" /> : goals.length === 0 ? <Empty>No goals yet. {openNeeds.length ? "Add a goal for one of your needs below." : "Add a need first, or a goal on its own."}</Empty> : legacyGoals.length === 0 ? <Empty>No goal matches &ldquo;{q}&rdquo;.</Empty> : (
           <>
             {plan && <p className="mb-2 text-[13px] text-gray-600">{plan.done} of {plan.total - plan.dropped} goals done{plan.overdue ? ` · ${plan.overdue} past their target date` : ""}.</p>}
             <ul className="divide-y divide-gray-100">
-              {goals.map(g => {
+              {legacyGoals.map(g => {
                 const overdue = (g.status === "planned" || g.status === "in_progress") && !!g.target_date && g.target_date < today;
                 return (
                   <li key={g.id} className="flex flex-wrap items-start justify-between gap-3 py-3">

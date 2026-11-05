@@ -1,6 +1,9 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
+import { PageSearch } from "../../../../../_components/search/PageSearch";
+import { matchesSearch } from "@/lib/individual/search/match";
+import { pageQuery } from "@/lib/individual/search/page-query";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { SECTION_TITLE, loadDocumentsConfig, templatesFor } from "@/lib/individual/documents-config";
 import { modelLines } from "@/lib/individual/documents/model";
@@ -41,6 +44,7 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
   const sp = await searchParams;
   const [cfg, docs, policy] = await Promise.all([loadDocumentsConfig(ctx.admin), loadDocuments(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
   const aiOn = policy.professionalDocuments.ai === "on";
+  const q = pageQuery(sp.q);
   const docId = one(sp.doc);
   const doc = docId ? await documentOf(ctx.admin, ctx.userId, docId) : null;
   const fromPassport = one(sp.origin) === "passport";
@@ -62,6 +66,7 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
   );
 
   function List() {
+    const shownDocs = (docs.documents ?? []).filter(d => !q || matchesSearch([d.title, cfg.types.find(t => t.code === d.doc_type)?.label ?? d.doc_type, cfg.templates.find(t => t.code === d.template_code)?.name ?? d.template_code], q));
     return (
       <>
         <Section id="new-h" title="Create a document" note={fromPassport ? "Started from your Passport: choose the Competen Passport Export, or any other type." : "Choose a type and a template. You choose every record that goes in."}>
@@ -98,9 +103,13 @@ export default async function DocumentStudioPage({ params, searchParams }: { par
           </ApiForm>
         </Section>
         <Section id="drafts-h" title="My documents" note="Private to you. Exports are made for you only and are not stored.">
-          {docs.documents === null ? <Unreadable what="documents" /> : docs.documents.length === 0 ? <Empty>No documents yet.</Empty> : (
+          {docs.documents !== null && docs.documents.length > 0 && (
+            <PageSearch scope="Searching your documents" action={`${experienceHref("professional", "progress/documents")}#drafts-h`} value={q} placeholder="A title, kind of document or template" clearHref={`${experienceHref("professional", "progress/documents")}#drafts-h`} />
+          )}
+          {docs.documents === null ? <Unreadable what="documents" /> : docs.documents.length === 0 ? <Empty>No documents yet.</Empty>
+            : shownDocs.length === 0 ? <Empty>No document matches &ldquo;{q}&rdquo;.</Empty> : (
             <ul className="divide-y divide-gray-100">
-              {docs.documents.map(d => {
+              {shownDocs.map(d => {
                 const ex = (docs.exports ?? []).filter(e => e.document_id === d.id);
                 return (
                   <li key={d.id} className="flex flex-wrap items-center justify-between gap-3 py-3">

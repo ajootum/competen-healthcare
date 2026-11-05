@@ -1,4 +1,7 @@
-import { EXPERIENCES } from "@/lib/individual/experiences";
+import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
+import { PageSearch } from "../../../../_components/search/PageSearch";
+import { matchesSearch } from "@/lib/individual/search/match";
+import { pageQuery } from "@/lib/individual/search/page-query";
 import type { Metadata } from "next";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { PageHeader } from "../../../../_components/chrome";
@@ -31,6 +34,7 @@ export default async function CompetenciesPage({ params, searchParams }: { param
   const x = EXPERIENCES.professional;
   const today = new Date().toISOString().slice(0, 10);
   const sp = await searchParams;
+  const q = pageQuery(sp.q);
   const one = (v: unknown) => (Array.isArray(v) ? v[0] : v) as string | undefined;
   const [ws, policy, offered, portfolio, learningOn] = await Promise.all([
     loadCompetencyWorkspace(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), loadCatalogueFor(ctx.admin, "professional"),
@@ -51,7 +55,10 @@ export default async function CompetenciesPage({ params, searchParams }: { param
   ]) : [null, { provisioned: false } as const, null];
   // The methods C5 offers: undefined while verification is not provisioned (the panel says so), null when unreadable.
   const methods = offeredMethods === null ? null : offeredMethods.provisioned ? offeredMethods.methods : undefined;
-  const groups = [...new Set(current.map(e => e.category_label ?? "Not grouped"))]
+  const shown = q ? current.filter(e => matchesSearch([e.title, e.description ?? "", e.category_label ?? ""], q)) : current;
+  const offeredShown = q && offered ? offered.filter(c => matchesSearch([c.title, c.catalogue.name], q)) : offered;
+  const here = experienceHref("professional", "competencies");
+  const groups = [...new Set(shown.map(e => e.category_label ?? "Not grouped"))]
     .sort((a, b) => [...cp.categories, ...DEFAULT_COMPETENCY_CATEGORIES].findIndex(c => c.label === a) - [...cp.categories, ...DEFAULT_COMPETENCY_CATEGORIES].findIndex(c => c.label === b));
 
   return (
@@ -69,13 +76,15 @@ export default async function CompetenciesPage({ params, searchParams }: { param
 
       {ws.provisioned && (
         <Section id="competencies-h" title="My competencies" note="Foundational, profession-specific, specialty, leadership, education, quality, research, or a personal interest. Not limited to your current role.">
+          {(current.length > 0 || (offered?.length ?? 0) > 0) && <PageSearch scope="Searching your competencies and the catalogues" action={here} value={q} placeholder="A competency, group or catalogue" clearHref={here} />}
           {ws.entries === null ? <p className="text-[13px] text-gray-600">Your competencies could not be read just now.</p>
-            : current.length === 0 ? <Empty>None yet. Add one from a catalogue, or in your own words.</Empty> : (
+            : current.length === 0 ? <Empty>None yet. Add one from a catalogue, or in your own words.</Empty>
+            : shown.length === 0 ? <Empty>None of your competencies match &ldquo;{q}&rdquo;.</Empty> : (
               groups.map(g => (
                 <div key={g} className="mb-2">
                   <h3 className="mt-2 text-[12.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{g}</h3>
                   <ul className="divide-y divide-gray-100">
-                    {current.filter(e => (e.category_label ?? "Not grouped") === g).map(e => (
+                    {shown.filter(e => (e.category_label ?? "Not grouped") === g).map(e => (
                       <EntryRow key={e.id} e={e} offered={catalogueOf(e.framework_competency_id)} today={today} policy={cp} accent={x.accent}
                         latest={(ws.assessments ?? []).find(a => a.my_competency_id === e.id) ?? null}
                         evidence={(ws.links ?? []).filter(l => l.my_competency_id === e.id && !l.unlinked_at).length} />
@@ -95,7 +104,7 @@ export default async function CompetenciesPage({ params, searchParams }: { param
 
       {ws.provisioned && offered !== null && offered.length > 0 && (
         <Section title="Explore the catalogues" note="Every competency Competen Professional offers, with its learning outcomes and expected proficiency. Content that is not clinically approved says so.">
-          <ExploreList offered={offered} mine={mine} accent={x.accent} />
+          {offeredShown && offeredShown.length === 0 ? <Empty>No catalogue competency matches &ldquo;{q}&rdquo;.</Empty> : <ExploreList offered={offeredShown ?? offered} mine={mine} accent={x.accent} />}
         </Section>
       )}
       {ws.provisioned && offered !== null && offered.length === 0 && (
