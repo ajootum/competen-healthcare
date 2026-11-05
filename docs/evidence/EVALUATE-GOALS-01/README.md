@@ -42,9 +42,9 @@ Both screens read through `evaluateScope` and the same records, so a completed e
 ## Not verified
 
 - Pilot learners' own records and plans: agents do not sign in as them.
-- Competency rows on real data: the fixture has no framework applied, so only the no-framework state was walked. The rows are covered by reading the code and by unit tests of the status rules.
+- Whether a real learner's links are meaningful. By owner request, a published framework (`nursing-ug-diploma`, 13 competencies) was applied to the staging test learner, with 4 accepted links from sections they answered on: `walk-framework.txt`, 16 PASS, 0 FAIL. Those links were made for the test and are not clinically matched, so the rows prove the display, not the mapping.
 - A fresh check run end to end from a goal. The walk fills in the goal and the form, and saves reviews of existing evidence. Fresh checks use the existing route, which was not changed.
-- Self-assessment, stage and verification values shown against a real competency, for the same reason.
+- Self-assessment, stage and verification with real values. The test learner has none, so only "None yet", "None decided" and "Not assessed in Scholar" were seen.
 - A real phone or tablet, and load time with a large record.
 
 ## Limits

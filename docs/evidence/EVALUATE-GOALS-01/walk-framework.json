@@ -1,0 +1,30 @@
+{
+  "programmes": [
+    [
+      "nursing-ug-diploma",
+      null
+    ]
+  ],
+  "catalogueFromApi": 0,
+  "answeredSections": 26,
+  "catalogueFromForm": 13,
+  "linked": [
+    200,
+    200,
+    200,
+    200
+  ],
+  "evaluateRows": [
+    "CF-CR-001 Gathers and interprets clinical information systematically | Not yet shown: Knowledge, Retention, Application, Reasoning. | Evaluate this",
+    "CF-CR-002 Recognises and responds to deterioration | Not yet shown: Knowledge, Retention, Application, Reasoning. | Evaluate this",
+    "CF-PS-002 Recognises, reports and learns from incidents | Not yet shown: Knowledge, Retention, Application, Reasoning. | Evaluate this",
+    "CF-PS-001 Verifies identity and consent before care | Not yet shown: Knowledge, Retention, Application, Reasoning. | Evaluate this"
+  ],
+  "progressRows": [
+    "CF-CR-001 Gathers and interprets clinical information systematically | Knowledge | Learning gap | Retention | Learning gap | Application | Not assessed | Reasoning | Not assessed | Self-assessment | None yet | Approved stage | None decided | Independently verified | Not assessed in Scholar | Evidence and sources",
+    "CF-CR-002 Recognises and responds to deterioration | Knowledge | Not enough yet | Retention | Not assessed | Application | Not assessed | Reasoning | Not assessed | Self-assessment | None yet | Approved stage | None decided | Independently verified | Not assessed in Scholar | Evidence and sources",
+    "CF-PS-002 Recognises, reports and learns from incidents | Knowledge | Not enough yet | Retention | Not enough yet | Application | Not assessed | Reasoning | Not assessed | Self-assessment | None yet | Approved stage | None decided | Independently verified | Not assessed in Scholar | Evidence and sources",
+    "CF-PS-001 Verifies identity and consent before care | Knowledge | Not enough yet | Retention | Not assessed | Application | Not assessed | Reasoning | Not assessed | Self-assessment | None yet | Approved stage | None decided | Independently verified | Not assessed in Scholar | Evidence and sources"
+  ],
+  "frameworkCoverage": "Competency framework coverage | 13 | In your framework | 4 | Accepted material links | 4 | With mapped practice | Framework evidence, not verified competence."
+}
