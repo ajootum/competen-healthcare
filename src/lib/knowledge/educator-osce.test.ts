@@ -9,6 +9,7 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/competency/clinical-review", () => ({
   loadRequiredApprovals: async () => ({ standard: 1, high: 2 }),
+  appointmentLabel: () => "Reviewer appointment",
   reviewerAppointments: async () => [{ id: "appt-1", scopes: [] }],
 }));
 

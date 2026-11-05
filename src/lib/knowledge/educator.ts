@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { loadRequiredApprovals, reviewerAppointments } from "@/lib/competency/clinical-review";
+import { appointmentLabel, loadRequiredApprovals, reviewerAppointments } from "@/lib/competency/clinical-review";
 import { stationContentOf, validateStationContent } from "@/lib/individual/scholar/osce";
 import { validateLibraryQuestion } from "@/lib/individual/scholar/library-format";
 import { questionContentFromFields } from "./question-format";
@@ -282,9 +282,14 @@ export async function listNeeds(admin: any) {
  * still matches), not yet decided by them. Scope is checked by the 442 trigger on the decision itself, which is
  * written through the existing /api/hq/clinical-review route (395).
  */
-export async function resourceReviewQueue(admin: any, reviewerId: string): Promise<{ appointments: { id: string }[]; items: ReviewItem[] } | null> {
-  const appts = await reviewerAppointments(admin, reviewerId);
-  if (appts === null) return null;
+export async function resourceReviewQueue(admin: any, reviewerId: string): Promise<{ appointments: { id: string; label: string }[]; items: ReviewItem[] } | null> {
+  const held = await reviewerAppointments(admin, reviewerId);
+  if (held === null) return null;
+  // The form names each appointment by its position. A name that cannot be read falls back to the position code, in words.
+  const roles = [...new Set(held.map(h => h.role).filter(Boolean))] as string[];
+  const { data: named } = roles.length ? await admin.from("hq_position").select("code, name").in("code", roles) : { data: [] };
+  const nameOf = new Map<string, string | null>((named ?? []).map((p: any) => [p.code, p.name]));
+  const appts = held.map(h => ({ id: h.id, label: appointmentLabel(nameOf.get(h.role ?? ""), h.role, h.scopes.length) }));
   const { data: vs, error } = await admin.from("clinical_content_version").select("id, knowledge_version_id, content_hash, content_snapshot, authored_by, submitted_by, required_approvals, created_at")
     .eq("content_kind", "resource").order("created_at", { ascending: false }).limit(200);
   if (error) return null;
