@@ -959,7 +959,7 @@ export function CardBrowser({ cards, decks, currentDeck, marksOn, filters, editI
                     <p className="text-[14.5px] font-semibold text-gray-900">{c.front}</p>
                     <p className="mt-0.5 text-[12px] text-gray-600">{c.originLabel} · {c.materialTitle}{c.topic ? ` · ${c.topic}` : ""}{c.competency ? ` · ${c.competency}` : ""}</p>
                     <p className="mt-1 text-[12.5px] text-gray-700 tabular-nums">
-                      <span className="font-semibold">{c.stateLabel}</span> · next review {when(c.nextReviewAt)} · last revised {when(c.lastReviewedAt)} · {c.reviews} review{c.reviews === 1 ? "" : "s"}
+                      <span className="font-semibold">{c.stateLabel}</span>{c.state === "due" ? "" : ` · next review ${when(c.nextReviewAt)}`} · last revised {when(c.lastReviewedAt)} · {c.reviews} review{c.reviews === 1 ? "" : "s"}
                       {c.intervalDays !== null && c.reviews > 0 ? ` · every ${c.intervalDays} day${c.intervalDays === 1 ? "" : "s"}, ease ${c.ease?.toFixed(2)}` : ""}
                     </p>
                     {c.recent.length > 0 && <p className="mt-0.5 text-[12px] text-gray-600">Recent: {c.recent.map(r => (r === "remembered" ? "✓" : "✕")).join(" ")}<span className="sr-only"> ({c.recent.map(r => (r === "remembered" ? "remembered" : "not remembered")).join(", ")})</span></p>}

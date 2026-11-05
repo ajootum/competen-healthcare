@@ -32,7 +32,7 @@ const ICON: Record<ReviseNavKey, React.ReactNode> = {
  */
 export function ReviseNav({ current, adaptive, row = false, container = false, studyId = null }: { current: ReviseNavKey; adaptive: boolean; row?: boolean; container?: boolean; studyId?: string | null }) {
   const items: { key: ReviseNavKey; label: string; href: string }[] = [
-    { key: "practice", label: "Practice Questions", href: studyHref("revise") },
+    { key: "practice", label: "Practice Questions", href: `${studyHref("revise")}?practice=1` },
     { key: "flashcards", label: "Flashcards", href: flashcardsHref() },
     ...(adaptive ? [{ key: "adaptive" as const, label: "Adaptive Exams", href: studyHref("revise/adaptive") }] : []),
     { key: "history", label: "Revision History", href: flashcardsHref({ view: "history" }) },

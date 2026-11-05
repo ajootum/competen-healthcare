@@ -256,8 +256,11 @@ export function buildRetrievalSchedule(input: {
   return { today, due, upcoming, later: items.filter(i => i.state === "later").length, notAssessed, capacity, note: RETRIEVAL_NOTE };
 }
 
+const shortDay = (day: string) => new Date(`${day}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" });
+
 /** Pure. One line for a list: when, and the main reason. */
 export function retrievalLine(i: RetrievalItem, today: string): string {
-  const when = i.state !== "due" ? `Due ${i.dueOn}` : i.overdueDays > 0 ? `Due since ${i.dueOn}` : "Due today";
-  return i.suggestedOn > today ? `${when} · for ${i.suggestedOn}` : when;
+  // SCHOLAR-REVISE-WORKSPACE-01: one meaning per date. A topic placed on a later day is not "due today" on that same line.
+  if (i.state === "due" && i.suggestedOn > today) return `Planned for ${shortDay(i.suggestedOn)}${i.overdueDays > 0 ? `, was due ${shortDay(i.dueOn)}` : ""}`;
+  return i.state !== "due" ? `Due ${shortDay(i.dueOn)}` : i.overdueDays > 0 ? `Due since ${shortDay(i.dueOn)}` : "Due today";
 }

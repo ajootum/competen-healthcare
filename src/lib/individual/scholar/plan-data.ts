@@ -322,7 +322,7 @@ function unfinishedOf(sessions: { id: string; title: string; lastActiveAt: strin
  * and notes (the routine changes made, each with an undo). A carry-over of an unfinished planned activity is recorded ONCE (auto_adjust,
  * idempotent by activity and day) the first time it is shown, and only where 840 is present. Reads only otherwise.
  */
-export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string }): Promise<TodayView | NotReady> {
+export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now: Date; tz: string; today: string; /** SCHOLAR-REVISE-WORKSPACE-01: read the plan and record nothing. Revise shows the plan; only My Plan changes it. */ readOnly?: boolean }): Promise<TodayView | NotReady> {
   const { admin, userId } = ctx;
   const plan780 = await studyPlanSchema(admin, userId);
   if (!isMyPlanOn(policy, plan780)) return gateReason(policy, plan780);
@@ -364,7 +364,7 @@ export async function loadToday(ctx: PlanCtx, policy: IndividualPolicy, o: { now
     const r = detectCarryOvers({ past, current: week, yesterday, events: c.events });
     carried = r.carried; missed = r.missed;
     if (r.excludeRefs.length) week = buildStudyPlan({ ...base, excludeRefs: new Set(r.excludeRefs) });
-    await Promise.all(carried.filter(n => !n.recorded).map(n => appendPlanEvent(admin, userId, "scholar", { kind: "auto_adjust", ref: n.key, status: "applied", value: { activityRef: n.ref, title: n.title.slice(0, 120), from: n.from, to: n.to, reason: n.reason.slice(0, 300) } })));
+    if (!o.readOnly) await Promise.all(carried.filter(n => !n.recorded).map(n => appendPlanEvent(admin, userId, "scholar", { kind: "auto_adjust", ref: n.key, status: "applied", value: { activityRef: n.ref, title: n.title.slice(0, 120), from: n.from, to: n.to, reason: n.reason.slice(0, 300) } })));
     for (const n of carried) notes.push({ text: n.reason, undo: { kind: "auto_adjust", ref: n.key } });
   }
   for (const m of missed) notes.push({ text: `"${m.title}" from ${m.from} is Missed, not rescheduled. You can reschedule it from the calendar.` });

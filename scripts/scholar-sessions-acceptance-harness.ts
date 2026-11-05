@@ -363,7 +363,7 @@ async function main() {
   const bi1 = await aiCount(B.id);
   ok("H4a. B GETting ?study=<A's id> on six pages: 200, no bar, no prefill, nothing of A's session (title, topic) shown (the requested id itself is only echoed back as the caller's own query parameter)",
     foreign.every(p => p.status === 200 && !p.all.includes(BAR) && !/respiratory distress/i.test(p.all) && !/Source: Respiratory Notes/i.test(p.all)),
-    JSON.stringify(foreign.map(p => [p.status, p.all.includes(BAR), p.all.includes(S)])));
+    JSON.stringify(foreign.map(p => [p.status, p.all.includes(BAR), p.all.includes(S), /respiratory distress/i.test(p.all), /respiratory distress/i.test(p.visible)])));
   const bPlain = await page(`${P}/revise`, B.jar);
   ok("H4b. the foreign id page is the same page as without it (same visible text apart from a clock-like change)", foreign[0].visible.length === bPlain.visible.length || Math.abs(foreign[0].visible.length - bPlain.visible.length) < 40,
     `${foreign[0].visible.length} vs ${bPlain.visible.length}`);

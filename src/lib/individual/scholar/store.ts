@@ -773,9 +773,9 @@ export async function recordAttempt(admin: Admin, userId: string, q: QuestionRow
 
 export type CardRow = { id: string; nextReviewAt: string; reviews: number; status: "active" | "mastered"; question: QuestionRow };
 
-export async function dueCards(admin: Admin, userId: string): Promise<Read<CardRow[]>> {
+export async function dueCards(admin: Admin, userId: string, today: string = todayIso()): Promise<Read<CardRow[]>> {
   const { data, error } = await admin.from("individual_scholar_card").select("id, question_id, next_review_at, reviews, status")
-    .eq("user_id", userId).eq("status", "active").lte("next_review_at", todayIso()).order("next_review_at").limit(50);
+    .eq("user_id", userId).eq("status", "active").lte("next_review_at", today).order("next_review_at").limit(50);
   if (error) return fail(error);
   const rows = (data ?? []) as any[];
   if (!rows.length) return { ok: true, data: [] };
@@ -789,9 +789,9 @@ export async function dueCards(admin: Admin, userId: string): Promise<Read<CardR
 }
 
 /** How many cards are due now. Null when it could not be counted -- never shown as zero. */
-export const countDue = cache(async (admin: Admin, userId: string): Promise<number | null> => {
+export const countDue = cache(async (admin: Admin, userId: string, today?: string): Promise<number | null> => {
   const { count, error } = await admin.from("individual_scholar_card").select("id", { count: "exact", head: true })
-    .eq("user_id", userId).eq("status", "active").lte("next_review_at", todayIso());
+    .eq("user_id", userId).eq("status", "active").lte("next_review_at", today ?? todayIso());
   return error ? null : (count ?? 0);
 });
 
@@ -1305,7 +1305,7 @@ export async function revisionInsightRows(admin: Admin, userId: string): Promise
   attempts: { questionId: string; correct: boolean; answeredAt: string; marking: string; sessionId: string | null }[];
   questions: { id: string; stem: string; kind: RevisionKind; chunkId: string; materialId: string; competencyId: string | null }[];
   reviews: { quality: number; reviewedAt: string; materialId: string }[] | null;
-  cards: { nextReviewAt: string; status: "active" | "mastered" }[];
+  cards: { nextReviewAt: string; status: "active" | "mastered"; materialId: string | null }[];
 }>> {
   let att = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at, marking, revision_session_id").eq("user_id", userId).order("answered_at", { ascending: false }).limit(5000);
   if (att.error) att = await admin.from("individual_scholar_attempt").select("question_id, correct, answered_at").eq("user_id", userId).order("answered_at", { ascending: false }).limit(5000);
@@ -1313,7 +1313,7 @@ export async function revisionInsightRows(admin: Admin, userId: string): Promise
   let qs = await admin.from("individual_scholar_question").select("id, stem, kind, chunk_id, material_id, competency_id").eq("user_id", userId).limit(5000);
   if (qs.error) qs = await admin.from("individual_scholar_question").select("id, stem, kind, chunk_id, material_id").eq("user_id", userId).limit(5000);
   if (qs.error) return fail(qs.error);
-  const [reviews, cards] = await Promise.all([reviewRows(admin, userId), admin.from("individual_scholar_card").select("next_review_at, status").eq("user_id", userId).limit(5000)]);
+  const [reviews, cards] = await Promise.all([reviewRows(admin, userId), admin.from("individual_scholar_card").select("next_review_at, status, material_id").eq("user_id", userId).limit(5000)]);
   if (cards.error) return fail(cards.error);
   return {
     ok: true,
@@ -1321,7 +1321,7 @@ export async function revisionInsightRows(admin: Admin, userId: string): Promise
       attempts: ((att.data ?? []) as any[]).map(a => ({ questionId: a.question_id, correct: a.correct, answeredAt: a.answered_at, marking: a.marking ?? "deterministic", sessionId: a.revision_session_id ?? null })),
       questions: ((qs.data ?? []) as any[]).map(q => ({ id: q.id, stem: q.stem, kind: q.kind, chunkId: q.chunk_id, materialId: q.material_id, competencyId: q.competency_id ?? null })),
       reviews: reviews.ok ? reviews.data : null,
-      cards: ((cards.data ?? []) as any[]).map(c => ({ nextReviewAt: c.next_review_at, status: c.status })),
+      cards: ((cards.data ?? []) as any[]).map(c => ({ nextReviewAt: c.next_review_at, status: c.status, materialId: c.material_id ?? null })),
     },
   };
 }
