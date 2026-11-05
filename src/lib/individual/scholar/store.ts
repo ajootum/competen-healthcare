@@ -5524,7 +5524,12 @@ export async function recordSearchCapture(admin: Admin, userId: string, e: Captu
   if (latest?.error && isNotProvisioned(latest.error)) { history992 = false; return "not_provisioned"; }
   const last = latest?.data as { activity: string; query: string | null; created_at: string; request_key: string } | null;
   if (last?.request_key === e.requestKey) return "existing";
-  if (repeatsLatest(last ? { activity: last.activity, query: last.query, createdAt: last.created_at } : null, e, nowIso)) return "repeat";
+  if (repeatsLatest(last ? { activity: last.activity, query: last.query, createdAt: last.created_at } : null, e, nowIso)) {
+    // SCHOLAR-ASK-SOURCES-01: the same words asked of different sources are a new question, not a double submit. Unreadable or before 999: a repeat, as before.
+    const was = e.sources?.length && last ? await admin.from(SH_TABLE).select("sources").eq("user_id", userId).eq("request_key", last.request_key).maybeSingle() : null;
+    const before = was && !was.error ? parseAskSources((was.data as { sources?: unknown } | null)?.sources) : [];
+    if (!(before.length && before.join() !== (e.sources ?? []).join())) return "repeat";
+  }
   const s = session?.data as { id: string; topic: string | null } | null;
   const c = chunk?.data as { id: string; material_id: string } | null;
   const materialId = (material?.data as { id: string } | null)?.id ?? c?.material_id ?? null;

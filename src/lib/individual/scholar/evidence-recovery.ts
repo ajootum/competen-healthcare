@@ -538,6 +538,17 @@ export function liveSources(ctx: IndividualContext, policy: IndividualPolicy, re
   };
 }
 
+/**
+ * SCHOLAR-ASK-SOURCES-01: whether this learner can reach any approved library content. The library tier matches the catalogue of
+ * their programme (or HQ's reference collections), so without one it could only ever find nothing, and offering it would mislead.
+ */
+export async function askLibraryReady(admin: unknown, policy: IndividualPolicy, competencies: Parameters<typeof referenceSource>[2]): Promise<boolean> {
+  const source = await referenceSource(admin, policy, competencies);
+  if ((source.catalogue ?? []).some(c => c.contentStatus === "approved")) return true;
+  if (!policy.scholarCaseEntries.includes("library")) return false;
+  return ((await findLibraryCases(admin, { limit: 1 })) ?? []).length > 0;
+}
+
 const publicResult = (r: RecoveryResult & Internal): RecoveryResult => {
   const { research: _r, passages: _p, ...out } = r;
   void _r; void _p;

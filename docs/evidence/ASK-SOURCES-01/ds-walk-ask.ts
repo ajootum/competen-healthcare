@@ -12,6 +12,7 @@ const findings: string[] = [];
 const ok = (c: boolean, w: string) => { const l = `${c ? "PASS" : "FAIL"} ${w}`; findings.push(l); console.log(l); };
 const LIB = "/individual/scholar/study";
 const Q = process.env.WALK_Q ?? "Why should critically ill patients be assessed on a continuing basis?";
+const RQ = process.env.WALK_RES_Q ?? Q;
 const record: Record<string, unknown> = {};
 
 async function signIn(page: import("@playwright/test").Page) {
@@ -62,6 +63,9 @@ async function ask(page: import("@playwright/test").Page, q: string, opts: { chi
   ok(!offered(/Web/i), "web sources are not offered, because Ask has no web path");
   const hasSaved = offered(/saved learning/), hasLibrary = offered(/Competen Library/), hasResearch = offered(/Research literature/);
   console.log({ hasSaved, hasLibrary, hasResearch });
+  ok(hasSaved, "my saved learning is offered");
+  ok(process.env.WALK_LIBRARY === "on" ? hasLibrary : !hasLibrary, process.env.WALK_LIBRARY === "on" ? "Competen Library is offered" : "Competen Library is hidden from a learner who can reach no approved content");
+  ok(hasResearch, "research literature is offered");
   await panel(page).screenshot({ path: join(OUT, "shots/selector-1440.png") });
 
   // 1. Default: notes only, the existing route, the same answer shape.
@@ -92,12 +96,13 @@ async function ask(page: import("@playwright/test").Page, q: string, opts: { chi
 
   // 3. Combined, with research: each source apart, found told from read.
   if (hasResearch) {
-    const both = await ask(page, Q, { chips: [/Research literature/] });
+    const both = await ask(page, RQ, { chips: [/Research literature/] });
     record.combined = { url: both.url, status: both.status, sent: both.body.sources, searched: both.json.searched, answer: String(both.json.answer ?? "").slice(0, 300), research: both.json.research && { text: both.json.research.text?.slice(0, 400) ?? null, withheld: both.json.research.withheld, used: both.json.research.used?.length, found: both.json.research.found?.length } };
     ok(both.url === "/api/individual/scholar/explain/across", "materials plus research goes to the new route");
     ok(JSON.stringify(both.body.sources) === JSON.stringify(["materials", "research"]), "both chosen sources are sent");
     ok((both.json.searched ?? []).map((s: { source: string }) => s.source).join() === "materials,research", "both are reported as searched");
     const main = String(both.json.answer ?? "");
+    ok(!/PART (ONE|TWO)/i.test(main), "the name of a part is never shown");
     ok(!main || !/\[[CE]\d+\]/.test(main), "the materials answer holds no research citation");
     const rtext = String(both.json.research?.text ?? "");
     ok(!rtext || !/\[[SC]\d+\]/.test(rtext), "the research part holds no materials citation");
@@ -105,17 +110,21 @@ async function ask(page: import("@playwright/test").Page, q: string, opts: { chi
     ok(used.every((u: { tag: string | null }) => /^E\d+$/.test(u.tag ?? "")), "research sources used carry [E n]");
     ok(!rtext || [...rtext.matchAll(/\[E(\d+)\]/g)].every(m => used.some((u: { tag: string }) => u.tag === `E${m[1]}`)), "every [E n] in the text has its reference");
     const text = await panel(page).innerText();
-    if (rtext) ok(/full text not read/i.test(text), "research is labelled as abstracts, full text not read");
+    ok(!!rtext, "the combined answer has a research part");
+    ok(used.length > 0, "at least one source is listed as used");
+    ok(/full text not read/i.test(text), "research is labelled as abstracts, full text not read");
     if ((both.json.research?.found ?? []).length) ok(text.includes("Found, not used as evidence"), "sources only found are listed apart from evidence");
     await panel(page).screenshot({ path: join(OUT, "shots/combined-research-1440.png") });
     await open(page);
 
     // 4. Research alone, and a mode.
-    const alone = await ask(page, Q, { chips: [/Research literature/, /My learning materials/], mode: "Summarise" });
+    const alone = await ask(page, RQ, { chips: [/Research literature/, /My learning materials/], mode: "Summarise" });
     record.researchAlone = { sent: alone.body.sources, mode: alone.body.mode, searched: alone.json.searched, version: alone.json.provenance?.promptVersion ?? null, text: alone.json.research?.text?.slice(0, 300) ?? null, withheld: alone.json.research?.withheld ?? null };
     ok(JSON.stringify(alone.body.sources) === JSON.stringify(["research"]), "research alone can be chosen");
     ok(alone.body.mode === "summary", "Summarise is kept across sources");
     ok(!alone.json.answer, "research alone shows no notes answer");
+    ok(!!alone.json.research?.text, "research alone gives a cited research answer");
+    await panel(page).screenshot({ path: join(OUT, "shots/research-alone-1440.png") });
     ok(!alone.body.materialIds, "no material is sent when materials are not chosen");
     ok(!alone.json.provenance || String(alone.json.provenance.promptVersion).includes("summary"), "the record names the mode");
     await open(page);
@@ -134,12 +143,27 @@ async function ask(page: import("@playwright/test").Page, q: string, opts: { chi
 
   // 6. Competen Library, with materials.
   if (hasLibrary) {
-    const lib = await ask(page, Q, { chips: [/Competen Library/] });
+    const lib = await ask(page, process.env.WALK_LIB_Q ?? Q, { chips: [/Competen Library/] });
     record.library = { sent: lib.body.sources, searched: lib.json.searched, library: lib.json.library ?? null, answer: String(lib.json.answer ?? "").slice(0, 200) };
     ok((lib.json.searched ?? []).some((s: { source: string }) => s.source === "library"), "Competen Library is reported as searched");
-    const t = String(lib.json.library?.text ?? "");
-    ok(!t || !/\[[SE]\d+\]/.test(t), "the library part holds only its own citations");
+    ok(!/PART (ONE|TWO)/i.test(String(lib.json.answer ?? "")), "the name of a part is never shown here either");
+    ok(!lib.json.library || (lib.json.library.items ?? []).length > 0, "library entries are listed as they stand");
     await panel(page).screenshot({ path: join(OUT, "shots/library-1440.png") });
+    await open(page);
+  }
+
+  // 6b. How library entries look. Staging can reach none (its frameworks are unpublished), so this reply is STUBBED: it checks the layout only.
+  if (!hasLibrary && hasResearch) {
+    await page.route("**/api/individual/scholar/explain/across", route => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({
+      notInNotes: true, searched: [{ source: "research", state: "no_match", count: 0, note: null }, { source: "library", state: "listed", count: 1, note: null }],
+      library: { label: "Approved Competen Library entries that match your question. These are competency titles and outcomes, not teaching text, so Scholar lists them and does not write from them.", items: [{ title: "Oxygen therapy", code: "RS-1", outcome: "Stub outcome for layout only", status: "Clinically approved", kind: "competency" }] },
+    }) }));
+    await ask(page, "Layout check only", { chips: [/Research literature/] });
+    const t = await panel(page).innerText();
+    ok(/in competen library/i.test(t) && t.includes("Clinically approved"), "library entries show apart, with their status (layout only, stubbed reply)");
+    ok(t.includes("Competen Library: searched, matching entries listed"), "library entries are reported as listed, not used (layout only, stubbed reply)");
+    await panel(page).screenshot({ path: join(OUT, "shots/library-layout-stub-1440.png") });
+    await page.unroute("**/api/individual/scholar/explain/across");
     await open(page);
   }
 
@@ -165,7 +189,8 @@ async function ask(page: import("@playwright/test").Page, q: string, opts: { chi
   await page.goto(`${BASE}${LIB}/saved/searches`, { waitUntil: "domcontentloaded", timeout: 300_000 });
   await page.waitForTimeout(7000);
   const hist = await page.locator("main").innerText();
-  ok(/Searched: My learning materials, Research literature/.test(hist) || !hasResearch, "search history shows the sources chosen with the question");
+  ok(/Searched: My learning materials, Research literature/.test(hist), "search history shows the sources chosen with the question");
+  ok(/Searched: Research literature(?!,)/.test(hist), "the same words asked of other sources are their own entry");
   ok(hist.includes("Answer not kept"), "the row still says the answer is not kept");
   await page.screenshot({ path: join(OUT, "shots/history-1440.png") });
   await ctx.close();

@@ -445,7 +445,7 @@ type Source = { tag: string; chunkId: string; materialId: string; citation: stri
 type Supplementary = { text?: string; label?: string; withheld?: string } | null;
 type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary; actionId?: string; searched?: Searched[]; library?: AskLibraryPart | null; research?: AskResearchPart | null };
 type ResearchRef = { tag?: string | null; title: string; journal: string | null; year: number | null; provider: string; url: string; excerpt?: string | null };
-type AskLibraryPart = { label: string; text: string | null; withheld: string | null; items: { tag: string; title: string; code: string | null; status: string }[] };
+type AskLibraryPart = { label: string; items: { title: string; code: string | null; outcome: string | null; status: string }[] };
 type AskResearchPart = { label: string; text: string | null; withheld: string | null; used: ResearchRef[]; found: ResearchRef[] };
 
 // COMPETEN-SCHOLAR-01 S3: ways of learning from the same passages. "Tutor me" is per section (TutorPanel).
@@ -658,11 +658,11 @@ function ExplanationView({ item }: { item: Explained }) {
           </ul>
         </div>
       ))}
-      {item.library && (item.library.text || item.library.withheld) && (
-        <AskExternalPart heading="From Competen Library" label={item.library.label} text={item.library.text} withheld={item.library.withheld}>
-          {item.library.items.length > 0 && <ul className="mt-2 space-y-1">{item.library.items.map(l => (
-            <li key={l.tag} className="text-[13px] text-gray-700"><span className="font-mono text-[12px] font-bold" style={{ color: accent }}>[{l.tag}]</span> {l.code ? `${l.code} ` : ""}{l.title} <span className="text-gray-600">· {l.status}</span></li>
-          ))}</ul>}
+      {item.library && item.library.items.length > 0 && (
+        <AskExternalPart heading="In Competen Library" label={item.library.label} text={null} withheld={null}>
+          <ul className="mt-2 space-y-1">{item.library.items.map(l => (
+            <li key={`${l.title}|${l.outcome ?? ""}`} className="text-[13px] text-gray-700">{l.code ? `${l.code} ` : ""}{l.title}{l.outcome ? `: ${l.outcome}` : ""} <span className="text-gray-600">· {l.status}</span></li>
+          ))}</ul>
         </AskExternalPart>
       )}
       {item.research && (

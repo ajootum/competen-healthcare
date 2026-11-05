@@ -5,7 +5,9 @@
 //
 //   materials  the learner's uploads, by the existing search. Alone, this is the existing explain route, unchanged.
 //   saved      the learner's saved teaching and their own notes on it. Learner-owned, so cited with the materials as [S n].
-//   library    approved Competen Library content (the recovery tier's source). External to the learner, cited [C n].
+//   library    approved Competen Library entries (the recovery tier's source). External to the learner, listed as they stand and
+//              never given to the model: they are competency titles and outcomes, not teaching text. Offered only to a learner
+//              who can reach some: it matches their programme's catalogue, or HQ's reference collections.
 //   research   the Research & Evidence Engine. External. Keywords from the question leave Competen, never the notes. Cited [E n].
 //   web        named for the record only and NEVER offered: Ask has no web path. Scholar's web research is the examination
 //              tool (exam-research.ts), off in production, and turning it on is an owner decision (processor, cost, funding).
@@ -30,14 +32,18 @@ export function parseAskSources(raw: unknown): AskSource[] {
 /** Pure. Materials alone is the default path, which the existing explain route serves. */
 export const isDefaultSources = (s: readonly AskSource[]): boolean => s.length === 1 && s[0] === "materials";
 
-export type AskOfferInput = { savedReady: boolean; sourceModes: readonly string[]; researchOperational: boolean };
+export type AskOfferInput = {
+  savedReady: boolean; sourceModes: readonly string[]; researchOperational: boolean;
+  /** This learner can reach approved library content (evidence-recovery askLibraryReady). Without it the source could only ever find nothing. */
+  libraryReady: boolean;
+};
 
 /** Pure. What is offered now. Only what can run: a source that cannot is not shown at all. Web is never offered (see above). */
 export function offeredAskSources(i: AskOfferInput): AskSource[] {
   return [
     "materials",
     ...(i.savedReady ? ["saved" as const] : []),
-    ...(i.sourceModes.includes("library") ? ["library" as const] : []),
+    ...(i.sourceModes.includes("library") && i.libraryReady ? ["library" as const] : []),
     ...(i.sourceModes.includes("research") && i.researchOperational ? ["research" as const] : []),
   ];
 }
@@ -49,11 +55,11 @@ export function toggleAskSource(selected: readonly AskSource[], s: AskSource): A
 }
 
 /** What happened to one chosen source for this question. Reported for every source chosen, so the learner sees what was actually searched. */
-export type SearchedState = "used" | "no_match" | "found_only" | "withheld" | "not_run";
+export type SearchedState = "used" | "listed" | "no_match" | "found_only" | "withheld" | "not_run";
 export type Searched = { source: AskSource; state: SearchedState; count: number; note: string | null };
 
 const STATE_WORDS: Record<SearchedState, string> = {
-  used: "searched and used", no_match: "searched, nothing matched", found_only: "searched, sources found but none read",
+  used: "searched and used", listed: "searched, matching entries listed", no_match: "searched, nothing matched", found_only: "searched, sources found but none read",
   withheld: "searched, but that part was not shown", not_run: "not searched",
 };
 /** Pure. One source's line under the answer. */
@@ -71,6 +77,12 @@ export function researchSearched(r: { state: string; evidence: number; items: nu
   if (r.shown) return { ...base, state: "used", note: "abstracts only, full text not read" };
   if (r.withheld) return { ...base, state: "withheld", note: null };
   return r.items > 0 ? { ...base, state: "found_only", note: null } : { ...base, state: "no_match", note: null };
+}
+
+/** Pure. How Competen Library went: its entries are listed, never written from. */
+export function libraryListed(failed: boolean, found: number): Searched {
+  if (failed) return { source: "library", state: "not_run", count: 0, note: "it could not be read just now" };
+  return { source: "library", state: found ? "listed" : "no_match", count: found, note: null };
 }
 
 /** Pure. How a source inside Competen went. */
