@@ -5,7 +5,7 @@ import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import { LearningIcon } from "@/components/ui/scholar-learning";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
-import { experienceHref } from "@/lib/individual/experiences";
+import { experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
 import { GLOBAL_SEARCH_MIN, type GlobalGroup } from "@/lib/individual/scholar/global-search-types";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 import { HistoryNotice, useSearchHistoryChoice } from "../SearchHistoryChoice";
@@ -16,11 +16,18 @@ import { HistoryNotice, useSearchHistoryChoice } from "../SearchHistoryChoice";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const DEBOUNCE_MS = 250;
-const API = "/api/individual/scholar/search";
 
 type State = { status: "idle" } | { status: "loading" } | { status: "failed" } | { status: "done"; q: string; groups: GlobalGroup[] };
 
-export function GlobalSearch() {
+type Copy = { name: string; placeholder: string; scope: string };
+const COPY: Record<ExperienceKey, Copy> = {
+  scholar: { name: "Scholar", placeholder: "A topic, material, question or competency", scope: "Searching everything you can open in Scholar. Only you see your own records. No AI is used." },
+  professional: { name: "Professional", placeholder: "A competency, evidence, CPD entry, need or goal", scope: "Searching everything you can open in Professional. Only you see your own records. No AI is used." },
+};
+
+export function GlobalSearch({ experience }: { experience: ExperienceKey }) {
+  const copy = COPY[experience];
+  const API = `/api/individual/${experience}/search`;
   const router = useRouter();
   const choice = useSearchHistoryChoice();
   const [open, setOpen] = useState(false);
@@ -57,7 +64,7 @@ export function GlobalSearch() {
       }
     }, DEBOUNCE_MS);
     return () => { clearTimeout(id); ctl.abort(); };
-  }, [q, open]);
+  }, [q, open, API]);
 
   const groups = state.status === "done" ? state.groups : [];
   const found = groups.filter(g => g.types.length > 0);
@@ -66,12 +73,12 @@ export function GlobalSearch() {
 
   function keep(resultCount: number) {
     const typed = q.trim();
-    if (choice.on && typed.length >= GLOBAL_SEARCH_MIN) recordHistory({ activity: "material_search", query: typed, resultCount });
+    if (experience === "scholar" && choice.on && typed.length >= GLOBAL_SEARCH_MIN) recordHistory({ activity: "material_search", query: typed, resultCount });
   }
   function go(path: string) {
     keep(count);
     close();
-    router.push(experienceHref("scholar", path));
+    router.push(experienceHref(experience, path));
   }
   function onKey(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "ArrowDown" && count) { e.preventDefault(); setActive(a => (a + 1) % count); }
@@ -79,6 +86,7 @@ export function GlobalSearch() {
     else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0 && results[active]) go(results[active].path);
+      else if (experience === "professional") { const first = found[0]; if (first) go(first.morePath); }
       else if (q.trim().length >= GLOBAL_SEARCH_MIN) go(`study/learn?q=${encodeURIComponent(q.trim())}`);
     }
   }
@@ -86,32 +94,32 @@ export function GlobalSearch() {
 
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Search everything in Scholar" data-global-search
+      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label={`Search everything in ${copy.name}`} data-global-search
         className={`hidden min-h-[40px] w-[190px] items-center lg:w-[240px] gap-2 rounded-xl border border-gray-300 bg-white px-3 text-left text-[13.5px] text-gray-600 hover:border-gray-400 md:inline-flex pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
         <LearningIcon name="search" className="h-[17px] w-[17px] shrink-0" />
-        <span className="min-w-0 flex-1 truncate">Search Scholar</span>
+        <span className="min-w-0 flex-1 truncate">Search {copy.name}</span>
         <kbd className="hidden shrink-0 rounded lg:inline border border-gray-200 bg-gray-50 px-1.5 py-0.5 text-[11px] font-semibold text-gray-600">Ctrl K</kbd>
       </button>
-      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label="Search everything in Scholar" data-global-search-icon
+      <button type="button" onClick={() => setOpen(true)} aria-haspopup="dialog" aria-label={`Search everything in ${copy.name}`} data-global-search-icon
         className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-gray-800 hover:bg-gray-100 md:hidden ${focusRing}`}>
         <LearningIcon name="search" className="h-[22px] w-[22px]" />
       </button>
       {/* In the page's body: inside the sticky header, its stacking would put the bottom bar over this panel. */}
       {open && createPortal(
-        <div data-cmp-theme="scholar" className="cmp-scholar fixed inset-0 z-[70] bg-black/40 md:p-16" onClick={e => { if (e.target === e.currentTarget) close(); }}>
-          <div ref={panel} role="dialog" aria-modal="true" aria-label="Search Scholar" data-global-search-panel
+        <div data-cmp-theme={experience} className={`${experience === "scholar" ? "cmp-scholar " : ""}fixed inset-0 z-[70] bg-black/40 md:p-16`} onClick={e => { if (e.target === e.currentTarget) close(); }}>
+          <div ref={panel} role="dialog" aria-modal="true" aria-label={`Search ${copy.name}`} data-global-search-panel
             className="cmp-learn-key mx-auto flex h-full max-h-full w-full flex-col bg-white shadow-xl md:h-auto md:max-h-[76vh] md:max-w-2xl md:rounded-2xl">
             <div className="border-b border-gray-200 p-3">
               <div className="flex items-center gap-2">
                 <div className="relative min-w-0 flex-1">
                   <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><LearningIcon name="search" className="h-[18px] w-[18px]" /></span>
                   <input ref={input} type="search" role="combobox" aria-expanded={count > 0} aria-controls="global-search-results" aria-activedescendant={active >= 0 ? `global-result-${active}` : undefined}
-                    value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} maxLength={120} autoComplete="off" aria-label="Search everything in Scholar" placeholder="A topic, material, question or competency"
+                    value={q} onChange={e => setQ(e.target.value)} onKeyDown={onKey} maxLength={120} autoComplete="off" aria-label={`Search everything in ${copy.name}`} placeholder={copy.placeholder}
                     className={`block min-h-[44px] w-full rounded-xl border border-gray-300 bg-white py-2 pl-10 pr-3 text-[16px] text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} />
                 </div>
                 <button type="button" onClick={close} className={`inline-flex min-h-[44px] shrink-0 items-center rounded-xl px-3 text-[14px] font-semibold text-gray-800 hover:bg-gray-100 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Close</button>
               </div>
-              <p className="mt-1.5 text-[12.5px] text-gray-700">Searching everything you can open in Scholar. Only you see your own records. No AI is used.</p>
+              <p className="mt-1.5 text-[12.5px] text-gray-700">{copy.scope}</p>
             </div>
 
             <div id="global-search-results" role="listbox" aria-label="Results" className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -164,7 +172,7 @@ export function GlobalSearch() {
                 </div>
               )}
             </div>
-            {choice.offered && <div className="border-t border-gray-100 px-3 py-2"><HistoryNotice className="" /></div>}
+            {experience === "scholar" && choice.offered && <div className="border-t border-gray-100 px-3 py-2"><HistoryNotice className="" /></div>}
           </div>
         </div>,
         document.body,
