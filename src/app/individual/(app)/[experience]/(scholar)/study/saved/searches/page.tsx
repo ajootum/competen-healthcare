@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { pageScope } from "@/lib/individual/search/registry";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
@@ -9,7 +11,6 @@ import { HistoryHeader, HistoryList, type ClientEntry } from "../../_components/
 import { SearchHistorySetting } from "../../_components/search-history-setting";
 import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { consentDocuments } from "@/lib/individual/scholar/consent-gate";
-import { LearningIcon } from "@/components/ui/scholar-learning";
 import { ASK_SOURCE_LABEL } from "@/lib/individual/scholar/ask-sources";
 import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, withHistorySources, searchHistoryTopics, sessionsByIds } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -143,18 +144,8 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
         <HistoryHeader count={hasHistoryFilters(q) ? 1 : total} />
         <SearchHistorySetting state={choice.state} unreadable={choice.unreadable} published={documents.published} grantedAt={choice.grantedAt} revokedAt={choice.revokedAt} notifiedAt={choice.notifiedAt} legal={documents.links} />
 
-        <form method="get" action={base} role="search" className="relative mt-4">
-          {q.show && <input type="hidden" name="show" value={q.show} />}
-          {(["material", "topic", "from", "to"] as const).map(k => (q[k] ? <input key={k} type="hidden" name={k} value={q[k]!} /> : null))}
-          {q.pinned && <input type="hidden" name="pinned" value="1" />}
-          <label htmlFor="history-q" className="sr-only">Search your history</label>
-          <input id="history-q" type="search" name="q" defaultValue={q.q} maxLength={200} placeholder="Search your history..."
-            className={`block min-h-[48px] w-full rounded-full border border-gray-300 bg-white py-2.5 pl-5 pr-14 text-[15px] text-gray-900 ${focusRing}`} />
-          <button type="submit" aria-label="Search" className={`absolute right-1 top-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 pointer-coarse:h-[var(--cmp-touch-min)] pointer-coarse:w-[var(--cmp-touch-min)] ${focusRing}`}>
-            <LearningIcon name="search" className="h-5 w-5" />
-          </button>
-        </form>
-        {q.q && <p className="mt-1.5 text-[13px]"><Link href={`${base}${historyParams(q, { q: null })}`} className={`inline-flex min-h-[40px] items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Clear search</Link></p>}
+        <PageSearch scope={pageScope("history")} action={base} value={q.q} placeholder="Search your history" className="mt-4" clearHref={`${base}${historyParams(q, { q: null })}`}
+          hidden={{ show: q.show, material: q.material, topic: q.topic, from: q.from, to: q.to, pinned: q.pinned ? "1" : null }} />
 
         <div className="mt-3 flex flex-wrap items-start gap-2">
           <nav aria-label="Show" className="contents">

@@ -1,3 +1,4 @@
+import { matchesSearch } from "../search/match";
 // ── OSCE PRACTICE ── SCHOLAR-PRACTICE-EXAMS-01 (owner, 30 Oct 2026), migration 720 ─────────────────────────────
 //
 // A simulated OSCE station a learner practises ALONE: a scenario, candidate instructions and a timer; they write what
@@ -1012,12 +1013,10 @@ export function parseOsceFilter(sp: Record<string, string | string[] | undefined
   };
 }
 
-/** Pure. The stations a filter keeps. `q` matches the topic, the body system or the title (any word order). */
+/** Pure. The stations a filter keeps. `q` matches the topic, the body system or the title by the shared matcher (any word order, part of a word, one slip). */
 export function filterStations<T extends Filterable>(stations: readonly T[], f: OsceFilter): T[] {
-  const words = (f.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
   return stations.filter(s => {
-    const hay = `${s.title} ${s.topic ?? ""} ${s.bodySystem ?? ""}`.toLowerCase();
-    return words.every(w => hay.includes(w))
+    return matchesSearch(`${s.title} ${s.topic ?? ""} ${s.bodySystem ?? ""}`, f.q)
       && (!f.competency || s.competencyId === f.competency) && (!f.programme || s.programmeCode === f.programme)
       && (!f.difficulty || s.difficulty === f.difficulty) && (!f.source || s.source === f.source);
   });

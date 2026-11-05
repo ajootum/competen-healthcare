@@ -726,9 +726,7 @@ export function DeckList({ decks, marksOn, archiveOn, exports, editId }: { decks
     <section aria-labelledby="decks-h" className="space-y-4">
       <h2 id="decks-h" className="text-[18px] font-bold text-gray-900">My Decks</h2>
       <div role="search" className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-200 bg-white p-3">
-        <label className="min-w-0 flex-1 text-[12.5px] font-semibold text-gray-700">Search decks
-          <input type="search" value={search} onChange={e => setSearch(e.target.value)} className={`${field} mt-1 block w-full`} placeholder="Part of a deck name" />
-        </label>
+        <PageSearchInput scope={pageScope("flashcards")} value={search} onChange={setSearch} placeholder="Part of a deck name" />
         <label className="text-[12.5px] font-semibold text-gray-700">Sort by
           <select value={sort} onChange={e => setSort(e.target.value as DeckSort)} className={`${field} mt-1 block`}>
             {(Object.keys(DECK_SORT_LABEL) as DeckSort[]).map(k => <option key={k} value={k}>{DECK_SORT_LABEL[k]}</option>)}
@@ -909,7 +907,8 @@ export function CardBrowser({ cards, decks, currentDeck, marksOn, filters, editI
       <h2 id="cards-h" className="text-[18px] font-bold text-gray-900">{currentDeck ? `Cards in ${currentDeck.title}` : "All cards"}</h2>
       <form ref={formRef} role="search" className="flex flex-wrap items-end gap-2 rounded-2xl border border-gray-200 bg-white p-3"
         onSubmit={e => { e.preventDefault(); const f = new FormData(formRef.current!); router.push(flashcardsHref({ ...base, q: String(f.get("q") ?? "") || null, state: String(f.get("state") ?? "") || null, origin: String(f.get("origin") ?? "") || null, bookmarked: f.get("bookmarked") ? "1" : null })); }}>
-        <label className="min-w-0 flex-1 text-[12.5px] font-semibold text-gray-700">Search cards<input name="q" defaultValue={filters.q} className={`${field} mt-1 block w-full`} placeholder="Words on the card, a topic, a document" /></label>
+        <input type="hidden" name="q" value={cardQ} />
+        <PageSearchInput scope={pageScope("flashcards")} value={cardQ} onChange={setCardQ} placeholder="Words on the card, a topic, a document" />
         <label className="text-[12.5px] font-semibold text-gray-700">Status
           <select name="state" defaultValue={filters.state} className={`${field} mt-1 block`}><option value="">Any</option><option value="due">Due today</option><option value="needs_practice">Needs more practice</option><option value="remembered">Remembered</option><option value="new">Not studied yet</option></select>
         </label>

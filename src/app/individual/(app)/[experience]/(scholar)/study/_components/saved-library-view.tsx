@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import type { ReactNode } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import {
@@ -115,15 +117,8 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
       <p className="mt-1 text-[13px] text-gray-600">{AI_LABEL}. Private to you and for your own study: never an assessment, never evidence of competence. Opening anything here uses no AI.</p>
 
       {/* SEARCH: deterministic and private (no AI). One search over saved lessons, notes, questions and your materials. */}
-      <form method="get" action={href("study/saved")} role="search" className="mt-3 flex flex-wrap items-end gap-2">
-        {FILTER_KEYS.map(k => (q[k] ? <input key={k} type="hidden" name={k} value={q[k]!} /> : null))}
-        <label className="min-w-0 flex-1 basis-[16rem] text-[12.5px] font-semibold text-gray-800">Search your saved lessons, notes, questions and materials
-          <input type="search" name="q" defaultValue={q.q} maxLength={200} className={field} placeholder="for example: preload OR afterload" />
-        </label>
-        {historyOn && <HistoryKeyInput />}
-        <button type="submit" className={ghost}>Search</button>
-        {q.q && <Link href={urlWith(q, { q: null })} className={ghost}>Clear search</Link>}
-      </form>
+      <PageSearch scope={scopeLine("saved")} action={href("study/saved")} value={q.q} placeholder="for example: preload OR afterload" className="mt-3"
+        hidden={Object.fromEntries(FILTER_KEYS.map(k => [k, q[k]]))} clearHref={urlWith(q, { q: null })} extra={historyOn ? <HistoryKeyInput /> : undefined} />
       <HistoryNotice />
       {historyOn && q.q && <RecordSearch activity="library_search" query={q.q} requestKey={historyKey} resultCount={null} materialId={q.material} />}
 

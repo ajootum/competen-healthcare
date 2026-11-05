@@ -73,6 +73,15 @@ export const allowedSearchModules = (a: SearchAccess): SearchModule[] => SCHOLAR
 /** The line that says what a box searches. */
 export const scopeLine = (key: SearchModuleKey) => `Searching ${searchModule(key).scope}`;
 
+/** Boxes that filter one page's own list and are not a Global Search source: the words under the box. */
+export const PAGE_SCOPES = {
+  history: "your search history",
+  flashcards: "your flashcards",
+  osce: "your OSCE stations",
+  progress: "your progress history",
+} as const;
+export const pageScope = (key: keyof typeof PAGE_SCOPES) => `Searching ${PAGE_SCOPES[key]}`;
+
 /** A search on a module's own page, below /individual/scholar. */
 export function moduleSearchPath(key: SearchModuleKey, q: string): string {
   const m = searchModule(key);

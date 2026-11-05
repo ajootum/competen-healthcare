@@ -15,7 +15,7 @@ function FieldIcon() {
   return <span aria-hidden className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-500"><LearningIcon name="search" className="h-[18px] w-[18px]" /></span>;
 }
 
-export function PageSearch({ scope, action, name = "q", value, placeholder, hidden = {}, clearHref, className = "mb-4", extra, children }: {
+export function PageSearch({ scope, action, name = "q", value, placeholder, hidden = {}, clearHref, className = "mb-4", extra, list, children }: {
   /** What this box searches, from the search registry. */
   scope: string;
   action: string;
@@ -28,6 +28,8 @@ export function PageSearch({ scope, action, name = "q", value, placeholder, hidd
   className?: string;
   /** Anything that must sit inside the form beside the field, such as the search history key. */
   extra?: ReactNode;
+  /** The id of a datalist offering suggestions for the field. */
+  list?: string;
   /** Filters, inside the form. */
   children?: ReactNode;
 }) {
@@ -38,7 +40,7 @@ export function PageSearch({ scope, action, name = "q", value, placeholder, hidd
       <div className="flex gap-2">
         <div className="relative min-w-0 flex-1">
           <FieldIcon />
-          <input type="search" name={name} defaultValue={value ?? ""} maxLength={200} autoComplete="off" aria-label={scope} placeholder={placeholder} className={fieldCls} />
+          <input type="search" name={name} defaultValue={value ?? ""} maxLength={200} autoComplete="off" list={list} aria-label={scope} placeholder={placeholder} className={fieldCls} />
         </div>
         <button type="submit" className={buttonCls}>Search</button>
       </div>
