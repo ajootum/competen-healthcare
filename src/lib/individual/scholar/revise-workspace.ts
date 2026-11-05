@@ -62,7 +62,9 @@ export type QueueItem = {
 };
 
 export type TodayInput = {
+  /** Newest first. The two newest get a row each; any more are one row, so unfinished work does not fill the queue. */
   resume: readonly { key: string; title: string; position: number; total: number | null; lastActiveDay: string; href: string }[];
+  resumeAllHref: string;
   dueCards: number; dueCardsHref: string;
   retrieval: readonly { key: string; label: string; status: string; why: string; more: readonly string[]; href: string; actionLabel: string; priorityFlag: boolean }[];
   /** Questions missed more than once, with the materials they came from. */
@@ -74,6 +76,7 @@ export type TodayInput = {
   priorities: readonly string[];
 };
 
+const RESUME_ROWS = 2;
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 /** Pure. Whether a title is about one of the learner's priorities, by whole words either way round. */
 export function matchesPriority(title: string, priorities: readonly string[]): boolean {
@@ -85,11 +88,16 @@ export function matchesPriority(title: string, priorities: readonly string[]): b
 export function buildTodayQueue(i: TodayInput): QueueItem[] {
   const pri = (t: string) => matchesPriority(t, i.priorities);
   const items: QueueItem[] = [
-    ...i.resume.map((r): QueueItem => ({
+    ...i.resume.slice(0, RESUME_ROWS).map((r): QueueItem => ({
       key: `resume-${r.key}`, kind: "resume", title: `Carry on: ${r.title}`, status: "In progress", priority: pri(r.title), more: [],
       why: `${r.total === null ? `${r.position} answered` : `${r.position} of ${r.total} answered`}, last worked on ${shortDate(r.lastActiveDay)}. Your answers so far are saved.`,
       action: { kind: "link", href: r.href, label: "Resume" },
     })),
+    ...(i.resume.length > RESUME_ROWS ? [{
+      key: "resume-more", kind: "resume" as const, title: `${i.resume.length - RESUME_ROWS} more unfinished ${i.resume.length - RESUME_ROWS === 1 ? "session" : "sessions"}`, status: "In progress", priority: false, more: [],
+      why: "Your answers so far are saved, so you can come back to these whenever you like.",
+      action: { kind: "link" as const, href: i.resumeAllHref, label: "See them all" },
+    }] : []),
     ...(i.dueCards > 0 ? [{
       key: "cards", kind: "cards" as const, title: `Review ${i.dueCards} due ${i.dueCards === 1 ? "card" : "cards"}`, status: "Due", priority: false,
       why: "Recalling these now, as they come due, is what makes them last.",

@@ -218,10 +218,13 @@ async function main() {
   note(`materials: ${docs.length} uploaded and analysed · competency links proposed: ${linked}`);
 
   // ── R1: open Revision ──
+  // SCHOLAR-REVISE-WORKSPACE-01: one view at a time. Today holds the ways to revise; the rest each have their own view.
   const page = await get("/individual/scholar/study/revise", sa.jar);
-  ok("R1. Revision opens: Start Today's Revision, the modes, saved sets, the cards due and how revision is going",
-    page.status === 200 && ["Start Today's Revision", "Quick practice", "Weak areas", "Mock practice", "Saved revision sets", "Review cards due", "How your revision is going"].every(s => page.text.includes(s)),
-    `${page.status}`);
+  const [pageTopics, pageCards, pageInsights] = await Promise.all(["?view=topics", "?review=cards", "?view=insights"].map(v => get(`/individual/scholar/study/revise${v}`, sa.jar)));
+  ok("R1. Revision opens: Today's revision and the modes on Today, saved sets under All Topics, the cards due, and how revision is going under Revision Insights",
+    [page, pageTopics, pageCards, pageInsights].every(p => p.status === 200) && ["Today's revision", "Quick practice", "Weak areas", "Mock practice"].every(s => page.text.includes(s))
+    && pageTopics.text.includes("Saved revision sets") && pageCards.text.includes("Review cards due") && pageInsights.text.includes("How your revision is going"),
+    `${[page, pageTopics, pageCards, pageInsights].map(p => p.status)}`);
 
   // ── R3/R4: the respiratory materials, ten questions ──
   const genBefore = (await admin.from("audit_log").select("id", { count: "exact" }).eq("actor_id", a).eq("entity_type", "individual_scholar_revision_generate").limit(1)).count ?? 0;
@@ -272,7 +275,7 @@ async function main() {
   const weakIds = (weak.json?.items ?? []).map((i: any) => i.id);
   ok("R7a. Weak areas offers exactly what was missed, with no new questions written", weak.status === 200 && wrongIds.every(id => weakIds.includes(id)) && weak.json?.generated === 0, `${weak.status} ${weakIds.length}`);
   for (const id of wrongIds) { const resp = await wrongResponse(a, id); await send("POST", "/api/individual/scholar/revision/answer", { questionId: id, sessionId: weak.json?.session?.id, response: resp }, sa.jar); }
-  const page2 = await get("/individual/scholar/study/revise", sa.jar);
+  const page2 = await get("/individual/scholar/study/revise?view=insights", sa.jar);
   const hard = items.find(i => i.id === wrongIds[0]);
   ok("R7. the difficult concepts are identified: what was missed twice is listed, with Teach me this", page2.status === 200 && page2.text.includes("What you keep missing") && page2.text.includes("missed 2 times") && !!hard && page2.text.includes(`study/learn?section=${hard.chunkId}`));
   const learn = hard ? await get(`/individual/scholar/study/learn?section=${hard.chunkId}&revision=${sid}`, sa.jar) : null;
@@ -295,7 +298,7 @@ async function main() {
   ok("R10b. spaced revision offers the cards due, writes nothing new", spaced.status === 200 ? spaced.json.generated === 0 && spaced.json.items.length > 0 : spaced.status === 404, `${spaced.status} ${spaced.json?.items?.length ?? spaced.json?.error}`);
 
   // ── R11: recall history and progress ──
-  const page3 = await get("/individual/scholar/study/revise", sa.jar);
+  const page3 = await get("/individual/scholar/study/revise?view=insights", sa.jar);
   const prog = await get("/individual/scholar/study/progress", sa.jar);
   ok("R11. recall history and progress: reviews counted, recall measured or said why not, materials revised, how answers were marked; Progress opens",
     page3.status === 200 && /Reviews, last \d+ days/.test(page3.text) && page3.text.includes("Recall over six weeks") && /Materials revised/.test(page3.text) && page3.text.includes("by AI evaluation") && prog.status === 200);
@@ -364,7 +367,7 @@ async function main() {
   const bStart = bDoc ? await start(sb.jar, { mode: "quick", scope: { kind: "document", materialId: bDoc }, quantity: 4 }) : null;
   const bItem = (bStart?.json?.items ?? []).find((i: any) => i.kind !== "short");
   const bAns = bItem ? await send("POST", "/api/individual/scholar/revision/answer", { questionId: bItem.id, sessionId: bStart!.json.session?.id, response: await rightResponse(b, bItem.id) }, sb.jar) : null;
-  const bPage = await get("/individual/scholar/study/revise", sb.jar);
+  const bPage = await get("/individual/scholar/study/revise?view=insights", sb.jar);
   ok("R14. without a competency catalogue revision works end to end: questions written from the notes, answered and marked, and the workspace says competency activity is not measured",
     bStart?.status === 200 && (bStart.json.items ?? []).length > 0 && bAns?.status === 200 && bPage.status === 200 && bPage.text.includes("Revision works without a catalogue"),
     `${bStart?.status} ${bStart?.json?.error ?? ""} · ${bAns?.status}`);

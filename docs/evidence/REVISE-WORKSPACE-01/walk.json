@@ -1,0 +1,50 @@
+{
+  "started": {
+    "status": 200,
+    "sessionId": true
+  },
+  "shortcuts": [
+    "Flashcards",
+    "Practice Questions",
+    "Adaptive Exams",
+    "Revision History",
+    "Mistake Notebook",
+    "My Decks"
+  ],
+  "cardRows": [
+    "Review 37 due cards"
+  ],
+  "month": "Studied in November 2026\n\nDays you answered questions, reviewed cards or worked through a lesson. Uploading a material does not count as studying it.\n\nEssential Nursing Care of the Critically Ill\n\nStudied 4 Nov, 5 Nov · Uploaded 3 Nov\n\n42 answered · 21 missed · 16 card reviews · 2 lessons\n\n10 cards due\nLessons\nRevise this\n\nQuality Improvement Science and Methods\n\nStudied 1 Nov, 2 Nov, 4 Nov, 5 Nov · Uploaded 1 Nov\n\n128 answered · 89 missed · 54 card reviews · 2 lessons\n\n27 cards due\nLessons\nRevise this\n\nrecognising-deterioration-notes\n\nStudied 2 Nov · Uploaded 1 Nov\n\n1 answered\n\nUp to date\nRevise this\n\nFormative learning only · Private to you · Not verified clinical competence\n\nCompeten Scho",
+  "monthGroups": 3,
+  "catalogueShown": 3,
+  "planRead": {
+    "status": 200,
+    "hadPlan": false
+  },
+  "queueBefore": [
+    "Carry on: Quick practice",
+    "Carry on: Quick practice",
+    "8 more unfinished sessions",
+    "Review 37 due cards",
+    "Practise what you keep missing",
+    "Fix 29 mistakes",
+    "Learn your notes \"Quality Improvement Science and Methods\""
+  ],
+  "priorityUsed": "Learn your notes \"Quality Improvement Science and Methods\"",
+  "priorities": "What you are working towards\nGoal\nWalk goal\nWalk exam\n25 Nov, in 20 days\nYour priority topics\nLearn your notes \"Quality Improvement Science and Methods\"\n\nChange these in My Plan\n\nComing up in the next 7 days\nLearn your notes \"Quality Improvement Science and Methods\" · 6 Nov · 15 min · Scholar plan\nReview 15 flashcards · 6 Nov · 15 min · Scholar plan\nLearn your notes \"Essential Nursing Care of the ",
+  "planEvents": {
+    "before": "0-0/11",
+    "after": "0-0/11"
+  },
+  "insightsStats": "Cards due now\n37\nDue in the next 7 days\n19\nReviews, last 28 days\n70\nRecall\n46%\nof 70 reviews graded Okay or better\nMaterials revised\n3 of 3\nAnswers marked\n69\nby code 39 · by you 29 · by AI evaluation 1\nRecall over six weeks\nReviews and the share graded Okay or better, by week\nWeek of\tReviews\tRecalle",
+  "height_today_820": 2200,
+  "height_month_820": 1332,
+  "height_topics_820": 1310,
+  "height_priorities_820": 1773,
+  "height_insights_820": 2595,
+  "height_today_390": 2574,
+  "height_month_390": 1477,
+  "height_topics_390": 1433,
+  "height_priorities_390": 1784,
+  "height_insights_390": 2624
+}

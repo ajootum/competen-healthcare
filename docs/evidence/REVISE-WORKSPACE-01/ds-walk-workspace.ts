@@ -65,6 +65,20 @@ const contradiction = (t: string) => /Due today[^\n]{0,40}\b\d{1,2} (Jan|Feb|Mar
   ok(!contradiction(text), "no Due today beside a later date");
   for (const w of ["Quick Recall", "Deep Understanding", "Clinical Reasoning", "Mixed Challenge"]) ok(text.includes(w), `${w} can be chosen on Today`);
   ok(!text.includes("How your revision is going"), "the detailed statistics are not on Today");
+  const about = (await page.locator("[data-revise-queue] h2, [data-revise-item] p:first-of-type").allInnerTexts()).filter(t => /\b(flash)?cards?\b/i.test(t.split("\n")[0]));
+  record.cardRows = about;
+  ok(about.length <= 1, `the due cards are one row (${about.length})`);
+  const more = page.getByRole("link", { name: "See them all" });
+  if (await more.count()) {
+    const carry = (await page.locator("[data-revise-item='resume']").count()) + 1;
+    ok(carry === 3, `unfinished sessions take at most two rows and one gathering the rest (${carry})`);
+    await more.click();
+    await page.waitForURL(/resume=all/, { timeout: 120_000 });
+    await page.waitForTimeout(5000);
+    ok((await page.locator("[data-revise-resume-all] li").count()) >= 3, "See them all lists every unfinished session");
+    await page.screenshot({ path: join(OUT, "shots/resume-all-1440.png") });
+    await go(page, R);
+  }
   ok(!/Saved revision sets/.test(text), "saved sets are not on Today");
   if (sessionId) {
     const first = await page.locator("[data-revise-first]").getAttribute("data-revise-first");
@@ -151,17 +165,66 @@ const contradiction = (t: string) => /Due today[^\n]{0,40}\b\d{1,2} (Jan|Feb|Mar
   await go(page, `${R}?practice=1`);
   ok(!!(await page.locator("#choose-revision").count()), "Practice Questions opens the full choice of what and how");
 
-  // ── priorities: read from My Plan, nothing written ──
-  const planPath = "/api/individual/scholar/study-plan";
-  const before = await page.evaluate(async u => (await fetch(u)).text(), planPath);
+  // ── priorities: read from My Plan, nothing written. Staging fixture only; the plan it had is put back ──
+  const settingsPath = "/api/individual/scholar/plan/settings";
+  const readPlan = () => page.evaluate(async u => { const r = await fetch(u); return { status: r.status, json: await r.json().catch(() => ({})) }; }, settingsPath);
+  const planEvents = async () => {
+    const { SB_URL, SB_KEY } = process.env;
+    const head = { apikey: SB_KEY!, Authorization: `Bearer ${SB_KEY}`, Prefer: "count=exact", Range: "0-0" };
+    const users = await (await fetch(`${SB_URL}/auth/v1/admin/users?per_page=1000`, { headers: head })).json();
+    const id = (users.users ?? []).find((u: { email?: string }) => u.email?.toLowerCase() === field("email").toLowerCase())?.id;
+    if (!id) return null;
+    const r = await fetch(`${SB_URL}/rest/v1/individual_learning_plan_event?user_id=eq.${id}&select=id`, { headers: head });
+    return r.headers.get("content-range");
+  };
+  await go(page, R);
+  const original = await readPlan();
+  record.planRead = { status: original.status, hadPlan: !!original.json.settings };
+  ok(original.status === 200, "the plan can be read");
+  const rows = await page.locator("[data-revise-item], [data-revise-first] h2").allInnerTexts();
+  record.queueBefore = rows.map(t => t.split("\n")[0]);
+  const candidate = (await page.locator("[data-revise-item='retrieval'] p, [data-revise-item='plan'] p").first().innerText().catch(() => "")).trim() || (await page.locator("[data-revise-first] h2").innerText().catch(() => "")).replace(/^Carry on:\s*/, "").trim();
+  const priority = candidate.slice(0, 100);
+  record.priorityUsed = priority;
+  const later = new Date(Date.now() + 20 * 864e5).toISOString().slice(0, 10);
+  const saved = await post(settingsPath, { goalType: "exam", sessionMinutes: 30, daysPerWeek: 5, examDate: later, examLabel: "Walk exam", goal: "Walk goal", priorities: [priority] });
+  ok(saved.status < 300, `a plan with a priority saves on staging (${saved.status})`);
+  const planBefore = JSON.stringify((await readPlan()).json.settings), eventsBefore = await planEvents();
+  await go(page, R);
+  const flagged = await main(page).innerText();
+  ok(flagged.includes("In your priorities"), `a matching queue row says In your priorities (${priority})`);
+  await page.screenshot({ path: join(OUT, "shots/today-priority-1440.png") });
   await go(page, `${R}?view=priorities`);
   const pri = await main(page).innerText();
-  record.priorities = pri.slice(pri.indexOf("What you are working towards"), pri.indexOf("What you are working towards") + 500);
-  ok(pri.includes("What you are working towards") || pri.includes("My Plan is not available"), "My Priorities reads the plan");
-  ok(pri.includes("Coming up in the next 7 days") || pri.includes("My Plan is not available"), "it shows what is coming up");
+  record.priorities = pri.slice(pri.indexOf("What you are working towards"), pri.indexOf("What you are working towards") + 400);
+  ok(pri.includes("What you are working towards"), "My Priorities reads the plan");
+  ok(pri.includes("Walk goal") && pri.includes("Walk exam") && pri.includes("in 20 days"), "it shows the goal, the exam and the days left");
+  const topicLink = page.locator("[data-revise-priority-topics] a", { hasText: priority });
+  ok(!!(await topicLink.count()), "it shows the priority topic");
+  await topicLink.first().click();
+  await page.waitForURL(/topic=/, { timeout: 120_000 });
+  await page.waitForTimeout(6000);
+  ok((await main(page).innerText()).includes(priority), "following a priority topic names it and asks how to revise it");
+  {
+    let sent: Record<string, unknown> | null = null;
+    await page.route("**/api/individual/scholar/revision/sessions", async route => { sent = JSON.parse(route.request().postData() ?? "{}"); await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "stopped by the walk" }) }); });
+    await page.locator("[data-intent='clinical_reasoning']").click();
+    await page.waitForTimeout(1500);
+    const s = sent as { intent?: string; scope?: { kind?: string; topic?: string } } | null;
+    ok(s?.intent === "clinical_reasoning" && s?.scope?.kind === "topic" && s?.scope?.topic === priority, "an intention starts on the priority topic");
+    await page.unroute("**/api/individual/scholar/revision/sessions");
+    await go(page, `${R}?view=priorities`);
+  }
+  ok(pri.includes("Coming up in the next 7 days"), "it shows what is coming up");
   await page.screenshot({ path: join(OUT, "shots/priorities-1440.png"), fullPage: true });
-  const after = await page.evaluate(async u => (await fetch(u)).text(), planPath);
-  ok(before === after, "opening it changes nothing in the plan");
+  ok(JSON.stringify((await readPlan()).json.settings) === planBefore, "opening Revise leaves the plan settings as they were");
+  const eventsAfter = await planEvents();
+  record.planEvents = { before: eventsBefore, after: eventsAfter };
+  ok(eventsBefore !== null && eventsBefore === eventsAfter, `opening Revise records no plan event (${eventsBefore} then ${eventsAfter})`);
+  const restored = original.json.settings
+    ? await post(settingsPath, { ...original.json.settings, confirmIncrease: true })
+    : await post("/api/individual/scholar/study-plan", null, "DELETE");
+  ok(restored.status < 300, `the fixture's plan is put back (${restored.status})`);
 
   // ── insights, and everything still reachable ──
   await go(page, `${R}?view=insights`);

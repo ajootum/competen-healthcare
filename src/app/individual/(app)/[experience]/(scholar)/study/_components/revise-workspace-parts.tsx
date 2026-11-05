@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LearningIcon, learnTone, type LearningIconName } from "@/components/ui/scholar-learning";
+import { LearningIcon, type LearningIconName } from "@/components/ui/scholar-learning";
 import { CATALOGUE_STATUS_LABEL, CONSOLIDATION_LABEL, REVISE_VIEWS, REVISE_VIEW_LABEL, shortDate, type CatalogueRow, type QueueItem, type ReviseView, type StudiedMonth } from "@/lib/individual/scholar/revise-workspace";
 import { sectionLead, toneAction } from "./progress-parts";
 import { StartRevisionButton } from "./revision-client";
@@ -27,7 +27,7 @@ export function ReviseViewNav({ current, carry }: { current: ReviseView | null; 
     </Link>
   );
   return (
-    <nav aria-label="Revise views" className={`${learnTone("next")} -mx-4 mb-2 overflow-x-auto px-4`}>
+    <nav aria-label="Revise views" className="cmp-learn-next -mx-4 mb-2 overflow-x-auto px-4">
       <div className="flex min-w-max items-center gap-1.5">
         {main.map(link)}
         <span aria-hidden className="mx-1 h-6 w-px bg-gray-300" />
@@ -40,9 +40,12 @@ export function ReviseViewNav({ current, carry }: { current: ReviseView | null; 
 /** Direct ways in, small on purpose: they are not sections of the page. */
 export function ReviseShortcuts({ items }: { items: { label: string; href: string }[] }) {
   return (
-    <nav aria-label="Revise shortcuts" className="mb-4 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13.5px]">
-      <span className="text-gray-600">Go straight to</span>
-      {items.map(i => <Link key={i.label} href={i.href} prefetch={false} className={`font-semibold text-gray-900 underline underline-offset-2 hover:opacity-80 pointer-coarse:inline-flex pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:items-center ${focusRing}`}>{i.label}</Link>)}
+    <nav aria-label="Revise shortcuts" className="-mx-4 mb-4 overflow-x-auto px-4 text-[13.5px] md:mx-0 md:overflow-visible md:px-0">
+      {/* One row that scrolls sideways on a phone, so what to do next stays on the first screen. */}
+      <div className="flex min-w-max items-center gap-x-4 gap-y-1 md:min-w-0 md:flex-wrap">
+        <span className="text-gray-600">Go straight to</span>
+        {items.map(i => <Link key={i.label} href={i.href} prefetch={false} className={`shrink-0 font-semibold text-gray-900 underline underline-offset-2 hover:opacity-80 pointer-coarse:inline-flex pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:items-center ${focusRing}`}>{i.label}</Link>)}
+      </div>
     </nav>
   );
 }
@@ -75,11 +78,11 @@ const Status = ({ text, priority }: { text: string; priority: boolean }) => (
 
 /** What needs attention: the first thing large, with why and how to begin. The rest one compact queue, not panels. */
 export function TodayQueue({ items, clear }: { items: QueueItem[]; clear: React.ReactNode }) {
-  if (!items.length) return <section aria-labelledby="queue-h" className={`${learnTone("next")} cmp-learn-box p-4 sm:p-5`}><h2 id="queue-h" className="text-[17px] font-bold text-gray-900">Nothing needs attention right now</h2><div className="mt-1 text-[14px] text-gray-800">{clear}</div></section>;
+  if (!items.length) return <section aria-labelledby="queue-h" className="cmp-learn-next cmp-learn-box p-4 sm:p-5"><h2 id="queue-h" className="text-[17px] font-bold text-gray-900">Nothing needs attention right now</h2><div className="mt-1 text-[14px] text-gray-800">{clear}</div></section>;
   const [first, ...rest] = items;
   return (
     <div className="space-y-3" data-revise-queue>
-      <section aria-labelledby="queue-h" data-revise-first={first.kind} className={`${learnTone("next")} cmp-learn-box p-4 sm:p-5`}>
+      <section aria-labelledby="queue-h" data-revise-first={first.kind} className="cmp-learn-next cmp-learn-box p-4 sm:p-5">
         <p id="queue-h" className="cmp-learn-ink text-[12.5px] font-bold">Start here</p>
         <div className="mt-1 flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
           <div className="min-w-0 flex-1 basis-[18rem]">
@@ -92,7 +95,7 @@ export function TodayQueue({ items, clear }: { items: QueueItem[]; clear: React.
         </div>
       </section>
       {rest.length > 0 && (
-        <section aria-labelledby="queue-rest-h" className={`${learnTone("summary")}`}>
+        <section aria-labelledby="queue-rest-h" className="cmp-learn-summary">
           <h2 id="queue-rest-h" className="mb-1.5 text-[14px] font-bold text-gray-900">Then</h2>
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-gray-200">
             {rest.map(i => (
@@ -121,7 +124,7 @@ export function StudiedMonthView({ v, today }: { v: StudiedMonth; today: string 
   const month = new Date(`${v.month}-15T12:00:00Z`).toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "UTC" });
   const empty = !v.groups.length && !v.unplaced.length;
   return (
-    <section aria-labelledby="month-h" className={`${learnTone("record")} space-y-3`}>
+    <section aria-labelledby="month-h" className="cmp-learn-record space-y-3">
       <div>
         <h2 id="month-h" className="text-[18px] font-bold text-gray-900">Studied in {month}</h2>
         <p className={sectionLead}>Days you answered questions, reviewed cards or worked through a lesson. Uploading a material does not count as studying it.</p>

@@ -3,7 +3,7 @@ import { buildCatalogue, buildStudiedThisMonth, buildTodayQueue, daysLeftLabel, 
 import { retrievalLine, type RetrievalItem } from "./retrieval-schedule";
 import { reviewStateOf } from "./flashcards";
 
-const empty: TodayInput = { resume: [], dueCards: 0, dueCardsHref: "/cards", retrieval: [], repeated: [], weakOffered: true, mistakes: null, mistakesHref: "/m", plan: [], recommended: [], priorities: [] };
+const empty: TodayInput = { resume: [], resumeAllHref: "/all", dueCards: 0, dueCardsHref: "/cards", retrieval: [], repeated: [], weakOffered: true, mistakes: null, mistakesHref: "/m", plan: [], recommended: [], priorities: [] };
 const TODAY = "2026-11-05";
 
 describe("the views", () => {
@@ -60,6 +60,15 @@ describe("the queue", () => {
     expect(q.map(i => i.kind)).toEqual(["resume", "cards", "retrieval", "weak", "mistakes", "plan", "recommended"]);
     expect(q[0].why).toContain("2 of 5 answered");
     expect(q[0].action).toEqual({ kind: "link", href: "/s1", label: "Resume" });
+  });
+  it("gives the two newest unfinished sessions a row each and gathers the rest into one, so they do not fill the queue", () => {
+    const s = (key: string) => ({ key, title: "Quick practice", position: 1, total: 3, lastActiveDay: TODAY, href: `/${key}` });
+    expect(buildTodayQueue({ ...empty, resume: [s("a"), s("b")] }).map(i => i.key)).toEqual(["resume-a", "resume-b"]);
+    const q = buildTodayQueue({ ...empty, dueCards: 1, resume: [s("a"), s("b"), s("c"), s("d")] });
+    expect(q.map(i => i.key)).toEqual(["resume-a", "resume-b", "resume-more", "cards"]);
+    expect(q[2].title).toBe("2 more unfinished sessions");
+    expect(q[2].action).toEqual({ kind: "link", href: "/all", label: "See them all" });
+    expect(buildTodayQueue({ ...empty, resume: [s("a"), s("b"), s("c")] })[2].title).toBe("1 more unfinished session");
   });
   it("says why each thing matters and gives one way to begin", () => {
     for (const i of buildTodayQueue({ ...empty, dueCards: 1, mistakes: 1, repeated: [{ materialTitle: null }] })) {

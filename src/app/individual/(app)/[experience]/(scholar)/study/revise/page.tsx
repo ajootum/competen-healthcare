@@ -29,9 +29,9 @@ import { learnerTimeZone, learnerToday, localDay } from "@/lib/individual/schola
 import { loadToday } from "@/lib/individual/scholar/plan-data";
 import { materialTopics } from "@/lib/individual/scholar/library";
 import { retrievalLine } from "@/lib/individual/scholar/retrieval-schedule";
+import { planRefOfKey } from "@/lib/individual/scholar/plan-today-view";
 import { CATALOGUE_STATUSES, CATALOGUE_STATUS_LABEL, buildCatalogue, buildStudiedThisMonth, buildTodayQueue, daysLeftLabel, filterCatalogue, hasCatalogueFilters, parseCatalogueFilters, parseReviseView, shortDate, type ReviseView } from "@/lib/individual/scholar/revise-workspace";
 import { CatalogueRowView, ReviseShortcuts, ReviseViewNav, StudiedMonthView, TodayQueue, reviseHref } from "../_components/revise-workspace-parts";
-import { learnTone } from "@/components/ui/scholar-learning";
 import { loadRetentionView } from "@/lib/individual/scholar/retention-data";
 import { listTransferChecks } from "@/lib/individual/scholar/store";
 import { TRANSFER_NOTE } from "@/lib/individual/scholar/transfer";
@@ -67,7 +67,7 @@ function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method:
   } catch { return null; }
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string; intent?: string; followUp?: string; view?: string; topic?: string; competency?: string; practice?: string; review?: string; q?: string; m?: string; t?: string; c?: string; status?: string; from?: string; page?: string }> }) {
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string; intent?: string; followUp?: string; view?: string; topic?: string; competency?: string; practice?: string; review?: string; resume?: string; q?: string; m?: string; t?: string; c?: string; status?: string; from?: string; page?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -144,7 +144,11 @@ export default async function Revise({ params, searchParams }: { params: Promise
     today, windowDays: policy.scholarInsightWindowDays, minAnswers: policy.scholarInsightMinAnswers,
     attempts: rows.data.attempts, questions: rows.data.questions, reviews: rows.data.reviews, cards: rows.data.cards, materials: mats,
   }) : null;
-  const active = sessions.ok ? sessions.data.filter(s => s.status === "active" && s.mode !== "adaptive" && !examIds.has(s.id)).slice(0, 5) : [];
+  const active = sessions.ok ? sessions.data.filter(s => s.status === "active" && s.mode !== "adaptive" && !examIds.has(s.id)) : [];
+  const carryOn = [
+    ...active.map(s => ({ key: s.id, title: REVISION_MODE_LABEL[s.mode as RevisionMode] ?? "Revision", position: s.position, total: s.total as number | null, lastActiveAt: s.lastActiveAt, href: `${studyHref("revise")}?session=${s.id}` })),
+    ...examsActive.map(e => ({ key: e.session.id, title: `Adaptive exam: ${e.title}`, position: e.session.position, total: null, lastActiveAt: e.session.lastActiveAt, href: adaptiveHref(e.session.id) })),
+  ].sort((a, b) => b.lastActiveAt.localeCompare(a.lastActiveAt));
 
   // HFE-01 Wave 4 (F10): before there is anything to revise, one message and one action -- not a dashboard of zeros.
   const nothingYet = materials.ok && mats.length === 0 && rows.ok && rows.data.attempts.length === 0
@@ -203,6 +207,29 @@ export default async function Revise({ params, searchParams }: { params: Promise
     ));
   }
 
+  // ── every unfinished session, from the queue's "See them all" ──
+  if (q.resume === "all") {
+    return frame("today", (
+      <section aria-labelledby="carry-h" className="space-y-2" data-revise-resume-all>
+        <p className="text-[14px]"><Link href={withStudy(reviseHref("today"), sid)} className={`font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`}>Back to Today</Link></p>
+        <h2 id="carry-h" className="text-[17px] font-bold text-gray-900">Carry on where you left off</h2>
+        {carryOn.length === 0 ? <p className="text-[14px] text-gray-800">Nothing is unfinished.</p> : (
+          <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-gray-200">
+            {carryOn.map(s => (
+              <li key={s.key} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-3.5 py-3">
+                <div className="min-w-0 flex-1 basis-[14rem]">
+                  <p className="break-words text-[14.5px] font-semibold text-gray-900">{s.title}</p>
+                  <p className="text-[13px] text-gray-700">{s.total === null ? `${s.position} answered` : `${s.position} of ${s.total} answered`}, last worked on {shortDate(localDay(s.lastActiveAt, tz))}.</p>
+                </div>
+                <Link href={s.href} prefetch={false} className={toneAction.secondary}>Resume</Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    ));
+  }
+
   // ── the due cards, on their own: the one queue's "Review cards" ──
   if (q.review === "cards") {
     const cardViews: CardView[] = cards.ok ? cards.data.map(c => ({
@@ -222,7 +249,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
     ));
   }
 
-  const planToday = view === "today" || view === "priorities" ? await loadToday(ctx, policy, { now, tz, today }).catch(() => null) : null;
+  const planToday = view === "today" || view === "priorities" ? await loadToday(ctx, policy, { now, tz, today, readOnly: true }).catch(() => null) : null;
   const plan = planToday?.ok ? planToday : null;
 
   // ── Today ──
@@ -235,17 +262,15 @@ export default async function Revise({ params, searchParams }: { params: Promise
     const later = (retention?.schedule?.due ?? []).filter(i => i.suggestedOn > today);
     const planItems = (plan?.todayItems ?? []).filter(i => (i.kind === "planned" && !!i.href) || (i.kind === "personal" && i.occurrence?.entryType !== "busy" && i.occurrence?.entryType !== "placement"));
     const queue = buildTodayQueue({
-      resume: [
-        ...active.map(s => ({ key: s.id, title: REVISION_MODE_LABEL[s.mode as RevisionMode] ?? "Revision", position: s.position, total: s.total, lastActiveDay: localDay(s.lastActiveAt, tz), href: `${studyHref("revise")}?session=${s.id}` })),
-        ...examsActive.map(e => ({ key: e.session.id, title: `Adaptive exam: ${e.title}`, position: e.session.position, total: null, lastActiveDay: localDay(e.session.lastActiveAt, tz), href: adaptiveHref(e.session.id) })),
-      ],
+      resume: carryOn.map(s => ({ ...s, lastActiveDay: localDay(s.lastActiveAt, tz) })), resumeAllHref: withStudy(reviseHref("today", { resume: "all" }), sid),
       dueCards: cards.ok ? cards.data.length : 0, dueCardsHref: withStudy(reviseHref("today", { review: "cards" }), sid),
       retrieval: dueNow.slice(0, 5).map(i => ({ key: i.topicKey, label: i.label, status: retrievalLine(i, today), why: i.reasons[0], more: [...i.reasons.slice(1), `Rules ${i.rules.join(", ")}.`], href: i.action.href, actionLabel: i.action.label, priorityFlag: i.flags.priority })),
       repeated: (insights?.repeatedDifficulties ?? []).map(d => ({ materialTitle: titles.get(d.materialId) ?? null })),
       weakOffered: policy.scholarRevisionModes.includes("weak"),
       mistakes: toFix?.ok ? toFix.data : null, mistakesHref: withStudy(studyHref("revise/mistakes"), sid),
-      plan: planItems.slice(0, 3).map(i => ({ key: i.key, title: i.title, why: `On your plan for today${i.minutes ? `, about ${i.minutes} min` : ""}.`, href: i.href ?? studyHref("plan") })),
-      recommended: policy.scholarRevisionRecommendations === "on" ? (insights?.recommendations ?? []).filter(r => r.id !== "spaced" && r.id !== "weak").slice(0, 1).map(r => ({
+      // The cards are already one row: a plan activity or suggestion about the same cards would only say it again.
+      plan: planItems.filter(i => !planRefOfKey(i.key)?.startsWith("revise:due") && !/\b(flash)?cards?\b/i.test(i.title)).slice(0, 3).map(i => ({ key: i.key, title: i.title, why: `On your plan for today${i.minutes ? `, about ${i.minutes} min` : ""}.`, href: i.href ?? studyHref("plan") })),
+      recommended: policy.scholarRevisionRecommendations === "on" ? (insights?.recommendations ?? []).filter(r => !["due", "spaced", "weak", "difficult"].includes(r.id)).slice(0, 1).map(r => ({
         key: r.id, title: r.title, why: r.reason,
         action: "learnSection" in r.action ? { kind: "link" as const, href: `${studyHref("learn")}?section=${r.action.learnSection}`, label: "Teach me this" } : { kind: "link" as const, href: withStudy(reviseHref("today", { practice: "1" }), sid), label: "Choose how" },
       })) : [],
@@ -257,7 +282,11 @@ export default async function Revise({ params, searchParams }: { params: Promise
         <TodayQueue items={queue}
           clear={<>{insights && insights.upcoming7 > 0 ? `${insights.upcoming7} ${insights.upcoming7 === 1 ? "card comes" : "cards come"} due in the next 7 days. ` : ""}You can revise anything you like below.</>} />
         {later.length > 0 && <p className="text-[13px] text-gray-700">{later.length} more {later.length === 1 ? "topic is" : "topics are"} placed on a later day, so today stays manageable. See them in <Link href={withStudy(reviseHref("insights"), sid)} className={toneAction.link}>Revision Insights</Link>.</p>}
-        {startForm(false, "Or choose how to revise", null, revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) }))}
+        {(() => {
+          // SCHOLAR-SESSION-AI-02: a study session's focus is chosen already, so the form opens on it, as it always has.
+          const scope = revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) });
+          return startForm(!!scope, "Or choose how to revise", null, scope);
+        })()}
       </div>
     ));
   }
@@ -346,7 +375,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
     const page = Math.min(f.page, shown.pages);
     const pageHref = (n: number) => reviseHref("topics", { q: f.q, m: f.material, t: f.topic, c: f.competency, status: f.status, from: f.from, page: n > 1 ? String(n) : null, study: sid });
     return frame("topics", (
-      <section aria-labelledby="topics-h" className={`${learnTone("sources")} space-y-3`}>
+      <section aria-labelledby="topics-h" className="cmp-learn-sources space-y-3">
         <h2 id="topics-h" className="text-[18px] font-bold text-gray-900">All topics</h2>
         <form method="get" action={studyHref("revise")} className="space-y-2" role="search">
           <input type="hidden" name="view" value="topics" />
