@@ -103,7 +103,7 @@ function Row({ e, notesOn }: { e: ClientEntry; notesOn: boolean }) {
         {/* The title is the row's link: stretched over the row, so the chevron and the whole row open the saved item. */}
         <p className="break-words text-[15px] font-bold leading-snug text-gray-900">
           {e.primary
-            ? <Link href={e.primary.href} prefetch={false} data-link="open" className={`after:absolute after:inset-0 after:rounded-xl hover:underline ${focusRing}`}><span className="sr-only">{e.primary.label}: </span>{e.title}</Link>
+            ? <Link href={e.primary.href} prefetch={false} data-link="open" className={`inline-block after:absolute after:inset-0 after:rounded-xl hover:underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><span className="sr-only">{e.primary.label}: </span>{e.title}</Link>
             : e.title}
         </p>
         <p className="mt-0.5 break-words text-[13px] text-gray-600">

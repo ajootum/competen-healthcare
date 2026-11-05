@@ -56,7 +56,7 @@ Shown at Learn search, library search, the Ask panel, Ask Scholar in a lesson, a
 
 ## For counsel
 
-1. **Lawful basis.** Is this consent, or performance of the service with the choice as a safeguard? The amendment (15) follows the answer.
+1. **Lawful basis.** Is this consent, or performance of the service with the choice as a safeguard? The amendment (15) follows the answer. **Opt-out with notice (v2, `16`) versus opt-in (v1) changes this question.**
 2. **"Not ordinarily visible".** No HQ surface reads this table, and the plane boundary refuses any landlord-plane read of it. Database administration and encrypted backups exist. Is the wording on authorised access right, and should it name who?
 3. **Retention.** The notice states the existing rules and invents no period. See 15, "What exists today".
 4. **Patient details.** Words that look like patient identifiers are screened and not kept, but screening cannot catch everything. Should the notice say so?

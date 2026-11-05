@@ -1,0 +1,74 @@
+PASS A has agreed to AI notice v3, with no history choice
+PASS recording fails: the notice says nothing is being kept
+PASS recording fails: no row
+PASS recording fails: the search form carries no history key
+PASS recording fails: the search still ran and is not kept
+PASS a search before the notice is not kept, even posted directly ({"kept":false,"reason":"off"})
+PASS Learn search, B: the one-time notice, with Keep it on, Turn it off and the link
+PASS Learn search, B: recorded as seen with no click (notified, grant time null)
+PASS the audit row says the notice was shown
+PASS no audit row says it was granted
+PASS once recorded, the same page's search form carries a history key
+PASS after the notice: the search is kept once
+PASS Learn results, the next page: the short notice says on, with its link, and no one-time notice (saw on)
+PASS Learn again, a later visit: the short notice says on, with its link, and no one-time notice (saw on)
+PASS Learn with the short notice at 1440: no horizontal overflow (1440 <= 1440)
+PASS setting: on, because you saw this notice
+PASS the page foot stays accurate
+PASS Keep it on: recorded as granted
+PASS Keep it on: a grant time and notice v2
+PASS Keep it on: the audit row says granted
+PASS setting: on, by their choice
+PASS Learn search, B again: the one-time notice, with Keep it on, Turn it off and the link
+PASS Learn search, B again: recorded as seen with no click (notified, grant time null)
+PASS Turn it off from the notice: recorded as revoked
+PASS Turn it off from the notice: no false grant time
+PASS after Turn it off, the same page: the short notice says off, with its link, and no one-time notice (saw off)
+PASS after Turn it off: no history key
+PASS off, visit 1: the short notice says off, with its link, and no one-time notice (saw off)
+PASS off, visit 1: the row is still revoked, so seeing the page did not turn it on
+PASS off, visit 2: the short notice says off, with its link, and no one-time notice (saw off)
+PASS off, visit 2: the row is still revoked, so seeing the page did not turn it on
+PASS off: a search is not kept
+PASS a notice recorded late cannot overwrite Turn it off ({"ok":true,"state":"off"})
+PASS setting, no choice: says nothing is being kept yet
+PASS opening the setting does not record the notice as seen
+PASS Turn it off from the setting, with no row: recorded
+PASS a v1 opt-in: the short notice says on, with its link, and no one-time notice (saw on)
+PASS a v1 opt-in: the row is unchanged, not moved to v2
+PASS a v1 opt-in: the search form carries a key
+PASS a v1 opt-in: stays on, and the search is kept
+PASS a v1 opt-out: the short notice says off, with its link, and no one-time notice (saw off)
+PASS a v1 opt-out: stays off, and the search is not kept
+PASS a v1 opt-out: the row is unchanged
+PASS 1 Learn search: the one-time notice, with Keep it on, Turn it off and the link
+PASS 1 Learn search: recorded as seen with no click (notified, grant time null)
+PASS 2 Library search: the one-time notice, with Keep it on, Turn it off and the link
+PASS 2 Library search: recorded as seen with no click (notified, grant time null)
+PASS 3 Ask panel: the one-time notice, with Keep it on, Turn it off and the link
+PASS 3 Ask panel: nothing recorded while the recording was held
+PASS 4 Ask Scholar in a lesson: the one-time notice, with Keep it on, Turn it off and the link
+PASS 4 Ask Scholar in a lesson: recorded as seen with no click (notified, grant time null)
+PASS AI help answers with the notice on screen (200)
+PASS AI really ran
+PASS the question, asked after the notice was recorded, is kept once
+PASS asking did not turn seeing the notice into a grant
+PASS 5 Ask about your notes: the one-time notice, with Keep it on, Turn it off and the link
+PASS 5 Ask about your notes: recorded as seen with no click (notified, grant time null)
+PASS A's AI consent row is byte-identical
+PASS B's AI consent row is byte-identical
+PASS Settings shows the same state
+PASS the current supplement is v2, signed out, marked as a draft
+PASS the v1 supplement stays reachable, word for word, marked as earlier
+PASS 820: the coarse pointer is in effect
+PASS My Search History at 820: every target is at least 44 px
+PASS the one-time notice at 820: every target is at least 44 px
+PASS 390: the coarse pointer is in effect
+PASS My Search History at 390: every target is at least 44 px
+PASS the one-time notice at 390: every target is at least 44 px
+PASS at 390: the one-time notice, with Keep it on, Turn it off and the link
+PASS at 390: recorded as seen with no click (notified, grant time null)
+PASS the one-time notice at 390: no horizontal overflow (390 <= 390)
+PASS no application console errors
+PASS no 5xx responses
+ALL PASS -- 73 passed, 0 failed

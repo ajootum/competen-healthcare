@@ -182,7 +182,7 @@ export default async function ExperienceLayout({ children, params }: {
   // Private module development access: the private Scholar modules this person may see, computed once and handed to every navigation surface. Any failure is none.
   const modulesP: Promise<Set<ScholarModuleKey>> | Set<ScholarModuleKey> = scholar ? scholarModulesOnce(shell.ctx.admin, shell.ctx.userId) : new Set<ScholarModuleKey>();
   // My Search History (993): the learner's own choice, once per page, for the notices and for what a page may send. Any failure is off: nothing is kept.
-  const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false }; } })() : { offered: false, on: false };
+  const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false, pending: false }; } })() : { offered: false, on: false, pending: false };
   const [learning, ai, myPlanOn, moduleSet, historyChoice] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP]);
   const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
@@ -220,7 +220,7 @@ export default async function ExperienceLayout({ children, params }: {
         <main id="main" className="min-w-0 flex-1 pb-24 md:pb-10">
           <ShellActionProvider action={action}>
           <AiAvailabilityProvider standing={aiSlim}>
-          <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on }}>
+          <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}>
           <MyPlanNavProvider on={myPlanOn}>
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"

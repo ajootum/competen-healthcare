@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
-import { setConsent } from "@/lib/individual/scholar/store";
+import { recordSearchHistoryNoticeSeen, setConsent } from "@/lib/individual/scholar/store";
+import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { audit } from "@/lib/individual/scholar/http";
 import { CONSENT_AWAITING_LEGAL, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, SEARCH_HISTORY_FEATURE, SEARCH_HISTORY_NOTICE, SEARCH_HISTORY_NOTICE_VERSION } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -19,11 +20,23 @@ export const dynamic = "force-dynamic";
 // their own Professional development needs and plan goals. Granting it needs Professional to be live for them.
 // Migration 993: { feature: "scholar_search_history", grant } is the person's choice to keep new searches and questions in My Search History.
 // Granting it needs HQ to offer it. It never touches the AI help row, and turning it off is always allowed and removes nothing.
+// Migration 994: { feature: "scholar_search_history", seen: true } records that the one-time notice was on the learner's screen. That is NOT a grant: its
+// status is notified, its audit row says notice_shown, and it never overwrites a choice the learner made. It answers with their state, and only that decides.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
   const body = await req.json().catch(() => ({}));
+  if (body?.feature === SEARCH_HISTORY_FEATURE && body?.seen === true) {
+    const policy = await loadIndividualPolicy(ctx.admin);
+    if (policy.scholarSearchHistory !== "on") return NextResponse.json({ error: "My Search History is not offered here." }, { status: 409 });
+    if (!consentDocuments().published) return NextResponse.json({ error: SEARCH_HISTORY_NOTICE.awaitingLegal }, { status: 409 });
+    const seen = await recordSearchHistoryNoticeSeen(ctx.admin, ctx.userId);
+    if (seen === "failed") return NextResponse.json({ error: "My Search History could not start just now. Nothing is being kept." }, { status: 500 });
+    if (seen === "recorded") await audit(ctx, "individual_scholar_consent_notice_shown", "individual_scholar_consent", null, { feature: SEARCH_HISTORY_FEATURE, notice_version: SEARCH_HISTORY_NOTICE_VERSION });
+    const choice = await readSearchHistoryChoice(ctx.admin, ctx.userId, policy);
+    return NextResponse.json({ ok: true, state: choice.unreadable ? "unreadable" : choice.state });
+  }
   if (typeof body?.grant !== "boolean") return NextResponse.json({ error: "Say whether to grant or revoke." }, { status: 400 });
   const cross = body.feature === CROSS_EXPERIENCE_FEATURE;
   const history = body.feature === SEARCH_HISTORY_FEATURE;

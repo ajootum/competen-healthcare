@@ -2,6 +2,8 @@
 
 > **SUBJECT TO LEGAL REVIEW. NOT LEGALLY APPROVED AND NOT PUBLISHED.** Bracketed slots are counsel decisions or owner facts. No period is invented here.
 >
+> **Written for v1 (opt-in). Not updated for v2 (on by default after a notice, `16`), and not published.** The live disclosure is the supplement at `/legal/search-history`.
+>
 > **Authority:** owner decision 5 November 2026, items 4, 5 and 6. **Applies to:** the Competen Individual Privacy Notice published at `/legal` (`draft-2026-10-23`, in `src/lib/legal/interim-drafts.json`) and the Scholar Privacy Notice counsel draft (`04`). Section numbers below are `04`'s. In the published notice the same text goes in §4 Information collected, §8 Artificial intelligence, §10 Private learning, §16 Retention and §17 Deletion and withdrawal.
 
 ## The text to add
