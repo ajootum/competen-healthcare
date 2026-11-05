@@ -4,7 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import type { NbaRecommendation } from "@/lib/individual/scholar/next-best-action";
-import { cardCls, linkBtn, pillOutline, pillPrimary, quietBtn, summaryCls, tagCls, whenChipCls } from "./plan-style";
+import { learnAction, learnBox } from "@/components/ui/scholar-learning";
+import { linkBtn, pillOutline, quietBtn, summaryCls, tagCls, whenChipCls } from "./plan-style";
 import { ErrorLine, callJson, errorOf } from "./plan-ui";
 
 // SALE-2026-11 R3 / SALE-11 -- MY PLAN -> TODAY: NEXT LEARNING ACTIONS (policy scholar_next_best_action, default off).
@@ -15,14 +16,14 @@ import { ErrorLine, callJson, errorOf } from "./plan-ui";
 
 const API = "/api/individual/scholar/plan/next-action";
 
-export function NextActionsCard({ accent, items, canDecide, canPlan, dismissed, snoozed, studyId }: {
-  accent: string; items: NbaRecommendation[]; canDecide: boolean; canPlan: boolean; dismissed: number; snoozed: number; studyId: string | null;
+export function NextActionsCard({ items, canDecide, canPlan, dismissed, snoozed, studyId }: {
+  items: NbaRecommendation[]; canDecide: boolean; canPlan: boolean; dismissed: number; snoozed: number; studyId: string | null;
 }) {
   const uid = useId();
   return (
-    <section aria-labelledby={`${uid}-h`} className={cardCls} data-testid="plan-next-actions">
+    <section aria-labelledby={`${uid}-h`} className={`${learnBox("next")} p-4 sm:p-5`} data-testid="plan-next-actions">
       <div className="flex items-start justify-between gap-3">
-        <h2 id={`${uid}-h`} className="text-[16px] font-bold text-gray-900">Next learning actions</h2>
+        <h2 id={`${uid}-h`} className="cmp-learn-ink text-[16px] font-bold">Next learning actions</h2>
         <span className={tagCls}>Suggested</span>
       </div>
       <p className="mt-1 text-[13.5px] text-gray-700">From your own answers, lessons and cards. Nothing changes in your plan unless you add it.</p>
@@ -30,11 +31,11 @@ export function NextActionsCard({ accent, items, canDecide, canPlan, dismissed, 
         <p className="mt-3 text-[14px] text-gray-700">Nothing to suggest right now.{dismissed + snoozed > 0 ? ` ${hidden(dismissed, snoozed)}` : ""}</p>
       ) : (
         <ol className="mt-3 space-y-3">
-          {items.map((r, i) => <NextAction key={r.ref} r={r} first={i === 0} accent={accent} canDecide={canDecide} canPlan={canPlan} studyId={studyId} />)}
+          {items.map((r, i) => <NextAction key={r.ref} r={r} first={i === 0} canDecide={canDecide} canPlan={canPlan} studyId={studyId} />)}
         </ol>
       )}
-      {items.length > 0 && dismissed + snoozed > 0 && <p className="mt-3 text-[12.5px] text-gray-600">{hidden(dismissed, snoozed)}</p>}
-      {!canDecide && <p className="mt-3 text-[12.5px] text-gray-600">Adding, snoozing and dismissing are not available here yet. You can still start any of these.</p>}
+      {items.length > 0 && dismissed + snoozed > 0 && <p className="mt-3 text-[13px] text-gray-800">{hidden(dismissed, snoozed)}</p>}
+      {!canDecide && <p className="mt-3 text-[13px] text-gray-800">Adding, snoozing and dismissing are not available here yet. You can still start any of these.</p>}
     </section>
   );
 }
@@ -43,7 +44,7 @@ const hidden = (d: number, s: number) =>
   [d ? `${d} dismissed (back if your evidence changes)` : "", s ? `${s} snoozed` : ""].filter(Boolean).join(", ") + ".";
 const withStudy = (href: string, studyId: string | null) => (studyId ? `${href}${href.includes("?") ? "&" : "?"}study=${encodeURIComponent(studyId)}` : href);
 
-function NextAction({ r, first, accent, canDecide, canPlan, studyId }: { r: NbaRecommendation; first: boolean; accent: string; canDecide: boolean; canPlan: boolean; studyId: string | null }) {
+function NextAction({ r, first, canDecide, canPlan, studyId }: { r: NbaRecommendation; first: boolean; canDecide: boolean; canPlan: boolean; studyId: string | null }) {
   const router = useRouter();
   const uid = useId();
   const [busy, setBusy] = useState(false);
@@ -63,7 +64,7 @@ function NextAction({ r, first, accent, canDecide, canPlan, studyId }: { r: NbaR
   }
 
   return (
-    <li className="rounded-xl border border-gray-200 p-3" data-testid="next-action" data-kind={r.kind}>
+    <li className="rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-3" data-testid="next-action" data-kind={r.kind}>
       <div className="flex flex-wrap items-start justify-between gap-2">
         <p className="min-w-0 flex-1 break-words text-[16px] font-bold leading-snug text-gray-900" id={`${uid}-t`}>{r.action}</p>
         <span className={whenChipCls}>{r.minutes} min</span>
@@ -79,7 +80,7 @@ function NextAction({ r, first, accent, canDecide, canPlan, studyId }: { r: NbaR
       </details>
       {r.state === "planned" && <p className="mt-1 text-[13.5px] font-semibold text-gray-900" role="status">In your plan for {r.plannedFor === null ? "today" : r.plannedFor}.</p>}
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        <Link href={withStudy(r.href, studyId)} className={first ? pillPrimary : pillOutline} style={first ? { background: accent } : undefined} aria-describedby={`${uid}-t`}>Start</Link>
+        <Link href={withStudy(r.href, studyId)} className={first ? learnAction.primary : pillOutline} aria-describedby={`${uid}-t`}>Start</Link>
         {canDecide && r.state === "new" && (
           <>
             {canPlan && <button type="button" className={quietBtn} disabled={busy} onClick={() => decide("accept")}>Add to today<span className="sr-only">: {r.action}</span></button>}
