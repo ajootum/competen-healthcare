@@ -195,6 +195,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
   const [save, setSave] = useState<SaveState>({ state: "idle", at: null });
   const prev = useRef(station.durationMinutes * 60);
   const finishing = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
   const dirty = useRef(false);
   const latest = useRef<Record<string, string>>({});
   const tried = useRef(false);
@@ -227,14 +228,21 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
   }, [hasOpenRun, pending, start]);
 
   const saveNow = useCallback(async (keepalive = false) => {
-    if (!attemptId || !dirty.current) return;
+    if (!attemptId || !dirty.current || finishing.current) return;
     dirty.current = false;
     setSave(s => ({ ...s, state: "saving" }));
-    const r = await call(url, { action: "save", responses: latest.current }, "POST", keepalive);
-    if (r.ok) { setSave({ state: "saved", at: r.json.savedAt ?? new Date().toISOString() }); return; }
-    if (r.json.closed) { setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
-    dirty.current = true;
-    setSave(s => ({ state: "failed", at: s.at, note: r.json.error ?? "Not saved just now. Keep writing: it will try again." }));
+    const run = (async () => {
+      const r = await call(url, { action: "save", responses: latest.current }, "POST", keepalive);
+      if (r.ok) { setSave({ state: "saved", at: r.json.savedAt ?? new Date().toISOString() }); return; }
+      // The finish that is under way says what happens next: this reply does not.
+      if (finishing.current) return;
+      if (r.json.closed) { setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
+      dirty.current = true;
+      setSave(s => ({ state: "failed", at: s.at, note: r.json.error ?? "Not saved just now. Keep writing: it will try again." }));
+    })();
+    inFlight.current = run;
+    await run;
+    if (inFlight.current === run) inFlight.current = null;
   }, [attemptId, url]);
 
   // Autosave: shortly after typing stops, on a slow heartbeat while there are unsaved changes, and when the page is hidden.
@@ -262,6 +270,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
     if (finishing.current) return;
     finishing.current = true;
     setBusy(true); setError("");
+    if (inFlight.current) await inFlight.current;
     const r = await call(url, { action: "finish", responses: latest.current, timeUp: byTimer });
     setBusy(false);
     finishing.current = false;

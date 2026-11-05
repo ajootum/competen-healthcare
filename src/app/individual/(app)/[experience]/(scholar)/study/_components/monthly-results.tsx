@@ -25,7 +25,7 @@ const BAND: Record<string, { word: string; glyph: string; chip: string }> = {
   needs_work: { word: "Needs work", glyph: "▼", chip: "border-red-300 bg-red-50 text-red-900" },
 };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export type MonthlyResultsView = {
   month: string;

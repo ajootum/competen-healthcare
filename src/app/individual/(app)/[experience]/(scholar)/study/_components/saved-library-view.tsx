@@ -46,6 +46,7 @@ type Admin = any; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Params = Record<string, string | string[] | undefined>;
 const href = (seg: string) => experienceHref("scholar", seg);
 const EXPORT = "/api/individual/scholar/learn/export";
+const EXPORT_FORM = "saved-lessons-export";
 const ukDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }); };
 const pill = "inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-700";
 const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
@@ -311,7 +312,7 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
       <div className="flex flex-wrap items-start gap-3">
         {c.selectable && (
           <label className="-m-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:min-w-[var(--cmp-touch-min)]">
-            <input type="checkbox" name="selected" value={a.id} aria-label={`Choose ${itemTitle(a, c)} to download`} className="h-5 w-5" />
+            <input type="checkbox" form={EXPORT_FORM} name="selected" value={a.id} aria-label={`Choose ${itemTitle(a, c)} to download`} className="h-5 w-5" />
           </label>
         )}
         <div className="min-w-0 flex-1">
@@ -396,14 +397,15 @@ async function RecentView({ admin, userId, q, titles, policy, notes, topicRows }
   const only = !q.competency && q.status === "any";
   const whole = !only ? null : q.material && !q.topic && !q.from ? `?material=${q.material}` : q.topic && !q.material && !q.from ? `?topic=${encodeURIComponent(q.topic)}` : q.from && q.to && !q.material && !q.topic ? `?from=${q.from}&to=${q.to}` : null;
   return (
-    <form method="get" action={EXPORT} className="mt-3">
-      <div className="mb-2 flex flex-wrap items-center gap-2">
+    <div className="mt-3">
+      {/* The list sits outside the form: each row holds an Ask panel with its own form, and forms cannot nest. The tick boxes join it by id. */}
+      <form id={EXPORT_FORM} method="get" action={EXPORT} className="mb-2 flex flex-wrap items-center gap-2">
         <button type="submit" className={ghost}>Download chosen lessons (PDF, up to 100)</button>
         {whole && <a href={`${EXPORT}${whole}`} download className={ghost}>Download everything this filter shows (PDF)</a>}
-      </div>
+      </form>
       <ul className="space-y-3">{rows.map(a => <ArtefactItem key={a.id} a={a} c={c} />)}</ul>
       <Pager q={q} next={page.data.next} prevFirst={!!q.cursor} />
-    </form>
+    </div>
   );
 }
 

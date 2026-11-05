@@ -108,6 +108,14 @@ export function recallCardOf(q: QuestionRow): QuestionRow | null {
   return null;
 }
 
+/**
+ * Pure. Is this stored attempt the rating of a card? A rating is stored as an attempt AND a review (391), and the review is
+ * the one record of it. A governed library question studied as a card keeps its stored kind `mcq`, and only a rating marks
+ * one self_graded: a multiple-choice answer itself is always marked by code.
+ */
+export const isCardRating = (kind: string, marking: string | null | undefined): boolean =>
+  kind === "flashcard" || (kind === "mcq" && marking === "self_graded");
+
 // ── WHAT A CARD IS, AS EVERY SURFACE (AND THE EXPORTS) READ IT ──
 
 export type CardOrigin = "notes" | "library" | "learner";

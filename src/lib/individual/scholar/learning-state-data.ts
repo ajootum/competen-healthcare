@@ -2,6 +2,7 @@ import { learningExposure, listTransferChecks, masteryEvidence, sessionAttemptId
 import { MASTERY_MAX_ROWS, MASTERY_WINDOW_DAYS } from "./mastery-data";
 import { buildLearningState, type StateEvidence, type StateMarking, type StateTopic, type TopicLearningState, type ExposureRow } from "./learning-state";
 import { isCognitiveLevel } from "./question-intel";
+import { isCardRating } from "./flashcards";
 import { isStatedConfidence, realMisconceptions } from "./learning-need";
 import { isTransferOutside, type TransferOutside } from "./transfer";
 import type { TopicCard } from "./retrieval-schedule";
@@ -79,7 +80,7 @@ export async function readStateInputs(admin: unknown, userId: string, policy: In
     const q = qById.get(a.questionId);
     if (!q) continue;
     // A flashcard rating is stored as an attempt AND a review (391). The review row below is the one record of it: counting both counted one rating twice.
-    if (q.kind === "flashcard") continue;
+    if (isCardRating(q.kind, a.marking)) continue;
     const tr = a.id ? transfer?.get(a.id) ?? null : null;
     const key = place(q.materialId, q.chunkId, tr?.topic ?? q.topic);
     if (!key) continue;
