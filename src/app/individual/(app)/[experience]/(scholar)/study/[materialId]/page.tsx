@@ -148,7 +148,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
 
   return (
     <>
-      <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← My Learning</Link></p>
+      <p className="mb-2 text-[13px]"><Link href={experienceHref("scholar", "study/library")} className={`font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: x.accent }}>← My Learning</Link></p>
       <PageHeader accent={x.accent} eyebrow="Your material" title={m.title}
         intro={`${unit === "section" ? (m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)") : `${FORMAT_LABEL[FORMAT_OF[m.mimeType]]}, ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}`} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
@@ -193,7 +193,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       {!consentOn && (
         <p className="mb-6 rounded-xl border border-gray-200 bg-white px-4 py-3 text-[13.5px] text-gray-700">
           {offMessage}{" "}
-          <Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link>.
+          <Link href={experienceHref("scholar", "study/library")} className={`font-semibold underline ${focusRing}`}>Go to My Learning</Link>.
         </p>
       )}
 

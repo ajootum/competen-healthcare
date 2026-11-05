@@ -1,0 +1,50 @@
+PASS 390: no sideways scroll
+PASS 390: every control reaches 44 px on touch ()
+PASS 390: the three sections, in order
+PASS 390: Continue, then Start, then Materials
+PASS 390: 3 materials shown
+PASS 390: Continue and Start are near the first screen (start button ends at 834)
+PASS 390: no percentage
+PASS 390: rows carry no repeated metadata
+PASS 390: no page or hydration error ()
+PASS Continue names one of the learner's own sessions
+PASS Continue opens that same session
+PASS resuming creates no session
+PASS typing in the field calls no AI
+PASS Start Learning hands the words to Learn
+PASS Learn takes over with those words
+PASS starting calls no AI ()
+PASS starting creates no session
+PASS an empty topic starts nothing
+PASS an empty topic has a route to the materials
+PASS a material opens its own page
+PASS My Library keeps every action it had
+PASS the #upload link still opens the upload form
+PASS View all sessions opens the existing list
+PASS 320: no sideways scroll
+PASS 320: every control reaches 44 px on touch ()
+PASS 320: the three sections, in order
+PASS 320: Continue, then Start, then Materials
+PASS 320: 3 materials shown
+PASS 320: no percentage
+PASS 320: rows carry no repeated metadata
+PASS 320: no page or hydration error ()
+PASS 820: no sideways scroll
+PASS 820: every control reaches 44 px on touch ()
+PASS 820: the three sections, in order
+PASS 820: Continue, then Start, then Materials
+PASS 820: 3 materials shown
+PASS 820: no percentage
+PASS 820: rows carry no repeated metadata
+PASS 820: no page or hydration error ()
+PASS 1440: no sideways scroll
+PASS 1440: every control reaches 44 px on touch ()
+PASS 1440: the three sections, in order
+PASS 1440: Continue, then Start, then Materials
+PASS 1440: 3 materials shown
+PASS 1440: no percentage
+PASS 1440: rows carry no repeated metadata
+PASS 1440: no page or hydration error ()
+PASS the sidebar's My Library opens the library
+PASS no session was created (4 before, 4 after)
+PASS no session changed its step

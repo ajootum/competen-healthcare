@@ -23,7 +23,7 @@ export default async function MyProgrammes({ params }: { params: Promise<{ exper
   const x = SCHOLAR;
   const [chosen, offered] = await Promise.all([learnerProgramme(ctx.admin, ctx.userId), listProgrammes(ctx.admin)]);
   const view = programmesView(chosen, offered);
-  const library = experienceHref("scholar", "study");
+  const library = experienceHref("scholar", "study/library");
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="Courses & Training" title="My Programmes" intro="The programme you follow and the competency frameworks behind it." />

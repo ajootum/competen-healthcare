@@ -46,7 +46,7 @@ export function CompetencySection({ learner, progress, coverage, unreadable, acc
         {!learner.programme ? (
           <StatePanel title={offered === 0 ? "No competency framework is set up for Scholar yet" : "No programme chosen"}>
             <p>{noProgrammeText(offered)}</p>
-            {offered !== 0 && <p><Link href={experienceHref("scholar", "study")} className={`font-semibold underline ${focusRing}`} style={{ color: accent }}>Go to My Learning</Link></p>}
+            {offered !== 0 && <p><Link href={experienceHref("scholar", "study/library")} className={`font-semibold underline ${focusRing}`} style={{ color: accent }}>Go to My Learning</Link></p>}
           </StatePanel>
         ) : unreadable ? <Unreadable what="progress by competency" />
           : progress && progress.totals.competencies === 0 ? (

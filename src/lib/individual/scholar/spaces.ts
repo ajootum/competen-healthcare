@@ -28,8 +28,9 @@ export const SCHOLAR_SPACES: readonly ScholarSpace[] = [
   // PLP-01..04: My Plan is the first tab. It is not a stage of the journey and not a sidebar module; the tab is hidden while HQ has it off.
   { key: "plan", segment: "study/plan", tab: "My Plan", eyebrow: "My Learning", title: "My Plan",
     intro: "One next step, a calendar you control, and a plain view of how you are studying." },
-  { key: "library", segment: "study", tab: "Library", eyebrow: "Your library", title: "My Learning",
-    intro: "Your materials, connected to what you want to learn." },
+  // SCH-HFE-01: /study is the Study Home, which belongs to this space, as a material's own page does; the library itself is study/library.
+  { key: "library", segment: "study/library", tab: "Library", eyebrow: "Your library", title: "My Learning",
+    intro: "Your materials, connected to what you want to learn.", also: ["study"] },
   { key: "learn", segment: "study/learn", tab: "Learn", eyebrow: "Source-grounded study", title: "Learn",
     intro: "Understand your notes. Keep the evidence in view.", also: ["study/saved"] },
   { key: "revise", segment: "study/revise", tab: "Revise", eyebrow: "Recall & retention", title: "Revise",
