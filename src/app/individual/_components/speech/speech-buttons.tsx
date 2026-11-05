@@ -30,6 +30,8 @@ const PLAY = "M6 4l10 6-10 6V4z";
 const PAUSE = "M6 4v12M14 4v12";
 const STOP = "M5 5h10v10H5z";
 const CHEVRON = "M5 8l5 5 5-5";
+const BACK = "M15 5l-7 5 7 5V5zM5 5v10";
+const FORWARD = "M5 5l7 5-7 5V5zM15 5v10";
 const MIC = "M10 2.5a2.5 2.5 0 00-2.5 2.5v5a2.5 2.5 0 005 0V5A2.5 2.5 0 0010 2.5zM4.5 9.5a5.5 5.5 0 0011 0M10 15v2.5M7 17.5h6";
 
 /** Space held until the page knows what the browser can do, so a control appearing never moves what is around it. */
@@ -38,7 +40,8 @@ const Placeholder = ({ w }: { w: string }) => <span aria-hidden="true" className
 /* ------------------------------------------------------------------ Listen */
 
 /**
- * "Listen": play / pause / resume the text, stop, and a small menu for the speed (0.8 / 1 / 1.2 / 1.5) and the voice.
+ * "Listen": play / pause / resume the text, stop, and a small menu for the speed (0.8 / 1 / 1.2 / 1.5) and the voice. While reading, Back and Forward
+ * move one sentence and a slider moves to any sentence: the voice is the device's own, so there is no audio file to seek by the second.
  * `text` is the raw lesson or answer text: citation markers and markdown are removed before it is spoken. One reading at a
  * time on the page; reading stops when this control leaves the page.
  */
@@ -54,6 +57,10 @@ export function ReadAloudButton({ text, label = "Listen", about, className = "" 
   const [voiceURI, setVoice] = useVoiceChoice();
   const voices = useVoices();
   const [open, setOpen] = useState(false);
+  // Where the slider is being moved to: reading follows when it stops moving, so dragging does not restart the voice at every step.
+  const [moving, setMoving] = useState<number | null>(null);
+  const moveTimer = useRef<number | null>(null);
+  useEffect(() => () => { if (moveTimer.current !== null) window.clearTimeout(moveTimer.current); }, []);
   const menuId = useId();
   const wrap = useRef<HTMLDivElement>(null);
   const trigger = useRef<HTMLButtonElement>(null);
@@ -72,7 +79,14 @@ export function ReadAloudButton({ text, label = "Listen", about, className = "" 
   if (support === null) return <Placeholder w="w-[12rem]" />;
   if (!support.synthesis || !enabled) return null;
 
-  const speakable = chunkForSpeech(text).length > 0;
+  const sentences = chunkForSpeech(text);
+  const speakable = sentences.length > 0;
+  const shownAt = moving ?? ra.state.index;
+  const moveTo = (i: number) => {
+    setMoving(i);
+    if (moveTimer.current !== null) window.clearTimeout(moveTimer.current);
+    moveTimer.current = window.setTimeout(() => { moveTimer.current = null; ra.seek(i); setMoving(null); }, 300);
+  };
   const subject = about ? ` ${about}` : "";
   const main = status === "speaking" ? "Pause" : status === "paused" ? "Resume" : label;
   const onMain = () => (status === "speaking" ? ra.pause() : status === "paused" ? ra.resume() : ra.play(text));
@@ -96,6 +110,17 @@ export function ReadAloudButton({ text, label = "Listen", about, className = "" 
         <button type="button" onClick={ra.stop} aria-label={`Stop reading${subject}`} className={base}>
           <Icon d={STOP} fill />Stop
         </button>
+      )}
+      {status !== "idle" && ra.state.total > 1 && (
+        <div className="flex basis-full flex-wrap items-center gap-1.5" role="group" aria-label={`Position in the reading${subject}`}>
+          <button type="button" onClick={ra.back} disabled={ra.state.index <= 0} aria-label="Back one sentence" className={base}><Icon d={BACK} fill />Back</button>
+          <button type="button" onClick={ra.forward} disabled={ra.state.index >= ra.state.total - 1} aria-label="Forward one sentence" className={base}>Forward<Icon d={FORWARD} fill /></button>
+          <input type="range" min={1} max={ra.state.total} step={1} value={shownAt + 1} onChange={e => moveTo(Number(e.target.value) - 1)}
+            aria-label="Move to a sentence" aria-valuetext={`Sentence ${shownAt + 1} of ${ra.state.total}`}
+            className={`${touch} min-w-[8rem] flex-1 cursor-pointer ${focusRing}`} />
+          <span className="text-[12.5px] tabular-nums text-gray-700">Sentence {shownAt + 1} of {ra.state.total}</span>
+          {moving !== null && sentences[moving] && <p className="basis-full truncate text-[12.5px] text-gray-700">{sentences[moving]}</p>}
+        </div>
       )}
       <span role="status" aria-live="polite" className="cmp-sr-only">
         {status === "speaking" ? `Reading${subject}.` : status === "paused" ? "Paused." : ""}

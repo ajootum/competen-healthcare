@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { DictationEngine, DictationFieldWriter, ReadAloudEngine, type RecognitionEnv, type SynthEnv } from "./speech-engine";
+import { CHUNK_MAX } from "./speech";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
@@ -14,19 +15,98 @@ function mockSynth(voices: any[] = [{ name: "gb", lang: "en-GB", voiceURI: "gb" 
   return { env, spoken, cancels: () => cancels, last: () => spoken[spoken.length - 1] };
 }
 
+describe("ReadAloudEngine: fewer pauses, skip and seek", () => {
+  const three = "One is short. Two is short too. Three is short as well.";
+  it("speaks several sentences in one utterance, up to the limit, and counts sentences", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play(three);
+    expect(m.spoken).toHaveLength(1);
+    expect(m.last().text).toBe(three);
+    expect(e.getState()).toMatchObject({ status: "speaking", index: 0, total: 3 });
+    m.last().onend();
+    expect(m.spoken).toHaveLength(1);
+    expect(e.getState().status).toBe("idle");
+  });
+  it("never makes an utterance longer than the limit", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play(Array.from({ length: 30 }, (_, i) => `This is sentence number ${"x".repeat(i % 3 + 1)} of the long text.`).join(" "));
+    while (e.getState().status === "speaking") { expect(m.last().text.length).toBeLessThanOrEqual(CHUNK_MAX); m.last().onend(); }
+    expect(m.spoken.length).toBeGreaterThan(1);
+  });
+  it("runs longer on a voice stored on the device, and keeps the short limit on an online one", () => {
+    const text = Array.from({ length: 12 }, (_, i) => `Sentence ${"x".repeat(i + 1)} of this long lesson has about sixty characters in it.`).join(" ");
+    const local = mockSynth([{ name: "gb", lang: "en-GB", voiceURI: "gb", localService: true }]);
+    new ReadAloudEngine(local.env).play(text);
+    expect(local.last().text.length).toBeGreaterThan(CHUNK_MAX);
+    expect(local.last().text.length).toBeLessThanOrEqual(900);
+    const online = mockSynth([{ name: "gb", lang: "en-GB", voiceURI: "gb", localService: false }]);
+    new ReadAloudEngine(online.env).play(text);
+    expect(online.last().text.length).toBeLessThanOrEqual(CHUNK_MAX);
+  });
+  it("joins a heading with no full stop so it is still read as its own phrase", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play("Oxygen therapy\n\nGive it with care.");
+    expect(m.last().text).toBe("Oxygen therapy. Give it with care.");
+  });
+  it("moves the position with word boundaries, and resumes in the later sentence", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play(three);
+    m.last().onboundary({ name: "word", charIndex: three.indexOf("short too") });
+    expect(e.getState().index).toBe(1);
+    e.pause(); e.resume();
+    expect(m.last().text.startsWith("short too.")).toBe(true);
+  });
+  it("forward and back move one sentence, and stop at the ends", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play(three);
+    e.back();
+    expect(e.getState().index).toBe(0);
+    e.forward();
+    expect(e.getState().index).toBe(1);
+    expect(m.last().text.startsWith("Two is short too.")).toBe(true);
+    e.forward(); e.forward();
+    expect(e.getState().index).toBe(2);
+    e.back();
+    expect(e.getState().index).toBe(1);
+  });
+  it("seek goes to a sentence, and a cancelled utterance ending does not move it on", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play(three);
+    const old = m.last();
+    e.seek(2);
+    expect(m.last().text).toBe("Three is short as well.");
+    old.onend();
+    expect(e.getState()).toMatchObject({ status: "speaking", index: 2 });
+    e.seek(99);
+    expect(e.getState().index).toBe(2);
+  });
+  it("seek while paused stays paused and reads from there on resume", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.play(three);
+    e.pause();
+    const n = m.spoken.length;
+    e.seek(1);
+    expect(m.spoken).toHaveLength(n);
+    expect(e.getState()).toMatchObject({ status: "paused", index: 1 });
+    e.resume();
+    expect(m.last().text.startsWith("Two is short too.")).toBe(true);
+  });
+  it("seek does nothing when not reading", () => {
+    const m = mockSynth(); const e = new ReadAloudEngine(m.env);
+    e.seek(3);
+    expect(m.spoken).toHaveLength(0);
+    expect(e.getState().status).toBe("idle");
+  });
+});
+
 describe("ReadAloudEngine", () => {
   const long = "First sentence here. Second sentence follows.\n\nThird paragraph begins. And ends.";
-  it("speaks sentence by sentence and ends idle", () => {
+  it("speaks the sentences together, across a paragraph, counts them, and ends idle", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
     e.play(long);
     expect(e.getState()).toEqual({ status: "speaking", index: 0, total: 4 });
     expect(m.spoken).toHaveLength(1);
-    expect(m.last().text).toBe("First sentence here.");
-    m.last().onend();
-    expect(e.getState()).toMatchObject({ status: "speaking", index: 1 });
-    expect(m.last().text).toBe("Second sentence follows.");
-    m.last().onend(); m.last().onend();
-    expect(e.getState()).toMatchObject({ status: "speaking", index: 3 });
+    expect(m.last().text).toBe("First sentence here. Second sentence follows. Third paragraph begins. And ends.");
     m.last().onend();
     expect(e.getState().status).toBe("idle");
   });
@@ -37,17 +117,17 @@ describe("ReadAloudEngine", () => {
     expect(m.last().voice.voiceURI).toBe("gb");
     expect(m.last().lang).toBe("en-GB");
   });
-  it("pause with no word boundary reported restarts only the current sentence", () => {
+  it("pause with no word boundary reported restarts from where the position last moved", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
-    e.play(long); m.last().onend();
+    e.play(long);
     e.pause();
-    expect(e.getState()).toMatchObject({ status: "paused", index: 1 });
+    expect(e.getState()).toMatchObject({ status: "paused", index: 0 });
     const stale = m.last();
     e.resume();
-    expect(m.spoken).toHaveLength(3);
+    expect(m.spoken).toHaveLength(2);
     expect(m.last().text).toBe(stale.text);
     stale.onend(); // the cancelled utterance's late event must change nothing
-    expect(e.getState()).toMatchObject({ status: "speaking", index: 1 });
+    expect(e.getState()).toMatchObject({ status: "speaking", index: 0 });
   });
   it("pause after a word boundary resumes from that word, not the sentence start", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
@@ -59,14 +139,13 @@ describe("ReadAloudEngine", () => {
     e.pause();
     expect(e.getState()).toMatchObject({ status: "paused", index: 0 });
     e.resume();
-    expect(m.last().text).toBe("was given fluids and antibiotics.");
+    expect(m.last().text).toBe("was given fluids and antibiotics. Then she slept.");
     // A second pause counts boundaries relative to the shortened utterance.
     m.last().onboundary({ name: "word", charIndex: 4 });
     e.pause(); e.resume();
-    expect(m.last().text).toBe("given fluids and antibiotics.");
-    m.last().onend(); // finishing the remainder moves to the next sentence
-    expect(e.getState()).toMatchObject({ status: "speaking", index: 1 });
-    expect(m.last().text).toBe("Then she slept.");
+    expect(m.last().text).toBe("given fluids and antibiotics. Then she slept.");
+    m.last().onend(); // finishing the utterance finishes the reading
+    expect(e.getState().status).toBe("idle");
   });
   it("ignores boundary events from a cancelled utterance", () => {
     const m = mockSynth(); const e = new ReadAloudEngine(m.env);
