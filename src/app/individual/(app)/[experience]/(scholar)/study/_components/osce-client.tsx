@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
+import { learnAction } from "@/components/ui/scholar-learning";
 import type { RecoveryMode } from "@/lib/individual/policy";
 import { studyHref } from "./question-view";
 import { carry, studyField } from "./study-active";
@@ -29,10 +30,10 @@ import { AskAbout } from "./ask-panel";
 
 const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
+const btn = learnAction.primary;
+const ghost = learnAction.secondary;
 const field = `w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const card = "rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4 md:p-5";
+const card = "cmp-learn-practice cmp-learn-box p-4 md:p-5";
 
 type Json = Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
 async function call(url: string, body?: unknown, method = "POST", keepalive = false): Promise<{ ok: boolean; status: number; json: Json }> {
@@ -98,7 +99,7 @@ export function OsceCreate(props: {
   const ready = source === "library" ? !!libraryPick : source === "template" ? !!template : source === "competency" ? !!competency : !!material && !props.aiNote;
   return (
     <section aria-labelledby="osce-new-h" className={card}>
-      <h2 id="osce-new-h" className="text-[16px] font-bold text-gray-900">New practice station</h2>
+      <h2 id="osce-new-h" className="cmp-learn-ink text-[16px] font-bold">New practice station</h2>
       <fieldset className="mt-3">
         <legend className="text-[13px] font-semibold text-gray-800">Where the station comes from</legend>
         <div className="mt-2 grid gap-2 md:grid-cols-2">
@@ -155,7 +156,7 @@ export function OsceCreate(props: {
           <RecoveryFlow key={recovery.key} request={recovery.body} onDismiss={() => setRecovery(null)} />
         </div>
       )}
-      <button type="button" onClick={create} disabled={busy || !ready} className={`mt-4 ${btn}`} style={{ background: accent }}>{busy ? "Preparing…" : "Make the station"}</button>
+      <button type="button" onClick={create} disabled={busy || !ready} className={`mt-4 ${btn}`}>{busy ? "Preparing…" : "Make the station"}</button>
     </section>
   );
 }
@@ -195,6 +196,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
   const [save, setSave] = useState<SaveState>({ state: "idle", at: null });
   const prev = useRef(station.durationMinutes * 60);
   const finishing = useRef(false);
+  const inFlight = useRef<Promise<void> | null>(null);
   const dirty = useRef(false);
   const latest = useRef<Record<string, string>>({});
   const tried = useRef(false);
@@ -227,14 +229,21 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
   }, [hasOpenRun, pending, start]);
 
   const saveNow = useCallback(async (keepalive = false) => {
-    if (!attemptId || !dirty.current) return;
+    if (!attemptId || !dirty.current || finishing.current) return;
     dirty.current = false;
     setSave(s => ({ ...s, state: "saving" }));
-    const r = await call(url, { action: "save", responses: latest.current }, "POST", keepalive);
-    if (r.ok) { setSave({ state: "saved", at: r.json.savedAt ?? new Date().toISOString() }); return; }
-    if (r.json.closed) { setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
-    dirty.current = true;
-    setSave(s => ({ state: "failed", at: s.at, note: r.json.error ?? "Not saved just now. Keep writing: it will try again." }));
+    const run = (async () => {
+      const r = await call(url, { action: "save", responses: latest.current }, "POST", keepalive);
+      if (r.ok) { setSave({ state: "saved", at: r.json.savedAt ?? new Date().toISOString() }); return; }
+      // The finish that is under way says what happens next: this reply does not.
+      if (finishing.current) return;
+      if (r.json.closed) { setChecklist(r.json.checklist ?? null); setTimeUp(!!r.json.timeUp); setPhase("check"); return; }
+      dirty.current = true;
+      setSave(s => ({ state: "failed", at: s.at, note: r.json.error ?? "Not saved just now. Keep writing: it will try again." }));
+    })();
+    inFlight.current = run;
+    await run;
+    if (inFlight.current === run) inFlight.current = null;
   }, [attemptId, url]);
 
   // Autosave: shortly after typing stops, on a slow heartbeat while there are unsaved changes, and when the page is hidden.
@@ -262,6 +271,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
     if (finishing.current) return;
     finishing.current = true;
     setBusy(true); setError("");
+    if (inFlight.current) await inFlight.current;
     const r = await call(url, { action: "finish", responses: latest.current, timeUp: byTimer });
     setBusy(false);
     finishing.current = false;
@@ -321,7 +331,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
 
   return (
     <section aria-labelledby="osce-run-h" className={card}>
-      <h2 id="osce-run-h" className="text-[16px] font-bold text-gray-900">
+      <h2 id="osce-run-h" className="cmp-learn-ink text-[16px] font-bold">
         {phase === "brief" ? "The station" : phase === "running" ? "In the station" : phase === "check" ? "Check yourself against the checklist" : "Your practice result"}
       </h2>
       <OsceLabel />
@@ -335,7 +345,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
           <p><span className="font-semibold">Scenario. </span>{station.scenario}</p>
           <p><span className="font-semibold">Your task. </span>{station.candidateInstructions}</p>
           <p className="text-[13px] text-gray-600">{station.durationMinutes} minutes. You write under: {station.sections.join(", ")}. Your writing is saved as you go. The checklist and the guidance are shown after the station, as in an OSCE.</p>
-          <button type="button" onClick={start} disabled={busy} className={btn} style={{ background: accent }}>{busy ? (hasOpenRun ? "Resuming…" : "Starting…") : hasOpenRun ? "Resume my run" : "Start the station"}</button>
+          <button type="button" onClick={start} disabled={busy} className={btn}>{busy ? (hasOpenRun ? "Resuming…" : "Starting…") : hasOpenRun ? "Resume my run" : "Start the station"}</button>
         </div>
       )}
 
@@ -399,7 +409,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
               </li>
             ))}
           </ol>
-          <button type="button" onClick={mark} disabled={busy || unmarked > 0 || !items.length} className={btn} style={{ background: accent }}>
+          <button type="button" onClick={mark} disabled={busy || unmarked > 0 || !items.length} className={btn}>
             {unmarked > 0 ? `Mark every item (${unmarked} left)` : busy ? "Saving…" : "Save my marks"}
           </button>
         </div>

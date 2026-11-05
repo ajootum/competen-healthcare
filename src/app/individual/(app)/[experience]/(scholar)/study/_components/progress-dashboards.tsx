@@ -17,6 +17,7 @@ import { loadStageSide } from "@/lib/assessment/adapters/scholar/progression-rea
 import type { OverviewCompetency } from "@/lib/assessment/adapters/scholar/competency-overview-model";
 import type { CatalogueCompetency } from "@/lib/individual/scholar/catalogue";
 import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
+import { PhoneFold } from "./phone-fold";
 import { CompetencyTable, CountBar, GoalCard, GoalChip, OverTime, StatusChip, Tile, evaluateHref, snapshotWhen, type CompetencyRow, type GoalCardData } from "./evaluate-parts";
 import { EvaluationView } from "./evaluation-view";
 import { toneAction } from "./progress-parts";
@@ -141,7 +142,7 @@ export async function OverviewDashboard({ ctx, policy, o, due }: { ctx: Ctx; pol
       </section>
       <div className="grid gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
         <section aria-labelledby="ov-activity-h" className={box}>
-          <h3 id="ov-activity-h" className="text-[15px] font-bold text-gray-900">Learning activity over time</h3>
+          <PhoneFold summary={<h3 id="ov-activity-h" className="inline text-[15px] font-bold text-gray-900">Learning activity over time</h3>}>
           <p className="text-[12.5px] text-gray-700">Answers given each week. Study activity, not a measure of competence.</p>
           {trend.some(w => w.attempts > 0) ? (
             <ol className="mt-2 flex h-28 items-end gap-1.5" aria-label="Answers by week">
@@ -154,6 +155,7 @@ export async function OverviewDashboard({ ctx, policy, o, due }: { ctx: Ctx; pol
               ))}
             </ol>
           ) : <p className="mt-2 text-[13px] text-gray-700">No activity recorded in the last 8 weeks.</p>}
+          </PhoneFold>
         </section>
         <section aria-labelledby="ov-conf-h" className={box} data-evidence-confidence>
           <h3 id="ov-conf-h" className="text-[15px] font-bold text-gray-900">Evidence confidence</h3>
@@ -170,15 +172,16 @@ export async function OverviewDashboard({ ctx, policy, o, due }: { ctx: Ctx; pol
         </section>
         <div className="space-y-3">
           <section aria-labelledby="ov-cov-h" className={box}>
-            <h3 id="ov-cov-h" className="text-[15px] font-bold text-gray-900">Reading and revision coverage</h3>
-            <div className="mt-2 space-y-2.5">
-              {cov && <CountBar label="Sections with activity" have={cov.sections.worked} of={cov.sections.total} />}
-              {cov && materials.ok && <CountBar label="Materials with activity" have={cov.materials} of={Math.max(materials.data.length, cov.materials)} />}
-            </div>
-            <p className="mt-2 text-[12.5px] text-gray-700">Activity does not establish that material was understood or retained.</p>
+            <PhoneFold summary={<h3 id="ov-cov-h" className="inline text-[15px] font-bold text-gray-900">Reading and revision coverage</h3>}>
+              <div className="mt-2 space-y-2.5">
+                {cov && <CountBar label="Sections with activity" have={cov.sections.worked} of={cov.sections.total} />}
+                {cov && materials.ok && <CountBar label="Materials with activity" have={cov.materials} of={Math.max(materials.data.length, cov.materials)} />}
+              </div>
+              <p className="mt-2 text-[12.5px] text-gray-700">Activity does not establish that material was understood or retained.</p>
+            </PhoneFold>
           </section>
           <section aria-labelledby="ov-fw-h" className={box} data-framework-coverage>
-            <h3 id="ov-fw-h" className="text-[15px] font-bold text-gray-900">Competency framework coverage</h3>
+            <PhoneFold summary={<h3 id="ov-fw-h" className="inline text-[15px] font-bold text-gray-900">Competency framework coverage</h3>}>
             {catalogue.length ? (
               <dl className="mt-2 grid grid-cols-3 gap-2 text-center">
                 <div><dd className="text-[20px] font-bold tabular-nums text-gray-900">{catalogue.length}</dd><dt className="text-[12px] text-gray-700">In your framework</dt></div>
@@ -187,6 +190,7 @@ export async function OverviewDashboard({ ctx, policy, o, due }: { ctx: Ctx; pol
               </dl>
             ) : <p className="mt-1 text-[13px] text-gray-800">No framework is applied yet. Your learning is still reported here.</p>}
             <p className="mt-2 text-[12.5px] text-gray-700">Framework evidence, not verified competence.</p>
+            </PhoneFold>
           </section>
         </div>
       </div>

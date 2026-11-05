@@ -108,7 +108,7 @@ function EvidenceList({ evidence, prefix }: { evidence: EvidenceView[]; prefix: 
                         : e.title}
                   </p>
                   <p className="text-[12px] text-gray-600">
-                    {e.citation}{e.kind === "web" && e.retrievedAt ? ` · retrieved ${new Date(e.retrievedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}` : ""}
+                    {e.citation}{e.kind === "web" && e.retrievedAt ? ` · retrieved ${new Date(e.retrievedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}` : ""}
                     {e.kind === "web" && !e.published ? " · no publication date shown" : ""}
                   </p>
                   {e.excerpt && e.excerpt !== e.title && <p className="mt-1 text-[12.5px] leading-relaxed text-gray-700">“{e.excerpt.slice(0, 400)}{e.excerpt.length > 400 ? "…" : ""}”</p>}
@@ -144,7 +144,7 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
     <div className="mt-4 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-app-bg)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900"><span aria-hidden>✦</span>{a.recovered ? `${RECOVERY_EXPLANATION_LABEL}. Not an answer key or a mark.` : "Suggested answer, written by AI from the evidence below. Not an answer key or a mark."}</p>
-        <span className="text-[11.5px] text-gray-500">{new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {a.model}</span>
+        <span className="text-[11.5px] text-gray-500">{new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })} · {a.model}</span>
       </div>
       {attempted && (
         <>
@@ -272,7 +272,7 @@ function QuestionCard({ q, saved, choice, onSaved }: { q: PaperQuestionView; sav
   }
   const attempted = !!option || !!text.trim();
   return (
-    <li id={`q-${q.number}`} className={`rounded-2xl border bg-white p-5 ${q.leadIn ? "border-dashed border-gray-300" : "border-gray-200"}`}>
+    <li id={`q-${q.number}`} className={`cmp-learn-practice rounded-2xl border bg-[var(--cmp-app-surface)] p-5 ${q.leadIn ? "border-dashed border-gray-300" : "border-[var(--learn-border)]"}`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="text-[16px] font-bold text-gray-900">{q.leadIn ? `Question ${q.number}: shared information` : `Question ${q.number}`}</h3>
         <span className="text-[12px] text-gray-500">{[q.marks !== null ? `${q.marks} mark${q.marks === 1 ? "" : "s"}` : null, q.pages].filter(Boolean).join(" · ")}</span>
@@ -317,8 +317,8 @@ export function PaperStudy({ questions, saved, choice: initial, webDepths }: {
   const [choice, setChoice] = useState(initial);
   return (
     <>
-      <section aria-labelledby="ev-h" className="mb-5 rounded-2xl border border-gray-200 bg-white p-5">
-        <h2 id="ev-h" className="text-[16px] font-bold text-gray-900">Evidence for suggested answers</h2>
+      <section aria-labelledby="ev-h" className="mb-5 cmp-learn-sources cmp-learn-box p-5">
+        <h2 id="ev-h" className="cmp-learn-ink text-[16px] font-bold">Evidence for suggested answers</h2>
         <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-[14px] text-gray-800">
           <label className="flex min-h-[36px] items-center gap-2"><input type="checkbox" checked={choice.notes} onChange={e => setChoice({ ...choice, notes: e.target.checked })} /> Your notes</label>
           <label className="flex min-h-[36px] items-center gap-2"><input type="checkbox" checked={choice.library} onChange={e => setChoice({ ...choice, library: e.target.checked })} /> Competen library</label>
@@ -416,15 +416,15 @@ export function PaperActions({ materialId, guides }: { materialId: string; guide
     if (r.ok) router.push(experienceHref("scholar", "study/apply")); else setMsg(r.json.error ?? "It could not be removed.");
   }
   return (
-    <section aria-labelledby="guide-h" className="mt-6 rounded-2xl border border-gray-200 bg-white p-5">
-      <h2 id="guide-h" className="text-[16px] font-bold text-gray-900">Revision guide</h2>
+    <section aria-labelledby="guide-h" className="mt-6 cmp-learn-notes cmp-learn-box p-5">
+      <h2 id="guide-h" className="cmp-learn-ink text-[16px] font-bold">Revision guide</h2>
       <p className="mt-1 text-[14px] text-gray-600">A short guide written from the suggested answers you have revealed and their evidence.</p>
       <button type="button" className={`${ghost} mt-3`} disabled={busy || guideOff} aria-describedby={guideOff ? "guide-why" : undefined} onClick={guide}>{busy ? "Writing…" : guides.length ? "Write a new guide" : "Write a revision guide"}</button>
       {teach && !teach.available && <AiUnavailableNote id="guide-why" reason={teach.reason} experience="scholar" className="mt-2" />}
       {msg && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{msg}</p>}
       {guides.slice(0, 1).map(g => (
-        <div key={g.id} className="mt-4 rounded-xl bg-[var(--cmp-app-bg)] p-4">
-          <p className="text-[12px] text-gray-500">Saved {new Date(g.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · AI-written from your saved answers</p>
+        <div key={g.id} className="mt-4 rounded-xl bg-[var(--cmp-app-surface)] p-4 ring-1 ring-[var(--learn-border)]">
+          <p className="text-[12px] text-gray-500">Saved {new Date(g.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })} · AI-written from your saved answers</p>
           <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed text-gray-800"><Cited text={g.text} prefix={`g-${g.id.slice(0, 8)}`} /></p>
         </div>
       ))}

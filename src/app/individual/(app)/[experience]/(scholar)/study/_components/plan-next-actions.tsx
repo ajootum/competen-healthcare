@@ -16,14 +16,19 @@ import { ErrorLine, callJson, errorOf } from "./plan-ui";
 
 const API = "/api/individual/scholar/plan/next-action";
 
-export function NextActionsCard({ items, canDecide, canPlan, dismissed, snoozed, studyId }: {
+export function NextActionsCard({ items, canDecide, canPlan, dismissed, snoozed, studyId, title = "Next learning actions", collapseAfter }: {
   items: NbaRecommendation[]; canDecide: boolean; canPlan: boolean; dismissed: number; snoozed: number; studyId: string | null;
+  title?: string;
+  /** Show this many, with the rest one tap away (a screen where the suggestions are not the main task). */
+  collapseAfter?: number;
 }) {
+  const shown = collapseAfter === undefined ? items : items.slice(0, collapseAfter);
+  const more = collapseAfter === undefined ? [] : items.slice(collapseAfter);
   const uid = useId();
   return (
     <section aria-labelledby={`${uid}-h`} className={`${learnBox("next")} p-4 sm:p-5`} data-testid="plan-next-actions">
       <div className="flex items-start justify-between gap-3">
-        <h2 id={`${uid}-h`} className="cmp-learn-ink text-[16px] font-bold">Next learning actions</h2>
+        <h2 id={`${uid}-h`} className="cmp-learn-ink text-[16px] font-bold">{title}</h2>
         <span className={tagCls}>Suggested</span>
       </div>
       <p className="mt-1 text-[13.5px] text-gray-700">From your own answers, lessons and cards. Nothing changes in your plan unless you add it.</p>
@@ -31,8 +36,16 @@ export function NextActionsCard({ items, canDecide, canPlan, dismissed, snoozed,
         <p className="mt-3 text-[14px] text-gray-700">Nothing to suggest right now.{dismissed + snoozed > 0 ? ` ${hidden(dismissed, snoozed)}` : ""}</p>
       ) : (
         <ol className="mt-3 space-y-3">
-          {items.map((r, i) => <NextAction key={r.ref} r={r} first={i === 0} canDecide={canDecide} canPlan={canPlan} studyId={studyId} />)}
+          {shown.map((r, i) => <NextAction key={r.ref} r={r} first={i === 0} canDecide={canDecide} canPlan={canPlan} studyId={studyId} />)}
         </ol>
+      )}
+      {more.length > 0 && (
+        <details className="mt-3" data-next-more>
+          <summary className={summaryCls}>Show {more.length} more</summary>
+          <ol className="mt-2 space-y-3">
+            {more.map(r => <NextAction key={r.ref} r={r} first={false} canDecide={canDecide} canPlan={canPlan} studyId={studyId} />)}
+          </ol>
+        </details>
       )}
       {items.length > 0 && dismissed + snoozed > 0 && <p className="mt-3 text-[13px] text-gray-800">{hidden(dismissed, snoozed)}</p>}
       {!canDecide && <p className="mt-3 text-[13px] text-gray-800">Adding, snoozing and dismissing are not available here yet. You can still start any of these.</p>}

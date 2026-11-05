@@ -508,7 +508,7 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
 
 const OUTCOME_LABEL: Record<string, string> = { correct: "what the case calls for", partial: "partly", incorrect: "not what the case calls for", unmarked: "not marked" };
 const BASIS_LABEL: Record<string, string> = { rubric_error: "the rubric was wrong", key_error: "the answer key was wrong", marking_error: "it was marked wrongly", other: "reviewed" };
-const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }); };
+const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }); };
 
 /** SCHOLAR-CASE-INTEGRITY-01: the finished attempt is kept as it was completed, and any correction is shown beside the original. */
 function AttemptRecord({ a }: { a: Attempt }) {

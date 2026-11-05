@@ -25,7 +25,7 @@ export function LibraryRows({ rows }: { rows: LibraryRow[] }) {
   return (
     <ul>
       {rows.map(r => (
-        <li key={r.id} className="border-b border-gray-200 py-[18px] first:pt-0 last:border-b-0 last:pb-0">
+        <li key={r.id} className="border-b border-[var(--learn-border)] py-[18px] first:pt-0 last:border-b-0 last:pb-0">
           <div className="flex flex-wrap items-center gap-4">
             <span aria-hidden className="grid h-[54px] w-11 shrink-0 place-items-center rounded-[5px] bg-[var(--cmp-theme-soft)] text-[11px] font-extrabold" style={{ color: SCHOLAR.accent }}>{r.tile}</span>
             <div className="min-w-0 flex-1">
@@ -58,12 +58,12 @@ export function LibraryBrowser({ groups, actions, empty }: { groups: LibraryGrou
         <div className="flex flex-wrap gap-2.5">{actions}</div>
       </div>
       {total === 0 ? empty : (
-        <section aria-label="Your materials" className="mb-5 rounded-2xl border border-gray-200 bg-white p-6">
+        <section aria-label="Your materials" className="mb-5 cmp-learn-notes cmp-learn-box p-4 sm:p-6">
           {shown.length === 0 ? <p className="text-[15px] text-gray-600">No materials match your search.</p> : (
             <div className="space-y-6">
               {shown.map(g => (
                 <div key={g.key}>
-                  {g.name && <h2 className="mb-3 text-[12px] font-extrabold uppercase tracking-[0.14em] text-gray-500">{g.name}</h2>}
+                  {g.name && <h2 className="cmp-learn-ink mb-3 text-[12px] font-extrabold uppercase tracking-[0.14em]">{g.name}</h2>}
                   <LibraryRows rows={g.rows} />
                 </div>
               ))}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MONTHLY_STANDING_LINE, monthLabel } from "@/lib/individual/scholar/monthly-review";
+import { LearningSection, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { evaluationHref, studyHref } from "./question-view";
 
 // SCHOLAR-MONTHLY-REVIEW-01 -- the Monthly learning review panel on Evaluate. For this month (and last month while it is still
@@ -13,8 +14,8 @@ import { evaluationHref, studyHref } from "./question-view";
 // ⚠ ONE WORD AND ONE GLYPH PER STATE, never colour alone. One column, 44px targets (48px on a coarse pointer).
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[48px] ${focusRing}`;
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[48px] ${focusRing}`;
+const btn = learnAction.primary;
+const ghost = learnAction.secondary;
 
 export type ReviewRowView = { id: string; createdAt: string; late: boolean };
 export type MonthPanelView = {
@@ -30,7 +31,7 @@ const STATE: Record<MonthPanelView["state"], { word: string; glyph: string }> = 
 };
 
 /** Start (or retake) one month: ask the server for the sitting, then open it in Revise to be taken. Notes are shown first when there is something to say. */
-function StartReview({ month, retakeOf, label, primary, accent }: { month: string; retakeOf?: string; label: string; primary: boolean; accent: string }) {
+function StartReview({ month, retakeOf, label, primary }: { month: string; retakeOf?: string; label: string; primary: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -49,14 +50,14 @@ function StartReview({ month, retakeOf, label, primary, accent }: { month: strin
   }
   return (
     <div>
-      <button type="button" className={primary ? btn : ghost} style={primary ? { background: accent } : undefined} disabled={busy} onClick={start}>{busy ? "Preparing…" : label}</button>
+      <button type="button" className={primary ? btn : ghost} disabled={busy} onClick={start}>{busy ? "Preparing…" : label}</button>
       {busy && <p role="status" className="mt-2 text-[13px] text-gray-600">Preparing your review. Where new questions are needed this can take a minute or two; you can keep this page open.</p>}
       {error && <p role="alert" className="mt-2 text-[13.5px] font-semibold text-red-800">{error}</p>}
       {ready && (
-        <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
+        <div role="status" className={`mt-3 ${learnBox("next")} p-4`}>
           <p className="text-[14px] font-semibold text-gray-900">Your review is ready: {plural(ready.asked, "question")}{ready.asked < ready.planned ? ` (planned ${ready.planned})` : ""}.</p>
           <ul className="mt-1 list-disc space-y-0.5 pl-5 text-[13px] text-gray-800">{ready.notes.map(n => <li key={n}>{n}</li>)}</ul>
-          <p className="mt-2"><Link href={ready.href} className={`${btn} no-underline`} style={{ background: accent }}>Begin the review</Link></p>
+          <p className="mt-2"><Link href={ready.href} className={`${btn} no-underline`}>Begin the review</Link></p>
         </div>
       )}
     </div>
@@ -87,19 +88,16 @@ function OptOut({ optedOut }: { optedOut: boolean }) {
 
 export type NudgeView = { month: string; recommended: string; late: boolean };
 
-export function MonthlyReviewPanel({ panels, nudges, optedOut, canOptOut, reminders, currentMonth, accent }: {
-  panels: MonthPanelView[]; nudges: NudgeView[]; optedOut: boolean; canOptOut: boolean; reminders: boolean; currentMonth: string; accent: string;
+export function MonthlyReviewPanel({ panels, nudges, optedOut, canOptOut, reminders, currentMonth }: {
+  panels: MonthPanelView[]; nudges: NudgeView[]; optedOut: boolean; canOptOut: boolean; reminders: boolean; currentMonth: string; accent?: string;
 }) {
   return (
-    <section aria-labelledby="mr-h" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="mr-h" className="text-[15px] font-bold text-gray-900">Monthly learning review</h2>
-        <span className="rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-800">{MONTHLY_STANDING_LINE}</span>
-      </div>
+    <LearningSection tone="check" icon="record" level={2} headingId="mr-h" caps={false} title="Monthly learning review"
+      trailing={<span className="rounded-full border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-2.5 py-0.5 text-[12px] font-semibold text-gray-800">{MONTHLY_STANDING_LINE}</span>}>
       <p className="mt-1 text-[13px] text-gray-700">A short, balanced test of what you actually studied in a month: questions from those sections, your earlier gaps and scenarios, with feedback at the end. Optional: nothing waits on it.</p>
 
       {reminders && !optedOut && nudges.length > 0 && (
-        <p role="status" className="mt-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-[13.5px] text-amber-900">
+        <p role="status" className={`mt-3 ${learnBox("next")} p-3 text-[13.5px] text-gray-900`}>
           <span aria-hidden="true">★ </span><span className="font-semibold">Reminder: </span>
           {nudges.map(n => `your ${monthLabel(n.month)} review is open${n.late ? " (late)" : ` (recommended around ${day(n.recommended)})`}`).join(" and ")}. It is optional.
         </p>
@@ -117,7 +115,7 @@ export function MonthlyReviewPanel({ panels, nudges, optedOut, canOptOut, remind
             {panels.map(p => {
               const s = STATE[p.state];
               return (
-                <article key={p.month} aria-labelledby={`mr-${p.month}`} className="rounded-xl border border-gray-200 p-3 sm:p-4">
+                <article key={p.month} aria-labelledby={`mr-${p.month}`} className="rounded-xl bg-[var(--cmp-app-surface)] p-3 ring-1 ring-[var(--learn-border)] sm:p-4">
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
                     <h3 id={`mr-${p.month}`} className="text-[14px] font-bold text-gray-900">{monthLabel(p.month)}{p.month === currentMonth ? " (this month)" : ""}</h3>
                     <span className="inline-flex items-center gap-1 rounded-full border border-gray-300 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-800"><span aria-hidden="true">{s.glyph}</span>{s.word}</span>
@@ -132,11 +130,11 @@ export function MonthlyReviewPanel({ panels, nudges, optedOut, canOptOut, remind
                   {reminders && p.state === "ready" && !p.late && <p className="mt-1 text-[13px] text-gray-700">Recommended around {day(p.recommended)}.</p>}
 
                   <div className="mt-3 flex flex-wrap items-start gap-2">
-                    {p.state === "ready" && <StartReview month={p.month} label="Start the review" primary accent={accent} />}
-                    {p.state === "in_progress" && p.resumeHref && <Link href={p.resumeHref} className={`${btn} no-underline`} style={{ background: accent }}>Resume the review</Link>}
-                    {p.state === "in_progress" && <StartReview month={p.month} label="Start again" primary={false} accent={accent} />}
-                    {p.state === "done" && p.original && <Link href={evaluationHref(p.original.id)} className={`${btn} no-underline`} style={{ background: accent }}>See results</Link>}
-                    {p.state === "done" && p.original && <StartReview month={p.month} retakeOf={p.original.id} label="Practice retake" primary={false} accent={accent} />}
+                    {p.state === "ready" && <StartReview month={p.month} label="Start the review" primary />}
+                    {p.state === "in_progress" && p.resumeHref && <Link href={p.resumeHref} className={`${btn} no-underline`}>Resume the review</Link>}
+                    {p.state === "in_progress" && <StartReview month={p.month} label="Start again" primary={false} />}
+                    {p.state === "done" && p.original && <Link href={evaluationHref(p.original.id)} className={`${btn} no-underline`}>See results</Link>}
+                    {p.state === "done" && p.original && <StartReview month={p.month} retakeOf={p.original.id} label="Practice retake" primary={false} />}
                   </div>
                   {p.state === "done" && p.original && (
                     <div className="mt-2 text-[12.5px] text-gray-700">
@@ -155,6 +153,6 @@ export function MonthlyReviewPanel({ panels, nudges, optedOut, canOptOut, remind
           {canOptOut && <div className="mt-3"><OptOut optedOut={false} /></div>}
         </>
       )}
-    </section>
+    </LearningSection>
   );
 }

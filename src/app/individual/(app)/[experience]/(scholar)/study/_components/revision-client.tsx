@@ -292,7 +292,7 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
         {sets.map(s => (
           <li key={s.id} className={`flex flex-wrap items-center justify-between gap-2 ${whiteCard} px-3 py-2`}>
             <span className="min-w-0 flex-1 text-[14px]"><span className="font-semibold text-gray-900">{s.title}</span>
-              <span className="text-[13px] text-gray-700"> · {s.questions} question{s.questions === 1 ? "" : "s"}{s.lastUsedAt ? ` · last ${new Date(s.lastUsedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span></span>
+              <span className="text-[13px] text-gray-700"> · {s.questions} question{s.questions === 1 ? "" : "s"}{s.lastUsedAt ? ` · last ${new Date(s.lastUsedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}` : ""}</span></span>
             <span className="flex gap-2">
               <button type="button" className={ghost} disabled={!!busy} onClick={() => replay(s.id)}>{busy === s.id ? "Starting…" : "Revise again"}</button>
               <button type="button" className={ghost} disabled={!!busy} onClick={() => remove(s.id)} aria-label={`Remove ${s.title}`}>{busy === `d${s.id}` ? "Removing…" : "Remove"}</button>
@@ -851,7 +851,7 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
 }
 
 const OUTCOME_WORD = { correct: "correct", partial: "partly correct", incorrect: "not correct" } as const;
-const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "an earlier date"; };
+const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "an earlier date"; };
 
 /** Revise engine quality 2.5: a different question on what was just missed. The server chooses or writes it, and never repeats this one. */
 function FollowUpButton({ questionId }: { questionId: string }) {

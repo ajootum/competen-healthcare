@@ -61,7 +61,12 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
       await finishOsceAttempt(ctx.admin, ctx.userId, attempt.id, { responses: attempt.responses, finishedAt: new Date(now).toISOString(), durationSeconds: run.durationSeconds, timeUp: true });
       return NextResponse.json({ error: "Time was up, so the run was finished with what was last saved.", closed: true, timeUp: true, checklist: checklistView(snap.checklist) }, { status: 409 });
     }
-    if (!(await saveOsceProgress(ctx.admin, ctx.userId, attempt.id, responses))) return NextResponse.json({ error: "Not saved just now. Keep writing: it will try again." }, { status: 500 });
+    if (!(await saveOsceProgress(ctx.admin, ctx.userId, attempt.id, responses))) {
+      // A finish landed between the read above and this write: the run closed, and nothing failed.
+      const now = await getOsceAttempt(ctx.admin, ctx.userId, attempt.id);
+      if (now && (now.status !== "in_progress" || now.finishedAt)) return NextResponse.json({ error: "This run is no longer open.", closed: true, ...(now.finishedAt ? { timeUp: now.timeUp, checklist: checklistView(snap.checklist) } : {}) }, { status: 409 });
+      return NextResponse.json({ error: "Not saved just now. Keep writing: it will try again." }, { status: 500 });
+    }
     return NextResponse.json({ saved: true, savedAt: new Date().toISOString() });
   }
 
@@ -72,6 +77,9 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
   }
 
   if (body?.action === "finish") {
+    // The same finish twice, or a finish after the time-up save closed the run: the run is finished, so the reply says so.
+    const alreadyFinished = (a: typeof attempt) => NextResponse.json({ finished: true, durationSeconds: a.durationSeconds, timeUp: a.timeUp, checklist: checklistView(snap.checklist) });
+    if (attempt.finishedAt && !attempt.ticks) return alreadyFinished(attempt);
     if (attempt.finishedAt || attempt.status !== "in_progress") return NextResponse.json({ error: "This run has already finished." }, { status: 409 });
     // What the browser sends, or (nothing sent, for example after a reload at the bell) what was last autosaved.
     const responses = body?.responses && typeof body.responses === "object" ? normaliseResponses(body.responses, snap.sections) : attempt.responses;
@@ -84,7 +92,12 @@ export async function POST(req: Request, ctx2: { params: Promise<{ id: string }>
     const ok = await finishOsceAttempt(ctx.admin, ctx.userId, attempt.id, {
       responses, finishedAt: new Date(finished).toISOString(), durationSeconds: run.durationSeconds, timeUp: run.timeUp || body?.timeUp === true,
     });
-    if (!ok) return NextResponse.json({ error: "What you wrote could not be saved. Copy it somewhere safe and try again." }, { status: 500 });
+    if (!ok) {
+      // Another request finished the run between the read above and this write: nothing was lost that was not already kept.
+      const now = await getOsceAttempt(ctx.admin, ctx.userId, attempt.id);
+      if (now?.finishedAt && !now.ticks) return alreadyFinished(now);
+      return NextResponse.json({ error: "What you wrote could not be saved. Copy it somewhere safe and try again." }, { status: 500 });
+    }
     // The checklist reaches the browser only now, with the run finished (never in the brief or during the run).
     return NextResponse.json({ finished: true, durationSeconds: run.durationSeconds, timeUp: run.timeUp || body?.timeUp === true, checklist: checklistView(snap.checklist) });
   }

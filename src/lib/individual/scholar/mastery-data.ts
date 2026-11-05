@@ -1,6 +1,7 @@
 import { masteryEvidence, type MappingRow, type Read } from "./store";
 import { buildMastery, type MasteryEvidence, type MasteryLevel, type MasteryMarking, type MasteryResult } from "./mastery";
 import { isCognitiveLevel } from "./question-intel";
+import { isCardRating } from "./flashcards";
 import type { IndividualPolicy } from "../policy";
 
 // ── MASTERY: THE READ ── SCHOLAR-COMPANION-01 P1 ──────────────────────────────────────────────────────────────
@@ -68,7 +69,7 @@ export async function loadMastery(admin: unknown, userId: string, policy: Indivi
     const q = qById.get(a.questionId);
     if (!q) continue;
     // A flashcard rating is stored as an attempt AND a review (391). The review row below is the one record of it: counting both counted one rating twice.
-    if (q.kind === "flashcard") continue;
+    if (isCardRating(q.kind, a.marking)) continue;
     // SALE-2026-11 R1: a check kept without a mark (950 `unmarked`) is not an answer to count: before this it read as an app-marked wrong one.
     if (a.marking === "unmarked") continue;
     evidence.push({
