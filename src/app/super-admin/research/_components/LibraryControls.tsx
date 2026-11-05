@@ -103,6 +103,53 @@ export function BulkLibraryActions({ rows, canRetire }: { rows: BulkRow[]; canRe
   );
 }
 
+export type ReviewRow = { versionId: string; title: string; code: string };
+const REVIEW_MAX = 50;
+
+/**
+ * Bulk educator review: tick the drafts you have read (or select all on screen, up to REVIEW_MAX), confirm the exact
+ * count, and each is recorded exactly as the single "I have reviewed this content" click does, one by one. Clinical
+ * review decisions are never here.
+ */
+export function BulkEducatorReview({ rows }: { rows: ReviewRow[] }) {
+  const router = useRouter();
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [out, setOut] = useState<{ ok: boolean; text: string; failed: { title: string; error: string }[] } | null>(null);
+  const shown = rows.slice(0, REVIEW_MAX);
+  const picked = shown.filter(r => chosen.includes(r.versionId));
+  async function run() {
+    if (!picked.length) return;
+    if (!window.confirm(`Record your educator review of ${picked.length} item${picked.length === 1 ? "" : "s"}? Each is recorded as if you had reviewed it on its own.`)) return;
+    setBusy(true); setOut(null);
+    try {
+      const res = await fetch(EP, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "bulk_review", ids: picked.map(r => r.versionId) }) });
+      const j = await res.json().catch(() => ({}));
+      if (!Array.isArray(j?.results)) { setOut({ ok: false, text: j?.error ?? "That could not be done. Nothing has changed.", failed: [] }); return; }
+      const byId = new Map(picked.map(r => [r.versionId, r.title]));
+      const failed = (j.results as { id: string; ok: boolean; error?: string }[]).filter(x => !x.ok).map(x => ({ title: byId.get(x.id) ?? x.id, error: x.error ?? "Refused." }));
+      setOut({ ok: j.done > 0, text: `${j.done} of ${j.of} reviews recorded.${failed.length ? " Those recorded stay recorded." : ""}`, failed });
+      setChosen([]);
+      router.refresh();
+    } catch { setOut({ ok: false, text: "That could not be done. Check your connection.", failed: [] }); } finally { setBusy(false); }
+  }
+  if (!rows.length) return <p className="text-[12.5px] text-gray-600">No draft is waiting for your review.</p>;
+  return (
+    <div className="space-y-2 text-[12.5px]">
+      <p className="text-gray-600">{rows.length} draft{rows.length === 1 ? "" : "s"} not yet educator-reviewed. At most {REVIEW_MAX} at a time{rows.length > REVIEW_MAX ? `: the first ${REVIEW_MAX} are listed, the rest after these are done` : ""}. Each is recorded exactly as when reviewed on its own; one refusal does not stop the others. Clinical review is separate and stays individual.</p>
+      <label className="flex items-center gap-2"><input type="checkbox" checked={picked.length === shown.length} onChange={e => setChosen(e.target.checked ? shown.map(r => r.versionId) : [])} /> Select all ({shown.length})</label>
+      <ul className="max-h-56 overflow-y-auto rounded-lg border border-gray-200 p-1" aria-label="Drafts to review">{shown.map(r => (
+        <li key={r.versionId}><label className="flex items-center gap-2 px-1 py-0.5"><input type="checkbox" checked={chosen.includes(r.versionId)}
+          onChange={e => setChosen(e.target.checked ? [...chosen, r.versionId] : chosen.filter(x => x !== r.versionId))} />{r.title} <code className="text-gray-600">{r.code}</code></label></li>))}</ul>
+      <button type="button" className={primary} disabled={busy || !picked.length} onClick={run}>{busy ? "Working…" : `I have reviewed the selected content (${picked.length})`}</button>
+      {out && <div role={out.ok ? "status" : "alert"} className={out.ok ? "text-[var(--cmp-text-success)]" : "text-[var(--cmp-text-critical)]"}>
+        <p>{out.text}</p>
+        {out.failed.length > 0 && <ul className="ml-4 list-disc text-[var(--cmp-text-critical)]">{out.failed.map((f, i) => <li key={i}>{f.title}: {f.error}</li>)}</ul>}
+      </div>}
+    </div>
+  );
+}
+
 /**
  * Bulk draft import (owner decision 4 Nov, item 2). Pastes a JSON list of { code, title, fields, competencyIds? } -- the
  * same fields the "New resource" form sends -- and, for an AI-assisted batch, its model and prompt version. Every item

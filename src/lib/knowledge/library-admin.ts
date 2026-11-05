@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createResource, newVersion, publishVersion, retireVersion, setCompetencies, submitDraft } from "./educator";
+import { createResource, newVersion, publishVersion, retireVersion, reviewDraft, setCompetencies, submitDraft } from "./educator";
 import { listProgrammesForHq } from "@/lib/individual/programme-admin";
 
 // ── HQ QUESTION LIBRARY: PICKER OPTIONS AND BULK ACTIONS ── SQIE-CLOSE-2026-11 WS-E (owner directive s4) ──────────────────
@@ -122,6 +122,20 @@ export async function runBulk(admin: any, me: string, action: BulkAction, ids: r
       : action === "bulk_publish" ? await publishVersion(admin, me, id)
       : await retireVersion(admin, me, id, reason);
     out.push(r?.ok ? { id, ok: true, ...(r.versionId ? { versionId: r.versionId } : {}) } : { id, ok: false, error: r?.error ?? "That could not be done." });
+  }
+  return out;
+}
+
+/**
+ * Bulk educator review: each version id goes through reviewDraft, the function the single "I have reviewed this content"
+ * click uses (the ckri_knowledge_review RPC, which enforces the educator, the draft and the content hash). Same cap as the
+ * other bulk actions; a refusal is reported for that item and never undoes or stops the others.
+ */
+export async function runBulkReview(admin: any, me: string, ids: readonly string[]): Promise<BulkResult[]> {
+  const out: BulkResult[] = [];
+  for (const id of ids) {
+    const r: any = await reviewDraft(admin, me, id);
+    out.push(r?.ok ? { id, ok: true } : { id, ok: false, error: r?.error ?? "That could not be done." });
   }
   return out;
 }

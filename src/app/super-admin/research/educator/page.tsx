@@ -14,7 +14,7 @@ import { fieldsFromQuestionContent } from "@/lib/knowledge/question-format";
 import { listLearnerOffers } from "@/lib/knowledge/learner-offers";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { loadCompetencyOptions, loadProgrammeOptions } from "@/lib/knowledge/library-admin";
-import { CompetencyPicker, ImportDrafts } from "../_components/LibraryControls";
+import { BulkEducatorReview, CompetencyPicker, ImportDrafts } from "../_components/LibraryControls";
 
 // /super-admin/research/educator -- CKRI educator knowledge improvement (COMPETEN-KNOWLEDGE-RESEARCH-01 K3, migration 442).
 // Guarded by hq.learning.ckri.educator. Only the measures the published policy releases to educators, as suppressed
@@ -119,6 +119,7 @@ export default async function EducatorKnowledgePage({ searchParams }: { searchPa
         <h2 id="r-h" className="text-[15px] font-bold text-gray-900">Knowledge resources</h2>
         <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">New resource</summary><div className="mt-2"><NewResource programmes={programmes} /></div></details>
         <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Import revision questions as drafts</summary><div className="mt-2"><ImportDrafts /></div></details>
+        <details className="mb-2"><summary className="cursor-pointer text-[13px] font-semibold text-teal-800">Review several drafts at once</summary><div className="mt-2"><BulkEducatorReview rows={(resources ?? []).flatMap(r => r.versions.filter(v => v.state === "draft" && !v.educatorReviewed).map(v => ({ versionId: v.id, title: r.title, code: r.code })))} /></div></details>
         {!resources ? <p role="alert" className="text-[13px] text-[var(--cmp-text-critical)]">Resources could not be read.</p>
           : resources.length === 0 ? <p className="text-[13px] text-gray-600">None yet.</p> : (
           <ul className="divide-y divide-gray-100 text-[13px]">{resources.map(r => {

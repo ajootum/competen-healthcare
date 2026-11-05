@@ -5,7 +5,7 @@ import { currentTraceId } from "@/lib/trace";
 import { CKRI_OFF, ckriEnabled } from "@/lib/knowledge/governance";
 import { createResource, moveNeed, newVersion, publishVersion, raiseNeed, retireResource, retireVersion, reviewDraft, saveDraft, setCompetencies, submitDraft } from "@/lib/knowledge/educator";
 import { declineLearnerOffer, takeLearnerOffer } from "@/lib/knowledge/learner-offers";
-import { BULK_ACTIONS, bulkIds, importDrafts, importItems, importProvenance, loadCompetencyOptions, pickableCompetencies, runBulk, type BulkAction } from "@/lib/knowledge/library-admin";
+import { BULK_ACTIONS, bulkIds, importDrafts, importItems, importProvenance, loadCompetencyOptions, pickableCompetencies, runBulk, runBulkReview, type BulkAction } from "@/lib/knowledge/library-admin";
 
 // Request-time only: it reads the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -20,7 +20,7 @@ export const dynamic = "force-dynamic";
 // Clinical approval is NOT here: it is /api/hq/clinical-review (hq.quality.clinical.approve) and the 442 trigger.
 // ⚠ NOTHING THE BROWSER SENDS PICKS AN AUTHOR, A REVIEWER, AN ORIGIN, A STATE OR EVIDENCE. Every action is audited.
 
-const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "submit", "offer_take", "offer_decline", "bulk_submit", "bulk_replace", "bulk_import"] as const;
+const EDUCATOR = ["need_raise", "need_move", "resource_create", "draft_save", "version_new", "competencies_set", "review", "bulk_review", "submit", "offer_take", "offer_decline", "bulk_submit", "bulk_replace", "bulk_import"] as const;
 const PUBLISH = ["publish", "retire", "retire_version", "bulk_retire", "bulk_publish"] as const;
 const str = (v: unknown, max = 200) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
@@ -47,6 +47,20 @@ export async function POST(req: Request) {
     for (const x of results) if (x.versionId) await ctx.admin.from("audit_log").insert({
       trace_id: trace, actor_id: me, actor_name: ctx.fullName ?? null, action: "ckri_bulk_import", entity_type: "ckri_knowledge_version", entity_id: x.versionId,
       new_value: { action, code: x.code, ok: x.ok, origin: ai ? "ai_draft" : "educator", of: results.length },
+    }).then((y: unknown) => y, () => {});
+    const done = results.filter(x => x.ok).length;
+    return NextResponse.json({ ok: done > 0, done, of: results.length, results }, { status: done > 0 ? 200 : 409 });
+  }
+  if (action === "bulk_review") {
+    // Educator review only (hq.learning.ckri.educator, checked above). Each item is the single "review" action run in
+    // turn, and records the single action's own audit row (ckri_review): one refusal never undoes the others.
+    const ids = bulkIds(body?.ids);
+    if (!ids.ok) return NextResponse.json({ error: ids.error }, { status: 400 });
+    const results = await runBulkReview(ctx.admin, me, ids.ids);
+    const trace = await currentTraceId();
+    for (const x of results) if (x.ok) await ctx.admin.from("audit_log").insert({
+      trace_id: trace, actor_id: me, actor_name: ctx.fullName ?? null, action: "ckri_review", entity_type: "ckri_knowledge_version", entity_id: x.id,
+      new_value: { action: "review" },
     }).then((y: unknown) => y, () => {});
     const done = results.filter(x => x.ok).length;
     return NextResponse.json({ ok: done > 0, done, of: results.length, results }, { status: done > 0 ? 200 : 409 });
