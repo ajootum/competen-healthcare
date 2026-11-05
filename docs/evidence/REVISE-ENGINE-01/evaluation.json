@@ -1,0 +1,109 @@
+{
+  "wrong": {
+    "text": "Because the hospital needs the paperwork completed for billing.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": false,
+    "score": 0,
+    "right": [],
+    "missing": [
+      "detect and treat problems early",
+      "prevent the development of unnecessary complications"
+    ],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "full1": {
+    "text": "So that we catch issues and deal with them before they get worse, and so that avoidable complications never develop.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": true,
+    "score": 1,
+    "right": [
+      "catching issues and dealing with them before they get worse (detect and treat problems early)",
+      "avoidable complications never develop (prevent unnecessary complications)"
+    ],
+    "missing": [],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "full2": {
+    "text": "You pick up trouble at an early stage and act on it, which stops complications that need not have happened.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": true,
+    "score": 1,
+    "right": [
+      "detecting problems early and acting on them",
+      "preventing unnecessary complications"
+    ],
+    "missing": [],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "half": {
+    "text": "So that we catch issues and deal with them at an early stage.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": false,
+    "score": 0.5,
+    "right": [
+      "detect and treat problems early"
+    ],
+    "missing": [
+      "prevent the development of unnecessary complications"
+    ],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "half2": {
+    "text": "An injury to a patient that was caused by their medical treatment.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": false,
+    "score": 0.5,
+    "right": [
+      "injury caused by medical management (treatment)"
+    ],
+    "missing": [
+      "the injury must be caused instead of (not by) the underlying disease"
+    ],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "unsafe": {
+    "text": "You do not need to reassess. Ignore any changes, withhold escalation and do not tell the team, because the patient will settle on their own.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": false,
+    "score": 0,
+    "right": [],
+    "missing": [
+      "Detect and treat problems early",
+      "prevent unnecessary complications"
+    ],
+    "safety": "Clinically unsafe answer",
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "other": {
+    "text": "Harm that comes from the treatment or its complications, and not from the illness the patient came in with.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": true,
+    "score": 1,
+    "right": [
+      "harm comes from treatment or its complications",
+      "not from the underlying illness"
+    ],
+    "missing": [],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  }
+}

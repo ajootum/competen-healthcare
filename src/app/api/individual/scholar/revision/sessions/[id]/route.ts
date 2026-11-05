@@ -80,10 +80,15 @@ export async function PATCH(req: Request, ctx2: { params: Promise<{ id: string }
   const answeredIds = new Set(l.s.attempts.map(a => a.questionId));
   const done = view({ ...l.s, session: { ...l.s.session, status: "completed" } }, l.questions, true, await questionLinks(ctx.admin, ctx.userId, l.questions.filter(q => answeredIds.has(q.id))));
   const marked = l.s.attempts;
+  // A flashcard (or any card in a flashcards session) is a recall the learner rates themselves: it is not "matched your notes".
+  // `correct` and `marked` therefore leave self-rated cards out; they are reported separately as selfRated and recalled.
+  const recallIds = new Set(l.questions.filter(q => q.kind === "flashcard" || l.s.session.mode === "flashcards").map(q => q.id));
+  const rated = marked.filter(a => recallIds.has(a.questionId));
   return NextResponse.json({
     ...done,
     summary: {
-      answered: marked.length, of: l.questions.length, correct: marked.filter(a => a.correct).length, toGrade: l.s.held.length,
+      answered: marked.length, of: l.questions.length, marked: l.questions.length - recallIds.size, selfRated: rated.length, recalled: rated.filter(a => a.correct).length,
+      correct: marked.filter(a => !recallIds.has(a.questionId) && a.correct).length, toGrade: l.s.held.length,
       byMarking: { deterministic: marked.filter(a => a.marking === "deterministic").length, self_graded: marked.filter(a => a.marking === "self_graded").length, ai_evaluation: marked.filter(a => a.marking === "ai_evaluation").length },
     },
   });

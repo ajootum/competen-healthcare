@@ -591,7 +591,8 @@ const markingHonest = (src: Src) => {
 const reuseFirst = (src: Src) => {
   const s = src.get(`${API}/revision/sessions/route.ts`) ?? "", rev = src.get(REV) ?? "";
   const custom = s.slice(s.indexOf("if (mode === \"custom\") {"), s.indexOf("let chunkIds: string[] | null = null;"));
-  const fill = s.indexOf("let pick = pickQuestions("), gen = s.indexOf("runRevisionQuestions(");
+  // Revise engine quality: the fill is the route's repick(), one call to pickQuestions shaped by the intention.
+  const fill = /const repick = \(\) => \{[\s\S]{0,300}pickQuestions\(/.test(s) ? s.indexOf("let pick = repick();") : s.indexOf("let pick = pickQuestions("), gen = s.indexOf("runRevisionQuestions(");
   return custom.length > 50 && custom.length < 4000 && !/scholarAiRunner|runQuestions|runRevisionQuestions|aiPreflight/.test(custom)
     && fill > -1 && gen > fill && /if \(pick\.shortfall > 0 && GENERATING_MODES\.includes\(mode\) && scopeSections\.length(?: && body\?\.generate !== false)?\)/.test(s)
     && /if \(policy\.scholarRevisionGeneration === "saved_only"\)/.test(s)

@@ -190,3 +190,11 @@ export const LIBRARY_FORM_OPTIONS = libraryRows.map(r => ({ value: r.key as stri
 export const OPTION_KINDS: readonly string[] = ROWS.filter(r => r.usesOptions).map(r => r.stored);
 /** The kinds migration 417's revision-set CHECK knows (structured is kept in an adaptive blueprint only). */
 export const SET_CHECK_KINDS: readonly string[] = [...new Set(ROWS.map(r => r.stored as string))].filter(k => k !== "structured");
+
+/** Revise engine quality (owner, 5 Nov 2026, 2.6): the formats that suit each revision intention, most suitable first. Empty: everything offered. What is offered stays the policy's decision (revision-depth.ts intentFormats). */
+export const INTENT_FORMATS = {
+  quick_recall: ["flashcard", "true_false", "cloze", "mcq"],
+  deep_understanding: ["short", "extended", "structured", "match", "mrq"],
+  clinical_reasoning: ["scenario", "mcq", "structured", "short"],
+  mixed_challenge: [],
+} as const satisfies Record<string, readonly QuestionFormat[]>;

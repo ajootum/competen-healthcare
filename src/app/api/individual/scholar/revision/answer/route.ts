@@ -224,7 +224,9 @@ export async function POST(req: Request) {
   // SCHOLAR-SQIE-LEARNER-01: the key points an extended answer made, then the rubric snapshot, then the feedback (which yields first if the size is tight).
   const withMatched = extendedMatched && stored.response ? { ...stored.response, matched: extendedMatched } : stored.response;
   // SQIE-CLOSE-2026-11: the scoring rules it was marked under, and its safety outcome (scoring-rules.ts). A choice keeps the 416 shape.
-  const answered = withMatched ? { ...withMatched, rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}), ...(calc ? { calc: storedCalculation(calc) } : {}) } : withMatched;
+  // Revise engine quality 2.5: an answer to a follow-up names the question it follows, so what happened next is on the record.
+  const followUp = isUuid(body?.followUpOf) ? { followUpOf: body.followUpOf as string } : null;
+  const answered = withMatched ? { ...withMatched, rules: SCORING_RULES_VERSION, ...(safety ? { safety } : {}), ...(calc ? { calc: storedCalculation(calc) } : {}), ...followUp } : followUp ?? withMatched;
   const kept = withFormative(withRubricSnapshot(answered, rubricSnapshotOf(q)), formative);
   const saved = await recordRevisionAttempt(ctx.admin, ctx.userId, q, {
     chosenIndex: stored.chosenIndex, response: kept, correct: mark.correct, score: mark.score, marking, evaluator, sessionId,
@@ -327,7 +329,9 @@ async function answerStructured(ctx: IndividualContext, req: Request, body: any,
   const final = capped.results;
   const m = practiceMarks(parts, final);
   const marking = final.some(x => x.by === "self") ? "self_graded" as const : evaluator ? "ai_evaluation" as const : "deterministic" as const;
-  const stored = storedResponse(r);
+  const plain = storedResponse(r);
+  // Revise engine quality 2.5: an answer to a follow-up names the question it follows.
+  const stored = isUuid(body?.followUpOf) && plain.response ? { ...plain, response: { ...plain.response, followUpOf: body.followUpOf as string } } : plain;
   // SCHOLAR-WRITTEN-FEEDBACK-01: how each part was marked, and (AI-evaluated only) the formative feedback on each AI part.
   const formative = marking === "ai_evaluation" ? formativeFeedback(final.flatMap((x, i) => x.by === "ai" ? [{ part: i + 1, feedback: x.feedback ?? null, parts: x.parts ?? null }] : []), evaluator) : null;
   const criteriaMet = final.some(x => x.matched) ? { criteria: final.map(x => x.matched ?? null) } : {};

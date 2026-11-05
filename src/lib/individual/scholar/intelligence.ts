@@ -165,7 +165,8 @@ export function buildKnowledge(input: {
   cards: readonly ICard[]; reviews: readonly IReview[] | null; today: string; t: Thresholds;
 }): Knowledge {
   const { materials, questions, idx, cards, reviews, today, t } = input;
-  const mcq = questions.filter(q => !isReasoning(q));
+  // A flashcard is a recall the learner rates themselves (quality 4 counts as "correct"): it is not a marked answer, so it stays out of Knowledge accuracy.
+  const mcq = questions.filter(q => !isReasoning(q) && (q.kind as string) !== "flashcard");
   if (mcq.length === 0) return { state: "not_measured", reason: "No practice questions have been written from your notes yet." };
   const p = performanceOf(mcq, idx);
   if (p.answered === 0) return { state: "not_measured", reason: "You have not answered any practice questions yet." };

@@ -78,6 +78,8 @@ export async function readStateInputs(admin: unknown, userId: string, policy: In
   for (const a of attempts) {
     const q = qById.get(a.questionId);
     if (!q) continue;
+    // A flashcard rating is stored as an attempt AND a review (391). The review row below is the one record of it: counting both counted one rating twice.
+    if (q.kind === "flashcard") continue;
     const tr = a.id ? transfer?.get(a.id) ?? null : null;
     const key = place(q.materialId, q.chunkId, tr?.topic ?? q.topic);
     if (!key) continue;

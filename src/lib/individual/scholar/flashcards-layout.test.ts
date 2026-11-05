@@ -9,6 +9,8 @@ import { readFileSync } from "node:fs";
 
 const STUDY = "src/app/individual/(app)/[experience]/(scholar)/study";
 const client = readFileSync(`${STUDY}/_components/flashcards-client.tsx`, "utf8");
+// The card face, flip button and the two recall buttons moved to the one shared card (recall-card.tsx); the study screen renders them.
+const recallCard = readFileSync(`${STUDY}/_components/recall-card.tsx`, "utf8");
 const page = readFileSync(`${STUDY}/revise/flashcards/page.tsx`, "utf8");
 const nav = readFileSync(`${STUDY}/_components/revise-nav.tsx`, "utf8");
 const constant = (name: string) => new RegExp(`export const ${name} = "([^"]+)"`).exec(client)?.[1] ?? "";
@@ -56,7 +58,9 @@ describe("flashcards layout: by available width, one md viewport edge", () => {
     expect(client).toMatch(/<DeckHeader compact=\{!\(finished \|\| \(allDone && props\.completed\)\)\}/);
     expect(client).toMatch(/data-testid="deck-header-compact" className="flex min-w-0 items-center gap-3"/);
     // One block: card, sensitive note, rate buttons -- scrolled into view on start and previous / next only.
-    const block = client.slice(client.indexOf('data-testid="card-focus"'), client.indexOf('aria-label="Previous card"'));
+    const block = client.slice(client.indexOf('data-testid="card-focus"'), client.indexOf('aria-label="Previous card"')) + recallCard;
+    expect(client).toContain("<RatingButtons");
+    expect(client).toContain("<FlipCard");
     expect(block).toContain('aria-keyshortcuts="1"');
     expect(block).toContain('aria-keyshortcuts="2"');
     expect(block).toMatch(/scroll-mt-\[4\.5rem\]/);

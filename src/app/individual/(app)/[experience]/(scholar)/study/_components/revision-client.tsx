@@ -28,7 +28,10 @@ import type { RevisePrefill } from "@/lib/individual/scholar/study-carry";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
+import { RecallCard } from "./recall-card";
+import { RECALL } from "@/lib/individual/scholar/recall-choices";
 import { ROLE_LABEL, VARIANT_LABEL, isReasoningPart, roundingText, type Finding } from "@/lib/individual/scholar/scoring-rules";
+import { FOLLOW_UP_IMPROVED, FOLLOW_UP_STILL, REVISION_INTENT, REVISION_INTENTS, type RevisionIntent } from "@/lib/individual/scholar/revision-depth";
 
 // THE REVISION WORKSPACE -- COMPETEN-SCHOLAR-REVISION-01 R1 and R4 (owner GO 2026-10-24).
 // Revise -> Answer -> Understand mistakes -> Reinforce -> Revisit -> Improve. Every answer goes to
@@ -109,6 +112,17 @@ export function RevisionStart(props: {
     else { setNote(r.json.note ?? ""); setUnsaved({ items: r.json.items ?? [], label: r.json.label ?? null }); }
   }, [router, scopeKind, chosen, topic, competency, formats, quantity, difficulty, feedback, source, onlySections, presetMaterial]);
 
+  // Revise engine quality 2.6: start by what the learner wants from this sitting. The server turns it into formats, depths and a length.
+  const startIntent = useCallback(async (intent: RevisionIntent) => {
+    setBusy(intent); setError(""); setNote(""); setContinuity("");
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: REVISION_INTENT[intent].mode, intent, scope: { kind: "library" }, ...studyField() });
+    setBusy("");
+    if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "New questions are not available right now."); return; }
+    if (!r.ok) { setError(r.json.error ?? "Revision could not start just now."); return; }
+    if (r.json.session?.id) router.push(carry(`${revisionHref(r.json.session.id)}&intent=${intent}`));
+    else { setNote(r.json.note ?? ""); setUnsaved({ items: r.json.items ?? [], label: r.json.label ?? null }); }
+  }, [router]);
+
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
   if (unsaved) return <RevisionRunner session={null} items={unsaved.items} answered={[]} label={unsaved.label} />;
   return (
@@ -121,7 +135,18 @@ export function RevisionStart(props: {
         </button>
       )}
       {props.aiNote && <p className="mt-2 text-[13px] text-gray-800">{props.aiNote}</p>}
-      <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <ul className="mt-4 grid gap-2 sm:grid-cols-2" aria-label="What you want from this session">
+        {REVISION_INTENTS.map(i => (
+          <li key={i}>
+            <button type="button" disabled={!!busy} onClick={() => void startIntent(i)} data-intent={i}
+              className={`w-full ${whiteCard} p-3 text-left hover:bg-[var(--learn-surface)] disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+              <span className="cmp-learn-ink block text-[14.5px] font-bold">{busy === i ? "Preparing…" : REVISION_INTENT[i].label}</span>
+              <span className="block text-[13px] text-gray-700">{REVISION_INTENT[i].help}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {props.modes.filter(m => m !== "today" && m !== "custom").map(m => (
           <li key={m}>
             <button type="button" disabled={!!busy} onClick={() => start(m, false)}
@@ -257,11 +282,13 @@ type SessionState = { id: string | null; mode: string; feedback: "immediate" | "
 /** 425, owner decision R4: a short answer held until the end, then graded by the student against its notes. */
 export type HeldGrade = { response: string; accepted: string[]; rationale: string; source: RevisionFeedback["source"]; label: string };
 export type Answered = { questionId: string; feedback?: RevisionFeedback; held?: boolean; selfGrade?: HeldGrade };
-type Summary = { answered: number; of: number; correct: number; toGrade?: number; byMarking: Record<string, number> };
+type Summary = { answered: number; of: number; correct: number; marked?: number; selfRated?: number; recalled?: number; toGrade?: number; byMarking: Record<string, number> };
 /** SCHOLAR-SQIE-CLOSE-01: a structured part the student marks themselves, with what code or the AI already said of it. */
 type PartToGrade = { prompt: string; marks: number; accepted: string[]; byCode: boolean; ai: { awarded: number; feedback: string | null; label: string } | null };
 
 export function RevisionRunner(props: { session: SessionState | null; items: RevisionItemView[]; answered: Answered[]; label?: string | null;
+  /** This sitting follows up a question just missed. */
+  followUpOf?: string | null;
   /** EVALUATION-01: this sitting is the knowledge check of an evaluation, made from it when it ends. */
   evaluation?: { method: "fresh" | "combined"; scope: Record<string, unknown> } | null }) {
   const router = useRouter();
@@ -285,7 +312,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
   };
 
   async function finish() {
-    if (!sid) { setSummary({ answered: state!.answered.length, of: items.length, correct: state!.answered.filter(a => a.feedback?.correct).length, byMarking: {} }); return; }
+    if (!sid) { const cards = new Set(items.filter(i => i.kind === "flashcard").map(i => i.id)); const rated = state!.answered.filter(a => cards.has(a.questionId)); setSummary({ answered: state!.answered.length, of: items.length, marked: items.length - cards.size, selfRated: rated.length, recalled: rated.filter(a => a.feedback?.correct).length, correct: state!.answered.filter(a => !cards.has(a.questionId) && a.feedback?.correct).length, byMarking: {} }); return; }
     const r = await call(`/api/individual/scholar/revision/sessions/${sid}`, { complete: true }, "PATCH");
     if (r.ok) { setState(s => (s ? { ...s, answered: r.json.answered ?? s.answered, session: { ...s.session!, status: "completed" } } : s)); setSummary(r.json.summary); }
   }
@@ -309,7 +336,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
 
       {summary ? (
         <div className="mt-4 space-y-4">
-          <p className="text-[15px] font-semibold text-gray-900">Session finished: {summary.correct} of {summary.of} matched your notes.</p>
+          <p className="text-[15px] font-semibold text-gray-900">Session finished: {summary.correct} of {summary.marked ?? summary.of} matched your notes.{(summary.selfRated ?? 0) > 0 && ` You rated ${summary.selfRated} flashcard${summary.selfRated === 1 ? "" : "s"} yourself and remembered ${summary.recalled ?? 0}; that is your own judgement, not a marked answer.`}</p>
           {(summary.toGrade ?? 0) > 0 && <p className="text-[13px] text-gray-700">{summary.toGrade} short answer{summary.toGrade === 1 ? "" : "s"} could not be marked automatically. Compare {summary.toGrade === 1 ? "it" : "each"} with your notes below and mark it yourself.</p>}
           {Object.keys(summary.byMarking).length > 0 && (
             <p className="text-[13px] text-gray-800">Marked by code: {summary.byMarking.deterministic ?? 0} · by you: {summary.byMarking.self_graded ?? 0} · by AI evaluation: {summary.byMarking.ai_evaluation ?? 0}</p>
@@ -344,7 +371,7 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
                 className={`inline-flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-lg border bg-[var(--cmp-app-surface)] px-2 text-[12.5px] font-semibold tabular-nums pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:min-w-[var(--cmp-touch-min)] ${focusRing} ${n === at ? "border-2 border-[var(--learn-accent)]" : "border-[var(--learn-border)]"} text-gray-900`}>{answeredIds.has(i.id) && <span className="cmp-learn-accent"><LearningIcon name="check" className="h-3 w-3" /></span>}{n + 1}</button>
             ))}
           </nav>
-          <QuestionRunner key={item.id} item={item} sessionId={sid} feedbackMode={state.session?.feedback ?? "immediate"}
+          <QuestionRunner key={item.id} item={item} sessionId={sid} feedbackMode={state.session?.feedback ?? "immediate"} followUpOf={props.followUpOf ?? null}
             answered={state.answered.find(a => a.questionId === item.id) ?? null} onAnswered={record}
             onNext={() => setAt(n => { const next = items.findIndex((i, k) => k > n && !answeredIds.has(i.id) && i.id !== item.id); return next >= 0 ? next : Math.min(items.length - 1, n + 1); })} />
           {done && <button type="button" className={`${btn} mt-4`} onClick={finish}>Finish and see how it went</button>}
@@ -354,8 +381,8 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
   );
 }
 
-export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, onNext }: {
-  item: RevisionItemView; sessionId: string | null; feedbackMode: "immediate" | "end"; answered: Answered | null;
+export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnswered, onNext, followUpOf = null }: {
+  item: RevisionItemView; sessionId: string | null; feedbackMode: "immediate" | "end"; answered: Answered | null; followUpOf?: string | null;
   onAnswered: (a: Answered) => void; onNext: () => void;
 }) {
   const [busy, setBusy] = useState(false);
@@ -404,7 +431,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
 
   async function send(response: unknown, extra: Record<string, unknown> = {}) {
     setBusy(true); setError("");
-    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response, ...spellingField(readSpellingChoice()), ...extra });
+    const r = await call("/api/individual/scholar/revision/answer", { questionId: item.id, sessionId, response, ...spellingField(readSpellingChoice()), ...(followUpOf ? { followUpOf } : {}), ...extra });
     setBusy(false);
     if (r.json.needsSelfGrade && item.kind === "structured") {
       const parts = (r.json.parts ?? []) as PartToGrade[];
@@ -457,9 +484,9 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
         {/* SCHOLAR-SQIE-01: what the question rests on. */}
         <span className="ml-2 inline-block rounded-full border border-[var(--learn-border)] bg-[var(--learn-surface)] px-2 py-0.5 normal-case tracking-normal text-gray-800">{item.grounding ?? GROUNDING_LABEL.notes}</span>
       </p>
-      <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
+      {(item.kind !== "flashcard" || answered) && <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>}
       {answered ? (
-        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} stem={item.stem} /></> : <p className="mt-3 rounded-lg bg-[var(--learn-surface)] px-3 py-2 text-[13.5px] text-gray-800">Answer recorded. You will see how it went at the end of the session.</p>
+        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}{followUpOf && <p className="mt-3 rounded-lg bg-[var(--learn-surface)] px-3 py-2 text-[13.5px] font-semibold text-gray-900" role="status">{fb.correct ? FOLLOW_UP_IMPROVED : FOLLOW_UP_STILL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} stem={item.stem} /></> : <p className="mt-3 rounded-lg bg-[var(--learn-surface)] px-3 py-2 text-[13.5px] text-gray-800">Answer recorded. You will see how it went at the end of the session.</p>
       ) : item.kind === "scenario" ? (
         !sc.stage ? <p className="mt-3 text-[13.5px] text-gray-700">This scenario cannot be shown just now.</p> : (
           <div className="mt-3">
@@ -531,25 +558,20 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
           </div>
         )
       ) : item.kind === "flashcard" ? (
-        !back ? <button type="button" className={`${btn} mt-4`} disabled={busy} onClick={reveal}>Show the answer</button> : (
-          <div className="mt-4">
-            <div className="rounded-xl bg-[var(--learn-surface)] p-4">
-              {/* SCHOLAR-FLASHCARDS-01: a card the student wrote, or a library card, says so -- never "your notes". */}
-              <p className={smallCaps}>{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
-              <p className="mt-1 text-[14.5px] font-bold text-gray-900">{back.back}</p>
-              {back.card && back.card.origin !== "notes" ? <p className="mt-1 text-[12.5px] text-gray-600">{back.card.originLabel}</p>
-                : <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>}
-            </div>
-            <fieldset className="mt-3" disabled={busy}>
-              <legend className="text-[14px] font-semibold text-gray-900">How well did you remember it? (your own judgement)</legend>
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-                {[{ q: 0, l: "Blank" }, { q: 2, l: "Hard" }, { q: 3, l: "Okay" }, { q: 4, l: "Good" }, { q: 5, l: "Easy" }].map(g => (
-                  <button key={g.q} type="button" className={ghost} onClick={() => send({ quality: g.q })}>{g.l}</button>
-                ))}
+        <div className="mt-4">
+          {/* The one flashcard (recall-card.tsx): prompt on the front, the answer hidden until flipped, Remembered / Didn't remember after. Self-reported. */}
+          <RecallCard front={item.stem} back={back?.back ?? null} revealed={!!back} onFlip={() => void reveal()} busy={busy} loadingBack={busy}
+            onRate={c => void send({ quality: RECALL[c].quality })}
+            footer={back ? (
+              <div className="mx-auto mt-3 max-w-xl rounded-xl bg-[var(--learn-surface)] p-3">
+                {/* SCHOLAR-FLASHCARDS-01: a card the student wrote, or a library card, says so -- never "your notes". */}
+                <p className={smallCaps}>{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
+                {back.card && back.card.origin !== "notes" ? <p className="mt-1 text-[12.5px] text-gray-600">{back.card.originLabel}</p>
+                  : <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>}
+                <p className="mt-1 text-[12.5px] text-gray-600">Your own judgement, not a test score.</p>
               </div>
-            </fieldset>
-          </div>
-        )
+            ) : null} />
+        </div>
       ) : partGrade ? (
         <div className="mt-4 rounded-xl bg-[var(--learn-surface)] p-4">
           <p className="text-[13.5px] text-gray-800">{partGrade.reason}</p>
@@ -801,6 +823,26 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
 const OUTCOME_WORD = { correct: "correct", partial: "partly correct", incorrect: "not correct" } as const;
 const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" }) : "an earlier date"; };
 
+/** Revise engine quality 2.5: a different question on what was just missed. The server chooses or writes it, and never repeats this one. */
+function FollowUpButton({ questionId }: { questionId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function go() {
+    setBusy(true); setError("");
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: "quick", followUpOf: questionId, ...studyField() });
+    setBusy(false);
+    if (!r.ok || !r.json.session?.id) { setError(r.json.error ?? "A different question could not be found just now."); return; }
+    router.push(carry(`${revisionHref(r.json.session.id)}&followUp=${questionId}`));
+  }
+  return (
+    <>
+      <button type="button" className={btn} disabled={busy} onClick={() => void go()}>{busy ? "Finding one…" : "Try a different question on this"}</button>
+      {error && <p role="alert" className="basis-full text-[13px] font-semibold text-red-800">{error}</p>}
+    </>
+  );
+}
+
 /** SCHOLAR-CONTINUITY-01 (791): the question as it was answered, where it has changed since, and any correction of the result -- the original beside it. */
 function AttemptRecordNotes({ f }: { f: RevisionFeedback }) {
   if (!f.questionChanged && !f.corrections) return null;
@@ -989,6 +1031,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
         {/* SCHOLAR-LESSON-VISUALS-01: the original picture of the cited slide / page (asked for on the click; no AI). */}
         {!f.library && <SourcePictureButton materialId={f.source.materialId} citation={f.source.citation} className={ghost} />}
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId)} className={ghost}>Teach me this</Link>}
+        {!f.correct && !compact && !f.library && questionId && <FollowUpButton questionId={questionId} />}
         {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
         {/* SCHOLAR-SQIE-01: more on the same material, a step easier after a miss and harder after a right answer. */}

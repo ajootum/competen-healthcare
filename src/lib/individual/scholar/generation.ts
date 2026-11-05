@@ -9,6 +9,7 @@ import { CHECK_LABEL } from "./learn-check";
 import { DEPTH_REACHED, parseDepthReached } from "./learn-context";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
 import type { CognitiveLevel } from "./question-intel";
+import { DEPTH_RULE, SUBJECT_RULE, aboutTheDocument } from "./revision-depth";
 import { citeChunk, findPatientIdentifiers } from "./extract";
 import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
@@ -246,10 +247,15 @@ const QUESTION_RULES = [
   "   The stem is a question ending with '?'. Avoid negative stems; if you must use one, write NOT or EXCEPT in capitals.",
   "   Never use 'all of the above', 'none of the above' or 'both'. No option may contain another option's wording.",
   "   Exactly ONE option may be supported by the passage. Every wrong option must be clearly contradicted or unsupported by it.",
+  "   Each wrong option must tempt someone who has not understood: a related term from the passage misapplied, a true statement about something else in the passage, or the right idea in the wrong situation. Never a silly or obviously wrong option.",
+  "   All four options are alike in length and form, so the correct one does not stand out.",
+  "   Where the passage allows, ask the student to interpret, apply or prioritise rather than repeat a sentence. Items in one reply each test a DIFFERENT fact.",
   "5. rationale explains in one or two sentences why the correct option is right, in the passage's own terms.",
   "6. Never include a name, NHS number, date of birth or any detail that could identify a real person.",
   "",
-  'Reply with JSON ONLY, no prose and no code fence: [{"stem": "...", "options": ["...", "...", "...", "..."], "correctIndex": 0, "rationale": "...", "sourceQuote": "...", "level": "understanding", "objective": "...", "keyPoints": ["..."], "misconceptions": ["..."], "references": []}]',
+  'Reply with JSON ONLY, no prose and no code fence: [{"stem": "...", "options": ["...", "...", "...", "..."], "correctIndex": 0, "rationale": "...", "sourceQuote": "...", "level": "understanding", "depth": "interpret", "objective": "...", "keyPoints": ["..."], "misconceptions": ["..."], "references": []}]',
+  DEPTH_RULE,
+  SUBJECT_RULE,
 ];
 
 // SCHOLAR-QUESTION-INTELLIGENCE-01 (mcq v4, case v4): the rubric fields, a spread of cognitive levels, and the
@@ -302,7 +308,7 @@ export function questionUserPrompt(passage: Passage): string {
 const squash = (s: string) => s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
 
 
-export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty"
+export type DropReason = "malformed" | "quote_not_in_passage" | "ungrounded" | QualityReason | "failed_verification" | "verification_unavailable" | "repeat" | "off_difficulty" | "about_the_notes"
   // SQIE-CLOSE-2026-11 WS-H: a generated question or case item that names a person (the revision formats already refuse it).
   | "identifier";
 
@@ -352,6 +358,7 @@ export function checkQuestions(raw: string, passage: Passage, limit: number = QU
     // SQIE-CLOSE-2026-11 WS-H: every word the model wrote is screened for a patient identifier, as every revision format is
     // (revision.ts checkRevisionDraft). The passage was screened at upload; the model's own stem, options and rationale were not.
     if (findPatientIdentifiers([stem, ...options, rationale].join("\n")).length) { out.dropped.push({ reason: "identifier" }); continue; }
+    if (aboutTheDocument(stem)) { out.dropped.push({ reason: "about_the_notes" }); continue; }
     const quoteKey = squash(quote).replace(/[.\s]+$/, "");
     if (quoteKey.length < 12 || !source.includes(quoteKey)) { out.dropped.push({ reason: "quote_not_in_passage" }); continue; }
     const violations = groundingViolations([stem, ...options, rationale].join("\n"), [passage.content]);
@@ -989,31 +996,35 @@ const REVISION_COMMON = [
   RUBRIC_RULE,
   "Reply with a JSON array ONLY, no prose and no code fence. If the passage cannot support an item of this kind, reply [].",
 ];
+// Revise engine quality (revision v4, flashcard mix v3, structured v2). Scenario and calculation keep REVISION_COMMON word for word: a stored scenario is
+// served only at its current prompt version, so changing that prompt would retire every scenario a learner already has.
+const REVISION_DEPTH = [...REVISION_COMMON, DEPTH_RULE, SUBJECT_RULE];
 export const REVISION_SYSTEM: Record<"mrq" | "short" | "flashcard" | "match" | "sequence" | "structured" | "true_false" | "extended" | "scenario" | "calculation", string> = {
-  mrq: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
-  short: [...REVISION_COMMON, 'Each item: {"stem": "a question ending with ? whose answer is a few words from the passage", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
+  mrq: [...REVISION_DEPTH, 'Each item: {"stem": "a question ending with ? that says to choose all that apply", "options": [4 to 6 short options built only from the passage\'s words, each a plausible answer that tempts someone who has not understood, never "all of the above"], "correct": [the indexes of EVERY option the passage supports, at least one and not all], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
+  short: [...REVISION_DEPTH, 'Each item: {"stem": "a question ending with ? that, where the passage allows, asks the student to explain why, interpret a finding or say what follows, in a phrase or a sentence; a plain fact only where that is the objective", "accepted": [1 to 4 short answers the passage supports, in its own words], "rationale": "...", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}'].join("\n"),
   // SCHOLAR-FLASHCARDS-QA-01 (flashcard v2, PROMPT_VERSIONS.flashcardMix): a concise one-concept back (never the
   // note's sentence repeated, never a second fact), a short explanation only where the passage gives a reason, a topic
   // name, and the objective in the learner's voice. Checked in code: question-intel.ts flashcardDraftProblem, parseRubric.
-  flashcard: [...REVISION_COMMON,
+  flashcard: [...REVISION_DEPTH,
+    "A flashcard is quick retrieval of ONE thing: a short prompt that never holds its own answer and is never a clinical scenario. Where a topic has several facts, write separate cards. Where the objective needs reasoning, it is not a flashcard: reply [].",
     'Each item: {"front": "a short question ending with ?, or a single term (a few words) to recall -- never a sentence or a statement", "back": "the answer to the front ONLY: one concept, as short as it can be (a few words, at most two short sentences), using the passage\'s terms but never repeating a passage sentence whole and never adding a second fact", "rationale": "one short sentence on why the answer holds, from the passage -- or \\"\\" when the passage gives no reason", "topic": "the topic the card belongs to, two to five words: one of the CONCEPTS given where one fits, otherwise the passage\'s own words", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}',
     'For flashcards, "objective" is written TO the learner as what they will be able to do, starting with a verb ("Explain why ...", "Recognise ...", "State ..."), never "Checks ...", "Tests ..." or "The student ...".',
   ].join("\n"),
-  match: [...REVISION_COMMON, 'Each item: {"stem": "what to match, e.g. Match each term to its meaning", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
-  sequence: [...REVISION_COMMON, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
+  match: [...REVISION_DEPTH, "Matching tests a meaningful association or distinction: each right side states the function, reason, consequence or contrast the passage gives, and never repeats its left term. The right sides are alike in form, so grammar gives no clue.", 'Each item: {"stem": "what to match, e.g. Match each finding to what it suggests", "pairs": [{"left": "...", "right": "..."}, {"left": "...", "right": "..."}, {"left": "...", "right": "..."}], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Three to six pairs, each stated by the passage, every left and every right different. Only write one when the passage states at least three such pairs.'].join("\n"),
+  sequence: [...REVISION_DEPTH, 'Each item: {"stem": "what to put in order, ending with ?", "steps": [3 to 6 steps IN THE ORDER THE PASSAGE GIVES THEM], "rationale": "...", "sourceQuote": "...", "difficulty": 1}. Only write one when the passage itself gives an order.'].join("\n"),
   // SCHOLAR-SQIE-CLOSE-01 (structured v1, migration 710): a lead-in and two to four parts, each its own question with
   // whole practice marks and its own rubric. Marked part by part by code or by the evaluator (activity evaluate).
-  structured: [...REVISION_COMMON,
-    'Each item: {"stem": "a short lead-in from the passage that sets up the parts (a statement is allowed here)", "parts": [{"prompt": "part (a): a question ending with ?", "marks": 1, "accepted": [1 to 4 short answers the passage supports, in its own words], "keyPoints": ["..."], "misconceptions": []}, {"prompt": "part (b): a different question ending with ?", "marks": 2, "accepted": ["..."], "keyPoints": ["..."], "misconceptions": []}], "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "references": []}.',
+  structured: [...REVISION_DEPTH,
+    'Each item: {"stem": "a short lead-in from the passage that sets up the parts (a statement is allowed here)", "parts": [{"prompt": "a question ending with ?, with no part label", "marks": 1, "accepted": [1 to 4 short answers the passage supports, in its own words], "keyPoints": ["..."], "misconceptions": []}, {"prompt": "a different question ending with ?, with no part label", "marks": 2, "accepted": ["..."], "keyPoints": ["..."], "misconceptions": []}], "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "references": []}.',
     "Two to four parts. Each part asks something DIFFERENT that the passage answers, building from recall to understanding or application where the passage allows. marks is a whole number from 1 to 5: more for a part that needs more of the passage. Write at most one item.",
   ].join("\n"),
   // SCHOLAR-SQIE-LEARNER-01: true/false -- a statement the passage settles, marked by code (formats.ts). Stored as a `short` item.
-  true_false: [...REVISION_COMMON,
+  true_false: [...REVISION_DEPTH,
     'Each item: {"statement": "ONE declarative sentence (never a question) that the passage settles, in the passage\'s own words", "answer": true, "explanation": "one or two sentences from the passage saying why the statement is true or false", "sourceQuote": "...", "difficulty": 1, "level": "recall", "objective": "...", "keyPoints": ["..."], "misconceptions": [], "references": []}.',
     'For true or false, rule 7 does not apply: the statement is a statement. Balance the items: about half should be false. A FALSE statement changes ONE thing the passage says (its opposite, or another term from the passage) using only words the passage uses, so the passage plainly shows it is false, and sourceQuote is the sentence that shows it. A TRUE statement is supported by sourceQuote itself. No double negatives, no "always" or "never" unless the passage says so, and never a statement the passage does not settle.',
   ].join("\n"),
   // SCHOLAR-SQIE-LEARNER-01: extended response -- a paragraph answer marked by the formative evaluator against its key points (formats.ts).
-  extended: [...REVISION_COMMON,
+  extended: [...REVISION_DEPTH,
     `Each item: {"stem": "a question ending with ? that needs a short paragraph to answer", "modelAnswer": "a complete answer of two to four sentences, in the passage's own words", "keyPoints": [${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} short points a full answer makes, each a DIFFERENT idea the passage states], "marks": 4, "rationale": "...", "sourceQuote": "...", "difficulty": 2, "level": "understanding", "objective": "...", "misconceptions": [], "references": []}.`,
     `For an extended response, "keyPoints" has ${EXTENDED_POINTS_MIN} to ${EXTENDED_POINTS_MAX} points (not one to four): the answer is marked by how many it makes. marks is a whole number from 1 to 10. Write at most one item.`,
   ].join("\n"),
@@ -1157,7 +1168,9 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
 export const EVALUATE_SYSTEM = [
   "You give formative feedback on a healthcare student's short answer to a revision question, for their own study.",
   "Judge the answer ONLY against the passage from their notes, the accepted answers and the key points given. Do not use outside knowledge.",
-  "Accept an answer that says the same thing in other words, including clinically equivalent wording. Do not reward an answer for things the passage does not say.",
+  "Judge understanding, not phrases. Accept an answer that says the same thing in other words, including clinically equivalent wording and equivalent reasoning. Do not reward an answer for things the passage does not say.",
+  "'correct' means the understanding is there. 'partly' means some of it is there and something essential is missing. 'incorrect' means the reasoning is wrong or nothing essential is there.",
+  "An answer that makes all the key points, in any words, is correct, and one that makes only some of them is partly correct. Where no key points are given, one accepted answer in any words is correct. Only what the accepted answers and key points require can be missing: never something else the passage also says.",
   "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
   // SQIE-CLOSE-2026-11 WS-B (evaluate v3): the safety line, quoted from the answer.
   UNSAFE_RULE,
@@ -1216,7 +1229,9 @@ export function parseEvaluation(raw: string, grounding: readonly string[], opts:
   }
   const body = rest;
   const sections = parseFeedbackSections(body);
-  const parts = sections && unsafe?.length ? { ...sections, unsafe } : sections;
+  // Revise engine quality: a correct answer has nothing essential missing, so a line saying otherwise would contradict its own verdict. (An extended answer is scored by the key points it matched, so its list stays.)
+  const judged = sections && !opts.keyPoints && m[1].toLowerCase() === "correct" ? { ...sections, missing: [] } : sections;
+  const parts = judged && unsafe?.length ? { ...judged, unsafe } : judged;
   const feedback = parts ? feedbackText(parts) : unsafe?.length ? `${FEEDBACK_HEADINGS.unsafe}: ${unsafe.join("; ")}.\n${body}` : body;
   if (!feedback || feedback.length > (parts ? 2000 : 800)) return { ok: false, reason: "malformed" };
   if (findPatientIdentifiers(feedback).length) return { ok: false, reason: "identifier" };

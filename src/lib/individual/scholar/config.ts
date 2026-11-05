@@ -89,8 +89,9 @@ export const PROMPT_VERSIONS = {
   explain: "scholar-explain-v3",
   // v4 (SCHOLAR-QUESTION-INTELLIGENCE-01): the rubric fields, a spread of cognitive levels, and the guidance block
   // (concepts, competency, level, difficulty, count, references) after the passage. case moves with it.
-  mcq: "scholar-mcq-v4",
-  case: "scholar-case-v4",
+  // v5 (Revise engine quality, owner 5 Nov 2026): depth, a different fact per item, and wrong options that tempt someone who has not understood.
+  mcq: "scholar-mcq-v5",
+  case: "scholar-case-v5",
   verify: "scholar-verify-v1",
   // SCHOLAR-QUESTION-INTELLIGENCE-01: the same blind check for mrq and short revision items (question-quality.ts).
   verifyRevision: "scholar-verify-revision-v1",
@@ -149,20 +150,22 @@ export const PROMPT_VERSIONS = {
   // v2 (SCHOLAR-QUESTION-INTELLIGENCE-01): five labelled feedback parts, judged against the rubric where there is one.
   // v3 (SQIE-CLOSE-2026-11 WS-B): a required UNSAFE line quoting any statement in the answer that would be unsafe if done in practice;
   // an unsafe answer is marked incorrect and earns nothing (generation.ts parseEvaluation).
-  evaluate: "scholar-evaluate-v3",
+  // v4 (Revise engine quality): understanding over phrases, and WHY teaches the principle. The caps and the safety line are unchanged.
+  evaluate: "scholar-evaluate-v4",
   // COMPETEN-SCHOLAR-REVISION-01 R2: revision questions of the 416 kinds, one prompt per kind, on the question rules.
   // v2: answers and rationale in the passage's own words; [] when a kind does not fit; a matching item only with three pairs.
   // v3 (SCHOLAR-QUESTION-INTELLIGENCE-01): every item asks (never a statement as a flashcard front), the rubric fields,
   // the guidance block; mrq and short carry +verifyRevision (generation.ts revisionPromptVersion).
-  revision: "scholar-revision-v3",
+  // v4 (Revise engine quality): depth, a different fact per item, explanation-seeking short answers, and matching that needs thought.
+  revision: "scholar-revision-v4",
   // v2 (staging acceptance notes): a concise one-concept back, a short explanation, a topic, a learner-voice objective.
   // SCHOLAR-FLASHCARDS-QA-01: flashcards are written to a configured mix of recall, understanding, application and
   // clinical reasoning (policy scholar_flashcard_level_mix), only at the levels the passage can support. A flashcard
   // is therefore written at "scholar-revision-v3:flashcard+scholar-flashcard-mix-v2" (generation.ts revisionPromptVersion).
-  flashcardMix: "scholar-flashcard-mix-v2",
+  flashcardMix: "scholar-flashcard-mix-v3",
   // SCHOLAR-SQIE-CLOSE-01 (710): a structured question -- a lead-in and two to four parts, each with its marks and its
   // rubric -- on the revision rules (generation.ts REVISION_SYSTEM.structured). Its own version: a new prompt.
-  structured: "scholar-structured-v1",
+  structured: "scholar-structured-v2",
   // SCHOLAR-CE-2026 CE-05: an evolving scenario -- a situation that unfolds over two to four stages, each stage one question of an
   // existing kind -- on the revision rules (generation.ts REVISION_SYSTEM.scenario). Its own version: a new prompt.
   // v2: a clinical situation that develops over time; no answer given away in the opening or an earlier stage; no talk of notes or students.

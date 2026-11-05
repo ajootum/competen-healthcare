@@ -229,6 +229,6 @@ describe("staging notes: a back is one concise concept, a topic is kept, an obje
     expect(REVISION_SYSTEM.flashcard).toMatch(/"rationale"/);
     expect(REVISION_SYSTEM.flashcard).toMatch(/"topic"/);
     expect(REVISION_SYSTEM.flashcard).toMatch(/never "Checks \.\.\."/);
-    expect(PROMPT_VERSIONS.flashcardMix).toBe("scholar-flashcard-mix-v2");
+    expect(PROMPT_VERSIONS.flashcardMix).toBe("scholar-flashcard-mix-v3");
   });
 });

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { isRated, type QuickMark, type RecallMark } from "@/lib/individual/scholar/learn-inline";
 import { PracticeQuestion, ghost, btn, focusRing, lessonFlashcardsHref, req } from "./learn-practice";
 import { carry } from "./study-active";
+import { RecallCard } from "./recall-card";
 import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 import { LearningDisclosure, LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 
@@ -116,37 +117,29 @@ function RecallItem({ card, multi, fresh, saveMissed, ownCards, onRate, register
   return (
     <div className="rounded-lg border p-3" style={{ borderColor: "var(--cmp-fc-question-border)" }}>
       {multi && <p className="text-[12px] font-semibold" style={labelStyle}>{card.label}</p>}
-      <p className="whitespace-pre-wrap break-words text-[15px] font-semibold">{card.front}</p>
-      <ReadAloudButton text={card.front} about="this question" className="mt-2" />
-      {!showAnswer && <button type="button" className={`${ghost} mt-3 ${touch}`} onClick={() => setRevealed(true)}>Show answer</button>}
-      {showAnswer && (
-        <div className="mt-3 rounded-lg border px-3 py-2.5" style={answerStyle}>
-          <p className="text-[11.5px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--cmp-fc-answer-label)" }}>Answer</p>
-          <p className="mt-1 whitespace-pre-wrap break-words text-[14.5px]">{card.back}</p>
-          {(card.why || card.sources.length > 0) && (
-            <details className="group mt-2">
-              <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 text-[13px] font-semibold ${touch} [&::-webkit-details-marker]:hidden ${focusRing}`}>
-                <span aria-hidden="true" className="text-[10px] transition-transform group-open:rotate-90">▶</span>Why / source
-              </summary>
-              {card.why && <p className="break-words text-[13.5px]">{card.why}</p>}
-              {card.sources.length > 0 && (
-                <ul className="mt-1.5 space-y-1 text-[12.5px]">
-                  {card.sources.map((x, i) => <li key={i} className="break-words">From {x.citation}</li>)}
-                </ul>
-              )}
-            </details>
-          )}
-        </div>
-      )}
-      {showAnswer && !rated && (
-        <div className="mt-3">
-          <div role="group" aria-label="How well did you remember?" className="flex flex-wrap gap-2">
-            <button type="button" className={`${ghost} ${touch}`} onClick={() => onRate("remembered")}>Remembered</button>
-            <button type="button" className={`${ghost} ${touch}`} onClick={() => onRate("again")}>Didn&apos;t remember</button>
-          </div>
-          <p className="mt-2 text-[12px]" style={labelStyle}>Your own judgement — not a test score.</p>
-        </div>
-      )}
+      <ReadAloudButton text={card.front} about="this question" className="mb-2" />
+      {/* The one flashcard (recall-card.tsx): the prompt, the answer after the flip, then the learner's own rating. Nothing else is recorded. */}
+      <RecallCard front={card.front} back={card.back} revealed={showAnswer} rated={rated} onFlip={() => setRevealed(true)} onRate={onRate}
+        footer={showAnswer ? (
+          <>
+            {(card.why || card.sources.length > 0) && (
+              <div className="mx-auto mt-3 max-w-xl rounded-lg border px-3 py-2.5" style={answerStyle}>
+                <details className="group">
+                  <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 text-[13px] font-semibold ${touch} [&::-webkit-details-marker]:hidden ${focusRing}`}>
+                    <span aria-hidden="true" className="text-[10px] transition-transform group-open:rotate-90">▶</span>Why / source
+                  </summary>
+                  {card.why && <p className="break-words text-[13.5px]">{card.why}</p>}
+                  {card.sources.length > 0 && (
+                    <ul className="mt-1.5 space-y-1 text-[12.5px]">
+                      {card.sources.map((x, i) => <li key={i} className="break-words">From {x.citation}</li>)}
+                    </ul>
+                  )}
+                </details>
+              </div>
+            )}
+            {!rated && <p className="mt-2 text-center text-[12px]" style={labelStyle}>Your own judgement — not a test score.</p>}
+          </>
+        ) : null} />
       {rated && mark && (
         <div className="mt-3" aria-live="polite">
           <p className="text-[13.5px] font-semibold">{RECALL_LABEL[mark]} <span className="font-normal" style={labelStyle}>· your own judgement, not a test score</span></p>

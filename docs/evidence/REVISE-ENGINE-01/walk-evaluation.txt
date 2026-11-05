@@ -1,0 +1,10 @@
+PASS the evaluator ran (ai_evaluation)
+PASS a wrong answer earns nothing (score 0)
+PASS the full answer in other words is credited (score 1)
+PASS the same answer worded differently gets the same result (score 1)
+PASS a second question: the definition in other words is credited (score 1)
+PASS half the answer earns partial credit (score 0.5)
+PASS the partial answer is told what is missing
+PASS a second question: half the answer earns partial credit (score 0.5)
+PASS a correct answer is told nothing is missing
+PASS unsafe reasoning is not rewarded and is flagged (score 0, safety: Clinically unsafe answer)
