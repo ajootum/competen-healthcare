@@ -12,6 +12,8 @@ import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice, EmptySta
 import StudyNav from "../../_components/StudyNav";
 import { studyHref, sourceHref } from "../../_components/question-view";
 import { ReviseThese } from "../../_components/mistakes-client";
+import { LearningSection } from "@/components/ui/scholar-learning";
+import { StateChip, toneAction } from "../../_components/progress-parts";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -35,17 +37,16 @@ const field = `rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-[14px
 
 function Mistake({ m }: { m: MistakeItem }) {
   return (
-    <li className="rounded-xl border border-gray-200 bg-white p-4">
+    <li className="rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-4">
       <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-        <span className={`rounded-full border px-2.5 py-0.5 font-semibold ${m.corrected ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-amber-300 bg-amber-50 text-amber-950"}`}>
-          {m.corrected ? `Corrected ${m.correctedAt ? when(m.correctedAt) : ""}`.trim() : "Still to fix"}
-        </span>
-        <span className="text-gray-600">Missed {m.missed} time{m.missed === 1 ? "" : "s"} · last {when(m.lastMissedAt)}</span>
+        {m.corrected
+          ? <StateChip tone="strong" mark="checked">{`Corrected ${m.correctedAt ? when(m.correctedAt) : ""}`.trim()}</StateChip>
+          : <StateChip tone="developing" mark="none">Still to fix</StateChip>}
+        <span className="text-gray-700">Missed {m.missed} time{m.missed === 1 ? "" : "s"} · last {when(m.lastMissedAt)}</span>
       </div>
       <p className="mt-2 text-[15.5px] font-semibold leading-relaxed text-gray-900">{m.stem}</p>
       <dl className="mt-2 space-y-1.5 text-[14px]">
-        <div><dt className="inline font-semibold text-gray-700">Your answer: </dt><dd className="inline text-gray-900">{m.yourAnswer}</dd>
-          {m.markingLabel && <span className="ml-2 text-[12px] text-gray-500">({m.markingLabel})</span>}</div>
+        <div><dt className="inline font-semibold text-gray-700">Your answer: </dt><dd className="inline text-gray-900">{m.yourAnswer}{m.markingLabel && <span className="ml-2 text-[12.5px] text-gray-700">({m.markingLabel})</span>}</dd></div>
         {m.correctAnswer && <div><dt className="inline font-semibold text-gray-700">The answer: </dt><dd className="inline text-gray-900">{m.correctAnswer}</dd></div>}
         {m.rationale && m.rationale.trim() !== m.correctAnswer.trim() && <div><dt className="inline font-semibold text-gray-700">Why: </dt><dd className="inline text-gray-800">{m.rationale}</dd></div>}
       </dl>
@@ -56,8 +57,8 @@ function Mistake({ m }: { m: MistakeItem }) {
         </div>
       )}
       <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[13px]">
-        <Link href={`${studyHref("learn")}?section=${m.chunkId}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Teach me this</Link>
-        <Link href={sourceHref(m.materialId, m.chunkId)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Show the source</Link>
+        <Link href={`${studyHref("learn")}?section=${m.chunkId}`} className={toneAction.link}>Teach me this</Link>
+        <Link href={sourceHref(m.materialId, m.chunkId)} className={toneAction.link}>Show the source</Link>
       </p>
     </li>
   );
@@ -75,7 +76,7 @@ export default async function MistakeNotebook({ params, searchParams }: { params
     <>
       <PageHeader accent={x.accent} eyebrow="Revise" title="Mistake notebook" intro="The questions you got wrong, with the answer and why. A question is corrected when you later answer it right." />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
-      <p className="mb-4 text-[13.5px]"><Link href={studyHref("revise")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to Revise</Link></p>
+      <p className="mb-4 text-[13.5px]"><Link href={studyHref("revise")} className={`inline-flex items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Back to Revise</Link></p>
       <BoundaryNotice notice={FORMATIVE_NOTICE} />
     </>
   );
@@ -143,13 +144,11 @@ export default async function MistakeNotebook({ params, searchParams }: { params
       ) : (
         <div className="space-y-5">
           {nb.groups.map(g => (
-            <section key={g.materialId} aria-labelledby={`g-${g.materialId}`}>
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-                <h2 id={`g-${g.materialId}`} className="text-[15px] font-bold text-gray-900">{g.title} <span className="text-[13px] font-normal text-gray-600">· {g.toFix} to fix of {g.items.length}</span></h2>
-                {weakOn && g.toFix > 0 && !q.material && nb.groups.length > 1 && <ReviseThese materialId={g.materialId} label="Revise these" />}
-              </div>
-              <ul className="space-y-3">{g.items.map(m => <Mistake key={m.questionId} m={m} />)}</ul>
-            </section>
+            <LearningSection key={g.materialId} tone="record" icon="record" level={2} headingId={`g-${g.materialId}`} caps={false}
+              title={<>{g.title} <span className="text-[13px] font-normal text-gray-700">· {g.toFix} to fix of {g.items.length}</span></>}
+              trailing={weakOn && g.toFix > 0 && !q.material && nb.groups.length > 1 ? <ReviseThese materialId={g.materialId} label="Revise these" /> : undefined}>
+              <ul className="mt-3 space-y-3">{g.items.map(m => <Mistake key={m.questionId} m={m} />)}</ul>
+            </LearningSection>
           ))}
         </div>
       )}

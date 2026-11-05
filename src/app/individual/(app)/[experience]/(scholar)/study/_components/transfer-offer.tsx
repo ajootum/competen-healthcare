@@ -6,8 +6,8 @@
 // Nothing starts until the learner clicks. Formative only.
 
 import { useState } from "react";
+import { learnAction } from "@/components/ui/scholar-learning";
 
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
 async function post(url: string, body: unknown): Promise<{ ok: boolean; json: Record<string, unknown> }> {
   try {
@@ -16,7 +16,7 @@ async function post(url: string, body: unknown): Promise<{ ok: boolean; json: Re
   } catch { return { ok: false, json: { error: "You seem to be offline. Try again when you are connected." } }; }
 }
 
-export function TransferOffer({ topic, accent }: { topic: string; accent: string }) {
+export function TransferOffer({ topic }: { topic: string }) {
   const [busy, setBusy] = useState<null | "choosing" | "writing">(null);
   const [error, setError] = useState<string | null>(null);
   async function start() {
@@ -38,8 +38,7 @@ export function TransferOffer({ topic, accent }: { topic: string; accent: string
   return (
     <div className="mt-1.5">
       <button type="button" onClick={start} disabled={busy !== null} data-transfer-start={topic}
-        className={`inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-60 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}
-        style={{ background: accent }}>
+        className={learnAction.primary}>
         {busy === "choosing" ? "Choosing a question…" : busy === "writing" ? "Writing a new question…" : "Try it in a new setting"}
       </button>
       {error && <p role="alert" className="mt-1.5 text-[13px] text-red-800">{error}</p>}

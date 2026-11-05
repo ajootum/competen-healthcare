@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { SCHOLAR } from "@/lib/individual/experiences";
+import { learnAction } from "@/components/ui/scholar-learning";
 import { studyHref } from "./question-view";
 import { carry, studyField } from "./study-active";
 
@@ -11,9 +11,6 @@ import { carry, studyField } from "./study-active";
 // scoped to one material or to the whole library. No new engine, no new route. Wrong and corrected questions are both in
 // that pool, so a corrected one comes round again as a check. One column below md; touch targets grow on coarse pointers.
 
-const accent = SCHOLAR.accent;
-const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
 export function ReviseThese({ materialId, label }: { materialId: string | null; label: string }) {
   const router = useRouter();
@@ -37,8 +34,8 @@ export function ReviseThese({ materialId, label }: { materialId: string | null; 
     }
   }
   return (
-    <span className="inline-flex flex-col items-start gap-1">
-      <button type="button" className={btn} style={{ background: accent }} disabled={busy} onClick={start}>{busy ? "Preparing…" : label}</button>
+    <span className="cmp-learn-record inline-flex flex-col items-start gap-1">
+      <button type="button" className={learnAction.primary} disabled={busy} onClick={start}>{busy ? "Preparing…" : label}</button>
       {error && <span role="alert" className="text-[13px] font-semibold text-red-800">{error}</span>}
     </span>
   );

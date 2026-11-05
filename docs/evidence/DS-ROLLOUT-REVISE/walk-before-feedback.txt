@@ -1,0 +1,46 @@
+PASS revise 1440: no horizontal overflow (0px)
+PASS revise 1440: axe 0 violations
+PASS revise 1440, folds open: axe 0 violations
+PASS revise 820: no horizontal overflow (0px)
+PASS revise 820: axe 0 violations
+PASS revise 820, folds open: axe 0 violations
+PASS revise 820: touch targets >= 44px
+PASS revise 390: no horizontal overflow (0px)
+PASS revise 390: axe 0 violations
+PASS revise 390, folds open: axe 0 violations
+PASS revise 390: touch targets >= 44px
+PASS session 1440: no horizontal overflow (0px)
+PASS session 1440: axe 0 violations
+PASS session 1440, folds open: axe 0 violations
+PASS session 820: no horizontal overflow (0px)
+PASS session 820: axe 0 violations
+PASS session 820, folds open: axe 0 violations
+PASS session 820: touch targets >= 44px
+PASS session 390: no horizontal overflow (0px)
+PASS session 390: axe 0 violations
+PASS session 390, folds open: axe 0 violations
+PASS session 390: touch targets >= 44px
+PASS fc-session 1440: no horizontal overflow (0px)
+PASS fc-session 1440: axe 0 violations
+PASS fc-session 1440, folds open: axe 0 violations
+PASS fc-session 820: no horizontal overflow (0px)
+PASS fc-session 820: axe 0 violations
+PASS fc-session 820, folds open: axe 0 violations
+PASS fc-session 820: touch targets >= 44px
+PASS fc-session 390: no horizontal overflow (0px)
+PASS fc-session 390: axe 0 violations
+PASS fc-session 390, folds open: axe 0 violations
+PASS fc-session 390: touch targets >= 44px
+PASS feedback 1440: no horizontal overflow (0px)
+PASS feedback 1440: axe 0 violations
+PASS feedback 1440, folds open: axe 0 violations
+PASS feedback 820: no horizontal overflow (0px)
+PASS feedback 820: axe 0 violations
+PASS feedback 820, folds open: axe 0 violations
+PASS feedback 820: touch targets >= 44px
+PASS feedback 390: no horizontal overflow (0px)
+PASS feedback 390: axe 0 violations
+PASS feedback 390, folds open: axe 0 violations
+PASS feedback 390: touch targets >= 44px
+PASS console errors: 0
+PASS 5xx responses: 0

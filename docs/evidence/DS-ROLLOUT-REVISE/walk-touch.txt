@@ -1,0 +1,24 @@
+PASS apply 1440: no horizontal overflow (0px)
+PASS apply 1440: axe 0 violations
+PASS apply 1440, folds open: axe 0 violations
+PASS apply 820: no horizontal overflow (0px)
+PASS apply 820: axe 0 violations
+PASS apply 820, folds open: axe 0 violations
+PASS apply 820: touch targets >= 44px
+PASS apply 390: no horizontal overflow (0px)
+PASS apply 390: axe 0 violations
+PASS apply 390, folds open: axe 0 violations
+PASS apply 390: touch targets >= 44px
+PASS evaluate 1440: no horizontal overflow (0px)
+PASS evaluate 1440: axe 0 violations
+PASS evaluate 1440, folds open: axe 0 violations
+PASS evaluate 820: no horizontal overflow (0px)
+PASS evaluate 820: axe 0 violations
+PASS evaluate 820, folds open: axe 0 violations
+PASS evaluate 820: touch targets >= 44px
+PASS evaluate 390: no horizontal overflow (0px)
+PASS evaluate 390: axe 0 violations
+PASS evaluate 390, folds open: axe 0 violations
+PASS evaluate 390: touch targets >= 44px
+PASS console errors: 0
+PASS 5xx responses: 0

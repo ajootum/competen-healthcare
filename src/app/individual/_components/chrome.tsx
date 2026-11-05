@@ -125,7 +125,7 @@ export function BoundaryNotice({ notice, detail }: { notice: string; detail?: Re
       <p className="font-semibold">{notice}</p>
       {detail && (
         <details className="mt-1">
-          <summary className="cursor-pointer text-[12.5px] font-semibold underline underline-offset-2">What this means here</summary>
+          <summary className="cursor-pointer text-[12.5px] font-semibold underline underline-offset-2 pointer-coarse:py-3.5">What this means here</summary>
           <p className="mt-1">{detail}</p>
         </details>
       )}

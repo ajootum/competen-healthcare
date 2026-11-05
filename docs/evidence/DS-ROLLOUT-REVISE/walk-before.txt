@@ -1,0 +1,129 @@
+PASS revise 1440: no horizontal overflow (0px)
+PASS revise 1440: axe 0 violations
+PASS revise 1440, folds open: axe 0 violations
+PASS revise 820: no horizontal overflow (0px)
+PASS revise 820: axe 0 violations
+PASS revise 820, folds open: axe 0 violations
+PASS revise 820: touch targets >= 44px
+PASS revise 390: no horizontal overflow (0px)
+PASS revise 390: axe 0 violations
+PASS revise 390, folds open: axe 0 violations
+PASS revise 390: touch targets >= 44px
+PASS mistakes 1440: no horizontal overflow (0px)
+FAIL mistakes 1440: axe definition-list(27: section:nth-child(1) > .space-y-3 > .p-4.rounded-xl.border-gray-200:nth-child(1) > .space-y-1\.5 ; .p-4.rounded-xl.borde)
+FAIL mistakes 1440, folds open: axe definition-list(27: section:nth-child(1) > .space-y-3 > .p-4.rounded-xl.border-gray-200:nth-child(1) > .space-y-1\.5 ; .p-4.rounded-xl.borde)
+PASS mistakes 820: no horizontal overflow (0px)
+FAIL mistakes 820: axe definition-list(27: section:nth-child(1) > .space-y-3 > .p-4.rounded-xl.border-gray-200:nth-child(1) > .space-y-1\.5 ; .p-4.rounded-xl.borde)
+FAIL mistakes 820, folds open: axe definition-list(27: section:nth-child(1) > .space-y-3 > .p-4.rounded-xl.border-gray-200:nth-child(1) > .space-y-1\.5 ; .p-4.rounded-xl.borde)
+PASS mistakes 820: touch targets >= 44px
+PASS mistakes 390: no horizontal overflow (0px)
+FAIL mistakes 390: axe definition-list(27: section:nth-child(1) > .space-y-3 > .p-4.rounded-xl.border-gray-200:nth-child(1) > .space-y-1\.5 ; .p-4.rounded-xl.borde)
+FAIL mistakes 390, folds open: axe definition-list(27: section:nth-child(1) > .space-y-3 > .p-4.rounded-xl.border-gray-200:nth-child(1) > .space-y-1\.5 ; .p-4.rounded-xl.borde)
+PASS mistakes 390: touch targets >= 44px
+PASS adaptive 1440: no horizontal overflow (0px)
+PASS adaptive 1440: axe 0 violations
+PASS adaptive 1440, folds open: axe 0 violations
+PASS adaptive 820: no horizontal overflow (0px)
+PASS adaptive 820: axe 0 violations
+PASS adaptive 820, folds open: axe 0 violations
+PASS adaptive 820: touch targets >= 44px
+PASS adaptive 390: no horizontal overflow (0px)
+PASS adaptive 390: axe 0 violations
+PASS adaptive 390, folds open: axe 0 violations
+PASS adaptive 390: touch targets >= 44px
+PASS fc-study 1440: no horizontal overflow (0px)
+PASS fc-study 1440: axe 0 violations
+PASS fc-study 1440, folds open: axe 0 violations
+PASS fc-study 820: no horizontal overflow (0px)
+PASS fc-study 820: axe 0 violations
+PASS fc-study 820, folds open: axe 0 violations
+PASS fc-study 820: touch targets >= 44px
+PASS fc-study 390: no horizontal overflow (0px)
+PASS fc-study 390: axe 0 violations
+PASS fc-study 390, folds open: axe 0 violations
+PASS fc-study 390: touch targets >= 44px
+PASS fc-test 1440: no horizontal overflow (0px)
+PASS fc-test 1440: axe 0 violations
+PASS fc-test 1440, folds open: axe 0 violations
+PASS fc-test 820: no horizontal overflow (0px)
+PASS fc-test 820: axe 0 violations
+PASS fc-test 820, folds open: axe 0 violations
+PASS fc-test 820: touch targets >= 44px
+PASS fc-test 390: no horizontal overflow (0px)
+PASS fc-test 390: axe 0 violations
+PASS fc-test 390, folds open: axe 0 violations
+PASS fc-test 390: touch targets >= 44px
+PASS fc-manage 1440: no horizontal overflow (0px)
+PASS fc-manage 1440: axe 0 violations
+PASS fc-manage 1440, folds open: axe 0 violations
+PASS fc-manage 820: no horizontal overflow (0px)
+PASS fc-manage 820: axe 0 violations
+PASS fc-manage 820, folds open: axe 0 violations
+PASS fc-manage 820: touch targets >= 44px
+PASS fc-manage 390: no horizontal overflow (0px)
+PASS fc-manage 390: axe 0 violations
+PASS fc-manage 390, folds open: axe 0 violations
+PASS fc-manage 390: touch targets >= 44px
+PASS fc-cards 1440: no horizontal overflow (0px)
+PASS fc-cards 1440: axe 0 violations
+PASS fc-cards 1440, folds open: axe 0 violations
+PASS fc-cards 820: no horizontal overflow (0px)
+PASS fc-cards 820: axe 0 violations
+PASS fc-cards 820, folds open: axe 0 violations
+PASS fc-cards 820: touch targets >= 44px
+PASS fc-cards 390: no horizontal overflow (0px)
+PASS fc-cards 390: axe 0 violations
+PASS fc-cards 390, folds open: axe 0 violations
+PASS fc-cards 390: touch targets >= 44px
+PASS fc-decks 1440: no horizontal overflow (0px)
+PASS fc-decks 1440: axe 0 violations
+PASS fc-decks 1440, folds open: axe 0 violations
+PASS fc-decks 820: no horizontal overflow (0px)
+PASS fc-decks 820: axe 0 violations
+PASS fc-decks 820, folds open: axe 0 violations
+PASS fc-decks 820: touch targets >= 44px
+PASS fc-decks 390: no horizontal overflow (0px)
+PASS fc-decks 390: axe 0 violations
+PASS fc-decks 390, folds open: axe 0 violations
+PASS fc-decks 390: touch targets >= 44px
+PASS fc-history 1440: no horizontal overflow (0px)
+PASS fc-history 1440: axe 0 violations
+PASS fc-history 1440, folds open: axe 0 violations
+PASS fc-history 820: no horizontal overflow (0px)
+PASS fc-history 820: axe 0 violations
+PASS fc-history 820, folds open: axe 0 violations
+PASS fc-history 820: touch targets >= 44px
+PASS fc-history 390: no horizontal overflow (0px)
+PASS fc-history 390: axe 0 violations
+PASS fc-history 390, folds open: axe 0 violations
+PASS fc-history 390: touch targets >= 44px
+PASS session 1440: no horizontal overflow (0px)
+PASS session 1440: axe 0 violations
+PASS session 1440, folds open: axe 0 violations
+PASS session 820: no horizontal overflow (0px)
+PASS session 820: axe 0 violations
+PASS session 820, folds open: axe 0 violations
+PASS session 820: touch targets >= 44px
+PASS session 390: no horizontal overflow (0px)
+PASS session 390: axe 0 violations
+PASS session 390, folds open: axe 0 violations
+PASS session 390: touch targets >= 44px
+PASS fc-session 1440: no horizontal overflow (0px)
+PASS fc-session 1440: axe 0 violations
+PASS fc-session 1440, folds open: axe 0 violations
+PASS fc-session 820: no horizontal overflow (0px)
+PASS fc-session 820: axe 0 violations
+PASS fc-session 820, folds open: axe 0 violations
+PASS fc-session 820: touch targets >= 44px
+PASS fc-session 390: no horizontal overflow (0px)
+PASS fc-session 390: axe 0 violations
+PASS fc-session 390, folds open: axe 0 violations
+PASS fc-session 390: touch targets >= 44px
+FAIL console errors: 2 -- session@820: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` wh | fc-session@820: A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` wh
+PASS 5xx responses: 0

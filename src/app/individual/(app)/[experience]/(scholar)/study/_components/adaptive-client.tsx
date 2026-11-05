@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { SCHOLAR } from "@/lib/individual/experiences";
+import { learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { adaptiveHref, studyHref } from "./question-view";
 import { carry, studyField } from "./study-active";
 import type { adaptivePrefill } from "@/lib/individual/scholar/study-carry";
@@ -20,10 +20,10 @@ import type { GenerationDifficulty, SourceMode } from "@/lib/individual/scholar/
 // question comes from /api/individual/scholar/revision/adaptive/next. The rule is always on screen, in words.
 // One column below md (the CPR-MOB-001 single md edge); touch targets grow on coarse pointers.
 
-const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
+const btn = learnAction.primary;
+const ghost = learnAction.secondary;
+const whiteCard = "rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-4";
 const field = `rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const WORD: Record<GenerationDifficulty, string> = { easy: "Easier", standard: "Standard", harder: "Harder" };
 
@@ -82,7 +82,7 @@ export function AdaptiveStart(props: {
 
   const ready = formats.some(f => shown.includes(f)) && (scopeKind !== "documents" || chosen.length > 0) && (scopeKind !== "topic" || topic.trim().length >= 2) && (scopeKind !== "competencies" || comps.length > 0);
   return (
-    <section aria-labelledby="adaptive-start-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+    <section aria-labelledby="adaptive-start-h" className={`${learnBox("check")} p-4 sm:p-5`}>
       <h2 id="adaptive-start-h" className="text-[16px] font-bold text-gray-900">Set up an adaptive exam</h2>
       <p className="mt-0.5 text-[13.5px] text-gray-600">Practice from the Competen library and your own notes. Formative: not an examination and not evidence of competence.</p>
       <RuleNote rule={props.rule} className="mt-3" />
@@ -145,7 +145,7 @@ export function AdaptiveStart(props: {
             </select>
           </label>
         </div>
-        <button type="submit" className={btn} style={{ background: accent }} disabled={busy || !ready}>{busy ? "Preparing your exam…" : "Start the exam"}</button>
+        <button type="submit" className={btn} disabled={busy || !ready}>{busy ? "Preparing your exam…" : "Start the exam"}</button>
       </form>
       {continuity && (
         <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
@@ -203,11 +203,11 @@ export function AdaptiveRunner(props: { sessionId: string; title: string; feedba
   const left = remaining(deadline, now);
 
   return (
-    <section aria-labelledby="adaptive-run-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+    <section aria-labelledby="adaptive-run-h" className={`${learnBox("check")} p-4 sm:p-5`}>
       <div className="flex flex-wrap items-center gap-3">
         <h2 id="adaptive-run-h" className="text-[16px] font-bold text-gray-900">{props.title}</h2>
         {cur && <p className="text-[12.5px] font-semibold text-gray-500 tabular-nums">Question {cur.number} of {cur.total}</p>}
-        {cur && <div className="h-1.5 min-w-[120px] flex-1 rounded-full bg-gray-100" aria-hidden><div className="h-1.5 rounded-full" style={{ width: `${(cur.answered / Math.max(1, cur.total)) * 100}%`, background: accent }} /></div>}
+        {cur && <div className="h-1.5 min-w-[120px] flex-1 rounded-full bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]" aria-hidden><div className="h-1.5 rounded-full bg-[var(--learn-accent)]" style={{ width: `${(cur.answered / Math.max(1, cur.total)) * 100}%` }} /></div>}
         {left && <p className="text-[13px] font-semibold tabular-nums text-gray-800" aria-live="off"><span className="sr-only">Time left </span>{left}</p>}
         <Link href={studyHref("revise")} className={`text-[13px] underline ${focusRing}`}>Leave (it is kept)</Link>
       </div>
@@ -239,7 +239,7 @@ function Trajectory({ points }: { points: AdaptiveReport["trajectory"] }) {
   return (
     <svg viewBox={`0 0 ${w} ${h}`} className="mt-2 h-16 w-full max-w-full" preserveAspectRatio="none" aria-hidden>
       {(["harder", "standard", "easy"] as const).map(d => <line key={d} x1={0} x2={w} y1={y(d)} y2={y(d)} stroke="currentColor" className="text-gray-200" strokeWidth={1} />)}
-      <polyline fill="none" stroke={accent} strokeWidth={2} points={points.map((p, i) => `${x(i)},${y(p.asked)}`).join(" ")} />
+      <polyline fill="none" stroke="var(--learn-accent)" strokeWidth={2} points={points.map((p, i) => `${x(i)},${y(p.asked)}`).join(" ")} />
       {points.map((p, i) => <circle key={i} cx={x(i)} cy={y(p.asked)} r={4} className={p.result === "right" ? "fill-emerald-600" : p.result === "missed" ? "fill-red-600" : "fill-gray-400"} />)}
     </svg>
   );
@@ -247,7 +247,7 @@ function Trajectory({ points }: { points: AdaptiveReport["trajectory"] }) {
 
 function Groups({ title, groups, empty }: { title: string; groups: AdaptiveReport["byTopic"]; empty: string }) {
   return (
-    <section className="rounded-xl border border-gray-200 p-4">
+    <section className={whiteCard}>
       <h3 className="text-[14px] font-bold text-gray-900">{title}</h3>
       {groups.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">{empty}</p> : (
         <ul className="mt-2 space-y-1.5">{groups.map(g => (
@@ -272,7 +272,7 @@ export function AdaptiveReportView({ report, sessionId, title, review }: { repor
   }
   const s = report.score;
   return (
-    <section aria-labelledby="adaptive-report-h" className="space-y-4 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+    <section aria-labelledby="adaptive-report-h" className={`${learnBox("check")} space-y-4 p-4 sm:p-5`}>
       <div>
         <h2 id="adaptive-report-h" className="text-[16px] font-bold text-gray-900">{title}: your report</h2>
         <p className="mt-1 rounded-lg bg-gray-50 px-3 py-1.5 text-[12.5px] font-semibold text-gray-800">{report.label}</p>
@@ -295,7 +295,7 @@ export function AdaptiveReportView({ report, sessionId, title, review }: { repor
       </dl>
       <p className="text-[12.5px] text-gray-600">Questions: {report.sources.library} from the Competen library (clinically reviewed) · {report.sources.stored} of your saved questions · {report.sources.generated} written for this exam from your notes.</p>
 
-      <section className="rounded-xl border border-gray-200 p-4">
+      <section className={whiteCard}>
         <h3 className="text-[14px] font-bold text-gray-900">Difficulty, question by question</h3>
         <RuleNote rule={report.rule} className="mt-2" />
         <Trajectory points={report.trajectory} />
@@ -314,12 +314,12 @@ export function AdaptiveReportView({ report, sessionId, title, review }: { repor
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
-        <section className="rounded-xl border border-gray-200 p-4">
+        <section className={whiteCard}>
           <h3 className="text-[14px] font-bold text-gray-900">Strengths</h3>
           {report.strengths.length ? <ul className="mt-1 list-disc pl-5 text-[13.5px] text-gray-900">{report.strengths.map(x => <li key={x}>{x}</li>)}</ul>
             : <p className="mt-1 text-[13px] text-gray-600">None yet: a strength needs at least two marked answers on it, 80% or more matching.</p>}
         </section>
-        <section className="rounded-xl border border-gray-200 p-4">
+        <section className={whiteCard}>
           <h3 className="text-[14px] font-bold text-gray-900">Learning gaps</h3>
           {report.gaps.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">No missed questions.</p> : (
             <ul className="mt-1 space-y-2">{report.gaps.map(g => (
@@ -333,7 +333,7 @@ export function AdaptiveReportView({ report, sessionId, title, review }: { repor
       </div>
 
       {report.recommendations.length > 0 && (
-        <section aria-labelledby="adaptive-rec-h" className="rounded-xl border border-gray-200 p-4">
+        <section aria-labelledby="adaptive-rec-h" className={whiteCard}>
           <h3 id="adaptive-rec-h" className="text-[14px] font-bold text-gray-900">What to revise next</h3>
           <ul className="mt-2 space-y-2">{report.recommendations.map(r => (
             <li key={r.id} className="text-[13.5px]">

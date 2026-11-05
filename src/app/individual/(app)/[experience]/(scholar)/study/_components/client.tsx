@@ -9,7 +9,7 @@ import { readyHref, sourceHref, studyHref } from "./question-view";
 import { AiFeedback } from "./ai-feedback";
 import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE, CONSENT_UPDATED, DOCX_MIME, MARKED_AGAINST_NOTES, PDF_MIME, PPTX_MIME, TEXT_MIME, PERSONAL_CASE_LABEL, PII_WARNING, QUESTION_MAX, SOURCE_NOTICE, UPLOAD_ATTESTATION } from "@/lib/individual/scholar/config";
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
-import { DisclaimerBadge } from "@/components/ui/scholar-learning";
+import { DisclaimerBadge, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
@@ -846,11 +846,11 @@ export function CardReview({ cards }: { cards: CardView[] }) {
   const when = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   if (!card) {
     return (
-      <div className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-        <p className="text-[15px] font-semibold text-gray-900">{done.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due for review."}</p>
-        {!done.length && <p className="mt-1 text-[13.5px] text-gray-600">Cards appear here when you get a practice or case question wrong. Answer some questions on one of your materials to start.</p>}
+      <div className={`${learnBox("quickCheck")} p-4 sm:p-5`}>
+        <p className="cmp-learn-ink text-[15px] font-semibold">{done.length ? `Done for today: you reviewed ${done.length} card${done.length === 1 ? "" : "s"}.` : "Nothing is due for review."}</p>
+        {!done.length && <p className="mt-1 text-[13.5px] text-gray-800">Cards appear here when you get a practice or case question wrong. Answer some questions on one of your materials to start.</p>}
         {done.length > 0 && (
-          <ul className="mt-3 divide-y divide-gray-100 rounded-xl border border-gray-200">
+          <ul className="mt-3 divide-y divide-gray-100 rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]">
             {done.map((d, k) => (
               <li key={k} className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-[13px]">
                 <span className="min-w-0 flex-1 truncate text-gray-800">{d.stem}</span>
@@ -859,7 +859,7 @@ export function CardReview({ cards }: { cards: CardView[] }) {
             ))}
           </ul>
         )}
-        <button type="button" className={`${ghost} mt-4`} onClick={() => router.refresh()}>Check again</button>
+        <button type="button" className={`${learnAction.secondary} mt-4`} onClick={() => router.refresh()}>Check again</button>
       </div>
     );
   }
@@ -875,35 +875,35 @@ export function CardReview({ cards }: { cards: CardView[] }) {
   }
   const last = done.at(-1);
   return (
-    <section aria-label="Review card" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+    <section aria-label="Review card" className={`${learnBox("quickCheck")} p-4 sm:p-5`}>
       <div className="flex items-center gap-3">
-        <p className="text-[12.5px] font-semibold text-gray-500 tabular-nums">Card {i + 1} of {cards.length}</p>
-        <div className="h-1.5 flex-1 rounded-full bg-gray-100" aria-hidden>
-          <div className="h-1.5 rounded-full" style={{ width: `${(i / cards.length) * 100}%`, background: accent }} />
+        <p className="text-[13px] font-semibold text-gray-800 tabular-nums">Card {i + 1} of {cards.length}</p>
+        <div className="h-1.5 flex-1 rounded-full bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]" aria-hidden>
+          <div className="h-1.5 rounded-full bg-[var(--learn-accent)]" style={{ width: `${(i / cards.length) * 100}%` }} />
         </div>
       </div>
-      {last && <p aria-live="polite" className="mt-2 text-[12.5px] text-gray-600">Previous card: {last.longInterval ? "moved to a long interval (60+ days)" : `comes back ${last.next}`}.</p>}
+      {last && <p aria-live="polite" className="mt-2 text-[13px] text-gray-800">Previous card: {last.longInterval ? "moved to a long interval (60+ days)" : `comes back ${last.next}`}.</p>}
       <p className="mt-3 text-[16px] font-semibold leading-relaxed text-gray-900">{card.stem}</p>
-      <p className="mt-1 text-[12.5px] text-gray-500">Try to recall the answer before you reveal it.</p>
+      <p className="mt-1 text-[13px] text-gray-700">Try to recall the answer before you reveal it.</p>
       {!shown ? (
-        <button type="button" className={`${btn} mt-4`} style={{ background: accent }} onClick={() => setShown(true)}>Show answer</button>
+        <button type="button" className={`${learnAction.primary} mt-4`} onClick={() => setShown(true)}>Show answer</button>
       ) : (
         <>
-          <div className="mt-4 rounded-xl bg-gray-50 p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">What your notes say</p>
+          <div className="mt-4 rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-4">
+            <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-700">What your notes say</p>
             <p className="mt-1 text-[14.5px] font-bold text-gray-900">{card.answer}</p>
             <p className="mt-1 text-[14px] text-gray-800">{card.rationale}</p>
-            <blockquote className="mt-2 border-l-4 pl-3 text-[13.5px] italic text-gray-700" style={{ borderColor: accent }}>“{card.quote}”</blockquote>
+            <blockquote className="mt-2 border-l-4 border-[var(--learn-accent)] pl-3 text-[13.5px] italic text-gray-800">“{card.quote}”</blockquote>
             <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={card.href} className={`underline underline-offset-2 ${focusRing}`}>{card.citation}</Link></p>
             <div className="mt-3"><SourceNotice compact /></div>
           </div>
           <fieldset className="mt-4" disabled={busy}>
             <legend className="text-[14px] font-semibold text-gray-900">How well did you remember it?</legend>
-            <p className="text-[12.5px] text-gray-500">Your grade sets when it comes back: sooner if it was hard, later if it was easy.</p>
+            <p className="text-[13px] text-gray-700">Your grade sets when it comes back: sooner if it was hard, later if it was easy.</p>
             <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
               {GRADES.map(g => (
-                <button key={g.q} type="button" onClick={() => grade(g.q)} className={`${ghost} flex-col !px-2`}>
-                  <span>{g.label}</span><span className="text-[11.5px] font-normal text-gray-500">{g.hint}</span>
+                <button key={g.q} type="button" onClick={() => grade(g.q)} className={`${learnAction.secondary} flex-col !px-2`}>
+                  <span>{g.label}</span><span className="text-[12px] font-normal text-gray-700">{g.hint}</span>
                 </button>
               ))}
             </div>
