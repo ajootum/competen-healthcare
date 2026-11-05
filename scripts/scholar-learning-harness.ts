@@ -766,7 +766,7 @@ const uploadLimitsHold = (src: Src) => {
  */
 const uploadGoverned = (src: Src) => {
   const up = src.get(`${API}/uploads/route.ts`) ?? "", mat = src.get(`${API}/materials/route.ts`) ?? "", cl = src.get(CLIENT) ?? "";
-  const pol = read("src/lib/individual/policy.ts"), home = src.get(`${PAGES}/page.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
+  const pol = read("src/lib/individual/policy.ts"), home = src.get(`${PAGES}/library/page.tsx`) ?? "", mp = src.get(`${PAGES}/[materialId]/page.tsx`) ?? "";
   return /const rules = uploadRules\(policy\);/.test(up) && /\(rules\.mimes as readonly string\[\]\)\.includes\(mime\)/.test(up) && /size > rules\.maxBytes/.test(up)
     && /const rules = uploadRules\(policy\);/.test(mat) && /\(rules\.mimes as readonly string\[\]\)\.includes\(declared\)/.test(mat) && /> rules\.maxBytes/.test(mat)
     && /extractMaterial\(mime, bytes, policy\.scholarPdfMaxPages(, policy\.scholarPptxMaxSlides)?\)/.test(mat)
