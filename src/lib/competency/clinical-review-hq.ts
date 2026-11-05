@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { approverPositions, carryingApproval, reviewerAppointments, scopeCovers, type ReviewerScope, type ScopeKind } from "./clinical-review";
+import { appointmentLabel, approverPositions, carryingApproval, reviewerAppointments, scopeCovers, type ReviewerScope, type ScopeKind } from "./clinical-review";
 
 // ── CLINICAL REVIEW: WHAT THE HQ PAGES READ ── migration 395 ──────────────────────────────────────────────
 //
@@ -204,7 +204,7 @@ async function methodCandidates(admin: any, reviewerId: string, versions: any[],
   } catch { return []; }
 }
 
-export type ReviewerView = { appointmentId: string; personId: string | null; name: string; scopes: (ReviewerScope & { label: string })[] };
+export type ReviewerView = { appointmentId: string; personId: string | null; name: string; position: string; scopes: (ReviewerScope & { label: string })[] };
 export type ScopeOption = { kind: ScopeKind; ref: string; label: string };
 
 /** Every active clinical reviewer appointment, with its scopes, and what a scope may name. */
@@ -224,6 +224,10 @@ export async function governanceView(admin: any): Promise<{ reviewers: ReviewerV
   if (scopes === null) return null;
   const people = appts.length ? await rows(admin.from("profiles").select("id, full_name").in("id", appts.map((a: any) => a.person_id).filter(Boolean))) : [];
   if (people === null) return null;
+  // Each row names the position its appointment holds (a person may hold two); an unreadable name falls back to the code in words.
+  const roles = [...new Set(appts.map((a: any) => a.role).filter(Boolean))] as string[];
+  const { data: named } = roles.length ? await admin.from("hq_position").select("code, name").in("code", roles) : { data: [] };
+  const positionOf = new Map<string, string | null>((named ?? []).map((p: any) => [p.code, p.name]));
   const fwName = new Map<string, string>(fws.map((f: any) => [f.id, f.name]));
   const options: ScopeOption[] = [
     ...terms.map((t: any) => ({ kind: t.taxonomies.kind as ScopeKind, ref: t.id, label: `${t.taxonomies.kind === "profession" ? "Profession" : "Specialty"}: ${t.value}` })),
@@ -234,7 +238,7 @@ export async function governanceView(admin: any): Promise<{ reviewers: ReviewerV
   const name = new Map<string, string>(people.map((p: any) => [p.id, p.full_name]));
   return {
     reviewers: appts.map((a: any) => ({
-      appointmentId: a.id, personId: a.person_id, name: name.get(a.person_id) ?? a.person_name ?? "Unnamed appointment",
+      appointmentId: a.id, personId: a.person_id, position: appointmentLabel(positionOf.get(a.role ?? ""), a.role, 1), name: name.get(a.person_id) ?? a.person_name ?? "Unnamed appointment",
       scopes: scopes.filter((s: any) => s.appointment_id === a.id).map((s: any) => ({ id: s.id, appointmentId: a.id, kind: s.scope_kind, ref: s.scope_ref, label: label.get(`${s.scope_kind}:${s.scope_ref}`) ?? `${s.scope_kind} (no longer listed)` })),
     })),
     options,
