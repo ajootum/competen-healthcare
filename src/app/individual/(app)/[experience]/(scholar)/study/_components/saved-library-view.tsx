@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
+import { correctQuery, expandText, expandWebsearch, vocabularyOf } from "@/lib/individual/search/tolerant";
 import type { ReactNode } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import {
@@ -559,9 +560,13 @@ async function NotesView({ admin, userId, q, titles, names, notes, v820, topicRo
  * learner's own uploaded sections, found by the same words (the first SECTION_FIRST, then SECTION_PAGE more at a time). The filters apply to
  * every group. With filters on, the best FILTERED_SEARCH_READ matches are read, filtered and paged here. Deterministic, private, no AI.
  */
-async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: {
+async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mode = "first", fixed = "" }: {
   admin: Admin; userId: string; q: LibraryQuery; v820: boolean; titles: Map<string, string>; names: Map<string, MaterialName>; topicRows: { chunkId: string; topics: string[] }[];
+  /** first: as typed with the closed synonyms. corrected: the one-slip spelling fix (only when first found nothing). plain: as typed, when the fix found nothing too. */
+  mode?: "first" | "corrected" | "plain"; fixed?: string;
 }) {
+  const words = mode === "corrected" ? fixed : q.q ?? "";
+  const synonyms = mode !== "plain";
   const offset = (q.page - 1) * LIBRARY_PAGE_SIZE;
   const filtered = hasLibraryFilters(q);
   const kindLabel: Record<string, string> = { artefact: "Saved lesson", note: "Your note", lesson: "Learning session", flashcard: "Flashcard", card_note: "Your note on a flashcard" };
@@ -582,13 +587,13 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
       hits = page.items; total = page.total;
     }
   } else if (!filtered) {
-    const r = await librarySearch(admin, userId, q.q, LIBRARY_PAGE_SIZE, offset);
+    const r = await librarySearch(admin, userId, synonyms ? expandWebsearch(words) : words, LIBRARY_PAGE_SIZE, offset);
     if (!r.ok) unreadable = true; else { hits = r.data.rows; total = r.data.total; }
   } else {
     const pool: LibraryHit[] = [];
     let all = 0;
     for (let o = 0; o < FILTERED_SEARCH_READ; o += 50) {
-      const r = await librarySearch(admin, userId, q.q, 50, o);
+      const r = await librarySearch(admin, userId, synonyms ? expandWebsearch(words) : words, 50, o);
       if (!r.ok) { unreadable = true; break; }
       pool.push(...r.data.rows); all = r.data.total;
       if (r.data.rows.length < 50 || pool.length >= all) break;
@@ -610,9 +615,10 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
   for (const a of artRead.ok ? artRead.data : []) arts.set(a.id, a);
 
   // From your materials: the learner's own sections, ranked by the same words (no AI).
-  const tsq = toTsQuery(q.q);
+  const sectionWords = synonyms ? expandText(words) : words;
+  const tsq = toTsQuery(sectionWords);
   const found = tsq ? await searchSectionRows(admin, userId, tsq, 200) : null;
-  const sec = found?.ok ? sectionHits(rankChunks(q.q, found.data.rows, found.data.rows.length), q.q, names, scope, q.msec) : null;
+  const sec = found?.ok ? sectionHits(rankChunks(sectionWords, found.data.rows, found.data.rows.length), sectionWords, names, scope, q.msec) : null;
 
   const target = (h: LibraryHit): string => {
     if (h.kind === "lesson") return href(`study/learn?session=${encodeURIComponent(h.id)}`);
@@ -629,9 +635,16 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
   const groups = groupHits(hits);
   const secTotal = sec?.total ?? 0;
   const nothing = !unreadable && hits.length === 0 && (sec?.hits.length ?? 0) === 0;
+  // Nothing found as typed: one slip of spelling against the learner's own topics and material titles, said plainly. Never for a filtered or basic search.
+  if (nothing && mode === "first" && v820 && !filtered) {
+    const fix = correctQuery(words, vocabularyOf([...topicRows.flatMap(t => t.topics), ...titles.values()]));
+    if (fix.changed) return SearchView({ admin, userId, q, v820, titles, names, topicRows, mode: "corrected", fixed: fix.text });
+  }
+  if (nothing && mode === "corrected") return SearchView({ admin, userId, q, v820, titles, names, topicRows, mode: "plain" });
   return (
     <div className="mt-3">
       {!v820 && <p className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700">Basic search: it looks for every word in your newest {BASIC_SEARCH_ROWS} saved lessons only. Notes and flashcards are not searched here yet. Your materials are searched below.</p>}
+      {mode === "corrected" && <p className="mt-2 text-[14px] text-gray-800" role="status" data-testid="showing-results-for">Showing results for <span className="font-semibold">{fixed}</span>. You searched for “{q.q}”.</p>}
       <p className="mt-2 text-[13px] text-gray-700" role="status">
         {total + secTotal} result{total + secTotal === 1 ? "" : "s"} for “{q.q}”{filtered ? ", with your filters" : ""}: {total} in your library, {secTotal} in your materials. Best matches first. Private to you; no AI.
         {capped ? ` Filters apply to your best ${FILTERED_SEARCH_READ} library matches.` : ""}

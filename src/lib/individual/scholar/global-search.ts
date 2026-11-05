@@ -4,10 +4,17 @@ import { matchesSearch, searchWords } from "../search/match";
 import { listEntries } from "../learning-plan/entry-store";
 import { loadPracticeRows } from "./apply-context-data";
 import { loadLearnerCatalogue } from "./competency-view";
-import { displayTitle, parseSearchParams, searchLibrary } from "./learn-search";
+import { displayTitle, parseSearchParams } from "./learn-search";
+import { searchLibraryTolerant } from "./tolerant-search";
+import { expandWebsearch } from "../search/tolerant";
+import { learningEnabled } from "@/lib/learning/policy";
+import { myRecords } from "@/lib/learning/record";
+import { loadLearningRecords } from "@/lib/learning/products";
+import { filterCompleted, filterCourses, filterProgrammes, completedView, myCoursesView, programmesView } from "@/app/individual/(app)/[experience]/(scholar)/courses/courses-view";
 import { GLOBAL_SEARCH_MAX, GLOBAL_SEARCH_MIN, type GlobalGroup, type GlobalType } from "./global-search-types";
+import { materialTopics } from "./library";
 import { cardHrefPath, lessonHrefPath } from "./saved-library";
-import { getStudyPlan, librarySearch, listEvaluations, listMaterials, type LibraryHit, type MaterialRow } from "./store";
+import { getStudyPlan, learnerProgramme, libraryTopics, librarySearch, listEvaluations, listMaterials, listProgrammes, type LibraryHit, type MaterialRow } from "./store";
 
 // COMPETEN UNIVERSAL SEARCH STANDARD: Global Search across Scholar. Each registered module the person may see is searched through
 // the reads its own page uses, and always for the signed-in person's own records. No AI. A module the registry refuses is never
@@ -52,7 +59,7 @@ function sources(ctx: Ctx): Partial<Record<SearchModuleKey, Source>> {
     },
     learn: async (q, { materials }) => {
       if (!materials) return null;
-      const r = await searchLibrary(admin, userId, parseSearchParams({ q }), materials);
+      const r = await searchLibraryTolerant(admin, userId, parseSearchParams({ q }), materials);
       if (!r.topics && !r.sections && !r.sessions) return null;
       return [
         { label: "Topics", results: (r.topics?.items ?? []).slice(0, PER_TYPE).map(t => ({ id: t.name, title: t.name, detail: `${t.sections} section${t.sections === 1 ? "" : "s"}`, path: `study/learn?topicView=${encodeURIComponent(t.name)}` })) },
@@ -60,8 +67,31 @@ function sources(ctx: Ctx): Partial<Record<SearchModuleKey, Source>> {
         { label: "Learning sessions", results: (r.sessions?.items ?? []).slice(0, PER_TYPE).map(s => ({ id: s.id, title: s.title, detail: s.status === "completed" ? "Completed" : "In progress", path: `study/learn?session=${s.id}` })) },
       ];
     },
+    // Revise: the same rows its All Topics page lists (a material, with its topics), matched by title and topic. Two reads beyond the
+    // shared materials read: libraryTopics (the analysis rows and the learner's topic corrections). Opens the catalogue on that material.
+    revise: async (q, { materials }) => {
+      if (!materials) return null;
+      const topics = await libraryTopics(admin, userId);
+      if (topics === null) return null;
+      const rows = materials.map(m => ({ m, topics: materialTopics(topics.get(m.id) ?? []).map(t => t.topic) })).filter(r => matchesSearch([r.m.title, ...r.topics], q));
+      return [{ label: "Topics to revise", results: rows.slice(0, PER_TYPE).map(r => ({ id: r.m.id, title: displayTitle(r.m.title), detail: r.topics.slice(0, 3).join(", ") || null, path: `study/revise?view=topics&m=${r.m.id}` })) }];
+    },
+    courses: async q => {
+      if (!(await learningEnabled(admin))) return [];
+      const [open, done, chosen, offered] = await Promise.all([
+        myRecords(admin, userId).catch(() => null), loadLearningRecords(admin, userId).catch(() => null), learnerProgramme(admin, userId), listProgrammes(admin),
+      ]);
+      const mine = myCoursesView(true, open), completed = completedView(true, done), programmes = programmesView(chosen, offered);
+      if (mine.kind === "unreadable" && completed.kind === "unreadable" && programmes.kind === "unreadable") return null;
+      const programmeList = programmes.kind === "none" ? programmes.offered : programmes.kind === "chosen" ? [programmes.programme, ...programmes.others] : [];
+      return [
+        { label: "Courses you are taking", results: (mine.kind === "items" ? filterCourses(mine.items, q) : []).slice(0, PER_TYPE).map(c => ({ id: c.id, title: c.title, detail: `${c.code} · ${c.statusLabel}`, path: `courses/mine?q=${encodeURIComponent(c.title)}` })) },
+        { label: "Completed courses", results: (completed.kind === "items" ? filterCompleted(completed.items, q) : []).slice(0, PER_TYPE).map(c => ({ id: c.recordId, title: c.title, detail: c.outcomeLabel, path: `courses/progress?q=${encodeURIComponent(c.title)}` })) },
+        { label: "Programmes", results: filterProgrammes(programmeList, q).slice(0, PER_TYPE).map(p => ({ id: p.code, title: p.label, detail: p.profession, path: `courses/programmes?q=${encodeURIComponent(p.label)}` })) },
+      ];
+    },
     saved: async q => {
-      const r = await librarySearch(admin, userId, q, PER_TYPE, 0);
+      const r = await librarySearch(admin, userId, expandWebsearch(q), PER_TYPE, 0);
       if (!r.ok) return null;
       return [{ label: "Saved lessons, notes and cards", results: r.data.rows.map(h => {
         // An artefact's label is the action that made it ("teach"): its kind says more. The others are labelled by their own words.

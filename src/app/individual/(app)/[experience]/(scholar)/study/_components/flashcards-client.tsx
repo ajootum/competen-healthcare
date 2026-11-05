@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { askPrefill } from "@/lib/individual/scholar/ask-context";
 import { AskAbout } from "./ask-panel";
+import { PageSearchInput } from "@/app/individual/_components/search/PageSearch";
+import { pageScope } from "@/lib/individual/search/registry";
 import { ReadAloudButton } from "@/app/individual/_components/speech/speech-buttons";
 import { ResizeHandle } from "@/components/ui/resizable";
 import { usePaneGrid } from "@/components/ui/pane-grid";
@@ -871,6 +873,7 @@ export function CardBrowser({ cards, decks, currentDeck, marksOn, filters, editI
   const [editing, setEditing] = useState<string | null>(editId && cards.some(c => c.id === editId && c.editable) ? editId : null);
   useEffect(() => { if (editing && editing === editId) document.getElementById(`card-${editing}`)?.scrollIntoView({ block: "center" }); }, [editing, editId]);
   const formRef = useRef<HTMLFormElement>(null);
+  const [cardQ, setCardQ] = useState(filters.q ?? "");
   const allChosen = chosen.length === cards.length && cards.length > 0;
   const toggle = (id: string) => setChosen(c => (c.includes(id) ? c.filter(x => x !== id) : [...c, id]));
   const base = useMemo(() => ({ view: "cards", deck: currentDeck?.key ?? null }), [currentDeck]);
