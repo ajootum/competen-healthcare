@@ -1,0 +1,89 @@
+{
+  "notes": {
+    "url": "/api/individual/scholar/explain",
+    "sources": 3,
+    "answer": "Your notes don't use the phrase \"continuing basis\" directly, but they do point to several reasons why ongoing assessment matters for critically ill patients.\n\nFirst, your notes describe a graduated mobilisation plan — from positioning, through passive movement, sitting upright, sitting in a chair, a"
+  },
+  "specific": {
+    "sources": 3,
+    "message": null
+  },
+  "combined": {
+    "url": "/api/individual/scholar/explain/across",
+    "status": 200,
+    "sent": [
+      "materials",
+      "research"
+    ],
+    "searched": [
+      {
+        "source": "materials",
+        "state": "used",
+        "count": 5,
+        "note": null
+      },
+      {
+        "source": "research",
+        "count": 5,
+        "state": "used",
+        "note": "abstracts only, full text not read"
+      }
+    ],
+    "answer": "Your notes highlight that correct positioning is a core part of preventing complications in critically ill patients [S3]. Lying in bed for long periods can be a painful experience, and immobility contributes to pressure ulcers as one of the common short- and long-term complications [S1] [S3].\n\nYour ",
+    "research": {
+      "text": "Rehabilitation interventions for pressure ulcer prevention include repositioning, passive and active-assisted mobilisation, exercise prescription, electrical stimulation, and pressure-relief manoeuvres [E2]. The Cubbin & Jackson scale may offer relatively better diagnostic accuracy for pressure injury risk assessment in critically ill adults compared with generic scales, possibly due to its inclus",
+      "withheld": null,
+      "used": 3,
+      "found": 2
+    }
+  },
+  "researchAlone": {
+    "sent": [
+      "research"
+    ],
+    "mode": "summary",
+    "searched": [
+      {
+        "source": "research",
+        "count": 5,
+        "state": "used",
+        "note": "abstracts only, full text not read"
+      }
+    ],
+    "version": "scholar-explain-modes-v6:summary+across-v1",
+    "text": "- Repositioning, passive and active-assisted mobilisation, exercise prescription, electrical stimulation, pressure-relief manoeuvres, and education for individuals, caregivers, and professionals are among the rehabilitation interventions described for pressure ulcer prevention. [E2]\n- Movement and a",
+    "withheld": null
+  },
+  "saved": {
+    "sent": [
+      "saved"
+    ],
+    "searched": [
+      {
+        "source": "saved",
+        "state": "used",
+        "count": 3,
+        "note": null
+      }
+    ],
+    "answer": "Your notes frame critical care nursing around two main priorities: reducing risk and providing quality care, with personal hygiene sitting at the heart of both because it affects infection risk, dignity, and family confidence in the care being given [S1].\n\nThe focus of care rests on assessing patien",
+    "sources": [
+      {
+        "citation": "Saved teaching, 2026-11-04",
+        "origin": "saved",
+        "savedPath": "saved?version=135e059a-1d44-4b46-b19a-9d6880d21afd"
+      },
+      {
+        "citation": "Saved teaching, 2026-11-03",
+        "origin": "saved",
+        "savedPath": "saved?version=596fc707-07c2-4d47-aa5f-29c687bc7ec5"
+      },
+      {
+        "citation": "Saved teaching, 2026-11-03",
+        "origin": "saved",
+        "savedPath": "saved?version=2ab93dd7-e5e7-49f3-a7f5-eddbb0f1508c"
+      }
+    ],
+    "message": null
+  }
+}

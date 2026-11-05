@@ -10,7 +10,8 @@ import { SearchHistorySetting } from "../../_components/search-history-setting";
 import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { consentDocuments } from "@/lib/individual/scholar/consent-gate";
 import { LearningIcon } from "@/components/ui/scholar-learning";
-import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, searchHistoryTopics, sessionsByIds } from "@/lib/individual/scholar/store";
+import { ASK_SOURCE_LABEL } from "@/lib/individual/scholar/ask-sources";
+import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, withHistorySources, searchHistoryTopics, sessionsByIds } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
@@ -122,6 +123,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
       e.topic ? `Topic: ${e.topic}` : null,
       e.resultCount !== null ? `${e.resultCount} result${e.resultCount === 1 ? "" : "s"}` : null,
       e.step !== null && e.activity !== "lesson" ? `Lesson ${e.step + 1}` : null,
+      e.sources?.length ? `Searched: ${e.sources.map(s => ASK_SOURCE_LABEL[s]).join(", ")}` : null,
     ].filter((x): x is string => !!x);
     const { primary, rest } = splitEntryLinks(entryLinks(e).map(l => ({ label: l.label, href: studyHref(l.path.replace(/^study\/?/, "")), kind: l.kind })));
     return {
@@ -131,7 +133,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   };
   const total = list.ok ? list.data.total : 0;
   const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
-  const entries = list.ok ? list.data.entries.map(toClient) : [];
+  const entries = list.ok ? (await withHistorySources(ctx.admin, ctx.userId, list.data.entries)).map(toClient) : [];
   const pins = pinned?.ok ? pinned.data.entries.map(toClient) : [];
 
   return (

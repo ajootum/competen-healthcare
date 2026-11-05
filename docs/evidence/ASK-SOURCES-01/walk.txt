@@ -1,0 +1,47 @@
+PASS my learning materials is offered
+PASS web sources are not offered, because Ask has no web path
+PASS my saved learning is offered
+PASS Competen Library is hidden from a learner who can reach no approved content
+PASS research literature is offered
+PASS materials alone goes to the existing explain route
+PASS the default request names no sources, so it is the existing request
+PASS the default answers with citations
+PASS the answer says what was searched
+PASS materials are reported as searched and used
+PASS a chosen material is sent on its own
+PASS the answer cites only the chosen material
+PASS a fresh question starts on my materials
+PASS materials plus research goes to the new route
+PASS both chosen sources are sent
+PASS both are reported as searched
+PASS the name of a part is never shown
+PASS the materials answer holds no research citation
+PASS the research part holds no materials citation
+PASS research sources used carry [E n]
+PASS every [E n] in the text has its reference
+PASS the combined answer has a research part
+PASS at least one source is listed as used
+PASS research is labelled as abstracts, full text not read
+PASS sources only found are listed apart from evidence
+PASS research alone can be chosen
+PASS Summarise is kept across sources
+PASS research alone shows no notes answer
+PASS research alone gives a cited research answer
+PASS no material is sent when materials are not chosen
+PASS the record names the mode
+PASS saved learning alone can be chosen
+PASS saved learning is reported as searched
+PASS what it cites is marked as saved learning
+PASS library entries show apart, with their status (layout only, stubbed reply)
+PASS library entries are reported as listed, not used (layout only, stubbed reply)
+PASS web asked for by hand is reported as not searched (200)
+PASS a material that is not the learner's gives nothing from it
+PASS a question that identifies a patient is refused before any search (422)
+PASS no source is refused
+PASS signed out is refused (401)
+PASS search history shows the sources chosen with the question
+PASS the same words asked of other sources are their own entry
+PASS the row still says the answer is not kept
+PASS each source is at least 44 px tall on touch (47, 47, 47)
+PASS nothing runs off a 390 px screen
+PASS the page does not scroll sideways

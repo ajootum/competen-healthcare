@@ -1,0 +1,38 @@
+{
+  "library": [
+    {
+      "title": "Respiratory Assessment",
+      "text": "Respiratory Assessment",
+      "status": "Clinically approved"
+    },
+    {
+      "title": "Basic Blood Gas Interpretation",
+      "text": "Basic Blood Gas Interpretation",
+      "status": "Clinically approved"
+    }
+  ],
+  "out": [
+    {
+      "question": "What should a nurse be able to do about oxygen therapy?",
+      "mode": "explain",
+      "library": {
+        "ok": true,
+        "text": "The approved library entries available are titled Respiratory Assessment and Basic Blood Gas Interpretation, but neither entry contains detailed content about what a nurse should be able to do regarding oxygen therapy. [C1] [C2]",
+        "cited": [
+          1,
+          2
+        ]
+      },
+      "model": "claude-sonnet-4-6"
+    },
+    {
+      "question": "How do I interpret a blood gas?",
+      "mode": "simplify",
+      "library": {
+        "ok": false,
+        "reason": "uncited_sentence"
+      },
+      "model": "claude-sonnet-4-6"
+    }
+  ]
+}

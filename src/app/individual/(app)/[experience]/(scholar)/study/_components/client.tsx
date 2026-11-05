@@ -11,6 +11,7 @@ import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE,
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 import { DisclaimerBadge, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
+import { ASK_SOURCE_LABEL, DEFAULT_ASK_SOURCES, RESEARCH_LEAVES, isDefaultSources, searchedLine, toggleAskSource, type AskSource, type Searched } from "@/lib/individual/scholar/ask-sources";
 import { HistoryNotice, useSearchHistoryChoice } from "@/app/individual/_components/SearchHistoryChoice";
 import { RecallCard } from "./recall-card";
 import { RECALL, type RecallChoice } from "@/lib/individual/scholar/recall-choices";
@@ -440,9 +441,12 @@ export function UploadPanel({ rules }: { rules: UploadRulesView }) {
 
 // ── UNDERSTAND ─────────────────────────────────────────────────────────────────────────────────────
 
-type Source = { tag: string; chunkId: string; materialId: string; citation: string; excerpt: string };
+type Source = { tag: string; chunkId: string; materialId: string; citation: string; excerpt: string; origin?: "materials" | "saved"; savedPath?: string };
 type Supplementary = { text?: string; label?: string; withheld?: string } | null;
-type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary; actionId?: string };
+type Explained = { q: string; answer?: string; message?: string; sources: Source[]; provenance?: { model: string; promptVersion: string }; supplementary?: Supplementary; actionId?: string; searched?: Searched[]; library?: AskLibraryPart | null; research?: AskResearchPart | null };
+type ResearchRef = { tag?: string | null; title: string; journal: string | null; year: number | null; provider: string; url: string; excerpt?: string | null };
+type AskLibraryPart = { label: string; items: { title: string; code: string | null; outcome: string | null; status: string }[] };
+type AskResearchPart = { label: string; text: string | null; withheld: string | null; used: ResearchRef[]; found: ResearchRef[] };
 
 // COMPETEN-SCHOLAR-01 S3: ways of learning from the same passages. "Tutor me" is per section (TutorPanel).
 type Mode = "explain" | "summary" | "simplify" | "deeper";
@@ -491,9 +495,31 @@ function BeyondNotes({ s }: { s: Supplementary | undefined }) {
  */
 export type ExplainScopes = { materials: { id: string; title: string }[]; competencies: { id: string; title: string }[] };
 
-export function ExplainPanel({ materialId, materialIds, scopes, consent, offMessage, title = "Ask your notes", hint }: {
-  materialId?: string; materialIds?: string[]; scopes?: ExplainScopes; consent: boolean; offMessage?: string; title?: string; hint?: string;
+/** SCHOLAR-ASK-SOURCES-01: where this one question looks. Compact chips that wrap on a phone; the last one chosen stays on. */
+function SourcePicker({ offered, selected, setSelected }: { offered: readonly AskSource[]; selected: readonly AskSource[]; setSelected: (s: AskSource[]) => void }) {
+  return (
+    <fieldset className="mt-2">
+      <legend className="text-[12.5px] font-semibold text-gray-700">Look in</legend>
+      <div className="mt-1.5 flex flex-wrap gap-2">
+        {offered.map(s => {
+          const on = selected.includes(s);
+          return (
+            <label key={s} className={`inline-flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1.5 text-[13px] font-semibold pointer-coarse:py-3 has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 ${on ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-800"}`} style={on ? { background: accent } : undefined}>
+              <input type="checkbox" className="sr-only" checked={on} onChange={() => setSelected(toggleAskSource(selected, s))} />
+              <span aria-hidden>{on ? "\u2713" : "+"}</span>{ASK_SOURCE_LABEL[s]}
+            </label>
+          );
+        })}
+      </div>
+      {selected.includes("research") && <p className="mt-1.5 text-[12.5px] text-gray-600">{RESEARCH_LEAVES}</p>}
+    </fieldset>
+  );
+}
+
+export function ExplainPanel({ materialId, materialIds, scopes, askSources, consent, offMessage, title = "Ask your notes", hint }: {
+  materialId?: string; materialIds?: string[]; scopes?: ExplainScopes; askSources?: readonly AskSource[]; consent: boolean; offMessage?: string; title?: string; hint?: string;
 }) {
+  const [looked, setLooked] = useState<AskSource[]>([...DEFAULT_ASK_SOURCES]);
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -507,19 +533,26 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
     e.preventDefault();
     const text = q.trim();
     if (!text || busy) return;
-    if (scope === "chosen" && !chosen.length) { setError("Choose at least one material."); return; }
-    if (scope === "competency" && !competency) { setError("Choose a competency."); return; }
+    const inMaterials = looked.includes("materials");
+    if (inMaterials && scope === "chosen" && !chosen.length) { setError("Choose at least one material."); return; }
+    if (inMaterials && scope === "competency" && !competency) { setError("Choose a competency."); return; }
     setBusy(true); setError("");
-    const r = await post("/api/individual/scholar/explain", {
-      question: text, materialId, mode,
-      ...(materialIds?.length ? { materialIds } : scope === "chosen" ? { materialIds: chosen } : scope === "competency" ? { competencyId: competency } : {}),
+    // Materials alone stays on the explain route, unchanged. Anything more goes to the route that keeps each source apart.
+    const across = !isDefaultSources(looked);
+    const r = await post(across ? "/api/individual/scholar/explain/across" : "/api/individual/scholar/explain", {
+      question: text, ...(across ? { sources: looked } : { materialId }), mode,
+      ...(!inMaterials ? {} : materialIds?.length ? { materialIds } : scope === "chosen" ? { materialIds: chosen } : scope === "competency" ? { competencyId: competency } : {}),
     });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "No explanation could be produced."); return; }
-    setItems(list => [{ q: text, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary }, ...list]);
+    const searched: Searched[] | undefined = r.json.searched ?? (askSources ? [{ source: "materials", state: r.json.answer ? "used" : "no_match", count: (r.json.sources ?? []).length, note: null }] : undefined);
+    setItems(list => [{ q: text, answer: r.json.answer ?? undefined, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary, searched, library: r.json.library, research: r.json.research }, ...list]);
     setQ("");
+    // The choice is this question's: the next one starts from the learner's materials again.
+    const asked = looked;
+    setLooked([...DEFAULT_ASK_SOURCES]);
     // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to is kept once in the learner's own history (their words, never the reply), where they turned it on.
-    if (historyChoice.on) void recordHistory({ activity: "ask", query: text, materialId: materialId ?? null });
+    if (historyChoice.on) void recordHistory({ activity: "ask", query: text, materialId: materialId ?? null, ...(askSources ? { sources: asked } : {}) });
   }
   return (
     <section aria-labelledby="explain-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
@@ -533,11 +566,12 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
           <textarea id={`explain-q-${materialId ?? "all"}`} rows={2} maxLength={QUESTION_MAX} value={q} onChange={e => setQ(e.target.value)}
             placeholder="For example: explain the stages of acute kidney injury"
             className={`w-full resize-y rounded-xl border border-gray-300 px-3 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
-          {scopes && !materialId && !materialIds?.length && (
+          {askSources && askSources.length > 1 && <SourcePicker offered={askSources} selected={looked} setSelected={setLooked} />}
+          {scopes && !materialId && !materialIds?.length && looked.includes("materials") && (
             <fieldset className="mt-3">
-              <legend className="text-[12.5px] font-semibold text-gray-700">Ask it of</legend>
+              <legend className="text-[12.5px] font-semibold text-gray-700">{askSources && askSources.length > 1 ? "Which of my materials" : "Ask it of"}</legend>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px] text-gray-800">
-                <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "all"} onChange={() => setScope("all")} /> All my notes</label>
+                <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "all"} onChange={() => setScope("all")} /> All my materials</label>
                 {scopes.materials.length > 1 && <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "chosen"} onChange={() => setScope("chosen")} /> Materials I choose</label>}
                 {scopes.competencies.length > 0 && <label className="inline-flex items-center gap-1.5"><input type="radio" name="explain-scope" checked={scope === "competency"} onChange={() => setScope("competency")} /> Notes linked to a competency</label>}
               </div>
@@ -560,7 +594,7 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
             </fieldset>
           )}
           <ModePicker mode={mode} setMode={setMode} idPrefix={`explain-${materialId ?? "all"}`} />
-          <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || !q.trim()}>{busy ? "Reading your notes…" : MODES.find(m => m.key === mode)!.label}</button>
+          <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || !q.trim()}>{busy ? (isDefaultSources(looked) ? "Reading your notes…" : "Searching your chosen sources…") : MODES.find(m => m.key === mode)!.label}</button>
           <HistoryNotice />
         </form>
       )}
@@ -572,7 +606,31 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
   );
 }
 
+/** SCHOLAR-ASK-SOURCES-01: an external part, visibly apart from what is the learner's own, or why it was held back. */
+function AskExternalPart({ heading, label, text, withheld, children }: { heading: string; label: string; text: string | null; withheld: string | null; children?: React.ReactNode }) {
+  return (
+    <aside aria-label={heading} className="mt-4 rounded-xl border-2 border-dashed border-sky-300 bg-sky-50/60 p-3.5">
+      <p className="text-[12px] font-bold uppercase tracking-[0.12em] text-sky-900">{heading}</p>
+      <p className="mt-0.5 text-[12.5px] text-sky-950">{label}</p>
+      {text && <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{text}</p>}
+      {withheld && <p className="mt-2 text-[13px] text-gray-700">{withheld}</p>}
+      {children}
+    </aside>
+  );
+}
+
+function ResearchRefLine({ r }: { r: ResearchRef }) {
+  return (
+    <li className="text-[13px] text-gray-700">
+      {r.tag && <><span className="font-mono text-[12px] font-bold" style={{ color: accent }}>[{r.tag}]</span>{" "}</>}
+      <a href={r.url} target="_blank" rel="noopener noreferrer" className={`underline underline-offset-2 hover:text-gray-900 ${focusRing}`}>{r.title}</a>
+      {" "}<span className="text-gray-600">{[r.journal, r.year, r.provider].filter(Boolean).join(" · ")}</span>
+    </li>
+  );
+}
+
 function ExplanationView({ item }: { item: Explained }) {
+  const own = item.sources.filter(s => s.origin !== "saved"), saved = item.sources.filter(s => s.origin === "saved");
   return (
     <article className="rounded-xl border border-gray-200 p-4">
       <p className="text-[12.5px] font-semibold text-gray-500">You asked</p>
@@ -584,20 +642,45 @@ function ExplanationView({ item }: { item: Explained }) {
           <div className="mt-3"><SourceNotice /></div>
           <BeyondNotes s={item.supplementary} />
         </>
-      ) : (
+      ) : item.message ? (
         <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2.5 text-[14px] text-gray-800">{item.message}</p>
-      )}
-      {item.sources.length > 0 && (
-        <div className="mt-3">
-          <p className="text-[12.5px] font-semibold text-gray-600">{item.answer ? "Sources in your notes" : "Passages it was given"}</p>
+      ) : null}
+      {[{ list: own, heading: item.answer ? (saved.length ? "Sources in your materials" : "Sources in your notes") : "Passages it was given" }, { list: saved, heading: "Sources in your saved learning" }].filter(g => g.list.length > 0).map(g => (
+        <div key={g.heading} className="mt-3">
+          <p className="text-[12.5px] font-semibold text-gray-600">{g.heading}</p>
           <ul className="mt-1 space-y-1">
-            {item.sources.map(s => (
+            {g.list.map(s => (
               <li key={s.tag} className="text-[13px] text-gray-700">
                 <span className="font-mono text-[12px] font-bold" style={{ color: accent }}>[{s.tag}]</span>{" "}
-                <Link href={sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 hover:text-gray-900 ${focusRing}`}>{s.citation}</Link>
+                <Link href={s.origin === "saved" ? studyHref(s.savedPath ?? "saved") : sourceHref(s.materialId, s.chunkId)} className={`underline underline-offset-2 hover:text-gray-900 ${focusRing}`}>{s.citation}</Link>
               </li>
             ))}
           </ul>
+        </div>
+      ))}
+      {item.library && item.library.items.length > 0 && (
+        <AskExternalPart heading="In Competen Library" label={item.library.label} text={null} withheld={null}>
+          <ul className="mt-2 space-y-1">{item.library.items.map(l => (
+            <li key={`${l.title}|${l.outcome ?? ""}`} className="text-[13px] text-gray-700">{l.code ? `${l.code} ` : ""}{l.title}{l.outcome ? `: ${l.outcome}` : ""} <span className="text-gray-600">· {l.status}</span></li>
+          ))}</ul>
+        </AskExternalPart>
+      )}
+      {item.research && (
+        <AskExternalPart heading="From research literature" label={item.research.label} text={item.research.text} withheld={item.research.withheld}>
+          {item.research.used.length > 0 && <>
+            <p className="mt-2 text-[12.5px] font-semibold text-gray-700">Used as evidence (abstract read, full text not read)</p>
+            <ul className="mt-1 space-y-1">{item.research.used.map(r => <ResearchRefLine key={r.url} r={r} />)}</ul>
+          </>}
+          {item.research.found.length > 0 && <>
+            <p className="mt-2 text-[12.5px] font-semibold text-gray-700">Found, not used as evidence</p>
+            <ul className="mt-1 space-y-1">{item.research.found.map(r => <ResearchRefLine key={r.url} r={r} />)}</ul>
+          </>}
+        </AskExternalPart>
+      )}
+      {item.searched && item.searched.length > 0 && (
+        <div className="mt-3 border-t border-gray-100 pt-2">
+          <p className="text-[12.5px] font-semibold text-gray-600">What Scholar searched</p>
+          <ul className="mt-0.5 space-y-0.5">{item.searched.map(s => <li key={s.source} className="text-[12.5px] text-gray-600">{searchedLine(s)}</li>)}</ul>
         </div>
       )}
       {item.provenance && <p className="mt-2 text-[11.5px] text-gray-400">Model {item.provenance.model} · prompt {item.provenance.promptVersion}</p>}

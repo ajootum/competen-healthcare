@@ -4,7 +4,10 @@ import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { countDue, learnerProgramme, listCollections, listMappings, listMaterials, listProgrammes, materialExtras } from "@/lib/individual/scholar/store";
+import { offeredAskSources } from "@/lib/individual/scholar/ask-sources";
+import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
+import { askLibraryReady } from "@/lib/individual/scholar/evidence-recovery";
+import { countDue, librarySchema, learnerProgramme, listCollections, listMappings, listMaterials, listProgrammes, materialExtras } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { uploadRules } from "@/lib/individual/scholar/config";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
@@ -81,6 +84,8 @@ export default async function MyLearning({ params, searchParams }: { params: Pro
     materials: list.map(m => ({ id: m.id, title: m.title })),
     competencies: liveIds.map(id => ({ id, title: `${names.get(id)?.code ? `${names.get(id)!.code} ` : ""}${names.get(id)?.title ?? "Competency"}` })).sort((a, b) => a.title.localeCompare(b.title)),
   };
+  // SCHOLAR-ASK-SOURCES-01: only the sources that can run now are offered for a question.
+  const askSources = offeredAskSources({ savedReady: await librarySchema(ctx.admin, ctx.userId), sourceModes: policy.scholarResearch.modes, researchOperational: await scholarResearchOperational(ctx.admin).catch(() => false), libraryReady: await askLibraryReady(ctx.admin, policy, learner.competencies).catch(() => false) });
   const rowOf = (m: (typeof list)[number]) => libraryRow(m, { quality: extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null, stamp: stampOf(m.createdAt), paper: paperIds.has(m.id) });
   const groups: LibraryGroup[] = shelves
     ? [...shelves.map(s => ({ key: s.id, name: s.name, rows: list.filter(m => extras.byId.get(m.id)?.collectionId === s.id).map(rowOf) })),
@@ -194,8 +199,8 @@ export default async function MyLearning({ params, searchParams }: { params: Pro
 
       {materials.ok && materials.data.length > 0 && (
         <div className="mt-5">
-          <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across your library" scopes={scopes}
-            hint="Searches your materials and answers only from what it finds, naming each material it used and citing the page, slide or section. Explanations are not saved." />
+          <ExplainPanel consent={status === "on"} offMessage={status ? aiOffMessage(status) ?? undefined : undefined} title="Ask across your library" scopes={scopes} askSources={askSources}
+            hint="Choose where to look for each question. Scholar starts with your materials, answers only from what it finds, and shows what it searched and what it used. Explanations are not saved." />
         </div>
       )}
 

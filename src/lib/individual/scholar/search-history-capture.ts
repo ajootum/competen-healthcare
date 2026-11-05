@@ -11,6 +11,8 @@ export type CaptureRequest = {
   activity: CapturedActivity; query: string; requestKey?: string;
   materialId?: string | null; chunkId?: string | null; artefactId?: string | null; sessionId?: string | null; step?: number | null;
   topic?: string | null; resultCount?: number | null;
+  /** SCHOLAR-ASK-SOURCES-01: an Ask question's chosen source categories. */
+  sources?: readonly string[];
 };
 
 /** Keep one submitted search or question. Resolves to whether it was kept; never throws. */
