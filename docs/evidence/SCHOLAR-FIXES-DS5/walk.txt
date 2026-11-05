@@ -1,1 +1,38 @@
 PASS an OSCE station is listed
+PASS Finish around an autosave shows no false "could not be saved" (round 0)
+PASS the checklist follows (round 0)
+PASS Finish around an autosave shows no false "could not be saved" (round 1)
+PASS the checklist follows (round 1)
+PASS Finish around an autosave shows no false "could not be saved" (round 2)
+PASS the checklist follows (round 2)
+PASS no OSCE request failed (200)
+PASS a ticked lesson belongs to the export form, outside the list
+PASS no form sits inside another
+PASS the Ask panel stays open after asking on the list
+PASS asking does not leave the page or start a download
+PASS the panel shows a reply or its reason
+PASS on a wide screen My Progress keeps every section open
+PASS Evaluate calls it Next steps, once
+PASS one next step shows, the rest one tap away
+PASS past evaluations show the last three, with the history link
+PASS the history link stays
+PASS Monthly learning review keeps its heading
+PASS no page errors ()
+PASS no hydration or nesting error ()
+PASS the words on study/saved are unchanged (14467 characters)
+PASS the words on study/apply/osce are unchanged (1523 characters)
+PASS the words on study/apply are unchanged (1996 characters)
+PASS the words on study are unchanged (2371 characters)
+PASS the words on study/evaluate?view=monthly are unchanged (1232 characters)
+PASS the words on study/revise are unchanged (1763 characters)
+PASS study/evaluate does not scroll sideways at 390
+PASS study/progress does not scroll sideways at 390
+PASS study/saved does not scroll sideways at 390
+PASS study does not scroll sideways at 390
+PASS study/evaluate?view=monthly does not scroll sideways at 390
+PASS study/apply/osce does not scroll sideways at 390
+PASS Evaluate is shorter on a phone (2894 px, was 3504)
+PASS My Progress is shorter on a phone (2045 px, was 2370)
+PASS three lower sections fold on a phone (3)
+PASS one tap opens a folded section
+PASS Learn, Revise, Apply and Evaluate tabs reach 44 px on touch (44,44,44,44)
