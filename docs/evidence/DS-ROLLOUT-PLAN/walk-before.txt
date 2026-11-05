@@ -1,0 +1,35 @@
+PASS calendar 1440: no horizontal overflow (0px)
+PASS calendar 1440: axe 0 violations
+PASS calendar 1440, folds open: axe 0 violations
+PASS calendar 820: no horizontal overflow (0px)
+PASS calendar 820: axe 0 violations
+PASS calendar 820, folds open: axe 0 violations
+PASS calendar 820: touch targets >= 44px
+PASS calendar 390: no horizontal overflow (0px)
+PASS calendar 390: axe 0 violations
+PASS calendar 390, folds open: axe 0 violations
+PASS calendar 390: touch targets >= 44px
+PASS today 1440: no horizontal overflow (0px)
+PASS today 1440: axe 0 violations
+PASS today 1440, folds open: axe 0 violations
+PASS today 820: no horizontal overflow (0px)
+PASS today 820: axe 0 violations
+PASS today 820, folds open: axe 0 violations
+PASS today 820: touch targets >= 44px
+PASS today 390: no horizontal overflow (0px)
+PASS today 390: axe 0 violations
+PASS today 390, folds open: axe 0 violations
+PASS today 390: touch targets >= 44px
+PASS insights 1440: no horizontal overflow (0px)
+PASS insights 1440: axe 0 violations
+PASS insights 1440, folds open: axe 0 violations
+PASS insights 820: no horizontal overflow (0px)
+PASS insights 820: axe 0 violations
+PASS insights 820, folds open: axe 0 violations
+PASS insights 820: touch targets >= 44px
+PASS insights 390: no horizontal overflow (0px)
+PASS insights 390: axe 0 violations
+PASS insights 390, folds open: axe 0 violations
+PASS insights 390: touch targets >= 44px
+PASS console errors: 0
+PASS 5xx responses: 0

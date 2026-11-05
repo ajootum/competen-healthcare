@@ -139,18 +139,18 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
                   startHref={t.next ? startHref(t.next.href, studyId) : null} resume={t.next ? t.next.rule === "unfinished" : false} starting={t.starting} />
               </>
             ) : (
-              <TodayEmpty accent={x.accent} planHref={calendarHref(base, { span: "month", date: today, today, extra: { ...keep, add: "1" } })} studyNowHref={studyNow} calendarHref={calHref} />
+              <TodayEmpty planHref={calendarHref(base, { span: "month", date: today, today, extra: { ...keep, add: "1" } })} studyNowHref={studyNow} calendarHref={calHref} />
             )}
-            {nba && <NextActionsCard accent={x.accent} items={nba.items} canDecide={nba.canDecide} canPlan={nba.canPlan} dismissed={nba.dismissed} snoozed={nba.snoozed} studyId={studyId} />}
-            <ComingUp accent={x.accent} today={today} items={t.comingUp} calendarHref={calHref} />
+            {nba && <NextActionsCard items={nba.items} canDecide={nba.canDecide} canPlan={nba.canPlan} dismissed={nba.dismissed} snoozed={nba.snoozed} studyId={studyId} />}
+            <ComingUp today={today} items={t.comingUp} calendarHref={calHref} />
             <NotesList notes={t.notes} />
-            <MissedList accent={x.accent} today={today} missed={t.missed} />
+            <MissedList today={today} missed={t.missed} />
           </div>
           <div className="space-y-4">
-            <DueAndReview accent={x.accent} dueCards={t.dueCards} flashcardsHref={flashcards} review={t.upcomingMonthlyReview} hideCards={t.todayItems !== null} />
+            <DueAndReview dueCards={t.dueCards} flashcardsHref={flashcards} review={t.upcomingMonthlyReview} hideCards={t.todayItems !== null} />
             <DoneToday items={t.doneToday} studyId={studyId} />
             {t.hasPlan && <ExamOffers accent={x.accent} offers={t.examOffers} />}
-            {t.hasPlan && t.reflection.enabled && <ReflectionCard accent={x.accent} week={t.reflection.week} answered={t.reflection.answered} offer={t.reflection.offer} settings={t.settings} />}
+            {t.hasPlan && t.reflection.enabled && <ReflectionCard week={t.reflection.week} answered={t.reflection.answered} offer={t.reflection.offer} settings={t.settings} />}
           </div>
         </div>
       </PlanOptimistic>

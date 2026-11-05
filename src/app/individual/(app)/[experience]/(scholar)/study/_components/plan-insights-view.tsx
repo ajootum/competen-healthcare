@@ -5,7 +5,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import type { InsightsView as InsightsData } from "@/lib/individual/scholar/plan-data";
 import { adjustmentRef, planTile, practiceCaption, type Adjustment, type AdjustmentIcon } from "@/lib/individual/scholar/plan-insights";
-import { cardCls, linkBtn, primaryBtn, quietBtn } from "./plan-style";
+import { LearningSection, learnAction, learnBox } from "@/components/ui/scholar-learning";
+import { quietBtn } from "./plan-style";
 import { BulbIcon, CalendarIcon, CardsIcon, ClipboardCheckIcon, ErrorLine, PlanDialog, PracticeIcon, RestartIcon, callJson, errorOf } from "./plan-ui";
 import { EntryEditor } from "./plan-entries";
 import { PlanSetup } from "./plan-setup";
@@ -22,9 +23,9 @@ const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en
 
 function Tile({ label, value, caption, testId }: { label: string; value: string; caption: string; testId: string }) {
   return (
-    <li className="rounded-2xl bg-gray-100 p-4" data-testid={testId}>
+    <li className="rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-4" data-testid={testId}>
       <p className="text-[13.5px] text-gray-700">{label}</p>
-      <p className="mt-1 text-[32px] font-bold leading-tight tabular-nums text-gray-900">{value}</p>
+      <p className="cmp-learn-ink mt-1 text-[32px] font-bold leading-tight tabular-nums">{value}</p>
       <p className="mt-0.5 text-[12.5px] text-gray-700">{caption}</p>
     </li>
   );
@@ -49,14 +50,14 @@ function AdjustmentRow({ a, v, accent, onDeclined }: { a: Adjustment; v: Ready; 
   }
   const plan = a.addToPlan;
   return (
-    <li className="py-3 first:pt-0 last:pb-0" data-testid={`adjustment-${a.id}`}>
+    <li className="rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-3" data-testid={`adjustment-${a.id}`}>
       <div className="flex items-start gap-3">
-        <span className="mt-0.5 text-gray-700">{ICON[a.icon] ?? <BulbIcon size={20} />}</span>
+        <span className="cmp-learn-accent mt-0.5">{ICON[a.icon] ?? <BulbIcon size={20} />}</span>
         <div className="min-w-0 flex-1">
           <p className="text-[15px] font-semibold text-gray-900">{a.title}</p>
           <p className="text-[13.5px] text-gray-700">{a.text}</p>
           <div className="mt-2 flex flex-wrap gap-2">
-            {a.doNow && <Link href={a.doNow.href} className={primaryBtn} style={{ background: accent }}>Do it now<span className="sr-only">: {a.title}</span></Link>}
+            {a.doNow && <Link href={a.doNow.href} className={learnAction.primary}>Do it now<span className="sr-only">: {a.title}</span></Link>}
             {plan && <button type="button" className={quietBtn} onClick={() => setAdding(true)}>Add to plan<span className="sr-only">: {a.title}</span></button>}
             {v.features.decisions && <button type="button" className={quietBtn} disabled={busy} onClick={() => void notNow()}>Not now<span className="sr-only">: {a.title}</span></button>}
           </div>
@@ -84,10 +85,11 @@ export function InsightsView({ view, progressHref, accent }: { view: Ready; prog
   const [hidden, setHidden] = useState<readonly string[]>([]);
   const shown = view.adjustments.filter(a => !hidden.includes(a.id));
   return (
-    <section aria-labelledby="plan-insights-h" className={`${cardCls} space-y-5`}>
+    <section aria-labelledby="plan-insights-h" className="space-y-4">
+      <div className={`${learnBox("summary")} space-y-4 p-4 sm:p-5`}>
       <div className="flex items-baseline justify-between gap-3">
-        <h2 id="plan-insights-h" className="text-[22px] font-bold text-gray-900">Insights</h2>
-        <p className="text-[13.5px] text-gray-700">Last {tiles.windowDays} days</p>
+        <h2 id="plan-insights-h" className="cmp-learn-ink text-[22px] font-bold">Insights</h2>
+        <p className="text-[13.5px] text-gray-800">Last {tiles.windowDays} days</p>
       </div>
       <ul className="grid grid-cols-2 gap-3" aria-label="Last 28 days">
         <Tile testId="tile-study-days" label="Study days" value={String(tiles.studyDays)} caption="Qualifying activity" />
@@ -108,17 +110,17 @@ export function InsightsView({ view, progressHref, accent }: { view: Ready; prog
           )}
         </ul>
       )}
-
-      <div>
-        <h3 className="text-[16px] font-bold text-gray-900">Suggested next adjustments</h3>
-        {shown.length === 0
-          ? <p className="mt-1 text-[14px] text-gray-700">Nothing to adjust right now. Keep studying and suggestions appear as your evidence grows.</p>
-          : <ul className="mt-3 divide-y divide-gray-100">{shown.map(a => <AdjustmentRow key={a.id} a={a} v={view} accent={accent} onDeclined={id => setHidden(h => [...h, id])} />)}</ul>}
       </div>
 
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-gray-100 pt-3">
-        <p className="text-[12.5px] text-gray-600">These describe how you study. They are not an assessment of competence and are not added to your Passport.</p>
-        <Link href={progressHref} className={linkBtn}>See detail in Progress</Link>
+      <LearningSection tone="next" icon="target" title="Suggested next adjustments" caps={false} ariaLabel="Suggested next adjustments">
+        {shown.length === 0
+          ? <p className="mt-2 text-[14px] text-gray-800">Nothing to adjust right now. Keep studying and suggestions appear as your evidence grows.</p>
+          : <ul className="mt-3 space-y-2">{shown.map(a => <AdjustmentRow key={a.id} a={a} v={view} accent={accent} onDeclined={id => setHidden(h => [...h, id])} />)}</ul>}
+      </LearningSection>
+
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[13px] text-gray-700">These describe how you study. They are not an assessment of competence and are not added to your Passport.</p>
+        <span className="cmp-learn-summary"><Link href={progressHref} className={learnAction.link}>See detail in Progress</Link></span>
       </div>
     </section>
   );

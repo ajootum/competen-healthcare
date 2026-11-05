@@ -13,7 +13,8 @@ import type { ReflectionOffer } from "@/lib/individual/scholar/plan-reflection";
 import { addDay, settingsWithSessionMinutes } from "@/lib/individual/scholar/plan-view";
 import { dayWord, type ComingUpItem, type DoneItem } from "@/lib/individual/scholar/plan-today-view";
 import { groupCompleted } from "@/lib/individual/scholar/plan-workspace";
-import { cardCls, fieldCls, hintCls, labelCls, linkBtn, pillOutline, pillPrimary, primaryBtn, quietBtn, secondaryBtn, summaryCls, tagCls } from "./plan-style";
+import { learnAction, learnBox, type LearningTone } from "@/components/ui/scholar-learning";
+import { fieldCls, hintCls, labelCls, pillOutline, primaryBtn, quietBtn, secondaryBtn, summaryCls, tagCls } from "./plan-style";
 import { CheckIcon, ErrorLine, PersonIcon, PlanDialog, SparkleIcon, callJson, errorOf } from "./plan-ui";
 import { DoneGroup } from "./plan-agenda-rows";
 import { PlanSetup } from "./plan-setup";
@@ -23,6 +24,11 @@ import { PlanSetup } from "./plan-setup";
 // A choice that cannot be remembered (migration 840 absent) is simply not offered. The server remembers each choice as an append-only event.
 
 const API = "/api/individual/scholar/plan";
+
+// Scholar learning design system (DS rollout, My Plan): each block in its tone, with one filled primary in the tone's ink. The words are unchanged.
+const toned = (t: LearningTone) => `${learnBox(t)} p-4 sm:p-5`;
+const primary = learnAction.primary;
+const whiteRow = "rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]";
 
 // ── the next activity ──
 export function TodayNextCard({ accent, today, next, alternatives, canDecide, settings, extras, declinedHidden, about, startHref, resume, starting }: {
@@ -68,9 +74,9 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
   }
 
   return (
-    <section aria-labelledby={`${uid}-h`} className={cardCls} data-testid="plan-next">
+    <section aria-labelledby={`${uid}-h`} className={toned("next")} data-testid="plan-next">
       <div className="flex items-start justify-between gap-3">
-        <h2 id={`${uid}-h`} className="text-[16px] font-bold text-gray-900">Your next study session</h2>
+        <h2 id={`${uid}-h`} className="cmp-learn-ink text-[16px] font-bold">Your next study session</h2>
         {next && <span className={tagCls}>{resume ? "Started" : "Suggested"}</span>}
       </div>
       {next ? (
@@ -87,9 +93,9 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
           </details>
           <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
             <p className="text-[14px] tabular-nums text-gray-700">{next.minutes !== null ? `${next.minutes} minutes` : ""}</p>
-            {startHref && <Link href={startHref} className={primaryBtn} style={{ background: accent }}>{resume ? "Resume" : "Start"}<span className="sr-only">: {next.title}</span></Link>}
+            {startHref && <Link href={startHref} className={primary}>{resume ? "Resume" : "Start"}<span className="sr-only">: {next.title}</span></Link>}
           </div>
-          <div className="mt-3 border-t border-gray-100 pt-2">
+          <div className="mt-3 border-t border-[var(--learn-border)] pt-2">
             <button type="button" className={quietBtn} aria-expanded={more} aria-controls={`${uid}-more`} onClick={() => setMore(m => !m)}>{more ? "Fewer options" : "More"}</button>
             <div id={`${uid}-more`} className={`${more ? "mt-2 flex" : "hidden"} flex-wrap gap-2`}>
               {canDecide && <button type="button" className={quietBtn} disabled={busy} onClick={() => void decide("postpone")}>Postpone<span className="sr-only"> to tomorrow</span></button>}
@@ -102,7 +108,7 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
           {showAlt && (
             <ul id={`${uid}-alt`} className="mt-2 space-y-2">
               {alternatives.map(a => (
-                <li key={a.ref} className="rounded-xl border border-gray-200 p-3">
+                <li key={a.ref} className={`${whiteRow} p-3`}>
                   <p className="flex flex-wrap items-baseline gap-x-3 text-[15px] font-semibold text-gray-900"><span className="min-w-0 break-words">{a.title}</span>{a.minutes !== null && <span className="text-[13px] font-normal tabular-nums text-gray-700">{a.minutes} min</span>}</p>
                   <p className="mt-0.5 text-[13.5px] text-gray-700">{a.why}</p>
                   {a.href && <Link href={a.href} className={`${secondaryBtn} mt-2`}>Start this instead<span className="sr-only">: {a.title}</span></Link>}
@@ -117,7 +123,7 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
           <p className="mt-3 text-[16px] font-semibold text-gray-900">Nothing is suggested right now.</p>
           <p className="mt-1 text-[14px] text-gray-700">Nothing is waiting on you today. You can still learn from your library whenever you like.</p>
           <div className="mt-3 flex flex-wrap gap-2">
-            <Link href={experienceHref("scholar", "study/learn")} className={primaryBtn} style={{ background: accent }}>Go to Learn</Link>
+            <Link href={experienceHref("scholar", "study/learn")} className={primary}>Go to Learn</Link>
             <button type="button" className={quietBtn} aria-expanded={adjusting} onClick={() => setAdjusting(a => !a)}>{starting ? "Personalise plan" : "Adjust plan"}</button>
           </div>
         </>
@@ -135,9 +141,9 @@ export function TodayNextCard({ accent, today, next, alternatives, canDecide, se
 export function StartingPlanNote({ accent, today, settings, extras }: { accent: string; today: string; settings: ScholarPlanSettings; extras: boolean }) {
   const [open, setOpen] = useState(false);
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-200 bg-gray-50 px-4 py-2" data-testid="plan-starting">
-      <p className="text-[13.5px] text-gray-800"><span className="font-semibold">Starting plan</span> · {settings.sessionMinutes ?? 30} minutes a session, {settings.daysPerWeek} days a week. Nothing is saved until you set your own.</p>
-      <button type="button" className={`${linkBtn} text-[13.5px]`} style={{ color: accent }} onClick={() => setOpen(true)}>Personalise it</button>
+    <div className={`${learnBox("next")} flex flex-wrap items-center justify-between gap-2 px-4 py-2`} data-testid="plan-starting">
+      <p className="text-[13.5px] text-gray-800"><span className="cmp-learn-ink font-semibold">Starting plan</span> · {settings.sessionMinutes ?? 30} minutes a session, {settings.daysPerWeek} days a week. Nothing is saved until you set your own.</p>
+      <button type="button" className={learnAction.link} onClick={() => setOpen(true)}>Personalise it</button>
       {open && (
         <PlanDialog title="Personalise your plan" onClose={() => setOpen(false)} wide>
           <PlanSetup accent={accent} today={today} initial={settings} starting extras={extras} bare onDone={() => setOpen(false)} />
@@ -148,16 +154,16 @@ export function StartingPlanNote({ accent, today, settings, extras }: { accent: 
 }
 
 // ── what comes up next: the plan and the learner's own calendar, one list ──
-export function ComingUp({ accent, today, items, calendarHref }: { accent: string; today: string; items: ComingUpItem[]; calendarHref: string }) {
+export function ComingUp({ today, items, calendarHref }: { today: string; items: ComingUpItem[]; calendarHref: string }) {
   return (
-    <section aria-labelledby="plan-up-h" className={cardCls} data-testid="plan-coming-up">
-      <h2 id="plan-up-h" className="text-[16px] font-bold text-gray-900">Coming up</h2>
+    <section aria-labelledby="plan-up-h" className={toned("summary")} data-testid="plan-coming-up">
+      <h2 id="plan-up-h" className="cmp-learn-ink text-[16px] font-bold">Coming up</h2>
       {items.length === 0 ? (
         <p className="mt-1 text-[14px] text-gray-700">Nothing else is planned yet. Add an activity in your calendar, or come back tomorrow.</p>
       ) : (
-        <ul className="mt-2 divide-y divide-gray-100">
+        <ul className="mt-2 space-y-2">
           {items.map(i => (
-            <li key={i.key} className="flex items-center gap-3 py-2.5 first:pt-0 last:pb-0">
+            <li key={i.key} className={`flex items-center gap-3 ${whiteRow} px-3 py-2.5`}>
               <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${i.source === "personal" ? "bg-blue-50 text-blue-900" : "bg-gray-100 text-gray-800"}`}>{i.source === "personal" ? <PersonIcon size={16} /> : <SparkleIcon size={16} />}</span>
               <div className="min-w-0 flex-1">
                 <p className="break-words text-[14.5px] font-semibold text-gray-900">{i.title}</p>
@@ -170,7 +176,7 @@ export function ComingUp({ accent, today, items, calendarHref }: { accent: strin
           ))}
         </ul>
       )}
-      <Link href={calendarHref} className={`${linkBtn} mt-1 text-[13.5px]`} style={{ color: accent }}>Open the calendar</Link>
+      <Link href={calendarHref} className={`${learnAction.link} mt-1`}>Open the calendar</Link>
     </section>
   );
 }
@@ -179,18 +185,18 @@ export function ComingUp({ accent, today, items, calendarHref }: { accent: strin
 export function DoneToday({ items, studyId = null }: { items: DoneItem[]; studyId?: string | null }) {
   const rows = groupCompleted(items);
   return (
-    <section aria-labelledby="plan-done-h" className={cardCls} data-testid="plan-done-today">
-      <h2 id="plan-done-h" className="text-[16px] font-bold text-gray-900">Completed today</h2>
+    <section aria-labelledby="plan-done-h" className={toned("record")} data-testid="plan-done-today">
+      <h2 id="plan-done-h" className="cmp-learn-ink text-[16px] font-bold">Completed today</h2>
       {items.length === 0 ? (
         <p className="mt-1 text-[14px] text-gray-700">Nothing recorded yet today. What you study appears here.</p>
       ) : (
         <ul className="mt-1">
           {rows.map(r => r.type === "group" ? <DoneGroup key={r.key} row={r} studyId={studyId} /> : (
-            <li key={r.item.key} className="flex items-start gap-3 border-b border-gray-100 py-2.5 last:border-b-0">
-              <span className="mt-0.5 text-green-800"><CheckIcon size={18} /></span>
+            <li key={r.item.key} className="flex items-start gap-3 border-b border-[var(--learn-border)] py-2.5 last:border-b-0">
+              <span className="cmp-learn-accent mt-0.5"><CheckIcon size={18} /></span>
               <div className="min-w-0 flex-1">
                 <p className="break-words text-[14px] font-semibold text-gray-900">{r.item.href ? <Link href={r.item.href} className="underline underline-offset-2">{r.item.title}</Link> : r.item.title}</p>
-                {r.item.detail && <p className="text-[12.5px] text-gray-600">{r.item.detail}{r.item.basis === "self_reported" ? " (your word, not a record)" : ""}</p>}
+                {r.item.detail && <p className="text-[13px] text-gray-700">{r.item.detail}{r.item.basis === "self_reported" ? " (your word, not a record)" : ""}</p>}
               </div>
             </li>
           ))}
@@ -201,8 +207,8 @@ export function DoneToday({ items, studyId = null }: { items: DoneItem[]; studyI
 }
 
 // ── cards due, and the monthly review that is coming ──
-export function DueAndReview({ accent, dueCards, flashcardsHref, review, hideCards = false }: {
-  accent: string; dueCards: number; flashcardsHref: string;
+export function DueAndReview({ dueCards, flashcardsHref, review, hideCards = false }: {
+  dueCards: number; flashcardsHref: string;
   /** Today's schedule already lists the cards due (one row): not said twice. */
   hideCards?: boolean;
   review: { month: string; recommendedDate: string; late: boolean; startHref: string } | null;
@@ -213,17 +219,17 @@ export function DueAndReview({ accent, dueCards, flashcardsHref, review, hideCar
   return (
     <section aria-label="Revision and review" className="grid gap-3 sm:grid-cols-2">
       {showCards && (
-        <div className={cardCls}>
-          <h2 className="text-[15px] font-bold text-gray-900">Revision due</h2>
+        <div className={toned("quickCheck")}>
+          <h2 className="cmp-learn-ink text-[15px] font-bold">Revision due</h2>
           <p className="mt-0.5 text-[14px] text-gray-700"><span className="font-semibold tabular-nums">{dueCards}</span> card{dueCards === 1 ? "" : "s"} reached {dueCards === 1 ? "its" : "their"} review date.</p>
-          <Link href={flashcardsHref} className={`${secondaryBtn} mt-3`}>Review cards<span className="sr-only"> ({dueCards} due)</span></Link>
+          <Link href={flashcardsHref} className={`${primary} mt-3`}>Review cards<span className="sr-only"> ({dueCards} due)</span></Link>
         </div>
       )}
       {review && (
-        <div className={cardCls}>
-          <h2 className="text-[15px] font-bold text-gray-900">Monthly review coming up</h2>
+        <div className={toned("check")}>
+          <h2 className="cmp-learn-ink text-[15px] font-bold">Monthly review coming up</h2>
           <p className="mt-0.5 text-[14px] text-gray-700">{review.late ? "Recommended earlier, and still open." : `Recommended around ${day(review.recommendedDate)}.`} Optional: nothing waits on it.</p>
-          <Link href={review.startHref} className={`${secondaryBtn} mt-3`} style={{ color: accent }}>Open the review</Link>
+          <Link href={review.startHref} className={`${primary} mt-3`}>Open the review</Link>
         </div>
       )}
     </section>
@@ -244,9 +250,9 @@ export function NotesList({ notes }: { notes: TodayNote[] }) {
     router.refresh();
   }
   return (
-    <section aria-labelledby="plan-notes-h" className={cardCls}>
-      <h2 id="plan-notes-h" className="text-[15px] font-bold text-gray-900">About your plan</h2>
-      <ul className="mt-2 divide-y divide-gray-100">
+    <section aria-labelledby="plan-notes-h" className={toned("summary")}>
+      <h2 id="plan-notes-h" className="cmp-learn-ink text-[15px] font-bold">About your plan</h2>
+      <ul className="mt-2 divide-y divide-[var(--learn-border)]">
         {notes.map((n, i) => (
           <li key={`${i}-${n.text.slice(0, 24)}`} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <p className="min-w-0 text-[14px] text-gray-800">{n.text}</p>
@@ -260,7 +266,7 @@ export function NotesList({ notes }: { notes: TodayNote[] }) {
 }
 
 // ── missed, not rescheduled: a calendar move on the learner's say ──
-export function MissedList({ accent, today, missed }: { accent: string; today: string; missed: MissedItem[] }) {
+export function MissedList({ today, missed }: { today: string; missed: MissedItem[] }) {
   const router = useRouter();
   const uid = useId();
   const [open, setOpen] = useState("");
@@ -277,23 +283,23 @@ export function MissedList({ accent, today, missed }: { accent: string; today: s
     setOpen(""); router.refresh();
   }
   return (
-    <section aria-labelledby={`${uid}-h`} className={cardCls}>
-      <h2 id={`${uid}-h`} className="text-[15px] font-bold text-gray-900">Missed</h2>
-      <p className="text-[13px] text-gray-600">Not counted against you. Put it on a day that suits you, or leave it.</p>
-      <ul className="mt-2 divide-y divide-gray-100">
+    <section aria-labelledby={`${uid}-h`} className={toned("record")}>
+      <h2 id={`${uid}-h`} className="cmp-learn-ink text-[15px] font-bold">Missed</h2>
+      <p className="text-[13.5px] text-gray-800">Not counted against you. Put it on a day that suits you, or leave it.</p>
+      <ul className="mt-2 space-y-2">
         {missed.map(m => (
-          <li key={m.key} className="py-2.5 first:pt-0 last:pb-0">
+          <li key={m.key} className={`${whiteRow} px-3 py-2.5`}>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <p className="min-w-0 break-words text-[14px] text-gray-800"><span className="font-semibold">{m.title}</span> · {m.reason}</p>
               <button type="button" className={`${secondaryBtn} shrink-0`} aria-expanded={open === m.key} onClick={() => setOpen(o => (o === m.key ? "" : m.key))}>Reschedule<span className="sr-only">: {m.title}</span></button>
             </div>
             {open === m.key && (
-              <form className="mt-2 flex flex-wrap items-end gap-2 rounded-xl border border-gray-200 bg-gray-50 p-3" onSubmit={e => { e.preventDefault(); void move(m); }}>
+              <form className="mt-2 flex flex-wrap items-end gap-2 rounded-xl bg-[var(--learn-surface)] p-3" onSubmit={e => { e.preventDefault(); void move(m); }}>
                 <div>
                   <label htmlFor={`${uid}-d`} className={labelCls}>Move to</label>
                   <input id={`${uid}-d`} type="date" className={`${fieldCls} w-auto`} value={to} min={today} max={horizon} required onChange={e => setTo(e.target.value)} />
                 </div>
-                <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : "Save the new day"}</button>
+                <button type="submit" className={primary} disabled={busy}>{busy ? "Saving…" : "Save the new day"}</button>
                 <button type="button" className={secondaryBtn} disabled={busy} onClick={() => setOpen("")}>Cancel</button>
               </form>
             )}
@@ -322,9 +328,9 @@ export function ExamOffers({ accent, offers }: { accent: string; offers: ExamOff
   }
   const day = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" });
   return (
-    <section aria-labelledby="plan-exam-h" className={cardCls}>
-      <h2 id="plan-exam-h" className="text-[15px] font-bold text-gray-900">An exam in your calendar</h2>
-      <ul className="mt-2 divide-y divide-gray-100">
+    <section aria-labelledby="plan-exam-h" className={toned("next")}>
+      <h2 id="plan-exam-h" className="cmp-learn-ink text-[15px] font-bold">An exam in your calendar</h2>
+      <ul className="mt-2 divide-y divide-[var(--learn-border)]">
         {list.map(o => (
           <li key={o.key} className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
             <p className="min-w-0 break-words text-[14px] text-gray-800"><span className="font-semibold">{o.title}</span> · {day(o.date)}</p>
@@ -358,8 +364,8 @@ const WORKLOAD = [
 function readKept(key: string): boolean { try { return window.localStorage.getItem(key) === "kept"; } catch { return false; } }
 function subscribeKept(cb: () => void) { window.addEventListener("storage", cb); return () => window.removeEventListener("storage", cb); }
 
-export function ReflectionCard({ accent, week, answered, offer, settings }: {
-  accent: string; week: string; answered: boolean; offer: ReflectionOffer | null; settings: ScholarPlanSettings | null;
+export function ReflectionCard({ week, answered, offer, settings }: {
+  week: string; answered: boolean; offer: ReflectionOffer | null; settings: ScholarPlanSettings | null;
 }) {
   const router = useRouter();
   const uid = useId();
@@ -401,9 +407,9 @@ export function ReflectionCard({ accent, week, answered, offer, settings }: {
   const showOffer = !!shownOffer && !kept && !applied;
   if (!showForm && !showOffer && !applied && !sent) return null;
   return (
-    <section aria-labelledby={`${uid}-h`} className={cardCls} data-testid="plan-reflection">
-      <h2 id={`${uid}-h`} className="text-[15px] font-bold text-gray-900">How did this week feel?</h2>
-      <p className="text-[13px] text-gray-600">Private to you. It never changes your plan by itself.</p>
+    <section aria-labelledby={`${uid}-h`} className={toned("notes")} data-testid="plan-reflection">
+      <h2 id={`${uid}-h`} className="cmp-learn-ink text-[15px] font-bold">How did this week feel?</h2>
+      <p className="text-[13.5px] text-gray-800">Private to you. It never changes your plan by itself.</p>
       {showForm && (
         <form className="mt-3 space-y-3" onSubmit={submit}>
           <fieldset>
@@ -411,7 +417,7 @@ export function ReflectionCard({ accent, week, answered, offer, settings }: {
             <ul className="grid gap-2 sm:grid-cols-3">
               {WORKLOAD.map(w => (
                 <li key={w.value}>
-                  <label className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-[14px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${workload === w.value ? "border-gray-900 bg-gray-50 ring-2 ring-gray-900" : "border-gray-300 bg-white hover:bg-gray-50"}`}>
+                  <label className={`flex min-h-[44px] cursor-pointer items-center gap-2 rounded-xl border px-3 py-2 text-[14px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${workload === w.value ? "border-[var(--learn-accent)] bg-[var(--cmp-app-surface)] ring-2 ring-[var(--learn-accent)]" : "border-[var(--learn-border)] bg-[var(--cmp-app-surface)] hover:bg-[var(--learn-surface)]"}`}>
                     <input type="radio" name={`${uid}-w`} className="h-5 w-5" checked={workload === w.value} onChange={() => setWorkload(w.value)} />{w.label}
                   </label>
                 </li>
@@ -424,18 +430,18 @@ export function ReflectionCard({ accent, week, answered, offer, settings }: {
             <p id={`${uid}-nh`} className={hintCls}>Up to 500 characters. Do not include anything that identifies a patient.</p>
           </div>
           <ErrorLine text={error} />
-          <button type="submit" className={primaryBtn} style={{ background: accent }} disabled={busy}>{busy ? "Saving…" : "Save my answer"}</button>
+          <button type="submit" className={primary} disabled={busy}>{busy ? "Saving…" : "Save my answer"}</button>
         </form>
       )}
       {sent && !shownOffer && <p className="mt-2 text-[14px] text-gray-800" aria-live="polite">Thank you. Your plan stays as it is.</p>}
       {applied && <p className="mt-2 text-[14px] font-semibold text-gray-800" aria-live="polite">Your plan now uses that session length.</p>}
       {showOffer && shownOffer && (
-        <div className="mt-3 rounded-xl border border-gray-200 bg-gray-50 p-3" aria-live="polite">
+        <div className={`mt-3 ${whiteRow} p-3`} aria-live="polite">
           <p className="text-[14px] font-semibold text-gray-900">A suggestion, only if you want it</p>
           <p className="mt-0.5 text-[14px] text-gray-800">{shownOffer.message}</p>
           {confirmMsg && <p className="mt-2 text-[13.5px] font-semibold text-amber-950" role="alert">{confirmMsg}</p>}
           <div className="mt-2 flex flex-wrap gap-2">
-            {settings && <button type="button" className={primaryBtn} style={{ background: accent }} disabled={busy} onClick={() => void applyOffer(shownOffer, !!confirmMsg)}>{confirmMsg ? "Yes, use this" : "Use this"}</button>}
+            {settings && <button type="button" className={primary} disabled={busy} onClick={() => void applyOffer(shownOffer, !!confirmMsg)}>{confirmMsg ? "Yes, use this" : "Use this"}</button>}
             <button type="button" className={secondaryBtn} disabled={busy} onClick={keep}>Keep my plan</button>
           </div>
           <ErrorLine text={error} />
@@ -448,21 +454,21 @@ export function ReflectionCard({ accent, week, answered, offer, settings }: {
 // ── today's schedule: the same rows as the calendar's selected day ──
 export function TodaySchedule({ children }: { children: React.ReactNode }) {
   return (
-    <section aria-labelledby="plan-sched-h" className={cardCls} data-testid="plan-schedule">
-      <h2 id="plan-sched-h" className="text-[16px] font-bold text-gray-900">Planned for today</h2>
+    <section aria-labelledby="plan-sched-h" className={toned("summary")} data-testid="plan-schedule">
+      <h2 id="plan-sched-h" className="cmp-learn-ink text-[16px] font-bold">Planned for today</h2>
       {children}
     </section>
   );
 }
 
 // ── nothing is planned today: three ways forward, never the setup form ──
-export function TodayEmpty({ accent, planHref, studyNowHref, calendarHref }: { accent: string; planHref: string; studyNowHref: string; calendarHref: string }) {
+export function TodayEmpty({ planHref, studyNowHref, calendarHref }: { planHref: string; studyNowHref: string; calendarHref: string }) {
   return (
-    <section aria-labelledby="plan-empty-h" className={cardCls} data-testid="plan-today-empty">
-      <h2 id="plan-empty-h" className="text-[17px] font-bold text-gray-900">Nothing planned for today.</h2>
+    <section aria-labelledby="plan-empty-h" className={toned("next")} data-testid="plan-today-empty">
+      <h2 id="plan-empty-h" className="cmp-learn-ink text-[17px] font-bold">Nothing planned for today.</h2>
       <p className="mt-1 text-[14px] text-gray-700">You can plan a session, study now, or leave the day free.</p>
       <div className="mt-3 flex flex-wrap gap-2">
-        <Link href={planHref} className={pillPrimary} style={{ background: accent }}>Plan today</Link>
+        <Link href={planHref} className={primary}>Plan today</Link>
         <Link href={studyNowHref} className={pillOutline}>Study now</Link>
         <Link href={calendarHref} className={pillOutline}>View calendar</Link>
       </div>
