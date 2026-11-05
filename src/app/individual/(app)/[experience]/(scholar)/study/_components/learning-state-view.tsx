@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { experienceHref } from "@/lib/individual/experiences";
 import { EVIDENCE_WORD_LABEL, LEARNING_STATE_NOTE, evidenceLine, type EvidenceWord, type TopicLearningState } from "@/lib/individual/scholar/learning-state";
-import { Fold } from "./progress-parts";
+import { LearningSection } from "@/components/ui/scholar-learning";
+import { EVIDENCE_WORD_LOOK, Fold, StateChip, sectionLead, type ChipLook } from "./progress-parts";
 import { TopicFix } from "./learning-state-topic-fix";
 import { focusRing } from "../../../../../_components/chrome";
 import { TransferOffer } from "./transfer-offer";
@@ -17,20 +18,20 @@ const normKey = (t: string) => t.trim().toLowerCase().replace(/s+/g, " ");
 // or a competency link (My competencies).
 //
 // ⚠ WORDS, NEVER A NUMBER THAT LOOKS CALIBRATED; "Not enough evidence" when it is thin; never verified competence, never a stage.
+// DS rollout: the record tone. Each word has a shape, and a likely misconception is the calm revision amber, never red.
 
-const WORD_CHIP: Record<EvidenceWord, string> = {
-  none: "border-gray-300 bg-gray-50 text-gray-700",
-  thin: "border-amber-300 bg-amber-50 text-amber-900",
-  some: "border-sky-300 bg-sky-50 text-sky-900",
-  stronger: "border-green-300 bg-green-50 text-green-900",
+const MISCONCEPTION_LOOK: Record<EvidenceWord, ChipLook> = {
+  none: { tone: "neutral", mark: "none" },
+  thin: { tone: "developing", mark: "none" },
+  some: { tone: "developing", mark: "read" },
+  stronger: { tone: "needs_work", mark: "current" },
 };
 const SHOWN = 10;
 
 function Word({ w, misconception }: { w: EvidenceWord; misconception?: boolean }) {
   // For misconceptions, more evidence is a reason to act, so the words say so (never colour alone).
   const label = misconception ? ({ none: "None seen", thin: "Not enough to tell", some: "Possible", stronger: "Likely" } as const)[w] : EVIDENCE_WORD_LABEL[w];
-  const cls = misconception ? ({ none: WORD_CHIP.none, thin: WORD_CHIP.thin, some: WORD_CHIP.thin, stronger: "border-red-300 bg-red-50 text-red-900" } as const)[w] : WORD_CHIP[w];
-  return <span className={`inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-[12px] font-semibold ${cls}`}>{label}</span>;
+  return <StateChip {...(misconception ? MISCONCEPTION_LOOK : EVIDENCE_WORD_LOOK)[w]}>{label}</StateChip>;
 }
 
 function TopicState({ t, sections, extra, accent }: { t: TopicLearningState; sections: { chunkId: string; label: string; topics: string[] }[]; extra: TopicRetention | null; accent: string }) {
@@ -38,44 +39,44 @@ function TopicState({ t, sections, extra, accent }: { t: TopicLearningState; sec
     <li className="px-4 py-3" data-learning-state-topic={t.key}>
       {/* The browser may restore a native disclosure's open state before hydration (back / revisit): not a content mismatch. */}
       <details suppressHydrationWarning>
-        <summary className={`flex cursor-pointer flex-wrap items-center justify-between gap-2 pointer-coarse:py-2 ${focusRing}`}>
+        <summary className={`flex cursor-pointer flex-wrap items-center justify-between gap-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
           <span className="min-w-0 text-[14px] font-semibold text-gray-900">{t.label}</span>
-          <span className="text-[12px] font-semibold text-gray-600">{t.enough ? "See the evidence" : "Not enough evidence"}</span>
+          <span className="text-[12.5px] font-semibold text-gray-700">{t.enough ? "See the evidence" : "Not enough evidence"}</span>
         </summary>
         <p className="mt-1.5 text-[13px] text-gray-800" data-learning-state-headline>{t.headline}</p>
         <dl className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
           {t.dimensions.map(d => (
             <div key={d.key} className="px-3 py-2" data-dimension={d.key} data-word={d.word}>
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <dt className="text-[13px] font-semibold text-gray-900">{d.label}</dt>
-                {d.key !== "activity" && d.key !== "confidence" && d.key !== "exposure" && <dd><Word w={d.word} misconception={d.key === "misconceptions"} /></dd>}
-              </div>
-              <dd className="mt-0.5 text-[12.5px] text-gray-700">{d.summary}</dd>
+              <dt className="flex flex-wrap items-center justify-between gap-2 text-[13px] font-semibold text-gray-900">
+                <span>{d.label}</span>
+                {d.key !== "activity" && d.key !== "confidence" && d.key !== "exposure" && <Word w={d.word} misconception={d.key === "misconceptions"} />}
+              </dt>
+              <dd className="mt-0.5 text-[13px] leading-relaxed text-gray-700">{d.summary}</dd>
             </div>
           ))}
         </dl>
         {extra?.due && <p className="mt-2 text-[13px] text-gray-800" data-topic-retrieval>Due for retrieval: {extra.due}</p>}
         {extra?.prerequisite && (
-          <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50/60 px-3 py-2" data-topic-prerequisite={extra.prerequisite.prerequisite.id}>
+          <div className="cmp-learn-next cmp-learn-box mt-2 px-3 py-2" data-topic-prerequisite={extra.prerequisite.prerequisite.id}>
             <p className="text-[13px] font-semibold text-gray-900">A foundation to review first: {extra.prerequisite.prerequisite.title}</p>
-            <p className="mt-0.5 text-[12.5px] text-gray-800">{extra.prerequisite.reason}</p>
+            <p className="mt-0.5 text-[13px] leading-relaxed text-gray-800">{extra.prerequisite.reason}</p>
             <Link href={extra.prerequisite.href} className={`mt-1 inline-flex min-h-[44px] items-center text-[13.5px] font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>{extra.prerequisite.section ? `Review your notes: ${extra.prerequisite.section.label}` : `Learn "${extra.prerequisite.prerequisite.title}"`}</Link>
           </div>
         )}
         {extra?.transfer && (
-          <div className="mt-2 rounded-xl border border-sky-200 bg-sky-50/60 px-3 py-2" data-topic-transfer>
-            <p className="text-[12.5px] text-gray-800">{extra.transfer.reason}</p>
+          <div className="cmp-learn-practice cmp-learn-box mt-2 px-3 py-2" data-topic-transfer>
+            <p className="text-[13px] leading-relaxed text-gray-800">{extra.transfer.reason}</p>
             <TransferOffer topic={t.label} accent={accent} />
           </div>
         )}
         {t.evidence.length > 0 && (
           <div className="mt-2">
-            <h4 className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-600">The answers behind it (newest first)</h4>
-            <ul className="mt-1 space-y-0.5 text-[12.5px] text-gray-700">{t.evidence.map((e, i) => <li key={i}>{evidenceLine(e)}</li>)}</ul>
+            <h4 className="text-[12px] font-bold uppercase tracking-[0.08em] text-gray-700">The answers behind it (newest first)</h4>
+            <ul className="mt-1 space-y-0.5 text-[13px] text-gray-700">{t.evidence.map((e, i) => <li key={i}>{evidenceLine(e)}</li>)}</ul>
           </div>
         )}
         <div className="mt-2 rounded-xl bg-gray-50 px-3 py-2">
-          <p className="text-[12.5px] text-gray-700">Is something here filed under the wrong topic? Correct the topics of its section, and the evidence moves with it. A competency link is changed in <Link href={experienceHref("scholar", "my-competencies")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>My competencies</Link>.</p>
+          <p className="text-[13px] leading-relaxed text-gray-700">Is something here filed under the wrong topic? Correct the topics of its section, and the evidence moves with it. A competency link is changed in <Link href={experienceHref("scholar", "my-competencies")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>My competencies</Link>.</p>
           {sections.length > 0 && <TopicFix sections={sections} />}
         </div>
       </details>
@@ -104,12 +105,11 @@ export function LearningStateSection({ states, concepts, materials, retention = 
   const shown = states.slice(0, SHOWN);
   const enough = states.filter(s => s.enough).length;
   return (
-    <section aria-labelledby="learning-state-h" className="mt-8">
-      <h2 id="learning-state-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">What your evidence shows, by topic</h2>
-      <p className="mt-1 text-[13px] text-gray-600">For each topic: what you have met, understood, recalled later and applied, any likely misconception, and how strong the evidence is. Worked out from your own records with stated rules and no AI. {LEARNING_STATE_NOTE}</p>
+    <LearningSection caps={false} tone="record" icon="record" level={2} headingId="learning-state-h" title="What your evidence shows, by topic" className="mt-6">
+      <p className={sectionLead}>For each topic: what you have met, understood, recalled later and applied, any likely misconception, and how strong the evidence is. Worked out from your own records with stated rules and no AI. {LEARNING_STATE_NOTE}</p>
       <div className="mt-3">
         {states.length === 0 ? (
-          <p className="rounded-2xl border border-dashed border-gray-300 bg-white p-5 text-[14px] text-gray-600">No learning recorded on any topic yet, so Scholar draws no conclusion.</p>
+          <p className="rounded-xl border border-dashed border-gray-300 bg-white p-4 text-[14px] text-gray-700">No learning recorded on any topic yet, so Scholar draws no conclusion.</p>
         ) : (
           <Fold summary={`${states.length} topic${states.length === 1 ? "" : "s"}, ${enough} with enough evidence to say something`}>
             <ul aria-label="What your evidence shows, by topic" className="divide-y divide-gray-100">
@@ -120,10 +120,10 @@ export function LearningStateSection({ states, concepts, materials, retention = 
                 }))} />
               ))}
             </ul>
-            {states.length > SHOWN && <p className="border-t border-gray-100 px-4 py-2 text-[12.5px] text-gray-600">And {states.length - SHOWN} more topics.</p>}
+            {states.length > SHOWN && <p className="border-t border-gray-100 px-4 py-2 text-[13px] text-gray-700">And {states.length - SHOWN} more topics.</p>}
           </Fold>
         )}
       </div>
-    </section>
+    </LearningSection>
   );
 }

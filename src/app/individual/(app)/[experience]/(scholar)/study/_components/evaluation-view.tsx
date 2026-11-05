@@ -37,7 +37,7 @@ function AbsentText({ m }: { m: Absent }) {
     </p>
   );
 }
-function Band({ band }: { band: keyof typeof EVALUATION_BAND_LABEL }) {
+export function Band({ band }: { band: keyof typeof EVALUATION_BAND_LABEL }) {
   return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[12px] font-bold ${BAND_TONE[band]}`}><LearningIcon name={BAND_MARK[band]} className="h-3.5 w-3.5" />{EVALUATION_BAND_LABEL[band]}</span>;
 }
 function Card({ id, dim, children }: { id: string; dim: keyof typeof EVALUATION_DIMENSION_LABEL; children: React.ReactNode }) {

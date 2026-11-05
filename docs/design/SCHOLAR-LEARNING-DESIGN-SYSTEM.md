@@ -190,8 +190,9 @@ When you adopt:
 | **Learn** | v1 (PR #281) | Every component; the first consumer. |
 | **Apply** | DS rollout 1 | The case start and case player in the `practice` tone (`LearningSectionHead`, white inner cards with one ring, one filled primary in the tone's ink); the decision verdict as a shape and words, never a red or green box; `FeedbackParts` for the debrief; `LearningCallout` (`caution`, safety emphasis) for every safety-critical point; "Your cases" in `next`; the case-library offer and the clinically approved cases in `sources`. |
 | **Evaluate** | DS rollout 1 | Dimension cards in `check`; confidence in `record`; the competency framework view in `sources`; "What to do next" in `next`; "What this evaluation cannot say" and "Verified clinical competence: not assessed here" in `summary`. Bands are words with a shape (strong: a tick in `check`; developing and needs work: the revision amber), never red or green. |
+| **Progress** | DS rollout 2 | My learning progress, Study next and "Your plan" in `next`; each measure in `check` as Evaluate's dimension cards, with Evaluate's `Band`; activity, confidence, "What your evidence shows" and Your Passport in `record`; "Applying what you learned" and By topic in `practice`; Development over time, Learning intelligence and Last 8 weeks in `summary`; the framework and By competency in `sources`; By material in `notes`. A status or an evidence word is a `StateChip` (`progress-parts.tsx`): words with a `ProgressMark` shape, the revision amber for anything to work on, never red or green. The explore page follows: evidence in `record`, next in `next`, kept evaluations in `sources`. |
 
-Still to adopt: Revise (once SALE R2, PR #283, is merged), Progress (next: SALE R4 is merged), My Plan, Saved learning / Library, and the papers, OSCE and monthly-review panels shared by Apply and Evaluate.
+Still to adopt: Revise (SALE R2 is merged), My Plan, Saved learning / Library, and the papers, OSCE and monthly-review panels shared by Apply and Evaluate.
 
 ## 7. Change control
 
