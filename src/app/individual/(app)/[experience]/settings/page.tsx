@@ -58,7 +58,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           <hr className="my-5 border-0 border-t border-gray-200" />
           <h3 className="text-[16px] font-bold text-gray-900">Private by default</h3>
           <p className="mt-1.5 text-[15px] text-gray-600">Your material, answers and practice history are yours. Adding a learning record to your Passport is a separate choice you make.</p>
-          {historyChoice?.offered && <SearchHistorySetting on={historyChoice.on} unreadable={historyChoice.unreadable} published={documents.published} grantedAt={historyChoice.grantedAt} revokedAt={historyChoice.revokedAt} legal={documents.links} />}
+          {historyChoice?.offered && <SearchHistorySetting state={historyChoice.state} unreadable={historyChoice.unreadable} published={documents.published} grantedAt={historyChoice.grantedAt} revokedAt={historyChoice.revokedAt} notifiedAt={historyChoice.notifiedAt} legal={documents.links} />}
           {/* HFE-01 Wave 4 (F9): the destructive erase lives here, beside the consent, and only when there is material to erase. */}
           {studyCount > 0 && <div className="mt-5"><EraseAll count={studyCount} /></div>}
         </section>

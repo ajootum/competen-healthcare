@@ -15,7 +15,7 @@
 //                no AI call. Ask answers were never kept (owner ruling D10), so an Ask entry says so and offers where it was
 //                asked. Continuing a lesson in Learn is a separate, plainly worded link (CONTINUE_NOTE).
 //   PRIVACY      learner owned. No HQ surface reads it, never Personal AI memory. Removing an entry or clearing never deletes saved
-//                teaching, lessons, attempts, learning evidence or materials. Nothing new is kept until the learner turns it on (993).
+//                teaching, lessons, attempts, learning evidence or materials. Nothing new is kept until the learner has seen the notice (994), or after they turn it off.
 
 export const HISTORY_ACTIVITIES = ["material_search", "library_search", "ask", "teaching", "research", "lesson"] as const;
 export type HistoryActivity = (typeof HISTORY_ACTIVITIES)[number];
@@ -51,10 +51,13 @@ export const HISTORY_PRIVACY = "Not ordinarily visible to other learners, educat
 /** Owner decision 5 Nov 2026, item 2: beside every box whose words can be kept, with a link to the setting. Subject to legal review. */
 export const HISTORY_NOTICE_ON = "My Search History is on: what you submit here is kept there until you remove it. Please do not type patient details.";
 export const HISTORY_NOTICE_OFF = "My Search History is off: what you submit here is not kept there.";
+/** Owner decision 5 Nov 2026: the one-time notice, in place, for a learner with no recorded choice. Subject to legal review. */
+export const HISTORY_FIRST_NOTICE = "My Search History is on. From now on, the searches and questions you submit are kept there until you remove them. Answers are not kept. It is not ordinarily visible to other learners, educators or employers. Please do not type patient details.";
+export const HISTORY_FIRST_FAILED = "My Search History could not start just now, so nothing is being kept.";
 export const HISTORY_SETTING_LINK = "Manage My Search History";
 export const HISTORY_SETTING_PATH = "study/saved/searches#history-setting";
-/** Offered by HQ (policy, 992 present), turned on by the learner (their own record, 993). The capture route reads it again and decides. */
-export type SearchHistoryChoice = { offered: boolean; on: boolean };
+/** Offered by HQ (policy, 992 present). on: kept. pending: the one-time notice is still to be seen, so nothing is kept. The capture route reads it again and decides. */
+export type SearchHistoryChoice = { offered: boolean; on: boolean; pending: boolean };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v: unknown): v is string => typeof v === "string" && UUID.test(v);

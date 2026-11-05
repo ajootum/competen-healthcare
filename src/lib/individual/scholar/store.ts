@@ -91,18 +91,19 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 /** The consents this table holds: uploads (372), the cross-experience context (700) and My Search History (993). */
 export type ConsentFeature = typeof CONSENT_FEATURE | typeof CROSS_EXPERIENCE_FEATURE | typeof SEARCH_HISTORY_FEATURE;
 
-export type ConsentState = { granted: boolean; noticeVersion: string | null; grantedAt: string | null; revokedAt: string | null };
+/** granted: the person acted to agree. notified (994, My Search History only): they were shown the notice and did nothing else, which is not an agreement. */
+export type ConsentState = { granted: boolean; notified: boolean; noticeVersion: string | null; grantedAt: string | null; revokedAt: string | null; updatedAt: string | null };
 
 export async function readConsent(admin: Admin, userId: string, feature: ConsentFeature = CONSENT_FEATURE): Promise<Read<ConsentState>> {
   const { data, error } = await admin.from("individual_scholar_consent")
-    .select("status, notice_version, granted_at, revoked_at")
+    .select("status, notice_version, granted_at, revoked_at, updated_at")
     .eq("user_id", userId).eq("feature", feature).maybeSingle();
   if (error) return fail(error);
   return {
     ok: true,
     data: data
-      ? { granted: data.status === "granted", noticeVersion: data.notice_version, grantedAt: data.granted_at, revokedAt: data.revoked_at }
-      : { granted: false, noticeVersion: null, grantedAt: null, revokedAt: null },
+      ? { granted: data.status === "granted", notified: data.status === "notified", noticeVersion: data.notice_version, grantedAt: data.granted_at, revokedAt: data.revoked_at, updatedAt: data.updated_at ?? null }
+      : { granted: false, notified: false, noticeVersion: null, grantedAt: null, revokedAt: null, updatedAt: null },
   };
 }
 
@@ -116,10 +117,36 @@ export async function setConsent(admin: Admin, userId: string, grant: boolean, f
     }, { onConflict: "user_id,feature" });
     return { ok: !error };
   }
+  // My Search History is on by default, so turning it off must be recorded even by a learner with no row yet (994: with no grant time, as they granted nothing).
+  if (feature === SEARCH_HISTORY_FEATURE) {
+    const { error: iErr } = await admin.from("individual_scholar_consent").upsert({
+      user_id: userId, feature, status: "revoked", notice_version: SEARCH_HISTORY_NOTICE_VERSION, granted_at: null, revoked_at: now, updated_at: now,
+    }, { onConflict: "user_id,feature", ignoreDuplicates: true });
+    if (iErr) return { ok: false };
+  }
   const { error } = await admin.from("individual_scholar_consent")
     .update({ status: "revoked", revoked_at: now, updated_at: now })
     .eq("user_id", userId).eq("feature", feature);
   return { ok: !error };
+}
+
+/**
+ * The learner was shown the My Search History notice (994). That is what this records: status notified, never a grant. It only ever fills a gap: a
+ * learner who has acted, either way, keeps what they did, and a notice seen late cannot overwrite it. A learner who saw an earlier notice moves to this one.
+ * "recorded" is a new fact, so the route audits it. "already" is nothing new. "failed": nothing is recorded, so nothing is kept.
+ */
+export async function recordSearchHistoryNoticeSeen(admin: Admin, userId: string): Promise<"recorded" | "already" | "failed"> {
+  const now = new Date().toISOString();
+  const { data, error } = await admin.from("individual_scholar_consent").upsert({
+    user_id: userId, feature: SEARCH_HISTORY_FEATURE, status: "notified", notice_version: SEARCH_HISTORY_NOTICE_VERSION, granted_at: null, revoked_at: null, updated_at: now,
+  }, { onConflict: "user_id,feature", ignoreDuplicates: true }).select("user_id");
+  if (error) return "failed";
+  if ((data ?? []).length > 0) return "recorded";
+  const { data: moved, error: uErr } = await admin.from("individual_scholar_consent")
+    .update({ notice_version: SEARCH_HISTORY_NOTICE_VERSION, updated_at: now })
+    .eq("user_id", userId).eq("feature", SEARCH_HISTORY_FEATURE).eq("status", "notified").neq("notice_version", SEARCH_HISTORY_NOTICE_VERSION).select("user_id");
+  if (uErr) return "failed";
+  return (moved ?? []).length > 0 ? "recorded" : "already";
 }
 
 /** Migration 700: the cross-experience consent, current only for the notice version now shown. */

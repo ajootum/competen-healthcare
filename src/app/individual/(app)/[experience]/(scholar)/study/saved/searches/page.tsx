@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 // list, newest first, of the learner's submitted searches and Ask Scholar questions (from now on) and of what Scholar already
 // kept (their saved teaching and lessons, read at request time: nothing invented, nothing regenerated, never a sample). Opening a saved
 // answer or a lesson's saved teaching uses NO AI; continuing in Learn is a separate, plainly worded link in the row's menu. Database reads
-// only, keyed on the caller. Policy scholar_search_history (default off), and the learner's own setting (993, off until they turn it on): with it off
+// only, keyed on the caller. Policy scholar_search_history (default off), and the learner's own setting (on by default once they have seen the notice, 994): with it off
 // nothing new is kept, and everything already here can still be opened, removed or cleared. No HQ surface reads it, never AI memory.
 
 export async function generateMetadata(): Promise<Metadata> {
@@ -88,7 +88,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   const nav = (
     <>
       <StudyNav dueCount={due} study={null} />
-      <p className="mb-4 text-[13px]"><Link href={studyHref("saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to My learning library</Link></p>
+      <p className="mb-4 text-[13px]"><Link href={studyHref("saved")} className={`inline-flex items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Back to My learning library</Link></p>
     </>
   );
   if (policy.scholarSearchHistory !== "on") return <>{nav}<StatePanel title="My search history is not offered here"><p>Your saved learning and lessons are in My learning library.</p></StatePanel></>;
@@ -139,7 +139,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
       {nav}
       <section aria-label="My Search History" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
         <HistoryHeader count={hasHistoryFilters(q) ? 1 : total} />
-        <SearchHistorySetting on={choice.on} unreadable={choice.unreadable} published={documents.published} grantedAt={choice.grantedAt} revokedAt={choice.revokedAt} legal={documents.links} />
+        <SearchHistorySetting state={choice.state} unreadable={choice.unreadable} published={documents.published} grantedAt={choice.grantedAt} revokedAt={choice.revokedAt} notifiedAt={choice.notifiedAt} legal={documents.links} />
 
         <form method="get" action={base} role="search" className="relative mt-4">
           {q.show && <input type="hidden" name="show" value={q.show} />}
@@ -148,7 +148,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
           <label htmlFor="history-q" className="sr-only">Search your history</label>
           <input id="history-q" type="search" name="q" defaultValue={q.q} maxLength={200} placeholder="Search your history..."
             className={`block min-h-[48px] w-full rounded-full border border-gray-300 bg-white py-2.5 pl-5 pr-14 text-[15px] text-gray-900 ${focusRing}`} />
-          <button type="submit" aria-label="Search" className={`absolute right-1 top-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 ${focusRing}`}>
+          <button type="submit" aria-label="Search" className={`absolute right-1 top-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 pointer-coarse:h-[var(--cmp-touch-min)] pointer-coarse:w-[var(--cmp-touch-min)] ${focusRing}`}>
             <LearningIcon name="search" className="h-5 w-5" />
           </button>
         </form>

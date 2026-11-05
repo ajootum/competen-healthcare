@@ -1,6 +1,6 @@
 import { FOUNDATION_ENTITY, entityLegal, type EntityLegal } from "../legal";
 import { SCHOLAR } from "../experiences";
-import { CONSENT_AWAITING_LEGAL, CONSENT_NOTICE_VERSION, CONSENT_UPDATED, SEARCH_HISTORY_NOTICE_VERSION } from "./config";
+import { CONSENT_AWAITING_LEGAL, CONSENT_NOTICE_VERSION, CONSENT_UPDATED, SEARCH_HISTORY_GRANT_VERSIONS, SEARCH_HISTORY_NOTICE_VERSION } from "./config";
 import type { ConsentState } from "./store";
 
 // ── WHEN AI HELP MAY BE TURNED ON ── COMPETEN-IND-004 s10 consistency items 3 and 7, owner GO 2026-10-23 ──
@@ -63,11 +63,20 @@ export function consentStatus(state: Pick<ConsentState, "granted" | "noticeVersi
 }
 
 /**
- * Pure. My Search History (migration 993): on only for a grant to the CURRENT notice while the documents are published. Anything else is off,
- * so nothing new is kept. Apart from consentStatus, which is AI help and never reads this feature's row.
+ * Pure. Where a learner stands with My Search History (owner decision 5 Nov 2026, on by default after a one-time notice, migrations 993 and 994):
+ *   unseen        nothing recorded, or they saw an earlier notice and nothing else. The notice is due, and NOTHING IS KEPT
+ *   on_by_notice  they saw the current notice and did nothing else. Kept. This is not an agreement
+ *   on_chosen     they acted to keep it on, under any notice version we have asked under. Kept
+ *   off           they acted to turn it off, which stands whatever the version. Also the documents are unpublished, or a grant to an unknown version
+ * Apart from consentStatus, which is AI help and never reads this feature's row.
  */
-export function historyChoiceOn(state: Pick<ConsentState, "granted" | "noticeVersion">, documentsPublished: boolean): boolean {
-  return documentsPublished && state.granted && state.noticeVersion === SEARCH_HISTORY_NOTICE_VERSION;
+export type HistoryChoiceState = "unseen" | "on_by_notice" | "on_chosen" | "off";
+
+export function historyChoiceState(state: Pick<ConsentState, "granted" | "notified" | "noticeVersion" | "revokedAt">, documentsPublished: boolean): HistoryChoiceState {
+  if (!documentsPublished) return "off";
+  if (state.granted) return state.noticeVersion !== null && SEARCH_HISTORY_GRANT_VERSIONS.includes(state.noticeVersion) ? "on_chosen" : "off";
+  if (state.revokedAt !== null) return "off";
+  return state.notified && state.noticeVersion === SEARCH_HISTORY_NOTICE_VERSION ? "on_by_notice" : "unseen";
 }
 
 /** What an AI surface says in place of its controls while AI help is not on. Null when it is on. */
