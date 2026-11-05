@@ -88,7 +88,7 @@ export function PolicyForm({ initial, measures, dimensions }: { initial: PolicyS
 /** A small form: named fields, posted as one action. */
 export function FieldsForm({ action, fields, submit, done, endpoint, extra }: {
   action: string; submit: string; done: string; endpoint?: string; extra?: Record<string, unknown>;
-  fields: { name: string; label: string; kind?: "text" | "textarea" | "number" | "select" | "date"; options?: string[]; required?: boolean }[];
+  fields: { name: string; label: string; kind?: "text" | "textarea" | "number" | "select" | "date"; options?: (string | { value: string; label: string })[]; required?: boolean }[];
 }) {
   const { busy, msg, send } = useResearchSend(endpoint);
   const [v, setV] = useState<Record<string, string>>({});
@@ -104,7 +104,7 @@ export function FieldsForm({ action, fields, submit, done, endpoint, extra }: {
         <label key={f.name} className={`text-[12.5px] text-gray-700 ${f.kind === "textarea" ? "sm:col-span-2" : ""}`}>
           <span className="block">{f.label}</span>
           {f.kind === "textarea" ? <textarea required={f.required} value={v[f.name] ?? ""} onChange={e => set(f.name, e.target.value)} rows={3} className={`${input} w-full`} />
-            : f.kind === "select" ? <select required={f.required} value={v[f.name] ?? ""} onChange={e => set(f.name, e.target.value)} className={`${input} w-full`}><option value="">Choose</option>{f.options?.map(o => <option key={o} value={o}>{o}</option>)}</select>
+            : f.kind === "select" ? <select required={f.required} value={v[f.name] ?? ""} onChange={e => set(f.name, e.target.value)} className={`${input} w-full`}><option value="">Choose</option>{f.options?.map(o => { const { value, label } = typeof o === "string" ? { value: o, label: o } : o; return <option key={value} value={value}>{label}</option>; })}</select>
             : <input required={f.required} type={f.kind === "number" ? "number" : f.kind === "date" ? "date" : "text"} value={v[f.name] ?? ""} onChange={e => set(f.name, e.target.value)} className={`${input} w-full`} />}
         </label>
       ))}

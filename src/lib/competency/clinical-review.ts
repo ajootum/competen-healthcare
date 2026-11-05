@@ -229,16 +229,22 @@ export async function carryingApproval(query: (cols: string) => PromiseLike<{ da
   return (r.data ?? []).filter((a: any) => narrowToScope([APPROVE_CAPABILITY], a.capability_scope).length > 0 && appointmentInTerm(a.term_start, a.term_end));
 }
 
+/** Pure: an appointment as a reviewer reads it, by its position and never its id, saying when it can approve nothing yet. */
+export function appointmentLabel(positionName: string | null | undefined, role: string | null | undefined, scopeCount: number): string {
+  const name = positionName?.trim() || (role ?? "").replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase()) || "Reviewer appointment";
+  return scopeCount > 0 ? name : `${name} (no scope yet)`;
+}
+
 /** A person's active clinical reviewer appointments (any position granting approval) and their active scopes. */
-export async function reviewerAppointments(admin: any, personId: string): Promise<{ id: string; scopes: ReviewerScope[] }[] | null> {
+export async function reviewerAppointments(admin: any, personId: string): Promise<{ id: string; role?: string; scopes: ReviewerScope[] }[] | null> {
   const positions = await approverPositions(admin);
   if (positions === null) return null;
   if (!positions.length) return [];
-  const all = await carryingApproval((cols: string) => admin.from("ogs_office_appointments").select(cols).eq("person_id", personId).in("role", positions).eq("status", "active"), "id");
+  const all = await carryingApproval((cols: string) => admin.from("ogs_office_appointments").select(cols).eq("person_id", personId).in("role", positions).eq("status", "active"), "id, role");
   if (all === null) return null;
   const appts = all;
   if (!appts?.length) return [];
   const { data: sc, error: sErr } = await admin.from("clinical_reviewer_scope").select("id, appointment_id, scope_kind, scope_ref").in("appointment_id", appts.map((a: any) => a.id)).is("ended_at", null);
-  if (sErr) return absent(sErr) ? appts.map((a: any) => ({ id: a.id, scopes: [] })) : null;
-  return appts.map((a: any) => ({ id: a.id, scopes: (sc ?? []).filter((s: any) => s.appointment_id === a.id).map((s: any) => ({ id: s.id, appointmentId: a.id, kind: s.scope_kind, ref: s.scope_ref })) }));
+  if (sErr) return absent(sErr) ? appts.map((a: any) => ({ id: a.id, role: a.role, scopes: [] })) : null;
+  return appts.map((a: any) => ({ id: a.id, role: a.role, scopes: (sc ?? []).filter((s: any) => s.appointment_id === a.id).map((s: any) => ({ id: s.id, appointmentId: a.id, kind: s.scope_kind, ref: s.scope_ref })) }));
 }

@@ -38,7 +38,7 @@ export default async function KnowledgeReviewPage() {
             <div className="mt-2">
               <FieldsForm action="decide" endpoint="/api/hq/clinical-review" submit="Record decision" done="Recorded."
                 extra={{ versionId: i.versionId }}
-                fields={[{ name: "appointmentId", label: "Your reviewer appointment", kind: "select", options: q.appointments.map(a => a.id), required: true },
+                fields={[{ name: "appointmentId", label: "Your reviewer appointment", kind: "select", options: q.appointments.map(a => ({ value: a.id, label: a.label })), required: true },
                   { name: "decision", label: "Decision", kind: "select", options: ["approved", "rejected"], required: true },
                   ...(i.kind === "revision_question" && hasSafetyMarkers(i.content) ? [{ name: "safetyMarkers", label: MARKERS_CONFIRMATION, kind: "select" as const, options: [...MARKERS_CONFIRMATION_OPTIONS], required: true }] : []),
                   { name: "comment", label: "Comment (required to reject)", kind: "textarea" }]} />
