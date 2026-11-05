@@ -26,6 +26,8 @@ import {
 import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenarioAnswer, shapeScenario, scenarioFlaw, scenarioGroundingFlaw, scenarioIsMeta, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
+import { aboutTheDocument, differentFactsFirst, withoutPartLabel, type Depth } from "./revision-depth";
+import { matchPairProblem } from "./question-intel";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
 import { choiceLeaks, writtenLeaks } from "./answer-leak";
@@ -192,7 +194,7 @@ export function learnerItem(q: RevisionQuestion): LearnerItem {
     const variant = structuredVariantOf(q.answer), findings = findingsOf(q.answer);
     return {
       ...base,
-      parts: structuredParts(q).map(p => ({ prompt: p.prompt, marks: p.marks, ...(isReasoningPart(p.contract.role) ? { role: p.contract.role } : {}), ...(p.contract.options ? { options: [...p.contract.options] } : {}) })),
+      parts: structuredParts(q).map(p => ({ prompt: withoutPartLabel(p.prompt), marks: p.marks, ...(isReasoningPart(p.contract.role) ? { role: p.contract.role } : {}), ...(p.contract.options ? { options: [...p.contract.options] } : {}) })),
       ...(variant || findings.length ? { structured: { variant, findings } } : {}),
     };
   }
@@ -401,6 +403,7 @@ export function storedResponse(r: Response): { chosenIndex: number | null; respo
 
 export type RevisionDraft = { stem: string; options: string[]; answer: Record<string, unknown>; rationale: string; sourceQuote: string; difficulty: 1 | 2 | 3 };
 export type DraftReason =
+  | "answer_in_pair" | "front_long" | "answer_in_front" | "about_the_notes"
   | "malformed" | "quote_not_in_passage" | "ungrounded" | "identifier" | "duplicate"
   // SCHOLAR-QUESTION-INTELLIGENCE-01: it asks nothing, repeats a stored question, has give-away options, its key and
   // explanation disagree, or it is not the difficulty asked for.
@@ -538,9 +541,14 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     if (front && back && quote) d = { stem: front, options: [], answer: { back }, rationale: text(r.rationale, 1200) ?? back, sourceQuote: quote, difficulty };
   } else if (kind === "match") {
     const stem = text(r.stem, 400), rationale = text(r.rationale, 1200);
-    const pairs = Array.isArray(r.pairs) ? (r.pairs as unknown[]).map(p => { const x = (p ?? {}) as Record<string, unknown>; return { left: text(x.left, 200), right: text(x.right, 200) }; }) : null;
+    // The model sometimes answers in the shape other formats use: options on the left and the matches in answer. Same content, so it is read, not thrown away.
+    const altRight = Array.isArray(r.answer) ? r.answer : Array.isArray((r.answer as { matches?: unknown } | null)?.matches) ? (r.answer as { matches: unknown[] }).matches : null;
+    const rawPairs = Array.isArray(r.pairs) ? (r.pairs as unknown[]) : Array.isArray(r.options) && altRight && altRight.length === r.options.length ? (r.options as unknown[]).map((left, i) => ({ left, right: altRight[i] })) : null;
+    const pairs = rawPairs ? rawPairs.map(p => { const x = (p ?? {}) as Record<string, unknown>; return { left: text(x.left, 200), right: text(x.right, 200) }; }) : null;
     if (stem && rationale && quote && pairs && pairs.length >= 3 && pairs.length <= 6 && pairs.every(p => p.left && p.right)) {
       if (new Set(pairs.map(p => norm(p.left!))).size !== pairs.length || new Set(pairs.map(p => norm(p.right!))).size !== pairs.length) return { ok: false, reason: "duplicate" };
+      const given = matchPairProblem(pairs as { left: string; right: string }[]);
+      if (given) return { ok: false, reason: given };
       d = { stem, options: pairs.map(p => p.left!), answer: { matches: pairs.map(p => p.right!) }, rationale, sourceQuote: quote, difficulty };
     }
   } else if (kind === "calculation") {
@@ -561,7 +569,8 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
     const stem = text(r.stem, 800), rationale = text(r.rationale, 1200);
     const parts = Array.isArray(r.parts) ? (r.parts as unknown[]).map(p => {
       const x = (p ?? {}) as Record<string, unknown>;
-      return { raw: x, prompt: text(x.prompt, 400), marks: x.marks, accepted: (strs(x.accepted) ?? []).map(a => a.trim()).filter(Boolean) };
+      // The screen numbers the parts, so a label the model wrote ("part (a):") would show twice.
+      return { raw: x, prompt: text(typeof x.prompt === "string" ? withoutPartLabel(x.prompt) : x.prompt, 400), marks: x.marks, accepted: (strs(x.accepted) ?? []).map(a => a.trim()).filter(Boolean) };
     }) : null;
     if (stem && rationale && quote && parts && parts.length >= STRUCTURED_PARTS_MIN && parts.length <= STRUCTURED_PARTS_MAX
       && parts.every(p => p.prompt && isMarks(p.marks) && p.accepted.length >= 1 && p.accepted.length <= 4 && p.accepted.every(a => a.length <= 200))) {
@@ -610,6 +619,9 @@ export function checkRevisionDraft(kind: Exclude<RevisionFormat, "mcq">, raw: un
   // stem of a multiple-response item states every keyed option and no other; a short answer's stem states an accepted answer;
   // a structured item's lead-in or any of its part prompts states a part's accepted answer (the parts are shown together).
   if (answerLeaks(kind, d)) return { ok: false, reason: "answer_leaked" };
+  // Revise engine quality: test the subject, not the slide. A scenario has its own rules for this (scenario.ts).
+  if (kind !== "scenario" && kind !== "structured" && aboutTheDocument(d.stem)) return { ok: false, reason: "about_the_notes" };
+  if (kind === "structured" && (d.answer.parts as { prompt: string }[]).some(p => aboutTheDocument(p.prompt))) return { ok: false, reason: "about_the_notes" };
   if (kind === "mrq" && distractorProblem(d.options)) return { ok: false, reason: "weak_distractors" };
   const expected = expectedOf(kind, d);
   if (kind === "true_false") {
@@ -678,6 +690,8 @@ export type PoolItem = {
   latestCorrect: boolean | null; misses: number; lastAnsweredAt: string | null; due: boolean;
   /** SCHOLAR-SQIE-LEARNER-01: what its rubric lists as common misconceptions, and its topic (misconception.ts). Optional: none is no match. */
   misconceptions?: readonly string[]; topic?: string | null;
+  /** Revise engine quality: its design depth, whether it was written at the current prompt, and what makes it the same fact as another. */
+  depth?: Depth | null; current?: boolean; factKey?: string | null;
 };
 
 const DIFFICULTY_LEVEL: Record<Exclude<RevisionDifficulty, "any">, number> = { easy: 1, standard: 2, harder: 3 };
@@ -700,9 +714,16 @@ export function pickQuestions(input: {
   mode: RevisionMode; pool: readonly PoolItem[]; quantity: number; formats: readonly RevisionKind[]; difficulty: RevisionDifficulty; seed: string;
   /** SCHOLAR-SQIE-LEARNER-01: the learner's misses in the last 30 days (misconception.ts recentMisses). Only Weak areas reads them. */
   recentMisses?: readonly RecentMiss[];
+  /** A revision intention: these depths first, then the rest. */
+  depths?: readonly Depth[];
+  /** Questions that may not be offered (a follow-up never repeats the question just missed). */
+  exclude?: readonly string[];
+  /** Mixed Challenge: formats interleaved over the whole order, so what is due does not fill the set with one format. */
+  varied?: boolean;
 }): { ids: string[]; shortfall: number } {
   const formats = input.mode === "flashcards" ? ["flashcard"] : input.formats;
-  let pool = input.pool.filter(p => formats.includes(p.kind));
+  const excluded = new Set(input.exclude ?? []);
+  let pool = input.pool.filter(p => formats.includes(p.kind) && !excluded.has(p.id));
   const level = input.difficulty === "any" ? null : DIFFICULTY_LEVEL[input.difficulty];
   const fits = (p: PoolItem) => level === null || (p.difficulty ?? 2) === level;
   const stable = (xs: PoolItem[]) => [...xs].sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
@@ -737,9 +758,15 @@ export function pickQuestions(input: {
       if (input.mode === "mock") ordered = seededOrder(ordered.length, input.seed).map(i => ordered[i]);
     }
   }
-  pool = ordered;
+  pool = input.varied ? byFormat(ordered) : ordered;
   const preferred = [...pool.filter(fits), ...pool.filter(p => !fits(p))];
-  const ids = preferred.slice(0, input.quantity).map(p => p.id);
+  // Revise engine quality. A practice set fills with what was written at the current prompt and at the depth asked for, each a different fact.
+  // Spaced, weak and flashcards keep their order: what is due or missed comes first whatever it is.
+  const shaped = input.mode === "spaced" || input.mode === "weak" || input.mode === "flashcards" ? preferred
+    : differentFactsFirst(input.depths?.length
+      ? [...preferred.filter(p => p.depth && input.depths!.includes(p.depth)), ...preferred.filter(p => !(p.depth && input.depths!.includes(p.depth)))]
+      : input.mode === "today" ? preferred : [...preferred.filter(p => p.current), ...preferred.filter(p => !p.current)]);
+  const ids = shaped.slice(0, input.quantity).map(p => p.id);
   return { ids, shortfall: GENERATING_MODES.includes(input.mode) ? Math.max(0, input.quantity - ids.length) : 0 };
 }
 

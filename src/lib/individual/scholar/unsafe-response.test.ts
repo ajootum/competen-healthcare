@@ -19,7 +19,7 @@ const PARTS = "RIGHT: give oxygen\nMISSING: give intravenous antibiotics within 
 describe("the prompts ask for it, and the versions say so", () => {
   it("evaluate, extended and case reasoning carry the UNSAFE rule; the versions are bumped", () => {
     for (const s of [EVALUATE_SYSTEM, EVALUATE_EXTENDED_SYSTEM, CASE_REASONING_SYSTEM]) expect(s).toContain(UNSAFE_RULE);
-    expect(PROMPT_VERSIONS.evaluate).toBe("scholar-evaluate-v3");
+    expect(PROMPT_VERSIONS.evaluate).toBe("scholar-evaluate-v4");
     expect(PROMPT_VERSIONS.caseReasoning).toBe("scholar-case-reasoning-v3");
   });
 });
@@ -83,7 +83,7 @@ describe("the runners send the rule and parse with it", () => {
   it("runEvaluate: an unsafe short answer comes back flagged with the quote", async () => {
     const r = await runEvaluate("u", { question: "What is done within one hour?", accepted: ["give intravenous antibiotics"], answer: ANSWER, passage }, fake(`VERDICT: partly\nUNSAFE: Wait until tomorrow before giving antibiotics\n${PARTS}`) as never);
     expect(r.ok && r.evaluation.ok && [r.evaluation.verdict, r.evaluation.unsafe]).toEqual(["partly", ["Wait until tomorrow before giving antibiotics"]]);
-    expect(r.ok && r.promptVersion).toBe("scholar-evaluate-v3");
+    expect(r.ok && r.promptVersion).toBe("scholar-evaluate-v4");
   });
   it("runCaseReasoning: the same for a written case decision", async () => {
     const r = await runCaseReasoning("u", { prompt: "What is done within one hour?", expected: "Give intravenous antibiotics within one hour.", facts: [], answer: ANSWER, passages: [passage] }, fake(`VERDICT: correct\nUNSAFE: wait until tomorrow before giving antibiotics\n${PARTS}`) as never);

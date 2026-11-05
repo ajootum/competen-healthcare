@@ -25,6 +25,7 @@ import { findPatientIdentifiers } from "./extract";
 import { words as plainWords } from "./learner-context";
 import { unsupportedTerms } from "./question-quality";
 import { FEEDBACK_HEADINGS, GROUNDING_LABEL } from "./config";
+import { depthAimLine, depthFromLevel, isDepth, type Depth } from "./revision-depth";
 
 // ── LEVELS, DIFFICULTY, SOURCE MODES ──
 
@@ -70,6 +71,8 @@ export type GenerationContext = {
   mode: SourceMode;
   /** Mode notes_and_references only: the references an item may draw on, cited by tag. */
   references: PromptReference[];
+  /** A sitting that aims at some depths (a revision intention). Steers only. */
+  depths?: readonly Depth[];
 };
 export const NO_CONTEXT: GenerationContext = { concepts: [], competency: null, level: null, difficulty: null, mode: "notes", references: [] };
 
@@ -86,6 +89,8 @@ export function generationContextBlock(c: GenerationContext, count: number | nul
   if (c.competency && plainWords(c.competency.title)) lines.push(`COMPETENCY the passage is linked to: ${plainWords(c.competency.title)}${c.competency.outcome && plainWords(c.competency.outcome) ? ` -- ${plainWords(c.competency.outcome)}` : ""}. Prefer items that serve it.`);
   if (c.level && plainWords(c.level)) lines.push(`MY LEVEL: ${plainWords(c.level)}. Pitch the items to it.`);
   if (c.difficulty) lines.push(DIFFICULTY_AIM[c.difficulty]);
+  const aim = depthAimLine(c.depths);
+  if (aim) lines.push(aim);
   if (count !== null) lines.push(`Write up to ${["one", "two", "three", "four", "five"][Math.min(5, Math.max(1, count)) - 1]} item${count === 1 ? "" : "s"}.`);
   const refs = c.mode === "notes_and_references" ? c.references.filter(r => plainWords(r.title)) : [];
   if (refs.length) lines.push(`APPROVED REFERENCES you may also draw on. An item that uses one lists its tag in "references"; never cite a tag not listed here:\n${refs.map(r => `[${r.tag}] ${plainWords(r.title)}${r.outcome && plainWords(r.outcome) ? `: ${plainWords(r.outcome)}` : ""}`).join("\n")}`);
@@ -114,6 +119,8 @@ export const RUBRIC_RULE = [
 export type Rubric = {
   objective: string | null;
   level: CognitiveLevel;
+  /** One of the six design categories (revision-depth.ts), where the item has one. Guidance, not competency staging. */
+  depth?: Depth;
   /** The answer the item expects, in words (the key of its kind). */
   expectedAnswer: string | null;
   keyPoints: string[];
@@ -143,6 +150,7 @@ export function parseRubric(raw: unknown, grounding: readonly string[], opts: { 
   return {
     objective: objective && ok(objective) ? objective : null,
     level: isCognitiveLevel(r.level) ? r.level : DIFFICULTY_LEVEL[opts.difficulty],
+    ...(isDepth(r.depth) ? { depth: r.depth } : depthFromLevel(r.level) ? { depth: depthFromLevel(r.level)! } : {}),
     expectedAnswer: opts.expectedAnswer ? opts.expectedAnswer.slice(0, 600) : null,
     keyPoints: keep(strs(r.keyPoints, opts.maxKeyPoints ?? 4, 300)),
     acceptedAlternatives: [...new Set(opts.accepted ?? [])].slice(0, 8),
@@ -170,6 +178,7 @@ export function rubricOf(answer: unknown): Rubric | null {
   if (!r || typeof r !== "object" || !isCognitiveLevel(r.level)) return null;
   return {
     objective: typeof r.objective === "string" ? r.objective : null, level: r.level,
+    ...(isDepth(r.depth) ? { depth: r.depth } : {}),
     expectedAnswer: typeof r.expectedAnswer === "string" ? r.expectedAnswer : null,
     keyPoints: strs(r.keyPoints, 8, 300), acceptedAlternatives: strs(r.acceptedAlternatives, 8, 300), misconceptions: strs(r.misconceptions, 3, 300),
     source: r.source === "references" ? "references" : "notes", referenceIds: strs(r.referenceIds, 6, 64),
@@ -205,9 +214,14 @@ export const CARD_BACK_ONE_CONCEPT = { chars: 300, sentences: 2 };
  * words or more, found verbatim in the passage) rather than a recall prompt, or its back is more than one concept
  * (longer than 300 characters or more than two sentences).
  */
-export function flashcardDraftProblem(front: string, back: string, passage: string): "copied" | "multi_concept" | "back_copied" | "second_fact" | null {
+const CARD_FRONT_MAX = 180;
+
+export function flashcardDraftProblem(front: string, back: string, passage: string): "copied" | "multi_concept" | "back_copied" | "second_fact" | "front_long" | "answer_in_front" | null {
   const f = flatWords(front), p = flatWords(passage);
   if (f.split(" ").length >= 8 && p.includes(f)) return "copied";
+  // Revise engine quality: a card is quick retrieval. A long front is a scenario or an essay in disguise, and a front that holds its own answer tests nothing.
+  if (front.length > CARD_FRONT_MAX) return "front_long";
+  if (flatWords(back) && ` ${f} `.includes(` ${flatWords(back)} `)) return "answer_in_front";
   const parts = back.split(/[.!?;]+(?:\s|$)/).map(s => s.trim()).filter(Boolean);
   const sentences = back.split(/[.!?]+(?:\s|$)/).map(s => s.trim()).filter(Boolean).length;
   if (back.length > CARD_BACK_ONE_CONCEPT.chars || sentences > CARD_BACK_ONE_CONCEPT.sentences) return "multi_concept";
@@ -265,12 +279,25 @@ export type FeedbackParts = {
 };
 
 /** The lines an evaluator writes after its VERDICT line. "none" where a part has nothing. */
+/**
+ * Pure. A matching item that needs no thought: a right side that repeats its own left term gives the pair away. Revise engine quality, 2.3.
+ * Compares content words only, so a shared ordinary word is not a clue.
+ */
+export function matchPairProblem(pairs: readonly { left: string; right: string }[]): "answer_in_pair" | null {
+  const leak = pairs.filter(p => {
+    const left = flatWords(p.left).split(" ").filter(w => w.length >= 5);
+    const right = ` ${flatWords(p.right)} `;
+    return left.length > 0 && left.every(w => right.includes(` ${w} `));
+  });
+  return leak.length * 2 >= pairs.length ? "answer_in_pair" : null;
+}
+
 export const FEEDBACK_FORMAT = [
   "Then exactly these five lines, each short, in the passage's own words (write none where a part has nothing):",
   "RIGHT: what the answer got right (separate points with ;)",
   "MISSING: the concepts or key points it missed (separate with ;)",
   "MISCONCEPTIONS: any mistaken idea in the answer (separate with ;)",
-  "WHY: one sentence on why the correct answer holds, from the passage",
+  "WHY: one sentence teaching the principle behind the correct answer, from the passage (never just the answer again)",
   "NEXT: one short thing to revise next, from the passage",
 ].join("\n");
 

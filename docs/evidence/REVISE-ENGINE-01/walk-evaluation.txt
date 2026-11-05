@@ -1,0 +1,6 @@
+PASS a written session starts (200)
+PASS the evaluator ran (ai_evaluation)
+PASS an empty answer earns nothing
+FAIL the full answer in other words is credited (score 0.5)
+PASS half the answer earns partial credit (score 1)
+PASS unsafe reasoning is not rewarded (score 0, safety: Clinically unsafe answer)

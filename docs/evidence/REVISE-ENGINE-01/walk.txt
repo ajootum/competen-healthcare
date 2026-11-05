@@ -1,0 +1,45 @@
+PASS Revise offers Quick Recall
+PASS Revise offers Deep Understanding
+PASS Revise offers Clinical Reasoning
+PASS Revise offers Mixed Challenge
+PASS quick_recall: session starts (200, generated 1, reused 7)
+PASS deep_understanding: session starts (200, generated 0, reused 6)
+PASS clinical_reasoning: session starts (200, generated 0, reused 5)
+PASS mixed_challenge: session starts (200, generated 0, reused 10)
+PASS revise card 1440: no recall controls before the flip
+PASS revise card 1440: Remembered and Didn't remember after the flip
+PASS revise card 1440: axe 0 violations
+PASS revise card 1440: no horizontal overflow (0px)
+PASS revise card 1440: Remembered records quality 4
+PASS revise card 820: no recall controls before the flip
+PASS revise card 820: Remembered and Didn't remember after the flip
+PASS revise card 820: axe 0 violations
+PASS revise card 820: no horizontal overflow (0px)
+PASS revise card 820: touch targets >= 44px
+PASS revise card 820: Remembered records quality 4
+PASS revise card 390: no recall controls before the flip
+PASS revise card 390: Remembered and Didn't remember after the flip
+PASS revise card 390: axe 0 violations
+PASS revise card 390: no horizontal overflow (0px)
+PASS revise card 390: touch targets >= 44px
+PASS revise card 390: Remembered records quality 4
+PASS review cards 1440: answer controls hidden before the flip
+PASS review cards 1440: Next card present
+PASS review cards 1440: Didn't remember saved, next review 2026-11-06
+PASS review cards 390: answer controls hidden before the flip
+PASS review cards 390: Next card present
+PASS review cards 390: Didn't remember saved, next review 2026-11-06
+PASS saved deck reopens in the flip card
+PASS saved deck 390: axe 0 violations
+PASS saved deck 390: no horizontal overflow (0px)
+PASS saved deck 390: touch targets >= 44px
+PASS evaluation: an empty answer earns nothing
+PASS evaluation: the key in other words is credited, or handed to the learner (undefined, score undefined)
+PASS evaluation: unsafe reasoning is not rewarded (score undefined)
+PASS evaluation sampled on a written question
+PASS feedback after a miss: axe 0 violations
+PASS feedback after a miss: no horizontal overflow (0px)
+PASS follow-up: a different question, never the one just missed
+PASS follow-up: says what it is
+PASS a wrong answer reached a follow-up
+PASS no 5xx or page errors: 0

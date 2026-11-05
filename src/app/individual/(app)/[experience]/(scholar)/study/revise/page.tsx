@@ -31,6 +31,7 @@ import { loadRetentionView } from "@/lib/individual/scholar/retention-data";
 import { listTransferChecks } from "@/lib/individual/scholar/store";
 import { TRANSFER_NOTE } from "@/lib/individual/scholar/transfer";
 import { RetentionPanel } from "../_components/retention-panel";
+import { FOLLOW_UP_LABEL, REVISION_INTENT, isRevisionIntent } from "@/lib/individual/scholar/revision-depth";
 import { LearningSection } from "@/components/ui/scholar-learning";
 import { sectionLead, toneAction } from "../_components/progress-parts";
 
@@ -60,7 +61,7 @@ function evaluationIntent(q: { evaluate?: string; evscope?: string }): { method:
   } catch { return null; }
 }
 
-export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string }> }) {
+export default async function Revise({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; evaluate?: string; evscope?: string; material?: string; difficulty?: string; study?: string; sections?: string; intent?: string; followUp?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
@@ -106,9 +107,10 @@ export default async function Revise({ params, searchParams }: { params: Promise
     return (
       <>
         {header}
-        <RevisionRunner session={{ id: s.data.session.id, mode: s.data.session.mode, feedback: s.data.session.feedback, status: s.data.session.status, total: questions.length, position: s.data.session.position }}
+        <RevisionRunner key={s.data.session.id} session={{ id: s.data.session.id, mode: s.data.session.mode, feedback: s.data.session.feedback, status: s.data.session.status, total: questions.length, position: s.data.session.position }}
           items={questions.map(revisionItemView)} answered={answered} evaluation={evaluationIntent(q)}
-          label={transferTopic ? `Transfer check on ${transferTopic}. ${TRANSFER_NOTE}` : null} />
+          followUpOf={isUuid(q.followUp) ? q.followUp : null}
+          label={transferTopic ? `Transfer check on ${transferTopic}. ${TRANSFER_NOTE}` : isUuid(q.followUp) ? FOLLOW_UP_LABEL : isRevisionIntent(q.intent) ? `${REVISION_INTENT[q.intent].label}. ${REVISION_INTENT[q.intent].help}` : null} />
       </>
     );
   }

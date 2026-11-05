@@ -79,11 +79,9 @@ const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace
 //   "Remembered / Review later"        = quality 4  (a recall: 1, 6, then x ease, ease unchanged)
 // The policy bounds of REVISION-01 R3 (harder interval share, longest interval, mastery) apply as to every review.
 
-export const RECALL = {
-  again: { quality: 1, label: "Didn't remember", sub: "Review sooner", key: "1" },
-  remembered: { quality: 4, label: "Remembered", sub: "Review later", key: "2" },
-} as const;
-export type RecallChoice = keyof typeof RECALL;
+import { RECALL, type RecallChoice } from "./recall-choices";
+export { RECALL };
+export type { RecallChoice };
 /** Pure. What a stored grade reads as: recalled at 3 or above (the line the insights already use), else not. */
 export const recallOf = (quality: number): RecallChoice => (quality >= 3 ? "remembered" : "again");
 /** Pure. The schedule one button gives, through the SAME scheduler every review uses. Never a second scheduler. */

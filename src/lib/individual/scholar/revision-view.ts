@@ -12,6 +12,7 @@ import { answerText, effectiveKind, keyOf, learnerItem, practiceMarks, structure
 import { markedAgainstLine } from "./marked-against";
 import { scenarioMarks, scenarioSpecOf, stageKeyText, storedStageResults, type StageResult } from "./scenario";
 import type { LibraryProvenance, QuestionRow } from "./store";
+import { DEPTH_LABEL } from "./revision-depth";
 import { extendedMarks, extendedSpecOf, isExtendedQuestion, storedMatched } from "./formats";
 import { applySnapshot, rubricChanged, rubricHash, snapshotOf, type RubricSnapshot } from "./rubric-snapshot";
 import { CORRECTION_BASIS_LABEL, QUESTION_CHANGED_NOTE, applyAssessedSnapshot, effectiveResult, outcomeOf, questionChanged, type AttemptIntegrity, type Outcome } from "./attempt-snapshot";
@@ -285,7 +286,7 @@ export function feedbackView(row: QuestionRow, m: {
   return {
     markedAgainst,
     ...(scenario ? { scenario } : {}),
-    rubric: rubric ? { objective: rubric.objective, level: LEVEL_LABEL[rubric.level], keyPoints: rubric.keyPoints, grounding: q.library ? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL[rubric.source] } : null,
+    rubric: rubric ? { objective: rubric.objective, level: rubric.depth ? DEPTH_LABEL[rubric.depth] : LEVEL_LABEL[rubric.level], keyPoints: rubric.keyPoints, grounding: q.library ? LIBRARY_QUESTION_LABEL : GROUNDING_LABEL[rubric.source] } : null,
     nextDifficulty: STEPS[Math.max(0, Math.min(2, (q.difficulty ?? 2) - 1 + (m.correct ? 1 : -1)))],
     questionId: q.id, correct: m.correct, score: m.score, marking: m.marking, markingLabel: MARKING_LABEL[m.marking],
     answer: answerText(q), rationale: q.rationale,

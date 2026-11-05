@@ -12,6 +12,8 @@ import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-
 import { DisclaimerBadge, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 import { HistoryNotice, useSearchHistoryChoice } from "@/app/individual/_components/SearchHistoryChoice";
+import { RecallCard } from "./recall-card";
+import { RECALL, type RecallChoice } from "@/lib/individual/scholar/recall-choices";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
 // including its refusals, in words. Nothing here decides access or ownership: the routes do, by the
@@ -829,14 +831,6 @@ export function QuestionCard({ q, index, chunkId, onAnswered, stepLabel }: { q: 
 
 export type CardView = { id: string; stem: string; answer: string; rationale: string; quote: string; citation: string; href: string };
 
-const GRADES = [
-  { q: 0, label: "Blank", hint: "No idea" },
-  { q: 2, label: "Hard", hint: "Got it wrong" },
-  { q: 3, label: "Okay", hint: "Right, with effort" },
-  { q: 4, label: "Good", hint: "Right" },
-  { q: 5, label: "Easy", hint: "Instant" },
-];
-
 export function CardReview({ cards }: { cards: CardView[] }) {
   const router = useRouter();
   const [i, setI] = useState(0);
@@ -844,8 +838,10 @@ export function CardReview({ cards }: { cards: CardView[] }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   // Owner review P1.8: every grade says what it did, and the session ends with what happens next.
-  const [done, setDone] = useState<{ stem: string; next: string; longInterval: boolean }[]>([]);
+  const [done, setDone] = useState<{ id: string; stem: string; next: string; longInterval: boolean }[]>([]);
   const card = cards[i];
+  const ratedIds = new Set(done.map(d => d.id));
+  const go = (n: number) => { setI(Math.max(0, Math.min(cards.length - 1, n))); setShown(false); setError(""); };
   const when = (iso: string) => new Date(`${iso}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" });
   if (!card) {
     return (
@@ -866,15 +862,19 @@ export function CardReview({ cards }: { cards: CardView[] }) {
       </div>
     );
   }
-  async function grade(q: number) {
+  async function grade(choice: RecallChoice) {
     setBusy(true); setError("");
-    const r = await post(`/api/individual/scholar/cards/${card.id}`, { quality: q });
+    // Standard Recall: Didn't remember = quality 1, Remembered = quality 4 (recall-choices.ts), to the same card route as before.
+    const r = await post(`/api/individual/scholar/cards/${card.id}`, { quality: RECALL[choice].quality });
     setBusy(false);
     if (!r.ok) { setError(r.json.error ?? "Your review could not be saved."); return; }
-    setDone(list => [...list, { stem: card.stem, next: when(r.json.nextReviewAt), longInterval: r.json.status === "mastered" }]);
-    setShown(false); setI(n => n + 1);
+    setDone(list => [...list, { id: card.id, stem: card.stem, next: when(r.json.nextReviewAt), longInterval: r.json.status === "mastered" }]);
+    // On to the next card not yet rated (after this one first, then any earlier one that was skipped); none left ends the session.
+    const rest = cards.findIndex((c, k) => k > i && !ratedIds.has(c.id));
+    const any = rest >= 0 ? rest : cards.findIndex(c => c.id !== card.id && !ratedIds.has(c.id));
+    setShown(false); setI(any >= 0 ? any : cards.length);
     // After the last card, refresh the server parts (the due count on the Revise tab). The summary is local state and stays.
-    if (i + 1 >= cards.length) router.refresh();
+    if (any < 0) router.refresh();
   }
   const last = done.at(-1);
   return (
@@ -882,37 +882,29 @@ export function CardReview({ cards }: { cards: CardView[] }) {
       <div className="flex items-center gap-3">
         <p className="text-[13px] font-semibold text-gray-800 tabular-nums">Card {i + 1} of {cards.length}</p>
         <div className="h-1.5 flex-1 rounded-full bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]" aria-hidden>
-          <div className="h-1.5 rounded-full bg-[var(--learn-accent)]" style={{ width: `${(i / cards.length) * 100}%` }} />
+          <div className="h-1.5 rounded-full bg-[var(--learn-accent)]" style={{ width: `${(done.length / cards.length) * 100}%` }} />
         </div>
       </div>
       {last && <p aria-live="polite" className="mt-2 text-[13px] text-gray-800">Previous card: {last.longInterval ? "moved to a long interval (60+ days)" : `comes back ${last.next}`}.</p>}
-      <p className="mt-3 text-[16px] font-semibold leading-relaxed text-gray-900">{card.stem}</p>
-      <p className="mt-1 text-[13px] text-gray-700">Try to recall the answer before you reveal it.</p>
-      {!shown ? (
-        <button type="button" className={`${learnAction.primary} mt-4`} onClick={() => setShown(true)}>Show answer</button>
-      ) : (
-        <>
-          <div className="mt-4 rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-4">
-            <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-700">What your notes say</p>
-            <p className="mt-1 text-[14.5px] font-bold text-gray-900">{card.answer}</p>
-            <p className="mt-1 text-[14px] text-gray-800">{card.rationale}</p>
-            <blockquote className="mt-2 border-l-4 border-[var(--learn-accent)] pl-3 text-[13.5px] italic text-gray-800">“{card.quote}”</blockquote>
-            <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={card.href} className={`underline underline-offset-2 ${focusRing}`}>{card.citation}</Link></p>
-            <div className="mt-3"><SourceNotice compact /></div>
-          </div>
-          <fieldset className="mt-4" disabled={busy}>
-            <legend className="text-[14px] font-semibold text-gray-900">How well did you remember it?</legend>
-            <p className="text-[13px] text-gray-700">Your grade sets when it comes back: sooner if it was hard, later if it was easy.</p>
-            <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
-              {GRADES.map(g => (
-                <button key={g.q} type="button" onClick={() => grade(g.q)} className={`${learnAction.secondary} flex-col !px-2`}>
-                  <span>{g.label}</span><span className="text-[12px] font-normal text-gray-700">{g.hint}</span>
-                </button>
-              ))}
+      <div className="mt-3">
+        {/* The one flashcard (recall-card.tsx): the prompt on the front, the answer after the flip, then Remembered / Didn't remember. Self-reported. */}
+        <RecallCard front={card.stem} back={card.answer} revealed={shown || ratedIds.has(card.id)} onFlip={() => setShown(true)} busy={busy} rated={ratedIds.has(card.id)} onRate={c => void grade(c)}
+          footer={(shown || ratedIds.has(card.id)) ? (
+            <div className="mx-auto mt-4 max-w-xl rounded-xl bg-[var(--cmp-app-surface)] p-4 ring-1 ring-[var(--learn-border)]">
+              <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-700">What your notes say</p>
+              <p className="mt-1 text-[14px] text-gray-800">{card.rationale}</p>
+              <blockquote className="mt-2 border-l-4 border-[var(--learn-accent)] pl-3 text-[13.5px] italic text-gray-800">“{card.quote}”</blockquote>
+              <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={card.href} className={`underline underline-offset-2 ${focusRing}`}>{card.citation}</Link></p>
+              <div className="mt-3"><SourceNotice compact /></div>
+              <p className="mt-2 text-[12.5px] text-gray-700">{ratedIds.has(card.id) ? "You have rated this card." : "Your own judgement sets when it comes back: sooner if you did not remember it, later if you did."}</p>
             </div>
-          </fieldset>
-        </>
-      )}
+          ) : <p className="mt-2 text-center text-[13px] text-gray-700">Try to recall the answer before you reveal it.</p>}
+          nav={
+            <div className="mx-auto mt-3 flex max-w-[52rem] justify-between">
+              <button type="button" onClick={() => go(i - 1)} disabled={i === 0} aria-label="Previous card" className={learnAction.secondary}>Previous</button>
+              <button type="button" onClick={() => go(i + 1)} disabled={i >= cards.length - 1} aria-label="Next card" className={learnAction.secondary}>Next</button>
+            </div>} />
+      </div>
       <ErrorLine text={error} />
     </section>
   );

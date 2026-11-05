@@ -315,7 +315,7 @@ describe("the blind check for the other formats", () => {
     expect(applyBlindVerification([mi], verdict({ matches: letters })).kept).toEqual([0]);
     expect(applyBlindVerification([mi], verdict({ matches: [...letters].reverse() })).kept).toEqual(letters.join("") === [...letters].reverse().join("") ? [0] : []);
     expect(applyBlindVerification([mi], verdict({ matches: letters.slice(0, 2) })).kept).toEqual([]);
-    const seq = draftOf("sequence", { stem: "Put the steps in the order the notes give?", steps: ["Symptoms include fever", "Escherichia coli is the commonest cause", "Treatment is with antibiotics and fluids"], rationale: "The notes give this order.", sourceQuote: "Treatment is with antibiotics and fluids.", difficulty: 1 });
+    const seq = draftOf("sequence", { stem: "Put these steps in the order they apply?", steps: ["Symptoms include fever", "Escherichia coli is the commonest cause", "Treatment is with antibiotics and fluids"], rationale: "The notes give this order.", sourceQuote: "Treatment is with antibiotics and fluids.", difficulty: 1 });
     const si = blindItemOf("sequence", seq) as Extract<BlindItem, { kind: "sequence" }>;
     expect(applyBlindVerification([si], verdict({ order: si.keyed.map(i => "ABCDEF"[i]) })).kept).toEqual([0]);
     expect(applyBlindVerification([si], verdict({ order: ["A", "B", "C"].reverse() })).kept).toEqual(si.keyed.map(i => "ABCDEF"[i]).join("") === "CBA" ? [0] : []);

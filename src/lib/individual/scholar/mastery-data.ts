@@ -67,6 +67,8 @@ export async function loadMastery(admin: unknown, userId: string, policy: Indivi
   for (const a of attempts) {
     const q = qById.get(a.questionId);
     if (!q) continue;
+    // A flashcard rating is stored as an attempt AND a review (391). The review row below is the one record of it: counting both counted one rating twice.
+    if (q.kind === "flashcard") continue;
     // SALE-2026-11 R1: a check kept without a mark (950 `unmarked`) is not an answer to count: before this it read as an app-marked wrong one.
     if (a.marking === "unmarked") continue;
     evidence.push({

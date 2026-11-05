@@ -10,6 +10,7 @@
 // ⚠ A cloze item is never a clinically approved question and never published to the shared library.
 
 import type { RevisionDraft } from "./revision";
+import { looksLikeCitation } from "./revision-depth";
 
 export const CLOZE_BLANK = "_____";
 export const CLOZE_MODEL = "rule";
@@ -124,6 +125,7 @@ export type ClozeItem = { stem: string; term: string; accepted: string[]; senten
  */
 export function pickClozeItems(input: { text: string; terms: readonly string[]; max: number; existing?: ReadonlySet<string>; reject?: (sentence: string) => boolean }): ClozeItem[] {
   const sentences = splitSentences(input.text).filter(s => {
+    if (looksLikeCitation(s)) return false; // Revise engine quality: a reference-list line tests nothing.
     if (s.length < SENTENCE_MIN || s.length > SENTENCE_MAX || s.endsWith("?")) return false;
     if (s.split(" ").length < WORDS_MIN) return false;
     if ((s.match(/\d/g) ?? []).length > s.length * 0.2) return false;

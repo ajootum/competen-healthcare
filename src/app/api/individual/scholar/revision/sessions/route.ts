@@ -12,7 +12,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { leadingCompetency } from "@/lib/competency/mapping";
 import {
-  addDeckCards, chunkMappings, createRevisionSession, flashcardDecks, touchFlashcardDeck, getPassage, getRevisionSet, insertLibraryCopies, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
+  addDeckCards, chunkMappings, createRevisionSession, getQuestion, flashcardDecks, touchFlashcardDeck, getPassage, getRevisionSet, insertLibraryCopies, insertQuestions, insertRevisionQuestions, isUuid, listMaterials, listRevisionSessions,
   revisionPool, sectionLinks, sqieSchema, topicsOfSections, touchRevisionSet, type QuestionRow,
 } from "@/lib/individual/scholar/store";
 import { formatOfLibrary, loadLibraryQuestions, pickLibraryQuestions, type LibrarySection } from "@/lib/individual/scholar/library-questions";
@@ -25,7 +25,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRun
 import { activityOrFallback, activityState, getScholarAiStanding, type ScholarAiActivity } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
-import { GENERATING_MODES, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, type PoolItem } from "@/lib/individual/scholar/revision";
+import { GENERATING_MODES, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
 import { missOf, recentMisses, signalsOf } from "@/lib/individual/scholar/misconception";
 import { writeClozeItems } from "@/lib/individual/scholar/cloze-service";
 import { isClozeQuestion } from "@/lib/individual/scholar/cloze";
@@ -34,6 +34,8 @@ import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/i
 import { withoutFlashcards } from "@/lib/individual/scholar/flashcard-experience";
 import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
+import { REVISION_INTENT, depthOfAnswer, factKeyOf, aboutTheDocument, followUpConcepts, looksLikeCitation, intentFormats, isRevisionIntent, thinForQuestions, type Depth, type RevisionIntent } from "@/lib/individual/scholar/revision-depth";
+import { rubricOf } from "@/lib/individual/scholar/question-intel";
 import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
   MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
@@ -151,7 +153,14 @@ export async function POST(req: Request) {
   let scopeSections: string[] = [];
   // SCHOLAR-FLASHCARDS-01: the learner's own learning gaps, as cards: where they missed, and what to focus on.
   let gapConcepts: Map<string, string[]> | null = null;
-  if (body?.scope?.kind === "gaps") {
+  // Revise engine quality 2.5: a different question on what was just missed: same section, focused on what its rubric names, never the same question.
+  const missed = mode === "quick" && isUuid(body?.followUpOf) ? await getQuestion(ctx.admin, ctx.userId, body.followUpOf) : null;
+  if (isUuid(body?.followUpOf) && !missed) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
+  if (missed) {
+    const rubric = rubricOf(missed.answer);
+    chunkIds = [missed.chunkId]; scopeSections = [missed.chunkId];
+    gapConcepts = new Map([[missed.chunkId, followUpConcepts({ misconceptions: rubric?.misconceptions, keyPoints: rubric?.keyPoints })]]);
+  } else if (body?.scope?.kind === "gaps") {
     if (mode !== "flashcards") return NextResponse.json({ error: "Learning gaps are revised as flashcards." }, { status: 400 });
     const focus = gapFocus(await loadFlashcardGaps(ctx));
     if (!focus.chunkIds.length) return NextResponse.json({ error: "No learning gaps yet: questions you get wrong, and cards you do not remember, show up here." }, { status: 404 });
@@ -178,10 +187,14 @@ export async function POST(req: Request) {
 
   // SCHOLAR-SQIE-CLOSE-01: structured only where 710 stores it, and only with feedback after each answer.
   const sqie = await sqieSchema(ctx.admin, ctx.userId);
-  const formats = pickFormats(body?.formats, policy.scholarRevisionFormats).filter(f => f !== "structured" || (sqie && feedback === "immediate")).filter(f => !needsImmediateFeedback(f) || feedback === "immediate");
+  // Revise engine quality 2.6: an intention chooses formats, depths, length and difficulty; the policy still decides what is offered.
+  const intent: RevisionIntent | null = isRevisionIntent(body?.intent) ? body.intent : null;
+  const asIntent = intent ? REVISION_INTENT[intent] : null;
+  const offered = missed ? policy.scholarRevisionFormats.filter(f => f !== "flashcard" && f !== "cloze" && f !== "scenario") : policy.scholarRevisionFormats;
+  const formats = (intent ? intentFormats(intent, offered) : pickFormats(missed ? offered : body?.formats, offered)).filter(f => f !== "structured" || (sqie && feedback === "immediate")).filter(f => !needsImmediateFeedback(f) || feedback === "immediate");
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
-  const quantity = Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity;
-  const asked: RevisionDifficulty | null = (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
+  const quantity = missed ? 1 : asIntent?.quantity ?? (Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity);
+  const asked: RevisionDifficulty | null = asIntent ? asIntent.difficulty : (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
   let difficulty: RevisionDifficulty = asked ?? (mode === "flashcards" ? policy.scholarFlashcardDifficulty : policy.scholarRevisionDifficulty);
   // SCHOLAR-SQIE-01: where questions come from -- the notes (default), or the notes with approved references.
   const sourceMode: SourceMode = isSourceMode(body?.source) && (mode !== "flashcards" || policy.scholarFlashcardSourceModes.includes(body.source)) ? body.source : "notes";
@@ -195,6 +208,21 @@ export async function POST(req: Request) {
     cardIds = new Set(own.data.cards.map(c => c.id));
   }
   const seed = `${ctx.userId}:${new Date().toISOString().slice(0, 10)}:${mode}`;
+  const missedDepth = missed ? depthOfAnswer(missed.answer) : null;
+  const aim: readonly Depth[] = asIntent?.depths ?? (missedDepth ? [missedDepth] : []);
+  const exclude = missed ? [missed.id] : [];
+  // A stored question about the document itself, or a rule-written blank in a short title, is not offered by intention.
+  const about = (id: string) => !!pool?.questions.find(q => q.id === id && (aboutTheDocument(q.stem) || looksLikeCitation(q.stem) || (isClozeQuestion(q) && q.stem.trim().split(/\s+/).length < 10)
+    || (q.kind === "structured" && structuredParts(q).some(pt => aboutTheDocument(pt.prompt)))));
+  // A sitting the learner chose by intention (or a follow-up) wants new thinking, not only what older prompts left unseen: at least half of it unseen, at the current
+  // prompt and the depth asked for. Otherwise the shortfall is written, under the same call caps, allowance and checks. Everything else behaves as before.
+  const repick = () => {
+    const shaped = intent || missed ? pool!.items.filter(p => !about(p.id)) : pool!.items;
+    const r = pickQuestions({ mode, pool: shaped, quantity, formats: kinds, difficulty, seed, recentMisses: pool!.misses, depths: aim, exclude, varied: intent === "mixed_challenge" });
+    if (!intent && !missed) return r;
+    const fresh = shaped.filter(p => p.current && p.lastAnsweredAt === null && !exclude.includes(p.id) && kinds.includes(p.kind as RevisionFormat) && (!aim.length || (p.depth && aim.includes(p.depth)))).length;
+    return { ...r, shortfall: Math.max(r.shortfall, Math.ceil(quantity / 2) - fresh) };
+  };
 
   // SCHOLAR-FLASHCARDS-01: generating INTO a deck takes cards not yet in it, and adds them to it (by reference).
   const targetDeck = mode === "flashcards" && isUuid(body?.deckId) ? (await flashcardDecks(ctx.admin, ctx.userId)).find(d => d.id === body.deckId) ?? null : null;
@@ -222,7 +250,9 @@ export async function POST(req: Request) {
     const items: PoolItem[] = qs.filter(q => !!keyOf(q) && !inDeck.has(q.id)).map(q => {
       const s = p.data.stats.get(q.id)!;
       // SCHOLAR-SQIE-LEARNER-01: what its rubric lists as misconceptions and its topic, for the preference in Weak areas.
-      return { id: q.id, kind: effectiveKind(q), difficulty: q.difficulty, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: s.latestCorrect, misses: s.misses, lastAnsweredAt: s.lastAnsweredAt, due: s.due, ...signalsOf(q) };
+      return { id: q.id, kind: effectiveKind(q), difficulty: q.difficulty, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: s.latestCorrect, misses: s.misses, lastAnsweredAt: s.lastAnsweredAt, due: s.due, ...signalsOf(q),
+        // Revise engine quality: a governed library copy counts as current: it is clinically approved, not an older draft.
+        depth: depthOfAnswer(q.answer), current: !!q.library || q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q))), factKey: factKeyOf(q.chunkId, rubricOf(q.answer)?.objective) };
     });
     // The learner's misses in the last 30 days, with what each missed item's rubric lists (misconception.ts).
     return { questions: qs, items, misses: recentMisses(qs.flatMap(q => missOf(q, p.data.stats.get(q.id)?.lastMissAt)), new Date().toISOString()) };
@@ -238,7 +268,18 @@ export async function POST(req: Request) {
       .sort((a, b) => (b.lastAnsweredAt ?? "").localeCompare(a.lastAnsweredAt ?? "")).map(p => p.latestCorrect as boolean);
     if (base) difficulty = adaptDifficulty(base, recent);
   }
-  let pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
+  let pick = repick();
+  // Revise engine quality: never write from a title or objectives slide, and start where the fewest current questions exist, not at slide one.
+  // A follow-up stays on its own section. If every section is thin, the plan is unchanged. Read once, only when something is about to be written.
+  let ranked = false;
+  const rankSections = async () => {
+    if (ranked || missed) return;
+    ranked = true;
+    const read = await Promise.all(scopeSections.slice(0, 40).map(async c => ({ c, p: await getPassage(ctx.admin, ctx.userId, c) })));
+    const rich = read.filter(x => x.p && !thinForQuestions(x.p.content)).map(x => x.c);
+    const have = (c: string) => pool!.items.filter(p => p.chunkId === c && p.current).length;
+    if (rich.length) scopeSections = rich.map((c, n) => ({ c, n })).sort((a, b) => have(a.c) - have(b.c) || a.n - b.n).map(x => x.c);
+  };
 
   // ── SCHOLAR-COMPANION-01 P1: cloze items, written by a rule from the learner's own notes (cloze.ts). No AI, no allowance. ──
   // Only when cloze was asked for by name: a default session never gains new cloze items it was not asked for.
@@ -247,11 +288,12 @@ export async function POST(req: Request) {
     const have = pool.questions.filter(isClozeQuestion).length;
     const need = Math.min(20, Math.max(0, Math.ceil(quantity / kinds.length) - have));
     if (need > 0) {
+      await rankSections();
       const w = await writeClozeItems(ctx.admin, ctx.userId, { chunkIds: scopeSections, questions: pool.questions, need });
       clozeWritten = w.written;
       if (w.written) {
         pool = (await poolOf()) ?? pool;
-        pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
+        pick = repick();
       }
       await audit(ctx, "individual_scholar_revision_cloze", "individual_scholar_revision_session", null, { asked: need, written: w.written, sections: Math.min(scopeSections.length, 30), rule: "cloze:v1" });
     }
@@ -279,7 +321,7 @@ export async function POST(req: Request) {
       if (copies.ids.length) {
         libraryIds = copies.ids; libraryVersions = picks.map(x => x.question.versionId);
         pool = (await poolOf()) ?? pool;
-        pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
+        pick = repick();
       }
       await audit(ctx, "individual_scholar_revision_library", "individual_scholar_revision_session", null, {
         offered: library.length, picked: picks.length, copied: copies.copied, reused: copies.ids.length, versions: libraryVersions,
@@ -309,6 +351,7 @@ export async function POST(req: Request) {
         const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q)))).map(q => `${q.chunkId}|${effectiveKind(q)}`));
         // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
         // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
+        await rankSections();
         let i = 0, refused = false;
         for (let round = 0; round < 2 && pick.shortfall > 0 && generated < genCap && i < REVISION_GENERATION_CALLS_MAX && !refused; round++) {
                     const plan = planGeneration({ shortfall: Math.min(pick.shortfall, genCap - generated), chunkIds: scopeSections, formats: kinds, existing });
@@ -338,7 +381,8 @@ export async function POST(req: Request) {
             const sectionContext = await loader.forSection(passage.chunkId, { difficulty: generationDifficulty(difficulty), mode: call.kind === "mcq" ? "notes" : sourceMode });
             // SCHOLAR-FLASHCARDS-01: cards for a learning gap test what was missed (still only what the passage holds).
             const focus = gapConcepts?.get(passage.chunkId) ?? [];
-            const context = focus.length ? { ...sectionContext, concepts: [...focus, ...sectionContext.concepts] } : sectionContext;
+            const aimed = aim.length ? { ...sectionContext, depths: aim } : sectionContext;
+            const context = focus.length ? { ...aimed, concepts: [...focus, ...aimed.concepts] } : aimed;
             if (context.mode === "notes_and_references") referencesUsed = true;
             let ids: string[] = [], outcome = "", calls = 0;
             let mixPlan: { levels: Record<string, number>; fallback: string[]; relabelled: number } | null = null;
@@ -396,7 +440,7 @@ export async function POST(req: Request) {
           generated += made;
           if (!made) break;
           pool = (await poolOf()) ?? pool;
-          pick = pickQuestions({ mode, pool: pool.items, quantity, formats: kinds, difficulty, seed, recentMisses: pool.misses });
+          pick = repick();
         }
       }
     }
