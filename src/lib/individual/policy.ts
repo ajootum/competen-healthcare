@@ -125,7 +125,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_exam_papers" | "scholar_exam_web_provider" | "scholar_exam_research_depth" | "scholar_exam_scanned_pages" | "scholar_material_image_slides"
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
-  | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
+  | "professional_progress_default_period" | "professional_documents_ai" | "professional_global_search" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
@@ -1301,6 +1301,14 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offer Global Search" }, { value: "off", label: "Do not offer" }],
     fallback: "off",
     limitReason: "Reads only the signed-in learner's own records, and only the modules they may open. What is typed is kept only where My Search History is on, and only when a result is chosen. Default: off.",
+  },
+  {
+    key: "professional_global_search", kind: "choice", product: "Professional",
+    label: "Search: Global Search across Professional",
+    help: "Whether the Professional header offers Global Search: one box that searches the professional's own competencies, evidence, CPD, development goals and needs, and registration, grouped by where each result belongs. No AI. Each search box on a page is there either way.",
+    options: [{ value: "on", label: "Offer Global Search" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "Reads only the signed-in professional's own records, and nothing from Scholar. What is typed is not kept. Default: off.",
   },
   {
     key: "scholar_search_history", kind: "choice", product: "Scholar",
@@ -2555,6 +2563,8 @@ export type IndividualPolicy = {
   /** SCHOLAR-SEARCH-HISTORY-01: My Search History in the library (migration 992). Default off. */
   scholarSearchHistory: "on" | "off";
   scholarGlobalSearch: "on" | "off";
+  /** SEARCH-STANDARD-01: Global Search across Professional. Default off. */
+  professionalGlobalSearch: "on" | "off";
   /** SCHOLAR-INLINE-CHECKS-01: checks inside the scrolling lesson. */
   scholarLearnInlineRecall: "on" | "off";
   scholarLearnInlineRecallPlacement: "substantial" | "every_lesson" | "lesson_end";
@@ -2811,6 +2821,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
     scholarSearchHistory: clampChoice(policyDef("scholar_search_history") as ChoicePolicy, published.get(policyPath("scholar_search_history"))) as "on" | "off",
     scholarGlobalSearch: clampChoice(policyDef("scholar_global_search") as ChoicePolicy, published.get(policyPath("scholar_global_search"))) as "on" | "off",
+    professionalGlobalSearch: clampChoice(policyDef("professional_global_search") as ChoicePolicy, published.get(policyPath("professional_global_search"))) as "on" | "off",
     scholarLearnInlineRecall: clampChoice(policyDef("scholar_learn_inline_recall") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall"))) as "on" | "off",
     scholarLearnInlineRecallPlacement: clampChoice(policyDef("scholar_learn_inline_recall_placement") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall_placement"))) as "substantial" | "every_lesson" | "lesson_end",
     scholarLearnInlineRecallMinWords: int("scholar_learn_inline_recall_min_words"),
