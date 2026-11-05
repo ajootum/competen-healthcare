@@ -8,7 +8,7 @@
 import type { ScholarModuleKey } from "../scholar/module-access";
 
 export type SearchProduct = "Scholar";
-export type SearchModuleKey = "learn" | "library" | "saved" | "revise" | "apply" | "evaluate" | "plan" | "competencies";
+export type SearchModuleKey = "learn" | "library" | "saved" | "revise" | "apply" | "evaluate" | "plan" | "competencies" | "courses";
 
 export type SearchAccess = {
   /** My Plan is offered and installed. */
@@ -63,6 +63,9 @@ export const SCHOLAR_SEARCH_MODULES: readonly SearchModule[] = [
   { key: "competencies", product: "Scholar", label: "My Competencies", scope: "your competencies", segment: "my-competencies",
     recordTypes: [{ key: "competency", label: "Competencies" }],
     fields: ["title", "code"], filters: ["status", "Area", "sort"], allowed: a => a.modules.has("competencies") },
+  { key: "courses", product: "Scholar", label: "Courses & Training", scope: "your courses and programmes", segment: "courses/mine",
+    recordTypes: [{ key: "course", label: "Courses you are taking" }, { key: "completed", label: "Completed courses" }, { key: "programme", label: "Programmes" }],
+    fields: ["course titles and codes", "status", "programme names"], filters: [], allowed: a => a.modules.has("courses") },
 ];
 
 export const searchModule = (key: SearchModuleKey): SearchModule => SCHOLAR_SEARCH_MODULES.find(m => m.key === key)!;
@@ -78,7 +81,8 @@ export const PAGE_SCOPES = {
   history: "your search history",
   flashcards: "your flashcards",
   osce: "your OSCE stations",
-  progress: "your progress history",
+  evidence: "your evidence and assessments",
+  assessments: "your assessments",
 } as const;
 export const pageScope = (key: keyof typeof PAGE_SCOPES) => `Searching ${PAGE_SCOPES[key]}`;
 
