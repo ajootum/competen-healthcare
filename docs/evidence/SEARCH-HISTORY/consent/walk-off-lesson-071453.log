@@ -1,0 +1,12 @@
+PASS B has made no history choice: it is off
+INFO after Teach me: /individual/scholar/study/learn?session=5b97937b-671a-443e-8acc-c64bfe5706c5
+PASS a lesson is taught with it off (200 teach, 200 teach)
+PASS a new lesson exists (1 to 2)
+PASS AI really ran (1 rows)
+PASS off: nothing kept, and nothing sent to the history route
+PASS off: the typed topic is not kept
+PASS the AI consent row is untouched
+PASS no application console errors
+PASS no 5xx responses
+INFO removed the throwaway lesson (1)
+ALL PASS -- 9 passed, 0 failed

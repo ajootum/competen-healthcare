@@ -141,3 +141,7 @@ Page only. **Migration 992 is unchanged**: same file, same sha256, same VERIFY a
 - **Defect found by looking at the screenshot, not by the assertions:** later rows' ⋯ buttons painted through an open menu. Fixed. The first version of the check passed on the broken code, so it was replaced by a grid across the panel: 7 of 585 points covered on the old stacking (red), 0 on the fix.
 
 Proof: the walk logs in `walk/` from this branch. Earlier logs are from #287.
+
+## Follow-up: the owner's privacy decision (5 Nov 2026, migration 993)
+
+The owner applied 992 in production. Nothing is kept now until the learner turns it on, and deleting a material removes the entries that relied on it, so the line under Limits about search words being kept when a material is erased no longer holds once 993 is applied. VERIFY-992.sql describes the state before 993. See `consent/993-build-record.md`.

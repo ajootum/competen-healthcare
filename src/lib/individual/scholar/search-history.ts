@@ -14,8 +14,8 @@
 //   OPENING      a saved answer reopens as saved (the library's version view) and a lesson's saved teaching through the library:
 //                no AI call. Ask answers were never kept (owner ruling D10), so an Ask entry says so and offers where it was
 //                asked. Continuing a lesson in Learn is a separate, plainly worded link (CONTINUE_NOTE).
-//   PRIVACY      learner owned. Never shown to HQ, employers or educators, never Personal AI memory. Removing an entry or
-//                clearing never deletes saved teaching, lessons, attempts, learning evidence or materials.
+//   PRIVACY      learner owned. No HQ surface reads it, never Personal AI memory. Removing an entry or clearing never deletes saved
+//                teaching, lessons, attempts, learning evidence or materials. Nothing new is kept until the learner turns it on (993).
 
 export const HISTORY_ACTIVITIES = ["material_search", "library_search", "ask", "teaching", "research", "lesson"] as const;
 export type HistoryActivity = (typeof HISTORY_ACTIVITIES)[number];
@@ -45,9 +45,16 @@ export const COLLAPSE_MS = 120_000;
 export const ASK_ROW_NOTE = "Answer not kept";
 export const ASK_NOT_KEPT = "Scholar does not keep Ask answers, so an answer cannot be reopened. Your question and where you asked it are kept.";
 /** The empty history, honestly: nothing is invented, and what came before this page was not kept. */
-export const HISTORY_EMPTY = "Nothing here yet. Your searches, your questions to Scholar, your saved teaching and your lessons appear here. Searches and questions from before this page was offered were not kept, so they cannot be shown.";
+export const HISTORY_EMPTY = "Nothing here yet. Your saved teaching and your lessons appear here, and your searches and questions to Scholar while My Search History is on. Searches and questions from before it was on were not kept, so they cannot be shown.";
 export const CONTINUE_NOTE = "Opening a saved answer or a saved lesson uses no AI. Continue the lesson carries on in Learn, which writes new teaching only for a part you have not reached yet.";
-export const HISTORY_PRIVACY = "Private to you. Never shown to HQ, employers or educators, and never used as AI memory. Removing something here never deletes your saved learning, lessons, answers or materials.";
+export const HISTORY_PRIVACY = "Not ordinarily visible to other learners, educators or employers. Authorised staff and service providers may have access where needed to operate, secure or support the service, or where the law requires it. Personal AI does not use it. Answers are not kept. Removing an entry or clearing your history does not touch your notes, lessons, saved teaching or materials. Clearing cannot be undone.";
+/** Owner decision 5 Nov 2026, item 2: beside every box whose words can be kept, with a link to the setting. Subject to legal review. */
+export const HISTORY_NOTICE_ON = "My Search History is on: what you submit here is kept there until you remove it. Please do not type patient details.";
+export const HISTORY_NOTICE_OFF = "My Search History is off: what you submit here is not kept there.";
+export const HISTORY_SETTING_LINK = "Manage My Search History";
+export const HISTORY_SETTING_PATH = "study/saved/searches#history-setting";
+/** Offered by HQ (policy, 992 present), turned on by the learner (their own record, 993). The capture route reads it again and decides. */
+export type SearchHistoryChoice = { offered: boolean; on: boolean };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const isId = (v: unknown): v is string => typeof v === "string" && UUID.test(v);

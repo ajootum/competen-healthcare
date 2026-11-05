@@ -1,0 +1,7 @@
+PASS key off: the page says it is not offered and shows no list
+PASS key off: GET, PATCH and clear answer 403 (403, 403, 403)
+PASS key off: a capture keeps nothing and shows no error ({"kept":false,"reason":"off"})
+PASS key off: Learn's search has no history link and no key field
+PASS key off: the library has no history link
+PASS key off: no history row was written or changed
+ALL PASS -- 6 passed, 0 failed

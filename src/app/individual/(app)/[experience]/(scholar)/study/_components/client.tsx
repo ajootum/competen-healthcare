@@ -11,6 +11,7 @@ import { AI_LABEL, CONTENT_STATUS_LABEL, CONSENT_AWAITING_LEGAL, CONSENT_NOTICE,
 import type { ConsentStatus, LegalLink } from "@/lib/individual/scholar/consent-gate";
 import { DisclaimerBadge } from "@/components/ui/scholar-learning";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
+import { HistoryNotice, useSearchHistoryChoice } from "@/app/individual/_components/SearchHistoryChoice";
 
 // The interactive pieces of My Learning. Each one calls a gate-3 API route and shows what the route says,
 // including its refusals, in words. Nothing here decides access or ownership: the routes do, by the
@@ -499,6 +500,7 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
   const [scope, setScope] = useState<"all" | "chosen" | "competency">("all");
   const [chosen, setChosen] = useState<string[]>([]);
   const [competency, setCompetency] = useState("");
+  const historyChoice = useSearchHistoryChoice();
   async function ask(e: React.FormEvent) {
     e.preventDefault();
     const text = q.trim();
@@ -514,8 +516,8 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
     if (!r.ok) { setError(r.json.error ?? "No explanation could be produced."); return; }
     setItems(list => [{ q: text, answer: r.json.answer, message: r.json.message, sources: r.json.sources ?? [], provenance: r.json.provenance, supplementary: r.json.supplementary }, ...list]);
     setQ("");
-    // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to is kept once in the learner's own history (their words, never the reply).
-    void recordHistory({ activity: "ask", query: text, materialId: materialId ?? null });
+    // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to is kept once in the learner's own history (their words, never the reply), where they turned it on.
+    if (historyChoice.on) void recordHistory({ activity: "ask", query: text, materialId: materialId ?? null });
   }
   return (
     <section aria-labelledby="explain-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
@@ -557,6 +559,7 @@ export function ExplainPanel({ materialId, materialIds, scopes, consent, offMess
           )}
           <ModePicker mode={mode} setMode={setMode} idPrefix={`explain-${materialId ?? "all"}`} />
           <button type="submit" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || !q.trim()}>{busy ? "Reading your notes…" : MODES.find(m => m.key === mode)!.label}</button>
+          <HistoryNotice />
         </form>
       )}
       <ErrorLine text={error} />

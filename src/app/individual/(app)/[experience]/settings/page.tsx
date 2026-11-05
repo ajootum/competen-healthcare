@@ -10,6 +10,10 @@ import OwnProfileCard from "@/components/account/OwnProfileCard";
 import { AiHelpBody, readAiHelp } from "../(scholar)/study/_components/shell-pieces";
 import { EraseAll } from "../(scholar)/study/_components/client";
 import { listMaterials } from "@/lib/individual/scholar/store";
+import { SearchHistorySetting } from "../(scholar)/study/_components/search-history-setting";
+import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
+import { consentDocuments } from "@/lib/individual/scholar/consent-gate";
+import { loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { professionalSelfAddEnabled } from "@/lib/individual/professional-add";
 import AddProfessional from "../../../_components/AddProfessional";
 
@@ -33,6 +37,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
   const x = EXPERIENCES[experience];
   const primary = effectivePrimary(ctx.membership.primaryExperience, ctx.live) ?? experience;
   const study = experience === "scholar" ? await listMaterials(ctx.admin, ctx.userId) : null;
+  const historyChoice = experience === "scholar" ? await readSearchHistoryChoice(ctx.admin, ctx.userId, await loadIndividualPolicyOnce(ctx.admin)) : null;
+  const documents = consentDocuments();
   const studyCount = study?.ok ? study.data.length : 0;
   // P5 (prepared, OFF): offered only in Scholar, only without Professional, and only while the server gate is on.
   const canAddProfessional = experience === "scholar" && !ctx.live.includes("professional") && (await professionalSelfAddEnabled(ctx.admin));
@@ -52,6 +58,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           <hr className="my-5 border-0 border-t border-gray-200" />
           <h3 className="text-[16px] font-bold text-gray-900">Private by default</h3>
           <p className="mt-1.5 text-[15px] text-gray-600">Your material, answers and practice history are yours. Adding a learning record to your Passport is a separate choice you make.</p>
+          {historyChoice?.offered && <SearchHistorySetting on={historyChoice.on} unreadable={historyChoice.unreadable} published={documents.published} grantedAt={historyChoice.grantedAt} revokedAt={historyChoice.revokedAt} legal={documents.links} />}
           {/* HFE-01 Wave 4 (F9): the destructive erase lives here, beside the consent, and only when there is material to erase. */}
           {studyCount > 0 && <div className="mt-5"><EraseAll count={studyCount} /></div>}
         </section>

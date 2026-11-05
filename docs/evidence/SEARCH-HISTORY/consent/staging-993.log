@@ -1,0 +1,68 @@
+=== VERIFY-993.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: VERIFY-993: the consent CHECK does not name scholar_search_history
+=== APPLY 1
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/supabase/migrations/993-individual-scholar-search-history-choice.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-993.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: null value in column "notice_version" of relation "individual_scholar_consent" violates not-null constraint
+=== APPLY 2
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/supabase/migrations/993-individual-scholar-search-history-choice.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-993.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: null value in column "notice_version" of relation "individual_scholar_consent" violates not-null constraint
+=== VERIFY-993-prod.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993-prod.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== ROLLBACK-993.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/ROLLBACK-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-993-prod.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993-prod.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: VERIFY-993-prod: the consent feature CHECK does not hold all three features
+=== REAPPLY
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+Done on ezhvpgtcqcdsgylrxgdb. Committed.
+=== VERIFY-993.sql
+
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: null value in column "notice_version" of relation "individual_scholar_consent" violates not-null constraint
+=== VERIFY-993 after the probe fix
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+FAILED on ezhvpgtcqcdsgylrxgdb; rolled back, nothing changed: null value in column "granted_at" of relation "individual_scholar_consent" violates not-null constraint
+=== VERIFY-993 after the probe fix
+File   : C:/Users/elish/Documents/Competen/competen-search-history/docs/evidence/SEARCH-HISTORY/consent/VERIFY-993.sql
+Target : ezhvpgtcqcdsgylrxgdb  (production is rnnqhlrcgvsauigxwszl; this is NOT production)
+Type the target ref to run it (ezhvpgtcqcdsgylrxgdb): 
+Done on ezhvpgtcqcdsgylrxgdb. Committed.

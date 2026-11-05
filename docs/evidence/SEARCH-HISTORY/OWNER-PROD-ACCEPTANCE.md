@@ -4,14 +4,31 @@ Run only after the owner's GO. No agent signs in as these learners or touches pr
 
 ## Before
 
-1. Apply `992-individual-scholar-search-history.sql` in the production SQL editor, whole file.
-2. Run `VERIFY-992-prod.sql`. Expect the notice `VERIFY-992-prod: PASS`.
-3. Deploy the app. Publish `scholar_search_history` ON in HQ (Library: My search history).
-4. Run `PROD-COUNTS-992.sql` and keep the result: this is the "before".
+992 is already applied. **Order matters: the notice and the learner's choice must work before anything can be kept** (owner decision 5 Nov 2026, item 7).
+
+1. Run `consent/PRECHECK-993-prod.sql` and keep the result.
+2. Apply `993-individual-scholar-search-history-choice.sql` in the production SQL editor, whole file.
+3. Run `consent/VERIFY-993-prod.sql`. Expect the notice `VERIFY-993-prod: PASS`. Run the precheck again: `ai_consents` must not have changed.
+4. Deploy the app. Nothing changes for learners: the key is still OFF.
+5. After the approved wording and the owner's own GO, publish `scholar_search_history` ON in HQ (Library: My search history). This offers the setting. It keeps nothing by itself.
+6. Run `PROD-COUNTS-992.sql` and keep the result: this is the "before".
 
 Each learner signs in on their own account, or you check with them present. Use **competenelisha** as learner A and **apollonatooli** as learner B.
 
 ## Checks, for each learner
+
+Open **My Learning → Learn**.
+
+### The choice comes first
+
+| # | Do | Expect | Pass |
+|---|---|---|---|
+| a | Look at the header, then below the search box | "AI help on", and nobody asks them to agree again. A line says My Search History is off, with the link **Manage My Search History** | ☐ |
+| b | Search `off check` and click **Search my library**, then ask Ask Scholar one short question in a lesson (uses one AI call) | Both work as usual | ☐ |
+| c | Click **Manage My Search History** | The setting says off, with the whole notice open. `off check` and the question are **not** in the list | ☐ |
+| d | Click **Turn on My Search History** | It says on, with today's date | ☐ |
+
+### With it on
 
 Open **My Learning → Learn**. Below the search box, click **My search history**.
 
@@ -28,6 +45,16 @@ Open **My Learning → Learn**. Below the search box, click **My search history*
 | 9 | In the row's ⋯ menu, **Pin** the search from step 4, then **Unpin** it | It shows under Pinned, then leaves | ☐ |
 | 10 | In the row's ⋯ menu, **Remove** the search from step 5 | It goes. Nothing else changes | ☐ |
 | 11 | Open the history on a second device or browser | The same entries in the same order. A search made there appears on the first after a reload | ☐ |
+
+## Turning it off, and deleting a material
+
+| # | Do | Expect | Pass |
+|---|---|---|---|
+| e | In **Settings → AI & privacy**, click **Turn off My Search History** | It says off. AI help still says on. The entries stay in the list | ☐ |
+| f | Search `after off check` in Learn | It works, and it is not added to the list | ☐ |
+| g | Only with the learner's agreement, on a material they do not need: note an Ask Scholar entry asked about it, then delete the material | That entry goes. A search with no link to the material stays | ☐ |
+
+Turn it back on before the next section if the learner wants it on.
 
 ## One learner cannot see the other
 
@@ -49,10 +76,12 @@ Open **My Learning → Learn**. Below the search box, click **My search history*
 
 | # | Do | Expect | Pass |
 |---|---|---|---|
-| 16 | Run `PROD-COUNTS-992.sql` again and compare | `artefacts`, `sessions`, `attempts`, `materials`, `cards`, `notes` unchanged. `events` and `ai_rows` rise only by what steps 2-6 did: step 6 asked one question, and opening a saved answer or saved lessons adds neither | ☐ |
+| 16 | Run `PROD-COUNTS-992.sql` again and compare | `artefacts`, `sessions`, `attempts`, `materials`, `cards`, `notes` unchanged, apart from what step g deleted with the material. `events` and `ai_rows` rise only by what steps 2-6 did: step 6 asked one question, and opening a saved answer or saved lessons adds neither | ☐ |
 | 17 | In HQ, look for the learner's searches | They appear nowhere in HQ | ☐ |
+| 18 | Run `consent/PRECHECK-993-prod.sql` again | `ai_consents` and `ai_consents_v3_granted` are unchanged | ☐ |
 
 ## Roll back
 
-- **Quickest:** set `scholar_search_history` OFF in HQ. The page and capture stop at once, and nothing else changes.
+- **Quickest:** set `scholar_search_history` OFF in HQ. The page and capture stop at once, and nothing else changes. Learners also cannot reach their entries to delete them while it is off.
+- **993:** `consent/ROLLBACK-993.sql` refuses once any learner has made this choice.
 - **Full:** `ROLLBACK-992.sql` refuses while any entry exists. Those are learner records, so removing them is your decision by hand.

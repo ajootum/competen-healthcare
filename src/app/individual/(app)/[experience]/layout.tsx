@@ -22,6 +22,8 @@ import { AiHelpSwitch, JourneyButton } from "./(scholar)/study/_components/shell
 import { ScholarEduNotice } from "./(scholar)/study/_components/edu-notice";
 import { getAiStanding } from "@/lib/ai/allowance";
 import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityContext";
+import { SearchHistoryChoiceProvider } from "../../_components/SearchHistoryChoice";
+import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
 import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
@@ -179,7 +181,9 @@ export default async function ExperienceLayout({ children, params }: {
   const myPlanP = scholar ? (async () => { try { const [policy, provisioned] = await Promise.all([loadIndividualPolicyOnce(shell.ctx.admin), studyPlanSchema(shell.ctx.admin, shell.ctx.userId)]); return isMyPlanOn(policy, provisioned); } catch { return false; } })() : false;
   // Private module development access: the private Scholar modules this person may see, computed once and handed to every navigation surface. Any failure is none.
   const modulesP: Promise<Set<ScholarModuleKey>> | Set<ScholarModuleKey> = scholar ? scholarModulesOnce(shell.ctx.admin, shell.ctx.userId) : new Set<ScholarModuleKey>();
-  const [learning, ai, myPlanOn, moduleSet] = await Promise.all([learningP, aiP, myPlanP, modulesP]);
+  // My Search History (993): the learner's own choice, once per page, for the notices and for what a page may send. Any failure is off: nothing is kept.
+  const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false }; } })() : { offered: false, on: false };
+  const [learning, ai, myPlanOn, moduleSet, historyChoice] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP]);
   const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
@@ -216,6 +220,7 @@ export default async function ExperienceLayout({ children, params }: {
         <main id="main" className="min-w-0 flex-1 pb-24 md:pb-10">
           <ShellActionProvider action={action}>
           <AiAvailabilityProvider standing={aiSlim}>
+          <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on }}>
           <MyPlanNavProvider on={myPlanOn}>
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"
@@ -230,6 +235,7 @@ export default async function ExperienceLayout({ children, params }: {
               )}
             </div>
           </MyPlanNavProvider>
+          </SearchHistoryChoiceProvider>
           </AiAvailabilityProvider>
           </ShellActionProvider>
         </main>

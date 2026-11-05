@@ -36,6 +36,7 @@ import { NotebookView } from "./notebook-view";
 import { workspaceSchema } from "@/lib/individual/scholar/store";
 // SCHOLAR-SEARCH-HISTORY-01: My search history (policy scholar_search_history, default off), its entry here and its capture.
 import { HistoryKeyInput, RecordSearch } from "./search-history-client";
+import { HistoryNotice } from "../../../../../_components/SearchHistoryChoice";
 
 // SCHOLAR-LIBRARY-01 (owner instruction 1 Nov 2026): THE PERSONAL LIBRARY on Saved learning. A server component: database
 // reads only, keyed on the caller (store.ts), shaped by saved-library.ts. NO AI anywhere: opening a lesson from here is the
@@ -122,6 +123,7 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
         <button type="submit" className={ghost}>Search</button>
         {q.q && <Link href={urlWith(q, { q: null })} className={ghost}>Clear search</Link>}
       </form>
+      <HistoryNotice />
       {historyOn && q.q && <RecordSearch activity="library_search" query={q.q} requestKey={historyKey} resultCount={null} materialId={q.material} />}
 
       {version ? await VersionView({ admin, userId, id: version, titles, policy, notes, q })

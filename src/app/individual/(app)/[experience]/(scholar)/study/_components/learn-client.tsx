@@ -61,6 +61,7 @@ import { shortRef } from "@/lib/individual/scholar/notes-layout";
 import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
 // SCHOLAR-SEARCH-HISTORY-01: an answered Ask Scholar question is kept in the learner's own history (their words and where, never the answer).
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
+import { HistoryNotice, useSearchHistoryChoice } from "@/app/individual/_components/SearchHistoryChoice";
 
 // THE LEARN WORKSPACE -- COMPETEN-SCHOLAR-LEARN-01 (owner GO 2026-10-24). Three regions on a wide screen -- the
 // sources (the steps and the student's own sections, the originals one click away), the guided lesson in the
@@ -1060,7 +1061,9 @@ export function LearnWorkspace(props: {
   }
   // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to (even "this isn't in your notes") is one entry in the learner's own history:
   // their words and where they asked, never the reply. A clarify prompt is no reply yet: it is kept when the learner answers it (answerEducation).
+  const historyChoice = useSearchHistoryChoice();
   function keepAsked(q: string, onStep?: number) {
+    if (!historyChoice.on) return;
     const st = onStep === undefined ? step : session?.steps.find(x => x.step === onStep) ?? step;
     if (st) void recordHistory({ activity: "ask", query: q, sessionId: session?.id ?? null, step: session?.id ? st.step : null, chunkId: st.sections[0]?.chunkId ?? null });
   }
@@ -1661,6 +1664,7 @@ export function LearnWorkspace(props: {
                 className={`w-full rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] ${focusRing}`} disabled={!props.consent} />
               <button type="submit" className={`${ghost} mt-2`} disabled={!!busy || !ask.trim() || !props.consent || !!offReason("ask")} aria-describedby={offReason("ask") ? "learn-ask-why" : undefined}>{busy === "ask" ? "Reading your notes…" : "Ask"}</button>
               {props.consent && offReason("ask") && <p id="learn-ask-why" className="mt-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] leading-relaxed text-gray-700">{aiReasonCopy(offReason("ask")!, "scholar").text}</p>}
+              <HistoryNotice />
             </form>
           ) : <p className="mt-2 text-[13px] text-gray-600">Asking is switched off here.</p>}
           {pending?.target === "ask" && <ClarifyPurpose key={pending.question ?? pending.asked ?? pending.action} clarify={pending.prompt} busy={!!busy} accent={accent} className="mt-3" onEducation={() => void answerEducation()} onPatient={() => confirmStudy(false)} />}

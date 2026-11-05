@@ -1,0 +1,87 @@
+INFO A AI consent at the start: granted at scholar-ai-uploads-notice-v3
+PASS A has agreed to AI notice v3 and has made no history choice
+PASS v3 learner: the header says AI help on, and nothing asks them to agree again
+PASS Learn search, off: notice says off, with a named link to the setting (saw off, linked)
+PASS Learn search, off: the form carries no history key
+PASS Learn search, off: the results address has no history key
+PASS Learn search, off: nothing kept
+PASS Library search, off: notice says off, with a named link to the setting (saw off, linked)
+PASS Library search, off: nothing kept
+PASS off: the page sent the history route nothing (0 sent)
+PASS off: a direct capture is refused by the server ({"kept":false,"reason":"off"})
+PASS Ask panel, off: notice says off, with a named link to the setting (saw off, linked)
+PASS Ask panel: says the answer is not saved, with no absolute claim
+INFO Ask panel: no clarify prompt
+PASS AI help with it off: the Ask panel answered
+PASS AI help with it off: Learn Ask answered (200)
+PASS a lesson opens with it off
+PASS Learn Ask, off: notice says off, with a named link to the setting (saw off, linked)
+PASS AI help with it off: Understand answered (200)
+PASS Understand, off: notice says off, with a named link to the setting (saw off, linked)
+PASS AI really ran with it off (3 AI ledger and request rows)
+PASS off: none of the three questions was kept
+PASS off: captured rows unchanged (6)
+PASS off: no question was sent to the history route
+PASS off: the AI consent row is untouched
+PASS setting: while off, the whole notice is open
+PASS setting: the notice says what is kept, who may see it, and that it is apart from AI help
+PASS setting: a learner who never chose is off
+PASS no choice row until the learner chooses
+PASS setting: turning it on shows on
+PASS the choice is recorded with its notice version and time (scholar-search-history-notice-v1)
+PASS the choice is audited, as the feature name only
+PASS turning it on did not touch the AI consent row
+PASS Learn search, on: notice says on, with a named link to the setting (saw on, linked)
+PASS Learn search, on: kept once
+PASS Learn search, on: a reload adds nothing
+PASS Library search, on: notice says on, with a named link to the setting (saw on, linked)
+PASS Library search, on: kept once
+PASS Ask panel, on: notice says on, with a named link to the setting (saw on, linked)
+INFO Ask panel: no clarify prompt
+PASS Ask panel, on: answered
+PASS Ask panel, on: the question is kept once
+PASS Learn Ask, on: answered
+PASS Learn Ask, on: notice says on, with a named link to the setting (saw on, linked)
+PASS Learn Ask, on: the question is kept once
+PASS Understand, on: answered
+PASS Understand, on: notice says on, with a named link to the setting (saw on, linked)
+PASS Understand, on: the question is kept once
+PASS the table has no column an answer could be kept in
+PASS Settings (AI and privacy) shows the same setting, on
+PASS Settings: turning it off shows off
+PASS turning it off is recorded, with when
+PASS turning it off did not touch the AI consent row
+PASS turning it off removed nothing (11)
+PASS after turning it off: a new search is not kept
+PASS with it off: entries already kept can still be found
+PASS with it off: one entry can still be removed
+PASS A's materials, notes, cards, attempts and lessons unchanged across the walk ({"artefacts":14,"sessions":4,"attempts":139,"materials":3,"cards":45,"notes":13})
+INFO A's saved teaching across the walk: 14 to 14. What Learn does on its own, not the history
+INFO AI ledger and request rows for A during this walk: 5 (six questions, on purpose)
+PASS B turns it on
+PASS B: turning it on did not touch B's AI consent row
+PASS B, on: four entries kept (linked to the material, in its lesson, in a two-material lesson, no link)
+PASS the learner deletes the material (200)
+PASS deleted material: the entry linked to it is gone
+PASS deleted material: the entry asked in the lesson that relied only on it is gone
+PASS deleted material: that lesson went too (the existing rule)
+PASS deleted material: a lesson that also relies on another material stays, and so does its entry
+PASS deleted material: a search with no link stays (open question for the owner)
+PASS deleted material: attempts, saved teaching, notes and cards are unchanged, as this throwaway material had none (7 attempts)
+PASS when that lesson goes, its entry goes
+PASS B turns it off
+PASS with it off: clear all removes every search and question
+PASS clear touched none of B's records
+PASS B's AI consent row is unchanged across the walk
+PASS My Search History with the setting at 1440: no horizontal overflow (1440 <= 1440)
+PASS Learn search with the notice at 1440: no horizontal overflow (1440 <= 1440)
+PASS Settings with the setting at 1440: no horizontal overflow (1440 <= 1440)
+PASS My Search History with the setting at 820: no horizontal overflow (820 <= 820)
+PASS Learn search with the notice at 820: no horizontal overflow (820 <= 820)
+PASS Settings with the setting at 820: no horizontal overflow (820 <= 820)
+PASS My Search History with the setting at 390: no horizontal overflow (390 <= 390)
+PASS Learn search with the notice at 390: no horizontal overflow (390 <= 390)
+PASS Settings with the setting at 390: no horizontal overflow (390 <= 390)
+PASS no application console errors
+PASS no 5xx responses
+ALL PASS -- 81 passed, 0 failed
