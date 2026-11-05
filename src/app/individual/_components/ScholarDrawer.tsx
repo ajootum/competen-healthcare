@@ -16,7 +16,7 @@ import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 
-export function ScholarDrawer({ myPlan, modules, learning = false }: { myPlan: boolean; modules: readonly ScholarModuleKey[]; learning?: boolean }) {
+export function ScholarDrawer({ myPlan, searchHistory = false, modules, learning = false }: { myPlan: boolean; searchHistory?: boolean; modules: readonly ScholarModuleKey[]; learning?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const below = useBelowMd();
@@ -55,7 +55,7 @@ export function ScholarDrawer({ myPlan, modules, learning = false }: { myPlan: b
               </button>
             </div>
             <nav aria-label="Competen Scholar menu" className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-              <ScholarNavTree myPlan={myPlan} modules={modules} onNavigate={close} />
+              <ScholarNavTree myPlan={myPlan} searchHistory={searchHistory} modules={modules} onNavigate={close} />
               {learning && (
                 <Link href="/individual/learning" onClick={close}
                   className={`mt-3 flex items-center gap-3 rounded-[9px] border-t border-gray-100 px-4 py-2.5 pt-3 text-[15px] font-medium text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
