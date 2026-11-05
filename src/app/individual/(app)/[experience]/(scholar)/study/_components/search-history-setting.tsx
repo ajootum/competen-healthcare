@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { SEARCH_HISTORY_FEATURE, SEARCH_HISTORY_NOTICE } from "@/lib/individual/scholar/config";
 import type { LegalLink } from "@/lib/individual/scholar/consent-gate";
+import { SEARCH_HISTORY_SUPPLEMENT, SEARCH_HISTORY_SUPPLEMENT_PATH } from "@/lib/legal/search-history-supplement";
 import { focusRing } from "../../../../../_components/chrome";
 
 // THE LEARNER'S MY SEARCH HISTORY SETTING -- owner decision 5 Nov 2026, items 1 and 2, migration 993. On My Search History and in Settings
@@ -51,6 +52,7 @@ export function SearchHistorySetting({ on, published, unreadable = false, grante
             {legal.map(d => (
               <li key={`${d.title}-${d.version}`}>{d.url ? <a href={d.url} target="_blank" rel="noopener" className={`font-semibold underline underline-offset-2 ${focusRing}`}>{d.title}</a> : d.title}</li>
             ))}
+            <li><a href={SEARCH_HISTORY_SUPPLEMENT_PATH} target="_blank" rel="noopener" className={`font-semibold underline underline-offset-2 ${focusRing}`} data-testid="history-supplement-link">{SEARCH_HISTORY_SUPPLEMENT.title}</a></li>
           </ul>
         </div>
       </details>

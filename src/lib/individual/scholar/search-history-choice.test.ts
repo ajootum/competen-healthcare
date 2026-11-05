@@ -5,6 +5,8 @@ import { consentStatus, historyChoiceOn } from "./consent-gate";
 import { HISTORY_NOTICE_OFF, HISTORY_NOTICE_ON, HISTORY_PRIVACY } from "./search-history";
 import { readSearchHistoryChoice } from "./search-history-choice";
 import { resetSearchHistorySchema, setConsent } from "./store";
+import { CURRENT_LEGAL_VERSION, LEGAL_VERSIONS } from "../../legal/interim";
+import { SEARCH_HISTORY_SUPPLEMENT, SEARCH_HISTORY_SUPPLEMENT_PATH } from "../../legal/search-history-supplement";
 
 // Owner decision 5 Nov 2026 (My Search History privacy). Off until the learner turns it on, apart from AI help, and absolute claims about
 // who can see it are not made.
@@ -99,6 +101,25 @@ describe("My Search History: AI help is not touched", () => {
     const post = route.slice(route.indexOf("export async function POST"), route.indexOf("export async function PATCH"));
     expect(post.indexOf("readSearchHistoryChoice")).toBeGreaterThan(-1);
     expect(post.indexOf("readSearchHistoryChoice")).toBeLessThan(post.indexOf("req.json"));
+  });
+});
+
+describe("My Search History: the Privacy Notice supplement (pilot GO item 5)", () => {
+  it("is Notice v1's own words, and says who it applies to", () => {
+    const n = SEARCH_HISTORY_NOTICE;
+    expect(SEARCH_HISTORY_SUPPLEMENT.body).toEqual([n.kept, n.notKept, n.howLong, n.who, n.patient, n.off]);
+    expect(SEARCH_HISTORY_SUPPLEMENT.version).toBe(SEARCH_HISTORY_NOTICE_VERSION);
+    expect(SEARCH_HISTORY_SUPPLEMENT.applies).toMatch(/only to learners who turn on My Search History/);
+  });
+  it("changes no published version, so no acceptance is asked for again", () => {
+    expect(LEGAL_VERSIONS.map(v => v.version)).toEqual(["draft-2026-10-23"]);
+    expect(CURRENT_LEGAL_VERSION.documents.privacy.some(d => JSON.stringify(d).includes("My Search History"))).toBe(false);
+    for (const f of ["src/lib/individual/legal.ts", "src/lib/individual/terms.ts", "src/lib/individual/access.ts"]) expect(readFileSync(f, "utf8")).not.toMatch(/search-history-supplement/);
+  });
+  it("is a static page beside the notice, and the notice's page links to it", () => {
+    expect(SEARCH_HISTORY_SUPPLEMENT_PATH).toBe("/legal/search-history");
+    expect(readFileSync("src/app/legal/search-history/page.tsx", "utf8")).toMatch(/CURRENT_LEGAL_VERSION\.status/);
+    expect(readFileSync("src/components/legal/LegalDocumentPage.tsx", "utf8")).toMatch(/kind === "privacy" && .*SEARCH_HISTORY_SUPPLEMENT_PATH/);
   });
 });
 

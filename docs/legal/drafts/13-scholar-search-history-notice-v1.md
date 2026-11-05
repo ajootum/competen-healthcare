@@ -1,6 +1,6 @@
 # Competen Scholar: My Search History notice, v1 (`scholar-search-history-notice-v1`)
 
-> **SUBJECT TO LEGAL REVIEW. NOT LEGALLY APPROVED. WAITING FOR THE OWNER'S APPROVAL.** The text below is reproduced **word for word** from `src/lib/individual/scholar/config.ts` (`SEARCH_HISTORY_NOTICE`, `SEARCH_HISTORY_NOTICE_VERSION`), and from `search-history.ts` for the short notices. The key `scholar_search_history` stays OFF until the owner decides.
+> **SUBJECT TO LEGAL REVIEW. NOT LEGALLY APPROVED. Owner pilot GO, 5 November 2026.** The text below is reproduced **word for word** from `src/lib/individual/scholar/config.ts` (`SEARCH_HISTORY_NOTICE`, `SEARCH_HISTORY_NOTICE_VERSION`), and from `search-history.ts` for the short notices. Its body is also published as the supplement at `/legal/search-history`.
 >
 > **No word may change without a new version.** A grant counts only for the current version of this notice.
 

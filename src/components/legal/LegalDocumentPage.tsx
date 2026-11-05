@@ -2,6 +2,7 @@ import Link from "next/link";
 import SiteHeader from "@/components/marketing/SiteHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { LEGAL_KIND_LABEL, legalPath, type LegalKind, type LegalVersion } from "@/lib/legal/interim";
+import { SEARCH_HISTORY_SUPPLEMENT, SEARCH_HISTORY_SUPPLEMENT_PATH } from "@/lib/legal/search-history-supplement";
 
 // One template for every published legal document set (COMPETEN-LEGAL-001 s4). It renders the text it is
 // given and adds only navigation and the status banner; it never rewords a document.
@@ -28,6 +29,7 @@ export default function LegalDocumentPage({ kind, v, permanent }: { kind: LegalK
             {v.documents[kind].map(d => <li key={d.key}><a href={`#${d.key}`} className="text-[var(--cmp-text-link,#1d4ed8)] hover:underline">{d.title}</a></li>)}
           </ul>
           <p className="mt-3">See also the <Link href={permanent ? legalPath(other, v.version) : `/legal/${other}`} className="underline">{LEGAL_KIND_LABEL[other]}</Link>.</p>
+          {kind === "privacy" && <p className="mt-1">Scholar learners who turn on My Search History: see the <Link href={SEARCH_HISTORY_SUPPLEMENT_PATH} className="underline">{SEARCH_HISTORY_SUPPLEMENT.title}</Link>.</p>}
         </nav>
 
         {v.documents[kind].map(d => (

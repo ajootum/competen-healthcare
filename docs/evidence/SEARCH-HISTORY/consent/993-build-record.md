@@ -62,6 +62,10 @@ A lesson is deleted only by `pruneEmptySessions` (once no step is left) or by er
 - One earlier run recorded React console errors on `/study/learn`. They did not recur in a targeted probe (off and on, reload, back, the notice link) or in the two clean runs. Treated as dev-server noise.
 - Fixture A gained attempts during one run, from another session using that shared fixture. Clean runs show the walk writes none.
 
+## Owner pilot GO, 5 Nov 2026: the supplement
+
+The published Individual Privacy Notice did not disclose this collection, and a new version would close Scholar until each person accepted again. The owner's minimum correction is a dated supplement at `/legal/search-history`, whose body is Notice v1 from `config.ts`. It is linked from `/legal`, from the Privacy Notice pages' navigation (the notice's text is untouched) and from the setting. No version, env value, `acceptanceState` or consent changes. The open questions in `15` are settled for the pilot by that GO: the build stays as it is, and `14` and `15` stay unpublished.
+
 ## Not proven
 
 - **Production:** nothing was run there.
