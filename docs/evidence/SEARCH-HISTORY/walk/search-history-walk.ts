@@ -52,6 +52,7 @@ async function counts(id: string) {
     (select count(*) from individual_scholar_attempt where user_id = $1)::int as attempts,
     (select count(*) from individual_scholar_material where user_id = $1)::int as materials,
     (select count(*) from individual_scholar_card where user_id = $1)::int as cards,
+    (select count(*) from individual_scholar_artefact where user_id = $1 and superseded_at is null and (content ~* '(^|\\n)[\\s*_#>-]*FROM RESEARCH' or refs @> '[{"kind":"external"}]'::jsonb))::int as "researchTeaching",
     (select count(*) from individual_scholar_search_history where user_id = $1 and origin = 'captured')::int as captured,
     (select count(*) from individual_scholar_search_history where user_id = $1 and origin = 'recovered' and hidden_at is not null)::int as hidden,
     (select count(*) from individual_scholar_search_history h join individual_scholar_learning_session s on s.id = h.session_id where h.user_id = $1 and h.origin = 'recovered' and h.hidden_at is not null)::int as "hiddenLessons",
@@ -93,7 +94,9 @@ async function go(page: Page, url: string) {
 }
 const rowKeys = (page: Page, list = "history-list") => page.locator(`[data-testid="${list}"] li[data-entry]`).evaluateAll(els => els.map(e => e.getAttribute("data-entry")!));
 const rowActs = (page: Page) => page.locator(`[data-testid="history-list"] li[data-entry]`).evaluateAll(els => els.map(e => e.getAttribute("data-activity")!));
-const heading = (page: Page) => page.locator(`[data-testid="history-list"] h2`).innerText();
+const heading = (page: Page) => page.getByTestId("history-count").innerText();
+/** A row's overflow menu, opened, then the named control in it. */
+const inMenu = async (row: ReturnType<Page["locator"]>, name: string | RegExp) => { await row.getByTestId("row-menu").click(); return row.getByRole("button", typeof name === "string" ? { name, exact: true } : { name }); };
 async function overflow(page: Page, label: string) {
   const o = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, vw: document.documentElement.clientWidth }));
   ok(o.sw <= o.vw, `${label}: no horizontal overflow (scrollWidth ${o.sw} <= viewport ${o.vw})`);
@@ -116,7 +119,7 @@ async function main() {
   await go(a1.page, HIST);
   const expectA = beforeA.current_artefacts + beforeA.sessions - beforeA.hiddenLessons - beforeA.hiddenTeaching + beforeA.captured;
   const h1 = await heading(a1.page);
-  ok(h1.includes(`(${expectA})`), `1 existing history: A's list total is current saved teaching + lessons + captured (${expectA}); heading "${h1}"`);
+  ok(h1.startsWith(`${expectA} `), `1 existing history: A's list total is current saved teaching + lessons + captured (${expectA}); count "${h1}"`);
   const acts1 = await rowActs(a1.page);
   ok(acts1.some(a => a === "teaching" || a === "research") && acts1.includes("lesson") || acts1.length > 0 && acts1.every(a => ["teaching", "research", "lesson", "material_search", "library_search", "ask"].includes(a)), `1 rows carry saved teaching and lessons (${[...new Set(acts1)].join(", ")})`);
   const times = await a1.page.locator(`[data-testid="history-list"] li[data-entry] time`).evaluateAll(els => els.map(e => e.getAttribute("datetime")!));
@@ -124,8 +127,35 @@ async function main() {
   await a1.page.screenshot({ path: join(SHOTS, "01-history-existing-1440.png"), fullPage: true });
   await overflow(a1.page, "1440 history");
 
+  // THE OWNER'S MOCK-UP: one card, its words, its chips, icon-tile rows with a chevron, Filters behind one control, and real rows only.
+  const main = await a1.page.locator("main").innerText();
+  ok(/My Search History/.test(main) && /Find your previous searches and learning questions/.test(main), "mock-up: the title and subtitle");
+  ok(await a1.page.getByPlaceholder("Search your history...").isVisible(), "mock-up: the search box and its placeholder");
+  const chips = await a1.page.getByRole("navigation", { name: "Show" }).getByRole("link").allInnerTexts();
+  ok(JSON.stringify(chips) === JSON.stringify(["All", "Searches", "Ask Scholar", "Lessons", "Research"]), `mock-up: the chips in order (${chips.join(", ")})`);
+  ok(!(await a1.page.locator('select[name="material"]').isVisible()) && await a1.page.getByTestId("history-filters").locator("summary").isVisible(), "mock-up: material, topic and date sit behind Filters");
+  ok(!/Sample entry|Illustrative/i.test(main), "mock-up: no sample rows or sample words");
+  await a1.page.getByTestId("history-filters").locator("summary").click();
+  ok(await a1.page.locator('select[name="material"]').isVisible() && await a1.page.locator('input[name="from"]').isVisible(), "mock-up: Filters opens to material, topic and date");
+  await a1.page.getByTestId("history-filters").locator("summary").click();
+  const firstRow = a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first();
+  ok(await firstRow.locator("svg").first().isVisible(), "mock-up: each row has its icon tile");
+  await firstRow.getByTestId("row-menu").click();
+  ok(await firstRow.getByRole("button", { name: /^Pin|^Unpin/ }).isVisible() && await firstRow.getByRole("button", { name: /^Remove from history/ }).isVisible(), "mock-up: pin and remove are in the row's menu");
+  // Nothing from the rows below paints over the open menu: every point of a grid across the panel hits the panel itself.
+  const covered = await firstRow.getByRole("button", { name: /^Remove from history/ }).evaluate(el => {
+    const panel = el.parentElement!, r = panel.getBoundingClientRect();
+    let bad = 0, n = 0;
+    for (let y = r.top + 4; y < r.bottom - 2; y += 6) for (let x = r.left + 4; x < r.right - 2; x += 6) { n++; const hit = document.elementFromPoint(x, y); if (!hit || !panel.contains(hit)) bad++; }
+    return { bad, n };
+  });
+  ok(covered.n > 100 && covered.bad === 0, `mock-up: the open menu is on top of the rows below it (${covered.bad} of ${covered.n} points covered)`);
+  await a1.page.screenshot({ path: join(SHOTS, "01b-row-menu-1440.png"), fullPage: false });
+  await a1.page.keyboard.press("Escape");
+  ok(!(await firstRow.getByRole("button", { name: /^Remove from history/ }).isVisible()), "the row's menu closes on Escape");
+
   // 2. A SAVED ANSWER REOPENS WITH NO AI CALL
-  await go(a1.page, `${HIST}?activity=teaching`);
+  await go(a1.page, `${HIST}?show=lessons`);
   const openSaved = a1.page.locator(`[data-testid="history-list"] li[data-activity="teaching"] a, [data-testid="history-list"] li[data-activity="research"] a`).filter({ hasText: "Open the saved answer" }).first();
   const savedHref = await openSaved.getAttribute("href");
   info(`2 link: ${savedHref}`);
@@ -140,7 +170,7 @@ async function main() {
   await a1.page.screenshot({ path: join(SHOTS, "02-saved-answer-reopened-1440.png"), fullPage: false });
   // ... and a lesson's saved teaching: read in the library, with no AI call.
   const events0 = (await counts(A.id)).events;
-  await go(a1.page, `${HIST}?activity=lesson`);
+  await go(a1.page, `${HIST}?show=lessons`);
   const openLesson = a1.page.locator(`[data-testid="history-list"] li[data-activity="lesson"] a`).filter({ hasText: "Open its saved lessons" }).first();
   const lessonHref = await openLesson.getAttribute("href");
   await openLesson.click();
@@ -151,7 +181,10 @@ async function main() {
   info(`2 learning events for A across that open: ${events0} -> ${(await counts(A.id)).events}`);
   await a1.page.screenshot({ path: join(SHOTS, "02b-lesson-saved-teaching-1440.png"), fullPage: false });
   // every open link stays out of Learn's lesson; only the worded Continue link goes there
-  await go(a1.page, `${HIST}?activity=lesson`);
+  await go(a1.page, `${HIST}?show=lessons`);
+  await a1.page.locator(`[data-testid="history-list"] li[data-activity="lesson"]`).first().getByTestId("row-menu").click();
+  const conts = await a1.page.locator(`[data-testid="history-list"] a[data-link="continue"]`).evaluateAll(els => els.map(e => [e.textContent, e.getAttribute("href")!]));
+  ok(conts.length === 1 && conts[0][0] === "Continue the lesson" && conts[0][1].includes("/study/learn?session="), "2 Continue the lesson sits in the row's menu, plainly worded");
   const opens = await a1.page.locator(`[data-testid="history-list"] a[data-link="open"]`).evaluateAll(els => els.map(e => e.getAttribute("href")!));
   ok(opens.length > 0 && opens.every(h => !h.includes("/study/learn?session=")), "2 no open link goes into a Learn lesson; only Continue the lesson does");
 
@@ -187,7 +220,7 @@ async function main() {
   ok((await empty.json()).kept === false && (await counts(A.id)).captured === beforeA.captured + 3, "3 an empty query is never kept");
   await go(a1.page, HIST);
   const top3 = await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first().innerText();
-  ok(top3.includes("Asked Scholar") && top3.includes(`walk${STAMP}`), "3 the newest entry is the Ask question, at the top");
+  ok(top3.includes("Ask Scholar") && top3.includes(`walk${STAMP}`), "3 the newest entry is the Ask question, at the top");
   info(`3 first page holds ${(await rowKeys(a1.page)).length} entries`);
   ok((await a1.page.locator(`[data-testid="history-list"]`).innerText()).includes(QA) && (await a1.page.locator(`[data-testid="history-list"]`).innerText()).includes(QL), "3 both searches are in the history");
   await a1.page.screenshot({ path: join(SHOTS, "03-history-new-entries-1440.png"), fullPage: false });
@@ -195,18 +228,34 @@ async function main() {
   // 4. SEARCH AND FILTERS
   await go(a1.page, `${HIST}?q=${encodeURIComponent(`walk${STAMP}`)}`);
   const found = await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).count();
-  ok(found === 3 && /^3 found/i.test(await heading(a1.page)), `4 full-text search finds exactly the three new entries (${found})`);
+  ok(found === 3 && /^3 found/.test(await heading(a1.page)), `4 full-text search finds exactly the three new entries (${found})`);
   ok(await a1.page.locator(`[data-testid="history-list"] mark`).count() > 0, "4 matches are marked in the snippet");
-  await go(a1.page, `${HIST}?activity=material_search`);
+  // The chips, clicked: Searches spans two activities, newest first, and no other kind shows.
+  await go(a1.page, HIST);
+  ok(await a1.page.getByRole("navigation", { name: "Show" }).getByRole("link", { name: "All", exact: true }).getAttribute("aria-current") === "page", "4 All is the selected chip by default");
+  await a1.page.getByRole("navigation", { name: "Show" }).getByRole("link", { name: "Searches" }).click();
+  await a1.page.waitForURL(/show=searches/, { timeout: 120_000 });
+  await a1.page.locator('[data-testid="history-list"][data-ready="1"]').waitFor({ timeout: 60_000 }).catch(() => {});
   const msActs = await rowActs(a1.page);
-  ok(msActs.length >= 1 && msActs.every(a => a === "material_search"), `4 the activity filter shows only material searches (${msActs.length})`);
-  await go(a1.page, `${HIST}?activity=lesson`);
+  ok(msActs.includes("material_search") && msActs.includes("library_search") && msActs.every(a => a === "material_search" || a === "library_search"), `4 the Searches chip shows both kinds of search and nothing else (${msActs.length})`);
+  const msTimes = await a1.page.locator(`[data-testid="history-list"] li[data-entry] time`).evaluateAll(els => els.map(e => e.getAttribute("datetime")!));
+  ok(msTimes.every((t, i) => i === 0 || Date.parse(t) <= Date.parse(msTimes[i - 1])), "4 ... newest first across both");
+  await go(a1.page, `${HIST}?show=ask`);
+  const askActs = await rowActs(a1.page);
+  ok(askActs.length >= 1 && askActs.every(a => a === "ask"), `4 the Ask Scholar chip shows only questions (${askActs.length})`);
+  await go(a1.page, `${HIST}?show=lessons`);
+  const lessonActs = await rowActs(a1.page);
   const shownLessons = beforeA.sessions - beforeA.hiddenLessons;
-  ok((await rowActs(a1.page)).length === shownLessons && (await rowActs(a1.page)).every(a => a === "lesson"), `4 the lesson filter shows A's ${shownLessons} lessons (none removed from history)`);
+  ok(lessonActs.filter(a => a === "lesson").length === shownLessons && lessonActs.every(a => a === "lesson" || a === "teaching"), `4 the Lessons chip shows A's ${shownLessons} lessons and their saved teaching, nothing else (${lessonActs.length})`);
+  await go(a1.page, `${HIST}?show=research`);
+  const researchActs = await rowActs(a1.page);
+  ok(researchActs.every(a => a === "research"), `4 the Research chip shows only teaching with research (${researchActs.length}; A has ${beforeA.researchTeaching})`);
+  ok(researchActs.length === beforeA.researchTeaching, "4 ... and all of it");
+  await a1.page.screenshot({ path: join(SHOTS, "04-chip-research-1440.png"), fullPage: false });
   const mat = (await one(`select material_id from individual_scholar_artefact where user_id = $1 and superseded_at is null group by material_id order by count(*) desc limit 1`, [A.id])).material_id;
   const matCount = Number((await one(`select count(*) n from individual_scholar_artefact where user_id = $1 and superseded_at is null and material_id = $2`, [A.id, mat])).n);
-  await go(a1.page, `${HIST}?activity=teaching&material=${mat}`);
-  const tActs = await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).count();
+  await go(a1.page, `${HIST}?show=lessons&material=${mat}`);
+  const tActs = await a1.page.locator(`[data-testid="history-list"] li[data-activity="teaching"]`).count();
   const rAct = Number((await one(`select count(*) n from individual_scholar_artefact where user_id = $1 and superseded_at is null and material_id = $2 and (content ~* '(^|\\n)[\\s*_#>-]*FROM RESEARCH' or refs @> '[{"kind":"external"}]'::jsonb)`, [A.id, mat])).n);
   ok(tActs === matCount - rAct, `4 the material filter (with teaching) shows that material's saved teaching only (${tActs} = ${matCount} - ${rAct} research)`);
   const topic = (await one(`select topic from individual_scholar_learning_session where user_id = $1 and topic is not null limit 1`, [A.id]))?.topic ?? `Heart failure ${STAMP}`;
@@ -227,24 +276,24 @@ async function main() {
 
   // 5. PIN AND SAVE
   await go(a1.page, `${HIST}?q=${encodeURIComponent(QA)}`);
-  await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first().getByRole("button", { name: "Pin" }).click();
-  await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first().getByRole("button", { name: "Unpin" }).waitFor({ timeout: 30_000 }).catch(() => {});
+  await (await inMenu(a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first(), "Pin")).click();
+  await a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first().getByText("Pinned").waitFor({ timeout: 30_000 }).catch(() => {});
   await go(a1.page, HIST);
   ok((await a1.page.getByTestId("history-pinned").innerText()).includes(QA), "5 a pinned search shows under Pinned");
-  await go(a1.page, `${HIST}?activity=teaching`);
+  await go(a1.page, `${HIST}?show=lessons`);
   const teachRow = a1.page.locator(`[data-testid="history-list"] li[data-activity="teaching"]`).first();
   const teachKey = await teachRow.getAttribute("data-entry");
-  await teachRow.getByRole("button", { name: "Pin" }).click();
-  await teachRow.getByRole("button", { name: "Unpin" }).waitFor({ timeout: 30_000 }).catch(() => {});
+  await (await inMenu(teachRow, "Pin")).click();
+  await teachRow.getByText("Pinned").waitFor({ timeout: 30_000 }).catch(() => {});
   await go(a1.page, HIST);
   ok((await rowKeys(a1.page, "history-pinned")).includes(teachKey!), "5 a recovered saved teaching can be pinned too");
   const notes0 = (await counts(A.id)).notes;
-  const saveBtn = a1.page.locator(`[data-testid="history-pinned"] li[data-entry="${teachKey}"]`).getByRole("button", { name: "Save for revision" });
-  await saveBtn.click();
+  const pinnedTeach = a1.page.locator(`[data-testid="history-pinned"] li[data-entry="${teachKey}"]`);
+  await (await inMenu(pinnedTeach, "Save for revision")).click();
   await a1.page.getByTestId("history-pinned").getByRole("button", { name: "Saved for revision" }).waitFor({ timeout: 30_000 });
   const notes1 = (await counts(A.id)).notes;
   ok(notes1 - notes0 <= 1, `5 Save for revision is the library's own bookmark (notes ${notes0} -> ${notes1}; an existing bookmark is reused)`);
-  await a1.page.locator(`[data-testid="history-pinned"] li[data-entry="${teachKey}"]`).getByRole("button", { name: "Unpin" }).click();
+  await pinnedTeach.getByRole("button", { name: "Unpin" }).click();
   await a1.page.locator(`[data-testid="history-pinned"] li[data-entry="${teachKey}"]`).waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
   await go(a1.page, HIST);
   ok(!(await rowKeys(a1.page, "history-pinned")).includes(teachKey!), "5 unpinning takes it off Pinned");
@@ -254,15 +303,15 @@ async function main() {
   await go(a1.page, `${HIST}?q=${encodeURIComponent(QL)}`);
   const qlRow = a1.page.locator(`[data-testid="history-list"] li[data-entry]`).first();
   const qlKey = await qlRow.getAttribute("data-entry");
-  await qlRow.getByRole("button", { name: /^Remove from history/ }).click();
+  await (await inMenu(qlRow, /^Remove from history/)).click();
   await a1.page.locator(`[data-testid="history-list"] li[data-entry="${qlKey}"]`).waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
   ok(Number((await one(`select count(*) n from individual_scholar_search_history where id = $1`, [qlKey!.slice(2)])).n) === 0, "6 removing a search deletes its history row");
-  await go(a1.page, `${HIST}?activity=lesson`);
-  const lessonRow = a1.page.locator(`[data-testid="history-list"] li[data-entry]`).last();
+  await go(a1.page, `${HIST}?show=lessons`);
+  const lessonRow = a1.page.locator(`[data-testid="history-list"] li[data-activity="lesson"]`).last();
   const lessonKey = await lessonRow.getAttribute("data-entry");
-  await lessonRow.getByRole("button", { name: /^Remove from history/ }).click();
+  await (await inMenu(lessonRow, /^Remove from history/)).click();
   await a1.page.locator(`[data-testid="history-list"] li[data-entry="${lessonKey}"]`).waitFor({ state: "detached", timeout: 30_000 }).catch(() => {});
-  await go(a1.page, `${HIST}?activity=lesson`);
+  await go(a1.page, `${HIST}?show=lessons`);
   ok(!(await rowKeys(a1.page)).includes(lessonKey!), "6 a removed lesson leaves the history");
   ok(Number((await one(`select count(*) n from individual_scholar_learning_session where id = $1`, [lessonKey!.slice(7)])).n) === 1, "6 ... and the lesson itself is untouched");
 
@@ -327,7 +376,7 @@ async function main() {
   await b1.page.getByRole("button", { name: "Yes, clear my search history" }).click();
   await b1.page.getByText("Your search history is cleared.").waitFor({ timeout: 30_000 }).catch(() => {});
   await go(b1.page, HIST);
-  ok((await rowKeys(b1.page)).length === 0, "9 after confirming, B's history is empty");
+  ok((await rowKeys(b1.page)).length === 0 && /were not kept/.test(await b1.page.getByTestId("history-empty").innerText()), "9 after confirming, B's history is empty and says so honestly");
   await b1.page.screenshot({ path: join(SHOTS, "09-cleared-1440.png"), fullPage: false });
   await go(a1.page, HIST);
   ok(JSON.stringify(await rowKeys(a1.page)) === JSON.stringify(finalKeysA.filter(k => k !== aCaptured || true)) || (await rowKeys(a1.page)).length === finalKeysA.length, "9 B's clear left A's history as it was");

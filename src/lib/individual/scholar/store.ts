@@ -39,7 +39,7 @@ import { newestSavedLesson, type LessonRecord } from "./learn-journey";
 import { baseKey, keysetFilter, orderVersions, pageOf, supersededKey, type Cursor, type NoteInput, type NoteKind, type NoteTarget } from "./saved-library";
 import { readFrameworkProvenance } from "@/lib/competency/framework-provenance";
 import { correctionFromRow, provenance990Keys, provenanceOf, snapshotFromRow, snapshotInsertRow, withMappingStatus, type AttemptIntegrity, type CompetencyProvenance, type AttemptSnapshotRow, type CorrectionBasis, type CorrectionRow, type Outcome } from "./attempt-snapshot";
-import { HISTORY_ACTIVITIES, HISTORY_PAGE_SIZE, markKey, repeatsLatest, type CaptureInput, type EntryRef, type HistoryActivity, type HistoryEntry, type HistoryQuery } from "./search-history";
+import { HISTORY_ACTIVITIES, HISTORY_PAGE_SIZE, SHOW_ACTIVITIES, markKey, mergeHistoryPages, repeatsLatest, type CaptureInput, type EntryRef, type HistoryActivity, type HistoryEntry, type HistoryQuery } from "./search-history";
 import { rangeBounds } from "./saved-library";
 
 // ── THE SCHOLAR STORE ── the ONE file that reads and writes individual_scholar_* (migration 372) ──────────
@@ -5397,13 +5397,34 @@ export async function listSearchHistory(admin: Admin, userId: string, q: History
   if (!(await historySchema(admin))) return { ok: false, notProvisioned: true };
   const { fromIso, toIso } = rangeBounds(q.from, q.to);
   const limit = Math.min(Math.max(opts.limit ?? HISTORY_PAGE_SIZE, 1), 50);
-  const { data, error } = await admin.rpc(SH_LIST, {
-    p_user_id: userId, p_query: q.q || null, p_activity: q.activity, p_material: q.material, p_topic: q.topic,
-    p_from: fromIso, p_to: toIso, p_pinned: opts.pinnedOnly ?? q.pinned, p_limit: limit, p_offset: opts.pinnedOnly ? 0 : (q.page - 1) * limit,
-  });
-  if (error) { if (isMissingRpc(error)) history992 = false; return { ok: false, notProvisioned: isMissingRpc(error) }; }
-  const rows = (data ?? []) as unknown[];
-  return { ok: true, data: { entries: rows.map(shEntry), total: Number((rows[0] as { total?: unknown } | undefined)?.total ?? 0) } };
+  const offset = opts.pinnedOnly ? 0 : (q.page - 1) * limit;
+  const read = async (activity: HistoryActivity | null, size: number, from: number): Promise<Read<{ entries: HistoryEntry[]; total: number }>> => {
+    const { data, error } = await admin.rpc(SH_LIST, {
+      p_user_id: userId, p_query: q.q || null, p_activity: activity, p_material: q.material, p_topic: q.topic,
+      p_from: fromIso, p_to: toIso, p_pinned: opts.pinnedOnly ?? q.pinned, p_limit: size, p_offset: from,
+    });
+    if (error) { if (isMissingRpc(error)) history992 = false; return { ok: false, notProvisioned: isMissingRpc(error) }; }
+    const rows = (data ?? []) as unknown[];
+    return { ok: true, data: { entries: rows.map(shEntry), total: Number((rows[0] as { total?: unknown } | undefined)?.total ?? 0) } };
+  };
+  const activities = q.show ? SHOW_ACTIVITIES[q.show] : null;
+  if (!activities || activities.length === 1) return read(activities?.[0] ?? null, limit, offset);
+  // A chip across two activities: 992 lists one at a time, so read each list as far as this page needs and merge them (50 a read, the
+  // function's own limit; the page number is capped, so this is bounded).
+  const lists: HistoryEntry[][] = [];
+  let total = 0;
+  for (const activity of activities) {
+    const rows: HistoryEntry[] = [];
+    for (let from = 0; from < offset + limit; from += 50) {
+      const r = await read(activity, 50, from);
+      if (!r.ok) return r;
+      rows.push(...r.data.entries);
+      if (from === 0) total += r.data.total;
+      if (r.data.entries.length < 50) break;
+    }
+    lists.push(rows);
+  }
+  return { ok: true, data: { entries: mergeHistoryPages(lists, offset, limit), total } };
 }
 
 /** The topics the caller's history can be filtered by: the topics of their captured entries and of their lessons. */

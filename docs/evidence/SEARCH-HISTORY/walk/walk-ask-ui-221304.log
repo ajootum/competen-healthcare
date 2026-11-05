@@ -1,0 +1,18 @@
+INFO Ask panel: no clarify prompt
+INFO Ask panel text: Ask about this About: Saved lesson: Essential Nursing Care of the Critically Ill · Lesson 1 ✕ Your Personal AI is given the sections of your notes linked to this and asked to cite them. The label above each answer says whether it did. The answer is not saved: it is gone when you leave this page. Where My search history is offered, your question is kept there, private to you, until you remove it. Y
+INFO 200 /api/individual/scholar/learn/assistant
+INFO 200 /api/individual/scholar/library/history
+PASS Ask panel: an answered question appears in the history table
+PASS Ask panel: one row, with its reference (material true, lesson true)
+INFO 200 /api/individual/scholar/learn/act
+INFO 200 /api/individual/scholar/learn/act
+INFO 200 /api/individual/scholar/learn/act
+INFO 200 /api/individual/scholar/library/history
+PASS Learn Ask: an answered question appears in the history table
+PASS Learn Ask: one row, tied to its lesson and step (1)
+PASS history page: both questions, each saying its answer was not kept (2)
+PASS the table has no column an answer could be kept in
+INFO AI ledger + request rows for A during this script: 2 (the two questions asked here)
+PASS no application console errors
+PASS no 5xx responses
+ALL PASS -- 8 passed, 0 failed

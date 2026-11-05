@@ -1,33 +1,32 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
-import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
-import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../../_components/chrome";
+import { StatePanel, Unreadable, focusRing } from "../../../../../../_components/chrome";
 import StudyNav from "../../_components/StudyNav";
 import { studyHref } from "../../_components/question-view";
-import { ClearHistory, HistoryList, type ClientEntry } from "../../_components/search-history-client";
-import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, searchHistoryTopics } from "@/lib/individual/scholar/store";
+import { HistoryHeader, HistoryList, type ClientEntry } from "../../_components/search-history-client";
+import { LearningIcon } from "@/components/ui/scholar-learning";
+import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, searchHistoryTopics, sessionsByIds } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { learnerTimeZone } from "@/lib/individual/scholar/learning-definitions";
 import {
-  ACTIVITY_FILTER_LABEL, CONTINUE_NOTE, HISTORY_ACTIVITIES, HISTORY_PAGE_SIZE, HISTORY_PRIVACY, entryLinks, entryTitle, hasHistoryFilters, historyParams,
-  parseHistoryQuery, saveTarget, type HistoryEntry, type HistoryQuery,
+  ASK_NOT_KEPT, CONTINUE_NOTE, HISTORY_EMPTY, HISTORY_PAGE_SIZE, HISTORY_PRIVACY, HISTORY_SHOWS, SHOW_LABEL, entryLinks, entryTitle, hasHistoryFilters, historyParams,
+  panelFilterCount, parseHistoryQuery, saveTarget, splitEntryLinks, type HistoryEntry, type HistoryQuery,
 } from "@/lib/individual/scholar/search-history";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
 
-// MY SEARCH HISTORY -- SCHOLAR-SEARCH-HISTORY-01 (owner directive 4 Nov 2026, P1, SALE learner continuity), migration 992.
+// MY SEARCH HISTORY -- SCHOLAR-SEARCH-HISTORY-01 (owner directive 4 Nov 2026, P1, SALE learner continuity), migration 992. The owner's
+// mock-up: one card, a search box, chips, icon-tile rows with a chevron. Date, material and topic sit behind a Filters control.
 // A part of the Personal Learning Library (Saved learning), reachable from Learn's search and the library's search. One private
 // list, newest first, of the learner's submitted searches and Ask Scholar questions (from now on) and of what Scholar already
-// kept (their saved teaching and lessons, read at request time: nothing invented, nothing regenerated). Full-text search and
-// filters for activity, material, topic and date. Opening a saved answer or a lesson's saved teaching uses NO AI; continuing in
-// Learn is a separate, plainly worded link. Pin, Save for
-// revision (the 820 bookmark), Remove one, Clear all (confirmed). Database reads only, keyed on the caller. Policy
-// scholar_search_history (default off). Never shown to HQ, employers or educators, never AI memory.
+// kept (their saved teaching and lessons, read at request time: nothing invented, nothing regenerated, never a sample). Opening a saved
+// answer or a lesson's saved teaching uses NO AI; continuing in Learn is a separate, plainly worded link in the row's menu. Database reads
+// only, keyed on the caller. Policy scholar_search_history (default off). Never shown to HQ, employers or educators, never AI memory.
 
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "My search history" });
@@ -35,18 +34,23 @@ export async function generateMetadata(): Promise<Metadata> {
 
 const field = `mt-1 block w-full min-w-0 min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+const chip = `inline-flex min-h-[40px] items-center rounded-full border px-4 text-[13.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+const chipOn = "border-gray-900 bg-gray-900 text-white";
+const chipOff = "border-gray-300 bg-white text-gray-800 hover:bg-gray-50";
 const base = studyHref("saved/searches");
 
-function FilterForm({ q, materials, topics }: { q: HistoryQuery; materials: { id: string; title: string }[]; topics: string[] }) {
+/** Date, material, topic and pinned: behind one control, so the chip row stays as the mock-up has it. Open while any of them is on. */
+function Filters({ q, materials, topics }: { q: HistoryQuery; materials: { id: string; title: string }[]; topics: string[] }) {
+  const on = panelFilterCount(q);
   return (
-    <form method="get" action={base} className="mt-3 rounded-2xl border border-gray-200 bg-white p-3" data-testid="history-filters">
-      {q.q && <input type="hidden" name="q" value={q.q} />}
-      <fieldset className="min-w-0">
-        <legend className="text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Filter</legend>
-        <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <label className="min-w-0 text-[12.5px] font-semibold text-gray-800">Activity
-            <select name="activity" defaultValue={q.activity ?? ""} className={field}><option value="">Everything</option>{HISTORY_ACTIVITIES.map(a => <option key={a} value={a}>{ACTIVITY_FILTER_LABEL[a]}</option>)}</select>
-          </label>
+    <details open={on > 0} className="group open:w-full" data-testid="history-filters">
+      <summary className={`${chip} ${on ? chipOn : chipOff} cursor-pointer list-none gap-1.5 [&::-webkit-details-marker]:hidden`}>
+        Filters{on ? ` (${on})` : ""}<span aria-hidden className="text-[10px] motion-safe:transition-transform group-open:rotate-180">▾</span>
+      </summary>
+      <form method="get" action={base} className="mt-2 w-full rounded-2xl border border-gray-200 bg-white p-3">
+        {q.q && <input type="hidden" name="q" value={q.q} />}
+        {q.show && <input type="hidden" name="show" value={q.show} />}
+        <div className="grid gap-2 sm:grid-cols-2">
           <label className="min-w-0 text-[12.5px] font-semibold text-gray-800">Material
             <select name="material" defaultValue={q.material ?? ""} className={field}><option value="">All materials</option>{materials.map(m => <option key={m.id} value={m.id}>{m.title}</option>)}</select>
           </label>
@@ -65,10 +69,10 @@ function FilterForm({ q, materials, topics }: { q: HistoryQuery; materials: { id
             <input type="checkbox" name="pinned" value="1" defaultChecked={q.pinned} className="h-4 w-4" /> Pinned only
           </label>
           <button type="submit" className={ghost}>Apply filters</button>
-          {hasHistoryFilters(q) && <Link href={base} className={ghost}>Clear filters</Link>}
+          {on > 0 && <Link href={`${base}${historyParams(q, { material: null, topic: null, from: null, to: null, pinned: null })}`} className={ghost}>Clear filters</Link>}
         </div>
-      </fieldset>
-    </form>
+      </form>
+    </details>
   );
 }
 
@@ -77,90 +81,105 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   if (!page) return null;
   const { ctx } = page;
   const [policy, due] = await Promise.all([loadIndividualPolicy(ctx.admin), countDue(ctx.admin, ctx.userId)]);
-  const header = (
+  const nav = (
     <>
-      <PageHeader accent={SCHOLAR.accent} eyebrow="Kept for you" title="My search history"
-        intro="Your searches, questions to Scholar, saved teaching and lessons, newest first. Search it, filter it and open what you found before." />
       <StudyNav dueCount={due} study={null} />
       <p className="mb-4 text-[13px]"><Link href={studyHref("saved")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Back to My learning library</Link></p>
     </>
   );
-  if (policy.scholarSearchHistory !== "on") return <>{header}<StatePanel title="My search history is not offered here"><p>Your saved learning and lessons are in My learning library.</p></StatePanel></>;
-  if (!(await historySchema(ctx.admin))) return <>{header}<StatePanel title="My search history is not available here yet"><p>Your saved learning and lessons are unchanged in My learning library.</p></StatePanel></>;
+  if (policy.scholarSearchHistory !== "on") return <>{nav}<StatePanel title="My search history is not offered here"><p>Your saved learning and lessons are in My learning library.</p></StatePanel></>;
+  if (!(await historySchema(ctx.admin))) return <>{nav}<StatePanel title="My search history is not available here yet"><p>Your saved learning and lessons are unchanged in My learning library.</p></StatePanel></>;
 
   const q = parseHistoryQuery(await searchParams);
   const [list, pinned, materials, topics, notesOn] = await Promise.all([
     listSearchHistory(ctx.admin, ctx.userId, q),
-    // The pinned strip: only on the unfiltered first page, so it never repeats what a filter is showing.
+    // Pinned rows, above the list: only on the unfiltered first page, so it never repeats what a filter is showing.
     !hasHistoryFilters(q) && q.page === 1 ? listSearchHistory(ctx.admin, ctx.userId, q, { pinnedOnly: true, limit: 20 }) : Promise.resolve(null),
     listMaterials(ctx.admin, ctx.userId), searchHistoryTopics(ctx.admin, ctx.userId),
     policy.scholarLearningLibrary === "on" ? librarySchema(ctx.admin, ctx.userId) : Promise.resolve(false),
   ]);
   const mats = materials.ok ? materials.data.map(m => ({ id: m.id, title: m.title })) : [];
   const titles = new Map(mats.map(m => [m.id, m.title]));
+  const shown = [...(list.ok ? list.data.entries : []), ...(pinned?.ok ? pinned.data.entries : [])];
+  // A saved teaching's title says what it taught: its action and its lesson (or material). Titles only, never the AI's words.
+  const sessions = new Map((await sessionsByIds(ctx.admin, ctx.userId, shown.filter(e => e.activity !== "lesson" && e.sessionId).map(e => e.sessionId!))).map(s => [s.id, displaySessionTitle(s.title)]));
   const tz = learnerTimeZone(await headers());
   const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: tz });
   const toClient = (e: HistoryEntry): ClientEntry => {
+    const material = e.materialId ? titles.get(e.materialId) ?? null : null;
+    const about = e.sessionId ? sessions.get(e.sessionId) ?? null : null;
+    const action = entryTitle(e, a => LEARN_ACTION_LABEL[a as LearnAction]);
+    const teaching = e.activity === "teaching" || e.activity === "research";
+    const title = e.activity === "lesson" ? displaySessionTitle(e.label) : teaching && (about ?? material) ? `${action}: ${about ?? material}` : action;
     const meta = [
-      e.materialId && titles.get(e.materialId) ? titles.get(e.materialId)! : null,
+      material && !title.includes(material) ? material : null,
       e.topic ? `Topic: ${e.topic}` : null,
       e.resultCount !== null ? `${e.resultCount} result${e.resultCount === 1 ? "" : "s"}` : null,
       e.step !== null && e.activity !== "lesson" ? `Lesson ${e.step + 1}` : null,
     ].filter((x): x is string => !!x);
-    const title = e.activity === "lesson" ? displaySessionTitle(e.label) : entryTitle(e, a => LEARN_ACTION_LABEL[a as LearnAction]);
+    const { primary, rest } = splitEntryLinks(entryLinks(e).map(l => ({ label: l.label, href: studyHref(l.path.replace(/^study\/?/, "")), kind: l.kind })));
     return {
       key: e.key, activity: e.activity, title, when: fmt.format(new Date(e.createdAt)), whenIso: e.createdAt, meta, headline: e.headline, pinned: !!e.pinnedAt,
-      links: entryLinks(e).map(l => ({ label: l.label, href: studyHref(l.path.replace(/^study\/?/, "")), kind: l.kind })),
-      save: saveTarget(e), ai: e.activity === "teaching" || e.activity === "research", askNotKept: e.activity === "ask",
+      primary, rest, save: saveTarget(e), ai: teaching, askNotKept: e.activity === "ask",
     };
   };
   const total = list.ok ? list.data.total : 0;
   const pages = Math.max(1, Math.ceil(total / HISTORY_PAGE_SIZE));
+  const entries = list.ok ? list.data.entries.map(toClient) : [];
+  const pins = pinned?.ok ? pinned.data.entries.map(toClient) : [];
 
   return (
     <>
-      {header}
-      <p className="mb-1 text-[13px] text-gray-700">{HISTORY_PRIVACY}</p>
-      <p className="mb-3 text-[13px] text-gray-700">{CONTINUE_NOTE}</p>
+      {nav}
+      <section aria-label="My Search History" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+        <HistoryHeader count={hasHistoryFilters(q) ? 1 : total} />
 
-      <form method="get" action={base} role="search" className="flex flex-wrap items-end gap-2">
-        {(["activity", "material", "topic", "from", "to"] as const).map(k => (q[k] ? <input key={k} type="hidden" name={k} value={q[k]!} /> : null))}
-        {q.pinned && <input type="hidden" name="pinned" value="1" />}
-        <label className="min-w-0 flex-1 basis-[16rem] text-[12.5px] font-semibold text-gray-800">Search your history
-          <input type="search" name="q" defaultValue={q.q} maxLength={200} className={field} placeholder="for example: preload OR afterload" />
-        </label>
-        <button type="submit" className={ghost}>Search</button>
-        {q.q && <Link href={`${base}${historyParams(q, { q: null })}`} className={ghost}>Clear search</Link>}
-      </form>
+        <form method="get" action={base} role="search" className="relative mt-4">
+          {q.show && <input type="hidden" name="show" value={q.show} />}
+          {(["material", "topic", "from", "to"] as const).map(k => (q[k] ? <input key={k} type="hidden" name={k} value={q[k]!} /> : null))}
+          {q.pinned && <input type="hidden" name="pinned" value="1" />}
+          <label htmlFor="history-q" className="sr-only">Search your history</label>
+          <input id="history-q" type="search" name="q" defaultValue={q.q} maxLength={200} placeholder="Search your history..."
+            className={`block min-h-[48px] w-full rounded-full border border-gray-300 bg-white py-2.5 pl-5 pr-14 text-[15px] text-gray-900 ${focusRing}`} />
+          <button type="submit" aria-label="Search" className={`absolute right-1 top-1 inline-flex h-10 w-10 items-center justify-center rounded-full text-gray-700 hover:bg-gray-100 ${focusRing}`}>
+            <LearningIcon name="search" className="h-5 w-5" />
+          </button>
+        </form>
+        {q.q && <p className="mt-1.5 text-[13px]"><Link href={`${base}${historyParams(q, { q: null })}`} className={`inline-flex min-h-[40px] items-center font-semibold underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Clear search</Link></p>}
 
-      {/* The filters: open from md up, behind a disclosure on a phone (the one md breakpoint, CPR-MOB-001). */}
-      <details className="mt-3 md:hidden">
-        <summary className={`flex min-h-[44px] cursor-pointer list-none items-center justify-between gap-2 rounded-2xl border border-gray-200 bg-white px-4 text-[14px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-          <span>Filter{hasHistoryFilters({ ...q, q: "" }) ? " (on)" : ""}</span><span aria-hidden className="text-gray-500">▾</span>
-        </summary>
-        <FilterForm q={q} materials={mats} topics={topics} />
-      </details>
-      <div className="hidden md:block"><FilterForm q={q} materials={mats} topics={topics} /></div>
+        <div className="mt-3 flex flex-wrap items-start gap-2">
+          <nav aria-label="Show" className="contents">
+            <Link href={`${base}${historyParams(q, { show: null })}`} aria-current={!q.show ? "page" : undefined} className={`${chip} ${!q.show ? chipOn : chipOff}`}>All</Link>
+            {HISTORY_SHOWS.map(s => (
+              <Link key={s} href={`${base}${historyParams(q, { show: s })}`} aria-current={q.show === s ? "page" : undefined} className={`${chip} ${q.show === s ? chipOn : chipOff}`}>{SHOW_LABEL[s]}</Link>
+            ))}
+          </nav>
+          <Filters q={q} materials={mats} topics={topics} />
+        </div>
 
-      <div className="mt-5 space-y-5">
-        {pinned?.ok && pinned.data.entries.length > 0 && (
-          <HistoryList id="history-pinned" title="Pinned" entries={pinned.data.entries.map(toClient)} notesOn={notesOn} empty="" />
-        )}
-        {!list.ok ? <Unreadable what="your search history" /> : (
-          <HistoryList id="history-list" notesOn={notesOn}
-            title={hasHistoryFilters(q) ? `${total} found` : `Everything, newest first (${total})`}
-            entries={list.data.entries.map(toClient)}
-            empty={hasHistoryFilters(q) ? "Nothing in your history matches. Change the search or the filters." : "Nothing here yet. Your searches in Learn and your library, your questions to Scholar, your saved teaching and your lessons appear here."} />
+        {pins.length > 0 && <HistoryList id="history-pinned" heading="Pinned" entries={pins} notesOn={notesOn} />}
+        {!list.ok ? <div className="mt-4"><Unreadable what="your search history" /></div> : (
+          <>
+            {hasHistoryFilters(q) && <p className="mt-4 text-[13px] font-semibold text-gray-700" role="status" data-testid="history-count">{total} found</p>}
+            {!hasHistoryFilters(q) && <p className="sr-only" data-testid="history-count">{total} entries</p>}
+            {pins.length > 0 && <h2 className="mt-4 text-[12px] font-bold uppercase tracking-[0.1em] text-gray-500">Everything</h2>}
+            <HistoryList id="history-list" entries={entries} notesOn={notesOn} />
+            {entries.length === 0 && <p className="mt-3 rounded-xl bg-gray-50 p-4 text-[14px] text-gray-700" data-testid="history-empty">{hasHistoryFilters(q) ? "Nothing in your history matches. Change the search or the filters." : HISTORY_EMPTY}</p>}
+          </>
         )}
         {list.ok && pages > 1 && (
-          <nav aria-label="Pages" className="flex flex-wrap items-center gap-2">
+          <nav aria-label="Pages" className="mt-3 flex flex-wrap items-center gap-2">
             {q.page > 1 && <Link href={`${base}${historyParams(q, { page: q.page > 2 ? String(q.page - 1) : null })}`} className={ghost}>Newer</Link>}
             <span className="text-[13px] text-gray-700">Page {q.page} of {pages}</span>
             {q.page < pages && <Link href={`${base}${historyParams(q, { page: String(q.page + 1) })}`} className={ghost}>Older</Link>}
           </nav>
         )}
-        <ClearHistory count={hasHistoryFilters(q) ? 1 : total} />
-      </div>
+        <div className="mt-4 space-y-1 border-t border-gray-100 pt-3 text-[12.5px] text-gray-600">
+          <p>{HISTORY_PRIVACY}</p>
+          <p>{CONTINUE_NOTE}</p>
+          <p>{ASK_NOT_KEPT}</p>
+        </div>
+      </section>
     </>
   );
 }

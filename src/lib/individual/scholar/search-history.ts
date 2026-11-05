@@ -22,14 +22,17 @@ export type HistoryActivity = (typeof HISTORY_ACTIVITIES)[number];
 export const CAPTURED_ACTIVITIES = ["material_search", "library_search", "ask"] as const;
 export type CapturedActivity = (typeof CAPTURED_ACTIVITIES)[number];
 
+/** Each row's second line says what it is, in the owner's mock-up words. Research is saved teaching that includes research (the keywords were never kept). */
 export const ACTIVITY_LABEL: Record<HistoryActivity, string> = {
-  material_search: "Searched your materials", library_search: "Searched your library", ask: "Asked Scholar",
-  teaching: "Saved teaching", research: "Teaching with research", lesson: "Lesson",
+  material_search: "Materials search", library_search: "Library search", ask: "Ask Scholar",
+  teaching: "Saved teaching", research: "Teaching with research", lesson: "Previous lesson",
 };
-/** The filter's own words for each activity. */
-export const ACTIVITY_FILTER_LABEL: Record<HistoryActivity, string> = {
-  material_search: "Material searches", library_search: "Library searches", ask: "Ask Scholar questions",
-  teaching: "Saved teaching", research: "Teaching with research", lesson: "Lessons",
+/** The chips (All is no chip value). A saved teaching is a saved lesson to the learner, so it sits under Lessons. */
+export const HISTORY_SHOWS = ["searches", "ask", "lessons", "research"] as const;
+export type HistoryShow = (typeof HISTORY_SHOWS)[number];
+export const SHOW_LABEL: Record<HistoryShow, string> = { searches: "Searches", ask: "Ask Scholar", lessons: "Lessons", research: "Research" };
+export const SHOW_ACTIVITIES: Record<HistoryShow, readonly HistoryActivity[]> = {
+  searches: ["material_search", "library_search"], ask: ["ask"], lessons: ["lesson", "teaching"], research: ["research"],
 };
 
 export const HISTORY_PAGE_SIZE = 25;
@@ -38,7 +41,11 @@ export const QUERY_MAX = 300;
 export const TOPIC_MAX = 120;
 /** The same words of the same activity again within this window are one submission (a double click or a resend). */
 export const COLLAPSE_MS = 120_000;
-export const ASK_NOT_KEPT = "Scholar does not keep Ask answers, so this answer cannot be reopened. Your question and where you asked it are kept.";
+/** On each Ask row, and in full under the list. */
+export const ASK_ROW_NOTE = "Answer not kept";
+export const ASK_NOT_KEPT = "Scholar does not keep Ask answers, so an answer cannot be reopened. Your question and where you asked it are kept.";
+/** The empty history, honestly: nothing is invented, and what came before this page was not kept. */
+export const HISTORY_EMPTY = "Nothing here yet. Your searches, your questions to Scholar, your saved teaching and your lessons appear here. Searches and questions from before this page was offered were not kept, so they cannot be shown.";
 export const CONTINUE_NOTE = "Opening a saved answer or a saved lesson uses no AI. Continue the lesson carries on in Learn, which writes new teaching only for a part you have not reached yet.";
 export const HISTORY_PRIVACY = "Private to you. Never shown to HQ, employers or educators, and never used as AI memory. Removing something here never deletes your saved learning, lessons, answers or materials.";
 
@@ -121,7 +128,7 @@ export const markKey = (ref: { kind: "artefact" | "lesson"; id: string }) => `${
 // ── THE PAGE'S QUERY ──
 
 export type HistoryQuery = {
-  q: string; activity: HistoryActivity | null; material: string | null; topic: string | null;
+  q: string; show: HistoryShow | null; material: string | null; topic: string | null;
   from: string | null; to: string | null; pinned: boolean; page: number;
 };
 type Params = Record<string, string | string[] | undefined>;
@@ -129,21 +136,23 @@ const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v) 
 
 /** Pure. The history page's request, from its search params. Anything unknown or malformed is dropped. */
 export function parseHistoryQuery(p: Params): HistoryQuery {
-  const activity = (HISTORY_ACTIVITIES as readonly string[]).includes(one(p.activity)) ? one(p.activity) as HistoryActivity : null;
+  const show = (HISTORY_SHOWS as readonly string[]).includes(one(p.show)) ? one(p.show) as HistoryShow : null;
   const from = DAY.test(one(p.from)) ? one(p.from) : null, to = DAY.test(one(p.to)) ? one(p.to) : null;
   const page = Number(one(p.page));
   return {
-    q: one(p.q).replace(/\s+/g, " ").trim().slice(0, 200), activity,
+    q: one(p.q).replace(/\s+/g, " ").trim().slice(0, 200), show,
     material: isId(one(p.material)) ? one(p.material).toLowerCase() : null, topic: topicOf(one(p.topic)),
     ...(from && to && from > to ? { from: to, to: from } : { from, to }),
     pinned: one(p.pinned) === "1", page: Number.isInteger(page) && page >= 1 && page <= 200 ? page : 1,
   };
 }
-export const hasHistoryFilters = (q: HistoryQuery) => !!(q.q || q.activity || q.material || q.topic || q.from || q.to || q.pinned);
+export const hasHistoryFilters = (q: HistoryQuery) => !!(q.q || q.show || q.material || q.topic || q.from || q.to || q.pinned);
+/** Pure. How many of the filters behind the Filters control are on (the search box and the chips show themselves). */
+export const panelFilterCount = (q: HistoryQuery) => [q.material, q.topic, q.from || q.to, q.pinned].filter(Boolean).length;
 
 /** Pure. The page's own address with some params changed (null removes one). The page is dropped whenever anything else changes. */
 export function historyParams(q: HistoryQuery, change: Record<string, string | null> = {}): string {
-  const base: Record<string, string | null> = { q: q.q || null, activity: q.activity, material: q.material, topic: q.topic, from: q.from, to: q.to, pinned: q.pinned ? "1" : null };
+  const base: Record<string, string | null> = { q: q.q || null, show: q.show, material: q.material, topic: q.topic, from: q.from, to: q.to, pinned: q.pinned ? "1" : null };
   const p = new URLSearchParams();
   for (const [k, v] of Object.entries({ ...base, ...change })) if (v) p.set(k, v);
   const s = p.toString();
@@ -176,6 +185,21 @@ export function entryLinks(e: Pick<HistoryEntry, "activity" | "query" | "materia
   if (e.activity === "library_search" && e.query) out.push({ label: "Search again", path: `study/saved?q=${enc(e.query.slice(0, 200))}`, kind: "open" });
   if (e.sessionId) out.push({ label: "Continue the lesson", path: `study/learn?session=${enc(e.sessionId)}${e.step !== null ? `#lesson-${e.step}` : ""}`, kind: "continue" });
   return out;
+}
+
+/**
+ * Pure. One newest-first page across several activities' own newest-first lists (a chip that spans two). Same order as 992's list:
+ * time, newest first, then the entry key. Every list must hold at least offset + limit rows, or all it has.
+ */
+export function mergeHistoryPages(lists: readonly (readonly HistoryEntry[])[], offset: number, limit: number): HistoryEntry[] {
+  const at = (e: HistoryEntry) => { const t = Date.parse(e.createdAt); return Number.isNaN(t) ? 0 : t; };
+  return lists.flat().sort((a, b) => at(b) - at(a) || a.key.localeCompare(b.key)).slice(offset, offset + limit);
+}
+
+/** Pure. The row's chevron: its first "open" link. None for an Ask with nothing to open. Everything else goes in the row's menu. */
+export function splitEntryLinks<T extends { kind: "open" | "continue" }>(links: readonly T[]): { primary: T | null; rest: T[] } {
+  const primary = links.find(l => l.kind === "open") ?? null;
+  return { primary, rest: links.filter(l => l !== primary) };
 }
 
 /** Pure. The 820 bookmark ("Save for revision") an entry can take, when it points at a saved teaching or one lesson. */

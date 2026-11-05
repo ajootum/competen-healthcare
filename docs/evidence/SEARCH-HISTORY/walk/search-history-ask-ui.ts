@@ -153,7 +153,7 @@ async function main() {
   // 3. Both show in the page, say the answer was not kept, and no answer text is stored
   await go(a.page, `${HIST}?q=${encodeURIComponent(`uiask${STAMP}`)}`);
   const rows = await a.page.locator('[data-testid="history-list"] li[data-entry]').allInnerTexts();
-  ok(rows.length === 2 && rows.every(t => t.includes("Asked Scholar") && t.includes("does not keep Ask answers")), `history page: both questions, each saying the answer was not kept (${rows.length})`);
+  ok(rows.length === 2 && rows.every(t => t.includes("Ask Scholar") && t.includes("Answer not kept")), `history page: both questions, each saying its answer was not kept (${rows.length})`);
   const cols = (await db.query("select column_name from information_schema.columns where table_name = 'individual_scholar_search_history'")).rows.map((r: { column_name: string }) => r.column_name);
   ok(!cols.some((c: string) => /answer|content|response/.test(c)), "the table has no column an answer could be kept in");
   const spent = (await aiCalls(A.id)) - ai0;
