@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import SiteHeader from "@/components/marketing/SiteHeader";
 import SiteFooter from "@/components/marketing/SiteFooter";
 import { CURRENT_LEGAL_VERSION, LEGAL_KIND_LABEL, LEGAL_VERSIONS, legalPath, type LegalKind } from "@/lib/legal/interim";
+import { SEARCH_HISTORY_SUPPLEMENT, SEARCH_HISTORY_SUPPLEMENT_PATH } from "@/lib/legal/search-history-supplement";
 
 // COMPETEN-LEGAL-001 s4: the index of current documents. Drafts are not indexed by search engines.
 export const metadata: Metadata = { title: "Legal", robots: { index: false, follow: false } };
@@ -25,6 +26,7 @@ export default function Page() {
               <span className="text-gray-500"> — {CURRENT_LEGAL_VERSION.documents[k].map(d => d.title).join("; ")}</span>
             </li>
           ))}
+          <li><Link href={SEARCH_HISTORY_SUPPLEMENT_PATH} className="font-medium underline">{SEARCH_HISTORY_SUPPLEMENT.title}</Link></li>
         </ul>
         <h2 className="mt-10 text-[16px] font-semibold text-gray-900">All versions</h2>
         <ul className="mt-2 space-y-1 text-[13.5px] text-gray-700">

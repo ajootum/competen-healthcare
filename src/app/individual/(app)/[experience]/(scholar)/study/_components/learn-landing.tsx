@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { HistoryKeyInput } from "./search-history-client";
+import { HistoryNotice } from "../../../../../_components/SearchHistoryChoice";
 import {
   PAGE_SIZE, SEARCH_TABS, SEARCH_TAB_LABEL, shortDate,
   type CompetencyRef, type DocumentHit, type SearchParams, type SearchResult, type SearchTab, type SectionHit, type SessionHit, type TopicHit,
@@ -64,9 +65,10 @@ export function LearnSearchBox({ q = "", studyOn = false, historyOn = false }: {
         {historyOn && (
           <p className="mt-1.5 text-[13px]">
             <Link href={experienceHref("scholar", "study/saved/searches")} className={`inline-flex min-h-[40px] items-center font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} data-testid="learn-history-link">My search history</Link>
-            <span className="text-gray-500"> · what you searched and asked before, private to you</span>
+            <span className="text-gray-500"> · what you searched and asked before</span>
           </p>
         )}
+        <HistoryNotice className="mt-1" />
       </form>
     </section>
   );

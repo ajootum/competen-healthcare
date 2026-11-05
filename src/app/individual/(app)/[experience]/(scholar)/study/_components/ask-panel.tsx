@@ -15,6 +15,7 @@ import { SCHOLAR } from "@/lib/individual/experiences";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 import { activeStudyId } from "./study-active";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
+import { HistoryNotice, useSearchHistoryChoice } from "@/app/individual/_components/SearchHistoryChoice";
 
 // "ASK ABOUT THIS" -- SCHOLAR-CE-2026 CE-01. ONE panel, used from Revise feedback, a flashcard, a case debrief, OSCE feedback,
 // My Plan's next step and a saved lesson. The learner stays on the page: a side drawer on a wide screen, a bottom sheet on a
@@ -23,7 +24,8 @@ import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 // It posts to the SAME route Learn's "Ask" uses, with a typed context (scholar/ask-context.ts): the learner's own sections, the
 // study session open on this page, and where the question is asked from. The server reads every id again by the caller's id.
 // The answer is the same Personal AI answer: sources as chips, the "NOT COVERED" line, PERSONAL_AI_LABEL, the shared words when
-// AI is not available. ⚠ NOTHING IS SAVED: the conversation lives in this panel and is gone when the page is left.
+// AI is not available. ⚠ THE ANSWER IS NOT SAVED: the conversation lives in this panel and is gone when the page is left. The question alone is
+// kept in My Search History, and only where the learner has turned that on.
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const touch = "min-h-[44px] pointer-coarse:min-h-[var(--cmp-touch-min)]";
@@ -94,6 +96,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
     return () => abort.current?.abort();
   }, []);
 
+  const historyChoice = useSearchHistoryChoice();
   async function send(q: string, followUp?: FollowUp, asked?: "education") {
     const text = q.trim();
     if (!text || busy) return;
@@ -126,8 +129,9 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
     if (!followUp) { setQuestion(""); keep(text); }
   }
   // SCHOLAR-SEARCH-HISTORY-01: a question Scholar replied to (never a follow-up, which repeats it) is kept once in the learner's own history:
-  // their words and where they asked, never the reply. The server keeps nothing while HQ has the history off.
+  // their words and where they asked, never the reply. Nothing is sent while the learner has it off, and the server decides again.
   function keep(text: string) {
+    if (!historyChoice.on) return;
     void recordHistory({ activity: "ask", query: text, sessionId: sessionId ?? null, step: sessionId ? step ?? null : null, materialId: materialId ?? null, chunkId: chunkIds?.[0] ?? null });
   }
 
@@ -148,8 +152,9 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
         <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
           <p className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[12.5px] leading-relaxed text-gray-700">
             {grounded ? "Your Personal AI is given the sections of your notes linked to this and asked to cite them. The label above each answer says whether it did. " : "No section of your notes is linked to this, so the answer is a general explanation. "}
-            The answer is not saved: it is gone when you leave this page. Where My search history is offered, your question is kept there, private to you, until you remove it.
+            The answer is not saved: it is gone when you leave this page.
           </p>
+          <HistoryNotice className="" />
           <form onSubmit={e => { e.preventDefault(); void send(question); }}>
             <label htmlFor={`${uid}-q`} className="text-[13.5px] font-semibold text-gray-900">Your question <span className="font-normal text-gray-600">(change it if you like)</span></label>
             <textarea id={`${uid}-q`} ref={questionRef} value={question} onChange={e => setQuestion(e.target.value)} maxLength={QUESTION_MAX} rows={4}

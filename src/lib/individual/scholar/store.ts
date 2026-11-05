@@ -8,7 +8,7 @@ import { ABANDON_AFTER_MS, SETTLED_RETENTION_MS, STALE_CLAIM_MS, abandonedObject
 import { parseLessonTitles } from "./learn-recut";
 import { learningPlanSchema } from "../learning-plan/event-store";
 import type { GoalType } from "../learning-plan/types";
-import { LEARNER_CARD, BUCKET, DOCX_MIME, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
+import { LEARNER_CARD, BUCKET, DOCX_MIME, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, SEARCH_HISTORY_FEATURE, SEARCH_HISTORY_NOTICE_VERSION, MAX_MATERIALS_PER_PERSON, PPTX_MIME, UNIT_OF, type MaterialMime } from "./config";
 import type { AiReading, Chunk, ExtractionQuality } from "./extract";
 import { planChunkInsertion, type NewChunk } from "./slide-images";
 import type { CandidateChunk } from "./retrieval";
@@ -88,8 +88,8 @@ const todayIso = () => new Date().toISOString().slice(0, 10);
 
 // ── CONSENT ────────────────────────────────────────────────────────────────────────────────────────
 
-/** The consents this table holds: uploads (372) and the cross-experience context (700). */
-export type ConsentFeature = typeof CONSENT_FEATURE | typeof CROSS_EXPERIENCE_FEATURE;
+/** The consents this table holds: uploads (372), the cross-experience context (700) and My Search History (993). */
+export type ConsentFeature = typeof CONSENT_FEATURE | typeof CROSS_EXPERIENCE_FEATURE | typeof SEARCH_HISTORY_FEATURE;
 
 export type ConsentState = { granted: boolean; noticeVersion: string | null; grantedAt: string | null; revokedAt: string | null };
 
@@ -111,7 +111,7 @@ export async function setConsent(admin: Admin, userId: string, grant: boolean, f
   const now = new Date().toISOString();
   if (grant) {
     const { error } = await admin.from("individual_scholar_consent").upsert({
-      user_id: userId, feature, status: "granted", ...(feature === CONSENT_FEATURE ? { notice_version: CONSENT_NOTICE_VERSION } : { notice_version: CROSS_EXPERIENCE_NOTICE_VERSION }),
+      user_id: userId, feature, status: "granted", ...(feature === CONSENT_FEATURE ? { notice_version: CONSENT_NOTICE_VERSION } : { notice_version: feature === SEARCH_HISTORY_FEATURE ? SEARCH_HISTORY_NOTICE_VERSION : CROSS_EXPERIENCE_NOTICE_VERSION }),
       granted_at: now, revoked_at: null, updated_at: now,
     }, { onConflict: "user_id,feature" });
     return { ok: !error };

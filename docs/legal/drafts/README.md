@@ -37,6 +37,14 @@
 - item 11, commercial terms: charging stays OFF;
 - item 12, the LEGAL-002 register decision: an owner decision, recorded in `docs/COMPETEN-LEGAL-002-legal-document-register-design.md`.
 
+## My Search History (owner decision 5 November 2026): subject to legal review
+
+| Draft | What it is | State |
+|---|---|---|
+| `13-scholar-search-history-notice-v1.md` | The separate notice and recorded choice (product text, word for word) | Owner pilot GO 5 Nov 2026. Subject to legal review. Its words are published as the supplement at `/legal/search-history` |
+| `14-scholar-ai-processing-consent-v4-draft.md` | Revised AI notice v4 | **Not active.** Publishing it would ask every v3 learner again |
+| `15-individual-privacy-notice-amendment-search-history.md` | The Privacy Notice amendment, and what retention and backup rules exist today | **Not published** (owner pilot GO). For later: publishing a new version closes the experience until each person accepts again |
+
 ## Owner slots, across the set
 
 - The registered legal names, numbers and addresses of Competen Holdings and of the Scholar operating entity (or the interim arrangement while it is not yet incorporated).

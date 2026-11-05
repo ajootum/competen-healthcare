@@ -1,6 +1,6 @@
 import { FOUNDATION_ENTITY, entityLegal, type EntityLegal } from "../legal";
 import { SCHOLAR } from "../experiences";
-import { CONSENT_AWAITING_LEGAL, CONSENT_NOTICE_VERSION, CONSENT_UPDATED } from "./config";
+import { CONSENT_AWAITING_LEGAL, CONSENT_NOTICE_VERSION, CONSENT_UPDATED, SEARCH_HISTORY_NOTICE_VERSION } from "./config";
 import type { ConsentState } from "./store";
 
 // ── WHEN AI HELP MAY BE TURNED ON ── COMPETEN-IND-004 s10 consistency items 3 and 7, owner GO 2026-10-23 ──
@@ -60,6 +60,14 @@ export function consentStatus(state: Pick<ConsentState, "granted" | "noticeVersi
   if (!documentsPublished) return "awaiting_legal";
   if (!state.granted) return "off";
   return state.noticeVersion === CONSENT_NOTICE_VERSION ? "on" : "outdated";
+}
+
+/**
+ * Pure. My Search History (migration 993): on only for a grant to the CURRENT notice while the documents are published. Anything else is off,
+ * so nothing new is kept. Apart from consentStatus, which is AI help and never reads this feature's row.
+ */
+export function historyChoiceOn(state: Pick<ConsentState, "granted" | "noticeVersion">, documentsPublished: boolean): boolean {
+  return documentsPublished && state.granted && state.noticeVersion === SEARCH_HISTORY_NOTICE_VERSION;
 }
 
 /** What an AI surface says in place of its controls while AI help is not on. Null when it is on. */

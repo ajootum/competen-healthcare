@@ -481,6 +481,24 @@ export const CROSS_EXPERIENCE_NOTICE = {
   how: "Your Scholar assistant reads them, as you recorded them, only when you ask it something, to suggest how your studies can help. It never changes them, and its suggestions are labelled as suggestions, never as your goals.",
   off: "You can turn this off at any time. Your assistant stops reading them straight away. Nothing is deleted.",
 } as const;
+/**
+ * MY SEARCH HISTORY (owner decision 5 Nov 2026, conditional approval, migration 993). The learner's own choice, OFF until they turn it on and
+ * apart from AI help: AI help never reads this row, and this notice changing asks nobody about AI help. A grant counts only for this version.
+ * SUBJECT TO LEGAL REVIEW, and waiting for the owner's approval (docs/legal/drafts/13). Do not edit a word without a new version.
+ */
+export const SEARCH_HISTORY_FEATURE = "scholar_search_history";
+export const SEARCH_HISTORY_NOTICE_VERSION = "scholar-search-history-notice-v1";
+export const SEARCH_HISTORY_NOTICE = {
+  heading: "What My Search History keeps, and your choice",
+  kept: "If you turn this on, the searches you submit and the questions you put to Ask Scholar are kept in My Search History, with the date and where you asked. Anything you type but do not submit is not kept.",
+  notKept: "Answers are not kept here. A saved answer or lesson stays in My learning library, and your history links to it.",
+  howLong: "Entries stay until you remove them, clear your history, delete a material they rely on, or your account is closed. Deleted entries can remain in encrypted backups until those backups are replaced on their rolling schedule. Backups are restored only for recovery.",
+  who: "Your history is not ordinarily visible to other learners, educators or employers. Authorised Competen staff and service providers may have access where needed to operate, secure or support the service, or where the law requires it. Personal AI does not use it.",
+  patient: "Please do not type identifiable patient information into a search or question.",
+  off: "This is separate from AI help. With it off, AI help, lessons and searching work the same, and new searches and questions are not kept. Turning it off does not remove what is already kept. You can remove entries or clear your history at any time.",
+  review: "You can review the applicable Privacy Notice and Terms of Use before continuing.",
+  awaitingLegal: "My Search History can be turned on once our Privacy Notice and Terms of Use are published.",
+} as const;
 export const CONSENT_NOTICE_VERSION = "scholar-ai-uploads-notice-v3";
 /**
  * v3 (owner GO, 2026-10-23): the owner-approved v2 wording with the seven consistency corrections from

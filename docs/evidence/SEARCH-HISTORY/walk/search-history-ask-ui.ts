@@ -108,6 +108,9 @@ const waitCaptured = async (id: string, n: number) => { for (let i = 0; i < 40; 
 // each question kept once, with its reference, and never the answer.
 async function main() {
   await db.connect();
+  // Since the owner's privacy decision (5 Nov 2026, migration 993) nothing is kept until the learner turns it on: this walk is of the feature with it ON.
+  // The setting itself, and it being off, are in ../consent/search-history-consent-walk.ts.
+  await db.query("insert into individual_scholar_consent (user_id, feature, status, notice_version, granted_at, updated_at) select u, 'scholar_search_history', 'granted', 'scholar-search-history-notice-v1', now(), now() from unnest($1::uuid[]) u on conflict (user_id, feature) do update set status = 'granted', notice_version = excluded.notice_version, revoked_at = null", [[A.id, B.id]]);
   const browser = await chromium.launch();
   const a = await context(browser, await cookiesFor(A.email), "ASK", { width: 1440, height: 1000 });
   const q1 = `How does preload change in sepsis? uiask${STAMP}`, q2 = `Why is oxygen given to a target range? uiask${STAMP}`;
@@ -160,6 +163,7 @@ async function main() {
   info(`AI ledger + request rows for A during this script: ${spent} (the two questions asked here)`);
   ok(consoleErrors.length === 0, `no application console errors${consoleErrors.length ? `: ${consoleErrors.join(" | ")}` : ""}`);
   ok(fivexx.length === 0, `no 5xx responses${fivexx.length ? `: ${fivexx.join(" | ")}` : ""}`);
+  await db.query("delete from individual_scholar_consent where feature = 'scholar_search_history' and user_id = any($1::uuid[])", [[A.id, B.id]]);
   await browser.close(); await db.end();
   const fails = log.filter(l => l.startsWith("FAIL")).length;
   log.push(`${fails ? "RED" : "ALL PASS"} -- ${log.filter(l => l.startsWith("PASS")).length} passed, ${fails} failed`);

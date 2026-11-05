@@ -6,6 +6,9 @@ import { StatePanel, Unreadable, focusRing } from "../../../../../../_components
 import StudyNav from "../../_components/StudyNav";
 import { studyHref } from "../../_components/question-view";
 import { HistoryHeader, HistoryList, type ClientEntry } from "../../_components/search-history-client";
+import { SearchHistorySetting } from "../../_components/search-history-setting";
+import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
+import { consentDocuments } from "@/lib/individual/scholar/consent-gate";
 import { LearningIcon } from "@/components/ui/scholar-learning";
 import { countDue, historySchema, librarySchema, listMaterials, listSearchHistory, searchHistoryTopics, sessionsByIds } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
@@ -26,7 +29,8 @@ export const dynamic = "force-dynamic";
 // list, newest first, of the learner's submitted searches and Ask Scholar questions (from now on) and of what Scholar already
 // kept (their saved teaching and lessons, read at request time: nothing invented, nothing regenerated, never a sample). Opening a saved
 // answer or a lesson's saved teaching uses NO AI; continuing in Learn is a separate, plainly worded link in the row's menu. Database reads
-// only, keyed on the caller. Policy scholar_search_history (default off). Never shown to HQ, employers or educators, never AI memory.
+// only, keyed on the caller. Policy scholar_search_history (default off), and the learner's own setting (993, off until they turn it on): with it off
+// nothing new is kept, and everything already here can still be opened, removed or cleared. No HQ surface reads it, never AI memory.
 
 export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "My search history" });
@@ -91,6 +95,8 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   if (!(await historySchema(ctx.admin))) return <>{nav}<StatePanel title="My search history is not available here yet"><p>Your saved learning and lessons are unchanged in My learning library.</p></StatePanel></>;
 
   const q = parseHistoryQuery(await searchParams);
+  const choice = await readSearchHistoryChoice(ctx.admin, ctx.userId, policy);
+  const documents = consentDocuments();
   const [list, pinned, materials, topics, notesOn] = await Promise.all([
     listSearchHistory(ctx.admin, ctx.userId, q),
     // Pinned rows, above the list: only on the unfiltered first page, so it never repeats what a filter is showing.
@@ -133,6 +139,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
       {nav}
       <section aria-label="My Search History" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
         <HistoryHeader count={hasHistoryFilters(q) ? 1 : total} />
+        <SearchHistorySetting on={choice.on} unreadable={choice.unreadable} published={documents.published} grantedAt={choice.grantedAt} revokedAt={choice.revokedAt} legal={documents.links} />
 
         <form method="get" action={base} role="search" className="relative mt-4">
           {q.show && <input type="hidden" name="show" value={q.show} />}

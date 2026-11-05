@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { setConsent } from "@/lib/individual/scholar/store";
 import { audit } from "@/lib/individual/scholar/http";
-import { CONSENT_AWAITING_LEGAL, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION } from "@/lib/individual/scholar/config";
+import { CONSENT_AWAITING_LEGAL, CONSENT_FEATURE, CONSENT_NOTICE_VERSION, CROSS_EXPERIENCE_FEATURE, CROSS_EXPERIENCE_NOTICE_VERSION, SEARCH_HISTORY_FEATURE, SEARCH_HISTORY_NOTICE, SEARCH_HISTORY_NOTICE_VERSION } from "@/lib/individual/scholar/config";
+import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { consentDocuments } from "@/lib/individual/scholar/consent-gate";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -16,6 +17,8 @@ export const dynamic = "force-dynamic";
 // (consent-gate.ts). Turning it off is always allowed.
 // Migration 700: { feature: "ai_cross_experience_context", grant } is the person's choice to let the Scholar assistant read
 // their own Professional development needs and plan goals. Granting it needs Professional to be live for them.
+// Migration 993: { feature: "scholar_search_history", grant } is the person's choice to keep new searches and questions in My Search History.
+// Granting it needs HQ to offer it. It never touches the AI help row, and turning it off is always allowed and removes nothing.
 
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
@@ -23,13 +26,15 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   if (typeof body?.grant !== "boolean") return NextResponse.json({ error: "Say whether to grant or revoke." }, { status: 400 });
   const cross = body.feature === CROSS_EXPERIENCE_FEATURE;
-  if (body.feature !== undefined && !cross && body.feature !== CONSENT_FEATURE) return NextResponse.json({ error: "Unknown choice." }, { status: 400 });
-  if (body.grant && !consentDocuments().published) return NextResponse.json({ error: CONSENT_AWAITING_LEGAL }, { status: 409 });
+  const history = body.feature === SEARCH_HISTORY_FEATURE;
+  if (body.feature !== undefined && !cross && !history && body.feature !== CONSENT_FEATURE) return NextResponse.json({ error: "Unknown choice." }, { status: 400 });
+  if (body.grant && !consentDocuments().published) return NextResponse.json({ error: history ? SEARCH_HISTORY_NOTICE.awaitingLegal : CONSENT_AWAITING_LEGAL }, { status: 409 });
+  if (history && body.grant && (await loadIndividualPolicy(ctx.admin)).scholarSearchHistory !== "on") return NextResponse.json({ error: "My Search History is not offered here." }, { status: 409 });
   if (cross && body.grant && !ctx.live.includes("professional")) return NextResponse.json({ error: "This needs Competen Professional, where your development plan is kept." }, { status: 409 });
-  const feature = cross ? CROSS_EXPERIENCE_FEATURE : CONSENT_FEATURE;
+  const feature = cross ? CROSS_EXPERIENCE_FEATURE : history ? SEARCH_HISTORY_FEATURE : CONSENT_FEATURE;
   const r = await setConsent(ctx.admin, ctx.userId, body.grant, feature);
   if (!r.ok) return NextResponse.json({ error: "Your choice could not be saved. Nothing has changed." }, { status: 500 });
   await audit(ctx, body.grant ? "individual_scholar_consent_granted" : "individual_scholar_consent_revoked", "individual_scholar_consent", null,
-    { feature, notice_version: cross ? CROSS_EXPERIENCE_NOTICE_VERSION : CONSENT_NOTICE_VERSION });
+    { feature, notice_version: cross ? CROSS_EXPERIENCE_NOTICE_VERSION : history ? SEARCH_HISTORY_NOTICE_VERSION : CONSENT_NOTICE_VERSION });
   return NextResponse.json({ ok: true, granted: body.grant });
 }

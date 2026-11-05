@@ -4,6 +4,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { parseEntryKey, parseHistoryQuery, validateCapture } from "@/lib/individual/scholar/search-history";
 import { clearSearchHistory, historySchema, listSearchHistory, recordSearchCapture, removeSearchHistoryEntry, setSearchHistoryPinned } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
+import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -15,10 +16,12 @@ export const dynamic = "force-dynamic";
 //   POST   { activity, query, requestKey, materialId?, chunkId?, artefactId?, sessionId?, step?, topic?, resultCount? }
 //          keep one SUBMITTED search or question (search-history validateCapture). Always 200 with { kept, reason }: a capture
 //          is a side note of the learner's own action, so it never shows an error to them. Nothing is kept when the key is off,
-//          992 is absent, the words are not a meaningful submission, or they look like they identify a patient.
+//          992 is absent, the LEARNER HAS NOT TURNED IT ON (migration 993, read before the body, unreadable counts as off), the words
+//          are not a meaningful submission, or they look like they identify a patient.
 //   PATCH  { key, pinned }                   pin or unpin one entry
 //   DELETE ?key=<entry key>                  remove one entry (a saved teaching or lesson stays: only its history entry goes)
 //   DELETE ?all=1&confirm=CLEAR              clear the whole history
+// Reading, pinning, removing and clearing do NOT need the learner's choice: turning it off stops new entries, and they can always delete.
 // Keyed on the caller (the guard's id) everywhere: another learner's entry or record is 404, never disclosed. Gated by policy
 // scholar_search_history (403 when off) and migration 992 (409 while absent). NO AI. NO AUDIT ROW: a row naming a learner's
 // searching would itself be identifiable activity outside the learner's plane, so this route writes none.
@@ -46,7 +49,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const ctx = await requireIndividualContext("scholar");
   if (isGuardRefusal(ctx)) return ctx;
-  if ((await loadIndividualPolicy(ctx.admin)).scholarSearchHistory !== "on") return NextResponse.json({ kept: false, reason: "off" });
+  if (!(await readSearchHistoryChoice(ctx.admin, ctx.userId, await loadIndividualPolicy(ctx.admin))).on) return NextResponse.json({ kept: false, reason: "off" });
   const v = validateCapture(await req.json().catch(() => null));
   if (!v.ok) return NextResponse.json({ kept: false, reason: v.problem });
   // Learner text is screened like every other learner text: words that look like they identify a patient are never kept.

@@ -9,6 +9,7 @@ import { HISTORY_ROUTE, recordHistory } from "@/lib/individual/scholar/search-hi
 import { snippetParts } from "@/lib/individual/scholar/saved-library";
 import { AI_LABEL } from "@/lib/individual/scholar/config";
 import { focusRing } from "../../../../../_components/chrome";
+import { useSearchHistoryChoice } from "../../../../../_components/SearchHistoryChoice";
 
 // SCHOLAR-SEARCH-HISTORY-01 -- the interactive parts of My Search History (study/saved/searches, the owner's mock-up: one card, icon-tile
 // rows, a chevron that opens the saved item) and its two capture pieces. Everything shown is decided on the server (the page), from the
@@ -184,6 +185,7 @@ export function HistoryHeader({ count }: { count: number }) {
  */
 export function HistoryKeyInput() {
   const ref = useRef<HTMLInputElement>(null);
+  const { on } = useSearchHistoryChoice();
   useEffect(() => {
     const input = ref.current, form = input?.form;
     if (!input || !form) return;
@@ -192,7 +194,9 @@ export function HistoryKeyInput() {
     const onSubmit = () => { input.value = newRequestKey(); };
     form.addEventListener("submit", onSubmit);
     return () => form.removeEventListener("submit", onSubmit);
-  }, []);
+  }, [on]);
+  // With My Search History off a submit carries no key, so nothing can be kept from it.
+  if (!on) return null;
   // The value is written after hydration (above), and a browser must not restore an old key on reload: autoComplete off.
   return <input ref={ref} type="hidden" name="hk" defaultValue="" autoComplete="off" suppressHydrationWarning />;
 }
@@ -200,10 +204,11 @@ export function HistoryKeyInput() {
 /** Keeps one submitted search once its results are shown: only with the form's own key (no key, no entry). Renders nothing. */
 export function RecordSearch({ activity, query, requestKey, resultCount, materialId = null }: { activity: CapturedActivity; query: string; requestKey: string | null; resultCount: number | null; materialId?: string | null }) {
   const done = useRef(false);
+  const { on } = useSearchHistoryChoice();
   useEffect(() => {
-    if (done.current || !requestKey || !REQUEST_KEY.test(requestKey)) return;
+    if (!on || done.current || !requestKey || !REQUEST_KEY.test(requestKey)) return;
     done.current = true;
     void recordHistory({ activity, query, requestKey, resultCount, materialId });
-  }, [activity, query, requestKey, resultCount, materialId]);
+  }, [on, activity, query, requestKey, resultCount, materialId]);
   return null;
 }
