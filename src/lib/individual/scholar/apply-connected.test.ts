@@ -163,6 +163,8 @@ describe("My Practice Library", () => {
   it("reads a finished debrief's gaps, and never a wrong answer's text", () => {
     expect(gapsOfDebrief({ missedFindings: [{ label: "Respiratory rate" }], safetyEvents: ["Did not escalate"], dimensions: [{ dimension: "prioritise", answered: 2, correct: 1 }, { dimension: "recognise", answered: 1, correct: 1 }] })).toEqual(["Respiratory rate", "Did not escalate", "Reasoning: prioritise"]);
     expect(gapsOfDebrief(null)).toEqual([]);
+    expect(gapsOfDebrief({ dimensions: [{ dimension: "decision", answered: 1, correct: 0, written: 1 }] })).toEqual([]);
+    expect(gapsOfDebrief({ dimensions: [{ dimension: "reasoning", answered: 2, correct: 0, written: 1 }] })).toEqual(["Reasoning"]);
   });
   it("tells where a stored activity stands from its attempts", () => {
     expect(practiceStatus([], [])).toBe("not_started");

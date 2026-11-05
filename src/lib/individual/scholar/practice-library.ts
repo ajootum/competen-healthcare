@@ -58,13 +58,14 @@ export function filterPractice(rows: readonly PracticeRow[], f: PracticeFilters)
   return { rows: kept.slice((page - 1) * PRACTICE_PAGE, page * PRACTICE_PAGE), total: kept.length, pages, page };
 }
 
-/** Pure. What a finished case's debrief says needs another look: findings never asked for, safety criteria broken, and reasoning that was marked wrong. */
+/** Pure. What a finished case's debrief says needs another look: findings never asked for, safety criteria broken, and choices marked wrong. */
 export function gapsOfDebrief(d: unknown): string[] {
-  const x = (d ?? {}) as { missedFindings?: { label?: unknown }[]; safetyEvents?: unknown[]; dimensions?: { dimension?: unknown; answered?: unknown; correct?: unknown }[] };
+  const x = (d ?? {}) as { missedFindings?: { label?: unknown }[]; safetyEvents?: unknown[]; dimensions?: { dimension?: unknown; answered?: unknown; correct?: unknown; written?: unknown }[] };
   const out: string[] = [];
   for (const m of x.missedFindings ?? []) if (typeof m?.label === "string") out.push(m.label);
   for (const s of x.safetyEvents ?? []) if (typeof s === "string") out.push(s);
-  for (const w of x.dimensions ?? []) if (typeof w?.dimension === "string" && Number(w.answered) > Number(w.correct)) out.push(`Reasoning: ${w.dimension}`);
+  // A written answer is not marked by code, so it is never counted as wrong here.
+  for (const w of x.dimensions ?? []) if (typeof w?.dimension === "string" && Number(w.answered) - Number(w.written ?? 0) > Number(w.correct)) out.push(w.dimension === "reasoning" ? "Reasoning" : `Reasoning: ${w.dimension}`);
   return [...new Set(out)].slice(0, 8);
 }
 
