@@ -199,6 +199,8 @@ export default async function MyLearning({ params, searchParams }: { params: Pro
         </div>
       )}
 
+      {/* SCHOLAR-APPLY-CONNECTED-01: what the learner has practised from this library. */}
+      <p className="mt-5 text-[13.5px] text-gray-800">Your cases, OSCE stations and papers are in <Link href={experienceHref("scholar", "study/apply?view=library")} className={`font-semibold underline underline-offset-2 ${focusRing}`}>My Practice Library</Link>.</p>
       {materials.ok && materials.data.length > 0 && (
         <p className="mt-8 text-[13px] text-gray-600">To erase all your study material, go to <Link href={`${experienceHref("scholar", "settings")}#privacy`} className="font-semibold underline underline-offset-2" style={{ color: x.accent }}>Settings, Privacy &amp; AI</Link>.</p>
       )}

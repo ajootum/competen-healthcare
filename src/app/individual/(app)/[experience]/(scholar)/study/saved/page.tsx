@@ -92,7 +92,7 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
         <h2 id="kept-h" className="sr-only">What is kept</h2>
         {[
           { label: "Practice questions", value: questions.ok ? String(practiceCount) : "Could not be read", href: experienceHref("scholar", "study"), note: "Marked by their own answer keys" },
-          { label: "Cases", value: questions.ok ? String(caseCount) : "Could not be read", href: experienceHref("scholar", "study/apply"), note: "Marked by their own answer keys" },
+          { label: "Cases", value: questions.ok ? String(caseCount) : "Could not be read", href: experienceHref("scholar", "study/apply?view=library"), note: "In My Practice Library" },
           { label: "Revision cards due", value: due === null ? "Could not be read" : String(due), href: experienceHref("scholar", "study/revise"), note: "Scheduled from your answers" },
           { label: "Learning sessions", value: sessions.ok ? String(sessions.data.length) : "Not kept here", href: experienceHref("scholar", "study/learn"), note: "Resume where you left off" },
         ].map(t => (

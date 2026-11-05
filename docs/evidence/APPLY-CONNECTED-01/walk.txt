@@ -1,0 +1,45 @@
+PASS the views are the mock-up's (Today, My Priorities, Recent Learning, All Practice & Library)
+PASS Today recommends practice from this learner's records
+PASS the recommendation says why
+PASS the figures at a glance are there
+PASS practice is kept apart from verified competence
+PASS every source shown names the record behind it
+PASS an integrated case is written and stored (200)
+PASS it is stored private and formative, never published
+PASS it records the generation version
+PASS it records its exact sources (3 sections, 1 materials)
+PASS it brings several studied sections together (3)
+PASS it says why
+PASS the case shows its sources and competency links
+PASS the case says what it is
+PASS submitted responses are kept (4)
+PASS the stored case reopens
+PASS its feedback reopens with it
+PASS feedback leads to what next
+PASS practising again is a new attempt
+PASS the first attempt is not overwritten
+PASS no new case, and the stored case is unchanged
+PASS reopening and practising again used no AI
+PASS search by title finds it ("Essential")
+PASS search by source finds it
+PASS the format filter works (2)
+PASS the gap filter shows only rows with a gap
+PASS another learner's attempt is not found
+PASS another learner's case cannot be played
+PASS another learner's case is not in this library
+PASS signed out is refused (401)
+PASS a topic with nothing studied says so, with no AI
+PASS My Priorities opens
+PASS Recent Learning says uploads do not count
+PASS the library keeps saved scenarios and approved cases
+PASS the builder defaults to all previous learning
+PASS My Library links to it
+PASS no page errors ()
+PASS today at 820: no sideways scroll
+PASS priorities at 820: no sideways scroll
+PASS recent at 820: no sideways scroll
+PASS library at 820: no sideways scroll
+PASS today at 390: no sideways scroll
+PASS priorities at 390: no sideways scroll
+PASS recent at 390: no sideways scroll
+PASS library at 390: no sideways scroll

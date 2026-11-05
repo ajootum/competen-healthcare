@@ -1432,6 +1432,97 @@ export async function listPrivateCases(admin: Admin, userId: string, limit = 30)
   return { ok: true, data: ((data ?? []) as any[]).map(r => ({ id: r.id, title: r.title, context: r.context, origin: r.origin, materialId: r.material_id, createdAt: r.created_at })) };
 }
 
+/** SCHOLAR-APPLY-CONNECTED-01: which steps of the caller's lessons use which sections. Reached or not is the caller's to work out from the session. */
+export async function learnedStepRows(admin: Admin, userId: string): Promise<{ sessionId: string; step: number; chunkId: string; materialId: string | null }[]> {
+  const { data, error } = await admin.from("individual_scholar_learning_step").select("session_id, step, chunk_id, material_id").eq("user_id", userId).limit(10000);
+  if (error) return [];
+  return ((data ?? []) as any[]).map(r => ({ sessionId: r.session_id, step: r.step, chunkId: r.chunk_id, materialId: r.material_id ?? null }));
+}
+/** SCHOLAR-APPLY-CONNECTED-01: the text of some of the caller's own sections, by id. */
+export async function chunkTextRows(admin: Admin, userId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  const keep = ids.filter(isUuid);
+  if (!keep.length) return new Map();
+  const { data, error } = await admin.from("individual_scholar_chunk").select("id, content").eq("user_id", userId).in("id", keep).limit(keep.length);
+  if (error) return new Map();
+  return new Map(((data ?? []) as any[]).map(r => [r.id as string, String(r.content ?? "")]));
+}
+/** SCHOLAR-APPLY-CONNECTED-01: the caller's cards that have actually been reviewed. */
+export async function reviewedCardRows(admin: Admin, userId: string): Promise<{ questionId: string; lastReviewedAt: string; lastQuality: number | null }[]> {
+  const { data, error } = await admin.from("individual_scholar_card").select("question_id, last_reviewed_at, last_quality, reviews").eq("user_id", userId).gt("reviews", 0).limit(5000);
+  if (error) return [];
+  return ((data ?? []) as any[]).filter(r => r.last_reviewed_at).map(r => ({ questionId: r.question_id, lastReviewedAt: r.last_reviewed_at, lastQuality: r.last_quality ?? null }));
+}
+/** SCHOLAR-APPLY-CONNECTED-01: what each of the caller's sections is about, with their own corrections. Empty where the analysis is absent. */
+export async function chunkConceptRows(admin: Admin, userId: string): Promise<Map<string, string[]>> {
+  const [{ data, error }, corrections] = await Promise.all([
+    admin.from("individual_scholar_chunk_analysis").select("chunk_id, concepts").eq("user_id", userId).limit(10000),
+    topicCorrections(admin, userId, null),
+  ]);
+  const out = new Map<string, string[]>();
+  if (error) return out;
+  for (const r of (data ?? []) as any[]) out.set(r.chunk_id, corrections.byChunk.get(r.chunk_id) ?? r.concepts ?? []);
+  return out;
+}
+/** SCHOLAR-APPLY-CONNECTED-01: the caller's stored cases with their sources, competencies and every playing of them. Nothing is written or regenerated. */
+export async function practiceCaseRows(admin: Admin, userId: string): Promise<{
+  cases: { id: string; title: string; materialId: string; createdAt: string; promptVersion: string; model: string; blueprint: unknown; chunkIds: string[]; sourceMaterialIds: string[]; competencyIds: string[] }[];
+  sessions: { id: string; caseId: string; status: string; createdAt: string; lastActiveAt: string; completedAt: string | null; debrief: unknown }[];
+}> {
+  const empty = { cases: [], sessions: [] };
+  const { data: cs, error } = await admin.from("individual_scholar_case").select("id, title, material_id, created_at, prompt_version, model, blueprint").eq("user_id", userId).order("created_at", { ascending: false }).limit(200);
+  if (error) return empty;
+  const ids = ((cs ?? []) as any[]).map(c => c.id);
+  const [sess, sources, comps] = await Promise.all([
+    admin.from("individual_scholar_case_session").select("id, private_case_id, status, created_at, last_active_at, completed_at, debrief").eq("user_id", userId).order("created_at", { ascending: false }).limit(1000),
+    ids.length ? admin.from("individual_scholar_case_source").select("case_id, chunk_id").eq("user_id", userId).in("case_id", ids) : { data: [] },
+    ids.length ? admin.from("individual_scholar_case_competency").select("case_id, competency_id").eq("user_id", userId).in("case_id", ids) : { data: [] },
+  ]);
+  const chunkIds = [...new Set(((sources.data ?? []) as any[]).map(s => s.chunk_id))];
+  const { data: chunks } = chunkIds.length ? await admin.from("individual_scholar_chunk").select("id, material_id").eq("user_id", userId).in("id", chunkIds) : { data: [] };
+  const materialOf = new Map(((chunks ?? []) as any[]).map(c => [c.id, c.material_id as string]));
+  return {
+    cases: ((cs ?? []) as any[]).map(c => {
+      const own = ((sources.data ?? []) as any[]).filter(s => s.case_id === c.id).map(s => s.chunk_id as string);
+      return {
+        id: c.id, title: c.title, materialId: c.material_id, createdAt: c.created_at, promptVersion: c.prompt_version, model: c.model, blueprint: c.blueprint, chunkIds: own,
+        sourceMaterialIds: [...new Set([c.material_id as string, ...own.map(id => materialOf.get(id)).filter((x): x is string => !!x)])],
+        competencyIds: ((comps.data ?? []) as any[]).filter(x => x.case_id === c.id).map(x => x.competency_id as string),
+      };
+    }),
+    sessions: ((sess.data ?? []) as any[]).map(s => ({ id: s.id, caseId: s.private_case_id, status: s.status, createdAt: s.created_at, lastActiveAt: s.last_active_at, completedAt: s.completed_at ?? null, debrief: s.debrief })),
+  };
+}
+/** Pure. What a stored case is about, for search: its objectives and differentials. Never its answers or how it unfolds. */
+export function caseBlueprintLabels(blueprint: unknown): string[] {
+  const b = (blueprint ?? {}) as { learningObjectives?: { text?: unknown }[]; differentials?: { label?: unknown }[]; patient?: { presentingComplaint?: unknown } };
+  return [...(b.learningObjectives ?? []).map(o => o?.text), ...(b.differentials ?? []).map(d => d?.label), b.patient?.presentingComplaint].filter((x): x is string => typeof x === "string" && !!x.trim());
+}
+/**
+ * SCHOLAR-APPLY-CONNECTED-01, deletion integrity. A case can now draw on several materials, and 435 only cascades from the material it
+ * is filed under, so a case using a section of ANOTHER material would otherwise survive that material's deletion with its words still
+ * in the stored case. These are the caller's cases drawing on this material through a source section. null when they could not be read.
+ */
+export async function casesDrawingOn(admin: Admin, userId: string, materialId: string): Promise<string[] | null> {
+  if (!isUuid(materialId)) return [];
+  const { data: chunks, error } = await admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("material_id", materialId).limit(5000);
+  if (error) return isNotProvisioned(error) ? [] : null;
+  const ids = ((chunks ?? []) as any[]).map(c => c.id);
+  if (!ids.length) return [];
+  const out = new Set<string>();
+  for (let i = 0; i < ids.length; i += 200) {
+    const r = await admin.from("individual_scholar_case_source").select("case_id").eq("user_id", userId).in("chunk_id", ids.slice(i, i + 200)).limit(5000);
+    if (r.error) return isNotProvisioned(r.error) ? [] : null;
+    for (const x of (r.data ?? []) as any[]) out.add(x.case_id);
+  }
+  return [...out];
+}
+/** Delete the caller's stored cases by id. Their sessions, answers and records go with them by cascade (435, 810). */
+export async function deletePrivateCases(admin: Admin, userId: string, ids: readonly string[]): Promise<boolean> {
+  if (!ids.length) return true;
+  const { error } = await admin.from("individual_scholar_case").delete().eq("user_id", userId).in("id", [...ids]);
+  return !error;
+}
+
 /** The private cases written from one material: what to withdraw from the shared library when it is deleted (C-e). */
 export async function privateCaseIdsOfMaterial(admin: Admin, userId: string, materialId: string): Promise<string[]> {
   if (!isUuid(materialId)) return [];
@@ -1447,8 +1538,8 @@ export async function caseSourcesOf(admin: Admin, userId: string, materialId: st
   let c = admin.from("individual_scholar_case").select("id").eq("user_id", userId);
   let q = admin.from("individual_scholar_question").select("case_id").eq("user_id", userId).eq("kind", "case").not("case_id", "is", null);
   if (materialId) { c = c.eq("material_id", materialId); q = q.eq("material_id", materialId); }
-  const [cases, steps] = await Promise.all([c.limit(5000), q.limit(5000)]);
-  return { cases: ((cases.data ?? []) as any[]).map(r => r.id), s4: [...new Set(((steps.data ?? []) as any[]).map(r => r.case_id as string))] };
+  const [cases, steps, drawing] = await Promise.all([c.limit(5000), q.limit(5000), materialId ? casesDrawingOn(admin, userId, materialId) : Promise.resolve([] as string[])]);
+  return { cases: [...new Set([...((cases.data ?? []) as any[]).map(r => r.id as string), ...(drawing ?? [])])], s4: [...new Set(((steps.data ?? []) as any[]).map(r => r.case_id as string))] };
 }
 
 export type CaseSessionRow = {

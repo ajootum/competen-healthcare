@@ -1,0 +1,72 @@
+{
+  "recommendation": {
+    "title": "Integrated practice: Focus of Care and Personal Hygiene",
+    "areas": [
+      "Focus of Care\nMissed in revision, 5 Nov · Essential Nursing Care of the Critically Ill",
+      "Personal Hygiene\nAnswered in revision, 5 Nov · Essential Nursing Care of the Critically Ill",
+      "Patient Positioning and Mobilisation\nStudied in a lesson, 4 Nov · Essential Nursing Care of the Critically Ill"
+    ]
+  },
+  "made": {
+    "status": 200,
+    "caseId": "b5e720f5-6f27-4540-b410-918047936b5b",
+    "connected": {
+      "why": "Connects 3 related areas: Focus of Care, Personal Hygiene, Patient Positioning and Mobilisation. Includes something you missed earlier.",
+      "areas": [
+        {
+          "chunkId": "ba05492b-3a48-4562-8533-7c2b5f951cba",
+          "materialId": "5327bda5-add2-4dfd-86c3-b9bec6eca907",
+          "label": "Focus of Care",
+          "materialTitle": "Essential Nursing Care of the Critically Ill",
+          "how": "Missed in revision, 5 Nov"
+        },
+        {
+          "chunkId": "e11edc81-6278-47ad-843d-16626d009eac",
+          "materialId": "5327bda5-add2-4dfd-86c3-b9bec6eca907",
+          "label": "Personal Hygiene",
+          "materialTitle": "Essential Nursing Care of the Critically Ill",
+          "how": "Answered in revision, 5 Nov"
+        },
+        {
+          "chunkId": "913fbf3c-5a61-4947-996e-5429544e66f4",
+          "materialId": "5327bda5-add2-4dfd-86c3-b9bec6eca907",
+          "label": "Patient Positioning and Mobilisation",
+          "materialTitle": "Essential Nursing Care of the Critically Ill",
+          "how": "Studied in a lesson, 4 Nov"
+        }
+      ]
+    },
+    "error": null,
+    "saved": null,
+    "sufficiency": null
+  },
+  "stored": {
+    "title": "Essential nursing care of a critically ill patient",
+    "review": "private_formative",
+    "version": "scholar-case-blueprint-v4+connected-v1",
+    "model": "claude-opus-4-8",
+    "sources": 3,
+    "materials": 1,
+    "competencies": 0
+  },
+  "answers": 4,
+  "firstAttemptStatus": "completed",
+  "gaps": "To revisit\n\nReasoning: interpretation\nReasoning: decision\nReasoning: reassessment\n\nRevise this\nTeach me this",
+  "deletionRead": {
+    "materials": 1,
+    "caseFiledUnder": 1
+  },
+  "across": {
+    "title": "Recognising a deteriorating patient",
+    "sections": 1,
+    "materials": 1,
+    "areas": [
+      [
+        "recognising-deterioration-notes",
+        "recognising-deterioration-notes",
+        "Answered in revision, 2 Nov"
+      ]
+    ]
+  },
+  "recentLessons": 4
+}

@@ -1,3 +1,4 @@
+import { casesDrawingOn, deletePrivateCases } from "@/lib/individual/scholar/store";
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { deleteMaterial, fileMaterial, questionIdsOfMaterial, renameMaterial, signedOriginalUrl } from "@/lib/individual/scholar/store";
@@ -63,7 +64,11 @@ export async function DELETE(_req: Request, ctx2: { params: Promise<{ id: string
   // content is purged, as the learner's own withdrawal does). A taken or promoted offer is the educator's own draft and stays.
   const qIds = await questionIdsOfMaterial(ctx.admin, ctx.userId, id);
   const offers = qIds?.length ? await withdrawOffersOfQuestions(ctx.admin, ctx.userId, qIds) : { withdrawn: 0, failed: qIds === null ? 1 : 0 };
+  // SCHOLAR-APPLY-CONNECTED-01: a case that drew on this material holds its words, so it goes with it, whichever material it is filed under.
+  const drawing = await casesDrawingOn(ctx.admin, ctx.userId, id);
+  if (drawing === null) return NextResponse.json({ error: "That material could not be deleted just now. Nothing was removed. Try again shortly." }, { status: 500 });
   const r = await deleteMaterial(ctx.admin, ctx.userId, id);
+  if (r.ok && r.found && !(await deletePrivateCases(ctx.admin, ctx.userId, drawing))) await audit(ctx, "individual_scholar_material_case_cleanup_failed", "individual_scholar_material", id, { cases: drawing.length });
   if (!r.found && r.ok) return NextResponse.json({ error: "Not found" }, { status: 404 });
   if (!r.ok) return NextResponse.json({ error: "That material could not be deleted just now. Nothing was removed. Try again shortly." }, { status: 500 });
   await audit(ctx, "individual_scholar_material_erased", "individual_scholar_material", id, { case_candidates_withdrawn: withdrawn.withdrawn, case_withdrawals_failed: withdrawn.failed, question_offers_withdrawn: offers.withdrawn, question_offer_withdrawals_failed: offers.failed });
