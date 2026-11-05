@@ -110,6 +110,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarNextBestAction: "off", scholarNextBestActionMax: 3, scholarActiveNotebook: "off",
       // SCHOLAR-SEARCH-HISTORY-01: My Search History is a new learner feature, so off.
       scholarSearchHistory: "off",
+      scholarGlobalSearch: "off",
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
       scholarLearnInlineRecall: "on", scholarLearnInlineRecallPlacement: "substantial", scholarLearnInlineRecallMinWords: 180, scholarLearnInlineChecks: "on", scholarLearnInlineApplication: "on", scholarLearnInlineSkippable: "on",
       scholarLearnCheckRequired: "required", scholarLearnSaveMissedCards: "on", scholarLearnCheckEvery: "2",

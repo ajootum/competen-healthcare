@@ -1,3 +1,5 @@
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import Link from "next/link";
 import { experienceHref } from "@/lib/individual/experiences";
 import type { IndividualPolicy } from "@/lib/individual/policy";
@@ -325,13 +327,12 @@ export async function HistoryDashboard({ ctx, q, from, a, b, sid, action, hidden
   return (
     <section aria-labelledby="ev-hist-h" className="cmp-learn-next space-y-3" data-progress-history>
       <h2 id="ev-hist-h" className="text-[18px] font-bold text-gray-900">Evaluation history</h2>
-      <form method="get" action={action} role="search" className="grid gap-2 sm:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_auto]">
-        <input type="hidden" name={hidden.name} value={hidden.value} />
-        {sid && <input type="hidden" name="study" value={sid} />}
-        <input name="q" defaultValue={q ?? ""} aria-label="Search your evaluations" placeholder="Search by goal, topic or competency" className={field} />
-        <input type="date" name="from" defaultValue={from ?? ""} aria-label="From this date" className={field} />
-        <button type="submit" className={toneAction.primary}>Search</button>
-      </form>
+      <PageSearch scope={scopeLine("evaluate")} action={action} value={q ?? ""} placeholder="Search by goal, topic or competency" hidden={{ [hidden.name]: hidden.value, study: sid }}
+        clearHref={`${action}?${hidden.name}=${encodeURIComponent(hidden.value)}${sid ? `&study=${sid}` : ""}`} className="">
+        <label className="mt-1 inline-flex items-center gap-2 text-[12.5px] font-semibold text-gray-700">From
+          <input type="date" name="from" defaultValue={from ?? ""} className={`${field} w-auto font-normal`} />
+        </label>
+      </PageSearch>
       {compared && (
         <div className={box} data-evaluate-compare>
           <p className="text-[14px] font-bold text-gray-900">{compared.older.label}: {snapshotWhen(compared.older.createdAt)} and {snapshotWhen(compared.newer.createdAt)}</p>

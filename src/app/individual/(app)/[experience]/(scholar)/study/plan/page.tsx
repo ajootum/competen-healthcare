@@ -1,3 +1,9 @@
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
+import { planSearchRows } from "@/lib/individual/scholar/global-search";
+import { listEntries } from "@/lib/individual/learning-plan/entry-store";
+import { isMyPlanOn } from "@/lib/individual/policy";
+import { getStudyPlan, studyPlanSchema } from "@/lib/individual/scholar/store";
 import Link from "next/link";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
@@ -46,7 +52,9 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "My Plan" });
 }
 
-type SP = { view?: string; date?: string; from?: string; span?: string; month?: string; study?: string; add?: string };
+type SP = { q?: string; view?: string; date?: string; from?: string; span?: string; month?: string; study?: string; add?: string };
+
+const withStudy = (href: string, studyId: string | null) => (studyId ? `${href}${href.includes("?") ? "&" : "?"}study=${encodeURIComponent(studyId)}` : href);
 
 function NotReady({ reason }: { reason: "off" | "not_provisioned" | "unreadable" | "not_found" }) {
   if (reason === "unreadable") return <Unreadable what="plan" />;
@@ -88,6 +96,7 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
     );
   };
 
+  const asked = (sp.q ?? "").replace(/\s+/g, " ").trim().slice(0, 200);
   // One white card holds the title, the one-line boundary, the three view tiles and (on the Calendar) the workspace itself.
   const frame = (inner?: React.ReactNode) => (
     <>
@@ -104,11 +113,39 @@ export default async function MyPlanPage({ params, searchParams }: { params: Pro
           </div>
         </header>
         <PlanViewNav base={base} current={view} explicit={explicit} extra={keep} />
+        <PageSearch scope={scopeLine("plan")} action={base} value={asked} placeholder="Search your goal, priorities and calendar" hidden={{ study: studyId }} clearHref={planViewHref(base, view, keep)} className="mt-3" />
         {inner && <div className="mt-4">{inner}</div>}
         <div className="mt-4"><LearningOnlyNote notice={FORMATIVE_NOTICE} /></div>
       </section>
     </>
   );
+
+  // ── A SEARCH OF MY PLAN: the learner's own goal, exam, priorities and calendar entries. It reads, and changes nothing. ──
+  if (asked) {
+    if (!isMyPlanOn(policy, await studyPlanSchema(ctx.admin, ctx.userId))) return <>{frame()}<NotReady reason="off" /></>;
+    const [plan, entries] = await Promise.all([getStudyPlan(ctx.admin, ctx.userId), listEntries(ctx.admin, ctx.userId, "scholar", "9999-12-31")]);
+    const rows = planSearchRows(plan.ok ? plan.data : null, entries.ok ? entries.data.entries : [], asked);
+    return frame(
+      <section aria-label="Search results" data-plan-search>
+        {!plan.ok && !entries.ok ? <p className="text-[14px] text-gray-800">My Plan could not be read just now. Try again shortly.</p>
+          : rows.length === 0 ? <p className="text-[14px] text-gray-800">Nothing in My Plan matches &ldquo;{asked}&rdquo;. Try fewer or different words.</p> : (
+            <>
+              <p role="status" className="text-[13px] font-semibold text-gray-700">{rows.length} result{rows.length === 1 ? "" : "s"}</p>
+              <ul className="mt-2 divide-y divide-gray-100 rounded-xl ring-1 ring-gray-200">
+                {rows.slice(0, 50).map(r => (
+                  <li key={r.id}>
+                    <Link href={withStudy(experienceHref("scholar", r.path), studyId)} className="block min-h-[44px] px-3.5 py-2.5 hover:bg-gray-50 focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                      <span className="block break-words text-[14.5px] font-semibold text-gray-900">{r.title}</span>
+                      <span className="block text-[12.5px] text-gray-700">{r.kind === "Calendar entry" ? `Calendar entry, ${r.detail}` : r.detail}</span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+      </section>,
+    );
+  }
 
   // ── TODAY ──
   if (view === "today") {
