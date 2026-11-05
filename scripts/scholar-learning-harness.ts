@@ -152,7 +152,7 @@ const generateOutsideGen = (src: Src) => [...src].filter(([f, s]) => f !== GEN &
 /** C2: each AI route runs aiPreflight (consent, quota, configuration) BEFORE the AI call. */
 function preflightOrder(src: Src): string[] {
   const bad: string[] = [];
-  for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/questions/route.ts`, "runQuestions("],
+  for (const [file, call] of [[`${API}/explain/route.ts`, "runExplain("], [`${API}/explain/across/route.ts`, "runAskAcross("], [`${API}/questions/route.ts`, "runQuestions("],
     [`${API}/materials/[id]/analyse/route.ts`, "runAnalysis("], [`${API}/cases/route.ts`, "runCase("],
     [`${API}/revision/sessions/route.ts`, "runRevisionQuestions("], [`${API}/revision/answer/route.ts`, "runEvaluate("],
     [`${API}/clinical/cases/route.ts`, "runCaseBlueprint("], [`${API}/clinical/sessions/[kind]/[id]/answer/route.ts`, "runCaseReasoning("],

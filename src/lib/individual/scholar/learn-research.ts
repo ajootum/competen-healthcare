@@ -96,7 +96,11 @@ export function narrowPlan(plan: ResearchPlan, n: ResearchNarrowing): ResearchPl
 }
 
 /** What a research request is about: the lesson (title, objective, key concepts, material topics) and the learner's question. */
-export type ResearchInput = { question?: string | null; topics: readonly string[]; title?: string | null; objective?: string | null; concepts?: readonly string[] | null };
+export type ResearchInput = {
+  question?: string | null; topics: readonly string[]; title?: string | null; objective?: string | null; concepts?: readonly string[] | null;
+  /** SCHOLAR-ASK-SOURCES-01: search the keywords as they stand. A learner's sentence has no lesson behind it, so a quoted run of its words ("do nurses prevent") finds nothing. */
+  plainKeywords?: boolean;
+};
 
 /**
  * SCHOLAR-RESEARCH-RELEVANCE-02: the lesson a request is for, from the lesson outline (title, objective, focus). When given,
@@ -121,7 +125,7 @@ export function lessonQuery(input: ResearchInput): ReturnType<typeof researchQue
   const ctx: LessonContext = { title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question };
   const source = [input.title, input.objective, ...(input.concepts ?? []), ...input.topics.slice(0, 8), input.question].filter(Boolean).join(" ").slice(0, 1200);
   if (findPatientIdentifiers(source).length) return { ok: false, reason: "identifier" };
-  const query = buildResearchQuery(ctx);
+  const query = input.plainKeywords ? "" : buildResearchQuery(ctx);
   return query ? { ok: true, query } : researchQuery(input);
 }
 
