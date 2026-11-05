@@ -14,9 +14,10 @@ describe("Scholar navigation model", () => {
   });
 
   it("gives every SCHOLAR_SPACES segment exactly one My Learning leaf, in order, with the sidebar's words", () => {
-    expect(learning.items.map(l => l.segment)).toEqual(SCHOLAR_SPACES.map(s => s.segment));
+    const spaces = learning.items.filter(l => l.key !== "search-history");
+    expect(spaces.map(l => l.segment)).toEqual(SCHOLAR_SPACES.map(s => s.segment));
     for (const s of SCHOLAR_SPACES) expect(learning.items.filter(l => l.segment === s.segment)).toHaveLength(1);
-    expect(learning.items.map(l => l.label)).toEqual(["My Plan", "My Library", "Learn", "Revise", "Apply", "Evaluate", "My Progress"]);
+    expect(learning.items.map(l => l.label)).toEqual(["My Plan", "My Library", "My Search History", "Learn", "Revise", "Apply", "Evaluate", "My Progress"]);
     expect(learning.items.every(l => l.carriesStudy)).toBe(true);
   });
 
@@ -49,6 +50,14 @@ describe("Scholar navigation model", () => {
   it("offers no enrol, buy, pay or certify wording", () => {
     for (const l of ALL_LEAVES) expect(l.label).not.toMatch(/enrol|buy|pay|certif/i);
     for (const m of SCHOLAR_NAV.modules) expect(m.label).not.toMatch(/enrol|buy|pay|certif/i);
+  });
+
+  it("shows My Search History only while HQ offers it, right after My Library, and makes it current on its own page", () => {
+    expect(visibleItems(learning, { myPlan: true }).map(l => l.key)).not.toContain("search-history");
+    expect(visibleItems(learning, { myPlan: true, searchHistory: false }).map(l => l.key)).not.toContain("search-history");
+    expect(visibleItems(learning, { myPlan: true, searchHistory: true }).map(l => l.key).slice(0, 3)).toEqual(["plan", "library", "search-history"]);
+    expect(activeOf("/individual/scholar/study/saved/searches")?.leaf.key).toBe("search-history");
+    expect(activeOf("/individual/scholar/study/saved")?.leaf.key).toBe("learn");
   });
 
   it("hides the My Plan leaf while its gate is off", () => {

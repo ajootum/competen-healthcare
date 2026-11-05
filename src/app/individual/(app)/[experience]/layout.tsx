@@ -193,7 +193,7 @@ export default async function ExperienceLayout({ children, params }: {
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
       <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
-          {scholar && <ScholarDrawer myPlan={myPlanOn} modules={scholarModules} learning={learning} />}
+          {scholar && <ScholarDrawer myPlan={myPlanOn} searchHistory={historyChoice.offered} modules={scholarModules} learning={learning} />}
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
@@ -209,7 +209,7 @@ export default async function ExperienceLayout({ children, params }: {
 
       <div className="flex">
         <aside className={`hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] ${scholar ? "w-[256px]" : "w-[236px]"} shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]`}>
-          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} scholarModules={scholarModules} />
+          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} searchHistory={historyChoice.offered} scholarModules={scholarModules} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>
             <p>One account, one Passport.</p>
