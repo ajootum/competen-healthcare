@@ -54,27 +54,21 @@ describe("the prompts", () => {
 });
 
 describe("the evaluator", () => {
+  const NL = String.fromCharCode(10);
   const g = ["kidney infection fever loin pain"];
   it("is told what can count as missing", () => {
     expect(EVALUATE_SYSTEM).toContain("Only what the accepted answers and key points require can be missing");
   });
   it("shows nothing missing beside a correct verdict, and keeps it beside a partial one", () => {
-    const body = "RIGHT: kidney infection
-MISSING: fever
-WHY: loin pain";
-    const yes = parseEvaluation(`VERDICT: correct
-${body}`, g);
+    const body = ["RIGHT: kidney infection", "MISSING: fever", "WHY: loin pain"].join(NL);
+    const yes = parseEvaluation(["VERDICT: correct", body].join(NL), g);
     expect(yes.ok && yes.parts?.missing).toEqual([]);
     expect(yes.ok && yes.feedback).not.toContain("fever");
-    const partly = parseEvaluation(`VERDICT: partly
-${body}`, g);
+    const partly = parseEvaluation(["VERDICT: partly", body].join(NL), g);
     expect(partly.ok && partly.parts?.missing).toEqual(["fever"]);
   });
   it("keeps the list on an extended answer, which is scored by the key points it matched", () => {
-    const r = parseEvaluation("VERDICT: correct
-MATCHED: 1
-RIGHT: kidney infection
-MISSING: fever", g, { keyPoints: 2 });
+    const r = parseEvaluation(["VERDICT: correct", "MATCHED: 1", "RIGHT: kidney infection", "MISSING: fever"].join(NL), g, { keyPoints: 2 });
     expect(r.ok && r.parts?.missing).toEqual(["fever"]);
   });
 });

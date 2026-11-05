@@ -26,7 +26,7 @@ import {
 import { citationFlaw, learnerView as scenarioLearnerView, parseScenario, scenarioAnswer, shapeScenario, scenarioFlaw, scenarioGroundingFlaw, scenarioIsMeta, scenarioSpecOf, scenarioTexts, type ScenarioLearnerView } from "./scenario";
 import { OPTION_KINDS, storedKindOfFormat } from "./question-formats";
 import { misconceptionScore, pickByMisconception, type RecentMiss } from "./misconception";
-import { aboutTheDocument, differentFactsFirst, withoutPartLabel, type Depth } from "./revision-depth";
+import { aboutTheDocument, depthOfAnswer, differentFactsFirst, withoutPartLabel, type Depth } from "./revision-depth";
 import { matchPairProblem } from "./question-intel";
 import { textGroundingViolations } from "@/lib/ai/grounding";
 import { unsupportedTerms } from "./question-quality";
@@ -183,6 +183,10 @@ export function seededOrder(n: number, seed: string): number[] {
 }
 
 /** Pure. The only projection of an unanswered question a browser receives: no key, rationale or source quote. */
+/** A question's rubric and depth, read here so a route that lists questions never touches the answer it must not send. */
+export const rubricOfQuestion = (q: { answer: unknown }) => rubricOf(q.answer);
+export const depthOfQuestion = (q: { answer: unknown }) => depthOfAnswer(q.answer);
+
 export function learnerItem(q: RevisionQuestion): LearnerItem {
   const base = { id: q.id, kind: q.kind, stem: q.stem, difficulty: q.difficulty, options: OPTION_KINDS.includes(q.kind) ? [...q.options] : [] };
   if (q.kind === "match") {

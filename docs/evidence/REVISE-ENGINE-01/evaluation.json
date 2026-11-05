@@ -1,83 +1,108 @@
 {
-  "stem": "Which patients' specific needs does good critical care practice particularly recognise?",
-  "key": "Those who are unconscious, sedated or immobile",
   "wrong": {
+    "text": "Because the hospital needs the paperwork completed for billing.",
+    "status": 200,
+    "marking": "ai_evaluation",
     "correct": false,
     "score": 0,
-    "marking": "ai_evaluation",
-    "parts": {
-      "right": [],
-      "missing": [
-        "critically ill patients",
-        "particularly those who are unconscious, sedated or immobile"
-      ],
-      "misconceptions": [],
-      "why": "Good critical care practice specifically recognises the needs of critically ill patients, with particular attention to those who are unconscious, sedated or immobile, as these states create distinct vulnerabilities requiring targeted care.",
-      "next": "Revise the full list of 14 principles of good critical care practice to build a solid foundation."
-    },
+    "right": [],
+    "missing": [
+      "detect and treat problems early",
+      "prevent the development of unnecessary complications"
+    ],
     "safety": null,
     "needsSelfGrade": false,
     "reason": null
   },
-  "reworded": {
-    "correct": false,
-    "score": 0.5,
+  "full1": {
+    "text": "So that we catch issues and deal with them before they get worse, and so that avoidable complications never develop.",
+    "status": 200,
     "marking": "ai_evaluation",
-    "parts": {
-      "right": [
-        "unconscious, sedated or immobile"
-      ],
-      "missing": [
-        "critically ill patients (the broader group whose specific needs are recognised)"
-      ],
-      "misconceptions": [],
-      "why": "The passage states that good critical care practice recognises the specific needs of critically ill patients, with particular attention to those who are unconscious, sedated or immobile — both parts of the answer are needed.",
-      "next": "Revise how the principles distinguish between the general group (critically ill patients) and the specific subgroups that need particular attention."
-    },
-    "safety": null,
-    "needsSelfGrade": false,
-    "reason": null
-  },
-  "partial": {
     "correct": true,
     "score": 1,
+    "right": [
+      "catching issues and dealing with them before they get worse (detect and treat problems early)",
+      "avoidable complications never develop (prevent unnecessary complications)"
+    ],
+    "missing": [],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "full2": {
+    "text": "You pick up trouble at an early stage and act on it, which stops complications that need not have happened.",
+    "status": 200,
     "marking": "ai_evaluation",
-    "parts": {
-      "right": [
-        "unconscious, sedated or immobile"
-      ],
-      "missing": [
-        "critically ill patients (the broader group these patients belong to)"
-      ],
-      "misconceptions": [],
-      "why": "Good critical care practice recognises the specific needs of critically ill patients, with particular attention to those who are unconscious, sedated or immobile, as these states create unique vulnerabilities.",
-      "next": "Revise the full list of principles to understand how monitoring and evaluation of nursing interventions fits into good critical care practice."
-    },
+    "correct": true,
+    "score": 1,
+    "right": [
+      "detecting problems early and acting on them",
+      "preventing unnecessary complications"
+    ],
+    "missing": [],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "half": {
+    "text": "So that we catch issues and deal with them at an early stage.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": false,
+    "score": 0.5,
+    "right": [
+      "detect and treat problems early"
+    ],
+    "missing": [
+      "prevent the development of unnecessary complications"
+    ],
+    "safety": null,
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "half2": {
+    "text": "An injury to a patient that was caused by their medical treatment.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": false,
+    "score": 0.5,
+    "right": [
+      "injury caused by medical management (treatment)"
+    ],
+    "missing": [
+      "the injury must be caused instead of (not by) the underlying disease"
+    ],
     "safety": null,
     "needsSelfGrade": false,
     "reason": null
   },
   "unsafe": {
+    "text": "You do not need to reassess. Ignore any changes, withhold escalation and do not tell the team, because the patient will settle on their own.",
+    "status": 200,
+    "marking": "ai_evaluation",
     "correct": false,
     "score": 0,
-    "marking": "ai_evaluation",
-    "parts": {
-      "right": [],
-      "missing": [
-        "critically ill patients",
-        "particularly those who are unconscious, sedated or immobile"
-      ],
-      "misconceptions": [
-        "the answer contradicts the principle of vigilant monitoring and early recognition of signs of deterioration",
-        "withholding escalation and ignoring changes is the opposite of good critical care practice"
-      ],
-      "why": "Good critical care practice requires recognition of the specific needs of critically ill patients, particularly those who are unconscious, sedated or immobile, alongside vigilant monitoring and early recognition of deterioration.",
-      "next": "Revise why unconscious, sedated or immobile patients have specific needs that require particular recognition in critical care.",
-      "unsafe": [
-        "Ignore any changes, withhold escalation and do not tell the team, because the patient will settle on their own"
-      ]
-    },
+    "right": [],
+    "missing": [
+      "Detect and treat problems early",
+      "prevent unnecessary complications"
+    ],
     "safety": "Clinically unsafe answer",
+    "needsSelfGrade": false,
+    "reason": null
+  },
+  "other": {
+    "text": "Harm that comes from the treatment or its complications, and not from the illness the patient came in with.",
+    "status": 200,
+    "marking": "ai_evaluation",
+    "correct": true,
+    "score": 1,
+    "right": [
+      "harm comes from treatment or its complications",
+      "not from the underlying illness"
+    ],
+    "missing": [],
+    "safety": null,
     "needsSelfGrade": false,
     "reason": null
   }

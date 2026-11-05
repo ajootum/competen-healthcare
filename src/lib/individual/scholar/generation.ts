@@ -1170,7 +1170,7 @@ export const EVALUATE_SYSTEM = [
   "Judge the answer ONLY against the passage from their notes, the accepted answers and the key points given. Do not use outside knowledge.",
   "Judge understanding, not phrases. Accept an answer that says the same thing in other words, including clinically equivalent wording and equivalent reasoning. Do not reward an answer for things the passage does not say.",
   "'correct' means the understanding is there. 'partly' means some of it is there and something essential is missing. 'incorrect' means the reasoning is wrong or nothing essential is there.",
-  "An answer that gives an accepted answer or all the key points, in any words, is correct. Only what the accepted answers and key points require can be missing: never something else the passage also says.",
+  "An answer that makes all the key points, in any words, is correct, and one that makes only some of them is partly correct. Where no key points are given, one accepted answer in any words is correct. Only what the accepted answers and key points require can be missing: never something else the passage also says.",
   "Your first line is exactly one of 'VERDICT: correct', 'VERDICT: partly' or 'VERDICT: incorrect'.",
   // SQIE-CLOSE-2026-11 WS-B (evaluate v3): the safety line, quoted from the answer.
   UNSAFE_RULE,

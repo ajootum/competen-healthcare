@@ -25,7 +25,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRun
 import { activityOrFallback, activityState, getScholarAiStanding, type ScholarAiActivity } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
-import { GENERATING_MODES, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
+import { GENERATING_MODES, depthOfQuestion, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, rubricOfQuestion, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
 import { missOf, recentMisses, signalsOf } from "@/lib/individual/scholar/misconception";
 import { writeClozeItems } from "@/lib/individual/scholar/cloze-service";
 import { isClozeQuestion } from "@/lib/individual/scholar/cloze";
@@ -34,8 +34,7 @@ import { cardsOfDecks, gapFocus, libraryRecallFits, recallCardOf } from "@/lib/i
 import { withoutFlashcards } from "@/lib/individual/scholar/flashcard-experience";
 import { loadFlashcardGaps, loadFlashcards } from "@/lib/individual/scholar/flashcard-service";
 import { generationContextLoader } from "@/lib/individual/scholar/question-context";
-import { REVISION_INTENT, depthOfAnswer, factKeyOf, aboutTheDocument, followUpConcepts, looksLikeCitation, intentFormats, isRevisionIntent, thinForQuestions, type Depth, type RevisionIntent } from "@/lib/individual/scholar/revision-depth";
-import { rubricOf } from "@/lib/individual/scholar/question-intel";
+import { REVISION_INTENT, factKeyOf, aboutTheDocument, followUpConcepts, looksLikeCitation, intentFormats, isRevisionIntent, thinForQuestions, type Depth, type RevisionIntent } from "@/lib/individual/scholar/revision-depth";
 import { adaptDifficulty, flashcardLevelMix, generationDifficulty, isSourceMode, stemKey, type SourceMode } from "@/lib/individual/scholar/question-intel";
 import {
   MOCK_LABEL, PROMPT_VERSIONS, REVISION_DIFFICULTIES, REVISION_GENERATION_CALLS_MAX, REVISION_FORMATS, REVISION_MODES, REVISION_QUANTITY_MAX,
@@ -157,7 +156,7 @@ export async function POST(req: Request) {
   const missed = mode === "quick" && isUuid(body?.followUpOf) ? await getQuestion(ctx.admin, ctx.userId, body.followUpOf) : null;
   if (isUuid(body?.followUpOf) && !missed) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
   if (missed) {
-    const rubric = rubricOf(missed.answer);
+    const rubric = rubricOfQuestion(missed);
     chunkIds = [missed.chunkId]; scopeSections = [missed.chunkId];
     gapConcepts = new Map([[missed.chunkId, followUpConcepts({ misconceptions: rubric?.misconceptions, keyPoints: rubric?.keyPoints })]]);
   } else if (body?.scope?.kind === "gaps") {
@@ -208,7 +207,7 @@ export async function POST(req: Request) {
     cardIds = new Set(own.data.cards.map(c => c.id));
   }
   const seed = `${ctx.userId}:${new Date().toISOString().slice(0, 10)}:${mode}`;
-  const missedDepth = missed ? depthOfAnswer(missed.answer) : null;
+  const missedDepth = missed ? depthOfQuestion(missed) : null;
   const aim: readonly Depth[] = asIntent?.depths ?? (missedDepth ? [missedDepth] : []);
   const exclude = missed ? [missed.id] : [];
   // A stored question about the document itself, or a rule-written blank in a short title, is not offered by intention.
@@ -252,7 +251,7 @@ export async function POST(req: Request) {
       // SCHOLAR-SQIE-LEARNER-01: what its rubric lists as misconceptions and its topic, for the preference in Weak areas.
       return { id: q.id, kind: effectiveKind(q), difficulty: q.difficulty, chunkId: q.chunkId, createdAt: q.createdAt, latestCorrect: s.latestCorrect, misses: s.misses, lastAnsweredAt: s.lastAnsweredAt, due: s.due, ...signalsOf(q),
         // Revise engine quality: a governed library copy counts as current: it is clinically approved, not an older draft.
-        depth: depthOfAnswer(q.answer), current: !!q.library || q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q))), factKey: factKeyOf(q.chunkId, rubricOf(q.answer)?.objective) };
+        depth: depthOfQuestion(q), current: !!q.library || q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q))), factKey: factKeyOf(q.chunkId, rubricOfQuestion(q)?.objective) };
     });
     // The learner's misses in the last 30 days, with what each missed item's rubric lists (misconception.ts).
     return { questions: qs, items, misses: recentMisses(qs.flatMap(q => missOf(q, p.data.stats.get(q.id)?.lastMissAt)), new Date().toISOString()) };
