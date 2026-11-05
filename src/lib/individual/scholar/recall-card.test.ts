@@ -57,6 +57,6 @@ describe("evidence honesty", () => {
   });
   it("Knowledge accuracy, mastery and learning state do not count a flashcard rating twice or as a marked answer", () => {
     expect(readFileSync("src/lib/individual/scholar/intelligence.ts", "utf8")).toContain('(q.kind as string) !== "flashcard"');
-    for (const f of ["mastery-data.ts", "learning-state-data.ts"]) expect(readFileSync(`src/lib/individual/scholar/${f}`, "utf8")).toContain('if (q.kind === "flashcard") continue;');
+    for (const f of ["mastery-data.ts", "learning-state-data.ts"]) expect(readFileSync(`src/lib/individual/scholar/${f}`, "utf8")).toContain("if (isCardRating(q.kind, a.marking)) continue;");
   });
 });

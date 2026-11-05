@@ -1,4 +1,5 @@
 import type { CompetencyRef, QuestionCompetency } from "./competency-sources";
+import { isCardRating } from "./flashcards";
 import { activeWeeksIn, lastStudyDay, localDay, studyActivityDays, studyDaysInWindow, type StudyStamp } from "./learning-definitions";
 import { buildCompetencyCoverage, type CompetencyCoverage, type CompetencyEvidence, type Insufficient, type NotMeasured } from "@/lib/competency/progress-model";
 
@@ -31,7 +32,7 @@ export type IMaterial = { id: string; title: string; createdAt?: string };
 export type IQuestion = { id: string; materialId: string; kind: Kind; caseId?: string | null };
 /** Reasoning is scenarios and case questions. Knowledge is everything else. Kept apart, never blended. */
 export const isReasoning = (q: IQuestion) => q.kind === "case" || !!q.caseId;
-export type IAttempt = { questionId: string; correct: boolean; answeredAt: string };
+export type IAttempt = { questionId: string; correct: boolean; answeredAt: string; marking?: string | null };
 export type ICard = { materialId: string; status: "active" | "mastered"; nextReviewAt: string };
 export type IReview = { materialId: string; quality: number; reviewedAt: string };
 
@@ -232,7 +233,10 @@ export function buildIntelligence(input: {
   const idx = attemptIndex(attempts.filter(a => known.has(a.questionId)));
   const coverage = buildCoverage(questions, idx, input.catalogue, input.mappings, input.competencyUnreadable);
   const engagement = buildEngagement({ materials, attempts, reviews, cards, today, windowDays: t.windowDays, tz: input.tz, activity: input.activity });
-  const knowledge = buildKnowledge({ materials, questions, idx, cards, reviews, today, t });
+  // A library question studied as a card keeps its stored kind `mcq`: its self-rating is a recall, not a marked answer.
+  const kindOf = new Map(questions.map(q => [q.id, q.kind as string]));
+  const knowledgeIdx = attemptIndex(attempts.filter(a => known.has(a.questionId) && !isCardRating(kindOf.get(a.questionId) ?? "", a.marking)));
+  const knowledge = buildKnowledge({ materials, questions, idx: knowledgeIdx, cards, reviews, today, t });
   const reasoning = buildReasoning(questions, idx, t);
 
   // ── Insights: one true sentence per measure that has something to say ──

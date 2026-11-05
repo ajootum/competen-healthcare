@@ -24,6 +24,12 @@ describe("the four measures are separate, and each says when it cannot be measur
     expect(li.recommendations[0].id).toBe("add-material");
   });
 
+  it("a library question rated as a card is not a marked answer in Knowledge accuracy", () => {
+    const questions = [q("a", "m1"), q("b", "m1"), q("c", "m1")];
+    const li = buildIntelligence({ ...base, questions, attempts: [at("a", true), at("b", false), { ...at("c", true), marking: "self_graded" }] });
+    expect(li.knowledge).toMatchObject({ state: "insufficient", have: 2, need: 5 });
+  });
+
   it("below the threshold, knowledge is insufficient with have/need -- never a percentage", () => {
     const questions = [q("a", "m1"), q("b", "m1"), q("c", "m1")];
     const li = buildIntelligence({ ...base, questions, attempts: [at("a", true), at("b", false)] });

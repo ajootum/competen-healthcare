@@ -13,7 +13,7 @@ Owner request, 5 Nov 2026: implement the known-issues list. The walk ran on stag
 |---|---|---|
 | OSCE false "could not be saved" | A save or finish whose run was closed by another request now reports the run as closed or finished. A finish waits for a save in flight, and no new save starts during a finish. | `osce/attempts/[id]/route.test.ts` (6 tests). Walk: Finish at three timings around the autosave, no false message, no failed request |
 | Ask panel on the library list | The export form no longer wraps the list, so the panel's own form is not nested in it. Tick boxes join the form by id. | Walk: no nested form, a ticked lesson belongs to the form, the panel stays open and the page stays put after asking |
-| Library card double count | A library question studied as a card is stored as `mcq`, so its rating counted as an attempt and a review. `isCardRating` now skips the attempt in `mastery-data.ts` and `learning-state-data.ts`. A real multiple-choice answer still counts. | `card-rating-evidence.test.ts` |
+| Library card double count | A library question studied as a card is stored as `mcq`, so its rating counted as an attempt and a review. `isCardRating` now skips the attempt in `mastery-data.ts` and `learning-state-data.ts`, and in Knowledge accuracy (`intelligence.ts`), where a self-rating counted as a marked answer. A real multiple-choice answer still counts. | `card-rating-evidence.test.ts`, `intelligence.test.ts` |
 | Dates in client components | Fixed to en-GB and UTC, so server and browser write the same date. | Code only. See the hydration note below |
 | Phone length | See the table below. | Walk |
 | DS rollout 5 | Library, Saved learning, papers, OSCE and Monthly review use the design system. Spec section 6.1 updated. | Walk: words unchanged on six pages |
@@ -28,6 +28,12 @@ Owner request, 5 Nov 2026: implement the known-issues list. The walk ran on stag
 - **Evaluate:** evidence tiles in two columns, one next step with the rest one tap away, the last three past evaluations with the history link.
 - **My Progress:** learning activity, reading coverage and framework coverage fold on a phone. They stay open on wider screens and open with one tap.
 - On Evaluate, "Next learning actions" now reads "Next steps", replacing the separate heading above it.
+
+## Tests
+
+- tsc clean. `scholar-learning-harness` 182 of 182.
+- Individual vitest (`src/lib/individual`, Individual routes and screens): 3525 of 3526 in 232 files. The one failure is the known `learn-guided.test.ts` timeout, which also times out on unchanged main and passes alone and in CI.
+- The walk ran before the Knowledge accuracy change, which is covered by its unit test.
 
 ## Exact findings
 
