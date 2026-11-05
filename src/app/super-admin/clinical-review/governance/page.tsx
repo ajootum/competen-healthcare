@@ -44,7 +44,7 @@ export default async function ClinicalGovernancePage() {
               <ul className="mt-3 divide-y divide-gray-100">
                 {view.reviewers.map(r => (
                   <li key={r.appointmentId} className="py-3">
-                    <p className="text-[14px] font-semibold text-gray-900">{r.name}</p>
+                    <p className="text-[14px] font-semibold text-gray-900">{r.name} <span className="font-normal text-gray-600">&mdash; {r.position}</span></p>
                     {r.scopes.length === 0 ? <p className="text-[12.5px] text-amber-900">No scope: this reviewer can approve nothing yet.</p> : (
                       <ul className="mt-1 space-y-1">
                         {r.scopes.map(s => <li key={s.id} className="flex flex-wrap items-center gap-2 text-[13px] text-gray-800">{s.label} <EndScope scopeId={s.id} /></li>)}

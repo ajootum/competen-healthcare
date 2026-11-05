@@ -7,10 +7,11 @@ vi.mock("./educator", () => ({
   retireVersion: vi.fn(async (_a: unknown, _m: string, id: string, reason: string) => { calls.push(`retire:${id}:${reason}`); return { ok: true }; }),
   publishVersion: vi.fn(async (_a: unknown, _m: string, id: string) => { calls.push(`publish:${id}`); return { ok: false, error: "not independent" }; }),
   createResource: vi.fn(async (_a: unknown, _m: string, r: { code: string; ai?: unknown }) => { calls.push(`create:${r.code}:${r.ai ? "ai" : "educator"}`); return r.code === "dup" ? { ok: false, error: "duplicate code" } : { ok: true, resourceId: `r-${r.code}`, versionId: `v-${r.code}` }; }),
+  reviewDraft: vi.fn(async (_a: unknown, _m: string, id: string) => { calls.push(`review:${id}`); return id.endsWith("2") ? { ok: false, error: "Content changed since." } : { ok: true }; }),
   setCompetencies: vi.fn(async (_a: unknown, v: string, ids: string[]) => { calls.push(`comp:${v}:${ids.length}`); return { ok: true }; }),
 }));
 
-import { BULK_MAX, IMPORT_MAX, bulkIds, importDrafts, importItems, importProvenance, loadCompetencyOptions, pickableCompetencies, runBulk } from "./library-admin";
+import { BULK_MAX, IMPORT_MAX, bulkIds, importDrafts, importItems, importProvenance, loadCompetencyOptions, pickableCompetencies, runBulk, runBulkReview } from "./library-admin";
 
 const U = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 
@@ -34,6 +35,15 @@ describe("runBulk: every item through the single-item function, each reported on
     expect(await runBulk({}, "me", "bulk_replace", [U(3)])).toEqual([{ id: U(3), ok: true, versionId: `v-of-${U(3)}` }]);
     await runBulk({}, "me", "bulk_retire", [U(4)], "Outdated guidance replaced.");
     expect(calls).toEqual([`new:${U(3)}`, `retire:${U(4)}:Outdated guidance replaced.`]);
+  });
+});
+
+describe("runBulkReview: each item through reviewDraft, partial failure reported", () => {
+  it("records per item; a refusal stops nothing", async () => {
+    calls.length = 0;
+    const r = await runBulkReview({}, "me", [U(1), U(2), U(3)]);
+    expect(r).toEqual([{ id: U(1), ok: true }, { id: U(2), ok: false, error: "Content changed since." }, { id: U(3), ok: true }]);
+    expect(calls).toEqual([`review:${U(1)}`, `review:${U(2)}`, `review:${U(3)}`]);
   });
 });
 
