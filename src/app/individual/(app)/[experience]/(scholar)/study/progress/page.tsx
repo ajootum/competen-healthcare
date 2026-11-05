@@ -310,7 +310,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
 
             {showTopicProgress && tp?.ok && <TopicProgressSection m={tp.data} />}
             {appOn && <ApplicationEvidenceSection records={app?.ok ? app.data : null} skills={app?.ok ? applicationBySkill(app.data, stateThresholds(policy)) : []} competencyTitle={competencyTitle} />}
-            {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} retention={retention} accent={x.accent} />}
+            {ls?.ok && rows.ok && <LearningStateSection states={ls.data} concepts={allRows?.ok ? allRows.data.concepts : null} materials={new Map(rows.data.materials.map(m => [m.id, m.title]))} retention={retention} />}
 
             {liShown ? <LearningIntelligence li={liShown} /> : <div className="mt-6"><Unreadable what="learning intelligence" /></div>}
 

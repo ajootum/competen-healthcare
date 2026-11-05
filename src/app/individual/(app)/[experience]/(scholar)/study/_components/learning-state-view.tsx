@@ -34,7 +34,7 @@ function Word({ w, misconception }: { w: EvidenceWord; misconception?: boolean }
   return <StateChip {...(misconception ? MISCONCEPTION_LOOK : EVIDENCE_WORD_LOOK)[w]}>{label}</StateChip>;
 }
 
-function TopicState({ t, sections, extra, accent }: { t: TopicLearningState; sections: { chunkId: string; label: string; topics: string[] }[]; extra: TopicRetention | null; accent: string }) {
+function TopicState({ t, sections, extra }: { t: TopicLearningState; sections: { chunkId: string; label: string; topics: string[] }[]; extra: TopicRetention | null }) {
   return (
     <li className="px-4 py-3" data-learning-state-topic={t.key}>
       {/* The browser may restore a native disclosure's open state before hydration (back / revisit): not a content mismatch. */}
@@ -66,7 +66,7 @@ function TopicState({ t, sections, extra, accent }: { t: TopicLearningState; sec
         {extra?.transfer && (
           <div className="cmp-learn-practice cmp-learn-box mt-2 px-3 py-2" data-topic-transfer>
             <p className="text-[13px] leading-relaxed text-gray-800">{extra.transfer.reason}</p>
-            <TransferOffer topic={t.label} accent={accent} />
+            <TransferOffer topic={t.label} />
           </div>
         )}
         {t.evidence.length > 0 && (
@@ -84,14 +84,13 @@ function TopicState({ t, sections, extra, accent }: { t: TopicLearningState; sec
   );
 }
 
-export function LearningStateSection({ states, concepts, materials, retention = null, accent }: {
+export function LearningStateSection({ states, concepts, materials, retention = null }: {
   states: TopicLearningState[];
   /** The current topics of each section (Progress read them), for the topic correction. */
   concepts: ReadonlyMap<string, readonly string[]> | null;
   materials: ReadonlyMap<string, string>;
   /** SALE-2026-11 R2: due retrieval, prerequisite reviews and transfer offers, where their keys are on. */
   retention?: RetentionView | null;
-  accent: string;
 }) {
   const extraOf = (t: TopicLearningState): TopicRetention | null => {
     if (!retention) return null;
@@ -114,7 +113,7 @@ export function LearningStateSection({ states, concepts, materials, retention = 
           <Fold summary={`${states.length} topic${states.length === 1 ? "" : "s"}, ${enough} with enough evidence to say something`}>
             <ul aria-label="What your evidence shows, by topic" className="divide-y divide-gray-100">
               {shown.map(t => (
-                <TopicState key={t.key} t={t} extra={extraOf(t)} accent={accent} sections={t.chunkIds.slice(0, 3).map((chunkId, i) => ({
+                <TopicState key={t.key} t={t} extra={extraOf(t)} sections={t.chunkIds.slice(0, 3).map((chunkId, i) => ({
                   chunkId, topics: [...(concepts?.get(chunkId) ?? [])],
                   label: `${t.materialId ? materials.get(t.materialId) ?? "Your notes" : "Your notes"}, section ${i + 1}`,
                 }))} />

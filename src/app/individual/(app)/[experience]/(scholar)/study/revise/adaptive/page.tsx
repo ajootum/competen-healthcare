@@ -114,7 +114,7 @@ export default async function AdaptiveExam({ params, searchParams }: { params: P
               competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} programme={learner.programme?.label ?? null}
               levelDefault={loader.levelDefault} rule={ADAPTIVE_RULE} aiNote={aiNote}
               scope={adaptivePrefill(study?.scope ?? null, { materialIds: materials.ok ? materials.data.filter(m => m.chunkCount > 0).map(m => m.id) : [], competencyIds: (learner.competencies ?? []).map(c => c.id) })} />}
-        <aside aria-labelledby="adaptive-history-h" className="rounded-2xl border border-gray-200 bg-white p-5">
+        <aside aria-labelledby="adaptive-history-h" className="cmp-learn-record cmp-learn-box p-4 sm:p-5">
           <h2 id="adaptive-history-h" className="text-[15px] font-bold text-gray-900">Your adaptive exams</h2>
           <p className="text-[12.5px] text-gray-600">{ADAPTIVE_REPORT_LABEL}</p>
           {!exams.ok ? (exams.notProvisioned ? <p className="mt-2 text-[13px] text-gray-600">Exams cannot be kept on this environment yet.</p> : <Unreadable what="your adaptive exams" />)

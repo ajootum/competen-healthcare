@@ -31,6 +31,8 @@ import { loadRetentionView } from "@/lib/individual/scholar/retention-data";
 import { listTransferChecks } from "@/lib/individual/scholar/store";
 import { TRANSFER_NOTE } from "@/lib/individual/scholar/transfer";
 import { RetentionPanel } from "../_components/retention-panel";
+import { LearningSection } from "@/components/ui/scholar-learning";
+import { sectionLead, toneAction } from "../_components/progress-parts";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -168,26 +170,25 @@ export default async function Revise({ params, searchParams }: { params: Promise
       <PaneGrid bp="lg" fallbackMain="minmax(0,3fr)"
         end={{ storageKey: "scholar.revise.side.w", defaultPx: { ratio: 0.4 }, fallback: "minmax(0,2fr)", label: "Resize the revision progress panel", node: (
         <aside aria-labelledby="intel-h" className="space-y-4">
-          <h2 id="intel-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">How your revision is going</h2>
-          <p className="text-[12.5px] text-gray-600">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>
+          <h2 id="intel-h" className="text-[17px] font-bold text-gray-900">How your revision is going</h2>
+          <p className="text-[13px] leading-relaxed text-gray-700">From your own answers and reviews. Revision is practice: none of this is an assessment or evidence of competence.</p>
           {!insights ? <Unreadable what="your revision history" /> : (
             <>
               {policy.scholarRevisionRecommendations === "on" && insights.recommendations.length > 0 && (
-                <section aria-labelledby="rec-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                  <h3 id="rec-h" className="text-[14px] font-bold text-gray-900">What to revise next</h3>
+                <LearningSection tone="next" icon="target" title="What to revise next" headingId="rec-h" caps={false}>
                   <ul className="mt-2 space-y-2">
                     {insights.recommendations.map(r => (
                       <li key={r.id} className="text-[13.5px]">
                         {"learnSection" in r.action
-                          ? <Link href={`${studyHref("learn")}?section=${r.action.learnSection}`} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{r.title}</Link>
+                          ? <Link href={`${studyHref("learn")}?section=${r.action.learnSection}`} className={toneAction.link}>{r.title}</Link>
                           : <span className="font-semibold text-gray-900">{r.title}</span>}
-                        <span className="block text-[12.5px] text-gray-600">{r.reason}</span>
+                        <span className="block text-[13px] text-gray-800">{r.reason}</span>
                       </li>
                     ))}
                   </ul>
-                </section>
+                </LearningSection>
               )}
-              <dl className="grid grid-cols-2 gap-3">
+              <dl className="cmp-learn-summary grid grid-cols-2 gap-3">
                 <Stat label="Cards due now" value={String(insights.due)} />
                 <Stat label="Due in the next 7 days" value={String(insights.upcoming7)} />
                 <Stat label={`Reviews, last ${policy.scholarInsightWindowDays} days`} value={insights.completedReviews.state === "measured" ? String(insights.completedReviews.reviews) : "Not measured"} note={insights.completedReviews.state === "measured" ? null : insights.completedReviews.reason} />
@@ -197,43 +198,40 @@ export default async function Revise({ params, searchParams }: { params: Promise
                 <Stat label="Answers marked" value={`${insights.marking.deterministic + insights.marking.self_graded + insights.marking.ai_evaluation}`}
                   note={`by code ${insights.marking.deterministic} · by you ${insights.marking.self_graded} · by AI evaluation ${insights.marking.ai_evaluation}`} />
               </dl>
-              <section aria-labelledby="ret-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                <h3 id="ret-h" className="text-[14px] font-bold text-gray-900">Recall over six weeks</h3>
+              <LearningSection tone="summary" icon="clock" title="Recall over six weeks" headingId="ret-h" caps={false}>
                 {insights.retention.state !== "measured" ? <p className="mt-1 text-[13px] text-gray-600">{insights.retention.state === "insufficient" ? `Not enough reviews yet (${insights.retention.have} of ${insights.retention.need}).` : insights.retention.reason}</p> : (
-                  <table className="mt-2 w-full text-[13px]">
+                  <table className="mt-2 w-full rounded-lg bg-[var(--cmp-app-surface)] text-[13px]">
                     <caption className="sr-only">Reviews and the share graded Okay or better, by week</caption>
-                    <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col" className="font-semibold">Week of</th><th scope="col" className="font-semibold">Reviews</th><th scope="col" className="font-semibold">Recalled</th></tr></thead>
+                    <thead><tr className="text-left text-[12px] text-gray-700"><th scope="col" className="font-semibold">Week of</th><th scope="col" className="font-semibold">Reviews</th><th scope="col" className="font-semibold">Recalled</th></tr></thead>
                     <tbody>{insights.retention.weeks.map(w => (
                       <tr key={w.weekStart} className="border-t border-gray-100"><td>{new Date(`${w.weekStart}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}</td>
                         <td className="tabular-nums">{w.reviews}</td><td className="tabular-nums">{w.recalledShare === null ? "No reviews" : `${w.recalledShare}%`}</td></tr>
                     ))}</tbody>
                   </table>
                 )}
-              </section>
-              <section aria-labelledby="hard-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                <h3 id="hard-h" className="text-[14px] font-bold text-gray-900">What you keep missing</h3>
+              </LearningSection>
+              <LearningSection tone="record" icon="record" title="What you keep missing" headingId="hard-h" caps={false}>
                 {insights.repeatedDifficulties.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Nothing missed more than once.</p> : (
                   <ul className="mt-2 space-y-2">{insights.repeatedDifficulties.map(d => (
-                    <li key={d.questionId} className="text-[13px]"><span className="text-gray-900">{d.stem}</span> <span className="text-gray-500">· missed {d.misses} times</span>
-                      <Link href={`${studyHref("learn")}?section=${d.chunkId}`} className={`ml-2 font-semibold underline ${focusRing}`}>Teach me this</Link></li>
+                    <li key={d.questionId} className="text-[13px]"><span className="text-gray-900">{d.stem}</span> <span className="text-gray-700">· missed {d.misses} times</span>
+                      <Link href={`${studyHref("learn")}?section=${d.chunkId}`} className={`ml-2 ${toneAction.link}`}>Teach me this</Link></li>
                   ))}</ul>
                 )}
-              </section>
-              <section aria-labelledby="comp-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-                <h3 id="comp-h" className="text-[14px] font-bold text-gray-900">Revision by competency</h3>
-                <p className="text-[12px] text-gray-600">Questions answered on competencies your notes are linked to. Practised, not achieved.</p>
+              </LearningSection>
+              <LearningSection tone="sources" icon="library" title="Revision by competency" headingId="comp-h" caps={false}>
+                <p className="mt-2 text-[13px] text-gray-700">Questions answered on competencies your notes are linked to. Practised, not achieved.</p>
                 {insights.competencyActivity.length === 0 ? <p className="mt-1 text-[13px] text-gray-600">Not measured: none of your revision questions is linked to a competency yet. Revision works without a catalogue.</p> : (
                   <ul className="mt-2 space-y-1">{insights.competencyActivity.slice(0, 8).map(c => (
                     <li key={c.competencyId} className="flex justify-between gap-2 text-[13px]"><span className="text-gray-900">{compNames.get(c.competencyId)?.title ?? "A competency"}</span><span className="tabular-nums text-gray-600">{c.answered} answered</span></li>
                   ))}</ul>
                 )}
-              </section>
+              </LearningSection>
             </>
           )}
         </aside>
         ) }}>
         <div className="space-y-5">
-          {retention && <RetentionPanel v={retention} accent={x.accent} />}
+          {retention && <RetentionPanel v={retention} />}
           <RevisionStart modes={policy.scholarRevisionModes} formats={formats} quantity={policy.scholarRevisionQuantity}
             difficulty={policy.scholarRevisionDifficulty} feedback={policy.scholarRevisionFeedback} materials={mats}
             competencies={(learner.competencies ?? []).map(c => ({ id: c.id, title: c.title }))} aiNote={aiNote}
@@ -242,59 +240,55 @@ export default async function Revise({ params, searchParams }: { params: Promise
             scope={q.material ? null : revisePrefill(study?.scope ?? null, { materialIds: mats.map(m => m.id), competencyIds: (learner.competencies ?? []).map(c => c.id) })} />
 
           {toFix?.ok && (
-            <Link href={withStudy(studyHref("revise/mistakes"), sid)} className={`flex min-h-[44px] items-center justify-between gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-3 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-              <span className="text-[14.5px] font-semibold text-gray-900">Mistake notebook ({toFix.data} to fix)</span>
-              <span className="text-[12.5px] text-gray-600">Your wrong answers, with the answer and why</span>
+            <Link href={withStudy(studyHref("revise/mistakes"), sid)} className={`cmp-learn-record cmp-learn-box flex min-h-[44px] flex-wrap items-center justify-between gap-x-3 gap-y-1 px-5 py-3 hover:opacity-90 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+              <span className="cmp-learn-ink text-[14.5px] font-semibold">Mistake notebook ({toFix.data} to fix)</span>
+              <span className="text-[13px] text-gray-800">Your wrong answers, with the answer and why</span>
             </Link>
           )}
 
           {policy.scholarAdaptiveExams === "on" && (
-            <section aria-labelledby="adaptive-h" className="rounded-2xl border border-gray-200 bg-white p-5">
-              <h2 id="adaptive-h" className="text-[15px] font-bold text-gray-900">Adaptive exam</h2>
-              <p className="mt-0.5 text-[13px] text-gray-600">{ADAPTIVE_HELP}</p>
-              <p className="mt-2 rounded-lg bg-[var(--cmp-theme-soft)] px-3 py-2 text-[12.5px] text-gray-800"><span className="font-semibold">How it adapts: </span>{ADAPTIVE_RULE}</p>
+            <LearningSection tone="check" icon="question" title="Adaptive exam" level={2} headingId="adaptive-h" caps={false}>
+              <p className={sectionLead}>{ADAPTIVE_HELP}</p>
+              <p className="mt-2 rounded-lg bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] px-3 py-2 text-[13px] text-gray-800"><span className="font-semibold">How it adapts: </span>{ADAPTIVE_RULE}</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link href={withStudy(adaptiveHref(), sid)} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Set up an adaptive exam</Link>
+                <Link href={withStudy(adaptiveHref(), sid)} className={toneAction.primary}>Set up an adaptive exam</Link>
                 {examsActive.map(e => (
-                  <Link key={e.session.id} href={adaptiveHref(e.session.id)} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>Carry on: {e.title} ({e.session.position} answered)</Link>
+                  <Link key={e.session.id} href={adaptiveHref(e.session.id)} className={`text-[13.5px] ${toneAction.link}`}>Carry on: {e.title} ({e.session.position} answered)</Link>
                 ))}
               </div>
-            </section>
+            </LearningSection>
           )}
 
           {policy.scholarFlashcards === "on" && (
-            <section aria-labelledby="flashcards-h" className="rounded-2xl border border-gray-200 bg-white p-5">
-              <h2 id="flashcards-h" className="text-[15px] font-bold text-gray-900">Flashcards</h2>
-              <p className="mt-0.5 text-[13px] text-gray-600">Recall the answer, flip the card, and say whether you remembered: it comes back sooner or later on your spaced review schedule. From your notes, the Competen library and your learning gaps, or cards you write yourself, in decks you can download.</p>
+            <LearningSection tone="quickCheck" icon="cards" title="Flashcards" level={2} headingId="flashcards-h" caps={false}>
+              <p className={sectionLead}>Recall the answer, flip the card, and say whether you remembered: it comes back sooner or later on your spaced review schedule. From your notes, the Competen library and your learning gaps, or cards you write yourself, in decks you can download.</p>
               <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Link href={withStudy(flashcardsHref(), sid)} className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Open Flashcards</Link>
-                <Link href={flashcardsHref({ view: "decks" })} className={`text-[13.5px] font-semibold underline underline-offset-2 ${focusRing}`}>My Decks</Link>
+                <Link href={withStudy(flashcardsHref(), sid)} className={toneAction.primary}>Open Flashcards</Link>
+                <Link href={flashcardsHref({ view: "decks" })} className={toneAction.secondary}>My Decks</Link>
               </div>
-            </section>
+            </LearningSection>
           )}
 
           {active.length > 0 && (
-            <section aria-labelledby="resume-h" className="rounded-2xl border border-gray-200 bg-white p-5">
-              <h2 id="resume-h" className="text-[15px] font-bold text-gray-900">Carry on where you left off</h2>
+            <LearningSection tone="next" icon="arrow" title="Carry on where you left off" level={2} headingId="resume-h" caps={false}>
               <ul className="mt-2 space-y-1.5">
                 {active.map(s => (
-                  <li key={s.id}><Link href={`${studyHref("revise")}?session=${s.id}`} className={`text-[14px] font-semibold underline underline-offset-2 ${focusRing}`}>{REVISION_MODE_LABEL[s.mode as RevisionMode] ?? "Revision"}</Link>
-                    <span className="text-[12.5px] text-gray-500"> · {s.position} of {s.total} answered · {new Date(s.lastActiveAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></li>
+                  <li key={s.id}><Link href={`${studyHref("revise")}?session=${s.id}`} className={`text-[14px] ${toneAction.link}`}>{REVISION_MODE_LABEL[s.mode as RevisionMode] ?? "Revision"}</Link>
+                    <span className="text-[13px] text-gray-700"> · {s.position} of {s.total} answered · {new Date(s.lastActiveAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</span></li>
                 ))}
               </ul>
-            </section>
+            </LearningSection>
           )}
 
-          <section aria-labelledby="sets-h" className="rounded-2xl border border-gray-200 bg-white p-5">
-            <h2 id="sets-h" className="text-[15px] font-bold text-gray-900">Saved revision sets</h2>
-            <p className="text-[12.5px] text-gray-600">Revising a saved set again uses its stored questions and answers: no new AI, so it is always available.</p>
-            {!sets.ok ? (sets.notProvisioned ? <p className="mt-2 text-[13px] text-gray-600">Saved sets are not available here yet.</p> : <Unreadable what="saved revision sets" />)
-              : sets.data.length === 0 ? <p className="mt-2 text-[13px] text-gray-600">None yet. After a session, you can save its questions as a set.</p>
+          <LearningSection tone="notes" icon="layers" title="Saved revision sets" level={2} headingId="sets-h" caps={false}>
+            <p className={sectionLead}>Revising a saved set again uses its stored questions and answers: no new AI, so it is always available.</p>
+            {!sets.ok ? (sets.notProvisioned ? <p className="mt-2 text-[13.5px] text-gray-800">Saved sets are not available here yet.</p> : <Unreadable what="saved revision sets" />)
+              : sets.data.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">None yet. After a session, you can save its questions as a set.</p>
                 : <SavedSets sets={sets.data.map(s => ({ id: s.id, title: s.title, questions: s.questionIds.length, lastUsedAt: s.lastUsedAt }))} />}
-          </section>
+          </LearningSection>
 
           <section aria-labelledby="cards-h">
-            <h2 id="cards-h" className="mb-2 text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Review cards due</h2>
+            <h2 id="cards-h" className="mb-2 text-[17px] font-bold text-gray-900">Review cards due</h2>
             {!cards.ok ? (cards.notProvisioned
               ? <StatePanel title="Revision is not set up here yet"><p>The study store it needs has not been installed here.</p></StatePanel>
               : <Unreadable what="review cards" />)
@@ -308,10 +302,10 @@ export default async function Revise({ params, searchParams }: { params: Promise
 
 function Stat({ label, value, note }: { label: string; value: string; note?: string | null }) {
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-3">
-      <dt className="text-[12px] font-semibold text-gray-500">{label}</dt>
-      <dd className="mt-0.5 text-[18px] font-bold text-gray-900 tabular-nums">{value}</dd>
-      {note && <dd className="text-[11.5px] text-gray-600">{note}</dd>}
+    <div className="cmp-learn-box p-3">
+      <dt className="text-[12.5px] font-semibold text-gray-700">{label}</dt>
+      <dd className="cmp-learn-ink mt-0.5 text-[18px] font-bold tabular-nums">{value}</dd>
+      {note && <dd className="text-[12px] text-gray-700">{note}</dd>}
     </div>
   );
 }

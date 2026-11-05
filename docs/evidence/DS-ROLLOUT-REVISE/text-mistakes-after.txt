@@ -1,0 +1,368 @@
+For learning only — AI can be incomplete or wrong. Check against your course materials and current local guidelines.
+Full disclaimer
+
+REVISE
+
+Mistake notebook
+
+The questions you got wrong, with the answer and why. A question is corrected when you later answer it right.
+
+✦
+AI help on
+Learn
+Revise
+43
+cards due
+Apply
+Evaluate
+
+Back to Revise
+
+Formative learning only · Private to you · Not verified clinical competence
+
+Show
+Still to fix (26)
+All mistakes (32)
+Material
+All materials
+Essential Nursing Care of the Critically Ill (1)
+Quality Improvement Science and Methods (25)
+Apply
+
+26 still to fix of 32 mistakes; showing 26.
+
+Revise what I got wrong
+Quality Improvement Science and Methods · 25 to fix of 25
+Revise these
+Still to fix
+Missed 1 time · last 4 Nov 2026
+
+In the passage, the phrase 'final (rather than in process) outcomes' distinguishes final outcomes from what?
+
+Your answer: Plan, do, study, act: test a small change, measure it, and adjust before spreading it.(Your own judgement, against the stored answer)
+The answer: In process outcomes (also accepted: Process outcomes)
+Why: The passage contrasts final outcomes with in process outcomes.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 28 times · last 4 Nov 2026
+
+A dose of 500 mg is prescribed. The suspension contains 250 mg in 5 mL. What volume should be given, in mL?
+
+Your answer: Not recorded(Marked against the stored answer)
+The answer: 10 mL
+Why: Dose divided by strength, times the volume.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 10 times · last 4 Nov 2026
+
+How is concentrated potassium chloride given?
+
+Your answer: as an IV bolus(Marked against the stored answer)
+The answer: by diluted infusion (also accepted: diluted infusion)
+Why: Concentrated potassium is diluted and given by infusion; never as an intravenous bolus.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 7 times · last 4 Nov 2026
+
+These observations were recorded.
+
+Your answer: (a) sepsis; (b) no answer(Marked against the stored answer)
+The answer: (a) possible sepsis; (b) escalate to the medical team
+Why: Fever and tachycardia together suggest sepsis.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 7 times · last 4 Nov 2026
+
+A patient on the ward has a new fever and a fast pulse.
+
+Your answer: (a) Give a fluid bolus without review; (b) It will raise the blood pressure(Your own judgement, against the stored answer)
+The answer: (a) Escalate to the medical team; (b) Sepsis needs urgent escalation to the medical team
+Why: Sepsis needs urgent escalation to the medical team.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 4 Nov 2026
+
+In the Study phase, Jane learned something that went beyond what the team had predicted — can you explain what that unexpected learning was and why it matters for improvement?
+
+Your answer: LESSON 8 OF 8 Current · Taught · Checked: not yet In this lesson: Describe PDSA worksheet. TEACH ME ✦ AI-generated from your notes, not clinically reviewed FROM YOUR NOTES These passages walk through a complete PDSA cycle — Plan, Do, Study, Act — using a real worked example of testing Teach-Back with patients. Understanding how each phase connects helps you see why this cycle is a practical tool for testing and learning from change in improvement projects . The PDSA cycle structures a test of change into four phases: planning the test, carrying it out, studying what happene(AI evaluation: an AI judged your answer against your notes. Not verified.)
+The answer: Beyond confirming the predictions, Jane realized the medication information sheets weren't as clear as she thought [S6]. The Study phase surfaces learning the team did not predict, not only whether predictions came true [S6]. That unexpected learning matters because it feeds the Act phase and the next cycle — here, re-writing the sheets with parent input [S7].
+
+Formative AI feedback on your written answer. Not self-assessment, not verified, not a measure of competence.
+
+What you got right: Nothing in your answer addressed the check question itself, so there is not yet anything to confirm about Jane's unexpected learning..
+Missing concepts: The unexpected learning was that Jane realized the medication information sheets she had been handing out to parents weren't as clear as she thought [S6].; She realized these should be re-written — maybe with the input of some parents [S6].; This went beyond the predictions: the team confirmed all three predictions, and this learning came in addition to that [S6].; Why it matters: this learning shaped the next cycle — they would like to pull together a team to work on the medication information sheets with parent input, gathering more information first [S7]..
+Misconceptions: Your reply seems to have pasted back the lesson introduction rather than answering the question. That is an easy slip, but it does not describe Jane's unexpected learning, so try putting it in your own words [S6]..
+Why the answer holds: Beyond confirming the predictions, Jane realized the medication information sheets weren't as clear as she thought [S6]. The Study phase surfaces learning the team did not predict, not only whether predictions came true [S6]. That unexpected learning matters because it feeds the Act phase and the next cycle — here, re-writing the sheets with parent input [S7].
+What to revise next: Re-read slide 48 [S6], then try describing in one sentence what Jane noticed about the sheets and what she decided should happen to them [S7].
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 4 times · last 4 Nov 2026
+
+How does the Study phase go beyond simply checking whether predictions came true?
+
+Your answer: I am not sure. I think you just give the patient more medicine and wait.(AI evaluation: an AI judged your answer against your notes. Not verified.)
+The answer: Study compares predictions to results — for example, the prediction that it would take more time at first, against the result that Teach-Back took about 5 minutes per patient [S5]. It goes further by capturing learning no one predicted, such as Jane's realisation about the medication information sheets [S6].
+
+Formative AI feedback on your written answer. Not self-assessment, not verified, not a measure of competence.
+
+What you got right: It is honest to say you are not sure, and that is a good place to start from..
+Missing concepts: The Study phase is where you summarize and reflect on what you learned, comparing each prediction to the result [S5][S6].; Beyond confirming predictions, it surfaces learning the team did not predict — for example, Jane realized the medication information sheets she had been handing out to parents weren’t as clear as she thought [S6].; It also records what happened and the observations made, such as that the patient was able to Teach-Back the instructions successfully after a second review [S4][S6]..
+Why the answer holds: Study means you observe, analyze, and learn from the test [S1]. You compare predictions against results — here all predictions were confirmed [S6]. It also captures unexpected learning, like the information sheets needing to be re-written, maybe with parent input [S6].
+What to revise next: Try re-reading slide 48 [S6], then ask yourself: how does what Jane learned in Study shape the Act phase decisions on slide 49 [S7]?
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+According to the passage, Quality Improvement aims to achieve better patient experience and what else?
+
+Your answer: Study compares results with predictions(Your own judgement, against the stored answer)
+The answer: better patient outcomes (also accepted: outcomes)
+Why: The passage states Quality Improvement is about better patient experience and outcomes.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+In the passage's definition, what is changed to achieve better patient experience and outcomes?
+
+Your answer: Study compares results with predictions(Your own judgement, against the stored answer)
+The answer: provider behaviour and organisation (also accepted: changing provider behaviour and organisation)
+Why: The passage says better experience and outcomes are achieved through changing provider behaviour and organisation.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+What kind of change methods and strategies does the passage say Quality Improvement uses?
+
+Your answer: Study compares results with predictions(Your own judgement, against the stored answer)
+The answer: systematic change methods and strategies (also accepted: systematic)
+Why: The passage describes the methods and strategies used as systematic.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+According to the objectives, which of the following are things the passage states will be defined? Select all that apply.
+
+Your answer: A. Quality(Marked against the stored answer)
+The answer: Quality; Quality Improvement
+Why: The passage lists 'Define Quality' and 'Define Quality Improvement', whereas dimensions and the Model are to be described, not defined.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+According to the objectives, which of the following are things the passage states will be described? Select all that apply.
+
+Your answer: A. The dimensions of Quality(Marked against the stored answer)
+The answer: The dimensions of Quality; The Model for Improvement
+Why: The passage lists 'Describe the dimensions of Quality' and 'Describe the Model for Improvement', whereas Quality and Quality Improvement are to be defined.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+Which of the following are listed among the objectives in the passage? Select all that apply.
+
+Your answer: A. Quality measures/indicators(Marked against the stored answer)
+The answer: Quality measures/indicators; Define Quality; The dimensions of Quality
+Why: The passage lists 'Quality measures/indicators', 'Define Quality' and 'Describe the dimensions of Quality' among its objectives; 'Define the objectives of measures' is not stated.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+Match each element of the Quality Improvement definition to its description
+
+Your answer: What is improved for patients → Using systematic change methods and strategies; What is changed to achieve this → Provider behaviour and organisation; How the change is made → Better patient experience and outcomes(Marked against the stored answer)
+The answer: What is improved for patients → Better patient experience and outcomes; What is changed to achieve this → Provider behaviour and organisation; How the change is made → Using systematic change methods and strategies
+Why: The passage defines Quality Improvement as better patient experience and outcomes achieved through changing provider behaviour and organisation using systematic change methods and strategies.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+Quality Improvement and _____: Science and Methods
+
+Your answer: Study compares results with predictions(Marked against the stored answer)
+The answer: Patient Safety Plan
+Why: Your notes say: Quality Improvement and Patient Safety Plan: Science and Methods
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+Waldman, J.D. & Schargel, F.P., 2006, ‘Twins in trouble (II): Systems thinking in healthcare and education’, _____ 17(1), 117–130. http://dx.doi.org/10.1080/14783360500250040
+
+Your answer: Study compares results with predictions(Marked against the stored answer)
+The answer: Total Quality Management
+Why: Your notes say: Waldman, J.D. & Schargel, F.P., 2006, ‘Twins in trouble (II): Systems thinking in healthcare and education’, Total Quality Management 17(1), 117–130. http://dx.doi.org/10.1080/14783360500250040
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+The _____ describes perceivers’ tendency to underestimate the impact of situational factors on human behavior and to overestimate the impact of dispositional factors.
+
+Your answer: Study compares results with predictions(Marked against the stored answer)
+The answer: fundamental attribution error
+Why: Your notes say: The fundamental attribution error describes perceivers’ tendency to underestimate the impact of situational factors on human behavior and to overestimate the impact of dispositional factors.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+By contrast, a _____ recognizes that individual practitioners should not be held accountable for system failings over which they have no control.
+
+Your answer: Study compares results with predictions(Marked against the stored answer)
+The answer: Just Culture
+Why: Your notes say: By contrast, a Just Culture recognizes that individual practitioners should not be held accountable for system failings over which they have no control.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+_____-Do-Study-Act (PDSA) cycle is shorthand for testing a change in the real work setting — by planning it, trying it, observing the results, and acting on what is learned.
+
+Your answer: Study compares results with predictions(Marked against the stored answer)
+The answer: Testing Changes The Plan
+Why: Your notes say: Testing Changes The Plan-Do-Study-Act (PDSA) cycle is shorthand for testing a change in the real work setting — by planning it, trying it, observing the results, and acting on what is learned.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+Order these three elements of the WHO patient safety definition as the passage lists them, ending with the response to adverse outcomes already occurring?
+
+Your answer: Amelioration → Prevention → Avoidance(Marked against the stored answer)
+The answer: Avoidance → Prevention → Amelioration
+Why: The passage lists the WHO patient safety definition as the avoidance, prevention, and amelioration of adverse outcomes or injuries stemming from the processes of health care.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+In the passage's definition, for whom are health services considered when defining quality? Select all that apply.
+
+Your answer: A. Individuals(Marked against the stored answer)
+The answer: Individuals; Populations
+Why: The passage states quality is the degree to which health services for individuals and populations meet the stated criteria.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+According to the passage, quality in healthcare is the degree to which health services do which of the following? Select all that apply.
+
+Your answer: A. Increase the likelihood of desired health outcomes(Marked against the stored answer)
+The answer: Increase the likelihood of desired health outcomes; Are consistent with current professional knowledge
+Why: The passage defines quality as the degree to which health services increase the likelihood of desired health outcomes and are consistent with current professional knowledge.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+What does a fishbone diagram show?
+
+Your answer: You rated your recall 1 of 5: not remembered(Your own judgement, against the stored answer)
+The answer: Possible causes of a problem, grouped by category.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+What is a balancing measure?
+
+Your answer: You rated your recall 1 of 5: not remembered(Your own judgement, against the stored answer)
+The answer: A check that a change has not caused problems elsewhere.
+
+Teach me this
+Show the source
+
+Still to fix
+Missed 1 time · last 1 Nov 2026
+
+What does PDSA stand for?
+
+Your answer: You rated your recall 1 of 5: not remembered(Your own judgement, against the stored answer)
+The answer: Plan, Do, Study, Act.
+
+Teach me this
+Show the source
+
+Essential Nursing Care of the Critically Ill · 1 to fix of 1
+Revise these
+Still to fix
+Missed 1 time · last 4 Nov 2026
+
+If your assessment finds that a patient's lids do not close fully but only the white of the eye is visible, what would follow in your care, and why does that grade matter?
+
+Your answer: A daily bed bath is standard care, with frequency increased for patients who are sweating, incontinent, bleeding, or have leaking wounds. Prophylactic pain relief before a bed bath may be appropriate because being moved is painful for many critically ill patients. Heat loss during a bed bath can cause vasoconstriction, which may lead to cardiovascular instability. Patients requiring total care must be handled carefully during repositioning to reduce friction and shear. Tears moisten the eyes and have antimicrobial properties; when eyes cannot close, the tear film evaporates more quickly. The b(AI evaluation: an AI judged your answer against your notes. Not verified.)
+The answer: The white of the eye showing with no cornea is Grade 1 [S8]. Grade 1 care: bathe the eye in warm water with gauze, examine it, apply ointment every 4 hours [S9]. The grade matters because it decides the care — ointment for Grade 1, taping for Grade 2 corneal exposure [S8][S9][S10].
+
+Formative AI feedback on your written answer. Not self-assessment, not verified, not a measure of competence.
+
+What you got right: You correctly stated that tears moisten the eyes and have antimicrobial properties, and that when eyes cannot close the tear film evaporates more quickly [S5]..
+Missing concepts: The check asked specifically about lids not closing fully with only the white of the eye visible — this is Grade 1, meaning any conjunctival exposure with no cornea [S8].; You did not say what care follows: bathe the eye in warm water with gauze, examine the eye, and apply ointment to the eye surface every 4 hours [S9].; You did not say why the grade matters — Grade 1 shows the conjunctiva is exposed but the cornea is not, which is what guides you to ointment rather than taping [S8][S9][S10].; When you examine the eye, the passages name what to look for: redness, corneal opacity/dullness, swelling/chemosis [S9]..
+Misconceptions: Most of your answer described the bed bath, pain relief, heat loss and skin tears [S2][S3][S4]. These are accurate points, but they answer a different question. It is a natural slip to recall well-learned material, but the check was about eye care for a patient with conjunctival exposure..
+Why the answer holds: The white of the eye showing with no cornea is Grade 1 [S8]. Grade 1 care: bathe the eye in warm water with gauze, examine it, apply ointment every 4 hours [S9]. The grade matters because it decides the care — ointment for Grade 1, taping for Grade 2 corneal exposure [S8][S9][S10].
+What to revise next: Re-read slide 18 and practise naming the Grade 1 steps in order before linking them to why the grade guides care [S9][S8].
+
+Teach me this
+Show the source
+
+Competen Scholar · Your learning belongs to you. Privacy & AI controls

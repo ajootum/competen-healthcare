@@ -5,7 +5,7 @@ import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { useRouter } from "next/navigation";
 import { useCallback, useMemo, useState } from "react";
-import { SCHOLAR } from "@/lib/individual/experiences";
+import { LearningCallout, LearningIcon, LearningSectionHead, ProgressMark, learnAction, learnBox, type ProgressState } from "@/components/ui/scholar-learning";
 import { sourceHref, studyHref } from "./question-view";
 import {
   CALCULATION_LABEL, EXTENDED_LABEL, EXTENDED_RESPONSE_MAX, MARKED_AGAINST_NOTES, MOCK_LABEL, SCENARIO_LABEL, TRUE_FALSE_LABEL, REVISION_DIFFICULTIES, REVISION_FORMAT_LABEL, REVISION_MODE_HELP, REVISION_MODE_LABEL,
@@ -39,10 +39,12 @@ import { ROLE_LABEL, VARIANT_LABEL, isReasoningPart, roundingText, type Finding 
 // SCHOLAR-SQIE-CLOSE-01: a structured question is its parts, each with its own answer box and marks, marked part by part
 // and totalled as practice marks (formative). A governed library question is labelled as such and cites the library.
 
-const accent = SCHOLAR.accent;
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 disabled:opacity-50 ${focusRing}`;
-const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${focusRing}`;
+// Scholar learning design system (DS rollout, Revise): the actions read --learn-* from the tone of the section they sit in.
+const btn = learnAction.primary;
+const ghost = learnAction.secondary;
+const whiteCard = "rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]";
+const smallCaps = "text-[12px] font-semibold uppercase tracking-wide text-gray-700";
 const field = `rounded-lg border border-gray-300 px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
 async function call(url: string, body?: unknown, method = "POST"): Promise<{ ok: boolean; status: number; json: Record<string, any> }> { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -110,29 +112,29 @@ export function RevisionStart(props: {
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
   if (unsaved) return <RevisionRunner session={null} items={unsaved.items} answered={[]} label={unsaved.label} />;
   return (
-    <section aria-labelledby="start-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
-      <h2 id="start-h" className="text-[16px] font-bold text-gray-900">Revise</h2>
-      <p className="mt-0.5 text-[13.5px] text-gray-600">From your own notes. Formative practice: not an assessment and not evidence of competence.</p>
+    <section aria-labelledby="start-h" className={`${learnBox("next")} p-4 sm:p-5`}>
+      <LearningSectionHead icon="target" title="Revise" id="start-h" level={2} caps={false} />
+      <p className="mt-2 max-w-[68ch] text-[13.5px] leading-relaxed text-gray-800">From your own notes. Formative practice: not an assessment and not evidence of competence.</p>
       {props.modes.includes("today") && (
-        <button type="button" className={`${btn} mt-4 w-full sm:w-auto`} style={{ background: accent }} disabled={!!busy} onClick={() => start("today", false)}>
+        <button type="button" className={`${btn} mt-4 w-full sm:w-auto`} disabled={!!busy} onClick={() => start("today", false)}>
           {busy === "today" ? "Preparing your revision…" : "Start Today's Revision"}
         </button>
       )}
-      {props.aiNote && <p className="mt-2 text-[12.5px] text-gray-600">{props.aiNote}</p>}
+      {props.aiNote && <p className="mt-2 text-[13px] text-gray-800">{props.aiNote}</p>}
       <ul className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
         {props.modes.filter(m => m !== "today" && m !== "custom").map(m => (
           <li key={m}>
             <button type="button" disabled={!!busy} onClick={() => start(m, false)}
-              className={`w-full rounded-xl border border-gray-200 p-3 text-left hover:bg-gray-50 disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+              className={`w-full ${whiteCard} p-3 text-left hover:bg-[var(--learn-surface)] disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
               <span className="block text-[14px] font-semibold text-gray-900">{busy === m ? "Preparing…" : REVISION_MODE_LABEL[m]}</span>
-              <span className="block text-[12.5px] text-gray-600">{REVISION_MODE_HELP[m]}</span>
+              <span className="block text-[13px] text-gray-700">{REVISION_MODE_HELP[m]}</span>
             </button>
           </li>
         ))}
       </ul>
       <button type="button" className={`${ghost} mt-4`} aria-expanded={open} aria-controls="choose-revision" onClick={() => setOpen(o => !o)}>Choose what and how to revise</button>
       {open && (
-        <form id="choose-revision" className="mt-3 space-y-4 rounded-xl border border-gray-200 p-4" onSubmit={e => { e.preventDefault(); void start(mode, true); }}>
+        <form id="choose-revision" className={`mt-3 space-y-4 ${whiteCard} p-4`} onSubmit={e => { e.preventDefault(); void start(mode, true); }}>
           <fieldset>
             <legend className="text-[13px] font-semibold text-gray-800">Way of revising</legend>
             <select value={mode} onChange={e => setMode(e.target.value as RevisionMode)} className={`${field} mt-1`} aria-label="Way of revising">
@@ -143,7 +145,7 @@ export function RevisionStart(props: {
             <legend className="text-[13px] font-semibold text-gray-800">What to revise</legend>
             <div className="mt-1 flex flex-wrap gap-3 text-[13.5px]">
               {(["library", "documents", "topic", "competency"] as const).filter(k => k !== "competency" || props.competencies.length).map(k => (
-                <label key={k} className="inline-flex items-center gap-1.5"><input type="radio" name="scope" checked={scopeKind === k} onChange={() => setScopeKind(k)} />
+                <label key={k} className="inline-flex items-center gap-1.5 pointer-coarse:min-h-[var(--cmp-touch-min)]"><input type="radio" name="scope" checked={scopeKind === k} onChange={() => setScopeKind(k)} />
                   {k === "library" ? "All my notes" : k === "documents" ? "Chosen materials" : k === "topic" ? "A topic" : "A competency"}</label>
               ))}
             </div>
@@ -153,7 +155,7 @@ export function RevisionStart(props: {
             )}
             {scopeKind === "documents" && (
               <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto">
-                {props.materials.map(m => <li key={m.id}><label className="inline-flex items-center gap-1.5 text-[13.5px]"><input type="checkbox" checked={chosen.includes(m.id)} onChange={() => setChosen(c => toggle(c, m.id))} />{m.title}</label></li>)}
+                {props.materials.map(m => <li key={m.id}><label className="inline-flex items-center gap-1.5 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)]"><input type="checkbox" checked={chosen.includes(m.id)} onChange={() => setChosen(c => toggle(c, m.id))} />{m.title}</label></li>)}
               </ul>
             )}
             {scopeKind === "topic" && <input aria-label="Topic" maxLength={120} value={topic} onChange={e => setTopic(e.target.value)} placeholder="For example: oxygen therapy" className={`${field} mt-2 w-full`} />}
@@ -167,7 +169,7 @@ export function RevisionStart(props: {
           <fieldset>
             <legend className="text-[13px] font-semibold text-gray-800">Question formats</legend>
             <div className="mt-1 flex flex-wrap gap-3 text-[13.5px]">
-              {props.formats.map(f => <label key={f} className="inline-flex items-center gap-1.5"><input type="checkbox" checked={formats.includes(f)} onChange={() => setFormats(x => toggle(x, f))} />{REVISION_FORMAT_LABEL[f]}</label>)}
+              {props.formats.map(f => <label key={f} className="inline-flex items-center gap-1.5 pointer-coarse:min-h-[var(--cmp-touch-min)]"><input type="checkbox" checked={formats.includes(f)} onChange={() => setFormats(x => toggle(x, f))} />{REVISION_FORMAT_LABEL[f]}</label>)}
             </div>
             {/* CE-05: structured and scenario questions are answered in steps, so they need feedback after each answer. */}
             {feedback === "end" && formats.some(f => f === "structured" || f === "scenario") && (
@@ -196,17 +198,14 @@ export function RevisionStart(props: {
               </select>
             </label>
           </div>
-          <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !formats.length || (scopeKind === "documents" && !chosen.length) || (scopeKind === "topic" && topic.trim().length < 2) || (scopeKind === "competency" && !competency)}>
+          <button type="submit" className={btn} disabled={!!busy || !formats.length || (scopeKind === "documents" && !chosen.length) || (scopeKind === "topic" && topic.trim().length < 2) || (scopeKind === "competency" && !competency)}>
             {busy ? "Preparing…" : "Start revising"}
           </button>
         </form>
       )}
       {note && <p role="status" className="mt-3 text-[13px] text-gray-700">{note}</p>}
       {continuity && (
-        <div role="status" className="mt-3 rounded-xl border border-sky-200 bg-sky-50/60 p-4">
-          <p className="text-[12px] font-bold uppercase tracking-[0.1em] text-sky-900">No new questions right now</p>
-          <p className="mt-1 text-[14px] text-gray-800">{continuity}</p>
-        </div>
+        <div role="status" className="mt-3"><LearningCallout tone="aiBeyond" icon="robot" label="No new questions right now"><p>{continuity}</p></LearningCallout></div>
       )}
       {error && <p role="alert" className="mt-3 text-[13.5px] font-semibold text-red-800">{error}</p>}
     </section>
@@ -235,11 +234,11 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
   }
   return (
     <>
-      <ul className="mt-2 divide-y divide-gray-100 rounded-xl border border-gray-200">
+      <ul className="mt-2 space-y-2">
         {sets.map(s => (
-          <li key={s.id} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2">
+          <li key={s.id} className={`flex flex-wrap items-center justify-between gap-2 ${whiteCard} px-3 py-2`}>
             <span className="min-w-0 flex-1 text-[14px]"><span className="font-semibold text-gray-900">{s.title}</span>
-              <span className="text-[12.5px] text-gray-500"> · {s.questions} question{s.questions === 1 ? "" : "s"}{s.lastUsedAt ? ` · last ${new Date(s.lastUsedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span></span>
+              <span className="text-[13px] text-gray-700"> · {s.questions} question{s.questions === 1 ? "" : "s"}{s.lastUsedAt ? ` · last ${new Date(s.lastUsedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` : ""}</span></span>
             <span className="flex gap-2">
               <button type="button" className={ghost} disabled={!!busy} onClick={() => replay(s.id)}>{busy === s.id ? "Starting…" : "Revise again"}</button>
               <button type="button" className={ghost} disabled={!!busy} onClick={() => remove(s.id)} aria-label={`Remove ${s.title}`}>{busy === `d${s.id}` ? "Removing…" : "Remove"}</button>
@@ -298,30 +297,30 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
   }
 
   return (
-    <section aria-labelledby="run-h" className="rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">
+    <section aria-labelledby="run-h" className={`${learnBox("check")} p-4 sm:p-5`}>
       <div className="flex flex-wrap items-center gap-3">
-        <h2 id="run-h" className="text-[16px] font-bold text-gray-900">{REVISION_MODE_LABEL[state.session?.mode as RevisionMode] ?? "Revision"}</h2>
-        <p className="text-[12.5px] font-semibold text-gray-500 tabular-nums">{answeredIds.size} of {items.length} answered</p>
-        <div className="h-1.5 min-w-[120px] flex-1 rounded-full bg-gray-100" aria-hidden><div className="h-1.5 rounded-full" style={{ width: `${(answeredIds.size / Math.max(1, items.length)) * 100}%`, background: accent }} /></div>
-        <Link href={revisionHref()} className={`text-[13px] underline ${focusRing}`}>Leave (it is kept)</Link>
+        <LearningSectionHead icon="question" title={REVISION_MODE_LABEL[state.session?.mode as RevisionMode] ?? "Revision"} id="run-h" level={2} caps={false} className="min-w-[10rem] flex-1" />
+        <p className="text-[13px] font-semibold text-gray-800 tabular-nums">{answeredIds.size} of {items.length} answered</p>
+        <div className="h-1.5 min-w-[120px] flex-1 rounded-full bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]" aria-hidden><div className="h-1.5 rounded-full bg-[var(--learn-accent)]" style={{ width: `${(answeredIds.size / Math.max(1, items.length)) * 100}%` }} /></div>
+        <Link href={revisionHref()} className={learnAction.link}>Leave (it is kept)</Link>
       </div>
-      {(props.label || state.session?.mode === "mock") && <p className="mt-2 rounded-lg bg-gray-50 px-3 py-1.5 text-[12.5px] text-gray-700">{props.label ?? MOCK_LABEL}</p>}
-      {!sid && <p className="mt-2 text-[12.5px] text-gray-600">This session is not kept, so it cannot be resumed later.</p>}
+      {(props.label || state.session?.mode === "mock") && <p className={`mt-2 ${whiteCard} px-3 py-1.5 text-[13px] text-gray-800`}>{props.label ?? MOCK_LABEL}</p>}
+      {!sid && <p className="mt-2 text-[13px] text-gray-800">This session is not kept, so it cannot be resumed later.</p>}
 
       {summary ? (
         <div className="mt-4 space-y-4">
           <p className="text-[15px] font-semibold text-gray-900">Session finished: {summary.correct} of {summary.of} matched your notes.</p>
           {(summary.toGrade ?? 0) > 0 && <p className="text-[13px] text-gray-700">{summary.toGrade} short answer{summary.toGrade === 1 ? "" : "s"} could not be marked automatically. Compare {summary.toGrade === 1 ? "it" : "each"} with your notes below and mark it yourself.</p>}
           {Object.keys(summary.byMarking).length > 0 && (
-            <p className="text-[12.5px] text-gray-600">Marked by code: {summary.byMarking.deterministic ?? 0} · by you: {summary.byMarking.self_graded ?? 0} · by AI evaluation: {summary.byMarking.ai_evaluation ?? 0}</p>
+            <p className="text-[13px] text-gray-800">Marked by code: {summary.byMarking.deterministic ?? 0} · by you: {summary.byMarking.self_graded ?? 0} · by AI evaluation: {summary.byMarking.ai_evaluation ?? 0}</p>
           )}
           <ol className="space-y-3">
             {items.map((i, n) => { const a = state.answered.find(x => x.questionId === i.id); return (
-              <li key={i.id} className="rounded-xl border border-gray-200 p-3">
+              <li key={i.id} className={`${whiteCard} p-3`}>
                 <p className="text-[14px] font-semibold text-gray-900">{n + 1}. {i.stem}</p>
                 {a?.feedback ? <FeedbackPanel f={a.feedback} sessionId={sid} compact questionId={i.id} stem={i.stem} />
                   : a?.selfGrade && sid ? <GradeAtEnd questionId={i.id} sessionId={sid} g={a.selfGrade} onGraded={graded} />
-                    : <p className="text-[13px] text-gray-500">Not answered.</p>}
+                    : <p className="text-[13px] text-gray-700">Not answered.</p>}
               </li>
             ); })}
           </ol>
@@ -342,13 +341,13 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
           <nav aria-label="Questions" className="mt-3 flex flex-wrap gap-1.5">
             {items.map((i, n) => (
               <button key={i.id} type="button" onClick={() => setAt(n)} aria-current={n === at ? "step" : undefined} aria-label={`Question ${n + 1}${answeredIds.has(i.id) ? ", answered" : ""}`}
-                className={`h-8 min-w-8 rounded-lg border px-2 text-[12.5px] font-semibold tabular-nums pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${n === at ? "border-gray-900" : "border-gray-200"} ${answeredIds.has(i.id) ? "bg-gray-100 text-gray-700" : "bg-white text-gray-900"}`}>{n + 1}</button>
+                className={`inline-flex h-8 min-w-8 items-center justify-center gap-0.5 rounded-lg border bg-[var(--cmp-app-surface)] px-2 text-[12.5px] font-semibold tabular-nums pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:min-w-[var(--cmp-touch-min)] ${focusRing} ${n === at ? "border-2 border-[var(--learn-accent)]" : "border-[var(--learn-border)]"} text-gray-900`}>{answeredIds.has(i.id) && <span className="cmp-learn-accent"><LearningIcon name="check" className="h-3 w-3" /></span>}{n + 1}</button>
             ))}
           </nav>
           <QuestionRunner key={item.id} item={item} sessionId={sid} feedbackMode={state.session?.feedback ?? "immediate"}
             answered={state.answered.find(a => a.questionId === item.id) ?? null} onAnswered={record}
             onNext={() => setAt(n => { const next = items.findIndex((i, k) => k > n && !answeredIds.has(i.id) && i.id !== item.id); return next >= 0 ? next : Math.min(items.length - 1, n + 1); })} />
-          {done && <button type="button" className={`${btn} mt-4`} style={{ background: accent }} onClick={finish}>Finish and see how it went</button>}
+          {done && <button type="button" className={`${btn} mt-4`} onClick={finish}>Finish and see how it went</button>}
         </>
       ) : <p className="mt-3 text-[14px] text-gray-600">No questions in this session.</p>}
     </section>
@@ -452,36 +451,36 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
   const fb = answered?.feedback ?? null;
 
   return (
-    <article className="mt-4">
-      <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+    <article className={`cmp-learn-check mt-4 ${whiteCard} p-4`}>
+      <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-gray-700">
         {REVISION_FORMAT_LABEL[item.kind as RevisionFormat] ?? "Practice case step"}{item.difficulty ? ` · ${item.difficulty === 1 ? "easier" : item.difficulty === 3 ? "harder" : "standard"}` : ""}
         {/* SCHOLAR-SQIE-01: what the question rests on. */}
-        <span className="ml-2 rounded-full bg-[var(--cmp-theme-soft)] px-2 py-0.5 normal-case tracking-normal text-gray-700">{item.grounding ?? GROUNDING_LABEL.notes}</span>
+        <span className="ml-2 inline-block rounded-full border border-[var(--learn-border)] bg-[var(--learn-surface)] px-2 py-0.5 normal-case tracking-normal text-gray-800">{item.grounding ?? GROUNDING_LABEL.notes}</span>
       </p>
       <p className="mt-1 text-[16px] font-semibold leading-relaxed text-gray-900">{item.stem}</p>
       {answered ? (
-        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} stem={item.stem} /></> : <p className="mt-3 rounded-lg bg-gray-50 px-3 py-2 text-[13.5px] text-gray-700">Answer recorded. You will see how it went at the end of the session.</p>
+        fb ? <>{recovered && <p className="mt-3 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{RECOVERY_EXPLANATION_LABEL}</p>}<FeedbackPanel f={fb} sessionId={sessionId} questionId={item.id} stem={item.stem} /></> : <p className="mt-3 rounded-lg bg-[var(--learn-surface)] px-3 py-2 text-[13.5px] text-gray-800">Answer recorded. You will see how it went at the end of the session.</p>
       ) : item.kind === "scenario" ? (
         !sc.stage ? <p className="mt-3 text-[13.5px] text-gray-700">This scenario cannot be shown just now.</p> : (
           <div className="mt-3">
             {sc.done.length > 0 && (
               <ol className="mb-3 space-y-2" aria-label="Stages you have answered">
                 {sc.done.map((d, i) => (
-                  <li key={i} className="rounded-lg bg-gray-50 px-3 py-2 text-[13px] text-gray-800">
+                  <li key={i} className="rounded-lg bg-[var(--learn-surface)] px-3 py-2 text-[13px] text-gray-800">
                     {d.reveal && <p>{d.reveal}</p>}
                     <p className="font-semibold">Stage {i + 1}: {d.prompt}</p>
-                    <p className="text-gray-600">Your answer: {d.answer}</p>
+                    <p className="text-gray-700">Your answer: {d.answer}</p>
                   </li>
                 ))}
               </ol>
             )}
             {sc.needSelf ? (
-              <div className="rounded-xl border border-gray-200 p-4">
+              <div className="rounded-xl bg-[var(--learn-surface)] p-4">
                 <p className="text-[13.5px] text-gray-800">{sc.needSelf.reason}</p>
-                <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
+                <p className={`mt-2 ${smallCaps}`}>The answers your notes support</p>
                 <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{sc.needSelf.accepted.map(a => <li key={a}>{a}</li>)}</ul>
                 <p className="mt-2 whitespace-pre-wrap text-[13px] text-gray-700">Your answer: <span className="font-semibold">{text}</span></p>
-                <p className="mt-1 text-[12px] text-gray-500">{sc.needSelf.label}</p>
+                <p className="mt-1 text-[12.5px] text-gray-700">{sc.needSelf.label}</p>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button type="button" className={ghost} disabled={busy} onClick={() => void sendStage(true)}>It says the same</button>
                   <button type="button" className={ghost} disabled={busy} onClick={() => void sendStage(false)}>It does not</button>
@@ -489,11 +488,11 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               </div>
             ) : (
               <form onSubmit={e => { e.preventDefault(); if (stageReady) void sendStage(); }}>
-                <p className="text-[11.5px] font-semibold uppercase tracking-[0.08em] text-gray-500">
+                <p className="text-[12px] font-semibold uppercase tracking-[0.08em] text-gray-700">
                   Stage {sc.stage.index + 1} of {item.scenario?.count ?? "?"} · {sc.stage.weight} mark{sc.stage.weight === 1 ? "" : "s"}
                 </p>
                 {sc.stage.reveal && (
-                  <p className="mt-1 rounded-lg border-l-4 bg-gray-50 px-3 py-2 text-[14px] text-gray-900" style={{ borderColor: accent }}><span className="font-semibold">New information:</span> {sc.stage.reveal}</p>
+                  <p className="mt-1 rounded-lg border-l-4 border-[var(--learn-accent)] bg-[var(--learn-surface)] px-3 py-2 text-[14px] text-gray-900"><span className="font-semibold">New information:</span> {sc.stage.reveal}</p>
                 )}
                 <p className="mt-2 text-[15px] font-semibold text-gray-900">{sc.stage.prompt}</p>
                 {(sc.stage.kind === "mcq" || sc.stage.kind === "mrq") && (
@@ -502,7 +501,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                     {sc.stage.kind === "mrq" && <p className="mb-2 text-[12.5px] text-gray-600">Choose all that apply.</p>}
                     <div className="grid gap-2 lg:grid-cols-2">
                       {sc.stage.options.map((o, i) => (
-                        <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${(sc.stage!.kind === "mrq" ? set.includes(i) : choice === i) ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
+                        <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${(sc.stage!.kind === "mrq" ? set.includes(i) : choice === i) ? "border-[var(--learn-accent)] bg-[var(--learn-surface)] ring-1 ring-[var(--learn-accent)]" : "border-[var(--learn-border)] hover:bg-[var(--learn-surface)]"}`}>
                           {sc.stage!.kind === "mrq"
                             ? <input type="checkbox" checked={set.includes(i)} onChange={() => setSet(s => (s.includes(i) ? s.filter(x => x !== i) : [...s, i]))} className="mt-1 h-4 w-4 shrink-0" />
                             : <input type="radio" name={`sc-${item.id}-${sc.stage!.index}`} checked={choice === i} onChange={() => setChoice(i)} className="mt-1 h-4 w-4 shrink-0" />}
@@ -523,7 +522,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                   </label>
                 )}
                 <div className="mt-3">
-                  <button type="submit" className={btn} style={{ background: accent }} disabled={!stageReady || busy}>
+                  <button type="submit" className={btn} disabled={!stageReady || busy}>
                     {busy ? "Checking…" : sc.stage.index + 1 === (item.scenario?.count ?? 0) ? "Check answer and finish" : "Check answer and see what happens next"}
                   </button>
                 </div>
@@ -532,11 +531,11 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
           </div>
         )
       ) : item.kind === "flashcard" ? (
-        !back ? <button type="button" className={`${btn} mt-4`} style={{ background: accent }} disabled={busy} onClick={reveal}>Show the answer</button> : (
+        !back ? <button type="button" className={`${btn} mt-4`} disabled={busy} onClick={reveal}>Show the answer</button> : (
           <div className="mt-4">
-            <div className="rounded-xl bg-gray-50 p-4">
+            <div className="rounded-xl bg-[var(--learn-surface)] p-4">
               {/* SCHOLAR-FLASHCARDS-01: a card the student wrote, or a library card, says so -- never "your notes". */}
-              <p className="text-[12px] font-semibold uppercase tracking-wide text-gray-500">{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
+              <p className={smallCaps}>{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
               <p className="mt-1 text-[14.5px] font-bold text-gray-900">{back.back}</p>
               {back.card && back.card.origin !== "notes" ? <p className="mt-1 text-[12.5px] text-gray-600">{back.card.originLabel}</p>
                 : <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>}
@@ -552,48 +551,48 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
           </div>
         )
       ) : partGrade ? (
-        <div className="mt-4 rounded-xl border border-gray-200 p-4">
+        <div className="mt-4 rounded-xl bg-[var(--learn-surface)] p-4">
           <p className="text-[13.5px] text-gray-800">{partGrade.reason}</p>
           <ol className="mt-3 space-y-3">
             {partGrade.parts.map((pt, i) => (
-              <li key={i} className="rounded-lg bg-gray-50 p-3">
+              <li key={i} className={`${whiteCard} p-3`}>
                 <p className="text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span></p>
                 <p className="mt-1 text-[13px] text-gray-700">Your answer: <span className="font-semibold">{texts[i] || "(left blank)"}</span></p>
                 <p className="mt-1 text-[13px] text-gray-800"><span className="font-semibold">{item.library ? "The library answer" : "Your notes"}:</span> {pt.accepted.join("; ")}</p>
                 {pt.ai?.feedback && <p className="mt-1 rounded border border-dashed border-amber-400 bg-amber-50 px-2 py-1 text-[12.5px] text-amber-950"><span className="font-semibold">{pt.ai.label}</span> {pt.ai.feedback}</p>}
                 {pt.byCode ? <p className="mt-1 text-[12px] text-gray-600">Marked against the stored answer.</p> : (
                   <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label={`Your judgement of part ${partLetter(i)}`}>
-                    <button type="button" aria-pressed={grades[i] === true} className={`${ghost} ${grades[i] === true ? "border-gray-900" : ""}`} disabled={busy} onClick={() => setGrades(g => g.map((x, k) => (k === i ? true : x)))}>It says the same</button>
-                    <button type="button" aria-pressed={grades[i] === false} className={`${ghost} ${grades[i] === false ? "border-gray-900" : ""}`} disabled={busy} onClick={() => setGrades(g => g.map((x, k) => (k === i ? false : x)))}>It does not</button>
+                    <button type="button" aria-pressed={grades[i] === true} className={`${ghost} ${grades[i] === true ? "!border-2 !border-[var(--learn-accent)]" : ""}`} disabled={busy} onClick={() => setGrades(g => g.map((x, k) => (k === i ? true : x)))}>It says the same</button>
+                    <button type="button" aria-pressed={grades[i] === false} className={`${ghost} ${grades[i] === false ? "!border-2 !border-[var(--learn-accent)]" : ""}`} disabled={busy} onClick={() => setGrades(g => g.map((x, k) => (k === i ? false : x)))}>It does not</button>
                   </div>
                 )}
               </li>
             ))}
           </ol>
-          <p className="mt-2 text-[12px] text-gray-500">{partGrade.label}</p>
-          <button type="button" className={`${btn} mt-3`} style={{ background: accent }} disabled={busy || partGrade.parts.some((pt, i) => !pt.byCode && grades[i] === null)}
+          <p className="mt-2 text-[12.5px] text-gray-700">{partGrade.label}</p>
+          <button type="button" className={`${btn} mt-3`} disabled={busy || partGrade.parts.some((pt, i) => !pt.byCode && grades[i] === null)}
             onClick={() => send({ texts }, { selfGrades: partGrade.parts.map((pt, i) => (pt.byCode ? null : grades[i])) })}>{busy ? "Saving…" : "Save my marking"}</button>
         </div>
       ) : selfGrade ? (
-        <div className="mt-4 rounded-xl border border-gray-200 p-4">
+        <div className="mt-4 rounded-xl bg-[var(--learn-surface)] p-4">
           <p className="text-[13.5px] text-gray-800">{selfGrade.reason}</p>
           {selfGrade.extended ? (
             <>
               {/* SCHOLAR-SQIE-LEARNER-01: an extended answer the AI could not mark: the student compares it with the key points and the model answer. */}
-              <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The points a full answer makes</p>
+              <p className={`mt-2 ${smallCaps}`}>The points a full answer makes</p>
               <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{selfGrade.extended.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>
-              <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The model answer from your notes</p>
+              <p className={`mt-2 ${smallCaps}`}>The model answer from your notes</p>
               <p className="mt-1 text-[14px] text-gray-900">{selfGrade.extended.modelAnswer}</p>
             </>
           ) : (
             <>
-              <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
+              <p className={`mt-2 ${smallCaps}`}>The answers your notes support</p>
               <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{selfGrade.accepted.map(a => <li key={a}>{a}</li>)}</ul>
             </>
           )}
           <p className="mt-2 whitespace-pre-wrap text-[13px] text-gray-700">Your answer: <span className="font-semibold">{text}</span></p>
           <SpellingNote spelling={selfGrade.spelling} />
-          <p className="mt-1 text-[12px] text-gray-500">{selfGrade.label}</p>
+          <p className="mt-1 text-[12.5px] text-gray-700">{selfGrade.label}</p>
           <div className="mt-3 flex flex-wrap gap-2">
             <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: true })}>{selfGrade.extended ? "It makes these points" : "It says the same"}</button>
             <button type="button" className={ghost} disabled={busy} onClick={() => send({ text }, { selfGrade: false })}>It does not</button>
@@ -611,7 +610,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               {item.kind === "mrq" && <p className="mb-2 text-[12.5px] text-gray-600">Choose all that apply.</p>}
               <div className="grid gap-2 lg:grid-cols-2">
                 {item.options.map((o, i) => (
-                  <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${(item.kind === "mrq" ? set.includes(i) : choice === i) ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
+                  <label key={i} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${(item.kind === "mrq" ? set.includes(i) : choice === i) ? "border-[var(--learn-accent)] bg-[var(--learn-surface)] ring-1 ring-[var(--learn-accent)]" : "border-[var(--learn-border)] hover:bg-[var(--learn-surface)]"}`}>
                     {item.kind === "mrq"
                       ? <input type="checkbox" checked={set.includes(i)} onChange={() => setSet(s => (s.includes(i) ? s.filter(x => x !== i) : [...s, i]))} className="mt-1 h-4 w-4 shrink-0" />
                       : <input type="radio" name={`r-${item.id}`} checked={choice === i} onChange={() => setChoice(i)} className="mt-1 h-4 w-4 shrink-0" />}
@@ -634,7 +633,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
                       <legend className="text-[13.5px] font-semibold text-gray-900">({partLetter(i)}) {pt.prompt} <span className="font-normal text-gray-600">· {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span></legend>
                       <div className="mt-1 grid gap-2 lg:grid-cols-2">
                         {pt.options.map((o, k) => (
-                          <label key={k} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${texts[i] === o ? "border-gray-900" : "border-gray-200 hover:bg-gray-50"}`}>
+                          <label key={k} className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3.5 py-2.5 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${texts[i] === o ? "border-[var(--learn-accent)] bg-[var(--learn-surface)] ring-1 ring-[var(--learn-accent)]" : "border-[var(--learn-border)] hover:bg-[var(--learn-surface)]"}`}>
                             <input type="radio" name={`rv-part-${item.id}-${i}`} checked={texts[i] === o} onChange={() => setTexts(t => t.map((x, j) => (j === i ? o : x)))} className="mt-1 h-4 w-4 shrink-0" />
                             <span><span className="font-semibold">{letter(k)}.</span> {o}</span>
                           </label>
@@ -666,7 +665,7 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
               <legend className="sr-only">True or false</legend>
               <div className="grid grid-cols-2 gap-3">
                 {(["true", "false"] as const).map(v => (
-                  <button key={v} type="button" className={`${ghost} min-h-[56px] text-[16px]`} onClick={() => void send({ text: v })}>{v === "true" ? "True" : "False"}</button>
+                  <button key={v} type="button" className={`${ghost} !min-h-[56px] !text-[16px]`} onClick={() => void send({ text: v })}>{v === "true" ? "True" : "False"}</button>
                 ))}
               </div>
             </fieldset>
@@ -724,8 +723,8 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
           {item.kind === "sequence" && (
             <ol className="space-y-2" aria-label="Put these in order">
               {order.map((idx, pos) => (
-                <li key={idx} className="flex items-center gap-2 rounded-xl border border-gray-200 px-3 py-2">
-                  <span className="w-6 text-[13px] font-bold text-gray-500 tabular-nums">{pos + 1}.</span>
+                <li key={idx} className="flex items-center gap-2 rounded-xl border border-[var(--learn-border)] px-3 py-2">
+                  <span className="w-6 text-[13px] font-bold text-gray-700 tabular-nums">{pos + 1}.</span>
                   <span className="flex-1 text-[14px] text-gray-900">{item.options[idx]}</span>
                   <button type="button" className={ghost} aria-label={`Move ${item.options[idx]} up`} disabled={pos === 0} onClick={() => setOrder(o => { const n = [...o]; [n[pos - 1], n[pos]] = [n[pos], n[pos - 1]]; return n; })}>↑</button>
                   <button type="button" className={ghost} aria-label={`Move ${item.options[idx]} down`} disabled={pos === order.length - 1} onClick={() => setOrder(o => { const n = [...o]; [n[pos + 1], n[pos]] = [n[pos], n[pos + 1]]; return n; })}>↓</button>
@@ -734,14 +733,14 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
             </ol>
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            {item.kind !== "true_false" && <button type="submit" className={btn} style={{ background: accent }} disabled={!ready || busy}>{busy ? "Checking…" : feedbackMode === "end" ? "Save answer" : "Check answer"}</button>}
+            {item.kind !== "true_false" && <button type="submit" className={btn} disabled={!ready || busy}>{busy ? "Checking…" : feedbackMode === "end" ? "Save answer" : "Check answer"}</button>}
             {item.kind === "cloze" && <button type="button" className={ghost} disabled={busy} onClick={() => void send({}, { giveUp: true })}>Show the answer (counts as a miss)</button>}
           </div>
         </form>
       )}
       {error && <p role="alert" className="mt-2 text-[13px] font-semibold text-red-800">{error}</p>}
-      {answered && <button type="button" className={`${ghost} mt-3`} onClick={onNext}>{fb && !fb.correct ? "Try another question" : "Next question"}</button>}
-      <p className="mt-3 text-[11.5px] text-gray-500">{item.kind === "cloze" ? CLOZE_LABEL : item.kind === "true_false" ? TRUE_FALSE_LABEL : item.kind === "scenario" ? SCENARIO_LABEL : item.label} · {item.citation}</p>
+      {answered && <button type="button" className={`${btn} mt-3`} onClick={onNext}>{fb && !fb.correct ? "Try another question" : "Next question"}</button>}
+      <p className="mt-3 text-[12px] text-gray-700">{item.kind === "cloze" ? CLOZE_LABEL : item.kind === "true_false" ? TRUE_FALSE_LABEL : item.kind === "scenario" ? SCENARIO_LABEL : item.label} · {item.citation}</p>
     </article>
   );
 }
@@ -759,13 +758,13 @@ export function GradeAtEnd({ questionId, sessionId, g, onGraded }: { questionId:
     onGraded({ questionId, feedback: r.json.feedback });
   }
   return (
-    <div className="mt-2 rounded-xl border border-gray-200 bg-gray-50 p-3">
+    <div className="cmp-learn-check mt-2 rounded-xl bg-[var(--learn-surface)] p-3">
       <p className="text-[13px] text-gray-800">Your answer: <span className="font-semibold">{g.response}</span></p>
-      <p className="mt-2 text-[12px] font-semibold uppercase tracking-wide text-gray-500">The answers your notes support</p>
+      <p className={`mt-2 ${smallCaps}`}>The answers your notes support</p>
       <ul className="mt-1 list-disc pl-5 text-[14px] text-gray-900">{g.accepted.map(x => <li key={x}>{x}</li>)}</ul>
       <p className="mt-2 text-[13px] leading-relaxed text-gray-800">{g.rationale}</p>
-      <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{g.source.quote}”</blockquote>
-      <p className="mt-1 text-[12px] text-gray-500">{g.label}. <Link href={sourceHref(g.source.materialId, g.source.chunkId)} className={`underline ${focusRing}`}>{g.source.citation}</Link></p>
+      <blockquote className="mt-2 border-l-4 border-[var(--learn-accent)] pl-3 text-[13px] italic text-gray-800">“{g.source.quote}”</blockquote>
+      <p className="mt-1 text-[12.5px] text-gray-700">{g.label}. <Link href={sourceHref(g.source.materialId, g.source.chunkId)} className={`underline ${focusRing}`}>{g.source.citation}</Link></p>
       <div className="mt-2 flex flex-wrap gap-2">
         <button type="button" className={ghost} disabled={busy} onClick={() => grade(true)}>It says the same</button>
         <button type="button" className={ghost} disabled={busy} onClick={() => grade(false)}>It does not</button>
@@ -786,7 +785,7 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
     <dl className={`mt-1 space-y-1 text-[13.5px] ${ink}`}>
       {/* SQIE-CLOSE-2026-11 WS-B: an unsafe statement first, in the learner's own words, apart from the five parts. */}
       {parts.unsafe?.length ? (
-        <div role="note" className="rounded-lg border-2 border-red-700 bg-red-50 px-3 py-2 text-red-950">
+        <div role="note" className="cmp-learn-caution rounded-lg border-2 border-l-[6px] border-[var(--learn-accent)] bg-[var(--learn-surface)] px-3 py-2 text-gray-900">
           <dt className="font-semibold">{FEEDBACK_HEADINGS.unsafe}</dt>
           <dd>{parts.unsafe.length > 1 ? <ul className="list-disc pl-5">{parts.unsafe.map(x => <li key={x}>{x}</li>)}</ul> : parts.unsafe[0]}</dd>
           <dd className="mt-1 text-[12.5px]">{UNSAFE_NOTE}</dd>
@@ -845,26 +844,33 @@ function FindingsTable({ findings }: { findings: Finding[] }) {
 /** SQIE-CLOSE-2026-11 WS-B: an unsafe answer, or a safety-critical point missed: said plainly, with what, and that the marks were capped. */
 function SafetyBlock({ s }: { s: NonNullable<RevisionFeedback["safety"]> }) {
   return (
-    <div role="note" data-testid="safety-outcome" className="mt-2 rounded-lg border-2 border-red-700 bg-white px-3 py-2">
-      <p className="text-[13px] font-bold text-red-900">{s.label}</p>
-      <p className="mt-0.5 text-[13px] text-gray-900">{s.explainer}</p>
+    <div data-testid="safety-outcome" className="mt-2"><LearningCallout tone="caution" icon="warn" label={s.label} emphasis="safety">
+      <p className="text-[13.5px] text-gray-900">{s.explainer}</p>
       {s.statement && s.by === "code" && <p className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Unsafe in your answer:</span> &ldquo;{s.statement}&rdquo;</p>}
       {s.missed.length > 0 && <div className="mt-1 text-[13px] text-gray-900"><span className="font-semibold">Missed:</span><ul className="list-disc pl-5">{s.missed.map(m => <li key={m}>{m}</li>)}</ul></div>}
-      <p className="mt-1 text-[11.5px] text-gray-600">{s.byLabel}</p>
-    </div>
+      <p className="text-[12px] text-gray-700">{s.byLabel}</p>
+    </LearningCallout></div>
   );
+}
+
+/** The shape beside the verdict's words: whole, part, or not yet. Marks count as part when some were given and not all. */
+function verdictMark(f: RevisionFeedback): ProgressState {
+  const marks = f.scenario?.practiceMarks ?? f.structured?.practiceMarks ?? f.extended?.marks ?? null;
+  if (marks) return marks.awarded >= marks.total && marks.total > 0 ? "checked" : marks.awarded > 0 ? "read" : "none";
+  return f.correct ? "checked" : f.score !== null && f.score > 0 ? "read" : "none";
 }
 
 export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem }: { f: RevisionFeedback; sessionId: string | null; compact?: boolean; questionId?: string; stem?: string | null }) {
   const basis = f.library ? "the Competen library answer" : "your notes";
   return (
-    <div aria-live="polite" className={`mt-3 rounded-xl border p-4 ${f.correct ? "border-emerald-300 bg-emerald-50" : "border-red-300 bg-red-50"}`}>
-      <p className={`text-[14.5px] font-bold ${f.correct ? "text-emerald-900" : "text-red-900"}`}>
+    <div aria-live="polite" className={`${learnBox("check")} mt-3 p-4`}>
+      {/* The verdict is a shape and words, never a red or green box: formative, never punitive. */}
+      <p className="flex items-start gap-2 text-[14.5px] font-bold"><span className="cmp-learn-accent mt-0.5"><ProgressMark state={verdictMark(f)} /></span><span className="cmp-learn-ink min-w-0">
         {f.scenario ? `${f.scenario.practiceMarks.awarded} of ${f.scenario.practiceMarks.total} practice marks`
           : f.structured ? `${f.structured.practiceMarks.awarded} of ${f.structured.practiceMarks.total} practice marks`
           : f.extended ? `${f.extended.marks.awarded} of ${f.extended.marks.total} practice marks`
           : f.correct ? `That matches ${basis}.` : f.score !== null && f.score > 0 ? `Partly: ${Math.round(f.score * 100)}% matched ${basis}.` : `That does not match ${basis}.`}
-      </p>
+      </span></p>
       {f.scenario && <p className="text-[12px] text-gray-700">{f.scenario.practiceMarks.label}</p>}
       {f.structured && <p className="text-[12px] text-gray-700">{f.structured.practiceMarks.label}</p>}
       {f.extended && <p className="text-[12px] text-gray-700">{f.extended.marks.label}</p>}
@@ -872,7 +878,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
       {f.safety && <SafetyBlock s={f.safety} />}
       {f.calculation && (
         // SQIE-CLOSE-2026-11 WS-A: what was given, the answer, and why (a wrong unit is said plainly).
-        <div data-testid="calculation-outcome" className="mt-2 rounded-lg bg-white/70 px-3 py-2 text-[13.5px] text-gray-900">
+        <div data-testid="calculation-outcome" className="mt-2 rounded-lg bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] px-3 py-2 text-[13.5px] text-gray-900">
           <p><span className="font-semibold">Your answer:</span> {f.calculation.given.value ?? "—"}{f.calculation.given.unit ? ` ${f.calculation.given.unit}` : ""} · <span className="font-semibold">The answer:</span> {f.calculation.expected.value}{f.calculation.expected.unit ? ` ${f.calculation.expected.unit}` : ""}</p>
           <p className="mt-0.5">{f.calculation.feedback}</p>
           {f.calculation.warnings.map(w => <p key={w} className="mt-0.5 text-[12.5px] text-amber-900">{w}</p>)}
@@ -881,7 +887,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
         </div>
       )}
       <AttemptRecordNotes f={f} />
-      {f.library &&<p className="mt-1 inline-flex rounded-full border border-gray-300 bg-white px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
+      {f.library &&<p className="mt-1 inline-flex rounded-full border border-gray-300 bg-[var(--cmp-app-surface)] px-2.5 py-0.5 text-[12px] font-semibold text-gray-900">{f.library.label} · version {f.library.versionNo}</p>}
       <p className="text-[12px] text-gray-700"><span className="font-semibold">{f.markingLabel}.</span> {f.marking === "deterministic" ? MARKED_AGAINST_NOTES : ""}</p>
       {/* SCHOLAR-CE-2026 CE-05: one honest line, on every format, saying what this was marked against. */}
       {f.markedAgainst && <p data-testid="marked-against" className="text-[12px] text-gray-700">{f.markedAgainst}</p>}
@@ -896,7 +902,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
       {f.scenario ? (
         <ol className="mt-2 space-y-2">
           {f.scenario.stages.map(st => (
-            <li key={st.index} className="rounded-lg bg-white/70 p-2.5 text-[13.5px] text-gray-900">
+            <li key={st.index} className="rounded-lg bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-2.5 text-[13.5px] text-gray-900">
               {st.reveal && <p className="text-gray-700">{st.reveal}</p>}
               <p className="font-semibold">Stage {st.index + 1}: {st.prompt} <span className="font-normal text-gray-700">· {st.awarded === null ? "—" : st.awarded} of {st.weight} mark{st.weight === 1 ? "" : "s"}</span></p>
               {st.yourAnswer !== null && <p className="mt-0.5"><span className="font-semibold">Your answer:</span> {st.yourAnswer}{st.by ? <span className="text-gray-600"> ({st.by === "code" ? "marked by code" : st.by === "ai" ? "judged by AI" : "marked by you"})</span> : null}</p>}
@@ -918,9 +924,9 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
         {!compact && !!f.structured.findings?.length && <FindingsTable findings={f.structured.findings} />}
         <ol className="mt-2 space-y-2">
           {f.structured.parts.map((pt, i) => (
-            <li key={i} className="rounded-lg bg-white/70 p-2.5 text-[13.5px] text-gray-900">
+            <li key={i} className="rounded-lg bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-2.5 text-[13.5px] text-gray-900">
               <p className="font-semibold">({String.fromCharCode(97 + i)}) {pt.roleLabel ? <span className="mr-1 rounded bg-gray-100 px-1.5 py-0.5 text-[11.5px] text-gray-700">{pt.roleLabel}</span> : null}{pt.prompt} <span className="font-normal text-gray-700">· {pt.awarded === null ? "—" : pt.awarded} of {pt.marks} mark{pt.marks === 1 ? "" : "s"}</span>
-                {pt.safetyCritical && <span className="ml-1 rounded bg-red-100 px-1.5 py-0.5 text-[11.5px] font-semibold text-red-900">Safety-critical</span>}</p>
+                {pt.safetyCritical && <span className="cmp-learn-caution ml-1 rounded border border-[var(--learn-accent)] bg-[var(--learn-surface)] px-1.5 py-0.5 text-[12px] font-semibold text-[var(--learn-ink)]">Safety-critical</span>}</p>
               <p className="mt-0.5"><span className="font-semibold">{pt.options ? "The answer:" : "Your notes:"}</span> {pt.accepted}</p>
               {/* WS-C: rubric-based partial credit: each weighted criterion, and whether the answer met it (formative). */}
               {pt.criteria && (
@@ -968,7 +974,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
           {f.rubric.keyPoints.length > 0 && <ul className="mt-1 list-disc pl-5">{f.rubric.keyPoints.map(k => <li key={k}>{k}</li>)}</ul>}
         </div>
       )}
-      {f.source.quote && <blockquote className="mt-2 border-l-4 pl-3 text-[13px] italic text-gray-700" style={{ borderColor: accent }}>“{f.source.quote}”</blockquote>}
+      {f.source.quote && <blockquote className="mt-2 border-l-4 border-[var(--learn-accent)] pl-3 text-[13px] italic text-gray-800">“{f.source.quote}”</blockquote>}
       {f.practises && (
         <p className="mt-2 text-[12.5px] text-gray-700">
           <span className="font-semibold">Practises:</span> {f.practises.competency}{f.practises.outcome ? <> · <span className="font-semibold">outcome:</span> {f.practises.outcome}</> : null}. <span className="text-gray-600">{f.practises.label}</span>

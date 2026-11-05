@@ -24,6 +24,8 @@ import {
   type CardRow, type DeckRow, type ExportFormat, type StudyCard,
 } from "../../_components/flashcards-client";
 import { FlashcardModeNav, MaterialCards, ResumePanel, TestTiles } from "../../_components/flashcards-modes";
+import { LearningSection } from "@/components/ui/scholar-learning";
+import { toneAction } from "../../_components/progress-parts";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
 // (a build-time render would fail without the service key, or freeze the gate into static HTML).
@@ -262,8 +264,8 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
   if (q.view === "history") {
     const v = spacedViews(cards, lib.data.today);
     const count = (label: string, n: number, state: ReviewState) => (
-      <Link href={flashcardsHref({ view: "cards", state })} className={`rounded-2xl border border-gray-200 bg-white p-3 hover:bg-gray-50 ${focusRing}`}>
-        <span className="block text-[12px] font-semibold text-gray-500">{label}</span><span className="block text-[22px] font-bold tabular-nums text-gray-900">{n}</span>
+      <Link href={flashcardsHref({ view: "cards", state })} className={`cmp-learn-summary cmp-learn-box p-3 hover:opacity-90 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+        <span className="block text-[12.5px] font-semibold text-gray-700">{label}</span><span className="cmp-learn-ink block text-[22px] font-bold tabular-nums">{n}</span>
       </Link>
     );
     return shell(
@@ -272,43 +274,41 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
         <div className="grid grid-cols-[repeat(auto-fit,minmax(8rem,1fr))] gap-2">
           {count("Due today", v.due.length, "due")}{count("Needs more practice", v.needsPractice.length, "needs_practice")}{count("Remembered", v.remembered.length, "remembered")}{count("Not studied yet", v.fresh.length, "new")}
         </div>
-        <p className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[14px] text-gray-800">
-          <span className="font-semibold">Next recommended review: </span>{v.due.length ? "today" : v.nextReview ? new Date(`${v.nextReview}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }) : "Not measured: no card has been reviewed yet."}
+        <p className="cmp-learn-next cmp-learn-box px-4 py-3 text-[14px] text-gray-900">
+          <span className="cmp-learn-ink font-semibold">Next recommended review: </span>{v.due.length ? "today" : v.nextReview ? new Date(`${v.nextReview}T12:00:00Z`).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", timeZone: "UTC" }) : "Not measured: no card has been reviewed yet."}
         </p>
-        <section aria-labelledby="gaps-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h3 id="gaps-h" className="text-[15px] font-bold text-gray-900">Topic-level gaps</h3>
-          <p className="text-[12.5px] text-gray-600">From the questions you got wrong and the cards you did not remember. Practice, not a judgement of competence.</p>
-          {gaps.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-700">No gaps recorded yet.</p> : (
+        <LearningSection tone="record" icon="record" title="Topic-level gaps" headingId="gaps-h" caps={false}>
+          <p className="mt-2 max-w-[68ch] text-[13.5px] leading-relaxed text-gray-800">From the questions you got wrong and the cards you did not remember. Practice, not a judgement of competence.</p>
+          {gaps.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">No gaps recorded yet.</p> : (
             <>
               <ul className="mt-2 space-y-2">
                 {gaps.map(g => (
-                  <li key={g.label} className="text-[13.5px]">
-                    <span className="font-semibold text-gray-900">{g.label}</span> <span className="text-gray-600">· {g.source === "osce" ? `${g.missed} gap${g.missed === 1 ? "" : "s"} in OSCE practice` : `missed ${g.missed} time${g.missed === 1 ? "" : "s"}`}</span>
-                    {g.keyPoints.length > 0 && <span className="block text-[12.5px] text-gray-700">Key points: {g.keyPoints.slice(0, 3).join("; ")}</span>}
-                    {g.misconceptions.length > 0 && <span className="block text-[12.5px] text-gray-700">Watch for: {g.misconceptions.slice(0, 2).join("; ")}</span>}
+                  <li key={g.label} className="rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] px-3.5 py-3 text-[13.5px]">
+                    <span className="font-semibold text-gray-900">{g.label}</span> <span className="text-gray-700">· {g.source === "osce" ? `${g.missed} gap${g.missed === 1 ? "" : "s"} in OSCE practice` : `missed ${g.missed} time${g.missed === 1 ? "" : "s"}`}</span>
+                    {g.keyPoints.length > 0 && <span className="mt-1 block max-w-[68ch] text-[13px] leading-relaxed text-gray-800">Key points: {g.keyPoints.slice(0, 3).join("; ")}</span>}
+                    {g.misconceptions.length > 0 && <span className="mt-1 block max-w-[68ch] text-[13px] leading-relaxed text-gray-800">Watch for: {g.misconceptions.slice(0, 2).join("; ")}</span>}
                     {(() => {
                       // Cards that already cover this gap's sections: studied as that lesson's cards (same cards, same history).
                       const own = cards.find(c => g.chunkIds.includes(c.chunkId));
-                      return own ? <Link href={withStudy(flashcardsHref({ material: own.material.id, section: own.chunkId }), sid)} className={`mr-3 text-[12.5px] font-semibold underline ${focusRing}`}>Study cards on this topic</Link> : null;
+                      return own ? <Link href={withStudy(flashcardsHref({ material: own.material.id, section: own.chunkId }), sid)} className={`mr-3 text-[13px] ${toneAction.link}`}>Study cards on this topic</Link> : null;
                     })()}
-                    <Link href={`${studyHref("learn")}?section=${g.chunkIds[0]}`} className={`text-[12.5px] font-semibold underline ${focusRing}`}>Revise this topic in Learn</Link>
+                    <Link href={`${studyHref("learn")}?section=${g.chunkIds[0]}`} className={`text-[13px] ${toneAction.link}`}>Revise this topic in Learn</Link>
                   </li>
                 ))}
               </ul>
-              {osceSkippedNote(gapInfo.osceSkipped) && <p role="note" className="mt-2 text-[12.5px] text-gray-600">{osceSkippedNote(gapInfo.osceSkipped)}</p>}
-              <Link href={flashcardsHref({ view: "manage", create: "gaps" })} className={`mt-3 inline-flex items-center text-[13.5px] font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Make cards for my gaps</Link>
+              {osceSkippedNote(gapInfo.osceSkipped) && <p role="note" className="mt-2 text-[13px] text-gray-800">{osceSkippedNote(gapInfo.osceSkipped)}</p>}
+              <Link href={flashcardsHref({ view: "manage", create: "gaps" })} className={`mt-3 ${toneAction.primary}`}>Make cards for my gaps</Link>
             </>
           )}
-        </section>
-        <section aria-labelledby="log-h" className="rounded-2xl border border-gray-200 bg-white p-4">
-          <h3 id="log-h" className="text-[15px] font-bold text-gray-900">Your recent reviews</h3>
-          {v.history.length === 0 ? <p className="mt-1 text-[13.5px] text-gray-700">No reviews recorded yet.</p> : (
-            <table className="mt-2 w-full text-[13px]">
+        </LearningSection>
+        <LearningSection tone="summary" icon="clock" title="Your recent reviews" headingId="log-h" caps={false}>
+          {v.history.length === 0 ? <p className="mt-1 text-[13.5px] text-gray-800">No reviews recorded yet.</p> : (
+            <table className="mt-2 w-full rounded-lg bg-[var(--cmp-app-surface)] text-[13px]">
               <caption className="sr-only">Your most recent card reviews, newest first</caption>
-              <thead><tr className="text-left text-[12px] text-gray-500"><th scope="col" className="font-semibold">Card</th><th scope="col" className="font-semibold">You said</th><th scope="col" className="font-semibold">When</th><th scope="col" className="hidden font-semibold md:table-cell">Next in</th></tr></thead>
+              <thead><tr className="text-left text-[12px] text-gray-700"><th scope="col" className="px-2 font-semibold">Card</th><th scope="col" className="font-semibold">You said</th><th scope="col" className="font-semibold">When</th><th scope="col" className="hidden font-semibold md:table-cell">Next in</th></tr></thead>
               <tbody>{v.history.map((h, i) => (
                 <tr key={`${h.cardId}-${i}`} className="border-t border-gray-100 align-top">
-                  <td className="py-1.5 pr-2 text-gray-900">{h.front}</td>
+                  <td className="py-1.5 pl-2 pr-2 text-gray-900">{h.front}</td>
                   <td className="py-1.5 pr-2">{recallOf(h.quality) === "remembered" ? "Remembered" : "Didn't remember"}</td>
                   <td className="py-1.5 pr-2 tabular-nums">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
                   <td className="hidden py-1.5 tabular-nums md:table-cell">{h.intervalDays === null ? "Not recorded" : `${h.intervalDays} day${h.intervalDays === 1 ? "" : "s"}`}</td>
@@ -316,7 +316,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
               ))}</tbody>
             </table>
           )}
-        </section>
+        </LearningSection>
       </section>,
       null, true, "study",
     );
