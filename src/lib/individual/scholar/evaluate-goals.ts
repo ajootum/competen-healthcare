@@ -10,6 +10,7 @@
 // and no Novice-to-Expert stage is ever worked out from learning activity.
 
 // Owner final alignment, 5 Nov 2026: Evaluate is where an evaluation is taken. My Progress is the read-only report of what the records show.
+import { matchesSearch } from "../search/match";
 export const EVALUATE_VIEWS = ["goals", "competencies", "learning", "reasoning", "monthly", "history"] as const;
 export type EvaluateView = (typeof EVALUATE_VIEWS)[number];
 export const EVALUATE_VIEW_LABEL: Record<EvaluateView, string> = { goals: "My Plan goals", competencies: "My Competencies", learning: "My Learning", reasoning: "Clinical Reasoning", monthly: "Monthly Review", history: "Evaluation history" };
@@ -95,8 +96,7 @@ export function snapshotRow(e: { id: string; scope: { label?: string } | null; k
 
 /** Pure. Search by what an evaluation was of, optionally from a date. */
 export function filterSnapshots(rows: readonly SnapshotRow[], f: { q?: string | null; from?: string | null }): SnapshotRow[] {
-  const words = (f.q ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-  return rows.filter(r => words.every(w => r.label.toLowerCase().includes(w)) && (!f.from || r.createdAt.slice(0, 10) >= f.from));
+  return rows.filter(r => matchesSearch(r.label, f.q) && (!f.from || r.createdAt.slice(0, 10) >= f.from));
 }
 
 export type DimensionChange = { key: DimensionName; label: string; from: EvidenceStatus; to: EvidenceStatus; movement: "more" | "same" | "changed" };

@@ -4,6 +4,7 @@
 // records, which stay where they are. Reading it never calls AI. It writes nothing, and it publishes nothing. All of it is
 // simulated practice: never an assessment, and never evidence of verified clinical competence.
 
+import { matchesSearch } from "../search/match";
 export const PRACTICE_FORMATS = ["case", "osce", "paper", "scenario", "library_case"] as const;
 export type PracticeFormat = (typeof PRACTICE_FORMATS)[number];
 export const PRACTICE_FORMAT_LABEL: Record<PracticeFormat, string> = { case: "Clinical reasoning case", osce: "OSCE station", paper: "Practice paper", scenario: "Saved scenario", library_case: "Library case" };
@@ -43,10 +44,7 @@ export function parsePracticeFilters(p: Record<string, string | undefined>): Pra
 const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 /** Pure. Every word must appear in the title, a topic or concept, a competency, a source or a gap. */
 export function matchesPractice(r: PracticeRow, q: string): boolean {
-  const words = norm(q).split(" ").filter(Boolean);
-  if (!words.length) return true;
-  const hay = norm([r.title, ...r.concepts, ...r.competencies, ...r.sources, ...r.gaps].join(" "));
-  return words.every(w => hay.includes(w));
+  return matchesSearch([r.title, ...r.concepts, ...r.competencies, ...r.sources, ...r.gaps], q);
 }
 
 /** Pure. The rows that match, newest activity first, and one page of them. */

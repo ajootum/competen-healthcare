@@ -10,6 +10,7 @@
 //           day a material was uploaded is shown as that, and is never a studied day.
 //   EVIDENCE All of this is practice. Nothing here is an assessment or evidence of competence.
 
+import { matchesSearch } from "../search/match";
 import { localDay } from "./learning-definitions";
 
 export const REVISE_VIEWS = ["today", "priorities", "month", "topics", "insights"] as const;
@@ -259,7 +260,6 @@ export function buildCatalogue(i: {
 
 /** Pure. The rows that match, and one page of them. */
 export function filterCatalogue(rows: readonly CatalogueRow[], f: CatalogueFilters): { rows: CatalogueRow[]; total: number; pages: number } {
-  const words = norm(f.q).split(" ").filter(Boolean);
   const topic = f.topic ? norm(f.topic) : null;
   const kept = rows.filter(r => {
     if (f.material && r.materialId !== f.material) return false;
@@ -267,8 +267,7 @@ export function filterCatalogue(rows: readonly CatalogueRow[], f: CatalogueFilte
     if (f.competency && !r.competencyIds.includes(f.competency)) return false;
     if (f.from && (!r.lastStudied || r.lastStudied < f.from)) return false;
     if (topic && !r.topics.some(t => norm(t) === topic)) return false;
-    const hay = norm([r.title, ...r.topics].join(" "));
-    return words.every(w => hay.includes(w));
+    return matchesSearch([r.title, ...r.topics], f.q);
   });
   const pages = Math.max(1, Math.ceil(kept.length / CATALOGUE_PAGE));
   const page = Math.min(f.page, pages);

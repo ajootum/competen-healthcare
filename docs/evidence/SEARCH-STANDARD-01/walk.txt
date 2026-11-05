@@ -1,0 +1,83 @@
+PASS Global Search published on staging (200)
+PASS signed out, the search route refuses (401)
+PASS the header has Global Search on every Scholar page
+PASS Ctrl K opens it, with the cursor in the field
+PASS it says what it is searching
+PASS part of a word finds the material, under My Library
+PASS one slip of the keyboard still finds it
+PASS no results: says so, and offers each area
+PASS each area the learner may open is offered
+PASS the arrow keys move through the results
+PASS Escape closes it
+PASS a result opens the material itself
+NOTE My Search History rows for the opened search: 1 before, 2 after
+PASS another learner's materials never appear, searching by their exact titles (8 tried)
+PASS My Library says what it searches
+PASS My Library filters as you type, forgiving a slip
+PASS the words stay in the address
+PASS coming back from a record keeps the search
+PASS Clear search brings everything back
+PASS Learn says what it searches, and can be cleared
+PASS Learn shows results
+PASS Revise says what it searches, on its first view
+PASS Revise takes the search to its list with filters
+PASS Revise can be cleared
+PASS Revise keeps the words in the box
+PASS Apply says what it searches, on its first view
+PASS Apply takes the search to its list with filters
+PASS Apply can be cleared
+PASS Apply keeps the words in the box
+PASS Evaluate says what it searches, on its first view
+PASS Evaluate takes the search to its list with filters
+PASS Evaluate can be cleared
+PASS Evaluate keeps the words in the box
+PASS My Plan says what it searches
+PASS My Plan finds the learner's own priority, forgiving a slip
+PASS My Plan says when nothing matches
+PASS My Competencies says what it searches
+PASS My Competencies forgives a slip
+PASS no AI or session call in any search ()
+PASS no session was created (4)
+PASS no page or hydration error ()
+PASS 390 library: the search box is there
+PASS 390 library: no sideways scroll
+PASS 390 library: the search controls reach 44 px on touch ()
+PASS 390 learn: the search box is there
+PASS 390 learn: no sideways scroll
+PASS 390 learn: the search controls reach 44 px on touch ()
+PASS 390 revise: the search box is there
+PASS 390 revise: no sideways scroll
+PASS 390 revise: the search controls reach 44 px on touch ()
+PASS 390 apply: the search box is there
+PASS 390 apply: no sideways scroll
+PASS 390 apply: the search controls reach 44 px on touch ()
+PASS 390 evaluate: the search box is there
+PASS 390 evaluate: no sideways scroll
+PASS 390 evaluate: the search controls reach 44 px on touch ()
+PASS 390 plan: the search box is there
+PASS 390 plan: no sideways scroll
+PASS 390 plan: the search controls reach 44 px on touch ()
+PASS 390: the header has a search icon
+PASS 390: it opens full width (390 px)
+PASS 390: results are grouped and tappable
+PASS 390: the panel is on top, with no bottom bar over it
+PASS 390: results show no raw markers
+PASS 820 library: the search box is there
+PASS 820 library: no sideways scroll
+PASS 820 library: the search controls reach 44 px on touch ()
+PASS 820 learn: the search box is there
+PASS 820 learn: no sideways scroll
+PASS 820 learn: the search controls reach 44 px on touch ()
+PASS 820 revise: the search box is there
+PASS 820 revise: no sideways scroll
+PASS 820 revise: the search controls reach 44 px on touch ()
+PASS 820 apply: the search box is there
+PASS 820 apply: no sideways scroll
+PASS 820 apply: the search controls reach 44 px on touch ()
+PASS 820 evaluate: the search box is there
+PASS 820 evaluate: no sideways scroll
+PASS 820 evaluate: the search controls reach 44 px on touch ()
+PASS 820 plan: the search box is there
+PASS 820 plan: no sideways scroll
+PASS 820 plan: the search controls reach 44 px on touch ()
+PASS 820: the header has the search field

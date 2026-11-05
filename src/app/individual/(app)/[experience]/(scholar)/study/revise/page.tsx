@@ -1,3 +1,5 @@
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import Link from "next/link";
 import { offerable } from "@/lib/individual/scholar/scenario-service";
 import { redirect } from "next/navigation";
@@ -179,6 +181,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
       <StudyNav dueCount={due} study={study?.bar ?? null} />
       <ReviseViewNav current={current} carry={sid} />
       <ReviseShortcuts items={shortcuts} />
+      {current !== "topics" && <PageSearch scope={scopeLine("revise")} action={studyHref("revise")} placeholder="Search your topics and materials" hidden={{ view: "topics", study: sid }} />}
       {body}
       <div className="mt-5"><BoundaryNotice notice={FORMATIVE_NOTICE} /></div>
     </>
@@ -377,13 +380,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
     return frame("topics", (
       <section aria-labelledby="topics-h" className="cmp-learn-sources space-y-3">
         <h2 id="topics-h" className="text-[18px] font-bold text-gray-900">All topics</h2>
-        <form method="get" action={studyHref("revise")} className="space-y-2" role="search">
-          <input type="hidden" name="view" value="topics" />
-          {sid && <input type="hidden" name="study" value={sid} />}
-          <div className="flex gap-2">
-            <input name="q" defaultValue={f.q} aria-label="Search your topics and materials" placeholder="Search your topics and materials" className={field} />
-            <button type="submit" className={`${toneAction.primary} shrink-0`}>Search</button>
-          </div>
+        <PageSearch scope={scopeLine("revise")} action={studyHref("revise")} value={f.q} placeholder="Search your topics and materials" hidden={{ view: "topics", study: sid }} clearHref={reviseHref("topics", { study: sid })} className="space-y-2">
           <details open={hasCatalogueFilters(f) && !f.q} className="text-[13.5px]" suppressHydrationWarning>
             <summary className={`cursor-pointer font-semibold text-gray-800 pointer-coarse:py-3.5 ${focusRing}`}>Filters</summary>
             <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
@@ -395,7 +392,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
             </div>
             <div className="mt-2 flex flex-wrap items-center gap-3"><button type="submit" className={toneAction.secondary}>Apply filters</button>{hasCatalogueFilters(f) && <Link href={reviseHref("topics", { study: sid })} className={toneAction.link}>Clear</Link>}</div>
           </details>
-        </form>
+        </PageSearch>
         <p className="text-[13px] text-gray-700" role="status">{shown.total} {shown.total === 1 ? "material" : "materials"}, oldest learning included.</p>
         {shown.rows.length === 0 ? <p className="rounded-xl bg-[var(--cmp-app-surface)] p-4 text-[14px] text-gray-800 ring-1 ring-gray-200">Nothing matches. Try fewer words or clear the filters.</p> : (
           <ul className="divide-y divide-gray-100 overflow-hidden rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-gray-200">{shown.rows.map(r => <CatalogueRowView key={r.materialId} r={r} />)}</ul>

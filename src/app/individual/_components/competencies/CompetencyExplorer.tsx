@@ -1,5 +1,7 @@
 "use client";
 
+import { PageSearchInput } from "../search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import Link from "next/link";
 import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Chip, focusRing, mutedText } from "@/components/assessment/ui";
@@ -130,6 +132,9 @@ function FrameworkExplorer({ framework: f, details, scaleMax, study, assessments
       if (st.areaId !== undefined && f.areas.some(a => a.id === st.areaId)) setAreaId(st.areaId);
       if (st.expanded) setExpanded(new Set(st.expanded));
     }
+    // Arriving from a search result: its words win over what was remembered.
+    const asked = new URLSearchParams(window.location.search).get("q");
+    if (asked) setQ(asked);
     setRestored(true);
   }, [f.id, f.areas]);
   useEffect(() => { if (restored) writeState(f.id, { areaId, expanded: [...expanded], q, filter, sort }); }, [restored, f.id, areaId, expanded, q, filter, sort]);
@@ -157,10 +162,9 @@ function FrameworkExplorer({ framework: f, details, scaleMax, study, assessments
 
       {/* Toolbar: search, filter, sort, expand/collapse. Sticky so it stays with a long list. */}
       <div className="sticky top-0 z-10 mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-gray-200 bg-white p-2" role="search" aria-label={`Search and filter ${f.name}`}>
-        <label className="flex min-w-[12rem] flex-1 items-center gap-2">
-          <span className="sr-only">Search competencies by title, code, Area or domain</span>
-          <input ref={searchRef} type="search" value={q} onChange={e => setQ(e.target.value)} placeholder="Search title, code, Area or domain" className={`${control} w-full`} />
-        </label>
+        <div className="min-w-[12rem] flex-1">
+          <PageSearchInput scope={scopeLine("competencies")} value={q} onChange={setQ} placeholder="Search title, code, Area or domain" inputRef={searchRef} />
+        </div>
         <label className="flex items-center gap-1.5 text-[12.5px] font-semibold text-gray-700">
           <span>Show</span>
           <select value={filter} onChange={e => setFilter(e.target.value as ExplorerFilter)} className={control} aria-label="Filter competencies">
