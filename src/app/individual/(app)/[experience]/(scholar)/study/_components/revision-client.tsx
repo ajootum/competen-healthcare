@@ -67,6 +67,25 @@ const learnHref = (chunkId: string, sessionId: string | null, action?: string) =
 
 export type ScopeOption = { kind: "library" } | { kind: "document"; materialId: string } | { kind: "topic"; topic: string } | { kind: "competency"; competencyId: string };
 
+/** SCHOLAR-REVISE-WORKSPACE-01: one queue item starting a session of a mode, across all the learner's notes, as RevisionStart does. */
+export function StartRevisionButton({ mode, label, className }: { mode: RevisionMode; label: string; className: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  return (
+    <span className="inline-flex flex-col items-start gap-1">
+      <button type="button" className={className} disabled={busy} onClick={async () => {
+        setBusy(true); setError("");
+        const r = await call("/api/individual/scholar/revision/sessions", { mode, scope: { kind: "library" }, ...studyField() });
+        setBusy(false);
+        if (r.json.session?.id) router.push(carry(revisionHref(r.json.session.id)));
+        else setError(r.json.error ?? "Revision could not start just now.");
+      }}>{busy ? "Preparing…" : label}</button>
+      {error && <span role="alert" className="max-w-[16rem] text-[12.5px] text-gray-800">{error}</span>}
+    </span>
+  );
+}
+
 export function RevisionStart(props: {
   modes: RevisionMode[]; formats: RevisionFormat[]; quantity: number; difficulty: string; feedback: "immediate" | "end";
   materials: { id: string; title: string }[]; competencies: { id: string; title: string }[]; aiNote: string | null;
@@ -74,6 +93,8 @@ export function RevisionStart(props: {
   preset?: { materialId?: string | null; difficulty?: string | null; /** SCHOLAR-INDEPENDENT-LEARNING-01 P1: only these sections of the material (a Learn lesson's), until the learner widens it. */ chunkIds?: readonly string[] | null } | null;
   /** SCHOLAR-SESSION-AI-02: the open study session's focus, chosen in "what to revise" (the learner may change it). */
   scope?: RevisePrefill | null;
+  /** SCHOLAR-REVISE-WORKSPACE-01: the workspace's form: its own heading, without what the queue above already offers. */
+  heading?: string; compact?: boolean; formOpen?: boolean;
 }) {
   const router = useRouter();
   const presetMaterial = props.preset?.materialId && props.materials.some(m => m.id === props.preset!.materialId) ? props.preset.materialId : null;
@@ -83,7 +104,7 @@ export function RevisionStart(props: {
   // Learning Continuity: new questions are not available, which is a state to explain, not an error.
   const [continuity, setContinuity] = useState("");
   const sc = presetMaterial ? null : props.scope ?? null;
-  const [open, setOpen] = useState(!!presetMaterial || !!sc);
+  const [open, setOpen] = useState(props.formOpen ?? (!!presetMaterial || !!sc));
   // The lesson's own sections, when Revise was opened from a lesson's notes: the scope is those sections, not the whole material.
   const [onlySections, setOnlySections] = useState<string[]>(presetMaterial && props.preset?.chunkIds?.length ? [...props.preset.chunkIds] : []);
   const [scopeKind, setScopeKind] = useState<"library" | "documents" | "topic" | "competency">(presetMaterial ? "documents" : sc?.kind ?? "library");
@@ -115,21 +136,24 @@ export function RevisionStart(props: {
   // Revise engine quality 2.6: start by what the learner wants from this sitting. The server turns it into formats, depths and a length.
   const startIntent = useCallback(async (intent: RevisionIntent) => {
     setBusy(intent); setError(""); setNote(""); setContinuity("");
-    const r = await call("/api/individual/scholar/revision/sessions", { mode: REVISION_INTENT[intent].mode, intent, scope: { kind: "library" }, ...studyField() });
+    // What the learner chose to revise, where they chose something. Otherwise all their notes.
+    const scope = presetMaterial ? (onlySections.length ? { kind: "sources", materialIds: [], chunkIds: onlySections, topics: [] } : { kind: "documents", materialIds: [presetMaterial] })
+      : sc?.kind === "topic" ? { kind: "topic", topic: sc.topic } : sc?.kind === "competency" ? { kind: "competency", competencyId: sc.competencyId } : sc?.kind === "documents" ? { kind: "documents", materialIds: sc.materialIds } : { kind: "library" };
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: REVISION_INTENT[intent].mode, intent, scope, ...studyField() });
     setBusy("");
     if (!r.ok && r.json.continuity) { setContinuity(r.json.error ?? "New questions are not available right now."); return; }
     if (!r.ok) { setError(r.json.error ?? "Revision could not start just now."); return; }
     if (r.json.session?.id) router.push(carry(`${revisionHref(r.json.session.id)}&intent=${intent}`));
     else { setNote(r.json.note ?? ""); setUnsaved({ items: r.json.items ?? [], label: r.json.label ?? null }); }
-  }, [router]);
+  }, [router, presetMaterial, onlySections, sc]);
 
   const toggle = <T,>(list: T[], v: T) => (list.includes(v) ? list.filter(x => x !== v) : [...list, v]);
   if (unsaved) return <RevisionRunner session={null} items={unsaved.items} answered={[]} label={unsaved.label} />;
   return (
     <section aria-labelledby="start-h" className={`${learnBox("next")} p-4 sm:p-5`}>
-      <LearningSectionHead icon="target" title="Revise" id="start-h" level={2} caps={false} />
-      <p className="mt-2 max-w-[68ch] text-[13.5px] leading-relaxed text-gray-800">From your own notes. Formative practice: not an assessment and not evidence of competence.</p>
-      {props.modes.includes("today") && (
+      <LearningSectionHead icon="target" title={props.heading ?? "Revise"} id="start-h" level={2} caps={false} />
+      {!props.compact && <p className="mt-2 max-w-[68ch] text-[13.5px] leading-relaxed text-gray-800">From your own notes. Formative practice: not an assessment and not evidence of competence.</p>}
+      {!props.compact && props.modes.includes("today") && (
         <button type="button" className={`${btn} mt-4 w-full sm:w-auto`} disabled={!!busy} onClick={() => start("today", false)}>
           {busy === "today" ? "Preparing your revision…" : "Start Today's Revision"}
         </button>
@@ -146,17 +170,22 @@ export function RevisionStart(props: {
           </li>
         ))}
       </ul>
-      <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-        {props.modes.filter(m => m !== "today" && m !== "custom").map(m => (
-          <li key={m}>
-            <button type="button" disabled={!!busy} onClick={() => start(m, false)}
-              className={`w-full ${whiteCard} p-3 text-left hover:bg-[var(--learn-surface)] disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
-              <span className="block text-[14px] font-semibold text-gray-900">{busy === m ? "Preparing…" : REVISION_MODE_LABEL[m]}</span>
-              <span className="block text-[13px] text-gray-700">{REVISION_MODE_HELP[m]}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
+      {(() => {
+        const ways = (
+          <ul className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {props.modes.filter(m => (props.compact || m !== "today") && m !== "custom").map(m => (
+              <li key={m}>
+                <button type="button" disabled={!!busy} onClick={() => start(m, false)}
+                  className={`w-full ${whiteCard} p-3 text-left hover:bg-[var(--learn-surface)] disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+                  <span className="block text-[14px] font-semibold text-gray-900">{busy === m ? "Preparing…" : REVISION_MODE_LABEL[m]}</span>
+                  <span className="block text-[13px] text-gray-700">{REVISION_MODE_HELP[m]}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        );
+        return props.compact ? <details className="mt-3" suppressHydrationWarning><summary className={`cursor-pointer text-[13.5px] font-semibold text-gray-800 pointer-coarse:py-3.5 ${focusRing}`}>More ways to revise</summary>{ways}</details> : ways;
+      })()}
       <button type="button" className={`${ghost} mt-4`} aria-expanded={open} aria-controls="choose-revision" onClick={() => setOpen(o => !o)}>Choose what and how to revise</button>
       {open && (
         <form id="choose-revision" className={`mt-3 space-y-4 ${whiteCard} p-4`} onSubmit={e => { e.preventDefault(); void start(mode, true); }}>
@@ -361,7 +390,8 @@ export function RevisionRunner(props: { session: SessionState | null; items: Rev
               {saved && <p role="status" className="w-full text-[13px] text-gray-700">{saved}</p>}
             </form>
           )}
-          <Link href={revisionHref()} className={ghost}>Back to Revision</Link>
+          {/* SCHOLAR-REVISE-WORKSPACE-01: feedback, saved, and the next action: Today works out what needs attention now. */}
+          <Link href={revisionHref()} className={btn} data-revise-next>See what to revise next</Link>
         </div>
       ) : item ? (
         <>

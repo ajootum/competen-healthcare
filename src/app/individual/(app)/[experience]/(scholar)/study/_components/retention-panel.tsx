@@ -26,7 +26,7 @@ export function RetentionPanel({ v }: { v: RetentionView }) {
           <p className={sectionLead}>{RETRIEVAL_NOTE} {s.capacity.basis}</p>
           {s.due.length === 0 ? (
             <p className={`mt-2 ${card} p-4 text-[14px] text-gray-700`} data-retrieval-empty>
-              Nothing is due today.{s.upcoming.length ? ` Next: ${s.upcoming[0].label} on ${s.upcoming[0].dueOn}.` : s.notAssessed ? " Topics you have met but not yet answered questions on are not scheduled." : ""}
+              Nothing is due today.{s.upcoming.length ? ` Next: ${s.upcoming[0].label} on ${new Date(`${s.upcoming[0].dueOn}T12:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}.` : s.notAssessed ? " Topics you have met but not yet answered questions on are not scheduled." : ""}
             </p>
           ) : (
             <ul className={list} aria-label="Due for retrieval">

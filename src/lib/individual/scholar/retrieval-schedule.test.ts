@@ -100,7 +100,8 @@ describe("SALE-08 retrieval: the schedule", () => {
     expect(s.capacity.perDay).toBe(2);
     expect(s.due.map(d => d.suggestedOn)).toEqual(["2026-11-04", "2026-11-04", "2026-11-06", "2026-11-06"]);
     expect(s.due[2].rules).toContain("S6");
-    expect(retrievalLine(s.due[2], s.today)).toMatch(/for 2026-11-06/);
+    expect(retrievalLine(s.due[2], s.today)).toMatch(/^Planned for 6 Nov/);
+    expect(retrievalLine(s.due[2], s.today)).not.toMatch(/Due today/);
   });
   it("S7: a topic known only from card reviews follows its cards and points to them", () => {
     const rows = [ev({ source: "review", marking: "self", at: "2026-10-30T09:00:00Z" })];
