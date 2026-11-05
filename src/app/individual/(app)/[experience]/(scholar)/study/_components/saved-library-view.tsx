@@ -308,7 +308,7 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
   const domId = `saved-${a.id}`;
   const acts = itemActions({ materialId: a.materialId, chunkId: a.sources[0] ?? null });
   return (
-    <li className="rounded-2xl border border-gray-200 bg-white p-4">
+    <li className="cmp-learn-notes cmp-learn-box p-4">
       <div className="flex flex-wrap items-start gap-3">
         {c.selectable && (
           <label className="-m-1 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:min-w-[var(--cmp-touch-min)]">
@@ -340,7 +340,7 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
           {/* SCHOLAR-CE-2026 CE-01: ask about this lesson in place -- its session's step where it still has one, else the sections it was taught from. */}
           <AskAbout className="mt-2" surface="library" chunkIds={savedLessonChunkIds(a.sources)} materialId={a.materialId} sessionId={live?.sessionId ?? null} step={live?.step ?? null}
             refLabel={`Saved lesson: ${itemTitle(a, c)}`} prefill={askPrefill("library", { title: itemTitle(a, c) })} />
-          <details className="mt-2 rounded-xl border border-gray-200" open={open}>
+          <details className="mt-2 rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)]" open={open}>
             <summary className={`cursor-pointer list-none px-3 py-2 text-[13.5px] font-semibold text-gray-900 ${focusRing}`}>Read it here</summary>
             <div id={domId} className="border-t border-gray-100 px-3 py-3"><ArtefactBody a={a} c={c} /></div>
           </details>
@@ -423,7 +423,7 @@ async function SessionView({ admin, userId, q, status }: { admin: Admin; userId:
           const n = steps.get(s.id)?.steps ?? 0;
           const at = Math.min(Math.max(far.get(s.id) ?? s.currentStep, s.currentStep), Math.max(0, n - 1));
           return (
-            <li key={s.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <li key={s.id} className="cmp-learn-next flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-4 py-3">
               <span className="min-w-0 flex-1 basis-[14rem]">
                 <span className="block break-words text-[14.5px] font-semibold text-gray-900">{displaySessionTitle(s.title)}</span>
                 <span className="block text-[12.5px] text-gray-600">{n ? `Lesson ${at + 1} of ${n}` : "No lessons left"} · last studied {ukDay(s.lastActiveAt)}{status === "completed" ? " · Completed" : ""}</span>
@@ -481,7 +481,7 @@ async function RevisionView({ admin, userId, q, titles, notes, v820, topicRows }
           const title = a ? lessonTitleOf(a.content) || "Saved lesson" : s && r.step !== null ? `${displaySessionTitle(s.title)} · Lesson ${r.step + 1}` : r.materialId ? titles.get(r.materialId) ?? "Your material" : "Bookmarked";
           const to = a ? urlWithVersion(a.id) : s && r.step !== null ? href(lessonHrefPath(s.id, r.step)) : r.materialId ? href(r.chunkId ? `study/${r.materialId}#c-${r.chunkId}` : `study/${r.materialId}`) : null;
           return (
-            <li key={r.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-gray-200 bg-white px-4 py-3">
+            <li key={r.id} className="cmp-learn-next flex flex-wrap items-center gap-x-4 gap-y-1 rounded-2xl border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-4 py-3">
               <span className="min-w-0 flex-1 basis-[14rem]">
                 <span className="block break-words text-[14.5px] font-semibold text-gray-900">{title}</span>
                 <span className="block text-[12.5px] text-gray-600">Bookmarked {ukDay(r.createdAt)}{a ? ` · ${titles.get(a.materialId) ?? "Your material"}` : ""}</span>
@@ -653,7 +653,7 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
               const chunkIds = h.chunkId ? [h.chunkId] : savedLessonChunkIds(art?.sources);
               const t = title(h);
               return (
-                <li key={`${h.kind}-${h.id}`} className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+                <li key={`${h.kind}-${h.id}`} className="cmp-learn-record rounded-2xl border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-4 py-3">
                   <Link href={target(h)} className={linkCls}>{t}</Link>
                   <span className="ml-2 text-[12px] text-gray-600">{kindLabel[h.kind] ?? "Result"}{materialId ? ` · ${titles.get(materialId) ?? "Your material"}` : ""} · {ukDay(h.createdAt)}</span>
                   <Snippet headline={h.headline} />
@@ -676,7 +676,7 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
           <p className="mt-1 text-[12.5px] text-gray-600">Sections of the files you uploaded, found by the same words. Showing {sec.hits.length} of {sec.total}.</p>
           <ul className="mt-2 space-y-2">
             {sec.hits.map(s => (
-              <li key={s.chunkId} className="rounded-2xl border border-gray-200 bg-white px-4 py-3">
+              <li key={s.chunkId} className="cmp-learn-sources rounded-2xl border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-4 py-3">
                 <p className="break-words text-[14px] font-semibold text-gray-900">{s.materialTitle} <span className="font-normal text-gray-600">· {s.location}</span></p>
                 <Snippet headline={s.headline} />
                 <p className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-0 text-[13px]">

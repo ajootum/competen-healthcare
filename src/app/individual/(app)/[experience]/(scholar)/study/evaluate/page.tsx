@@ -145,7 +145,7 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
           </div>
           <section aria-labelledby="eg-ev-h" className="cmp-learn-record">
             <h2 id="eg-ev-h" className="text-[16px] font-bold text-gray-900">Evidence already available</h2>
-            <dl className="mt-2 grid gap-2 sm:grid-cols-3">
+            <dl className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
               <Tile label="Sections with activity" value={cov ? `${cov.sections.worked} of ${cov.sections.total}` : "Not measured"} note="Coverage, not understanding" />
               <Tile label="Questions answered" value={String(c?.independentQuestions ?? 0)} note="Marked by the app" />
               <Tile label="Completed case decisions" value={String(c?.independentDecisions ?? 0)} note="Simulated practice" />
@@ -153,15 +153,14 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
             <p className="mt-2 text-[12.5px] text-gray-700">{e ? EVALUATION_CONFIDENCE_LABEL[e.confidence.level] : "Your evidence could not be read just now"}. Reading, your own ratings, AI feedback and answers marked by the app are kept apart.</p>
           </section>
           {nba && nba.items.length > 0 && (
-            <section aria-labelledby="eg-next-h">
-              <h2 id="eg-next-h" className="mb-2 text-[16px] font-bold text-gray-900">Next steps</h2>
-              <NextActionsCard items={nba.items.slice(0, 2)} canDecide={nba.canDecide} canPlan={nba.canPlan} dismissed={nba.dismissed} snoozed={nba.snoozed} studyId={sid} />
+            <section aria-label="Next steps">
+              <NextActionsCard title="Next steps" collapseAfter={1} items={nba.items.slice(0, 3)} canDecide={nba.canDecide} canPlan={nba.canPlan} dismissed={nba.dismissed} snoozed={nba.snoozed} studyId={sid} />
             </section>
           )}
           <section aria-labelledby="eg-past-h">
             <h2 id="eg-past-h" className="text-[16px] font-bold text-gray-900">Past evaluations</h2>
             {past.length === 0 ? <p className="mt-1 text-[13.5px] text-gray-700">None yet. An evaluation you complete is kept here and in My Progress.</p> : (
-              <ul className={`mt-2 ${list}`}>{past.map(h => <li key={h.id} className="px-3.5 py-2.5 text-[14px]" data-snapshot={h.id}><Link href={evaluationHref(h.id)} prefetch={false} className={toneAction.link}>{h.label}</Link><span className="block text-[12.5px] text-gray-700">{h.methodLine} · {snapshotWhen(h.createdAt)}</span></li>)}</ul>
+              <ul className={`mt-2 ${list}`}>{past.slice(0, 3).map(h => <li key={h.id} className="px-3.5 py-2.5 text-[14px]" data-snapshot={h.id}><Link href={evaluationHref(h.id)} prefetch={false} className={toneAction.link}>{h.label}</Link><span className="block text-[12.5px] text-gray-700">{h.methodLine} · {snapshotWhen(h.createdAt)}</span></li>)}</ul>
             )}
             <p className="mt-2 text-[13px]"><Link href={evaluateHref("history", { study: sid })} className={toneAction.link}>View evaluation history</Link></p>
           </section>
