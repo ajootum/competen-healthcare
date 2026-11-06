@@ -1,3 +1,5 @@
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import { countDue } from "@/lib/individual/scholar/store";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -134,6 +136,7 @@ export default async function ProgressPage({ params, searchParams }: { params: P
         <PageHeader accent={x.accent} eyebrow={scholarSpace("progress").eyebrow} title="Progress" intro={scholarSpace("progress").intro} />
         <StudyNav dueCount={due0} study={study0?.bar ?? null} />
         <ProgressTabsNav current={tab} study={study0?.session.id ?? null} />
+        {tab === "overview" && <PageSearch scope={scopeLine("evaluate")} action={studyHref("progress")} placeholder="Search your evaluation history by goal, topic or competency" hidden={{ tab: "history", study: study0?.session.id ?? null }} />}
         {tab === "overview" && <OverviewDashboard ctx={ctx} policy={policy0} o={o} due={due0} />}
         {tab === "goals" && <GoalsDashboard ctx={ctx} policy={policy0} o={o} sid={study0?.session.id ?? null} />}
         {tab === "competencies" && <CompetenciesDashboard ctx={ctx} policy={policy0} o={o} />}

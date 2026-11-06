@@ -40,7 +40,7 @@ export function SidebarNav({ experience, learning = false, myPlan = false, searc
         const href = experienceHref(experience, item.segment);
         const on = isActive(pathname, href, item.segment === "");
         return (
-          <Link key={item.key} href={href} aria-current={on ? "page" : undefined}
+          <Link prefetch={false} key={item.key} href={href} aria-current={on ? "page" : undefined}
             className={`flex items-center gap-3 rounded-[9px] px-4 py-2.5 text-[15px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "font-bold" : "font-medium text-gray-900 hover:bg-gray-50"}`}
             style={on ? { background: x.accentSoft, color: x.accent } : undefined}>
             <span aria-hidden className="w-5 text-center text-[15px]">{item.icon}</span>
@@ -49,7 +49,7 @@ export function SidebarNav({ experience, learning = false, myPlan = false, searc
         );
       })}
       {learning && (
-        <Link href="/individual/learning" className={`mt-2 flex items-center gap-3 rounded-[9px] border-t border-gray-100 px-4 py-2.5 pt-3 text-[15px] font-medium text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
+        <Link prefetch={false} href="/individual/learning" className={`mt-2 flex items-center gap-3 rounded-[9px] border-t border-gray-100 px-4 py-2.5 pt-3 text-[15px] font-medium text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
           <span aria-hidden className="w-5 text-center text-[15px]">◫</span>
           Competen Learning
         </Link>
@@ -72,7 +72,7 @@ export function BottomNav({ experience }: { experience: ExperienceKey }) {
           const on = isActive(pathname, href, item.segment === "");
           return (
             <li key={item.key}>
-              <Link href={href} aria-current={on ? "page" : undefined}
+              <Link prefetch={false} href={href} aria-current={on ? "page" : undefined}
                 className={`flex min-h-[56px] flex-col items-center justify-center gap-0.5 text-[11px] font-semibold ${focusRing} ${on ? "" : "text-gray-500"}`}
                 style={on ? { color: x.accent } : undefined}>
                 <span aria-hidden className="text-[18px] leading-none">{item.icon}</span>
@@ -115,7 +115,7 @@ export function AccountMenu({ experience, initials, name, preview = false, schol
     const on = isActive(pathname, href, i.segment === "");
     return (
       <li key={`${cls}-${i.key}`} className={cls}>
-        <Link href={href} aria-current={on ? "page" : undefined} onClick={() => setOpen(false)}
+        <Link prefetch={false} href={href} aria-current={on ? "page" : undefined} onClick={() => setOpen(false)}
           className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-[14.5px] ${on ? "font-bold" : "font-medium text-gray-900 hover:bg-gray-50"} ${focusRing}`}
           style={on ? { background: x.accentSoft, color: x.accent } : undefined}>
           <span aria-hidden className="w-5 text-center">{i.icon}</span>{i.label}
