@@ -20,7 +20,7 @@ const MORE: Screen[] = ["plan", "worlds", "quadrants", "review", "ai"];
 const TURN_OFF = "Turn off LifeOS? Your records are kept, and you can turn it on again later.";
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  const ref = useModalFocus<HTMLDivElement>(onClose);
+  const ref = useModalFocus(onClose);
   return (
     <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} className={styles.modal} role="dialog" aria-modal="true" aria-label={title}>

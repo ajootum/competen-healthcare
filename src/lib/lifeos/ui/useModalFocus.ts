@@ -7,8 +7,8 @@ import { useEffect, useRef } from "react";
 
 const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
-export function useModalFocus<T extends HTMLElement>(onClose: () => void) {
-  const ref = useRef<T>(null);
+export function useModalFocus(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
   const close = useRef(onClose);
   useEffect(() => { close.current = onClose; }, [onClose]);
   useEffect(() => {
