@@ -117,19 +117,31 @@ try {
   await until(async () => (await box.count()) > 0 || (await start.count()) > 0, 200_000);
   if (await start.count()) { await start.click(); await box.waitFor({ timeout: 180_000 }); }
   const gate = panel.locator('[role="status"]:has(button)');
-  let gateSeen = false, gateText = "";
-  for (const typed of [
-    "I have a patient on my ward right now who is doing this. What should I do for her today, should I give her something?",
-    "My baby at home does this and I am worried. Should I take him to hospital tonight or give him medicine?",
-  ]) {
+  const refusal = panel.locator('p[role="status"]');
+  const outcomeOf = async (typed: string) => {
     await box.fill(typed);
     from = new Date().toISOString();
     await check.click();
-    const seen = await until(async () => (await gate.count()) > 0 || (await panel.locator('[data-testid="guide-feedback"]').count()) > 0, 120_000);
-    if (seen && (await gate.count())) { gateSeen = true; gateText = (await gate.first().innerText()).replace(/\s+/g, " "); break; }
-    note(`the gate did not ask on: "${typed.slice(0, 50)}…"`);
-    const retry = panel.getByRole("button", { name: /Try again|Try this one/ }).first();
-    if (await retry.count()) { await retry.click(); await page.waitForTimeout(600); }
+    await until(async () => (await gate.count()) > 0 || (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || (await refusal.allInnerTexts()).some(t => t.trim() && !/Working/.test(t)), 150_000);
+    await page.waitForTimeout(600);
+    if (await gate.count()) return { kind: "asked", text: (await gate.first().innerText()).replace(/\s+/g, " ") };
+    if (await panel.locator('[data-testid="guide-feedback"]').count()) return { kind: "judged", text: "" };
+    return { kind: "refused", text: (await refusal.allInnerTexts()).join(" | ").replace(/\s+/g, " ") };
+  };
+  // A real patient: refused, whatever the framing, with nothing sent to a model.
+  const real = await outcomeOf("My patient in bed 4 is doing this. What should I do for her today?");
+  note(`a real patient: ${real.kind}: "${real.text.slice(0, 170)}"`);
+  await new Promise(r => setTimeout(r, 2500));
+  ok(real.kind === "refused" && (await aiCount(from)) === 0, `a real patient is refused in the panel, with no model call (${await aiCount(from)})`);
+  await panel.screenshot({ path: join(OUT, "shots/r1-real-patient-refused.png") });
+  if (await panel.locator('[data-testid="guide-feedback"]').count()) await panel.getByRole("button", { name: /Try again|Try this one/ }).first().click();
+  // An ambiguous request: the gate asks whether it is study.
+  let gateSeen = false, gateText = "";
+  for (const typed of ["Should I give something for this?", "Should I give paracetamol for this?", "What dose should be given for this?", "Should I give this baby a sedative?"]) {
+    const o = await outcomeOf(typed);
+    note(`"${typed}": ${o.kind} ${o.text.slice(0, 120)}`);
+    if (o.kind === "asked") { gateSeen = true; gateText = o.text; break; }
+    if (o.kind === "judged") { await panel.getByRole("button", { name: /Try again|Try this one/ }).first().click(); await page.waitForTimeout(600); }
   }
   ok(gateSeen, `the gate asks in the panel, where the learner is: "${gateText.slice(0, 120)}"`);
   if (gateSeen) {
@@ -139,20 +151,17 @@ try {
     ok(!(await box.isEditable()), "the answer cannot change while the question is open");
     const buttons = gate.first().locator("button");
     note(`its answers: ${(await buttons.allInnerTexts()).join(" / ")}`);
-    // "About a patient": the page's own answer, with nothing judged.
     await buttons.nth(1).click();
     await page.waitForTimeout(800);
-    const said = (await gate.first().innerText().catch(() => "")).replace(/\s+/g, " ");
-    note(`after "a patient": ${said.slice(0, 200)}`);
+    note(`after "a patient": ${(await gate.first().innerText().catch(() => "")).replace(/\s+/g, " ").slice(0, 220)}`);
     await new Promise(r => setTimeout(r, 2000));
     ok((await aiCount(from)) === 0 && (await panel.locator('[data-testid="guide-feedback"]').count()) === 0, "saying it is about a patient judges nothing and sends nothing");
     await panel.screenshot({ path: join(OUT, "shots/r1-patient-answer.png") });
-    // "For my studies": the same answer goes on, with the purpose recorded, and the panel carries on.
     await buttons.first().click();
-    const went = await until(async () => (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || (await panel.locator('p[role="status"]').count()) > 0, 180_000);
+    const went = await until(async () => (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || (await refusal.allInnerTexts()).some(t => t.trim() && !/Working/.test(t)), 180_000);
     ok(went, "saying it is for study carries on in the panel");
     await page.waitForTimeout(1500);
-    note(`after "for study": feedback ${await panel.locator('[data-testid="guide-feedback"]').count()}, model calls ${await aiCount(from)}`);
+    note(`after "for study": feedback ${await panel.locator('[data-testid="guide-feedback"]').count()}, model calls ${await aiCount(from)}, said "${(await refusal.allInnerTexts()).join(" | ").slice(0, 160)}"`);
   }
 
   // ── 4. LESSON-LEVEL COMPLETION: a lesson with no earlier check, through every step ──
@@ -187,19 +196,16 @@ try {
   const statusNow = (await page.locator("body").innerText());
   ok(!/Current · [^\n]*Checked:/.test(statusNow.slice(0, 6000)), "the lesson does not read as checked after one step");
   await p2.screenshot({ path: join(OUT, "shots/r4-after-step-1.png") });
-  // Through the rest, moving on.
-  for (let i = 1; i <= of; i++) {
-    const next = p2.getByRole("button", { name: /^(Next step|Finish)$/ }).first();
-    if (!(await next.count())) { await p2.getByRole("button", { name: /Move on without answering|Next step|Finish/ }).first().click(); }
-    else await next.click();
-    await page.waitForTimeout(1500);
-    if (i < of) { await until(async () => (await pill()).startsWith(`Step ${i + 1}`) && (await b2.count()) > 0, 180_000); await p2.getByRole("button", { name: /Move on without answering|Next step|Finish/ }).first().waitFor({ timeout: 30_000 }); }
-    if (i < of - 0 && (await p2.locator('[data-testid="guide-outcome"]').count())) break;
+  // Through the rest, moving on. Each step still has to be taught for the activity to complete.
+  await p2.getByRole("button", { name: /^(Next step|Finish)$/ }).first().click();
+  for (let guard = 0; guard < of + 2; guard++) {
+    const settled = await until(async () => (await p2.locator('[data-testid="guide-outcome"]').count()) > 0 || ((await b2.count()) > 0 && !(await p2.getByText("Working…").count())), 200_000);
+    if (!settled || (await p2.locator('[data-testid="guide-outcome"]').count())) break;
+    await page.waitForTimeout(800);
     events = await ev(1, started);
-    if (i < of) ok(events.every(e => e.verdict === null), `still no lesson-level verdict at step ${i + 1}`);
-    if (i < of) { await p2.getByRole("button", { name: /Move on without answering/ }).first().click(); await page.waitForTimeout(1500); if (i + 1 === of) { /* the last skip finishes */ } }
-    if (i + 1 >= of) break;
-    await until(async () => (await pill()).startsWith(`Step ${i + 2}`) && (await b2.count()) > 0, 180_000);
+    ok(events.every(e => e.verdict === null), `still no lesson-level verdict at "${await pill()}"`);
+    await p2.getByRole("button", { name: /Move on without answering/ }).first().click();
+    await page.waitForTimeout(1500);
   }
   await until(async () => (await p2.locator('[data-testid="guide-outcome"]').count()) > 0, 60_000);
   const outcome = await p2.locator('[data-testid="guide-outcome"]').innerText().catch(() => "(no outcome)");
