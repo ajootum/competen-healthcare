@@ -197,11 +197,65 @@ Everything an organisation needs to run a pilot, tested on staging against fixtu
 - Invitations are one at a time, with no bulk import.
 - Grants have no screen yet: a person shares a record with the whole workspace, or delegates it to one member.
 
+## Stage 6: the controlled public API (delivery step 9)
+
+An app can act for one person, within what that person approved, until they revoke it. **There is no master API key.** Off until the `lifeos_public_api` flag is on and a client is approved.
+
+- **OAuth 2.1, authorization code with PKCE.** Clients hold no secret. Codes and tokens are stored only as hashes. A code is single-use, for its client, with its verifier, at its exact return address.
+- **The boundary is a list.** `PUBLIC_ROUTES` names what a token can reach: profile, commitments, worlds, and reading the schedule. A token cannot reach anything else, whatever scopes it holds. Approving apps, deciding suggestions, sharing, invitations and tenants stay with the person, and the seal check fails if those are added.
+- **Consent:** a real screen that shows what is being asked. It appears only on a first-party host, and refuses an unapproved app, an unregistered return address, or a scope the app may not hold.
+- **Refresh rotates,** and replaying a used refresh token ends the whole approval, because it means a token was stolen.
+- **It ends when it should:** when the person disconnects it, loses LifeOS, or the app is suspended.
+- **Marked:** a write records the app as its source, in the record and in the person's audit trail.
+
+### Migration 906-lifeos-public-api.sql
+
+- **Dependencies:** 901. Application order: 901, 902, 903, 904, 905, 906.
+- **Pre-application state on staging:** no `lifeos_oauth_` tables.
+- **sha256:** `943324e458a9d6ef9fd877552d21a32cc5808fcecfb4139565eb2744fbaa6165`
+- **Applied to staging:** twice, the second run a no-op. It writes no row.
+- **Rollback:** [rollback-906.sql](evidence/LIFEOS-API-001/rollback-906.sql), rehearsed on staging inside a rolled-back transaction.
+- **Not applied to production.**
+
+**Verified:** `scripts/lifeos-public-api-harness.ts`, 49 of 49, with a real consent screen in Chromium and real tokens over HTTP on staging.
+
+**Not verified:** a real third-party app, production. No independent security read was run on this stage, and one is advisable before a real app connects.
+
+**Known limits:**
+
+- Approving a client is a direct database step, with no screen.
+- There is no CORS, so a browser-only app cannot call the API: server and native apps only.
+- Rate limits per app and person are the general ones, with no commercial tiers.
+
+## Stage 7: commercial readiness (delivery step 10)
+
+- **The assessment:** [LIFEOS-COMMERCIAL-READINESS-001](LIFEOS-COMMERCIAL-READINESS-001.md), covering the five questions the owner set, from measured facts.
+- **Export:** a person can download everything they own, at any time, including after their access has ended.
+
+**Verified on the top branch, staging:** pilot 50 of 50 including export, Individual access 32 of 32, browser walk 44 of 44.
+
+**No migration in this stage.**
+
+## Production package (when the owner chooses)
+
+Apply in this order, each by the owner in the SQL editor, each with its own GO. All are `lifeos_` objects and none changes another product's table.
+
+| Order | File | sha256 |
+|---|---|---|
+| 1 | 901-lifeos-core.sql | `008dfa62f2275da56b6c129813bc4d17a8bda2f3d703741f0c55bcce3361d5ad` |
+| 2 | 902-lifeos-access-terms.sql | `129f70c051762235d30b00c83c277e36bb304777e0682ed05e81e346c3ff6535` |
+| 3 | 903-lifeos-tenant-domains.sql | `b65a8cd67675da65b30ce5f7a5f9c2e983cc7d4c9ca88bca126c2f4f36ec9b56` |
+| 4 | 904-lifeos-invitations.sql | `75c5b1b29d83accde07649a697bd3dba03ce1306ba23de9620f926d87c193edc` |
+| 5 | 905-lifeos-domain-uniqueness.sql | `0cf78db6ccaad44d978fe8d2f1c4b87ae627c8389953cf01d360086bedea1ea0` |
+| 6 | 906-lifeos-public-api.sql | `943324e458a9d6ef9fd877552d21a32cc5808fcecfb4139565eb2744fbaa6165` |
+
+Then, each separately: turn on `lifeos_core`, `lifeos_individual_access` with published terms, `individual_lifeos_entry`, `lifeos_public_api` with approved clients, and `LIFEOS_TENANT_HOSTS`. Each one can be off while the others are on.
+
 ## Not done at this stage
 
 - **No way to get access outside a script.** Provisioning and entitlement grants are `core/provision.ts`, called by the harness. There is no commercial plan or billing behind `lifeos_entitlement` yet. Step 6.
 - **No AI model.** The Chief of Staff is rules only, matching the prototype. Connecting a model is a separate owner decision on what data may be sent.
-- **No integration provider, no OAuth, no public routes.** Steps 8 and 9. Every route is `internal`.
+- **No integration provider.** The adapter interface exists, and no provider is built.
 - **Known limits, from the independent read:**
   - A person whose entitlement lapses cannot revoke grants they gave until it is renewed. The grants stay as they set them.
   - Grants made before a person leaves are revoked on leaving. Those on a suspended tenant's workspace stay, and the workspace itself refuses everyone.

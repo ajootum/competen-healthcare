@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { ApiError, get, post } from "./client";
+import { ApiError, downloadExport, get, post } from "./client";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 delivery step 9. What a person has connected, and the way to end it.
@@ -18,6 +18,12 @@ export function ConnectedApps() {
   // eslint-disable-next-line react-hooks/set-state-in-effect -- reads the API after mount
   useEffect(() => { void load(); }, [load]);
   return (
+    <>
+    <div className={styles.card}>
+      <h2>Your records</h2>
+      <p className={styles.muted}>Everything you own in LifeOS, as a file you keep. You can do this at any time, including if your access ends.</p>
+      <button onClick={() => { downloadExport().catch(() => setError("Your records could not be prepared just now.")); }}>Download my records</button>
+    </div>
     <div className={styles.card}>
       <h2>Connected apps</h2>
       <p className={styles.muted}>Apps you have allowed to act for you. Disconnecting one ends its access at once.</p>
@@ -37,5 +43,6 @@ export function ConnectedApps() {
         </div>
       ))}
     </div>
+    </>
   );
 }

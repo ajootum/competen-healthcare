@@ -100,7 +100,12 @@ export async function readActiveIndividual(
 ): Promise<Row> {
   const [link] = await store.where("lifeos_identity_link", { issuer, subject, status: "active" }, { limit: 1 });
   if (!link) throw new LifeosError("forbidden", "LifeOS has not been enabled for this account.");
-  const individual = await store.get("lifeos_individual", String(link.individual_id));
+  return assertAdmitted(store, String(link.individual_id), sourceStands);
+}
+
+/** The person is active and holds a live entitlement that still stands. Sessions and bearer tokens pass the same check. */
+export async function assertAdmitted(store: LifeosStore, individualId: string, sourceStands: (entitlement: Row) => Promise<boolean> = async () => true): Promise<Row> {
+  const individual = await store.get("lifeos_individual", individualId);
   if (!individual || individual.status !== "active") throw new LifeosError("forbidden", "This LifeOS account is not active.");
   // The live view judges the period by the database clock. No live entitlement means no access.
   const live = await store.where("lifeos_live_entitlement", { individual_id: String(individual.id) }, { limit: 50 });

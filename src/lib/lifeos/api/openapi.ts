@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CONTRACT_VERSION } from "../core/contracts";
+import { SCOPES } from "../core/oauth";
 import type { Route } from "./routes";
 
 // LIFEOS-API-001 section 6. Generated from the route table, so it cannot describe an endpoint that does not exist.
@@ -66,11 +67,17 @@ export function buildOpenApi(routes: Route[], only?: "public") {
     info: {
       title: "LifeOS API",
       version: `1.${CONTRACT_VERSION}.0`,
-      description: "LifeOS Core and Commitment Engine. Internal at this stage. No master API key exists: third-party access will be user-delegated.",
+      description: only === "public"
+        ? "LifeOS public API. Access is user-delegated with OAuth 2.1 and PKCE: an app acts for one person, within the scopes they approved, until they revoke it. There is no master API key."
+        : "LifeOS Core and Commitment Engine, internal routes.",
     },
     servers: [{ url: "/api/lifeos/v1" }],
-    security: [{ session: [] }],
-    components: { securitySchemes: { session: { type: "apiKey", in: "cookie", name: "sb-<project-ref>-auth-token" } } },
+    security: only === "public" ? [{ oauth: [] }] : [{ session: [] }],
+    components: {
+      securitySchemes: only === "public"
+        ? { oauth: { type: "oauth2", flows: { authorizationCode: { authorizationUrl: "/lifeos/authorize", tokenUrl: "/api/lifeos/v1/oauth/token", scopes: SCOPES } } } }
+        : { session: { type: "apiKey", in: "cookie", name: "sb-<project-ref>-auth-token" } },
+    },
     paths,
   };
 }

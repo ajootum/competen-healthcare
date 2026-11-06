@@ -1,6 +1,6 @@
 import { LifeosError } from "./errors";
-import { provisionIndividual } from "./provision";
-import type { LifeosStore, Row } from "./types";
+import { assertAdmitted, provisionIndividual } from "./provision";
+import type { LifeosStore } from "./types";
 
 // LIFEOS-API-001 delivery step 6. Optional access for a person who already holds a live Competen Individual
 // entitlement. It is their choice, it records the terms they accepted, and it can be turned off.
@@ -27,6 +27,8 @@ export type AccessStatus = {
   eligible: boolean;
   /** They already hold live access. */
   active: boolean;
+  /** They have a LifeOS identity, so they have records to take with them. */
+  hasRecords: boolean;
   terms: { version: string; title: string; url: string } | null;
 };
 
@@ -36,15 +38,15 @@ async function publishedTerms(store: LifeosStore): Promise<AccessStatus["terms"]
   return latest ? { version: String(latest.version), title: String(latest.title), url: String(latest.url) } : null;
 }
 
-async function liveEntitlementsOf(store: LifeosStore, id: SessionIdentity): Promise<Row[]> {
-  const [link] = await store.where("lifeos_identity_link", { issuer: id.issuer, subject: id.subject, status: "active" }, { limit: 1 });
-  if (!link) return [];
-  return store.where("lifeos_live_entitlement", { individual_id: String(link.individual_id) }, { limit: 50 });
-}
-
 export async function accessStatus(store: LifeosStore, id: SessionIdentity): Promise<AccessStatus> {
-  const [enabled, terms, live] = await Promise.all([store.flagEnabled(INDIVIDUAL_ACCESS_FLAG), publishedTerms(store), liveEntitlementsOf(store, id)]);
-  return { enabled, eligible: enabled && id.competenIndividualLive, active: live.length > 0, terms };
+  const [enabled, terms, links] = await Promise.all([
+    store.flagEnabled(INDIVIDUAL_ACCESS_FLAG), publishedTerms(store),
+    store.where("lifeos_identity_link", { issuer: id.issuer, subject: id.subject, status: "active" }, { limit: 1 }),
+  ]);
+  const link = links[0];
+  // The same admission a request passes, so this can never say active for someone the API would refuse.
+  const active = link ? await assertAdmitted(store, String(link.individual_id), async e => e.source !== "competen_individual" || id.competenIndividualLive).then(() => true, () => false) : false;
+  return { enabled, eligible: enabled && id.competenIndividualLive, active, hasRecords: !!link, terms };
 }
 
 /** The person's own decision. Safe to retry: a person who already holds this access is simply told so. */
