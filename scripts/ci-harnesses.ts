@@ -40,6 +40,8 @@ const INCLUDED = [
   // COMP-ENG-002H Track B: the production-target guard, proven against a simulated production
   // identity with no network. §5 requires it to be "version-controlled and permanently blocking".
   "production-guard-harness.ts",
+  // ADR-018: the LifeOS seal. Parses source only, so it needs no database, network or environment.
+  "lifeos-seal-harness.ts",
   // COMP-ENG-002H Track A: next.config.ts and playwright.config.ts must agree about the dev origin.
   // Pure static read of two config files, so it belongs in the no-credential subset.
   "dev-origin-harness.ts",
@@ -286,6 +288,12 @@ const EXCLUDED: Exclusion[] = [
  * reads as pure/local must be screened into INCLUDED or EXCLUDED instead.
  */
 const STAGING_ONLY: Exclusion[] = [
+  {
+    file: "lifeos-acceptance-harness.ts",
+    reason:
+      "LIFEOS-API-001 end-to-end acceptance. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), the "
+      + "staging service-role key and real sessions. It creates fixture identities and turns the staging gate on for its run. Refuses any other project.",
+  },
   {
     file: "scholar-sqie-acceptance-harness.ts",
     reason:

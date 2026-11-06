@@ -1,0 +1,122 @@
+import { createHash } from "node:crypto";
+import { hasScope } from "../core/access";
+import { LifeosError } from "../core/errors";
+import { ListQueryInput } from "../core/contracts";
+import type { LifeosStore, Principal } from "../core/types";
+import { matchRoute, type Bucket } from "./routes";
+
+// LIFEOS-API-001 sections 2, 6 and 9. The one door. In order: gate, authentication, route, scope, rate limit,
+// request shape, handler. Every LifeOS endpoint passes through this function, and nothing else serves them.
+
+export const LIFEOS_CORE_FLAG = "lifeos_core";
+
+/** Requests per person, per minute. Fixed here at this stage, on the database clock. */
+export const RATE_LIMITS: Record<Bucket, { max: number; windowSeconds: number }> = {
+  read: { max: 600, windowSeconds: 60 },
+  write: { max: 120, windowSeconds: 60 },
+  generate: { max: 10, windowSeconds: 60 },
+};
+
+export type DispatchDeps = {
+  /** Null when the service key is unavailable, which is the same as the gate being off. */
+  store: LifeosStore | null;
+  /** Resolves the principal, or throws a LifeosError. */
+  authenticate: () => Promise<Principal>;
+  traceId: string;
+};
+
+const json = (status: number, body: unknown, headers: Record<string, string> = {}) =>
+  new Response(JSON.stringify(body), { status, headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers } });
+
+function errorResponse(e: LifeosError, traceId: string) {
+  return json(
+    e.status,
+    { error: { code: e.code, message: e.message, ...(e.details !== undefined ? { details: e.details } : {}), traceId } },
+    e.retryAfter ? { "Retry-After": String(e.retryAfter) } : {},
+  );
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+async function run(req: Request, segments: string[], deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
+  const principal = await deps.authenticate();
+
+  const matched = matchRoute(req.method, segments);
+  if (!matched) throw new LifeosError("not_found", "That was not found.");
+  if (matched === "method_not_allowed") throw new LifeosError("method_not_allowed", "That method is not available here.");
+  const { route, params } = matched;
+
+  for (const value of Object.values(params)) {
+    if (!UUID.test(value)) throw new LifeosError("not_found", "That was not found.");
+  }
+  if (route.scope && !hasScope(principal, route.scope)) throw new LifeosError("forbidden", "This access does not include that action.");
+
+  const limit = RATE_LIMITS[route.bucket];
+  const rate = await deps.store.rateTake(principal.individualId, route.bucket, limit.max, limit.windowSeconds);
+  if (!rate.allowed) throw new LifeosError("rate_limited", "Too many requests. Wait a moment and try again.", { retryAfter: rate.retryAfter });
+
+  const url = new URL(req.url);
+  let query: Record<string, string | number | undefined> = {};
+  if (route.list) {
+    const parsed = ListQueryInput.safeParse(Object.fromEntries(url.searchParams));
+    if (!parsed.success) throw new LifeosError("validation_failed", "Those filters are not valid.", { details: parsed.error.issues.map(i => ({ path: i.path.join("."), message: i.message })) });
+    query = parsed.data;
+  }
+
+  let body: unknown = undefined;
+  let idempotencyKey: string | null = null;
+  let requestHash: string | null = null;
+  if (route.method !== "GET") {
+    // Blocks a cross-site form post: a browser cannot send this content type from a plain form.
+    if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+      throw new LifeosError("validation_failed", "Send this request as application/json.");
+    }
+    idempotencyKey = req.headers.get("idempotency-key");
+    if (!idempotencyKey || idempotencyKey.length > 255) throw new LifeosError("validation_failed", "Every write needs an Idempotency-Key header of at most 255 characters.");
+    const raw = await req.text();
+    try {
+      body = raw ? JSON.parse(raw) : {};
+    } catch {
+      throw new LifeosError("validation_failed", "The request body is not valid JSON.");
+    }
+    requestHash = createHash("sha256").update(`${route.method} ${url.pathname}\n${raw}`).digest("hex");
+    if (route.input) {
+      const parsed = route.input.safeParse(body);
+      if (!parsed.success) throw new LifeosError("validation_failed", "Some of those values are not valid.", { details: parsed.error.issues.map(i => ({ path: i.path.join("."), message: i.message })) });
+    }
+  }
+
+  const result = await route.handler({
+    ctx: { store: deps.store, principal, traceId: deps.traceId, idempotencyKey, requestHash },
+    params, body, query,
+  });
+  return json(result.status ?? 200, {
+    data: result.data,
+    meta: {
+      traceId: deps.traceId,
+      ...(result.nextCursor !== undefined ? { nextCursor: result.nextCursor } : {}),
+      ...(result.replayed ? { replayed: true } : {}),
+    },
+  });
+}
+
+export async function dispatch(req: Request, segments: string[], deps: DispatchDeps): Promise<Response> {
+  // THE GATE FIRST, before authentication. Off, a signed-out visitor and a signed-in one get the same empty 404, so
+  // LifeOS cannot be told apart from a route that does not exist. Any failure to read the gate counts as off.
+  let on = false;
+  try {
+    on = !!deps.store && (await deps.store.flagEnabled(LIFEOS_CORE_FLAG));
+  } catch {
+    on = false;
+  }
+  if (!on || !deps.store) return new Response(null, { status: 404 });
+
+  try {
+    return await run(req, segments, { ...deps, store: deps.store });
+  } catch (e) {
+    if (e instanceof LifeosError) return errorResponse(e, deps.traceId);
+    // Unknown failures say nothing about their cause. The trace id joins this to the server log.
+    console.error(`[lifeos] ${deps.traceId}`, e);
+    return errorResponse(new LifeosError("unavailable", "LifeOS could not complete that just now."), deps.traceId);
+  }
+}
