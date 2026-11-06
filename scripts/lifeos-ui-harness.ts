@@ -330,6 +330,15 @@ async function main() {
     await p.getByRole("heading", { name: "Calendar", level: 1 }).waitFor({ timeout: 10000 });
     ok("V-back", true, "the browser's back button works between screens");
     await p.getByRole("main").getByRole("button", { name: "＋ Capture" }).click();
+    const stayed = await p.evaluate(() => {
+      const d = document.querySelector('[role="dialog"]');
+      const items = d ? [...d.querySelectorAll<HTMLElement>("button, input, select, textarea")].filter(x => !(x as HTMLButtonElement).disabled) : [];
+      items[items.length - 1]?.focus();
+      return !!d && d.contains(document.activeElement);
+    });
+    await p.keyboard.press("Tab");
+    const trapped = await p.evaluate(() => !!document.querySelector('[role="dialog"]')?.contains(document.activeElement));
+    ok("V-tab", stayed && trapped, "Tab stays inside a dialog");
     await p.keyboard.press("Escape");
     await dialog(p).waitFor({ state: "detached", timeout: 5000 });
     ok("V-esc", true, "Escape closes a dialog");

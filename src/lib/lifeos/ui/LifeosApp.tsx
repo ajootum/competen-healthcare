@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { Commitment, World } from "./client";
 import { addDays } from "../core/time";
 import {
@@ -9,6 +9,7 @@ import {
 } from "./screens";
 import { NAV, isScreen, type Screen } from "./nav";
 import { type CommitmentFields, type Lifeos, useLifeos } from "./useLifeos";
+import { useModalFocus } from "./useModalFocus";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 step 5. The shell of the owner-approved baseline: sidebar, bottom bar, Capture, and the dialogs.
@@ -19,14 +20,7 @@ const MORE: Screen[] = ["plan", "worlds", "quadrants", "review", "ai"];
 const TURN_OFF = "Turn off LifeOS? Your records are kept, and you can turn it on again later.";
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const before = document.activeElement as HTMLElement | null;
-    ref.current?.querySelector<HTMLElement>("input, select, textarea, button")?.focus();
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
-    document.addEventListener("keydown", onKey);
-    return () => { document.removeEventListener("keydown", onKey); before?.focus?.(); };
-  }, [onClose]);
+  const ref = useModalFocus<HTMLDivElement>(onClose);
   return (
     <div className={styles.overlay} onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
       <div ref={ref} className={styles.modal} role="dialog" aria-modal="true" aria-label={title}>
