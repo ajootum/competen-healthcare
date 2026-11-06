@@ -1,19 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ read: [] as string[], failLearn: false, learning: true }));
+const h = vi.hoisted(() => ({ read: [] as string[], failLearn: false, learning: true, failCourses: false, failProgrammes: false, learnAsked: [] as string[] }));
 
 vi.mock("../learning-plan/entry-store", () => ({ listEntries: async () => { h.read.push("plan"); return { ok: true, data: { entries: [{ id: "e1", title: "Sepsis revision", entryDate: "2026-11-09", status: "planned" }], exceptions: [] } }; } }));
 vi.mock("./apply-context-data", () => ({ loadPracticeRows: async () => { h.read.push("apply"); return []; } }));
 vi.mock("./competency-view", () => ({ loadLearnerCatalogue: async () => { h.read.push("competencies"); return { competencies: [{ id: "c1", title: "Recognise sepsis", code: "N1" }] }; } }));
 vi.mock("@/lib/learning/policy", () => ({ learningEnabled: async () => { h.read.push("learning-policy"); return h.learning; } }));
-vi.mock("@/lib/learning/record", () => ({ myRecords: async () => { h.read.push("courses"); return [{ id: "r1", title: "Sepsis recognition course", code: "SEP1", status: "in_progress", delivery: "competen", enrolledAt: "2026-10-01" }]; } }));
+vi.mock("@/lib/learning/record", () => ({ myRecords: async () => { h.read.push("courses"); if (h.failCourses) throw new Error("down"); return [{ id: "r1", title: "Sepsis recognition course", code: "SEP1", status: "in_progress", delivery: "competen", enrolledAt: "2026-10-01" }]; } }));
 vi.mock("@/lib/learning/products", () => ({ loadLearningRecords: async () => { h.read.push("completed"); return []; } }));
 vi.mock("./learn-search", () => ({
   displayTitle: (t: string) => t, parseSearchParams: (x: unknown) => x,
-}));
-vi.mock("./tolerant-search", () => ({
-  searchLibraryTolerant: async () => {
+  searchLibrary: async (_a: unknown, _u: unknown, p: { q: string }) => {
     h.read.push("learn");
+    h.learnAsked.push(p.q);
     if (h.failLearn) throw new Error("down");
     return { topics: { items: [{ name: "Sepsis", sections: 2 }] }, sections: { items: [{ chunkId: "ch1", materialId: "m1", materialTitle: "Sepsis notes", location: "Page 2", topics: [] }] }, sessions: { items: [] } };
   },
@@ -24,7 +23,7 @@ vi.mock("./store", () => ({
   librarySearch: async () => { h.read.push("saved"); return { ok: true, data: { rows: [], total: 0 } }; },
   listEvaluations: async () => { h.read.push("evaluate"); return { ok: true, data: [] }; },
   libraryTopics: async () => { h.read.push("revise-topics"); return new Map([["m1", [["Sepsis"], ["Sepsis", "Fluids"]]]]); },
-  learnerProgramme: async () => ({ ok: true, data: null }),
+  learnerProgramme: async () => (h.failProgrammes ? { ok: false, notProvisioned: false } : { ok: true, data: null }),
   listProgrammes: async () => ({ ok: true, data: [{ code: "RN", label: "Nursing", profession: "Nursing", country: null, level: null }] }),
   listMaterials: async () => ({ ok: true, data: [{ id: "m1", title: "Sepsis notes", fileName: "s.pdf" }, { id: "m2", title: "Wound care", fileName: "w.pdf" }] }),
 }));
@@ -94,7 +93,29 @@ describe("globalSearch", () => {
     h.learning = false;
     const off = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
     h.learning = true;
-    expect(off.find(x => x.module === "courses")).toMatchObject({ types: [], unreadable: false });
+    expect(off.find(x => x.module === "courses")).toMatchObject({ unreadable: false });
+  });
+  it("Programmes are still found with Learning off, and the course lists are not read", async () => {
+    h.learning = false; h.read = [];
+    const g = await globalSearch({ admin: {}, userId: "u1" }, open, "nursing");
+    h.learning = true;
+    expect(g.find(x => x.module === "courses")!.types.find(t => t.label === "Programmes")!.results.map(r => r.id)).toEqual(["RN"]);
+    expect(h.read).not.toContain("courses");
+    expect(h.read).not.toContain("completed");
+  });
+  it("one failed courses read says the source could not be searched", async () => {
+    h.failCourses = true;
+    const a = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
+    h.failCourses = false; h.failProgrammes = true;
+    const b = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
+    h.failProgrammes = false;
+    expect(a.find(x => x.module === "courses")).toMatchObject({ unreadable: true, types: [] });
+    expect(b.find(x => x.module === "courses")).toMatchObject({ unreadable: true, types: [] });
+  });
+  it("Learn is searched with synonyms only, never a spelling correction", async () => {
+    h.learnAsked = [];
+    await globalSearch({ admin: {}, userId: "u1" }, open, "paediatric");
+    expect(h.learnAsked).toEqual(["paediatric pediatric"]);
   });
 });
 

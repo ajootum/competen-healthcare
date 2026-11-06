@@ -4,9 +4,8 @@ import { matchesSearch, searchWords } from "../search/match";
 import { listEntries } from "../learning-plan/entry-store";
 import { loadPracticeRows } from "./apply-context-data";
 import { loadLearnerCatalogue } from "./competency-view";
-import { displayTitle, parseSearchParams } from "./learn-search";
-import { searchLibraryTolerant } from "./tolerant-search";
-import { expandWebsearch } from "../search/tolerant";
+import { displayTitle, parseSearchParams, searchLibrary } from "./learn-search";
+import { expandText, expandWebsearch } from "../search/tolerant";
 import { learningEnabled } from "@/lib/learning/policy";
 import { myRecords } from "@/lib/learning/record";
 import { loadLearningRecords } from "@/lib/learning/products";
@@ -59,7 +58,8 @@ function sources(ctx: Ctx): Partial<Record<SearchModuleKey, Source>> {
     },
     learn: async (q, { materials }) => {
       if (!materials) return null;
-      const r = await searchLibraryTolerant(admin, userId, parseSearchParams({ q }), materials);
+      // Synonyms only: Global Search never corrects spelling, so a misspelling finds nothing rather than quietly showing another term.
+      const r = await searchLibrary(admin, userId, { ...parseSearchParams({ q }), q: expandText(q) }, materials);
       if (!r.topics && !r.sections && !r.sessions) return null;
       return [
         { label: "Topics", results: (r.topics?.items ?? []).slice(0, PER_TYPE).map(t => ({ id: t.name, title: t.name, detail: `${t.sections} section${t.sections === 1 ? "" : "s"}`, path: `study/learn?topicView=${encodeURIComponent(t.name)}` })) },
@@ -77,12 +77,15 @@ function sources(ctx: Ctx): Partial<Record<SearchModuleKey, Source>> {
       return [{ label: "Topics to revise", results: rows.slice(0, PER_TYPE).map(r => ({ id: r.m.id, title: displayTitle(r.m.title), detail: r.topics.slice(0, 3).join(", ") || null, path: `study/revise?view=topics&m=${r.m.id}` })) }];
     },
     courses: async q => {
-      if (!(await learningEnabled(admin))) return [];
+      // My Programmes does not depend on Learning being on, so it is searched either way; the two course lists are read only when it is.
+      const on = await learningEnabled(admin);
       const [open, done, chosen, offered] = await Promise.all([
-        myRecords(admin, userId).catch(() => null), loadLearningRecords(admin, userId).catch(() => null), learnerProgramme(admin, userId), listProgrammes(admin),
+        on ? myRecords(admin, userId).catch(() => null) : Promise.resolve([]), on ? loadLearningRecords(admin, userId).catch(() => null) : Promise.resolve([]),
+        learnerProgramme(admin, userId), listProgrammes(admin),
       ]);
-      const mine = myCoursesView(true, open), completed = completedView(true, done), programmes = programmesView(chosen, offered);
-      if (mine.kind === "unreadable" && completed.kind === "unreadable" && programmes.kind === "unreadable") return null;
+      const mine = myCoursesView(on, open), completed = completedView(on, done), programmes = programmesView(chosen, offered);
+      // Any one of the three failing means this source could not be searched: it is never shown as having fewer results.
+      if (mine.kind === "unreadable" || completed.kind === "unreadable" || programmes.kind === "unreadable") return null;
       const programmeList = programmes.kind === "none" ? programmes.offered : programmes.kind === "chosen" ? [programmes.programme, ...programmes.others] : [];
       return [
         { label: "Courses you are taking", results: (mine.kind === "items" ? filterCourses(mine.items, q) : []).slice(0, PER_TYPE).map(c => ({ id: c.id, title: c.title, detail: `${c.code} · ${c.statusLabel}`, path: `courses/mine?q=${encodeURIComponent(c.title)}` })) },
