@@ -557,6 +557,10 @@ const HS_EXPECT: Record<string, { table: string; cols: string[]; filter: RegExp 
   instruments: { table: "asmt_instrument", cols: ["id", "code", "name"], filter: /\.eq\("owner_scope", "holdings"\)/ },
   frameworks: { table: "frameworks", cols: ["id", "code", "name"], filter: /\.is\("hospital_id", null\)/ },
   positions: { table: "hq_position", cols: ["code", "name", "space"], filter: /\.limit\(/ },
+  // staff directory: name and position title only. profiles is NOT read (no email, phone or HR field is reachable).
+  staff_offices: { table: "ogs_offices", cols: ["id", "office_type"], filter: /\.limit\(/ },
+  staff_appointments: { table: "ogs_office_appointments", cols: ["id", "office_id", "person_name", "role", "status", "term_start", "term_end"], filter: /\.in\("office_id"/ },
+  staff_positions: { table: "hq_position", cols: ["code", "name"], filter: /\.limit\(/ },
 };
 const hsFiles = [...walk(join(ROOT, "src/lib/hq/record-search")), ...walk(join(ROOT, "src/app/api/hq/search"))].filter(f => !/\.test\.tsx?$/.test(f));
 const hsSites = hsFiles.flatMap(f => extractReads(readFileSync(f, "utf8"), rel(f), ""));
@@ -564,13 +568,14 @@ const hsFound = hsSites.map(x => `${x.table}:${x.select === "columns" ? [...x.co
 const hsWant = [
   ...Object.values(HS_EXPECT).map(e => `${e.table}:${[...e.cols].sort().join(",")}`),
   "practice_platform_flags:enabled",
+  "audit_log:none", // the staff route's audit WRITE (no select list): who, source, result count, never the query
 ].sort();
 ok("HS1", JSON.stringify(hsFound) === JSON.stringify(hsWant),
   `the record-search library and routes read EXACTLY these tables and columns, no more: ${hsWant.join(" | ")}${JSON.stringify(hsFound) === JSON.stringify(hsWant) ? "" : ` -- found: ${hsFound.join(" | ")}`}`);
 ok("HS1b", hsSites.every(x => x.table !== null && x.select !== "unresolved"), "no read in the record-search code has a computed table name or select list");
 const hsRegistry = readFileSync(join(ROOT, "src/lib/hq/record-search/registry.ts"), "utf8");
 for (const [key, e] of Object.entries(HS_EXPECT)) {
-  const at = hsRegistry.indexOf(`from("${e.table}")`);
+  const at = hsRegistry.indexOf(`from("${e.table}").select("${e.cols.join(", ")}")`) >= 0 ? hsRegistry.indexOf(`from("${e.table}").select("${e.cols.join(", ")}")`) : hsRegistry.indexOf(`from("${e.table}")`);
   ok(`HS2.${key}`, at >= 0 && e.filter.test(hsRegistry.slice(at, at + 260)), `${e.table} is read with its ownership filter / shape in the query itself (${e.filter.source})`);
 }
 const hsPlanted = extractReads(`export const f = (a: any) => a.from("profiles").select("id, full_name"); export const g = (a: any) => a.from("asmt_response").select("item_id");`, "src/lib/hq/record-search/probe.ts", "");
