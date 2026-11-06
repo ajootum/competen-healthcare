@@ -46,7 +46,15 @@ export default function HqSearchLauncher({ destinations, recordSources = [] }: {
   // Record search state: results are stored WITH the query they answer, so loading is derived (no synchronous setState in an effect).
   const [rec, setRec] = useState<{ q: string; by: Record<string, RecordEntry> }>({ q: "", by: {} });
   const [dropped, setDropped] = useState<string[]>([]);
-  const liveSources = recordSources.filter(s => !dropped.includes(s.key));
+  const heldSources = recordSources.filter(s => !dropped.includes(s.key));
+  // Filters are built ONLY from sources this caller already holds (a refused source is dropped above and never listed).
+  const [fModule, setFModule] = useState("");
+  const [fType, setFType] = useState("");
+  const modules = [...new Set(heldSources.map(s => s.module))];
+  const types = [...new Set(heldSources.filter(s => !fModule || s.module === fModule).map(s => s.recordType))];
+  const activeModule = modules.includes(fModule) ? fModule : "";
+  const activeType = types.includes(fType) ? fType : "";
+  const liveSources = heldSources.filter(s => (!activeModule || s.module === activeModule) && (!activeType || s.recordType === activeType));
   const recQuery = query.trim().length >= MIN_CHARS ? query.trim() : "";
   const sourcesKey = liveSources.map(s => s.key).join(",");
 
@@ -183,6 +191,29 @@ export default function HqSearchLauncher({ destinations, recordSources = [] }: {
               </li>
             ))}
           </ul>
+        )}
+
+        {heldSources.length > 1 && (
+          <div className="mt-2 flex flex-wrap gap-2" role="group" aria-label="Filter records">
+            {modules.length > 1 && (
+              <label className="flex items-center gap-1 text-[11px] text-gray-400">Module
+                <select value={activeModule} onChange={e => { setFModule(e.target.value); setFType(""); setCursor(0); }}
+                  className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-white pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                  <option value="" className="text-black">All modules</option>
+                  {modules.map(m => <option key={m} value={m} className="text-black">{m}</option>)}
+                </select>
+              </label>
+            )}
+            {types.length > 1 && (
+              <label className="flex items-center gap-1 text-[11px] text-gray-400">Record type
+                <select value={activeType} onChange={e => { setFType(e.target.value); setCursor(0); }}
+                  className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[12px] text-white pointer-coarse:min-h-[var(--cmp-touch-min)]">
+                  <option value="" className="text-black">All types</option>
+                  {types.map(t => <option key={t} value={t} className="text-black">{t}</option>)}
+                </select>
+              </label>
+            )}
+          </div>
         )}
 
         {liveSources.length > 0 && recQuery !== "" && (

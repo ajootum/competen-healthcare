@@ -74,4 +74,32 @@ describe("HqSearchLauncher record sources", () => {
     expect(await screen.findByText(/search failed: the source could not be read/i, {}, { timeout: 2000 })).toBeTruthy();
     expect(screen.queryByText(/Nothing here matches that/)).toBeNull();
   });
+
+  const second = { key: "staff" as const, product: "Competen Platform", module: "Positions and appointments", recordType: "HQ staff member", endpoint: "/api/hq/search/staff" };
+
+  it("filters by module and record type from held sources only, and fetches only the chosen source", async () => {
+    fetchMock.mockResolvedValue(res(200, { hits: [], more: false }));
+    render(<HqSearchLauncher destinations={dest} recordSources={[source, second]} />);
+    await openAndType("alpha");
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2), { timeout: 2000 });
+    fireEvent.change(screen.getByLabelText("Module"), { target: { value: "Policy Manager" } });
+    expect(screen.queryByLabelText("Record type")).toBeNull();
+    fetchMock.mockClear();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1), { timeout: 2000 });
+    expect(fetchMock.mock.calls[0][0]).toBe("/api/hq/search/policies?q=alpha");
+  });
+
+  it("a refused source disappears from the filter lists", async () => {
+    fetchMock.mockImplementation(async (u: string) => (u.includes("staff") ? res(403, { error: "x" }) : res(200, { hits: [], more: false })));
+    render(<HqSearchLauncher destinations={dest} recordSources={[source, second]} />);
+    await openAndType("alpha");
+    await waitFor(() => expect(screen.queryByLabelText("Module")).toBeNull(), { timeout: 2000 });
+    expect(screen.queryByText("Positions and appointments")).toBeNull();
+  });
+
+  it("with one or no sources there is no filter", async () => {
+    render(<HqSearchLauncher destinations={dest} recordSources={[source]} />);
+    await openAndType("a");
+    expect(screen.queryByLabelText("Module")).toBeNull();
+  });
 });
