@@ -4,6 +4,8 @@ import { proposeMappings, type MappingFraming, type MappingSubject } from "@/lib
 import { CONTEXT_PREAMBLE } from "./learner-context";
 import { VERIFY_FORMATS_DEFAULT } from "./question-formats";
 import { SCENARIO_SCOPE_LINE } from "./scenario";
+import { varietyLine, type ScenarioContext } from "./scenario-variety";
+import { splitSentences } from "./cloze";
 import { CASE_MAX_STEPS, CASE_MIN_STEPS, EXTENDED_POINTS_MAX, EXTENDED_POINTS_MIN, FEEDBACK_HEADINGS, LEARN_TEACH_LEGACY, PROMPT_VERSIONS, QUESTIONS_PER_REQUEST, isTeachingAction, type CheckVerdict, type ClassicLearnAction, type ExplanationDepth, type LearnAction, type TeachingAction } from "./config";
 import { CHECK_LABEL } from "./learn-check";
 import { DEPTH_REACHED, parseDepthReached } from "./learn-context";
@@ -297,6 +299,8 @@ export type GenerationOptions = {
   verifyFormats?: readonly string[];
   /** SCHOLAR-SQIE-LEARNER-01: objectiveKey of the objectives this section already tests in this format; a draft that repeats one is not stored. */
   existingObjectives?: ReadonlySet<string>;
+  /** SCHOLAR-SCENARIO-VARIETY-01: what the learner's other scenarios ask, on this section and across the scope. */
+  existingScenarios?: ScenarioContext;
 };
 /** SCHOLAR-SQIE-LEARNER-01: the formats that were always blind-checked: what an absent policy means. */
 export const VERIFY_DEFAULT: readonly string[] = VERIFY_FORMATS_DEFAULT;
@@ -1298,7 +1302,9 @@ export async function runRevisionQuestions(userId: string, kind: keyof typeof RE
   const mixLine = levelPlan ? levelMixLine(levelPlan) : "";
   const guidance0 = generationContextBlock(context ?? NO_CONTEXT, asked);
   // CE-05: a scenario asks decisions fit for the learner's level (the guidance already carries MY LEVEL where the study record has one).
-  const guidance = kind === "scenario" ? (guidance0 ? `${guidance0}\n${SCENARIO_SCOPE_LINE}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${SCENARIO_SCOPE_LINE}`) : guidance0;
+  // SCHOLAR-SCENARIO-VARIETY-01: a different kind of decision from the scenarios this section already has. One more guidance line on the same call.
+  const scenarioLines = kind === "scenario" ? `${SCENARIO_SCOPE_LINE}\n${varietyLine(opts.existingScenarios ?? { section: [], other: [] }, splitSentences(passage.content))}` : "";
+  const guidance = kind === "scenario" ? (guidance0 ? `${guidance0}\n${scenarioLines}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${scenarioLines}`) : guidance0;
   const guidanceWithMix = !mixLine ? guidance : guidance ? `${guidance}\n${mixLine}` : `\n\nGUIDANCE (do not mention it). Every item must still be answerable from the passage ALONE.\n${mixLine}`;
   let relabelled = 0;
   for (let attempt = 1; attempt <= 2 && !kept.length; attempt++) {

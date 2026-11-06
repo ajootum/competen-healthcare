@@ -17,6 +17,8 @@ import HqSearchLauncher from "./_components/HqSearchLauncher";
 import { HQ_SEARCH_TABLES } from "./_components/nav-tables";
 import HqMobileNav from "./_components/HqMobileNav";
 import { offNavSwitches } from "@/lib/hq/nav-switches";
+import { hqRecordSearchEnabled } from "@/lib/hq/record-search/flag";
+import { hqRecordSourcesFor } from "@/lib/hq/record-search/registry";
 import SessionIdentityNotice, { RememberSessionIdentity } from "@/components/SessionIdentityNotice";
 import { resolveMissionProfile } from "@/lib/hq/mission-profile";
 import ProductDirectorSidebar from "./_components/ProductDirectorSidebar";
@@ -272,6 +274,8 @@ export default async function SuperAdminLayout({ children }: { children: React.R
 
   // HQ-IA-02: the launch flags that are off, for the sidebar's status badges only (null when unreadable).
   const offSwitches = await offNavSwitches(admin);
+  // HQ-RECORD-SEARCH-01: record sources for the palette, only for capabilities held (the union of appointments) and only with the flag on.
+  const recordSources = hqRecordSourcesFor({ isOwner, capabilities: hqCapabilities }, await hqRecordSearchEnabled(admin));
   const sidebar = (
     <WorkspaceSidebar profileName={profile?.full_name ?? null} roles={userRoles} activeRole={activeRole} workspaces={workspaces}
       isOwner={isOwner} hqCapabilities={hqCapabilities} positionNames={hqPositions.positionNames} offSwitches={offSwitches} />
@@ -316,7 +320,7 @@ export default async function SuperAdminLayout({ children }: { children: React.R
               the launcher itself holds no permission logic to read around. It grants nothing: every
               destination re-authorises on arrival. */}
           <div className="mb-4 flex justify-end">
-            <HqSearchLauncher destinations={hqSearchCatalogue(HQ_SEARCH_TABLES, { isOwner, capabilities: hqCapabilities })} />
+            <HqSearchLauncher destinations={hqSearchCatalogue(HQ_SEARCH_TABLES, { isOwner, capabilities: hqCapabilities })} recordSources={recordSources} />
           </div>
           {children}
         </main>
