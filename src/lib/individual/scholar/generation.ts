@@ -1064,8 +1064,8 @@ export const learnPromptVersion = (action: LearnAction | "check" | "clarify", op
 /** SCHOLAR-CUMULATIVE-TEACHING-01: an answer written with a TAUGHT SO FAR block carries the cumulative suffix, so it is never served as a context-free one. */
 export const cumulativePromptVersion = (version: string) => `${version}+${PROMPT_VERSIONS.cumulative}`;
 /** SCHOLAR-GUIDED-LEARNING-01: the earlier Teach Me versions whose saved lessons are still opened with no AI call (LEARN_TEACH_LEGACY). */
-export const legacyLearnPromptVersions = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean } = {}): string[] =>
-  action === "teach" ? LEARN_TEACH_LEGACY.map(v => `${PROMPT_VERSIONS.learn}:teach+${v}`) : action === "deeper" ? [`${PROMPT_VERSIONS.learn}:deeper`, ...(opts.deeperStructured ? [learnPromptVersion("deeper")] : [])] : [];
+export const legacyLearnPromptVersions = (action: LearnAction | "check" | "clarify"): string[] =>
+  action === "teach" ? LEARN_TEACH_LEGACY.map(v => `${PROMPT_VERSIONS.learn}:teach+${v}`) : action === "deeper" ? [`${PROMPT_VERSIONS.learn}:deeper`] : [];
 
 export type LearnResult = AiFailure | {
   ok: true; action: LearnAction | "check" | "clarify"; model: string; provider: string; promptVersion: string;

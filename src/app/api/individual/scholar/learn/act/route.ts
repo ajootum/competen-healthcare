@@ -26,7 +26,7 @@ import {
 import { composeDeeperAnswer, deeperSectionText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { citedTags } from "@/lib/individual/scholar/teach-format";
 import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, PRIOR_CHECKS_MAX, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
-import { coversLesson } from "@/lib/individual/scholar/learn-journey";
+import { coversLesson, restoredSources } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope } from "@/lib/individual/scholar/learn-research";
@@ -336,7 +336,7 @@ export async function POST(req: Request) {
   const key = storable && !recovery ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode, context }) : null;
   // SCHOLAR-GUIDED-LEARNING-01: a lesson saved under an earlier Teach Me version is still this lesson (same structure and
   // checks), so it is served -- reopening never costs AI because the prompt moved on. Looked up only when the current is absent.
-  const legacyKeys = key ? legacyLearnPromptVersions(action as LearnAction, deeperVersion).map(v => artefactKey({ action, depth, chunkIds: passages!.map(p => p.chunkId),
+  const legacyKeys = key ? legacyLearnPromptVersions(action as LearnAction).map(v => artefactKey({ action, depth, chunkIds: passages!.map(p => p.chunkId),
     promptVersion: mode === "research" ? `${v}${RESEARCH_PROMPT_SUFFIX}` : v, references, background, mode })) : [];
   const fits = (a: ArtefactRow | null) => !!a && a.sources.every(id => passages!.some(p => p.chunkId === id));
   const findSaved = async (): Promise<ArtefactRow | null> => {
@@ -358,7 +358,8 @@ export async function POST(req: Request) {
   const lessonScope: LessonScope | null = lesson ? { title: lesson.title, objective: lesson.objective, focus: lesson.focus } : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
-    const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
+    // SCHOLAR-GO-DEEPER-001: a lesson over the stored source limit keeps its later citations (learn-journey.ts restoredSources).
+    const src = restoredSources(a.sources, stepIds).map(id => byId.get(id)).filter((p): p is Passage => !!p);
     // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
     // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
     const split = splitLearnAnswer(a.content);

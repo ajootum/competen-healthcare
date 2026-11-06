@@ -3,6 +3,7 @@ import { GO_DEEPER_LEVELS, composeDeeperAnswer, deeperEvidenceStatement, deeperN
 import { DEEPER_MAX_TOKENS, deeperInstruction, notesClaimViolations, notesSectionSupported, scholarClaimViolations } from "./deeper-prompt";
 import { buildTaughtSoFar, taughtSoFarBlock } from "./learn-context";
 import { parseTeachAnswer } from "./teach-format";
+import { coversLesson, restoredSources } from "./learn-journey";
 import { checkDeeperAnswer, cumulativePromptVersion, learnPromptVersion, learnSystem, legacyLearnPromptVersions, runLearn, savedLearningPassage, type Passage } from "./generation";
 
 // SCHOLAR-GO-DEEPER-001: the structured round, what it may claim and what becomes of rounds already saved.
@@ -200,11 +201,31 @@ describe("checkDeeperAnswer", () => {
   });
 });
 
+describe("a lesson over the stored source limit", () => {
+  const ids = Array.from({ length: 16 }, (_, i) => `c${i}`);
+  it("still finds the teaching written for it, so it has taught ground and its rounds reopen", () => {
+    expect(coversLesson(ids.slice(0, 10), ids)).toBe(true);
+    expect(coversLesson([...ids.slice(0, 9), "other"], ids)).toBe(false);
+    expect(coversLesson(ids.slice(1, 11), ids)).toBe(false);
+    expect(coversLesson(ids.slice(0, 9), ids)).toBe(false);
+  });
+  it("a lesson within the limit is judged exactly as before", () => {
+    expect(coversLesson(["a", "b", "x"], ["a", "b"])).toBe(true);
+    expect(coversLesson(["b", "a"], ["a", "b"])).toBe(true);
+    expect(coversLesson(["a"], ["a", "b"])).toBe(false);
+  });
+  it("its later citations are restored on reopen; anything else is what was stored", () => {
+    expect(restoredSources(ids.slice(0, 10), ids)).toEqual(ids);
+    expect(restoredSources(["a", "b", "x"], ["a", "b"])).toEqual(["a", "b", "x"]);
+    expect(restoredSources(["z", ...ids.slice(1, 10)], ids)).toEqual(["z", ...ids.slice(1, 10)]);
+  });
+});
+
 describe("saved rounds and versions", () => {
   it("the structured version is ADDED: v2 stays in force with the policy off, and is a legacy version with it on", () => {
     expect(learnPromptVersion("deeper")).toContain("scholar-learn-deeper-v2");
     expect(learnPromptVersion("deeper", { deeperStructured: true })).toContain("scholar-learn-deeper-v3");
-    expect(legacyLearnPromptVersions("deeper", { deeperStructured: true })).toContain(learnPromptVersion("deeper"));
+    // Not a legacy version of the structured request: asking for a round must never be answered with an old one. A saved v2 round still opens (findSavedLesson, alsoSaved).
     expect(legacyLearnPromptVersions("deeper")).not.toContain(learnPromptVersion("deeper"));
     expect(cumulativePromptVersion(learnPromptVersion("deeper", { deeperStructured: true }))).toContain("+scholar-learn-cumulative-v1");
   });

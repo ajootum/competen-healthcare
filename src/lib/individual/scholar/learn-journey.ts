@@ -330,14 +330,30 @@ export const readCount = (facts: readonly LessonFacts[]) => facts.filter(f => f.
 
 // ── SAVED TEACHING, FOUND WITHOUT AI (the open:true fallback, and the records) ──
 
+/** 415 individual_scholar_artefact_source: ordinal between 1 and 10. store.ts saveArtefact keeps the first ten. */
+export const ARTEFACT_SOURCES_MAX = 10;
+
 /**
  * Pure. Whether a saved artefact was written for exactly this lesson: its sources BEGIN with the lesson's own sections
  * (the route saves the lesson's own passages first, then any related ones), as a set -- not merely one that cites them.
  */
 export function coversLesson(sources: readonly string[], chunkIds: readonly string[]): boolean {
   const want = new Set(chunkIds);
-  if (!want.size || want.size !== chunkIds.length || sources.length < want.size) return false;
+  if (!want.size || want.size !== chunkIds.length) return false;
+  // SCHOLAR-GO-DEEPER-001: 415's artefact_source keeps at most ARTEFACT_SOURCES_MAX sources, while a lesson may hold LESSON_MAX_SECTIONS (16). For a larger lesson
+  // only its first sections are stored, so that is what "written for this lesson" can mean. Before this, every lesson over ten sections found none of its saved
+  // teaching: no TAUGHT SO FAR, so Go deeper and Explain again repeated the lesson, and a reopen did not bring back its other rounds.
+  if (want.size > ARTEFACT_SOURCES_MAX) return sources.length === ARTEFACT_SOURCES_MAX && sources.every((id, i) => id === chunkIds[i]);
+  if (sources.length < want.size) return false;
   return sources.slice(0, want.size).every(id => want.has(id));
+}
+
+/**
+ * Pure. The sources a saved answer's [S n] tags mean. The route saves a lesson's own sections first, in order, so for a lesson over the stored limit tags past it are the
+ * lesson's next sections: restored here, so a citation or a picture on [S11] and beyond still works on reopen. Anything else is what was stored.
+ */
+export function restoredSources(sources: readonly string[], chunkIds: readonly string[]): readonly string[] {
+  return chunkIds.length > ARTEFACT_SOURCES_MAX && coversLesson(sources, chunkIds) ? chunkIds : sources;
 }
 
 /** Pure. The newest saved artefact for this action, material and lesson chunk set -- any prompt version, depth or mode. */
