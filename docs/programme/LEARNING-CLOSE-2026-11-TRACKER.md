@@ -561,7 +561,7 @@ File: `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator fold
 | PMC | 4 | 15 |
 | Cache | 2 | 0 |
 
-All of these came before the Ask guard (#325, deployed 6 Nov), so a typed question could have been part of a search. Competen keeps only the length of a search, not its words, so what was sent cannot be shown. OpenAlex is metered since 2026 while the registry cost stays 0, so its recorded cost cannot be relied on. Status: owner decision open on whether the mode stays on.
+All of these came before the Ask guard (#325, deployed 6 Nov), so a typed question could have been part of a search. Competen keeps only the length of a search, not its words, so what was sent cannot be shown. OpenAlex is metered since 2026 while the registry cost stays 0, so its recorded cost cannot be relied on. **Owner decision, 6 Nov 2026: keep it on.** Closed, not to be raised again. The search-term and OpenAlex facts above stand as the record.
 
 Reported by the coordinator after read-only checks, 4 Nov 2026 (not the Q1-Q6 result rows; those are still to come):
 - Capability `hq.scholar.analytics.identifiable.read` exists in production with no grants; none of the five 940 executive positions is held; only the legacy `chief_executive` (mullenokaisu) is.
