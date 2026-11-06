@@ -257,7 +257,7 @@ describe("SCHOLAR-GUIDE-ME-001: a Guide Me turn through the route", () => {
     expect(db.aiCalls).toBe(1);
     expect(db.systems[0]).toContain("MODE: GUIDE ME");
     expect(r.json.guide).toEqual({ step: 0, of: 1, turn: "teach" });
-    expect(r.json.provenance.promptVersion).toContain("+scholar-guide-me-v1:teach");
+    expect(r.json.provenance.promptVersion).toContain("+scholar-guide-me-v1:teach:0");
   });
   it("the first turn on a lesson is found again once it is itself taught ground, with no AI", async () => {
     await turn({ turn: "teach", step: 0 });
@@ -267,17 +267,27 @@ describe("SCHOLAR-GUIDE-ME-001: a Guide Me turn through the route", () => {
     expect(back.json).toMatchObject({ cached: true, guide: { step: 0, of: 1, turn: "teach" } });
     expect(back.json.answer).toContain("Why blame silences reports");
   });
-  it("opening what is saved, a hint and an example record nothing, so none can mark a lesson taught or read", async () => {
+  it("no turn of the guided activity marks the lesson: not opening, a hint, an example, or teaching a step", async () => {
     await turn({ turn: "teach", step: 0 }, { open: true });
-    expect(db.events).toHaveLength(0);
     db.aiText = HINT;
     await turn({ turn: "hint", step: 0, level: 1, question: "Why?" });
     await turn({ turn: "example", step: 0, question: "Why?" });
-    expect(db.events).toHaveLength(0);
-    expect(db.sessionUpdates).toHaveLength(0);
     db.aiText = TURN;
     await turn({ turn: "teach", step: 0 });
+    expect(db.events).toHaveLength(0);
+    expect(db.sessionUpdates).toHaveLength(0);
+  });
+  it("a judged step is recorded with no lesson-level verdict, and keeps the verdict for the learner", async () => {
+    db.aiText = "VERDICT: understood\nRIGHT:\n- Staff report errors without fear of blame [S1].\nKEY POINTS:\n- Staff report errors without fear of blame [S1].";
+    const r = await post({ action: "clarify", sessionId: S, step: 1, checkQuestion: "Why would reports fall?", answer: "Because staff would fear blame.", guided: true });
+    expect(r.json.verdict.value).toBe("understood");
     expect(db.events).toHaveLength(1);
+    expect((db.events[0] as { verdict: unknown }).verdict).toBeNull();
+  });
+  it("a plain check still carries its verdict to the lesson", async () => {
+    db.aiText = "VERDICT: understood\nRIGHT:\n- Staff report errors without fear of blame [S1].\nKEY POINTS:\n- Staff report errors without fear of blame [S1].";
+    await post({ action: "clarify", sessionId: S, step: 1, checkQuestion: "Why would reports fall?", answer: "Because staff would fear blame." });
+    expect((db.events[0] as { verdict: unknown }).verdict).toBe("understood");
   });
   it("a hint needs no notes section, and is not taught ground for what comes next", async () => {
     db.aiText = HINT;

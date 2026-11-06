@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, guideVerdictOf, isUncertainAnswer, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
+import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, guideTeachStepOf, guideVerdictOf, guideVersionTurn, guidedLessonOutcome, isUncertainAnswer, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
 import { guideInstruction, GUIDED_CLARIFY } from "./guide-me-prompt";
 import { parseDeeperAnswer } from "./deeper-format";
 import { isGuideAidVersion, isGuideTurnVersion, newestSavedLesson } from "./learn-journey";
@@ -111,6 +111,27 @@ describe("progress after a reopen comes from what is kept", () => {
   });
 });
 
+describe("the lesson-level guided check (owner decision RELEASE-001 item 3)", () => {
+  it("does not count until every step has been taught", () => {
+    expect(guidedLessonOutcome(["understood"], 3)).toEqual({ complete: false, verdict: null });
+    expect(guidedLessonOutcome(["understood", "understood"], 3)).toEqual({ complete: false, verdict: null });
+    expect(guidedLessonOutcome([], 1)).toEqual({ complete: false, verdict: null });
+  });
+  it("then says what the steps show, and never more", () => {
+    expect(guidedLessonOutcome(["understood", "understood", "understood"], 3)).toEqual({ complete: true, verdict: "understood" });
+    expect(guidedLessonOutcome(["understood", "attempted", null], 3)).toEqual({ complete: true, verdict: "partly" });
+    expect(guidedLessonOutcome(["understood", null, null], 3)).toEqual({ complete: true, verdict: "partly" });
+    expect(guidedLessonOutcome([null, null, null], 3)).toEqual({ complete: true, verdict: null });
+  });
+  it("reads a teaching step's place from its version, and nothing else", () => {
+    expect(guideTeachStepOf(learnPromptVersion("explain", { guide: guideVersionTurn("teach", 2) }))).toBe(2);
+    expect(guideTeachStepOf(learnPromptVersion("explain", { guide: guideVersionTurn("hint", 2) }))).toBeNull();
+    expect(guideTeachStepOf(learnPromptVersion("explain", { guide: guideVersionTurn("explain", 2) }))).toBeNull();
+    expect(guideTeachStepOf(learnPromptVersion("explain"))).toBeNull();
+    expect(guideTeachStepOf(`${learnPromptVersion("explain", { guide: guideVersionTurn("teach", 1) })}+scholar-learn-cumulative-v1`)).toBe(1);
+  });
+});
+
 describe("the teaching turn", () => {
   it("keeps one question, its sources and a real memory aid, under the same checks as Go Deeper", () => {
     const c = check(TURN);
@@ -204,7 +225,7 @@ describe("one call, its own version, never an Explain", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].system).toContain("MODE: GUIDE ME");
     expect(calls[0].maxTokens).toBe(1100);
-    expect(r.ok && r.promptVersion).toContain("+scholar-guide-me-v1:teach");
+    expect(r.ok && r.promptVersion).toContain("+scholar-guide-me-v1:teach:0");
   });
   it("without the policy's request an Explain is exactly an Explain", () => {
     expect(learnPromptVersion("explain")).not.toContain("guide-me");
@@ -215,7 +236,7 @@ describe("one call, its own version, never an Explain", () => {
   it("a saved turn is taught ground, told as Guide me, and is never reopened as an Explain", () => {
     const guide = { action: "guide", content: TURN, createdAt: "2026-11-02" };
     expect(taughtSoFarBlock(buildTaughtSoFar([guide]))).toContain("Guide me");
-    const v = learnPromptVersion("explain", { guide: "teach" });
+    const v = learnPromptVersion("explain", { guide: "teach:0" });
     expect(isGuideAidVersion(v)).toBe(false);
     expect(isGuideAidVersion(learnPromptVersion("explain", { guide: "hint" }))).toBe(true);
     expect(isGuideAidVersion(learnPromptVersion("explain", { guide: "example" }))).toBe(true);

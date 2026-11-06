@@ -1113,10 +1113,22 @@ export function LearnWorkspace(props: {
     if (r.json.continuity) return { ok: false, json: { error: r.json.continuity.message } };
     // Progress is what happened: a real teach, explanation or judged answer. Opening what is saved, a hint and an example are none of those.
     const guided = extra.guide as { turn?: string } | undefined;
+    // Owner decision RELEASE-001 item 3: a step's verdict is the step's. The lesson's own state changes when the guided activity is complete (guideComplete below).
     const learned = r.ok && !r.json.withheld && !extra.open && (a === "clarify" || guided?.turn === "teach" || guided?.turn === "explain") && !!r.json.answer;
-    if (learned) setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "guide"])], verdict: r.json.verdict?.value ?? p[st.step]?.verdict ?? null } }));
-    if (r.json.verdict?.value) dispatch({ type: "verdict", index: indexOf(st.step), value: String(r.json.verdict.value) });
+    if (learned) setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "guide"])], verdict: p[st.step]?.verdict ?? null } }));
     return r;
+  };
+  /** The learner reached the end of the guided lesson: the server decides what that means, from its own records. No AI. */
+  const guideComplete = (st: Step) => async (): Promise<{ complete: boolean; verdict: string | null } | null> => {
+    if (!session?.id) return null;
+    const r = await call("/api/individual/scholar/learn/guide-complete", { sessionId: session.id, step: st.step });
+    if (!r.ok) return null;
+    const out = r.json as { complete?: boolean; verdict?: string | null };
+    if (out.complete) {
+      setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "explain"])], verdict: out.verdict ?? p[st.step]?.verdict ?? null } }));
+      if (out.verdict) dispatch({ type: "verdict", index: indexOf(st.step), value: out.verdict });
+    }
+    return { complete: !!out.complete, verdict: out.verdict ?? null };
   };
   const runApproach = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
     if (!session) return null;
@@ -1545,7 +1557,7 @@ export function LearnWorkspace(props: {
               guidePanel={props.guideAdaptive ? (
                 <GuideMePanel key={st.step} state={guideStates[st.step] ?? GUIDE_FRESH}
                   setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
-                  run={runGuide(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")} checkDisabled={busyHere || !props.consent || !!offReason("clarify") || props.checks === "off"}
+                  run={runGuide(st)} complete={guideComplete(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")} checkDisabled={busyHere || !props.consent || !!offReason("clarify") || props.checks === "off"}
                   offNote={offReason("deeper") ? aiReasonCopy(offReason("deeper") as AiUnavailableReason, "scholar").text : null}
                   renderFlags={f => <AiFlagList flags={f} />}
                   renderClarify={(p, retry) => <ClarifyPurpose clarify={p as ClarifyPrompt} busy={!!busy} accent={accent} onEducation={() => { confirmStudy(true); retry(); }} onPatient={() => confirmStudy(false)} />}

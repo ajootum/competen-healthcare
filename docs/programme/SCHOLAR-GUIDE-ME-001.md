@@ -36,7 +36,7 @@ The cycle is explain, question, response, feedback, adapt, progress.
 
 **Metered and routed as Go deeper, not Explain.** The first counted run used the Explain route (Sonnet on staging). It wrote that a sleeping brain crosses a threshold more easily, which is doubtful science stated with confidence. A turn may carry Scholar's own science, so accuracy decides this. It costs about two to three times a plain Explain turn (table in the evidence). Production routing still follows HQ's eligibility rows.
 
-**What counts at lesson level.** Only a real teach, an explanation or a judged answer records a learning event or lesson progress. Opening what is saved, a hint and an example record nothing, so none can mark a lesson taught or read. A judged answer counts as one of the lesson's checks, as any check in Learn does, so a verdict on step 1 of 3 shows at lesson level as that check's result, and a lesson's "checked" state follows the existing check rule. Say if the owner wants the lesson to wait for every step: that is a small change.
+**What counts at lesson level (owner decision SCHOLAR-TEACHING-P1-RELEASE-001, item 3).** Each step's answer is kept as it is judged, and is that step's result. The lesson-level guided check counts only when the activity is complete: the learner reached the end and every step has been taught. The server decides this from its own records (`learn/guide-complete`, no AI), never from the page. The lesson's result is understood only if every step was understood, partly if any step was answered, and no check if nothing was. Until then no turn marks the lesson taught, read or checked. A lesson with Teach Me saved is taught by that, as before.
 
 **Steps come from the lesson.** About three headings a step, at most three. The server decides, from the lesson's own headings. It is the lesson's size, not a fixed script.
 
@@ -51,7 +51,8 @@ Nothing. Guide me is the hint form as it was, and an Explain stays an Explain.
 - Progress returning after a reopen is read from the kept checks, following the new questions feedback offered.
 - Moved-on and explained states are held by the page for the visit: on reopen those steps read as not answered, and the saved teaching still returns with no AI call.
 - A learner can reach "understood" on a retry after the feedback showed a model answer. This follows from showing that answer, and it is said as an informal check.
-- A lesson that spans several materials is not saved (the existing rule), so its steps do not reopen free.
+- A lesson that spans several materials is not saved (the existing rule), so its steps do not reopen free, and its guided activity cannot be counted as complete.
+- A step the learner moved past because it could not be taught leaves the activity not complete. The panel says so.
 - A library page may show fewer items than its size where Guide Me turns are hidden.
 - Guide me needs Explain offered as well, because a turn travels as that kind.
 - A learner's answer is judged against the lesson and what was taught, so an accurate point far from both can be under-credited. The instruction asks for credit, and a model decides.

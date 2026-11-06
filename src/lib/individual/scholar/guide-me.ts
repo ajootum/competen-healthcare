@@ -38,6 +38,9 @@ export function guideGround(headings: readonly string[], step: number, of: numbe
   return headings.slice(Math.round(step * per), Math.round((step + 1) * per));
 }
 
+/** Pure. What a saved turn's version says it is. A teaching step says which step, so the end of the activity can be read from what is saved. */
+export const guideVersionTurn = (turn: GuideTurn, step: number) => (turn === "teach" ? `teach:${step}` : turn);
+
 /** Pure. What makes a guided answer the same request: the same turn on the same step reuses what is saved. A hint keeps its level. */
 export const guideKeyContext = (a: Pick<GuideAsk, "turn" | "step" | "level" | "question">, of: number) => `guide:${a.turn}:${a.step}:${of}${a.turn === "hint" ? `:${a.level}` : ""}${a.turn === "teach" ? "" : `:${shortHash(a.question)}`}`;
 /** A hint, an example or an explanation is for the question in hand: a new question is a new request. */
@@ -105,6 +108,25 @@ export function guideVerdictOf(question: string, checks: readonly GuideKeptCheck
   }
   return answered ? "attempted" : null;
 }
+
+/**
+ * Pure. OWNER DECISION SCHOLAR-TEACHING-P1-RELEASE-001 item 3: step results are recorded as they happen, and THE LESSON-LEVEL GUIDED CHECK COUNTS ONLY WHEN THE ACTIVITY IS COMPLETE.
+ * Complete: the learner has reached the end and every step has been taught. The lesson's result then says what the steps show: understood only if every step was understood, partly if any step
+ * was answered, and no check at all if nothing was answered (moving through without answering is not a check). Anything less is not complete, and the lesson is left as it was.
+ */
+export function guidedLessonOutcome(steps: readonly ("understood" | "attempted" | null)[], of: number): { complete: boolean; verdict: "understood" | "partly" | null } {
+  const complete = steps.length >= of && of > 0;
+  if (!complete) return { complete: false, verdict: null };
+  const taken = steps.slice(0, of);
+  if (taken.every(s => s === "understood")) return { complete: true, verdict: "understood" };
+  return { complete: true, verdict: taken.some(s => !!s) ? "partly" : null };
+}
+
+/** Pure. A saved teaching step's place in the lesson, from its version: `:teach:<step>`. Null when it is not one. */
+export const guideTeachStepOf = (promptVersion: string | null | undefined): number | null => {
+  const m = /\+scholar-guide-me-v\d+:teach:(\d+)(?:\+|$)/.exec(promptVersion ?? "");
+  return m ? Number(m[1]) : null;
+};
 
 /** Pure. A later status never undoes understanding, and moving on never counts as understanding. */
 export function mergeStatus(was: StepStatus, now: StepStatus): StepStatus {

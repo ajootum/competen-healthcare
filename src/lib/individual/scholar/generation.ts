@@ -11,7 +11,7 @@ import { CHECK_LABEL } from "./learn-check";
 import { DEPTH_REACHED, parseDepthReached } from "./learn-context";
 import { DEEPER_MAX_OPTIONS, DEEPER_MAX_QUESTIONS, DEEPER_MAX_SECTIONS, DEEPER_MAX_TAKEAWAYS, DEEPER_NEUTRAL_HEADING, composeDeeperAnswer, deeperNotesOnlyText, deeperSectionText, parseDeeperAnswer, type DeeperBlock, type DeeperParts, type DeeperQuestion, type DeeperSection } from "./deeper-format";
 import { GUIDED_CLARIFY, GUIDE_MAX_TOKENS, guideInstruction } from "./guide-me-prompt";
-import type { GuideTurn } from "./guide-me";
+import { guideVersionTurn, type GuideTurn } from "./guide-me";
 import { DEEPER_MAX_TOKENS, SCHOLAR_SECTION_CHARS, deeperInstruction, notesClaimViolations, notesSectionSupported, scholarClaimViolations, sentenceSupported, sentencesOf } from "./deeper-prompt";
 import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachingBase, teachingInstruction, teachingMaxTokens, type ExamEvidence, type HintLevel } from "./learn-teaching";
 import type { CognitiveLevel } from "./question-intel";
@@ -1127,7 +1127,7 @@ export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest:
 }
 
 /** SCHOLAR-LEARN-FIX-01 L-B: Teach Me adds its structured-lesson version, so its saved answers key apart from the free-text ones. */
-export const learnPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: GuideTurn | null; guidedClarify?: boolean } = {}) => `${PROMPT_VERSIONS.learn}:${action}${opts.guide && action === "explain" ? `+${PROMPT_VERSIONS.guideMe}:${opts.guide}` : ""}${opts.guidedClarify && action === "clarify" ? `+${PROMPT_VERSIONS.guidedClarify}` : ""}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : action === "deeper" ? `+${opts.deeperStructured ? PROMPT_VERSIONS.learnDeeperStructured : PROMPT_VERSIONS.learnDeeper}` : action === "clarify" ? `+${PROMPT_VERSIONS.learnClarify}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
+export const learnPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: string | null; guidedClarify?: boolean } = {}) => `${PROMPT_VERSIONS.learn}:${action}${opts.guide && action === "explain" ? `+${PROMPT_VERSIONS.guideMe}:${opts.guide}` : ""}${opts.guidedClarify && action === "clarify" ? `+${PROMPT_VERSIONS.guidedClarify}` : ""}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : action === "deeper" ? `+${opts.deeperStructured ? PROMPT_VERSIONS.learnDeeperStructured : PROMPT_VERSIONS.learnDeeper}` : action === "clarify" ? `+${PROMPT_VERSIONS.learnClarify}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
 /** SCHOLAR-CUMULATIVE-TEACHING-01: an answer written with a TAUGHT SO FAR block carries the cumulative suffix, so it is never served as a context-free one. */
 export const cumulativePromptVersion = (version: string) => `${version}+${PROMPT_VERSIONS.cumulative}`;
 /** SCHOLAR-GUIDED-LEARNING-01: the earlier Teach Me versions whose saved lessons are still opened with no AI call (LEARN_TEACH_LEGACY). */
@@ -1146,7 +1146,7 @@ export type LearnResult = AiFailure | {
 
 /** COMPETEN-RESEARCH-01: a Research & Explain answer carries its own prompt version, so a saved one is never reused as notes-only. */
 export const RESEARCH_PROMPT_SUFFIX = "+research-v2";
-export const learnResearchPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: GuideTurn | null } = {}) => `${learnPromptVersion(action, opts)}${RESEARCH_PROMPT_SUFFIX}`;
+export const learnResearchPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: string | null } = {}) => `${learnPromptVersion(action, opts)}${RESEARCH_PROMPT_SUFFIX}`;
 /** Its own operation, so its spend is separable in plat_ai_requests (the per-learner cost limit, the HQ panel). */
 export const LEARN_RESEARCH_OPERATION = "individual_scholar_learn_research";
 
@@ -1192,7 +1192,7 @@ export async function runLearn(userId: string, args: {
     context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_learn" },
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const version = `${research.length ? learnResearchPromptVersion(args.action, { deeperStructured, guide: guide?.turn ?? null }) : learnPromptVersion(args.action, { deeperStructured, guide: guide?.turn ?? null, guidedClarify })}${studyContext ? `+${PROMPT_VERSIONS.studySession}` : ""}`;
+  const version = `${research.length ? learnResearchPromptVersion(args.action, { deeperStructured, guide: guide ? guideVersionTurn(guide.turn, guide.step) : null }) : learnPromptVersion(args.action, { deeperStructured, guide: guide ? guideVersionTurn(guide.turn, guide.step) : null, guidedClarify })}${studyContext ? `+${PROMPT_VERSIONS.studySession}` : ""}`;
   const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider, promptVersion: taught ? cumulativePromptVersion(version) : version };
   if (args.action === "check") {
     const question = checkCheckQuestion(r.text, args.passages);

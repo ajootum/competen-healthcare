@@ -19,14 +19,23 @@ export type GuideReply = { flags?: readonly { text: string }[]; retry?: boolean;
 export type GuideRun = (body: Record<string, unknown>) => Promise<{ ok: boolean; json: Record<string, unknown> } | null>;
 
 type StepState = { reply: GuideReply | null; hints: GuideReply[]; example: GuideReply | null; explained: GuideReply | null; showExplained: boolean; question: string | null; answer: string; feedback: GuideReply | null; note: string | null };
-export type GuideState = { of: number | null; current: number; status: StepStatus[]; steps: Record<number, StepState>; opened: boolean; finished: boolean };
+export type GuideState = { of: number | null; current: number; status: StepStatus[]; steps: Record<number, StepState>; opened: boolean; finished: boolean; outcome?: { complete: boolean; verdict: string | null } | null };
 export const GUIDE_FRESH: GuideState = { of: null, current: 0, status: [], steps: {}, opened: false, finished: false };
+/** What the lesson now says, in words. Never more than the server decided. */
+function outcomeWords(o: { complete: boolean; verdict: string | null }): string {
+  if (!o.complete) return "This guided lesson is not counted yet, because a step has not been taught. Your answers are kept.";
+  if (o.verdict === "understood") return "Counted for this lesson: you understood every step.";
+  if (o.verdict === "partly") return "Counted for this lesson: partly understood. Your answer to each step is kept.";
+  return "Finished. No check is counted for this lesson, because no step was answered.";
+}
 const FRESH_STEP: StepState = { reply: null, hints: [], example: null, explained: null, showExplained: false, question: null, answer: "", feedback: null, note: null };
 
-export function GuideMePanel({ state, setState, run, busy, disabled, checkDisabled, offNote, cite, answeredOf, renderResearch, renderClarify, renderFlags }: {
+export function GuideMePanel({ state, setState, run, complete, busy, disabled, checkDisabled, offNote, cite, answeredOf, renderResearch, renderClarify, renderFlags }: {
   /** The judged path has its own availability; `offNote`: why teaching is unavailable, in words. */
   checkDisabled?: boolean; offNote?: string | null;
   renderFlags: (flags: readonly { text: string }[]) => ReactNode;
+  /** Reaching the end: the server says whether the guided activity is complete and what the lesson's check is. */
+  complete: () => Promise<{ complete: boolean; verdict: string | null } | null>;
   renderClarify: (prompt: unknown, retry: () => void) => ReactNode;
   state: GuideState; setState: Dispatch<SetStateAction<GuideState>>; run: GuideRun; busy: boolean; disabled?: boolean;
   cite: (text: string, sources: readonly Source[]) => ReactNode;
@@ -133,7 +142,11 @@ export function GuideMePanel({ state, setState, run, busy, disabled, checkDisabl
     if (r?.answer) { patch(step, { explained: r, showExplained: true, note: null }); if (status === "open") setStatus(step, "explained"); }
   };
   const nextStep = () => {
-    if (lastStep) { setState(s => ({ ...s, finished: true })); return; }
+    if (lastStep) {
+      setState(s => ({ ...s, finished: true }));
+      void complete().then(out => setState(s => ({ ...s, outcome: out ?? { complete: false, verdict: null } })));
+      return;
+    }
     void teach(state.current + 1);
   };
   const skip = () => { if (status === "open") setStatus(state.current, "skipped"); nextStep(); };
@@ -184,6 +197,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, checkDisabl
       {state.finished && (
         <div className="mt-3 text-[14.5px] text-gray-900" role="status">
           <p className="font-semibold">{GUIDE_COPY.finished}</p>
+          {state.outcome && <p data-testid="guide-outcome" className="mt-1 text-[13.5px] text-gray-800">{outcomeWords(state.outcome)}</p>}
           <ul className="mt-1.5 space-y-0.5 text-[13.5px] text-gray-800">{state.status.map((s, i) => <li key={i}>Step {i + 1}: {STATUS_WORDS[s]}</li>)}</ul>
           <button type="button" className={`${learnAction.secondary} mt-2`} onClick={() => setState(st => ({ ...st, finished: false, current: Math.max(0, resumeStep(st.status) >= st.status.length ? 0 : resumeStep(st.status)) }))}>Go back through the steps</button>
         </div>

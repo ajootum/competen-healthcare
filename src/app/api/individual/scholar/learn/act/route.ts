@@ -26,7 +26,7 @@ import {
 } from "@/lib/individual/scholar/generation";
 import type { GuideContext } from "@/lib/individual/scholar/generation";
 import { composeDeeperAnswer, deeperSectionText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
-import { guideGround, guideKeyContext, guidePrompt, guideStepCount, isUncertainAnswer, parseGuideAsk } from "@/lib/individual/scholar/guide-me";
+import { guideGround, guideKeyContext, guidePrompt, guideStepCount, guideVersionTurn, isUncertainAnswer, parseGuideAsk } from "@/lib/individual/scholar/guide-me";
 import { citedTags } from "@/lib/individual/scholar/teach-format";
 import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, PRIOR_CHECKS_MAX, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
 import { coversLesson, isGuideAidVersion, isGuideTurnVersion, restoredSources } from "@/lib/individual/scholar/learn-journey";
@@ -342,12 +342,12 @@ export async function POST(req: Request) {
   // SCHOLAR-GO-DEEPER-001: Go deeper as a structured round, where policy says (default off). v2 stays in force with it off, and a round saved
   // under v2 stays what it is either way: it is shown (alsoSaved, findSavedLesson), counted in TAUGHT SO FAR and in the round limit, never regenerated.
   const deeperStructured = action === "deeper" && policy.scholarGoDeeperStructured;
-  const deeperVersion = { deeperStructured, guide: guideAsk?.turn ?? null };
-  const baseVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction, deeperVersion) : learnPromptVersion(action as LearnAction, deeperVersion);
   // SCHOLAR-GUIDE-ME-001: how many steps the lesson has and what this one covers, decided here from its own headings. The same turn on the same step is the same answer, whatever has been taught since, so it is reused.
   const guideOf = guideStepCount(lessonBrief?.sections?.length ?? 1);
   const guideContext: GuideContext | null = guideAsk ? { turn: guideAsk.turn, step: Math.min(guideAsk.step, guideOf - 1), of: guideOf, ground: guideGround(lessonBrief?.sections ?? [], Math.min(guideAsk.step, guideOf - 1), guideOf), level: guideAsk.level } : null;
   const guideFields = guideContext ? { guide: { step: guideContext.step, of: guideContext.of, turn: guideContext.turn } } : {};
+  const deeperVersion = { deeperStructured, guide: guideContext ? guideVersionTurn(guideContext.turn, guideContext.step) : null };
+  const baseVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction, deeperVersion) : learnPromptVersion(action as LearnAction, deeperVersion);
   // SCHOLAR-CUMULATIVE-TEACHING-01: an answer built on taught ground carries the cumulative suffix and the ground's fingerprint in its key.
   // SCHOLAR-GUIDE-ME-001: the same turn on the same step is the same saved answer, whatever has been taught since: its first save must be found again once it is itself taught ground.
   const promptVersion = taughtBlock && !guideAsk ? cumulativePromptVersion(baseVersion) : baseVersion;
@@ -402,8 +402,8 @@ export async function POST(req: Request) {
   // lands after the learner went back never pulls it back); moving back is the learner's explicit PATCH sessions/[id].
   const advances = sessionStep === null || step > sessionStep;
   // The learner opened a saved lesson: recorded as before (the two writes are independent, so together).
-  // SCHOLAR-GUIDE-ME-001: only a real teach or explanation shown is learning. Opening a saved step, a hint and an example record nothing, so none can mark a lesson taught or read.
-  const guideRecords = !guideAsk || (!open && (guideAsk.turn === "teach" || guideAsk.turn === "explain"));
+  // SCHOLAR-GUIDE-ME-001 + owner decision RELEASE-001 item 3: no turn of the guided activity marks the lesson. Each step's answer is kept as it is judged; the lesson counts when the activity is complete (learn/guide-complete).
+  const guideRecords = !guideAsk;
   const openedSaved = async (saved: ArtefactRow) => {
     if (recorded && sessionId && guideRecords && policy.scholarLearningHistory === "record") await Promise.all([
       recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: null, chunkIds: saved.sources }),
@@ -712,7 +712,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
     // SCHOLAR-GUIDE-ME-001: a hint or an example shown is not learning done (guideRecords).
     if (guideRecords) await Promise.all([
-      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId), attemptId: keptCheck?.id ?? null }),
+      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: guidedClarify ? null : eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId), attemptId: keptCheck?.id ?? null }),
       advances ? updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }) : Promise.resolve("ok" as const),
     ]);
   }
