@@ -1,4 +1,7 @@
 import Link from "next/link";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
+import { correctQuery, expandText, expandWebsearch, vocabularyOf } from "@/lib/individual/search/tolerant";
 import type { ReactNode } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import {
@@ -8,7 +11,7 @@ import {
 } from "@/lib/individual/scholar/store";
 import {
   BASIC_SEARCH_ROWS, LESSON_LINK_LABEL, LIBRARY_PAGE_SIZE, LIBRARY_STATUSES, LIBRARY_VIEWS, PROVENANCE_LABEL, STATUS_LABEL, VIEW_LABEL,
-  basicMatches, cardHrefPath, encodeCursor, lessonHrefPath, lessonLinkOf, lessonTitleOf, parseLibraryQuery, provenanceOf, rangeBounds, sectionsHrefPath,
+  basicMatches, cardHrefPath, encodeCursor, savedNothing, lessonHrefPath, lessonLinkOf, lessonTitleOf, parseLibraryQuery, provenanceOf, rangeBounds, sectionsHrefPath,
   snippetParts, versionLabel, type Cursor, type LessonLink, type LibraryQuery, type LibraryStatus,
 } from "@/lib/individual/scholar/saved-library";
 import {
@@ -115,15 +118,8 @@ export async function SavedLibrary({ admin, userId, params, policy, materials, c
       <p className="mt-1 text-[13px] text-gray-600">{AI_LABEL}. Private to you and for your own study: never an assessment, never evidence of competence. Opening anything here uses no AI.</p>
 
       {/* SEARCH: deterministic and private (no AI). One search over saved lessons, notes, questions and your materials. */}
-      <form method="get" action={href("study/saved")} role="search" className="mt-3 flex flex-wrap items-end gap-2">
-        {FILTER_KEYS.map(k => (q[k] ? <input key={k} type="hidden" name={k} value={q[k]!} /> : null))}
-        <label className="min-w-0 flex-1 basis-[16rem] text-[12.5px] font-semibold text-gray-800">Search your saved lessons, notes, questions and materials
-          <input type="search" name="q" defaultValue={q.q} maxLength={200} className={field} placeholder="for example: preload OR afterload" />
-        </label>
-        {historyOn && <HistoryKeyInput />}
-        <button type="submit" className={ghost}>Search</button>
-        {q.q && <Link href={urlWith(q, { q: null })} className={ghost}>Clear search</Link>}
-      </form>
+      <PageSearch scope={scopeLine("saved")} action={href("study/saved")} value={q.q} placeholder="for example: preload OR afterload" className="mt-3"
+        hidden={Object.fromEntries(FILTER_KEYS.map(k => [k, q[k]]))} clearHref={urlWith(q, { q: null })} extra={historyOn ? <HistoryKeyInput /> : undefined} />
       <HistoryNotice />
       {historyOn && q.q && <RecordSearch activity="library_search" query={q.q} requestKey={historyKey} resultCount={null} materialId={q.material} />}
 
@@ -564,9 +560,13 @@ async function NotesView({ admin, userId, q, titles, names, notes, v820, topicRo
  * learner's own uploaded sections, found by the same words (the first SECTION_FIRST, then SECTION_PAGE more at a time). The filters apply to
  * every group. With filters on, the best FILTERED_SEARCH_READ matches are read, filtered and paged here. Deterministic, private, no AI.
  */
-async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: {
+async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mode = "first", fixed = "" }: {
   admin: Admin; userId: string; q: LibraryQuery; v820: boolean; titles: Map<string, string>; names: Map<string, MaterialName>; topicRows: { chunkId: string; topics: string[] }[];
+  /** first: as typed with the closed synonyms. corrected: the one-slip spelling fix (only when first found nothing). plain: as typed, when the fix found nothing too. */
+  mode?: "first" | "corrected" | "plain"; fixed?: string;
 }) {
+  const words = mode === "corrected" ? fixed : q.q ?? "";
+  const synonyms = mode !== "plain";
   const offset = (q.page - 1) * LIBRARY_PAGE_SIZE;
   const filtered = hasLibraryFilters(q);
   const kindLabel: Record<string, string> = { artefact: "Saved lesson", note: "Your note", lesson: "Learning session", flashcard: "Flashcard", card_note: "Your note on a flashcard" };
@@ -587,13 +587,13 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
       hits = page.items; total = page.total;
     }
   } else if (!filtered) {
-    const r = await librarySearch(admin, userId, q.q, LIBRARY_PAGE_SIZE, offset);
+    const r = await librarySearch(admin, userId, synonyms ? expandWebsearch(words) : words, LIBRARY_PAGE_SIZE, offset);
     if (!r.ok) unreadable = true; else { hits = r.data.rows; total = r.data.total; }
   } else {
     const pool: LibraryHit[] = [];
     let all = 0;
     for (let o = 0; o < FILTERED_SEARCH_READ; o += 50) {
-      const r = await librarySearch(admin, userId, q.q, 50, o);
+      const r = await librarySearch(admin, userId, synonyms ? expandWebsearch(words) : words, 50, o);
       if (!r.ok) { unreadable = true; break; }
       pool.push(...r.data.rows); all = r.data.total;
       if (r.data.rows.length < 50 || pool.length >= all) break;
@@ -615,9 +615,10 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
   for (const a of artRead.ok ? artRead.data : []) arts.set(a.id, a);
 
   // From your materials: the learner's own sections, ranked by the same words (no AI).
-  const tsq = toTsQuery(q.q);
+  const sectionWords = synonyms ? expandText(words) : words;
+  const tsq = toTsQuery(sectionWords);
   const found = tsq ? await searchSectionRows(admin, userId, tsq, 200) : null;
-  const sec = found?.ok ? sectionHits(rankChunks(q.q, found.data.rows, found.data.rows.length), q.q, names, scope, q.msec) : null;
+  const sec = found?.ok ? sectionHits(rankChunks(sectionWords, found.data.rows, found.data.rows.length), sectionWords, names, scope, q.msec) : null;
 
   const target = (h: LibraryHit): string => {
     if (h.kind === "lesson") return href(`study/learn?session=${encodeURIComponent(h.id)}`);
@@ -633,15 +634,24 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows }: 
       : h.kind === "note" ? (h.label === "highlight" ? "Your highlight" : "Your note") : h.label.slice(0, 120);
   const groups = groupHits(hits);
   const secTotal = sec?.total ?? 0;
-  const nothing = !unreadable && hits.length === 0 && (sec?.hits.length ?? 0) === 0;
+  const sectionsFailed = found !== null && !found.ok;
+  const nothing = savedNothing({ unreadable, sectionsRead: found ? found.ok : null, hits: hits.length, sectionHits: sec?.hits.length ?? 0 });
+  // Nothing found as typed: one slip of spelling against the learner's own topics and material titles, said plainly. Never for a filtered or basic search.
+  if (nothing && mode === "first" && v820 && !filtered) {
+    const fix = correctQuery(words, vocabularyOf([...topicRows.flatMap(t => t.topics), ...titles.values()]));
+    if (fix.changed) return SearchView({ admin, userId, q, v820, titles, names, topicRows, mode: "corrected", fixed: fix.text });
+  }
+  if (nothing && mode === "corrected") return SearchView({ admin, userId, q, v820, titles, names, topicRows, mode: "plain" });
   return (
     <div className="mt-3">
       {!v820 && <p className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-700">Basic search: it looks for every word in your newest {BASIC_SEARCH_ROWS} saved lessons only. Notes and flashcards are not searched here yet. Your materials are searched below.</p>}
+      {mode === "corrected" && <p className="mt-2 text-[14px] text-gray-800" role="status" data-testid="showing-results-for">Showing results for <span className="font-semibold">{fixed}</span>. You searched for “{q.q}”.</p>}
       <p className="mt-2 text-[13px] text-gray-700" role="status">
         {total + secTotal} result{total + secTotal === 1 ? "" : "s"} for “{q.q}”{filtered ? ", with your filters" : ""}: {total} in your library, {secTotal} in your materials. Best matches first. Private to you; no AI.
         {capped ? ` Filters apply to your best ${FILTERED_SEARCH_READ} library matches.` : ""}
       </p>
       {unreadable && <div className="mt-2"><Unreadable what="your saved lessons and notes" /></div>}
+      {sectionsFailed && <div className="mt-2"><Unreadable what="the sections of your materials" /></div>}
       {nothing && <Empty>Nothing matches. Try fewer or other words, or OR between them{filtered ? ", or remove a filter" : ""}.</Empty>}
       {groups.map(g => (
         <section key={g.key} aria-labelledby={`grp-${g.key}`} className="mt-4">

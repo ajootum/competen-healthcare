@@ -1,14 +1,17 @@
+import { readingAttention } from "@/lib/individual/scholar/slide-classify";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
 import { Notice, PageHeader, StatePanel, Unreadable } from "../../../../_components/chrome";
 import { DialogButton } from "../../../../_components/Dialog";
 import { FORMAT_LABEL, FORMAT_OF, uploadRules } from "@/lib/individual/scholar/config";
-import { displaySessionTitle, displayTitle, sessionHits } from "@/lib/individual/scholar/learn-search";
-import { countDue, listLearningSessions, listMaterials, materialExtras } from "@/lib/individual/scholar/store";
+import { displayTitle } from "@/lib/individual/scholar/learn-search";
+import { resumeSession } from "@/lib/individual/scholar/resume-session";
+import { countDue, listMaterials, materialExtras } from "@/lib/individual/scholar/store";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { continueStudy, loadStudy } from "@/lib/individual/scholar/study-context";
 import { stageHref } from "@/lib/individual/scholar/study-carry";
+import type { StudySpace } from "@/lib/individual/scholar/study-session";
 import { listExamPapers } from "@/lib/individual/scholar/exam-store";
 import { EXAM_ATTESTATION, LIVE_EXAM_NOTICE } from "@/lib/individual/scholar/exam-service";
 import StudyNav from "./_components/StudyNav";
@@ -16,7 +19,7 @@ import { UploadPanel } from "./_components/client";
 import { learnHref } from "./_components/learn-landing";
 import { headerBtn } from "./_components/shell-pieces";
 import { ContinueCard, RecentMaterials, StartLearning, textLink, type MaterialView } from "./_components/study-home";
-import { fileTypeOf, materialState, resumableOf } from "./_components/study-home-model";
+import { fileTypeOf, materialState } from "./_components/study-home-model";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -31,16 +34,14 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Study" });
 }
 
-const RESUME_LOOK = 30;
-const RESUME_CHECK = 5;
 export default async function StudyHome({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
   const { ctx } = page;
   const x = SCHOLAR;
   const policy = await loadIndividualPolicy(ctx.admin);
-  const [materials, due, sessions, connected, study, papers] = await Promise.all([
-    listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, RESUME_LOOK),
+  const [materials, due, connected, study, papers] = await Promise.all([
+    listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId),
     continueStudy(ctx.admin, ctx.userId, policy), loadStudy(ctx.admin, ctx.userId, (await searchParams).study, null, policy), listExamPapers(ctx.admin, ctx.userId),
   ]);
   const libraryHref = experienceHref("scholar", "study/library");
@@ -63,20 +64,15 @@ export default async function StudyHome({ params, searchParams }: { params: Prom
   const list = materials.ok ? materials.data : [];
 
   // The open study session comes first (it reopens in its last stage), as on Scholar's home; then the latest active learning session.
-  const rows = sessions.ok ? sessions.data : [];
-  const active = rows.filter(r => r.status === "active");
-  const ordered = connected ? [...active.filter(r => r.id === connected.id), ...active.filter(r => r.id !== connected.id)] : active;
-  const { session: picked, blocked } = resumableOf(await sessionHits(ctx.admin, ctx.userId, ordered.slice(0, RESUME_CHECK), list));
-  // One session on its own needs no "started on" to tell it from others with the same name.
-  const pickedRow = picked ? rows.find(r => r.id === picked.id) : null;
-  const session = picked && pickedRow ? { ...picked, title: displaySessionTitle(pickedRow.title) } : picked;
-  const continueHref = session && connected?.id === session.id ? stageHref(connected.space, connected.id) : session ? learnHref({ session: session.id }) : null;
+  const resume = await resumeSession(ctx.admin, ctx.userId, list, connected);
+  const session = resume.session;
+  const continueHref = session && resume.connectedSpace ? stageHref(resume.connectedSpace as StudySpace, session.id) : session ? learnHref({ session: session.id }) : null;
 
   const shown = list.slice(0, 5);
   const extras = await materialExtras(ctx.admin, ctx.userId, shown.map(m => m.id));
   const recent: MaterialView[] = shown.map(m => ({
     id: m.id, title: displayTitle(m.title), type: fileTypeOf(FORMAT_LABEL[FORMAT_OF[m.mimeType]]),
-    state: materialState({ chunkCount: m.chunkCount, emptyUnits: extras.qualityOn ? extras.byId.get(m.id)?.quality?.emptyUnits.length ?? 0 : 0 }),
+    state: materialState({ chunkCount: m.chunkCount, emptyUnits: extras.qualityOn ? readingAttention(extras.byId.get(m.id)?.quality ?? null) : 0 }),
   }));
 
   const rules = uploadRules(policy);
@@ -91,12 +87,12 @@ export default async function StudyHome({ params, searchParams }: { params: Prom
     <>
       {header}
       <div className="max-w-[880px] space-y-5" data-study-home>
-        {session && continueHref && <ContinueCard s={session} href={continueHref} more={rows.length > 1} />}
-        {!session && blocked && (
+        {session && continueHref && <ContinueCard s={session} href={continueHref} more={resume.more} />}
+        {!session && resume.blocked && (
           <Notice>Your last session can no longer be resumed, because the material it was taught from is no longer available. Your learning record is unchanged. You can start something new below.</Notice>
         )}
-        {!sessions.ok && <Unreadable what="your learning sessions" />}
-        <StartLearning hasMaterials={list.length > 0} historyOn={policy.scholarSearchHistory === "on"} sessionsLink={!session && rows.length > 0} libraryHref={libraryHref} />
+        {!resume.read && <Unreadable what="your learning sessions" />}
+        <StartLearning hasMaterials={list.length > 0} historyOn={policy.scholarSearchHistory === "on"} sessionsLink={!session && resume.more} libraryHref={libraryHref} />
         <RecentMaterials rows={recent} unreadable={!materials.ok} upload={upload} libraryHref={libraryHref} />
       </div>
     </>

@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -23,6 +24,7 @@ import { ScholarEduNotice } from "./(scholar)/study/_components/edu-notice";
 import { getAiStanding } from "@/lib/ai/allowance";
 import { AiAvailabilityProvider } from "../../_components/ai/AiAvailabilityContext";
 import { SearchHistoryChoiceProvider } from "../../_components/SearchHistoryChoice";
+import { NavigationProgress } from "../../_components/NavigationProgress";
 import { GlobalSearch } from "../../_components/search/GlobalSearch";
 import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
@@ -193,6 +195,7 @@ export default async function ExperienceLayout({ children, params }: {
   // HFE-COLOR-02: one neutral canvas (#F7F8FA) for every product, white header and sidebar, subtle borders.
   return (
     <div data-cmp-theme={experience} className={`min-h-screen bg-[var(--cmp-app-bg)] ${scholar ? "cmp-scholar" : ""}`}>
+      <Suspense fallback={null}><NavigationProgress /></Suspense>
       <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
           {scholar && <ScholarDrawer myPlan={myPlanOn} searchHistory={historyChoice.offered} modules={scholarModules} learning={learning} />}

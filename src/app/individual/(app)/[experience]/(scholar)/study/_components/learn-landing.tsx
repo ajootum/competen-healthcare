@@ -126,9 +126,9 @@ export function ContinueLearning({ sessions, total, study = null }: { sessions: 
 }
 
 /** My Topics (owner s3): subjects (the student's own collections), then topics, then how many sections and documents. */
-export function MyTopics({ groups, total }: { groups: { subject: string | null; topics: TopicHit[] }[] | null; total: number }) {
+export function MyTopics({ groups, total, bare = false }: { groups: { subject: string | null; topics: TopicHit[] }[] | null; total: number; bare?: boolean }) {
   return (
-    <section aria-labelledby="topics-h" className={`${card} mb-5`}>
+    <section aria-labelledby="topics-h" className={bare ? "" : `${card} mb-5`}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="topics-h" className={h2}>My topics</h2>
         {total > 0 && <Link href={learnHref({ tab: "topics" })} className={`${link} text-[13.5px]`} style={{ color: accent }}>View all topics ({total})</Link>}
@@ -162,12 +162,12 @@ export function MyTopics({ groups, total }: { groups: { subject: string | null; 
 export type RecentDoc = DocumentHit & { status: string };
 
 /** Recently Added (owner s3): a few documents, then the Library, which manages them. */
-export function RecentlyAdded({ docs, studyOn = false }: { docs: RecentDoc[] | null; studyOn?: boolean }) {
+export function RecentlyAdded({ docs, studyOn = false, bare = false }: { docs: RecentDoc[] | null; studyOn?: boolean; bare?: boolean }) {
   return (
-    <section aria-labelledby="recent-h" className={card}>
+    <section aria-labelledby="recent-h" className={bare ? "" : card}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="recent-h" className={h2}>Recently added</h2>
-        <Link href={experienceHref("scholar", "study")} className={`${link} text-[13.5px]`} style={{ color: accent }}>Open your Library</Link>
+        <Link prefetch={false} href={experienceHref("scholar", "study/library")} className={`${link} inline-flex min-h-[44px] items-center text-[13.5px]`} style={{ color: accent }}>Open your Library</Link>
       </div>
       {docs === null ? <p className="mt-2 text-[13.5px] text-gray-600">Your materials could not be read just now.</p>
         : docs.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-600">Nothing uploaded yet. Upload your notes in the Library to start.</p>

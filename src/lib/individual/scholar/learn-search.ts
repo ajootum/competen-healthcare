@@ -12,6 +12,7 @@
 // ⚠ NEVER THE WHOLE LIBRARY IN THE BROWSER. One page of each list is sent, with exact counts.
 // ⚠ NEVER AN INVENTED LOCATION. A section's place is citeChunk's (its page, slide or section as stored).
 
+import { readingAttention } from "./slide-classify";
 import { citeChunk } from "./extract";
 import { FORMAT_LABEL, FORMAT_OF, UNIT_OF, type MaterialMime } from "./config";
 import { rankChunks, searchTerms, toTsQuery } from "./retrieval";
@@ -385,7 +386,7 @@ export async function learnLanding(admin: any, userId: string, materials: readon
     return {
       id: m.id, title: displayTitle(m.title), fileName: m.fileName, format: FORMAT_LABEL[FORMAT_OF[m.mimeType]], unit: UNIT_OF(m.mimeType), addedAt: m.createdAt, sections: m.chunkCount,
       topics: materialTopics(topicRows.ok ? topicRows.data : [], m.id, 3), subject: s ? names.get(s) ?? null : null,
-      status: processingStatus(!!q && q.emptyUnits.length > 0, analysed.has(m.id)),
+      status: processingStatus(readingAttention(q ?? null) > 0, analysed.has(m.id)),
     };
   });
   return {

@@ -74,7 +74,7 @@ export function ScholarNavTree({ myPlan, searchHistory = false, modules, onNavig
   const topLink = (leaf: NavLeaf, icon: string) => {
     const on = active?.leaf.key === leaf.key;
     return (
-      <Link key={leaf.key} href={experienceHref("scholar", leaf.segment)} aria-current={on ? "page" : undefined} onClick={onNavigate}
+      <Link prefetch={false} key={leaf.key} href={experienceHref("scholar", leaf.segment)} aria-current={on ? "page" : undefined} onClick={onNavigate}
         className={`${linkBase} ${on ? "font-bold" : "font-medium text-gray-900 hover:bg-gray-50"}`}
         style={on ? { background: SCHOLAR.accentSoft, color: SCHOLAR.accent } : undefined}>
         <span aria-hidden className="w-5 text-center text-[15px]">{icon}</span>
@@ -108,7 +108,7 @@ export function ScholarNavTree({ myPlan, searchHistory = false, modules, onNavig
                 const href = experienceHref("scholar", leaf.segment);
                 return (
                   <li key={leaf.key}>
-                    <Link href={leaf.carriesStudy ? withStudy(href, studyId) : href} aria-current={on ? "page" : undefined} onClick={onNavigate}
+                    <Link prefetch={false} href={leaf.carriesStudy ? withStudy(href, studyId) : href} aria-current={on ? "page" : undefined} onClick={onNavigate}
                       className={`flex items-center rounded-[9px] border-l-2 py-2 pl-3.5 pr-3 text-[14.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "font-bold" : "border-transparent font-medium text-gray-700 hover:bg-gray-50"}`}
                       style={on ? { background: SCHOLAR.accentSoft, color: SCHOLAR.accent, borderColor: SCHOLAR.accent } : undefined}>
                       {leaf.label}

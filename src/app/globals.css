@@ -1078,3 +1078,8 @@ aside[data-sidebar] details[data-nav-group] > summary::-webkit-details-marker { 
     box-shadow: 0 0 0 var(--cmp-space-4) var(--cmp-neutral-0);
   }
 }
+
+/* SCHOLAR-PERF-01: the bar shown from a tap until the next page arrives. It slows and never quite finishes, because the wait is unknown. */
+.cmp-nav-progress { width: 90%; transform-origin: left; animation: cmp-nav-progress 8s cubic-bezier(0.08, 0.7, 0.2, 1) both; }
+@keyframes cmp-nav-progress { from { transform: scaleX(0.08); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) { .cmp-nav-progress { animation: none; width: 100%; } }

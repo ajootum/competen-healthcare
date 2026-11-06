@@ -1,14 +1,18 @@
 import { describe, expect, it, vi } from "vitest";
 
-const h = vi.hoisted(() => ({ read: [] as string[], failLearn: false }));
+const h = vi.hoisted(() => ({ read: [] as string[], failLearn: false, learning: true, failCourses: false, failProgrammes: false, learnAsked: [] as string[] }));
 
 vi.mock("../learning-plan/entry-store", () => ({ listEntries: async () => { h.read.push("plan"); return { ok: true, data: { entries: [{ id: "e1", title: "Sepsis revision", entryDate: "2026-11-09", status: "planned" }], exceptions: [] } }; } }));
 vi.mock("./apply-context-data", () => ({ loadPracticeRows: async () => { h.read.push("apply"); return []; } }));
 vi.mock("./competency-view", () => ({ loadLearnerCatalogue: async () => { h.read.push("competencies"); return { competencies: [{ id: "c1", title: "Recognise sepsis", code: "N1" }] }; } }));
+vi.mock("@/lib/learning/policy", () => ({ learningEnabled: async () => { h.read.push("learning-policy"); return h.learning; } }));
+vi.mock("@/lib/learning/record", () => ({ myRecords: async () => { h.read.push("courses"); if (h.failCourses) throw new Error("down"); return [{ id: "r1", title: "Sepsis recognition course", code: "SEP1", status: "in_progress", delivery: "competen", enrolledAt: "2026-10-01" }]; } }));
+vi.mock("@/lib/learning/products", () => ({ loadLearningRecords: async () => { h.read.push("completed"); return []; } }));
 vi.mock("./learn-search", () => ({
   displayTitle: (t: string) => t, parseSearchParams: (x: unknown) => x,
-  searchLibrary: async () => {
+  searchLibrary: async (_a: unknown, _u: unknown, p: { q: string }) => {
     h.read.push("learn");
+    h.learnAsked.push(p.q);
     if (h.failLearn) throw new Error("down");
     return { topics: { items: [{ name: "Sepsis", sections: 2 }] }, sections: { items: [{ chunkId: "ch1", materialId: "m1", materialTitle: "Sepsis notes", location: "Page 2", topics: [] }] }, sessions: { items: [] } };
   },
@@ -18,12 +22,15 @@ vi.mock("./store", () => ({
   getStudyPlan: async () => ({ ok: true, data: { goal: "Pass the sepsis module", examLabel: null, examDate: null, priorities: [] } }),
   librarySearch: async () => { h.read.push("saved"); return { ok: true, data: { rows: [], total: 0 } }; },
   listEvaluations: async () => { h.read.push("evaluate"); return { ok: true, data: [] }; },
+  libraryTopics: async () => { h.read.push("revise-topics"); return new Map([["m1", [["Sepsis"], ["Sepsis", "Fluids"]]]]); },
+  learnerProgramme: async () => (h.failProgrammes ? { ok: false, notProvisioned: false } : { ok: true, data: null }),
+  listProgrammes: async () => ({ ok: true, data: [{ code: "RN", label: "Nursing", profession: "Nursing", country: null, level: null }] }),
   listMaterials: async () => ({ ok: true, data: [{ id: "m1", title: "Sepsis notes", fileName: "s.pdf" }, { id: "m2", title: "Wound care", fileName: "w.pdf" }] }),
 }));
 
 import { globalSearch, parseGlobalQuery, plainHit, planSearchRows, savedHitPath } from "./global-search";
 
-const open = { planOn: true, savedOn: true, modules: new Set(["competencies"]) } as never;
+const open = { planOn: true, savedOn: true, modules: new Set(["competencies", "courses"]) } as never;
 
 describe("parseGlobalQuery", () => {
   it("needs two characters and tidies the rest", () => {
@@ -66,7 +73,49 @@ describe("globalSearch", () => {
   });
   it("every group keeps a way to search that module's own page", async () => {
     const g = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
-    expect(g.find(x => x.module === "revise")).toMatchObject({ types: [], unreadable: false, morePath: "study/revise?view=topics&q=sepsis" });
+    expect(g.find(x => x.module === "revise")).toMatchObject({ unreadable: false, morePath: "study/revise?view=topics&q=sepsis" });
+    expect(g.find(x => x.module === "courses")).toMatchObject({ unreadable: false, morePath: "courses/mine?q=sepsis" });
+  });
+  it("Revise records open the catalogue on that material, and cost two reads beyond the shared materials read", async () => {
+    h.read = [];
+    const g = await globalSearch({ admin: {}, userId: "u1" }, open, "fluids");
+    const r = g.find(x => x.module === "revise")!.types[0].results;
+    expect(r).toEqual([expect.objectContaining({ id: "m1", path: "study/revise?view=topics&m=m1" })]);
+    expect(h.read.filter(x => x === "revise-topics")).toHaveLength(1);
+  });
+  it("Courses open the list they belong to, and are never read without the module or with Learning off", async () => {
+    const g = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
+    expect(g.find(x => x.module === "courses")!.types[0].results[0].path).toBe("courses/mine?q=Sepsis%20recognition%20course");
+    h.read = [];
+    const none = await globalSearch({ admin: {}, userId: "u1" }, { ...(open as object), modules: new Set(["competencies"]) } as never, "sepsis");
+    expect(none.map(x => x.module)).not.toContain("courses");
+    expect(h.read).not.toContain("courses");
+    h.learning = false;
+    const off = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
+    h.learning = true;
+    expect(off.find(x => x.module === "courses")).toMatchObject({ unreadable: false });
+  });
+  it("Programmes are still found with Learning off, and the course lists are not read", async () => {
+    h.learning = false; h.read = [];
+    const g = await globalSearch({ admin: {}, userId: "u1" }, open, "nursing");
+    h.learning = true;
+    expect(g.find(x => x.module === "courses")!.types.find(t => t.label === "Programmes")!.results.map(r => r.id)).toEqual(["RN"]);
+    expect(h.read).not.toContain("courses");
+    expect(h.read).not.toContain("completed");
+  });
+  it("one failed courses read says the source could not be searched", async () => {
+    h.failCourses = true;
+    const a = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
+    h.failCourses = false; h.failProgrammes = true;
+    const b = await globalSearch({ admin: {}, userId: "u1" }, open, "sepsis");
+    h.failProgrammes = false;
+    expect(a.find(x => x.module === "courses")).toMatchObject({ unreadable: true, types: [] });
+    expect(b.find(x => x.module === "courses")).toMatchObject({ unreadable: true, types: [] });
+  });
+  it("Learn is searched with synonyms only, never a spelling correction", async () => {
+    h.learnAsked = [];
+    await globalSearch({ admin: {}, userId: "u1" }, open, "paediatric");
+    expect(h.learnAsked).toEqual(["paediatric pediatric"]);
   });
 });
 
