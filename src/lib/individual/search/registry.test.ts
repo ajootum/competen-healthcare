@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { SCHOLAR_SEARCH_MODULES, allowedSearchModules, moduleSearchPath, scopeLine } from "./registry";
 import type { ScholarModuleKey } from "../scholar/module-access";
 
-const open = { planOn: true, savedOn: true, modules: new Set<ScholarModuleKey>(["competencies"]) };
+const open = { planOn: true, savedOn: true, modules: new Set<ScholarModuleKey>(["competencies", "courses"]) };
 const keys = (a: Parameters<typeof allowedSearchModules>[0]) => allowedSearchModules(a).map(m => m.key);
 
 describe("the search registry", () => {
@@ -22,6 +22,8 @@ describe("the search registry", () => {
     expect(keys({ ...open, planOn: false })).not.toContain("plan");
     expect(keys({ ...open, savedOn: false })).not.toContain("saved");
     expect(keys({ ...open, modules: new Set() })).not.toContain("competencies");
+    expect(keys({ ...open, modules: new Set() })).not.toContain("courses");
+    expect(keys({ ...open, modules: new Set<ScholarModuleKey>(["competencies"]) })).not.toContain("courses");
   });
   it("a module's search keeps the view it needs", () => {
     expect(moduleSearchPath("revise", "sepsis care")).toBe("study/revise?view=topics&q=sepsis+care");

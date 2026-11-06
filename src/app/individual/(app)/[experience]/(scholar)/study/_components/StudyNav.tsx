@@ -64,7 +64,7 @@ export default function StudyNav({ dueCount, study = null }: { dueCount?: number
           const on = current === s.key;
           return (
             <li key={s.key}>
-              <Link href={experienceHref("scholar", s.segment)} aria-current={on ? "page" : undefined}
+              <Link prefetch={false} href={experienceHref("scholar", s.segment)} aria-current={on ? "page" : undefined}
                 className={`inline-flex min-h-[40px] items-center gap-2 rounded-full border py-1 pl-1.5 pr-3.5 text-[14.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${on ? "bg-[var(--cmp-theme-soft)]" : "border-gray-200 bg-white text-gray-600 hover:text-gray-900"}`}
                 style={on ? { borderColor: SCHOLAR.accent, color: SCHOLAR.accent } : undefined}>
                 <ActivityChip space={s.key} />

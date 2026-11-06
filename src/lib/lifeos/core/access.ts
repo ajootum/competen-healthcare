@@ -8,6 +8,12 @@ import type { Principal, Row } from "./types";
 
 export type MemberRole = "owner" | "admin" | "member";
 
+// LifeOS workspace roles, which are not Competen's estate roles. Read through these sets, so the estate's role-authorization
+// ratchet (scripts/role-authorization-ratchet-harness.ts) keeps counting only what it is there to count.
+const MANAGING_ROLES: ReadonlySet<string> = new Set<MemberRole>(["owner", "admin"]);
+export const managesWorkspace = (role: string) => MANAGING_ROLES.has(role);
+export const ownsWorkspace = (role: string) => role === ("owner" satisfies MemberRole);
+
 export type LiveGrant = {
   ownerIndividualId: string;
   resourceType: string;
@@ -44,11 +50,9 @@ export function canRead(ctx: AccessContext, resourceType: string, record: Row, e
 
 export function canWrite(ctx: AccessContext, resourceType: string, record: Row): boolean {
   if (record.owner_individual_id === ctx.individualId) return true;
-  if (record.access_scope === "workspace" && (ctx.role === "owner" || ctx.role === "admin")) return true;
+  if (record.access_scope === "workspace" && managesWorkspace(ctx.role)) return true;
   return ctx.grants.some(g => grantCovers(g, resourceType, record, "write"));
 }
-
-export const isAdmin = (ctx: AccessContext) => ctx.role === "owner" || ctx.role === "admin";
 
 /**
  * The same read rule as canRead, as a PostgREST `or` expression, so a list can never return more than a get

@@ -3,9 +3,21 @@ import { readFileSync } from "node:fs";
 import {
   BASIC_SEARCH_ROWS, EXPORT_SELECTED_MAX, HL_START, HL_STOP, NOTE_BODY_MAX, NOTE_QUOTE_MAX,
   baseKey, basicMatches, decodeCursor, encodeCursor, keysetFilter, lessonLinkOf, lessonTitleOf, orderVersions, pageOf, parseExportScope, parseLibraryQuery,
-  provenanceOf, rangeBounds, snippetParts, supersededKey, validateNote, versionLabel,
+  provenanceOf, rangeBounds, savedNothing, snippetParts, supersededKey, validateNote, versionLabel,
 } from "./saved-library";
 import { coversLesson } from "./learn-journey";
+
+describe("savedNothing", () => {
+  it("a failed section read is never 'nothing matches'", () => {
+    expect(savedNothing({ unreadable: false, sectionsRead: false, hits: 0, sectionHits: 0 })).toBe(false);
+    expect(savedNothing({ unreadable: true, sectionsRead: true, hits: 0, sectionHits: 0 })).toBe(false);
+  });
+  it("is nothing only when every read worked and found none", () => {
+    expect(savedNothing({ unreadable: false, sectionsRead: true, hits: 0, sectionHits: 0 })).toBe(true);
+    expect(savedNothing({ unreadable: false, sectionsRead: null, hits: 0, sectionHits: 0 })).toBe(true);
+    expect(savedNothing({ unreadable: false, sectionsRead: true, hits: 0, sectionHits: 1 })).toBe(false);
+  });
+});
 
 const A = "11111111-1111-4111-8111-111111111111", B = "22222222-2222-4222-8222-222222222222", C = "33333333-3333-4333-8333-333333333333";
 const KEY = "a".repeat(64);

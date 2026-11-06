@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { EXPERIENCES, SCHOLAR, experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
@@ -9,6 +10,7 @@ import { continueStudy } from "@/lib/individual/scholar/study-context";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import HomeActivity, { readHomeExtras } from "./home-activity";
+import { Deferred, SectionLoading } from "./deferred";
 import { scholarModulesOnce } from "@/lib/individual/scholar/module-access";
 import { competenciesHref, continueTarget, coursesExploreHref, failedPart, HOME_CARDS, offPart, okPart, visibleHomeCards } from "./home-model";
 
@@ -34,10 +36,11 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
   // Private module development access: the modules this person may see (any failure: none). Asked before the reads that depend on it.
   const modules = [...(await scholarModulesOnce(ctx.admin, ctx.userId))];
   // SCHOLAR-SESSION-AI-02: an open study session takes the Continue slot, reopened in its last stage (null where off).
-  const [materials, due, sessions, study, extras] = await Promise.all([
+  // SCHOLAR-PERF-02: the activity rows take the most reading, so the cards show first and the rows arrive when they are ready.
+  const extrasP = policyP.then(p => readHomeExtras(ctx, p, { now: new Date(), tz, today, modules }));
+  const [materials, due, sessions, study] = await Promise.all([
     listMaterials(ctx.admin, ctx.userId), countDue(ctx.admin, ctx.userId), listLearningSessions(ctx.admin, ctx.userId, 1),
     policyP.then(p => continueStudy(ctx.admin, ctx.userId, p)),
-    policyP.then(p => readHomeExtras(ctx, p, { now: new Date(), tz, today, modules })),
   ]);
   const none = materials.ok && materials.data.length === 0;
   const resume = sessions.ok ? sessions.data.find(s => s.status === "active") ?? null : null;
@@ -64,16 +67,20 @@ export default async function ScholarHome({ ctx, other }: { ctx: IndividualConte
         ))}
       </div>
 
-      <HomeActivity
-        accent={x.accent}
-        modules={modules}
-        input={{
-          study: study ? { id: study.id, title: study.title, space: study.space } : null,
-          ...extras,
-          due,
-          materials: materials.ok ? okPart(materials.data.slice(0, 1).map(m => ({ id: m.id, title: m.title }))) : materials.notProvisioned ? offPart : failedPart,
-        }}
-      />
+      <Suspense fallback={<SectionLoading label="Loading your activity" rows={4} />}>
+        <Deferred content={extrasP.then(extras => (
+          <HomeActivity
+            accent={x.accent}
+            modules={modules}
+            input={{
+              study: study ? { id: study.id, title: study.title, space: study.space } : null,
+              ...extras,
+              due,
+              materials: materials.ok ? okPart(materials.data.slice(0, 1).map(m => ({ id: m.id, title: m.title }))) : materials.notProvisioned ? offPart : failedPart,
+            }}
+          />
+        ))} />
+      </Suspense>
 
       {other && (
         <section className="mt-6 rounded-2xl p-5" style={{ background: EXPERIENCES[other].accentSoft }}>
