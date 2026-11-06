@@ -1,7 +1,7 @@
 /**
- * General closed vocabulary of academic subject phrases for Scholar research lookup.
- * Lesson text is matched against this list; only a matched phrase may ever be sent
- * to a literature search. Every entry: lowercase ASCII, at least two words, no names,
+ * General closed vocabulary of academic subject phrases for research lookup, in the Holdings engine because it is
+ * research data for any consumer, not one product's logic. Text is matched against this list; only a matched phrase
+ * may ever be sent to a literature search. Every entry: lowercase ASCII, at least two words, no names,
  * places, brands, doses or patient details.
  */
 export const SUBJECT_PHRASES: readonly string[] = [

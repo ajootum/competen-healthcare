@@ -16,7 +16,7 @@ Reopening a saved lesson makes no search and no AI call. If research fails or is
 
 | Ruling | How | Proof |
 |---|---|---|
-| Only subject terms leave | Outgoing queries are constants in a closed list in the repo. The lesson is only read, to choose list entries. Nothing is built from learner text | `evidence-pack.ts`, hostile-lesson tests, searches in `run-ledger-fresh-search.json` |
+| Only subject terms leave | Outgoing queries are constants in a closed list in the repo (`evidence-pack.ts` for the curated topics, `holdings/research/subject-phrases.ts` for the general phrases). The lesson is only read, to choose list entries. Nothing is built from learner text | `evidence-pack.ts`, hostile-lesson tests, searches in `run-ledger-fresh-search.json` |
 | Free sources only | The pack narrows to PubMed, Crossref and PubMed Central | Test with OpenAlex Active: not called. Ledger: no OpenAlex host |
 | Citations shared, abstract text not | Shared rows hold bibliographic details and appraisal, one row per topic. Each lesson reads abstracts by PMID | Tests. Staging rows read back: no abstract text, no user id |
 | Abstracts only | Full text is never fetched, and each reference says so | `shots/3-references-open.png` |
@@ -70,7 +70,7 @@ The last Library and reopen checks ran with the switch off, which also shows a s
 ## Known limits, for the owner's decision
 
 1. **Acceptance items 2 and 3 are not fully met** (see the rubric). The abstracts do not cover cephalocaudal development, or the critical and sensitive distinction itself.
-2. **The list is small and hand-written:** 4 curated topics and about 1,240 phrases. A lesson outside it gets no search and says so. Only the 4 curated topics have tuned queries, and the phrase topics have not been tested for result quality. MeSH could widen it, but its licence and fit are not checked.
+2. **The list is small and hand-written:** 4 curated topics and about 1,240 phrases. The phrases sit in Holdings as shared research data. They include subjects such as "nursing process" and "teamwork training", which Scholar's own code may not name (harness K9 and S1), and those rules still hold for all Scholar code. A lesson outside it gets no search and says so. Only the 4 curated topics have tuned queries, and the phrase topics have not been tested for result quality. MeSH could widen it, but its licence and fit are not checked.
 3. **A failed search is saved with its lesson.** The notes lesson stays until the learner asks for a new one. Selective refresh is P2.
 4. **Freshness of 15 years drops older foundational works.** An HQ setting can raise it.
 5. **At scale:** NCBI allows 3 requests a second without a key, and the research budget check is not atomic (design finding F6). A free NCBI key is a future decision.

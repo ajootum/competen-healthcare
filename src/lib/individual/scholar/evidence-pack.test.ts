@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolvePolicy } from "../policy";
-import { SUBJECT_PHRASES } from "./research-vocabulary-terms";
+import { SUBJECT_PHRASES } from "@/lib/holdings/research/subject-phrases";
 import { SUBJECT_TOPICS, approvedQuery, evidenceKind, lessonTopics, readShared, selectPack, shareable, topicKey, type SharedRecord } from "./evidence-pack";
 import type { ResearchItem } from "@/lib/holdings/research/providers";
 

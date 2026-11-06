@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import type { ResearchItem } from "@/lib/holdings/research/providers";
-import { SUBJECT_PHRASES } from "./research-vocabulary-terms";
+import { SUBJECT_PHRASES } from "@/lib/holdings/research/subject-phrases";
 import { authorityOf, canonWord } from "./research-relevance";
 import { sameTopicWord } from "./source-quality";
 

@@ -563,12 +563,12 @@ export async function POST(req: Request) {
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   clock.mark("research");
-  const notesLesson = (run: typeof ai.run) => runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
+  const learnArgs = { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
     teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined,
-    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) }, run);
-  let r: Awaited<ReturnType<typeof notesLesson>> | IntegratedResult = pack?.state === "ready"
+    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) };
+  let r: Awaited<ReturnType<typeof runLearn>> | IntegratedResult = pack?.state === "ready"
     ? await runIntegratedTeach(ctx.userId, { question: prompt, passages, references, depth, learnerContext, lesson: lessonBrief, evidence: pack.evidence }, ai.run)
-    : await notesLesson(ai.run);
+    : await runLearn(ctx.userId, { ...learnArgs }, ai.run);
   // What the lesson with evidence came to: its counts, the [E n] it kept, and the reason research is not in it, if it is not.
   let integrated: IntegratedResult["integrated"] | null = r.ok && "integrated" in r ? (r as IntegratedResult).integrated : null;
   // What research WROTE is read by the same published risk rules as Research & Explain: above the request's own tier, the lesson falls back to its notes sentences.
@@ -581,7 +581,7 @@ export async function POST(req: Request) {
     }
   }
   // Research must never cost the learner the lesson: if the lesson with evidence cannot stand, it is taught from the notes, once, and says so.
-  if (pack?.state === "ready" && !(r.ok && r.check.ok) && !ai.refusal()) { r = await notesLesson((g, part) => ai.run(g, part ? `retry-${part}` : "retry")); integrated = null; }
+  if (pack?.state === "ready" && !(r.ok && r.check.ok) && !ai.refusal()) { r = await runLearn(ctx.userId, learnArgs, (g, part) => ai.run(g, part ? `retry-${part}` : "retry")); integrated = null; }
   const packReferences = pack && integrated ? pack.references(integrated.citedEvidence) : [];
   clock.mark("generate");
   // A refusal on the claim check comes after a lesson was written and paid for. That lesson stands, with nothing cited to research (the check failed closed).
