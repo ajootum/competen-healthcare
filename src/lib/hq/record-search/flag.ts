@@ -5,7 +5,7 @@
 // inserted by this change and there is no migration: nobody has turned this on until somebody writes the row. Same
 // reader shape as ckriEnabled (src/lib/knowledge/governance.ts), failing closed on an error or a throw.
 // It is enforced in every route AND read by the layout (so a palette is not offered a source that would answer 404).
-// It is switched through PATCH /api/v1/practice/flags (gate hq.practice.flags.manage), which creates the row on the first flip. The
+// It is switched through PATCH /api/hq/search/flag (gate hq.platform.governance.manage), which creates the row on the first flip. The
 // flag only SHOWS the search: each route still checks its own capability.
 
 export const HQ_RECORD_SEARCH_FLAG = "hq_record_search";
