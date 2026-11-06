@@ -709,8 +709,9 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     // SQIE WS-D (990): the immutable 791 snapshot of the judged answer. Never fails the answer; without 990 nothing is kept, as before.
     if (kept && q && response) await keepCheckSnapshot(ctx, kept, { questionId: q.id, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null, marking: "ai_evaluation" });
   }
-  if (recorded && sessionId && shown && guideRecords && policy.scholarLearningHistory === "record") {
-    await Promise.all([
+  if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
+    // SCHOLAR-GUIDE-ME-001: a hint or an example shown is not learning done (guideRecords).
+    if (guideRecords) await Promise.all([
       recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId), attemptId: keptCheck?.id ?? null }),
       advances ? updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }) : Promise.resolve("ok" as const),
     ]);
