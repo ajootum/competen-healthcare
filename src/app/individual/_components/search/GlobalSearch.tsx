@@ -7,7 +7,7 @@ import { LearningIcon } from "@/components/ui/scholar-learning";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
 import { professionalEnterTarget } from "@/lib/individual/search/enter-target";
-import { GLOBAL_SEARCH_MIN, type GlobalGroup } from "@/lib/individual/scholar/global-search-types";
+import { GLOBAL_SEARCH_MAX, GLOBAL_SEARCH_MIN, type GlobalGroup } from "@/lib/individual/scholar/global-search-types";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 import { HistoryNotice, useSearchHistoryChoice } from "../SearchHistoryChoice";
 
@@ -26,6 +26,9 @@ const COPY: Record<ExperienceKey, Copy> = {
   professional: { name: "Professional", placeholder: "A competency, evidence, CPD entry, need or goal", scope: "Searching everything you can open in Professional. Only you see your own records. No AI is used." },
 };
 
+/** What is typed, as the server echoes it back: spaces collapsed, trimmed, limited. */
+const askedAs = (typed: string) => typed.replace(/\s+/g, " ").trim().slice(0, GLOBAL_SEARCH_MAX);
+
 export function GlobalSearch({ experience }: { experience: ExperienceKey }) {
   const copy = COPY[experience];
   const API = `/api/individual/${experience}/search`;
@@ -35,6 +38,7 @@ export function GlobalSearch({ experience }: { experience: ExperienceKey }) {
   const [q, setQ] = useState("");
   const [state, setState] = useState<State>({ status: "idle" });
   const [active, setActive] = useState(-1);
+  const [enterWaiting, setEnterWaiting] = useState<string | null>(null);
   const panel = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLInputElement>(null);
   const close = useCallback(() => { setOpen(false); setActive(-1); }, []);
@@ -87,10 +91,23 @@ export function GlobalSearch({ experience }: { experience: ExperienceKey }) {
     else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0 && results[active]) go(results[active].path);
-      else if (experience === "professional") { const to = professionalEnterTarget(found, results[0]?.path ?? null); if (to) go(to); }
+      // Professional: only results for what is typed now. While they are still on their way, Enter waits for them, rather than doing nothing or opening the last search's.
+      else if (experience === "professional") {
+        if (q.trim().length < GLOBAL_SEARCH_MIN) return;
+        if (state.status === "done" && state.q === askedAs(q)) { const to = professionalEnterTarget(found, results[0]?.path ?? null); if (to) go(to); }
+        else setEnterWaiting(askedAs(q));
+      }
       else if (q.trim().length >= GLOBAL_SEARCH_MIN) go(`study/learn?q=${encodeURIComponent(q.trim())}`);
     }
   }
+  useEffect(() => {
+    if (enterWaiting === null) return;
+    if (enterWaiting !== askedAs(q) || state.status === "failed") { const id = setTimeout(() => setEnterWaiting(null), 0); return () => clearTimeout(id); }
+    if (state.status !== "done" || state.q !== enterWaiting) return;
+    const to = professionalEnterTarget(state.groups.filter(g => g.types.length > 0), state.groups.flatMap(g => g.types.flatMap(t => t.results))[0]?.path ?? null);
+    const id = setTimeout(() => { setEnterWaiting(null); if (to) { close(); router.push(experienceHref(experience, to)); } }, 0);
+    return () => clearTimeout(id);
+  }, [enterWaiting, q, state, close, router, experience]);
   useEffect(() => { if (active >= 0) panel.current?.querySelector(`[data-result="${active}"]`)?.scrollIntoView({ block: "nearest" }); }, [active]);
 
   return (

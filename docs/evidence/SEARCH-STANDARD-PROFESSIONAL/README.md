@@ -25,5 +25,9 @@ Two temporary Professional people with one matching CPD entry each, then removed
 
 ## Not verified
 
-- **Pressing Enter on a result.** In the walk the address stayed on the home page, so I can't say Enter opens the record. `enter-target.test.ts` covers the rule, and the first version of this walk could not settle it.
+- **Pressing Enter in a browser after the fix.** In the walk Enter did nothing when results had not arrived yet, and could have opened the previous search's area. The independent read found why. Enter now waits for results for what is typed, and a highlighted result still opens at once. The rule is unit tested (`enter-target.test.ts`), and the fix passes the type check, but it has not been walked again. With results, Enter opens the first area's filtered list, not the record, by design.
 - Real phones, a screen reader, production.
+
+## Independent read
+
+No blockers or should-fix items. Scoping, Scholar isolation, the policy gate, unreadable sources and Scholar's own search were all clean. Left as a note: opening a need or goal from a filtered list drops the search term.
