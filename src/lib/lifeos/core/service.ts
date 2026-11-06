@@ -1,5 +1,5 @@
 import { TransitionInput, VersionInput } from "./contracts";
-import { type AccessContext, canRead, canWrite, hasScope, isAdmin, toLiveGrant, visibilityFilter } from "./access";
+import { type AccessContext, canRead, canWrite, hasScope, managesWorkspace, ownsWorkspace, toLiveGrant, visibilityFilter } from "./access";
 import { LifeosError, notFound } from "./errors";
 import { MACHINES, assertCommitmentCanMove, assertTransition, missingForWork, resumeStatus } from "./machines";
 import { RESOURCES, type ResourceDef, type ResourceName, camelRow, snakeFields } from "./resources";
@@ -350,7 +350,7 @@ export async function getWorkspace(c: RequestContext, workspaceId: string): Prom
 
 export async function listMembers(c: RequestContext, workspaceId: string): Promise<Row[]> {
   const ctx = await loadAccess(c.store, c.principal, workspaceId);
-  if (!isAdmin(ctx)) throw new LifeosError("forbidden", "Only a workspace owner or admin can list members.");
+  if (!managesWorkspace(ctx.role)) throw new LifeosError("forbidden", "Only a workspace owner or admin can list members.");
   return c.store.where("lifeos_membership", { workspace_id: workspaceId }, { limit: INTERNAL_READ_LIMIT });
 }
 
@@ -361,7 +361,7 @@ export async function leaveWorkspace(c: RequestContext, workspaceId: string): Pr
     const ws = await c.store.get("lifeos_workspace", workspaceId);
     if (!ws || ws.kind === "personal") throw new LifeosError("conflict", "You cannot leave your personal workspace.");
     const [m] = await c.store.where("lifeos_membership", { workspace_id: workspaceId, individual_id: c.principal.individualId }, { limit: 1 });
-    if (m.role === "owner") throw new LifeosError("conflict", "The owner of an organisation workspace cannot leave it.");
+    if (ownsWorkspace(String(m.role))) throw new LifeosError("conflict", "The owner of an organisation workspace cannot leave it.");
     const given = await c.store.where(GRANT.table, { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
     return [
       { t: "lifeos_membership", op: "update", id: String(m.id), workspace_id: workspaceId, values: { status: "left", provenance_source: "user" } },
@@ -403,7 +403,7 @@ export async function listResource(c: RequestContext, workspaceId: string, name:
   const rows = await c.store.list(def.table, {
     workspaceId, filters, visibility: visibilityFilter(ctx, def.entity, def.extraReaderColumn), hasArchive: def.hasArchive,
     includeArchived: params.includeArchived === "true", orderColumn: "created_at",
-    cursor: params.cursor ? decodeCursor(params.cursor) : null, limit: limit + 1,
+    cursor: params.cursor ? decodeCursor(String(params.cursor)) : null, limit: limit + 1,
   });
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
@@ -473,7 +473,7 @@ export async function listAudit(c: RequestContext, workspaceId: string, params: 
   const limit = Number(params.limit ?? LIST_DEFAULT);
   const rows = await c.store.list("lifeos_audit_event", {
     workspaceId, filters, visibility: null, hasArchive: false, orderColumn: "seq",
-    cursor: params.cursor ? decodeSeqCursor(params.cursor) : null, limit: limit + 1,
+    cursor: params.cursor ? decodeSeqCursor(String(params.cursor)) : null, limit: limit + 1,
   });
   const page = rows.slice(0, limit);
   const last = page[page.length - 1];
