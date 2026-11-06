@@ -92,34 +92,75 @@ export type GuideKeptCheck = { question: string; verdict: string | null; next: s
  * "understood", "attempted", or null when it has not been answered. No second record: this reads only what the existing check already keeps.
  */
 export function guideVerdictOf(question: string, checks: readonly GuideKeptCheck[]): "understood" | "attempted" | null {
-  const seen = new Set<string>(), queue = [question];
-  let answered = false;
+  const kept = answersOf(question, checks);
+  if (!kept.length) return null;
+  return kept.some(c => c.verdict === "understood") ? "understood" : "attempted";
+}
+
+/** The kept answers to a question, and to the new questions feedback offered from it. */
+function answersOf(question: string, checks: readonly GuideKeptCheck[]): GuideKeptCheck[] {
+  const seen = new Set<string>(), queue = [question], kept: GuideKeptCheck[] = [];
   while (queue.length) {
     const q = queue.shift()!;
     if (seen.has(q)) continue;
     seen.add(q);
     for (const c of checks) {
       if (c.question !== q) continue;
-      answered = true;
-      if (c.verdict === "understood") return "understood";
+      kept.push(c);
       const next = followUpOf(c.next);
       if (next) queue.push(next);
     }
   }
-  return answered ? "attempted" : null;
+  return kept;
+}
+
+export type GuideStepResult = "understood" | "partly" | "not_yet";
+const STEP_RESULT_RANK: Record<GuideStepResult, number> = { not_yet: 1, partly: 2, understood: 3 };
+
+/**
+ * Pure. The best judged result each step reached, from the questions its saved teaching asked (every saved version of the step: a learner may have answered under another mode or depth).
+ * A question gives its answer to one step only: two steps can share the fallback question, and one answer is not two.
+ */
+export function guideStepResults(questions: readonly (readonly string[])[], checks: readonly GuideKeptCheck[]): (GuideStepResult | null)[] {
+  const credited = new Set<string>();
+  return questions.map(asked => {
+    let best: GuideStepResult | null = null;
+    for (const q of asked) {
+      if (credited.has(q)) continue;
+      const judged = answersOf(q, checks).map(c => c.verdict).filter((v): v is GuideStepResult => v === "understood" || v === "partly" || v === "not_yet");
+      if (!judged.length) continue;
+      credited.add(q);
+      for (const v of judged) if (!best || STEP_RESULT_RANK[v] > STEP_RESULT_RANK[best]) best = v;
+    }
+    return best;
+  });
 }
 
 /**
  * Pure. OWNER DECISION SCHOLAR-TEACHING-P1-RELEASE-001 item 3: step results are recorded as they happen, and THE LESSON-LEVEL GUIDED CHECK COUNTS ONLY WHEN THE ACTIVITY IS COMPLETE.
- * Complete: the learner has reached the end and every step has been taught. The lesson's result then says what the steps show: understood only if every step was understood, partly if any step
- * was answered, and no check at all if nothing was answered (moving through without answering is not a check). Anything less is not complete, and the lesson is left as it was.
+ * Complete: the learner has reached the end and every step has been taught. The lesson's result then says what the steps show, and never more: understood only if every step was understood,
+ * partly if any step reached partly or understood, not yet if the answers given reached neither, and no check at all if nothing was answered (moving through without answering is not a check).
+ * Anything less is not complete, and the lesson is left as it was.
  */
-export function guidedLessonOutcome(steps: readonly ("understood" | "attempted" | null)[], of: number): { complete: boolean; verdict: "understood" | "partly" | null } {
+export function guidedLessonOutcome(steps: readonly (GuideStepResult | null)[], of: number): { complete: boolean; verdict: GuideStepResult | null } {
   const complete = steps.length >= of && of > 0;
   if (!complete) return { complete: false, verdict: null };
   const taken = steps.slice(0, of);
   if (taken.every(s => s === "understood")) return { complete: true, verdict: "understood" };
-  return { complete: true, verdict: taken.some(s => !!s) ? "partly" : null };
+  if (taken.some(s => s === "understood" || s === "partly")) return { complete: true, verdict: "partly" };
+  return { complete: true, verdict: taken.some(s => s === "not_yet") ? "not_yet" : null };
+}
+
+/**
+ * Pure. Whether finishing again has anything new to say, newest event first. A step's answer (an attempt, no verdict of its own) newer than the lesson's latest verdict is new evidence. With none,
+ * the verdict that stands stands: going back and finishing again must not add a row, and must not put an older guided result over a later check.
+ */
+export function lessonResultIsNew(newestFirst: readonly { verdict: string | null; attemptId: string | null }[]): boolean {
+  for (const e of newestFirst) {
+    if (e.verdict) return false;
+    if (e.attemptId) return true;
+  }
+  return true;
 }
 
 /** Pure. A saved teaching step's place in the lesson, from its version: `:teach:<step>`. Null when it is not one. */

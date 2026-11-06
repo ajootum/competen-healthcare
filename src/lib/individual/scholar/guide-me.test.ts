@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, guideTeachStepOf, guideVerdictOf, guideVersionTurn, guidedLessonOutcome, isUncertainAnswer, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
+import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, guideTeachStepOf, guideVerdictOf, guideStepResults, guideVersionTurn, guidedLessonOutcome, isUncertainAnswer, lessonResultIsNew, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
 import { guideInstruction, GUIDED_CLARIFY } from "./guide-me-prompt";
 import { parseDeeperAnswer } from "./deeper-format";
 import { isGuideAidVersion, isGuideTurnVersion, newestSavedLesson } from "./learn-journey";
@@ -119,9 +119,29 @@ describe("the lesson-level guided check (owner decision RELEASE-001 item 3)", ()
   });
   it("then says what the steps show, and never more", () => {
     expect(guidedLessonOutcome(["understood", "understood", "understood"], 3)).toEqual({ complete: true, verdict: "understood" });
-    expect(guidedLessonOutcome(["understood", "attempted", null], 3)).toEqual({ complete: true, verdict: "partly" });
+    expect(guidedLessonOutcome(["understood", "not_yet", null], 3)).toEqual({ complete: true, verdict: "partly" });
+    expect(guidedLessonOutcome(["partly", "not_yet", null], 3)).toEqual({ complete: true, verdict: "partly" });
+    expect(guidedLessonOutcome(["not_yet", "not_yet", "not_yet"], 3)).toEqual({ complete: true, verdict: "not_yet" });
+    expect(guidedLessonOutcome(["not_yet", null, null], 3)).toEqual({ complete: true, verdict: "not_yet" });
     expect(guidedLessonOutcome(["understood", null, null], 3)).toEqual({ complete: true, verdict: "partly" });
     expect(guidedLessonOutcome([null, null, null], 3)).toEqual({ complete: true, verdict: null });
+  });
+  it("takes a step's best judged result across its saved versions, and credits one answer to one step", () => {
+    const yes = { question: "A?", verdict: "understood", next: null }, no = { question: "B?", verdict: "not_yet", next: null };
+    expect(guideStepResults([["New?", "A?"]], [yes])).toEqual(["understood"]);
+    expect(guideStepResults([["A?"], ["A?"]], [yes])).toEqual(["understood", null]);
+    expect(guideStepResults([["B?"], ["C?"]], [no])).toEqual(["not_yet", null]);
+    expect(guideStepResults([["B?"]], [no, { question: "B?", verdict: "partly", next: null }])).toEqual(["partly"]);
+    expect(guideStepResults([["D?"]], [{ question: "D?", verdict: null, next: null }])).toEqual([null]);
+  });
+  it("adds a lesson verdict only when a step was answered since the last one", () => {
+    const step = { verdict: null, attemptId: "a" }, lesson = { verdict: "understood", attemptId: null }, plain = { verdict: "not_yet", attemptId: "b" }, other = { verdict: null, attemptId: null };
+    expect(lessonResultIsNew([])).toBe(true);
+    expect(lessonResultIsNew([other, step, other])).toBe(true);
+    expect(lessonResultIsNew([step, lesson])).toBe(true);
+    expect(lessonResultIsNew([lesson, step])).toBe(false);
+    expect(lessonResultIsNew([other, lesson, step])).toBe(false);
+    expect(lessonResultIsNew([plain, lesson, step])).toBe(false);
   });
   it("reads a teaching step's place from its version, and nothing else", () => {
     expect(guideTeachStepOf(learnPromptVersion("explain", { guide: guideVersionTurn("teach", 2) }))).toBe(2);

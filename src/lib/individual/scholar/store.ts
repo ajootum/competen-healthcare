@@ -2473,6 +2473,16 @@ export type LearningEventRow = { step: number; action: string; verdict: string |
  * A session's events, in order (what was done, and the informal check outcomes). LE-03 (955): an event detached by a
  * re-cut (its lesson no longer exists as one) is left out, so it counts as no lesson's progress.
  */
+/** One lesson's events, newest first, with the kept check each judged. 950 absent: no links. A failed read is a failure, never an empty trail. */
+export async function lessonEventTrail(admin: Admin, userId: string, sessionId: string, step: number): Promise<Read<{ action: string; verdict: string | null; attemptId: string | null }[]>> {
+  const detached = await learningRecutSchema(admin, userId);
+  const read = (cols: string) => { const q = admin.from("individual_scholar_learning_event").select(cols).eq("user_id", userId).eq("session_id", sessionId).eq("step", step); return (detached ? q.is("detached_at", null) : q).order("created_at", { ascending: false }).limit(500); };
+  let { data, error } = await read("action, verdict, attempt_id");
+  if (error && /column|schema cache/i.test(String((error as any)?.message ?? ""))) ({ data, error } = await read("action, verdict"));
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ action: r.action, verdict: r.verdict ?? null, attemptId: r.attempt_id ?? null })) };
+}
+
 export async function learningEvents(admin: Admin, userId: string, sessionId: string): Promise<Read<LearningEventRow[]>> {
   let q = admin.from("individual_scholar_learning_event").select("step, action, verdict, created_at").eq("user_id", userId).eq("session_id", sessionId);
   if (await learningRecutSchema(admin, userId)) q = q.is("detached_at", null);

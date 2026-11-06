@@ -19,13 +19,19 @@ export type GuideReply = { flags?: readonly { text: string }[]; retry?: boolean;
 export type GuideRun = (body: Record<string, unknown>) => Promise<{ ok: boolean; json: Record<string, unknown> } | null>;
 
 type StepState = { reply: GuideReply | null; hints: GuideReply[]; example: GuideReply | null; explained: GuideReply | null; showExplained: boolean; question: string | null; answer: string; feedback: GuideReply | null; note: string | null };
-export type GuideState = { of: number | null; current: number; status: StepStatus[]; steps: Record<number, StepState>; opened: boolean; finished: boolean; outcome?: { complete: boolean; verdict: string | null } | null };
+export type GuideState = { of: number | null; current: number; status: StepStatus[]; steps: Record<number, StepState>; opened: boolean; finished: boolean; outcome?: GuideOutcome | null };
+/** What the server said about reaching the end. failed: it could not say. */
+export type GuideOutcome = { complete: boolean; verdict: string | null; recorded?: boolean; already?: boolean; failed?: boolean };
 export const GUIDE_FRESH: GuideState = { of: null, current: 0, status: [], steps: {}, opened: false, finished: false };
 /** What the lesson now says, in words. Never more than the server decided. */
-function outcomeWords(o: { complete: boolean; verdict: string | null }): string {
+function outcomeWords(o: GuideOutcome): string {
+  if (o.failed) return "This guided lesson could not be counted just now. Your answers are kept. Finishing it again will try once more.";
   if (!o.complete) return "This guided lesson is not counted yet, because a step has not been taught. Your answers are kept.";
+  if (o.recorded === false) return "You finished this guided lesson, but it was not recorded, so it is not counted.";
+  if (o.already) return "Finished. This lesson's check has already been counted.";
   if (o.verdict === "understood") return "Counted for this lesson: you understood every step.";
   if (o.verdict === "partly") return "Counted for this lesson: partly understood. Your answer to each step is kept.";
+  if (o.verdict === "not_yet") return "Counted for this lesson: not yet understood. Your answer to each step is kept.";
   return "Finished. No check is counted for this lesson, because no step was answered.";
 }
 const FRESH_STEP: StepState = { reply: null, hints: [], example: null, explained: null, showExplained: false, question: null, answer: "", feedback: null, note: null };
@@ -35,7 +41,7 @@ export function GuideMePanel({ state, setState, run, complete, busy, disabled, c
   checkDisabled?: boolean; offNote?: string | null;
   renderFlags: (flags: readonly { text: string }[]) => ReactNode;
   /** Reaching the end: the server says whether the guided activity is complete and what the lesson's check is. */
-  complete: () => Promise<{ complete: boolean; verdict: string | null } | null>;
+  complete: () => Promise<GuideOutcome | null>;
   renderClarify: (prompt: unknown, retry: () => void) => ReactNode;
   state: GuideState; setState: Dispatch<SetStateAction<GuideState>>; run: GuideRun; busy: boolean; disabled?: boolean;
   cite: (text: string, sources: readonly Source[]) => ReactNode;
@@ -144,7 +150,7 @@ export function GuideMePanel({ state, setState, run, complete, busy, disabled, c
   const nextStep = () => {
     if (lastStep) {
       setState(s => ({ ...s, finished: true }));
-      void complete().then(out => setState(s => ({ ...s, outcome: out ?? { complete: false, verdict: null } })));
+      void complete().then(out => setState(s => ({ ...s, outcome: out ?? { complete: false, verdict: null, failed: true } })));
       return;
     }
     void teach(state.current + 1);

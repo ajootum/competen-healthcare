@@ -44,7 +44,7 @@ const signIn = async () => {
   }
   if (new URL(page.url()).pathname.startsWith("/login")) throw new Error("could not sign in");
 };
-const load = async () => { await page.goto(LEARN, { waitUntil: "domcontentloaded", timeout: 300_000 }); await page.getByRole("radio", { name: /Guide me/ }).first().waitFor({ timeout: 200_000 }); await page.waitForTimeout(4000); };
+const load = async () => { await page.goto(LEARN, { waitUntil: "domcontentloaded", timeout: 300_000 }); await page.getByRole("radio", { name: /Guide me/ }).first().waitFor({ timeout: 200_000 }); await until(async () => [...(await rowTexts("Earlier lessons")), ...(await rowTexts("Later lessons"))].some(t => /Review saved lesson|Taught|Completed|Read/.test(t)), 90_000); await page.waitForTimeout(3000); };
 const rowsOf = (label: string) => page.locator(`nav[aria-label='${label}'] button`);
 const rowTexts = async (label: string) => (await rowsOf(label).allInnerTexts()).map(t => t.replace(/\s+/g, " ").trim());
 const chooseGuide = async () => { const panel = page.locator('[data-testid="guide-me"]'); await until(async () => { if (await panel.count()) return true; await page.getByRole("radio", { name: /Guide me/ }).first().click(); await page.waitForTimeout(2000); return (await panel.count()) > 0; }, 120_000); return panel; };
@@ -57,6 +57,15 @@ try {
 
   // ── 3. SAVED-STATE RECOVERY ON A LESSON OVER TEN SECTIONS (lesson 3, 16 sections, opened fresh in a new browser context) ──
   say("--- 3. saved state, a lesson over ten sections ---");
+  // The session remembers the last lesson opened: start from lesson 3 whichever it was, and read its row in the list on the way.
+  const startLater = await rowTexts("Later lessons");
+  if (startLater.length) {
+    note(`opened on an earlier lesson; later lessons: ${startLater.join(" / ").slice(0, 240)}`);
+    ok(/review saved lesson/i.test(startLater[startLater.length - 1] ?? ""), "the lesson over ten sections is listed as saved, not 'Start learning'");
+    await rowsOf("Later lessons").last().click();
+    await until(async () => (await rowTexts("Later lessons")).length === 0, 60_000);
+    await page.waitForTimeout(2500);
+  }
   let from = new Date().toISOString();
   const rounds = page.locator('[data-testid="go-deeper-round"]');
   await until(async () => (await rounds.count()) >= 2, 120_000);
@@ -213,9 +222,14 @@ try {
   await new Promise(r => setTimeout(r, 2000));
   events = await ev(1, started);
   note(`events: ${events.map(e => `${e.action}:${e.verdict}`).join(", ")}`);
-  ok(/Counted for this lesson: partly/.test(outcome) || /Counted for this lesson: you understood/.test(outcome), "the guided check counts at the end");
+  ok(/Counted for this lesson/.test(outcome), "the guided check counts at the end");
   ok(events.some(e => e.action === "clarify" && e.verdict && !e.attempt_id), "the lesson-level verdict is recorded once the activity is complete");
   await p2.screenshot({ path: join(OUT, "shots/r4-finished.png") });
+  // Finishing again adds nothing: the same request, from this page, twice.
+  const before5 = (await ev(1, started)).length;
+  const again = await page.evaluate(async id => { const res = await fetch("/api/individual/scholar/learn/guide-complete", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ sessionId: id, step: 1 }) }); return res.json(); }, SESSION);
+  await new Promise(r => setTimeout(r, 1500));
+  ok(again.complete === true && again.already === true && (await ev(1, started)).length === before5, `finishing again adds no event and says so (${before5} to ${(await ev(1, started)).length})`);
 
   // ── 5. EXISTING TEACHING AND REVISION ──
   say("--- 5. existing teaching and revision ---");

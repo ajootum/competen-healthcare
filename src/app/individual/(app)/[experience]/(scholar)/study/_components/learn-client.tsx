@@ -39,7 +39,7 @@ import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
 import { GoDeeperCard, type GoDeeperLevels } from "./go-deeper-view";
-import { GUIDE_FRESH, GuideMePanel, type GuideState } from "./guide-me-panel";
+import { GUIDE_FRESH, GuideMePanel, type GuideOutcome, type GuideState } from "./guide-me-panel";
 import { guideVerdictOf } from "@/lib/individual/scholar/guide-me";
 import { GO_DEEPER_COPY, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
@@ -1119,16 +1119,17 @@ export function LearnWorkspace(props: {
     return r;
   };
   /** The learner reached the end of the guided lesson: the server decides what that means, from its own records. No AI. */
-  const guideComplete = (st: Step) => async (): Promise<{ complete: boolean; verdict: string | null } | null> => {
+  const guideComplete = (st: Step) => async (): Promise<GuideOutcome | null> => {
     if (!session?.id) return null;
     const r = await call("/api/individual/scholar/learn/guide-complete", { sessionId: session.id, step: st.step });
     if (!r.ok) return null;
-    const out = r.json as { complete?: boolean; verdict?: string | null };
-    if (out.complete) {
+    const out = r.json as { complete?: boolean; verdict?: string | null; recorded?: boolean; already?: boolean };
+    // The lesson's state changes only with a record behind it, and not again when finishing again added nothing.
+    if (out.complete && out.recorded && !out.already) {
       setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "explain"])], verdict: out.verdict ?? p[st.step]?.verdict ?? null } }));
       if (out.verdict) dispatch({ type: "verdict", index: indexOf(st.step), value: out.verdict });
     }
-    return { complete: !!out.complete, verdict: out.verdict ?? null };
+    return { complete: !!out.complete, verdict: out.verdict ?? null, recorded: out.recorded, already: out.already };
   };
   const runApproach = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
     if (!session) return null;
