@@ -33,8 +33,8 @@ export const PACK_SOURCES = ["pubmed", "crossref", "pmc"] as const;
 export const TEACH_RESEARCH_OPERATION = "individual_scholar_teach_research";
 /** The wall clock the whole preparation may take, so a slow source cannot use up the lesson's own time. */
 export const PACK_DEADLINE_MS = 20_000;
-/** How long a learner waits for another learner's search of the same topic before going on without it. */
-const PEER_WAIT_MS = 4_000, PEER_POLL_MS = 500;
+/** A learner waits for another learner's search of the same topic: a claim lasts until that learner's whole pack is written. */
+const PEER_WAIT_UNTIL_MS = PACK_DEADLINE_MS + 12_000, PEER_POLL_MS = 1_000;
 /** A claim outlives no more than this: a crashed search frees its topic. */
 const CLAIM_MS = 45_000;
 /** A topic with nothing usable is remembered briefly, so a topic the literature does not serve is not searched on every lesson. */
@@ -86,6 +86,8 @@ async function searchTopic(topic: SubjectTopic, key: string, plan: ResearchPlan,
   const r = await runResearch(query, searchOnly(plan), { ...deps, cache: null });
   codes.push(...r.codes.filter(c => c !== "dropped_date"));
   if (r.state === "failed") return null;
+  // Records with no abstract at all means PubMed's abstract read failed, not that the topic has nothing. Not remembered: the next learner may try again.
+  if (r.items.length && !r.items.some(i => i.abstract)) { codes.push("abstracts_unreadable"); return null; }
   return { topic, key, kept: keepForTopic(r.items, topic, quality, level) };
 }
 
@@ -129,17 +131,17 @@ export async function prepareEvidencePack(ctx: IndividualContext, policy: PackPo
 
     // One topic at a time: NCBI allows three requests a second without a key, and a topic is three requests.
     for (const topic of topics) {
-      if (Date.now() - started > PACK_DEADLINE_MS) { codes.push("deadline"); unavailable++; continue; }
       const key = topicKey(topic, { sources: sourceIds, freshnessYears: plan.registry.pubmed.freshnessYears, maxResults: plan.policy.limits.maxResultsPerRequest });
       const nowIso = now().toISOString();
       const row = await readResearchTopic(ctx.admin, key, nowIso);
       if (row && row.provider !== PACK_BUILDING_PROVIDER) { results.push({ topic: topic.id, records: readShared(row.sources) }); reused++; continue; }
       if (!mayBuild) { unavailable++; continue; }
+      if (Date.now() - started > PACK_DEADLINE_MS) { codes.push("deadline"); unavailable++; continue; }
       // ⚠ Search once: whoever claims the topic searches, and a second learner waits for that result.
       const claimed = await claimResearchTopic(ctx.admin, key, { provider: PACK_BUILDING_PROVIDER, policyVersion: VOCABULARY_VERSION, ms: CLAIM_MS, nowIso });
       if (!claimed) {
         let peer: Awaited<ReturnType<typeof readResearchTopic>> = null;
-        for (const until = Date.now() + PEER_WAIT_MS; Date.now() < until;) {
+        for (const until = started + PEER_WAIT_UNTIL_MS; Date.now() < until;) {
           await new Promise(res => setTimeout(res, PEER_POLL_MS));
           peer = await readResearchTopic(ctx.admin, key, now().toISOString());
           if (peer && peer.provider !== PACK_BUILDING_PROVIDER) break;

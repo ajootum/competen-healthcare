@@ -365,7 +365,8 @@ export async function POST(req: Request) {
     const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
     // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
     // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
-    const split = splitLearnAnswer(a.content);
+    // A lesson from the three sources has no research part: a line that happens to begin "From research" is teaching, and must not be cut off there.
+    const split = isIntegratedVersion(a.promptVersion) ? { main: a.content, background: null, flags: null, research: null } : splitLearnAnswer(a.content);
     // SCHOLAR-RESEARCH-RELEVANCE-02: the saved record is never changed; what is SERVED is filtered against this lesson now (no AI).
     const restored = restoreResearch(a.refs.filter(r => r?.kind === "external") as unknown as ExternalReference[], split.research, contextOf(withLessonScope({ topics, title: stepTitle, question: action === "ask" ? question : null }, lessonScope)), policy.scholarResearch.relevance);
     const external = restored.references;
@@ -567,21 +568,22 @@ export async function POST(req: Request) {
     ? await runIntegratedTeach(ctx.userId, { question: prompt, passages, references, depth, learnerContext, lesson: lessonBrief, evidence: pack.evidence }, ai.run)
     : await notesLesson(ai.run);
   // What the lesson with evidence came to: its counts, the [E n] it kept, and the reason research is not in it, if it is not.
-  let integrated = r.ok && "integrated" in r ? r.integrated : null;
+  let integrated: IntegratedResult["integrated"] | null = r.ok && "integrated" in r ? (r as IntegratedResult).integrated : null;
   // What research WROTE is read by the same published risk rules as Research & Explain: above the request's own tier, the lesson falls back to its notes sentences.
   if (integrated && r.ok && r.check.ok) {
     const beyond = beyondNotes(r.check.text);
     if (beyond && !(await withinRequestRisk(ctx.admin, activity, risk, [beyond]))[0]) {
       const only = notesOnlyProjection(r.check.text);
-      r = { ...r, check: only ? { ok: true, text: only, cited: r.check.cited } : { ok: false, reason: "ungrounded" }, integrated: { ...integrated, citedEvidence: [], shown: { ...integrated.shown, evidence: 0, ai: 0 } } } as IntegratedResult;
-      integrated = (r as IntegratedResult).integrated;
+      integrated = { ...integrated, citedEvidence: [], shown: { ...integrated.shown, evidence: 0, ai: 0 } };
+      r = { ...r, check: only ? { ok: true, text: only, cited: r.check.cited } : { ok: false, reason: "ungrounded" }, integrated } as IntegratedResult;
     }
   }
   // Research must never cost the learner the lesson: if the lesson with evidence cannot stand, it is taught from the notes, once, and says so.
-  if (integrated && !(r.ok && r.check.ok) && !ai.refusal()) { r = await notesLesson((g, part) => ai.run(g, part ? `retry-${part}` : "retry")); integrated = null; }
+  if (pack?.state === "ready" && !(r.ok && r.check.ok) && !ai.refusal()) { r = await notesLesson((g, part) => ai.run(g, part ? `retry-${part}` : "retry")); integrated = null; }
   const packReferences = pack && integrated ? pack.references(integrated.citedEvidence) : [];
   clock.mark("generate");
-  const refusal = ai.refusal();
+  // A refusal on the claim check comes after a lesson was written and paid for. That lesson stands, with nothing cited to research (the check failed closed).
+  const refusal = integrated && r.ok && r.check.ok ? null : ai.refusal();
   if (refusal) await closeFlight("refused");
   if (refusal && prepare) return notPrepared("unavailable", { step });
   if (refusal?.error === "clarify_purpose") return meteredRefusal(refusal)!;

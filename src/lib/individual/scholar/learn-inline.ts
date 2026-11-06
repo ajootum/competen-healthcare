@@ -121,7 +121,7 @@ export const applicationAfter = (index: number, count: number, policy: Pick<Inli
 export function recallContent(x: {
   title: string; question: string | null; points: readonly string[]; overview: string | null; objective: string | null;
 }): { front: string; back: string; why: string } | null {
-  const clean = (s: string, max: number) => s.replace(/\s*\[[SRE]\d+\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+  const clean = (s: string, max: number) => s.replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
   const points = x.points.map(p => clean(p, 300)).filter(Boolean);
   const question = x.question ? clean(x.question, 300) : "";
   if (!question && !points.length) return null;

@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { beyondNotes, checkIntegrated, claimCheckUser, claimsOf, integratedSystem, isIntegratedVersion, notesOnlyProjection, parseUnsupported, runIntegratedTeach, sentencesOf, tagsOf, type PackEvidence } from "./teach-integrated";
 import type { Passage } from "./generation";
-import { citationSegments, parseTeachAnswer } from "./teach-format";
+import { citationSegments, notesSentencesOnly, parseTeachAnswer } from "./teach-format";
+import { savedLearningPassage } from "./generation";
 
 const passage = (i: number, content: string): Passage => ({ chunkId: `c${i}`, materialId: "m", materialTitle: "Growth notes", ordinal: i, pageFrom: i, pageTo: i, unit: "slide", content });
 const passages = [
@@ -25,6 +26,9 @@ describe("sentences", () => {
   });
   it("short forms do not end a sentence", () => {
     expect(sentencesOf("Reviews, e.g. by Smith et al. in this field, agree [E1]. Next [S1].")).toHaveLength(2);
+  });
+  it("a genus written short does not end a sentence, so its source stays with it", () => {
+    expect(sentencesOf("Infection with E. coli spreads by the hands [E1]. Next [S1].")).toEqual(["Infection with E. coli spreads by the hands [E1].", "Next [S1]."]);
   });
   it("reads the three sources", () => {
     expect(tagsOf("A [S1][E2] [AI].")).toEqual({ s: [1], e: [2], r: [], ai: true });
@@ -108,6 +112,19 @@ describe("each sentence is read against the source it names", () => {
   it("a lesson that has lost the notes is withheld: they stay the foundation", () => {
     const raw = `OVERVIEW: Plasticity declines gradually [E1]. Early enrichment partly offset deprivation [E1]. A window closes slowly [AI]. A door shuts quickly [AI]. A window is open for a time [AI]. Windows differ [AI].\n\nUNDERSTANDING: One line from the notes begins and ends quickly [S1].`;
     expect(checkIntegrated(raw, ctx).check.ok).toBe(false);
+  });
+
+  it("a lesson left with no overview and no key points cannot be read back, so it is withheld", () => {
+    const raw = "OVERVIEW: Across 92 studies plasticity declined [E1].\n\nUNDERSTANDING: A critical period begins and ends quickly [S1]. A sensitive period begins and ends gradually [S1].\n\nKEY POINTS:\n- Across 99 studies it declined [E1].";
+    expect(checkIntegrated(raw, ctx).check.ok).toBe(false);
+  });
+
+  it("[S1, E1] keeps each source, and [S1, AI] keeps the source", () => {
+    const c = checkIntegrated(lesson("A sensitive period begins and ends gradually, and plasticity declines gradually [S1, E1]. A critical period begins and ends quickly [S1, AI]."), ctx);
+    const text = c.check.ok ? c.check.text : "";
+    expect(text).toContain("[S1][E1]");
+    expect(text).not.toContain("[S1][S1]");
+    expect(text).toContain("quickly [S1].");
   });
 
   it("an answer without the labelled parts is not this lesson", () => {
@@ -227,6 +244,21 @@ describe("what happens to a shown lesson", () => {
     expect(only).not.toMatch(/\[E\d+\]|\[AI\]/);
     expect(only).toContain("[S1]");
     expect(only).toContain("CHECK YOUR UNDERSTANDING");
+  });
+
+  it("saved teaching re-read as notes keeps only what rests on the notes, so research can never come back cited as the notes", () => {
+    const kept = notesSentencesOnly(shown);
+    expect(kept).toContain("[S1]");
+    expect(kept).not.toMatch(/\[E\d+\]|\[AI\]/);
+    expect(kept).not.toContain("declines gradually [E1]");
+    const row = savedLearningPassage({ id: "x", kind: "artefact", materialId: "m", createdAt: "2026-11-06", content: shown });
+    expect(row.content).not.toContain("window closes slowly");
+    expect(row.content).not.toContain("plasticity");
+    expect(row.content).toContain("critical periods from sensitive");
+  });
+
+  it("an unreadable lesson is read whole by the risk rules: nothing skips them", () => {
+    expect(beyondNotes("Some text with no parts [E1].")).toContain("Some text");
   });
 
   it("gives the risk rules exactly what goes beyond the notes", () => {

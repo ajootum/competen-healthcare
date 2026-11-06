@@ -7,7 +7,10 @@ import {
   type AiRun, type ExplainCheck, type GovernedReference, type LearnFlag, type LearnResult, type LessonBrief, type Passage,
 } from "./generation";
 import { CONTEXT_PREAMBLE } from "./learner-context";
-import { TEACH_LABEL, TEACH_MAX_QUESTIONS, composeTeachAnswer, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
+import { TAGS, TEACH_LABEL, TEACH_MAX_QUESTIONS, composeTeachAnswer, isIntegratedVersion, parseTeachAnswer, questionText, sentencesOf, tagsOf, type SentenceTags, type TeachParts } from "./teach-format";
+
+export { isIntegratedVersion, sentencesOf, tagsOf };
+export type { SentenceTags };
 
 // ── TEACH ME WITH EVIDENCE ── SCHOLAR-RESEARCH-TEACH-001 P1 ─────────────────────────────────────────────────────────────
 //
@@ -31,7 +34,6 @@ import { TEACH_LABEL, TEACH_MAX_QUESTIONS, composeTeachAnswer, parseTeachAnswer,
 
 export const INTEGRATED_PROMPT_SUFFIX = `+${PROMPT_VERSIONS.researchTeach}`;
 export const integratedPromptVersion = () => `${learnPromptVersion("teach")}${INTEGRATED_PROMPT_SUFFIX}`;
-export const isIntegratedVersion = (promptVersion: string | null | undefined) => (promptVersion ?? "").includes(INTEGRATED_PROMPT_SUFFIX);
 
 /** What the model is shown of one record of the pack. An abstract only, and it is told so. */
 export type PackEvidence = { title: string; journal: string | null; year: number | null; kind: string; abstract: string };
@@ -84,25 +86,6 @@ export function integratedUser(question: string, passages: readonly Passage[], r
 
 // ── sentences ──────────────────────────────────────────────────────────────────────────────────────────────────────────
 
-/** Short forms whose full stop does not end a sentence. Masked while splitting. */
-const ABBREV = /\b(e\.g|i\.e|et al|cf|vs|etc|dr|mr|mrs|ms|prof|fig|no)\./gi;
-const MASK = "\u0001";
-const TAGS = /\s*\[(?:[SER]\d+|AI)\]/g;
-const TAG_AFTER_STOP = /([.!?])((?:\s*\[(?:[SER]\d+|AI)\])+)/g;
-
-/** Pure. Text as sentences, each tag moved inside its sentence: "It grows. [S1]" reads as "It grows [S1]." */
-export function sentencesOf(text: string): string[] {
-  const moved = text.replace(TAG_AFTER_STOP, (_m, stop: string, tags: string) => `${tags}${stop}`);
-  const masked = moved.replace(ABBREV, m => m.replace(/\.$/, MASK));
-  // A rule, a stray tag or a bullet with no words in it is not a sentence. Emphasis marks are not shown, so they do not stay in the text.
-  return masked.split(/(?<=[.!?])\s+/).map(s => s.split(MASK).join(".").replace(/\*+|(?<!\w)_+|_+(?!\w)/g, "").trim()).filter(s => /[a-z]{2}/i.test(s.replace(TAGS, "")));
-}
-
-export type SentenceTags = { s: number[]; e: number[]; r: number[]; ai: boolean };
-export const tagsOf = (sentence: string): SentenceTags => ({
-  s: [...sentence.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1])), e: [...sentence.matchAll(/\[E(\d+)\]/g)].map(m => Number(m[1])),
-  r: [...sentence.matchAll(/\[R(\d+)\]/g)].map(m => Number(m[1])), ai: sentence.includes(AI_TAG),
-});
 const plainOf = (sentence: string) => sentence.replace(TAGS, "").replace(/\s+([.,;:!?])/g, "$1").trim();
 
 /** Words only a source may say. An [AI] sentence that uses them is presenting a finding it has no source for. */
@@ -201,6 +184,8 @@ function outcome(l: Lesson, dropped: Dropped[], relabelled = 0): IntegratedOutco
   if (!fromNotes) return notFound("no_citation", dropped);
   if (fromNotes / kept.length < MIN_NOTES_SHARE) return notFound("no_citation", dropped);
   const text = composed(l);
+  // Without an overview or a key point left it no longer reads back as a lesson, so it could not be risk-read or reopened: withheld, and taught from the notes instead.
+  if (!parseTeachAnswer(text)) return notFound("no_citation", dropped);
   const cited = [...new Set(kept.flatMap(t => t.s))].sort((a, b) => a - b);
   const citedEvidence = [...new Set(kept.flatMap(t => t.e))].sort((a, b) => a - b);
   const violations = dropped.flatMap(d => d.violations ?? []);
@@ -222,7 +207,8 @@ const keepQuestions = (questions: readonly string[], passages: readonly Passage[
  * An answer without the labelled parts is not this lesson and is withheld.
  */
 export function checkIntegrated(raw: string, ctx: { passages: readonly Passage[]; references: readonly GovernedReference[]; evidence: readonly PackEvidence[]; asked: string }): IntegratedOutcome & { lesson: Lesson | null } {
-  const text = normaliseCitations(raw).trim();
+  // "[S1, AI]" names a source: the source stands. [AI] is only for a sentence with none.
+  const text = normaliseCitations(raw).replace(/\[((?:[SE])\d+)\s*[,;]\s*AI\]/g, "[$1]").replace(/\[AI\s*[,;]\s*([SE]\d+)\]/g, "[$1]").trim();
   const parts = parseTeachAnswer(text);
   if (!parts) return { ...notFound("no_citation"), lesson: null };
   // ⚠ An identifier anywhere withholds everything: it is never quietly cut out and the rest shown.
@@ -311,7 +297,8 @@ export function notesOnlyProjection(text: string): string | null {
 /** Pure. The [E n] and [AI] sentences of a lesson, as text: what the published risk rules read. */
 export const beyondNotes = (text: string): string => {
   const parts = parseTeachAnswer(text);
-  if (!parts) return "";
+  // Unreadable as a lesson: all of it is read, so nothing skips the risk rules.
+  if (!parts) return text.replace(TAGS, "");
   return allUnits(lessonOf(parts)).flatMap(u => u.sentences).filter(s => { const t = tagsOf(s); return t.e.length > 0 || !t.s.length; }).map(plainOf).join(" ");
 };
 

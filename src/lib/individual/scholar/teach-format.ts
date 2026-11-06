@@ -85,6 +85,46 @@ export function composeTeachAnswer(p: TeachParts): string {
   return out.join("\n\n");
 }
 
+// ── SCHOLAR-RESEARCH-TEACH-001: a lesson written from the notes, published evidence and Scholar's own explanation ──
+
+/** Pure. Whether a saved lesson was written from the three sources, by its prompt version. */
+export const isIntegratedVersion = (promptVersion: string | null | undefined) => (promptVersion ?? "").includes("+research-teach-");
+/** What such a lesson is shown under. "From your notes" would be untrue. */
+export const INTEGRATED_LABEL = "From your notes, published evidence and Scholar's own explanation";
+export const INTEGRATED_KEY = "Each sentence says what it rests on: a slide or page of your notes, a published source (E), or Scholar's own explanation (AI).";
+/** Every reference in a pack was read this way, and each says so. */
+export const ABSTRACT_ONLY_NOTE = "Abstract reviewed, not the full text.";
+/** Automated retrieval is not endorsement. */
+export const NOT_ENDORSED_NOTE = "Found automatically. Not reviewed or endorsed by Competen, and not clinical guidance.";
+
+/** Short forms whose full stop does not end a sentence. Masked while splitting. */
+const ABBREV = /\b(e\.g|i\.e|et al|cf|vs|etc|dr|mr|mrs|ms|prof|fig|no)\./gi;
+/** A genus written short ("E. coli", "S. aureus"): one capital and a stop before a lowercase word. */
+const INITIAL = /\b([A-Z])\.(?=\s+[a-z])/g;
+const MASK = "\u0001";
+/** The source tags of a sentence, with the space before each. */
+export const TAGS = /\s*\[(?:[SER]\d+|AI)\]/g;
+const TAG_AFTER_STOP = /([.!?])((?:\s*\[(?:[SER]\d+|AI)\])+)/g;
+
+/** Pure. Text as sentences, each tag moved inside its sentence: "It grows. [S1]" reads as "It grows [S1]." */
+export function sentencesOf(text: string): string[] {
+  const moved = text.replace(TAG_AFTER_STOP, (_m, stop: string, tags: string) => `${tags}${stop}`);
+  const masked = moved.replace(ABBREV, m => m.replace(/\.$/, MASK)).replace(INITIAL, `$1${MASK}`);
+  // A rule, a stray tag or a bullet with no words in it is not a sentence. Emphasis marks are not shown, so they do not stay in the text.
+  return masked.split(/(?<=[.!?])\s+/).map(s => s.split(MASK).join(".").replace(/\*+|(?<!\w)_+|_+(?!\w)/g, "").trim()).filter(s => /[a-z]{2}/i.test(s.replace(TAGS, "")));
+}
+
+export type SentenceTags = { s: number[]; e: number[]; r: number[]; ai: boolean };
+export const tagsOf = (sentence: string): SentenceTags => ({
+  s: [...sentence.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1])), e: [...sentence.matchAll(/\[E(\d+)\]/g)].map(m => Number(m[1])),
+  r: [...sentence.matchAll(/\[R(\d+)\]/g)].map(m => Number(m[1])), ai: sentence.includes("[AI]"),
+});
+
+/** Pure. Only what rests on the notes, line by line. Anything that re-reads saved teaching AS NOTES uses this, so research and Scholar's own words never come back cited as the notes. */
+export function notesSentencesOnly(text: string): string {
+  return text.split("\n").map(line => sentencesOf(line).filter(s => { const t = tagsOf(s); return t.s.length > 0 && !t.e.length; }).join(" ")).filter(Boolean).join("\n");
+}
+
 /** The passage numbers a piece of text cites ([S2] -> 2), in order, once each. */
 export const citedTags = (text: string): number[] => [...new Set([...text.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1])))];
 

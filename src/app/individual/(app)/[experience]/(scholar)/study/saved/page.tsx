@@ -1,3 +1,5 @@
+import { INTEGRATED_KEY, INTEGRATED_LABEL, isIntegratedVersion } from "@/lib/individual/scholar/teach-format";
+import { SavedEvidenceList } from "../_components/saved-evidence";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
@@ -177,8 +179,10 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
                               <span className="text-gray-600"> · {a.depth} · {new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {a.sources.length} section{a.sources.length === 1 ? "" : "s"}</span>
                             </summary>
                             <div className="border-t border-gray-100 px-3 py-3">
-                              <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
+                              <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{isIntegratedVersion(a.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
+                              {isIntegratedVersion(a.promptVersion) && <p className="mt-0.5 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
                               <div className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{a.content}</div>
+                              <SavedEvidenceList refs={a.refs} />
                               <ul className="mt-2 space-y-0.5">
                                 {a.sources.map((chunkId, i) => (
                                   <li key={chunkId} className="text-[12.5px]"><span className="font-mono font-bold" style={{ color: x.accent }}>[S{i + 1}]</span>{" "}

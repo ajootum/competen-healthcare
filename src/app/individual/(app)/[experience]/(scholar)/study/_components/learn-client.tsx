@@ -30,7 +30,7 @@ import { SPELLING_CHOICES, SPELLING_CHOICE_LABEL, readSpellingChoice, spellingFi
 import { LEARN_NOT_COVERED_LABEL, LEARN_NOT_COVERED_NOTE, LEARN_WIDER_LABEL, RECOVERY_EXPLANATION_LABEL, RECOVERY_NOT_USED_LABEL } from "@/lib/individual/scholar/config";
 import type { ReadingLink } from "@/lib/individual/scholar/evidence-recovery";
 import { STUDY_EVENT, carry } from "./study-active";
-import { citationSegments, citedTags, parseTeachAnswer, questionText, replyState, type LearnGrounding } from "@/lib/individual/scholar/teach-format";
+import { INTEGRATED_KEY, INTEGRATED_LABEL, citationSegments, citedTags, isIntegratedVersion, parseTeachAnswer, questionText, replyState, type LearnGrounding } from "@/lib/individual/scholar/teach-format";
 import { draftOwnCard } from "@/lib/individual/scholar/own-card-draft";
 import { DepthControl, FollowUpActions, PersonalAiAnswer, askPersonalAi } from "@/app/individual/_components/ai/PersonalAiAnswer";
 import { FOLLOW_UP_LABEL, type FollowUp, type FollowUpKind, type PersonalAiDepth, type PersonalAiSourceRef } from "@/lib/individual/personal-ai-options";
@@ -1844,8 +1844,8 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
             <FormativeAiLabel className="mt-1" />
           )}
           <div className={teachCard ? "mt-3" : "mt-2"}><AiBadge /></div>
-          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{r.research?.integrated ? "From your notes, published evidence and Scholar's own explanation" : SOURCE_KIND_LABEL.notes}</p>
-          {r.research?.integrated && <p className="mt-1 text-[12px] text-gray-700">Each sentence says what it rests on: a slide or page of your notes, a published source (E), or Scholar&apos;s own explanation (AI).</p>}
+          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{isIntegratedVersion(r.provenance?.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
+          {isIntegratedVersion(r.provenance?.promptVersion) && <p className="mt-1 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
           {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). LESSON REDESIGN:
               the listening and asking tools sit on their own row, apart from the reading text. */}
           {r.answer && (

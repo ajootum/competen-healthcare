@@ -13,7 +13,7 @@ import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachin
 import type { CognitiveLevel } from "./question-intel";
 import { DEPTH_RULE, SUBJECT_RULE, aboutTheDocument } from "./revision-depth";
 import { citeChunk, findPatientIdentifiers } from "./extract";
-import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
+import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, notesSentencesOnly, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import {
   REVISION_VERIFY_SYSTEM, VERIFY_SYSTEM, applyRevisionVerification, applyVerification, passageVocabulary, qualityProblems, revisionVerificationPrompt, verificationPrompt,
@@ -732,7 +732,9 @@ export function splitAskParts(raw: string): { main: string; background: string |
 /** Pure. A saved teaching or the learner's own note, as a passage: only its notes part, without the tags of its first answer. */
 export function savedLearningPassage(row: { id: string; kind: "artefact" | "note"; materialId: string | null; createdAt: string; content: string }): Passage {
   const end = /^[\s*_#>-]*(FROM RESEARCH|BEYOND THE NOTES|CHECK THIS):?/im.exec(row.content);
-  const body = (end ? row.content.slice(0, end.index) : row.content).replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").trim();
+  const part = end ? row.content.slice(0, end.index) : row.content;
+  // SCHOLAR-RESEARCH-TEACH-001: this becomes a passage the model cites as the learner's own. Research and Scholar's own sentences must not.
+  const body = (/\[E\d+\]|\[AI\]/.test(part) ? notesSentencesOnly(part) : part).replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").trim();
   return {
     chunkId: row.id, materialId: row.materialId ?? "", materialTitle: `${row.kind === "note" ? "Your note" : "Saved teaching"}, ${row.createdAt.slice(0, 10)}`,
     ordinal: 0, pageFrom: null, pageTo: null, content: body.slice(0, 1800),
@@ -820,8 +822,9 @@ export function normaliseCitations(text: string): string {
       if (to > from && to - from <= 12) return Array.from({ length: to - from + 1 }, (_, i) => `[${k}${from + i}]`).join("");
       return `[${k}${first}][${k}${to}]`;
     }
-    const nums = [first, ...rest.split(/[,;/]/).map(x => x.replace(/[^0-9]/g, "")).filter(Boolean)];
-    return nums.map(n => `[${k}${n}]`).join("");
+    // Each element keeps its own letter: "[S1, E2]" is a note and a record, never two notes.
+    const more = rest.split(/[,;/]/).map(x => /([SRE])?\s*(\d+)/.exec(x)).filter((m): m is RegExpExecArray => !!m).map(m => `[${m[1] ?? k}${m[2]}]`);
+    return [`[${k}${first}]`, ...more].join("");
   });
 }
 

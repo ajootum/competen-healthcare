@@ -1,3 +1,5 @@
+import { INTEGRATED_KEY, INTEGRATED_LABEL, isIntegratedVersion } from "@/lib/individual/scholar/teach-format";
+import { SavedEvidenceList } from "./saved-evidence";
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
@@ -351,7 +353,8 @@ const urlWithVersion = (id: string) => `${href("study/saved")}?version=${encodeU
 function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> }) {
   return (
     <>
-      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{isIntegratedVersion(a.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
+      {isIntegratedVersion(a.promptVersion) && <p className="mt-0.5 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
       <ReadAloudButton text={a.content} about="this saved lesson" className="mt-1" />
       <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{a.content}</div>
       <ul className="mt-2 space-y-0.5">
@@ -361,6 +364,7 @@ function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> 
         ))}
       </ul>
       {a.refs.length > 0 && <GovernedReferenceList refs={relabelReferences(a.refs, c.refSource)} />}
+      <SavedEvidenceList refs={a.refs} />
       {a.background && (
         <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[13px] text-gray-800">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-sky-900">{SUPPLEMENTARY_LABEL}</p>

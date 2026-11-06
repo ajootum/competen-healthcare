@@ -4026,7 +4026,7 @@ export async function learnResearchToday(admin: Admin, userId: string): Promise<
 /** Today's recorded AI spend (USD, UTC day) on one operation for the person. Unreadable: null (refuse). */
 export async function aiSpendToday(admin: Admin, userId: string, operation: string): Promise<number | null> {
   const since = `${new Date().toISOString().slice(0, 10)}T00:00:00Z`;
-  const { data, error } = await admin.from("plat_ai_requests").select("cost_usd").eq("actor_id", userId).eq("operation", operation).gte("created_at", since).limit(1000);
+  const { data, error } = await admin.from("plat_ai_requests").select("cost_usd").eq("actor_id", userId).in("operation", [operation, `${operation}_verify`]).gte("created_at", since).limit(1000);
   if (error) return null;
   return ((data ?? []) as { cost_usd: number | string | null }[]).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
 }

@@ -134,6 +134,9 @@ describe("prepareEvidencePack", () => {
     const esearches = [...a.urls, ...b.urls].filter(u => u.includes("esearch"));
     expect(esearches).toHaveLength(1);
     expect(x.searched + y.searched).toBe(1);
+    // The one who waited gets the result too, rather than a lesson without research.
+    expect(x.items.length).toBeGreaterThan(0);
+    expect(y.items.length).toBeGreaterThan(0);
   });
 
   it("a prepared lesson never searches", async () => {
@@ -151,6 +154,15 @@ describe("prepareEvidencePack", () => {
     const row = [...rows.values()][0];
     expect(row.provider).toBe(PACK_BUILDING_PROVIDER);
     expect((row.sources as unknown[]).length).toBe(0);
+    expect(new Date(row.expires_at as string).getTime()).toBeLessThan(Date.now() + 5000);
+  });
+
+  it("records with no abstract mean PubMed's abstract read failed: not remembered as nothing, so the next learner may try", async () => {
+    const { admin, rows } = makeAdmin(), n = net(u => (u.includes("efetch") ? "<bad/>" : null));
+    const p = await prepareEvidencePack(ctxOf(admin), policy, { lesson, actionId: "a", search: true }, { fetch: n.fetch as never });
+    expect(p.state).toBe("failed");
+    const row = [...rows.values()][0];
+    expect(row.provider).toBe(PACK_BUILDING_PROVIDER);
     expect(new Date(row.expires_at as string).getTime()).toBeLessThan(Date.now() + 5000);
   });
 

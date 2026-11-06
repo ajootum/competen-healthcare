@@ -68,7 +68,7 @@ const slug = (s: string) => s.replace(/\s+/g, "-");
 const PHRASE_TOPICS: readonly SubjectTopic[] = SUBJECT_PHRASES.map(p => ({ id: slug(p), label: p, match: [p], query: `"${p}"[tiab]`, concepts: [p] }));
 export const SUBJECT_TOPICS: readonly SubjectTopic[] = [...CURATED, ...PHRASE_TOPICS];
 /** Bumped when the list changes, so results are searched afresh under the new list. */
-export const VOCABULARY_VERSION = "subject-topics-2026-11-06";
+export const VOCABULARY_VERSION = "subject-topics-1";
 
 /** Pure. One word as matching reads it: lowercase, no accents, one spelling. */
 const tokens = (s: string): string[] => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/).filter(Boolean).map(canonWord);
@@ -183,7 +183,4 @@ export function evidenceKind(pubTypes: readonly string[] | undefined): string {
 export const RESEARCH_NOT_INCLUDED = "External research was not included in this lesson. It is taught from your notes and Scholar's own explanation.";
 /** The learner's words for what the pack sends, shown beside the references. */
 export const SUBJECT_TERMS_NOTICE = "Scholar consulted approved scholarly sources using subject terms only. Your notes, your name and your account are never sent.";
-/** Every reference in a pack was read this way, and each says so. */
-export const ABSTRACT_ONLY_NOTE = "Abstract reviewed, not the full text.";
-/** Automated retrieval is not endorsement. */
-export const NOT_ENDORSED_NOTE = "Found automatically. Not reviewed or endorsed by Competen, and not clinical guidance.";
+export { ABSTRACT_ONLY_NOTE, NOT_ENDORSED_NOTE } from "./teach-format";

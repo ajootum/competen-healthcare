@@ -10,13 +10,14 @@ const U = "aaaaaaaa-0000-4000-8000-00000000000a";
 const S = "bbbbbbbb-0000-4000-8000-00000000000b";
 const C = ["cccccccc-0000-4000-8000-000000000001", "cccccccc-0000-4000-8000-000000000002", "cccccccc-0000-4000-8000-000000000003"];
 
+const refusedNow = vi.hoisted(() => ({ value: null as null | { error: string } }));
 const db = vi.hoisted(() => ({
   audit: [] as { id: string; created_at: string; action: string; entity_type: string; new_value: Record<string, unknown> }[],
   artefacts: new Map<string, Record<string, unknown>>(),
   events: [] as unknown[], sessionUpdates: [] as unknown[],
   aiCalls: 0, aiText: "", aiGate: null as null | Promise<void>, aiStarted: null as null | (() => void),
   policy: {} as Record<string, unknown>, currentStep: 1, clock: 0,
-  pack: { calls: [] as { search: boolean }[], state: "ready" as string, complete: true }, riskClear: true, withinRisk: true, aiTexts: [] as string[],
+  pack: { calls: [] as { search: boolean }[], state: "ready" as string, complete: true }, riskClear: true, withinRisk: true, aiTexts: [] as string[], aiFailFirst: false, refuseVerify: false,
 }));
 
 vi.mock("@/lib/trace", () => ({ currentTraceId: async () => "trace-test" }));
@@ -77,9 +78,11 @@ vi.mock("@/lib/individual/scholar/http", async orig => {
     scholarAiRunner: () => ({
       run: async (_g: unknown, part?: string) => {
         db.aiCalls++;
+        if (db.aiFailFirst) { db.aiFailFirst = false; return { ok: false, error: "failed" }; }
+        if (part === "verify" && db.refuseVerify) { refusedNow.value = { error: "allowance" }; return { ok: false, error: "failed", detail: "metered" }; }
         return { ok: true, text: part === "verify" ? "[]" : (db.aiTexts.shift() ?? db.aiText), model: "fake-model", provider: "fake", usage: { input: 1, output: 1 } };
       },
-      refusal: () => null, actionId: `action-${db.aiCalls + 1}`, calls: () => ({ main: 1 }),
+      refusal: () => refusedNow.value, actionId: `action-${db.aiCalls + 1}`, calls: () => ({ main: 1 }),
     }),
   };
 });
@@ -144,7 +147,7 @@ const ON = { scholarTeachResearch: { on: true, maxSearches: 4, dailyCostCents: 1
 
 beforeEach(() => {
   db.audit = []; db.artefacts = new Map(); db.events = []; db.sessionUpdates = []; db.aiCalls = 0; db.aiText = WITH_EVIDENCE; db.aiTexts = [];
-  db.policy = {}; db.currentStep = 1; db.clock = 0; db.pack = { calls: [], state: "ready", complete: true }; db.riskClear = true; db.withinRisk = true;
+  db.policy = {}; db.currentStep = 1; db.clock = 0; db.pack = { calls: [], state: "ready", complete: true }; db.riskClear = true; db.withinRisk = true; db.aiFailFirst = false; db.refuseVerify = false; refusedNow.value = null;
 });
 
 describe("off, the default", () => {
@@ -244,6 +247,31 @@ describe("on", () => {
     expect(r.json.answer).not.toContain("[E1]");
     expect(r.json.research.integrated).toBe(false);
     expect(db.aiCalls).toBe(2);
+  }, 30000);
+
+  it("a lesson with evidence whose model call fails is taught from the notes, once", async () => {
+    db.aiFailFirst = true; db.aiText = NOTES;
+    const r = await teach();
+    expect(r.status).toBe(200);
+    expect(r.json.answer).toContain("[S1]");
+    expect(r.json.research.integrated).toBe(false);
+    expect(db.aiCalls).toBe(2);
+  }, 30000);
+
+  it("a refusal on the claim check does not lose the lesson: it stands, with nothing cited to research", async () => {
+    db.refuseVerify = true;
+    const r = await teach();
+    expect(r.status).toBe(200);
+    expect(r.json.answer).toContain("[S1]");
+    expect(r.json.answer).not.toContain("[E1]");
+    expect(r.json.continuity).toBeUndefined();
+  }, 30000);
+
+  it("a saved lesson with a line beginning 'From research' is reopened whole", async () => {
+    db.aiText = WITH_EVIDENCE.replace("KEY POINTS:", "From research we also know staff report errors [AI].\n\nKEY POINTS:");
+    await teach();
+    const r = await teach({ open: true });
+    expect(r.json.answer).toContain("KEY POINTS");
   }, 30000);
 
   it("a prepared lesson asks for what is shared, never searches, and waits for the learner when it is not all there", async () => {
