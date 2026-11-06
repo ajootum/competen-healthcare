@@ -31,9 +31,8 @@ const KIND_ICON: Record<DeeperKind, LearningIconName> = {
 };
 
 /** ONE place a section's note is captured. COMPETEN-NOTEBOOK-001's My Ideas & Notes (MyIdeasBox: chunkId, materialId, sectionLabel, anchor) is drawn here when it lands: nothing else changes. No second capture is built. */
-function SectionNote(_: { anchor: string; label: string; chunkId: string | null; materialId: string | null }): ReactNode {
-  return null;
-}
+export type SectionNoteProps = { anchor: string; label: string; chunkId: string | null; materialId: string | null };
+const SectionNote: (props: SectionNoteProps) => ReactNode = () => null;
 
 const firstSource = (section: DeeperSection, sources: readonly Source[]) => {
   const text = section.blocks.map(b => (b.t === "p" ? b.text : b.t === "list" ? b.items.join(" ") : b.t === "flow" ? b.steps.join(" ") : b.rows.flat().join(" "))).join(" ");

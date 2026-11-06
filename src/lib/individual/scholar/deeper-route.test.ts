@@ -143,8 +143,6 @@ const post = async (body: Record<string, unknown>) => {
   const res = await POST(new Request("http://x/api/individual/scholar/learn/act", { method: "POST", body: JSON.stringify(body) }));
   return { status: res.status, json: await res.json() as Record<string, any> };
 };
-const settle = () => new Promise(r => setTimeout(r, 20));
-const rows = (action: string) => db.audit.filter(r => r.action === action).map(r => r.new_value);
 
 beforeEach(() => {
   db.audit = []; db.artefacts = new Map(); db.events = []; db.sessionUpdates = []; db.aiCalls = 0; db.aiText = ROUND; db.aiGate = null; db.aiStarted = null;
