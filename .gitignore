@@ -54,3 +54,6 @@ next-env.d.ts
 .env*
 .next-dev.log
 .test3-credential.local.txt
+
+# SCHOLAR-VISUAL-001 phase 2: the render engine, compressed by scripts/pack-render-engine.mjs at build. Never committed.
+/.render-engine/
