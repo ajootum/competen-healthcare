@@ -26,9 +26,16 @@ function knownPhrases(q: string): { phrase: string; synonyms: string[] }[] {
   return out;
 }
 
-/** Pure. The query, then the synonyms of what it says (never removing a word). The same text when the list knows nothing in it. */
+/** Pure. True where the learner shaped the query themselves (quotes, OR, a minus): it is never expanded or corrected. */
+export const isShapedQuery = (q: string): boolean => /["]|(^|\s)-\S|\bor\b/i.test(q);
+
+/**
+ * Pure. The query, then the SINGLE-WORD synonyms of what it says (never removing a word). The same text when the list knows nothing in it.
+ * ⚠ A phrase member is never added: this text is ORed, so its words would match on their own ("copd" would find every "chronic ... disease").
+ * A typed phrase still gains its abbreviation ("root cause analysis" gains "rca"); an abbreviation gains nothing.
+ */
 export function expandText(q: string): string {
-  const extra = knownPhrases(q).flatMap(k => k.synonyms);
+  const extra = knownPhrases(q).flatMap(k => k.synonyms).filter(s => !s.includes(" "));
   if (!extra.length) return q;
   return `${q} ${extra.join(" ")}`.slice(0, MAX);
 }
@@ -62,6 +69,8 @@ export type Correction = { text: string; changed: boolean };
 
 /** Pure. A word of five letters or more that the vocabulary does not hold (not even the start of a word) becomes the one vocabulary word a single slip away. */
 export function correctQuery(q: string, vocabulary: ReadonlySet<string>): Correction {
+  // A query the learner shaped (quotes, OR, a minus) is theirs: correcting it would drop the operators.
+  if (isShapedQuery(q)) return { text: q, changed: false };
   const words = searchWords(q);
   let changed = false;
   const fixed = words.map(w => {

@@ -9,12 +9,21 @@ import { sectionTopicRows, type MaterialRow } from "./store";
 
 export type TolerantResult = SearchResult & { showingFor: string | null };
 
-const nothingFound = (r: SearchResult) => Object.values(r.counts).every(c => c === 0);
+/**
+ * Only the tabs asked for count: the others are not read (a null there is "not asked", not a failure). A null on a tab that WAS asked
+ * for is a real read failure, so it is never "nothing found".
+ */
+export const nothingFound = (r: SearchResult): boolean => {
+  const asked = r.params.tab === "all" ? Object.values(r.counts) : [r.counts[r.params.tab]];
+  return asked.every(c => c === 0);
+};
+/** True where a filter narrows the search: a correction is then never tried, as on Saved. */
+const filtered = (p: SearchParams) => !!p.type || !!p.within || !!p.subject;
 
 export async function searchLibraryTolerant(admin: any, userId: string, params: SearchParams, materials: readonly MaterialRow[]): Promise<TolerantResult> {
   const run = async (text: string): Promise<SearchResult> => ({ ...(await searchLibrary(admin, userId, { ...params, q: expandText(text) }, materials)), params });
   const first = await run(params.q);
-  if (!params.q || !nothingFound(first)) return { ...first, showingFor: null };
+  if (!params.q || filtered(params) || !nothingFound(first)) return { ...first, showingFor: null };
   const topics = await sectionTopicRows(admin, userId);
   const vocabulary = vocabularyOf([...(topics.ok ? topics.data.flatMap(t => t.topics) : []), ...materials.map(m => m.title)]);
   const fixed = correctQuery(params.q, vocabulary);
