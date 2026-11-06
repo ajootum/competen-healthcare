@@ -2,7 +2,7 @@
 
 import { Fragment, useState, type ReactNode } from "react";
 import { AnswerOption, DisclaimerBadge, InlineNote, LearningCallout, LearningDisclosure, LearningIcon, QuestionCard, learnAction, learnBox, learnTone, type LearningIconName } from "@/components/ui/scholar-learning";
-import { GO_DEEPER_COPY, GO_DEEPER_LEVELS, deeperEvidenceStatement, levelOfDepth, type DeeperBlock, type DeeperKind, type DeeperParts, type DeeperSection } from "@/lib/individual/scholar/deeper-format";
+import { GO_DEEPER_COPY, GO_DEEPER_LEVELS, deeperEvidenceStatement, deeperNoteAnchor, levelOfDepth, type DeeperBlock, type DeeperKind, type DeeperParts, type DeeperSection } from "@/lib/individual/scholar/deeper-format";
 import { citedTags, questionText } from "@/lib/individual/scholar/teach-format";
 import { pagesOfCitation } from "@/lib/individual/scholar/material-visuals";
 import { SectionPictures } from "./learn-visuals";
@@ -139,7 +139,8 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
     const picture = pages && source && pageKey && s.source === "notes" && !usedPages.has(pageKey) && usedPages.size < MAX_PICTURE_PAGES && s.kind !== "safety" && s.kind !== "misconception" && s.kind !== "advanced"
       ? <SectionPictures materialId={source.materialId} materialTitle={source.materialTitle} from={pages.from} to={pages.to} first last={false} /> : null;
     if (picture && pageKey) usedPages.add(pageKey);
-    const note = <SectionNote anchor={anchor} label={s.title} chunkId={source?.chunkId ?? null} materialId={source?.materialId ?? null} />;
+    // The section's own anchor, not the source's section: two sections citing one slide keep their notes apart.
+    const note = <SectionNote anchor={deeperNoteAnchor(parts.focus, i)} label={s.title} chunkId={null} materialId={source?.materialId ?? sources[0]?.materialId ?? null} />;
     const body = <Blocks blocks={s.blocks} cite={cite} />;
     if (s.kind === "advanced") {
       return (
