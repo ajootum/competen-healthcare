@@ -197,6 +197,7 @@ export const GO_DEEPER_COPY = {
   scholar: "Scholar’s explanation",
   scholarNote: "General teaching by AI, beyond your notes. Not checked against published research.",
   research: "From published research",
+  ai: "AI-generated, not clinically reviewed",
 } as const;
 
 /** Pure. The plain statement of what this round rests on. Said on every structured round, so the limit is never left to inference. */

@@ -1935,7 +1935,6 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
       research={r.research?.text ? <ResearchBlock x={r.research} /> : null} hasResearch={!!r.research?.text}
       tools={(
         <div role="group" aria-label="Lesson tools" className="flex flex-wrap items-center gap-2">
-          <AiBadge />
           <ReadAloudButton text={deeperPlainText(deep)} about="this round" />
           {ask && <AskAbout {...ask} />}
         </div>

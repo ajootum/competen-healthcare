@@ -1,0 +1,63 @@
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE Teach me (or its saved lesson): 0 model call(s), USD 0.0000
+NOTE Teach me calls: 0
+NOTE policy off: the v2 round from the earlier run of this walk is reused (that run: one model call, no structured card, no level control)
+NOTE a v2 round was saved: true (scholar-learn-v3:deeper+scholar-learn-deeper-v2)
+NOTE staging policy scholar_go_deeper_structured = on
+PASS policy on: the saved v2 round is still in the thread
+NOTE policy ON: Go deeper (Explore): 1 model call(s), USD 0.0378
+PASS structured round: exactly one model call (1), requests deeper:standard
+PASS default level is Explore (the learner's standard depth)
+PASS the grey question block
+PASS the Sources and evidence footer
+PASS the evidence limit is stated
+PASS the level control
+PASS at least one section marked From your notes
+NOTE Scholar sections marked: 5
+PASS no raw labels on the page
+PASS desktop: no sideways page scroll (0px)
+NOTE desktop: smallest control height 20px
+PASS tablet: no sideways page scroll (0px)
+NOTE tablet: smallest control height 20px
+PASS phone: no sideways page scroll (0px)
+NOTE phone: smallest control height 20px
+PASS choosing an option opens the check with the choice written in
+NOTE check answered (clarify): 1 model call(s), USD 0.0231
+PASS the check is one model call (1)
+PASS the learner keeps their place while the feedback arrives
+FAIL the judged answer is kept through the existing mechanism (marking undefined, score undefined)
+PASS moving the level control alone asks for nothing
+NOTE Go deeper at Advanced: 1 model call(s), USD 0.0423
+PASS Advanced: exactly one model call (1), requests deeper:detailed
+PASS the new round is at Advanced
+PASS a level already taught points to its saved round, with no AI
+NOTE a fourth Go deeper (the limit): 0 model call(s), USD 0.0000
+PASS past the limit: no model call (0); a v2 round counts towards it
+NOTE reopening the lesson: 0 model call(s), USD 0.0000
+PASS reopening: no model call (0)
+PASS both structured rounds are back
+PASS the level control works from the keyboard
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE reopening with the policy off: 0 model call(s), USD 0.0000
+PASS policy off: reopening makes no model call (0)
+PASS policy off: saved structured rounds stay readable
+PASS policy off: no level control
+NOTE whole walk: 3 model calls, USD 0.1032
+PASS no server errors ()
+NOTE console errors: The Content Security Policy directive 'upgrade-insecure-requests' is ignored when delivered in a report-only policy.
+
+--- second pass (read-only) ---
+NOTE a real generated round kept on the fixture for this pass: ok
+PASS the head-control round is on the page
+PASS the learner's own pictures appear under the sections that cite them (1)
+PASS each picture is labelled as the original
+PASS the badge does not claim the round is all from the notes
+PASS desktop: no sideways page scroll
+NOTE desktop: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":30,"t":"Helpful"}]
+PASS tablet: no sideways page scroll
+NOTE tablet: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":30,"t":"Helpful"}]
+PASS phone: no sideways page scroll
+NOTE phone: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":30,"t":"Helpful"}]
+PASS the judged check from the walk is kept through the existing mechanism (marking ai_evaluation, score 0.5, at 2026-11-06T13:38:47.172103+00:00)
+PASS this pass made no model call (0)
+NOTE staging policy left OFF

@@ -1,0 +1,132 @@
+{
+ "calls": 21,
+ "usd": 0.68859,
+ "runs": [
+  {
+   "name": "v2",
+   "calls": 1,
+   "cost_usd": 0.027835,
+   "ok": true
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0.029635,
+   "ok": false
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0.031685,
+   "ok": true
+  },
+  {
+   "name": "teach",
+   "calls": 1,
+   "cost_usd": 0.03445,
+   "ok": true
+  },
+  {
+   "name": "v2",
+   "calls": 1,
+   "cost_usd": 0.035415,
+   "ok": false
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0.034765,
+   "ok": true
+  },
+  {
+   "name": "understand",
+   "calls": 1,
+   "cost_usd": 0.03123,
+   "ok": false
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0,
+   "ok": true
+  },
+  {
+   "name": "advanced",
+   "calls": 1,
+   "cost_usd": 0.03888,
+   "ok": false
+  },
+  {
+   "name": "explore2",
+   "calls": 1,
+   "cost_usd": 0.039515,
+   "ok": true
+  },
+  {
+   "name": "understand",
+   "calls": 1,
+   "cost_usd": 0.02923,
+   "ok": true
+  },
+  {
+   "name": "advanced",
+   "calls": 1,
+   "cost_usd": 0.03573,
+   "ok": true
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0.03398,
+   "ok": true
+  },
+  {
+   "name": "explore2",
+   "calls": 1,
+   "cost_usd": 0.0389,
+   "ok": true
+  },
+  {
+   "name": "research",
+   "calls": 1,
+   "cost_usd": 0.037225,
+   "ok": true
+  },
+  {
+   "name": "research",
+   "calls": 1,
+   "cost_usd": 0.03595,
+   "ok": true
+  },
+  {
+   "name": "v2",
+   "calls": 1,
+   "cost_usd": 0.03399,
+   "ok": true
+  },
+  {
+   "name": "understand",
+   "calls": 1,
+   "cost_usd": 0.030855,
+   "ok": true
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0.03173,
+   "ok": true
+  },
+  {
+   "name": "advanced",
+   "calls": 1,
+   "cost_usd": 0.03803,
+   "ok": true
+  },
+  {
+   "name": "explore2",
+   "calls": 1,
+   "cost_usd": 0.039565,
+   "ok": true
+  }
+ ]
+}

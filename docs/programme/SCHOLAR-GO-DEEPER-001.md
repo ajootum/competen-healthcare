@@ -40,7 +40,7 @@ Why: depth is already stored on each saved round, is already in the saved key an
 
 **Answer options carry no key.** Options make the learner commit, then choosing one opens the existing check with the choice written in. The learner adds reasons and the existing `clarify` judges them. Stored and scored through the existing mechanism; no second marking path. An option's own citation is removed so it cannot point at its answer.
 
-**Pictures.** The learner's own originals through `SectionPictures` (SCHOLAR-VISUAL-001), at most three per round, under a notes section that cites that page. Original diagrams are tables and `FLOW` chains drawn as text, so they are accessible and cost nothing. No generated images.
+**Pictures.** The learner's own originals through `SectionPictures` (SCHOLAR-VISUAL-001), under a notes section that cites that page, each page once. Original diagrams are tables and `FLOW` chains drawn as text, so they are accessible and cost nothing. No generated images.
 
 ## 4. Saved rounds are not lost
 

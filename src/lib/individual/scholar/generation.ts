@@ -940,7 +940,9 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
   for (const s of parts.sections.slice(0, DEEPER_MAX_SECTIONS)) {
     const text = deeperSectionText(s);
     if (s.source === "scholar") {
-      if (s.kind !== "safety" && scholarOk(text)) kept.push(s); else removedSections++;
+      // A stray [S n] on Scholar's own section is not a claim we can honour: it is removed, and the section is judged and shown as what it says it is.
+      const blocks = untag(s.blocks);
+      if (s.kind !== "safety" && scholarOk(deeperSectionText({ blocks }))) kept.push({ ...s, blocks }); else removedSections++;
       continue;
     }
     const check = checkLearnMain(text, asked, passages, references);

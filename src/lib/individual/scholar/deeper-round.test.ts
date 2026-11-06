@@ -162,6 +162,14 @@ describe("checkDeeperAnswer", () => {
       expect(c.salvaged?.parts.sections).toBe(1);
     }
   });
+  it("a stray tag on Scholar's own section is removed, never left to imply the notes say it", () => {
+    const c = check(ROUND.replace("so control arrives from the top down.", "so control arrives from the top down [S1]."));
+    expect(c.ok).toBe(true);
+    if (!c.ok) return;
+    const s = parseDeeperAnswer(c.text)!.sections.find(x => x.title.startsWith("Why the order"))!;
+    expect(s.source).toBe("scholar");
+    expect(deeperSectionText(s)).not.toContain("[S1]");
+  });
   it("a safety section is never Scholar's own, whatever it says", () => {
     const c = check(ROUND.replace("SECTION: misconception | scholar | A late milestone is not a diagnosis", "SECTION: safety | scholar | When to worry"));
     expect(c.ok).toBe(true);

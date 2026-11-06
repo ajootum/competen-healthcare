@@ -56,8 +56,9 @@ const learnerContext = await tutor.loadTutorContext(admin, userId, passages.map(
 const results: Record<string, unknown> = JSON.parse(fs.existsSync(`${SP}/go-deeper-results.json`) ? fs.readFileSync(`${SP}/go-deeper-results.json`, "utf8") : "{}");
 const teachSaved = (results.teach as { saved?: string } | undefined)?.saved ?? null;
 const earlier: { action: string; content: string; createdAt: string }[] = teachSaved ? [{ action: "teach", content: teachSaved, createdAt: "2026-11-06T11:00:00Z" }] : [];
-const RUNS: Record<string, { structured: boolean; depth: "brief" | "standard" | "detailed"; after?: string; action?: "teach" }> = {
+const RUNS: Record<string, { structured: boolean; depth: "brief" | "standard" | "detailed"; after?: string; action?: "teach"; research?: boolean }> = {
   teach: { structured: false, depth: "standard", action: "teach" }, v2: { structured: false, depth: "standard" }, understand: { structured: true, depth: "brief" }, explore: { structured: true, depth: "standard" }, advanced: { structured: true, depth: "detailed" },
+  research: { structured: true, depth: "standard", research: true },
   explore2: { structured: true, depth: "standard", after: "explore" }, advanced2: { structured: true, depth: "detailed", after: "explore" },
 };
 for (const name of process.argv.slice(2)) {
@@ -76,7 +77,9 @@ for (const name of process.argv.slice(2)) {
   let rawText: string | null = null;
   const run = async (g: unknown, part: unknown) => { used++; const res = await ai.run(g, part); rawText = (res as { text?: string }).text ?? null; return res; };
   const started = Date.now();
-  const r = await gen.runLearn(userId, { action: spec.action ?? "deeper", question: prompt, passages, references: [], depth: spec.depth, background: true, history: [], learnerContext, research: [], taught, lesson: lessonBrief, learnerTexts: [], deeperStructured: spec.structured }, run);
+  const r = await gen.runLearn(userId, { action: spec.action ?? "deeper", question: prompt, passages, references: [], depth: spec.depth, background: true, history: [], learnerContext,
+    // A STAND-IN, written for this test and labelled so: it proves the round and the research part work together. Not a real paper and never shown to a learner. Real evidence is SCHOLAR-RESEARCH-TEACH-001's.
+    research: spec.research ? [{ tag: "E1", title: "TEST STAND-IN, not a real paper: maturation of motor control in infancy", journal: "Test fixture", year: 2020, abstract: "This stand-in abstract states that voluntary head control in infants was observed to emerge before independent walking, and that the order was more consistent than the timing between infants. It reports that the fading of some early reflexes coincided with growing voluntary control, and cautions that the observations were limited and could not establish cause." }] : [], taught, lesson: lessonBrief, learnerTexts: [], deeperStructured: spec.structured }, run);
   const ms = Date.now() - started;
   ledger.calls += used;
   const refusal = ai.refusal?.();
@@ -91,7 +94,7 @@ for (const name of process.argv.slice(2)) {
     name, structured: spec.structured, depth: spec.depth, after: spec.after ?? null, calls: used, ms, usage: rows ?? [], cost_usd: cost, refusal: refusal ?? null,
     ok: r.ok, error: r.ok ? null : r.error, promptVersion: r.ok ? r.promptVersion : null, model: r.ok ? r.model : null, depthReached: r.ok ? r.depthReached ?? null : null,
     check: r.ok ? { ok: r.check.ok, reason: r.check.ok ? null : r.check.reason, violations: r.check.ok ? null : r.check.violations ?? null, salvaged: r.check.ok ? r.check.salvaged ?? null : null, cited: r.check.ok ? r.check.cited : null } : null,
-    background: r.ok ? r.background : null, flags: r.ok ? r.flags : null,
+    background: r.ok ? r.background : null, flags: r.ok ? r.flags : null, research: r.ok ? r.research : null,
     words: saved ? saved.split(/\s+/).length : 0,
     sections: parts ? parts.sections.map((s: { kind: string; source: string; title: string; blocks: { t: string }[] }) => ({ kind: s.kind, source: s.source, title: s.title, blocks: s.blocks.map(b => b.t) })) : null,
     saved, raw: rawText,

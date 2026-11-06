@@ -318,7 +318,9 @@ export async function POST(req: Request) {
   ]);
   const topics = topicMap ? [...new Set([...topicMap.values()].flat())] : [];
   let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? meant : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
-  const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
+  // SCHOLAR-GO-DEEPER-001: in a structured round Scholar's own explanation is its own marked section, and research its own marked part, so the two sit side by side:
+  // evidence and educational inference kept apart, not one traded for the other. Every other action keeps the rule: with research, no background.
+  const background = policy.scholarBeyondNotes === "labelled" && (mode !== "research" || (action === "deeper" && policy.scholarGoDeeperStructured));
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
   const hasHistory = Array.isArray(body?.history) && body.history.length > 0;

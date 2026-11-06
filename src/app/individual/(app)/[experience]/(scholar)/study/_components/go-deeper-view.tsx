@@ -1,7 +1,7 @@
 "use client";
 
 import { Fragment, useState, type ReactNode } from "react";
-import { AnswerOption, InlineNote, LearningCallout, LearningDisclosure, LearningIcon, QuestionCard, learnAction, learnBox, learnTone, type LearningIconName } from "@/components/ui/scholar-learning";
+import { AnswerOption, DisclaimerBadge, InlineNote, LearningCallout, LearningDisclosure, LearningIcon, QuestionCard, learnAction, learnBox, learnTone, type LearningIconName } from "@/components/ui/scholar-learning";
 import { GO_DEEPER_COPY, GO_DEEPER_LEVELS, deeperEvidenceStatement, levelOfDepth, type DeeperBlock, type DeeperKind, type DeeperParts, type DeeperSection } from "@/lib/individual/scholar/deeper-format";
 import { citedTags, questionText } from "@/lib/individual/scholar/teach-format";
 import { pagesOfCitation } from "@/lib/individual/scholar/material-visuals";
@@ -22,6 +22,9 @@ export type GoDeeperLevels = {
   onLevel?: (depth: string) => void;
   busy: boolean;
 };
+
+/** Pages a round may look for pictures on: many slides hold none, so this bounds the search and the page, not the number shown. */
+const MAX_PICTURE_PAGES = 6;
 
 const KIND_ICON: Record<DeeperKind, LearningIconName> = {
   principle: "bulb", science: "layers", compare: "list", application: "target", misconception: "warn", safety: "warn", limits: "search", advanced: "spark",
@@ -134,8 +137,8 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
     // One original picture per page per round, under the section that cites it (SCHOLAR-VISUAL-001). Scholar's own sections cite nothing, so they show none.
     const pages = source ? pagesOfCitation(source.citation) : null;
     const pageKey = pages && source ? `${source.materialId}:${pages.from}` : null;
-    const picture = pages && source && pageKey && s.source === "notes" && !usedPages.has(pageKey) && usedPages.size < 3 && s.kind !== "safety"
-      ? <SectionPictures materialId={source.materialId} materialTitle={source.materialTitle} from={pages.from} to={pages.to} first={false} last={false} /> : null;
+    const picture = pages && source && pageKey && s.source === "notes" && !usedPages.has(pageKey) && usedPages.size < MAX_PICTURE_PAGES && s.kind !== "safety"
+      ? <SectionPictures materialId={source.materialId} materialTitle={source.materialTitle} from={pages.from} to={pages.to} first last={false} /> : null;
     if (picture && pageKey) usedPages.add(pageKey);
     const note = <SectionNote anchor={anchor} label={s.title} chunkId={source?.chunkId ?? null} materialId={source?.materialId ?? null} />;
     const body = <Blocks blocks={s.blocks} cite={cite} />;
@@ -192,7 +195,9 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
           <p className="mt-1 break-words text-[20px] font-bold leading-snug text-gray-900">{parts.focus}</p>
           {parts.covers && <p className="mt-1 text-[14px] text-gray-700">{parts.covers}</p>}
         </div>
-        {tools && <div className="mt-3">{tools}</div>}
+        {/* Not the usual "from your notes" badge: part of a round is, deliberately, not. */}
+        <div className="mt-3"><DisclaimerBadge>{GO_DEEPER_COPY.ai}</DisclaimerBadge></div>
+        {tools && <div className="mt-2">{tools}</div>}
         <div className="mt-4 break-words">
           {parts.sections.map((s, i) => (
             <Fragment key={i}>
