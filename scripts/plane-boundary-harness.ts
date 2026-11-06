@@ -568,6 +568,8 @@ const hsFound = hsSites.map(x => `${x.table}:${x.select === "columns" ? [...x.co
 const hsWant = [
   ...Object.values(HS_EXPECT).map(e => `${e.table}:${[...e.cols].sort().join(",")}`),
   "practice_platform_flags:enabled",
+  // PATCH /api/hq/search/flag: reads the switch, and writes it (update, or insert on the first flip). It is the only write of the row, gated by hq.platform.governance.manage.
+  "practice_platform_flags:enabled", "practice_platform_flags:none", "practice_platform_flags:none",
   "audit_log:none", // the staff route's audit WRITE (no select list): who, source, result count, never the query
 ].sort();
 ok("HS1", JSON.stringify(hsFound) === JSON.stringify(hsWant),
