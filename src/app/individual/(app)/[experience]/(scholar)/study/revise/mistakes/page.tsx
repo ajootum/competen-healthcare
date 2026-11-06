@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader, type ReaderClock } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
@@ -32,17 +34,16 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Mistake notebook" });
 }
 
-const when = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 const field = `rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-[14px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
-function Mistake({ m }: { m: MistakeItem }) {
+function Mistake({ m, clock }: { m: MistakeItem; clock: ReaderClock | null }) {
   return (
     <li className="rounded-xl bg-[var(--cmp-app-surface)] ring-1 ring-[var(--learn-border)] p-4">
       <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
         {m.corrected
-          ? <StateChip tone="strong" mark="checked">{`Corrected ${m.correctedAt ? when(m.correctedAt) : ""}`.trim()}</StateChip>
+          ? <StateChip tone="strong" mark="checked">{`Corrected ${m.correctedAt ? formatForReader(m.correctedAt, clock, "date") : ""}`.trim()}</StateChip>
           : <StateChip tone="developing" mark="none">Still to fix</StateChip>}
-        <span className="text-gray-700">Missed {m.missed} time{m.missed === 1 ? "" : "s"} · last {when(m.lastMissedAt)}</span>
+        <span className="text-gray-700">Missed {m.missed} time{m.missed === 1 ? "" : "s"} · last {formatForReader(m.lastMissedAt, clock, "date")}</span>
       </div>
       <p className="mt-2 text-[15.5px] font-semibold leading-relaxed text-gray-900">{m.stem}</p>
       <dl className="mt-2 space-y-1.5 text-[14px]">
@@ -67,6 +68,7 @@ function Mistake({ m }: { m: MistakeItem }) {
 export default async function MistakeNotebook({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ show?: string; material?: string; topic?: string; study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   const q = await searchParams;
@@ -147,7 +149,7 @@ export default async function MistakeNotebook({ params, searchParams }: { params
             <LearningSection key={g.materialId} tone="record" icon="record" level={2} headingId={`g-${g.materialId}`} caps={false}
               title={<>{g.title} <span className="text-[13px] font-normal text-gray-700">· {g.toFix} to fix of {g.items.length}</span></>}
               trailing={weakOn && g.toFix > 0 && !q.material && nb.groups.length > 1 ? <ReviseThese materialId={g.materialId} label="Revise these" /> : undefined}>
-              <ul className="mt-3 space-y-3">{g.items.map(m => <Mistake key={m.questionId} m={m} />)}</ul>
+              <ul className="mt-3 space-y-3">{g.items.map(m => <Mistake key={m.questionId} m={m} clock={clock} />)}</ul>
             </LearningSection>
           ))}
         </div>

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { pageScope } from "@/lib/individual/search/registry";
@@ -25,13 +27,14 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "Assessments" }); }
 
-const when = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const chip = "inline-flex items-center rounded-full border border-[var(--cmp-app-border)] bg-[var(--cmp-surface-neutral)] px-2.5 py-0.5 text-[12px] font-semibold text-[var(--cmp-text-neutral)]";
 const linkBtn = `inline-flex min-h-[44px] items-center rounded-lg border border-[var(--cmp-app-control-border)] bg-[var(--cmp-app-surface)] px-3 text-[13.5px] font-semibold text-[var(--cmp-app-text)] hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
 export default async function Assessments({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string; q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
+  const when = (iso: string) => formatForReader(iso, clock, "date", "UTC");
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
   const { study, q: rawQ } = await searchParams;

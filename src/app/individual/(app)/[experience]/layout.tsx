@@ -29,6 +29,8 @@ import { NavigationProgress } from "../../_components/NavigationProgress";
 import { GlobalSearch } from "../../_components/search/GlobalSearch";
 import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
+import { ReaderClockProvider } from "@/components/ReaderClock";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
 import { scholarModulesOnce, type ScholarModuleKey } from "@/lib/individual/scholar/module-access";
@@ -188,7 +190,9 @@ export default async function ExperienceLayout({ children, params }: {
   const modulesP: Promise<Set<ScholarModuleKey>> | Set<ScholarModuleKey> = scholar ? scholarModulesOnce(shell.ctx.admin, shell.ctx.userId) : new Set<ScholarModuleKey>();
   // My Search History (993): the learner's own choice, once per page, for the notices and for what a page may send. Any failure is off: nothing is kept.
   const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false, pending: false }; } })() : { offered: false, on: false, pending: false };
-  const [learning, ai, myPlanOn, moduleSet, historyChoice] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP]);
+  // LOCAL-TIME-ZONES: null while scholar_reader_time_zone is off, and always outside Scholar.
+  const clockP = scholar ? readerClock(shell.ctx) : null;
+  const [learning, ai, myPlanOn, moduleSet, historyChoice, clock] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP, clockP]);
   const globalSearchOn = await loadIndividualPolicyOnce(shell.ctx.admin).then(p => (scholar ? p.scholarGlobalSearch : p.professionalGlobalSearch) === "on").catch(() => false);
   const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
@@ -231,6 +235,7 @@ export default async function ExperienceLayout({ children, params }: {
           <ShellActionProvider action={action}>
           <AiAvailabilityProvider standing={aiSlim}>
           <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}>
+          <ReaderClockProvider clock={clock}>
           <MyPlanNavProvider on={myPlanOn}>
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"
@@ -245,6 +250,7 @@ export default async function ExperienceLayout({ children, params }: {
               )}
             </div>
           </MyPlanNavProvider>
+          </ReaderClockProvider>
           </SearchHistoryChoiceProvider>
           </AiAvailabilityProvider>
           </ShellActionProvider>

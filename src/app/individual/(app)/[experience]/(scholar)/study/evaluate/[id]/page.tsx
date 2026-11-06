@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -31,6 +33,7 @@ export default async function EvaluationRecordPage({ params, searchParams }: { p
   const p = await params;
   const page = await experienceModulePage(p.experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   const [due, r, policy, inPassport] = await Promise.all([countDue(ctx.admin, ctx.userId), getEvaluation(ctx.admin, ctx.userId, p.id), loadIndividualPolicy(ctx.admin), loadPassportEvaluations(ctx.admin, ctx.userId)]);
@@ -72,7 +75,7 @@ export default async function EvaluationRecordPage({ params, searchParams }: { p
       {header}
       <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
         <p className="text-[13px] text-gray-700">
-          {e.kind === "continuous" ? "Kept from Evaluate my understanding" : EVALUATION_METHOD_LABEL[e.method]} · {new Date(e.createdAt).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+          {e.kind === "continuous" ? "Kept from Evaluate my understanding" : EVALUATION_METHOD_LABEL[e.method]} · {formatForReader(e.createdAt, clock, "dateTime")}
           {" · "}<span className="font-semibold">{EVALUATION_CONFIDENCE_LABEL[e.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? e.confidence}</span>
           {e.supersedesId ? <> · follows <Link href={evaluationHref(e.supersedesId)} className={`underline ${focusRing}`}>an earlier evaluation</Link></> : null}
         </p>

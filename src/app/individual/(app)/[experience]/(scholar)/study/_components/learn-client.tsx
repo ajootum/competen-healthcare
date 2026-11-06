@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore, type CSSProperties } from "react";
 import { ResizeHandle } from "@/components/ui/resizable";
@@ -262,6 +264,7 @@ export function LearnWorkspace(props: {
   /** CYU-01: policy scholar_learn_check_placement (absent: distributed). */
   checkPlacement?: CheckPlacement;
 }) {
+  const clock = useReaderClock();
   const router = useRouter();
   const [session, setSession] = useState<SessionView | null>(props.initial);
   const [note, setNote] = useState<string | null>(null);
@@ -1456,7 +1459,7 @@ export function LearnWorkspace(props: {
                 <SectionCard as="li" key={h.attemptId} className="text-[14px]">
                   <p className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[12.5px] text-gray-700">
                     <span className="cmp-learn-ink inline-flex items-center gap-1 rounded-full border border-[var(--learn-border)] bg-[var(--learn-surface)] px-2 py-0.5 font-semibold">{checkOutcomeLabel(h, CHECK_VERDICT_LABEL)}</span>
-                    <span>{new Date(h.answeredAt).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}</span>
+                    <span>{formatForReader(h.answeredAt, clock, "dayMonthTime")}</span>
                   </p>
                   <p className="mt-1 text-[12.5px] text-gray-700">{CHECK_MARKING_LABEL[h.marking]}</p>
                   <p className="mt-2 break-words text-[15px] font-semibold leading-snug text-gray-900">{h.question}</p>
@@ -1783,6 +1786,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
   /** SCHOLAR-GUIDED-LEARNING-01: wider Learn-from modes the learner may choose; the inline check under a lesson question. */
   expansions?: Expansion[]; renderCheck?: (q: string) => React.ReactNode;
 }) {
+  const clock = useReaderClock();
   const r = card.reply;
   if (r.continuity) {
     return (
@@ -1880,7 +1884,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
       {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
       {r.saved && (
         <p className="mt-2 flex flex-wrap items-center gap-2 text-[12px] text-gray-600">
-          <span>Saved {new Date(r.saved.at).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })} · private, for your own study · no new AI was used</span>
+          <span>Saved {formatForReader(r.saved.at, clock, "date", "UTC")} · private, for your own study · no new AI was used</span>
           {onFresh && !r.savedEarlier && <button type="button" onClick={onFresh} className={`rounded-lg border border-gray-300 bg-white px-2 py-0.5 font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Explain it a new way</button>}
         </p>
       )}

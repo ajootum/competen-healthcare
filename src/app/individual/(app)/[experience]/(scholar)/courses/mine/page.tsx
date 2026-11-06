@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
@@ -19,11 +21,11 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("courses", { title: "My Courses" }); }
 
-const fmt = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export default async function MyCourses({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
   const { ctx } = page;
   const x = SCHOLAR;
@@ -46,7 +48,7 @@ export default async function MyCourses({ params, searchParams }: { params: Prom
                 <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
                   <div className="min-w-0">
                     <TextLink href={learningRecordHref(c.id)} accent={x.accent}>{c.title}</TextLink>
-                    <p className="text-[12.5px] text-gray-600">{c.code} · {c.deliveryLabel} · started {fmt(c.enrolledAt)}</p>
+                    <p className="text-[12.5px] text-gray-600">{c.code} · {c.deliveryLabel} · started {formatForReader(c.enrolledAt, clock, "date", "UTC")}</p>
                   </div>
                   <p className="text-[12.5px] font-semibold text-gray-800">{c.statusLabel}</p>
                 </li>
