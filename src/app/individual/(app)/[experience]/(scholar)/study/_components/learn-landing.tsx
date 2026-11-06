@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { HistoryKeyInput } from "./search-history-client";
+import { scopeLine } from "@/lib/individual/search/registry";
 import { HistoryNotice } from "../../../../../_components/SearchHistoryChoice";
 import {
   PAGE_SIZE, SEARCH_TABS, SEARCH_TAB_LABEL, shortDate,
@@ -48,6 +49,10 @@ export function LearnSearchBox({ q = "", studyOn = false, historyOn = false }: {
         <input id="learn-q" name="q" type="search" defaultValue={q} maxLength={200} autoComplete="off"
           placeholder="Search your notes, topics, clinical concepts or ask Scholar a question..."
           className={`mt-3 block min-h-[48px] w-full rounded-xl border border-gray-300 bg-white px-3.5 py-2.5 text-[15px] text-gray-900 ${focusRing}`} />
+        <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[12.5px] text-gray-700" data-search-scope>
+          <span>{scopeLine("learn")}</span>
+          {q && <Link href={LEARN} className={`${link} inline-flex min-h-[32px] items-center underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)]`} style={{ color: accent }}>Clear search</Link>}
+        </p>
         {historyOn && <HistoryKeyInput />}
         {studyOn && (
           <div className="mt-3">

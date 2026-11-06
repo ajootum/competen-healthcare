@@ -1,3 +1,5 @@
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import Link from "next/link";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
@@ -68,6 +70,7 @@ export default async function EvaluatePage({ params, searchParams }: { params: P
       <PageHeader accent={x.accent} eyebrow={scholarSpace("evaluate").eyebrow} title="Evaluate" intro="Assess what you planned to learn, where your evidence stands, and what to do next." />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
       <EvaluateViewNav current={view} study={sid} />
+      {view !== "history" && <PageSearch scope={scopeLine("evaluate")} action={studyHref("evaluate")} placeholder="Search by goal, topic or competency" hidden={{ view: "history", study: sid }} className="mb-3" />}
       <p className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><WorkflowLine /><Link href={progress("overview")} className={`text-[13.5px] ${toneAction.link}`}>View My Progress</Link></p>
     </>
   );

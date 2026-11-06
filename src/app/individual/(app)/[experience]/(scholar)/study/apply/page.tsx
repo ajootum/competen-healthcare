@@ -1,3 +1,5 @@
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
 import Link from "next/link";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
@@ -117,6 +119,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
       <PageHeader accent={x.accent} eyebrow={scholarSpace("apply").eyebrow} title="Apply" intro="Turn what you have learned into meaningful practice." />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
       <ApplyViewNav current={view} study={sid} />
+      {view !== "library" && <PageSearch scope={scopeLine("apply")} action={studyHref("apply")} placeholder="Title, topic, clinical concept, competency or source" hidden={{ view: "library", study: sid }} />}
     </>
   );
   const notice = <div className="mt-5"><BoundaryNotice notice={FORMATIVE_NOTICE} detail="Practice cases are formative simulation, not assessment, and never verified clinical competence. Your practice is private to you." /></div>;
@@ -268,13 +271,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
           <h2 id="practice-lib-h" className="text-[18px] font-bold text-gray-900">My Practice Library</h2>
           <p className="mt-1 text-[13.5px] text-gray-800">Search, reopen and compare your cases, OSCEs, papers and attempts. Private to you. Opening them uses no AI.</p>
         </div>
-        <form method="get" action={studyHref("apply")} role="search" className="space-y-2">
-          <input type="hidden" name="view" value="library" />
-          {sid && <input type="hidden" name="study" value={sid} />}
-          <div className="flex gap-2">
-            <input name="q" defaultValue={f.q} aria-label="Search your practice" placeholder="Title, topic, clinical concept, competency or source" className={field} />
-            <button type="submit" className={`${toneAction.primary} shrink-0`}>Search</button>
-          </div>
+        <PageSearch scope={scopeLine("apply")} action={studyHref("apply")} value={f.q} placeholder="Title, topic, clinical concept, competency or source" hidden={{ view: "library", study: sid }} clearHref={applyHref("library", { study: sid })} className="space-y-2">
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             <label className="block text-[12.5px] font-semibold text-gray-700">Format<select name="format" defaultValue={f.format ?? ""} className={`${field} mt-0.5 font-normal`}><option value="">All formats</option>{PRACTICE_FORMATS.map(x => <option key={x} value={x}>{PRACTICE_FORMAT_LABEL[x]}</option>)}</select></label>
             <label className="block text-[12.5px] font-semibold text-gray-700">Status<select name="status" defaultValue={f.status ?? ""} className={`${field} mt-0.5 font-normal`}><option value="">All statuses</option>{PRACTICE_STATUSES.map(x => <option key={x} value={x}>{PRACTICE_STATUS_LABEL[x]}</option>)}</select></label>
@@ -282,7 +279,7 @@ export default async function Apply({ params, searchParams }: { params: Promise<
             <label className="flex items-end gap-2 pb-2 text-[13.5px] font-semibold text-gray-800 pointer-coarse:min-h-[var(--cmp-touch-min)]"><input type="checkbox" name="gap" value="1" defaultChecked={f.gap} /> Has a learning gap</label>
           </div>
           <button type="submit" className={toneAction.secondary}>Apply filters</button>
-        </form>
+        </PageSearch>
         {practice === null ? <Unreadable what="your practice library" /> : (
           <>
             <p role="status" className="text-[13px] text-gray-700">{shown.total} of {practice.length}</p>

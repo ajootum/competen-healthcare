@@ -1,3 +1,4 @@
+import { matchesSearch } from "../search/match";
 import { frameworkTree, type FrameworkTree } from "@/lib/competency/framework-tree";
 
 // ── MY COMPETENCIES EXPLORER: THE VIEW MODEL ── SCHOLAR-COMPETENCY-EXPLORER-HFE-01 (owner instruction 3 Nov 2026) ──
@@ -222,14 +223,10 @@ export function rowMatchesFilter(r: ExplorerRow, f: ExplorerFilter): boolean {
   }
 }
 
-const norm = (s: string) => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "");
 
 /** Pure: every word of the query must occur in the competency's title, code, domain, Area or framework. */
 export function rowMatchesQuery(r: ExplorerRow, context: { domain: string; area: string | null; framework: string; frameworkCode: string | null }, q: string): boolean {
-  const words = norm(q).split(/\s+/).filter(Boolean);
-  if (!words.length) return true;
-  const hay = norm([r.title, r.code ?? "", context.domain, context.area ?? "", context.framework, context.frameworkCode ?? ""].join(" \u0000 "));
-  return words.every(w => hay.includes(w));
+  return matchesSearch([r.title, r.code ?? "", context.domain, context.area ?? "", context.framework, context.frameworkCode ?? ""], q);
 }
 
 const cmpIso = (a: string | null, b: string | null) => (a === b ? 0 : a === null ? 1 : b === null ? -1 : a > b ? -1 : 1);
