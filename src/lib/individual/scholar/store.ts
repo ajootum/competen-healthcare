@@ -2473,6 +2473,16 @@ export type LearningEventRow = { step: number; action: string; verdict: string |
  * A session's events, in order (what was done, and the informal check outcomes). LE-03 (955): an event detached by a
  * re-cut (its lesson no longer exists as one) is left out, so it counts as no lesson's progress.
  */
+/** One lesson's events, newest first, with the kept check each judged. 950 absent: no links. A failed read is a failure, never an empty trail. */
+export async function lessonEventTrail(admin: Admin, userId: string, sessionId: string, step: number): Promise<Read<{ action: string; verdict: string | null; attemptId: string | null }[]>> {
+  const detached = await learningRecutSchema(admin, userId);
+  const read = (cols: string) => { const q = admin.from("individual_scholar_learning_event").select(cols).eq("user_id", userId).eq("session_id", sessionId).eq("step", step); return (detached ? q.is("detached_at", null) : q).order("created_at", { ascending: false }).limit(500); };
+  let { data, error } = await read("action, verdict, attempt_id");
+  if (error && /column|schema cache/i.test(String((error as any)?.message ?? ""))) ({ data, error } = await read("action, verdict"));
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ action: r.action, verdict: r.verdict ?? null, attemptId: r.attempt_id ?? null })) };
+}
+
 export async function learningEvents(admin: Admin, userId: string, sessionId: string): Promise<Read<LearningEventRow[]>> {
   let q = admin.from("individual_scholar_learning_event").select("step, action, verdict, created_at").eq("user_id", userId).eq("session_id", sessionId);
   if (await learningRecutSchema(admin, userId)) q = q.is("detached_at", null);
@@ -2836,7 +2846,7 @@ export async function listArtefacts(admin: Admin, userId: string, opts: { materi
  * mode it was written under (learn-journey.ts newestSavedLesson). Learn/act's open falls back to it when the exact key
  * finds nothing, so a lesson taught under an older prompt or other settings reopens with no AI call. Keyed on user_id.
  */
-export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[] }): Promise<ArtefactRow | null> {
+export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[]; lesson?: { sessionId: string; step: number } | null }): Promise<ArtefactRow | null> {
   if (!q.chunkIds.length) return null;
   const r = await listArtefacts(admin, userId, { chunkIds: [q.chunkIds[0]], ...(q.materialId ? { materialId: q.materialId } : {}) });
   return r.ok ? newestSavedLesson(r.data, q) : null;
@@ -2848,7 +2858,7 @@ export async function findSavedLesson(admin: Admin, userId: string, q: { action:
  * only, keyed on user_id. Anything unreadable (415 / 416 absent) is simply not counted: a lesson then shows what the
  * learning events say, never a fabricated state.
  */
-export async function learnLessonRecords(admin: Admin, userId: string, steps: readonly LearningStep[], action: string): Promise<LessonRecord[]> {
+export async function learnLessonRecords(admin: Admin, userId: string, steps: readonly LearningStep[], action: string, sessionId: string | null = null): Promise<LessonRecord[]> {
   const all = [...new Set(steps.flatMap(s => s.sections.map(x => x.chunkId)))].slice(0, 400);
   const empty: LessonRecord[] = steps.map(s => ({ step: s.step, saved: null, attempts: 0 }));
   if (!all.length) return empty;
@@ -2859,17 +2869,18 @@ export async function learnLessonRecords(admin: Admin, userId: string, steps: re
   const list = (r: { data?: unknown; error?: unknown } | null): any[] => (r && !r.error && Array.isArray(r.data) ? r.data : []);
   const ids: string[] = [...new Set(list(src).map(r => String(r.artefact_id)))];
   const [arts, sources, att] = await Promise.all([
-    ids.length ? (async () => { const q = admin.from("individual_scholar_artefact").select("id, material_id, action, depth, prompt_version, created_at").eq("user_id", userId).eq("action", action).in("id", ids); return (await librarySchema(admin, userId) ? q.is("superseded_at", null) : q).limit(500); })() : null,
+    // SCHOLAR-GO-DEEPER-001: 820's own record of the lesson a row was saved for, so a lesson over ten sections finds its saved teaching here too (learn-journey.ts coversLesson).
+    ids.length ? (async () => { const v820 = await librarySchema(admin, userId); const q = admin.from("individual_scholar_artefact").select(`id, material_id, action, depth, prompt_version, created_at${v820 ? ", session_id, step" : ""}`).eq("user_id", userId).eq("action", action).in("id", ids); return (v820 ? q.is("superseded_at", null) : q).limit(500); })() : null,
     artefactSources(admin, userId, ids),
     list(qs).length ? admin.from("individual_scholar_attempt").select("question_id").eq("user_id", userId).in("question_id", list(qs).map(q => q.id)).limit(5000) : null,
   ]);
-  const rows = list(arts).map(r => ({ id: r.id as string, materialId: r.material_id as string, action: r.action as string, depth: r.depth as string, promptVersion: r.prompt_version as string, createdAt: r.created_at as string, sources: sources.get(r.id) ?? [] }));
+  const rows = list(arts).map(r => ({ id: r.id as string, materialId: r.material_id as string, action: r.action as string, depth: r.depth as string, promptVersion: r.prompt_version as string, createdAt: r.created_at as string, sources: sources.get(r.id) ?? [], sessionId: (r.session_id ?? null) as string | null, step: Number.isInteger(r.step) ? (r.step as number) : null }));
   const chunkOf = new Map<string, string>(list(qs).map(q => [String(q.id), String(q.chunk_id)]));
   const perChunk = new Map<string, number>();
   for (const a of list(att)) { const c = chunkOf.get(a.question_id); if (c) perChunk.set(c, (perChunk.get(c) ?? 0) + 1); }
   return steps.map(s => {
     const chunkIds = s.sections.map(x => x.chunkId);
-    const best = newestSavedLesson(rows, { action, materialId: s.sections[0]?.materialId ?? null, chunkIds });
+    const best = newestSavedLesson(rows, { action, materialId: s.sections[0]?.materialId ?? null, chunkIds, lesson: sessionId ? { sessionId, step: s.step } : null });
     return { step: s.step, saved: best ? { at: best.createdAt, promptVersion: best.promptVersion, depth: best.depth } : null, attempts: chunkIds.reduce((n, c) => n + (perChunk.get(c) ?? 0), 0) };
   });
 }
