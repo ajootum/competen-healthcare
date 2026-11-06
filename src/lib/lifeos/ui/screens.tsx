@@ -19,6 +19,7 @@ export const SCREENS: Record<Screen, { label: string; icon: string; desc: string
   quadrants: { label: "Four Quadrants", icon: "▦", desc: "Importance before urgency" },
   review: { label: "Weekly Review", icon: "↻", desc: "Reflect and improve" },
   ai: { label: "Chief of Staff", icon: "✦", desc: "Recommendations requiring your approval" },
+  organisation: { label: "Organisation", icon: "▣", desc: "Who is invited, and how your organisation appears" },
 };
 
 export type Actions = {

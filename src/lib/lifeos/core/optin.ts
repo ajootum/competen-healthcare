@@ -14,6 +14,8 @@ export type SessionIdentity = {
   issuer: string;
   subject: string;
   displayName: string;
+  /** The verified sign-in address, or null. */
+  email: string | null;
   /** True only when the other product's live entitlement was read successfully and exists. */
   competenIndividualLive: boolean;
 };
