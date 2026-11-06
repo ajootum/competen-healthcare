@@ -7,6 +7,7 @@ import type { IndividualContext } from "../guard";
 import type { ScholarResearchPolicy } from "../policy";
 import { LEARN_RESEARCH_OPERATION, type ResearchEvidence } from "./generation";
 import { audit } from "./http";
+import { TYPED_QUESTIONS_MAY_LEAVE } from "./ask-sources";
 import { DEFAULT_QUALITY, gateResearch, queryKeywords, type EvidenceQuality, type NotUsedByIndex, type NotUsedReason } from "./source-quality";
 import { DEFAULT_RELEVANCE, buildResearchQuery, declaresIrrelevant, exclusionReason, lessonConcepts, lessonVocabulary, rankRelevant, scoreRelevance, type ExcludedSource, type LessonContext, type RelevanceLevel } from "./research-relevance";
 import { LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, aiSpendToday, learnResearchToday, readResearchCache, writeResearchCache } from "./store";
@@ -130,13 +131,23 @@ export function lessonQuery(input: ResearchInput): ReturnType<typeof researchQue
 }
 
 /**
+ * Pure. ASK-RESEARCH-GUARD-01: the one point every Scholar search passes (Ask across, Ask in a lesson, evidence recovery). What was typed is taken out of
+ * the request, so neither the outgoing query nor the relevance context can carry it. The lesson's own title, objective and topics stay.
+ */
+export const withoutTypedQuestion = (input: ResearchInput, allowed: boolean = TYPED_QUESTIONS_MAY_LEAVE): ResearchInput =>
+  allowed ? input : { ...input, question: null };
+/** Pure. Nothing left to search once the typed question is gone: no search at all, and no attempt to build a query. */
+export const nothingButTypedQuestion = (input: ResearchInput): boolean => !input.title?.trim() && !input.objective?.trim() && !input.concepts?.length && !input.topics.length;
+
+/**
  * The research for one Learn request, within the learner's limits and the engine's configuration.
  * `actionId`: the Scholar AI action this research serves, so its usage and cost are attributed to that action's outcome.
  * `quality`: SCHOLAR-SOURCE-QUALITY-01 -- every result (fresh or cached) leaves here GATED: only items passing the
  * source-quality rules remain evidence; the rest are reading. Every Scholar caller (Learn, evidence recovery) gets this.
  */
 export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPolicy, input: ResearchInput, actionId: string | null = null, narrow: ResearchNarrowing | null = null, quality: EvidenceQuality = DEFAULT_QUALITY, scope: LessonScope | null = null): Promise<LearnResearch> {
-  input = withLessonScope(input, scope);
+  input = withoutTypedQuestion(withLessonScope(input, scope));
+  if (nothingButTypedQuestion(input)) return none("off", "Scholar does not search outside sources from a typed question.", ["typed_question_stays_inside"]);
   const lesson = { ctx: contextOf(input), level: (p.relevance ?? DEFAULT_RELEVANCE) as RelevanceLevel };
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
