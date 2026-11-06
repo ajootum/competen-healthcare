@@ -550,6 +550,34 @@ const star = extractReads(`export const f = (a: any) => a.from("asmt_instance").
 ok("AS6", !!star && judge(star).code === "STAR_NOT_ALLOWED", "select(\"*\") on a capture table is refused even from the assessor library");
 // <<< ASSESSOR-WORKSPACE
 
+// >>> HQ-RECORD-SEARCH-01 -- /api/hq/search/** is outside ENTRY_DIRS, so its reads are pinned here, with prefix "" (EVERY table).
+console.log("\n── §HS HQ record search controls ────────────────────────────────────────────");
+const HS_EXPECT: Record<string, { table: string; cols: string[]; filter: RegExp }> = {
+  policies: { table: "hq_policy", cols: ["id", "code", "title"], filter: /\.order\(/ },
+  instruments: { table: "asmt_instrument", cols: ["id", "code", "name"], filter: /\.eq\("owner_scope", "holdings"\)/ },
+  frameworks: { table: "frameworks", cols: ["id", "code", "name"], filter: /\.is\("hospital_id", null\)/ },
+  positions: { table: "hq_position", cols: ["code", "name", "space"], filter: /\.limit\(/ },
+};
+const hsFiles = [...walk(join(ROOT, "src/lib/hq/record-search")), ...walk(join(ROOT, "src/app/api/hq/search"))].filter(f => !/\.test\.tsx?$/.test(f));
+const hsSites = hsFiles.flatMap(f => extractReads(readFileSync(f, "utf8"), rel(f), ""));
+const hsFound = hsSites.map(x => `${x.table}:${x.select === "columns" ? [...x.columns].sort().join(",") : x.select}`).sort();
+const hsWant = [
+  ...Object.values(HS_EXPECT).map(e => `${e.table}:${[...e.cols].sort().join(",")}`),
+  "practice_platform_flags:enabled",
+].sort();
+ok("HS1", JSON.stringify(hsFound) === JSON.stringify(hsWant),
+  `the record-search library and routes read EXACTLY these tables and columns, no more: ${hsWant.join(" | ")}${JSON.stringify(hsFound) === JSON.stringify(hsWant) ? "" : ` -- found: ${hsFound.join(" | ")}`}`);
+ok("HS1b", hsSites.every(x => x.table !== null && x.select !== "unresolved"), "no read in the record-search code has a computed table name or select list");
+const hsRegistry = readFileSync(join(ROOT, "src/lib/hq/record-search/registry.ts"), "utf8");
+for (const [key, e] of Object.entries(HS_EXPECT)) {
+  const at = hsRegistry.indexOf(`from("${e.table}")`);
+  ok(`HS2.${key}`, at >= 0 && e.filter.test(hsRegistry.slice(at, at + 260)), `${e.table} is read with its ownership filter / shape in the query itself (${e.filter.source})`);
+}
+const hsPlanted = extractReads(`export const f = (a: any) => a.from("profiles").select("id, full_name"); export const g = (a: any) => a.from("asmt_response").select("item_id");`, "src/lib/hq/record-search/probe.ts", "");
+ok("HS3", hsPlanted.length === 2 && !hsFound.some(f => /^(profiles|asmt_response):/.test(f)),
+  "control: the same scan SEES a planted profiles / asmt_response read, so HS1's exact comparison would go red on one");
+// <<< HQ-RECORD-SEARCH-01
+
 // ── The allowlist, printed, because a policy nobody reads is a policy nobody keeps. ──────────────────
 console.log("\n── The allowlist ────────────────────────────────────────────────────────────");
 for (const d of describeAllowlist()) console.log(`  ${d.table.padEnd(34)} ${d.columns}`);
