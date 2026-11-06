@@ -1,3 +1,5 @@
+import { picturesCanBeRead, slideExtracts, slideRows } from "@/lib/individual/scholar/slide-classify";
+import { ReadingDetails } from "../_components/reading-details";
 import Link from "next/link";
 import { headers } from "next/headers";
 import type { Metadata } from "next";
@@ -86,11 +88,18 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
   const recoveryOn = policy.scholarMaterialImageSlides === "ai_transcription";
   const plans = new Map(await Promise.all(materials.map(async m => {
     const qm = extras.qualityOn ? extras.byId.get(m.id)?.quality ?? null : null;
-    const fits = recoveryOn && qm && qm.emptyUnits.length > 0 && ((m.mimeType === PDF_MIME && qm.unit === "page") || (m.mimeType === PPTX_MIME && qm.unit === "slide"));
+    const fits = recoveryOn && qm && picturesCanBeRead(qm) && ((m.mimeType === PDF_MIME && qm.unit === "page") || (m.mimeType === PPTX_MIME && qm.unit === "slide"));
     if (!fits) return [m.id, null] as const;
     // The page list names each page from its own text, or (no text layer) from its neighbours: the stored sections, no AI.
     const [plan, chunks] = await Promise.all([pictureSlidePlan(ctx.admin, ctx.userId, m.id), listChunks(ctx.admin, ctx.userId, m.id)]);
     return [m.id, plan ? { ...plan, pages: pageInfoOf(chunks.ok ? chunks.data : [], qm.emptyUnits, qm.aiReadUnits ?? []) } : null] as const;
+  })));
+  // SCHOLAR-PPTX-READING-01: Reading details for a presentation, from the sections already stored. No AI.
+  const rowsOf = new Map(await Promise.all(materials.map(async m => {
+    const rows = extras.qualityOn ? slideRows(extras.byId.get(m.id)?.quality ?? null) : null;
+    if (!rows) return [m.id, null] as const;
+    const chunks = await listChunks(ctx.admin, ctx.userId, m.id);
+    return [m.id, { rows, extracts: slideExtracts(rows, chunks.ok ? chunks.data : []) }] as const;
   })));
   // P6: with no programme offered at all (production today) the student is not told to choose one.
   const offered = !learner.programme ? await listProgrammes(ctx.admin) : null;
@@ -130,7 +139,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
         {cards.map(({ m, analysis, mapped, competencies, labels, topics, related, proposal }) => {
           const unit = UNIT_OF(m.mimeType);
           const plan = plans.get(m.id) ?? null;
-          const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null, { recoverable: !!plan?.slides.length }) : null;
+          const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null, { recoverable: !!plan?.slides.length, picturesShown: policy.scholarLessonVisuals === "on" }) : null;
           const analysed = analysis.ok && analysis.data.analysed >= analysis.data.sections;
           // SCHOLAR-UPLOAD-FIX: "none" only once every section was looked at; while finding, how far it has got.
           const topicsLine = topicsState({ consent: consentOn, analysed: analysis.ok ? analysis.data.analysed : null, sections: analysis.ok ? analysis.data.sections : null, topics: topics.length });
@@ -149,13 +158,14 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
                 {FORMAT_LABEL[FORMAT_OF[m.mimeType]]}{m.pageCount !== null ? ` · ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}` : ""} · {m.chunkCount} section{m.chunkCount === 1 ? "" : "s"} · {m.fileName}
               </p>
               <p className={`mt-2 rounded-lg px-3 py-2 text-[13.5px] ${q?.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "bg-gray-50 text-gray-800"}`}>
-                <span className="font-semibold">{q === null ? "Reading: " : q.partial ? "Partly read. " : "Read. "}</span>
+                <span className="font-semibold">{q === null ? "Reading: " : q.heading ? `${q.heading}. ` : q.partial ? "Partly read. " : "Read. "}</span>
                 {q === null ? "How completely this file was read is not recorded here." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
               </p>
+              {rowsOf.get(m.id) && <div className="mt-3"><ReadingDetails picturesShown={policy.scholarLessonVisuals === "on"} materialId={m.id} rows={rowsOf.get(m.id)!.rows} extracts={rowsOf.get(m.id)!.extracts} /></div>}
               {plan && plan.slides.length > 0 && (
                 <div className="mt-3">
-                  <PictureSlides materialId={m.id} unit={extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide"} slides={plan.slides.length}
-                    unreadable={extras.byId.get(m.id)?.quality?.emptyUnits.length ?? plan.slides.length} beyondCap={plan.beyondCap} consent={consentOn} policyOn
+                  <PictureSlides mixed={plan.slides.filter(n => extras.byId.get(m.id)?.quality?.slideFacts?.mixed.includes(n)).length} materialId={m.id} unit={extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide"} slides={plan.slides.length}
+                    unreadable={plan.slides.length + plan.beyondCap} beyondCap={plan.beyondCap} consent={consentOn} policyOn
                     requests={Math.ceil(plan.slides.length / TRANSCRIBE_BATCH)} batch={TRANSCRIBE_BATCH}
                     planned={plannedPages(plan.slides, plan.pages, extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide")} />
                 </div>

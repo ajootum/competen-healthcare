@@ -13,6 +13,8 @@ export default function SearchConsole({ sources }: { sources: { type: string; ic
   const [q, setQ] = useState("");
   const [groups, setGroups] = useState<Group[]>([]);
   const [total, setTotal] = useState<number | null>(null);
+  const [searched, setSearched] = useState<string[] | null>(null);
+  const [failed, setFailed] = useState(false);
   const [busy, setBusy] = useState(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -22,8 +24,9 @@ export default function SearchConsole({ sources }: { sources: { type: string; ic
     try {
       const res = await fetch(`/api/platform/search?q=${encodeURIComponent(term)}`, { cache: "no-store" });
       const j = await res.json();
-      setGroups(j.groups ?? []); setTotal(j.total ?? 0);
-    } catch { setGroups([]); setTotal(0); }
+      if (!res.ok) { setGroups([]); setTotal(0); setSearched(null); setFailed(true); }
+      else { setFailed(false); setGroups(j.groups ?? []); setTotal(j.total ?? 0); setSearched(Array.isArray(j.searched) ? j.searched : null); }
+    } catch { setGroups([]); setTotal(0); setSearched(null); setFailed(true); }
     setBusy(false);
   }, []);
 
@@ -45,6 +48,13 @@ export default function SearchConsole({ sources }: { sources: { type: string; ic
         {busy && <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[11px] text-gray-500">searching…</span>}
       </div>
 
+      {searched && !busy && (
+        <p className="text-xs text-gray-500">
+          {searched.length === 0 ? "Your account is not set up to search any source." : `Searched: ${searched.join(", ")}.`}
+          {searched.length < sources.length && " Other sources are not searched for your account."}
+        </p>
+      )}
+
       {total !== null && !busy && <p className="text-xs text-gray-500">{total} result{total === 1 ? "" : "s"} for “{q}”.</p>}
 
       {total === null ? (
@@ -53,7 +63,7 @@ export default function SearchConsole({ sources }: { sources: { type: string; ic
           <div className="flex flex-wrap gap-2">{sources.map(s => <span key={s.type} className="text-xs text-gray-600 border border-gray-100 rounded-full px-2.5 py-1">{s.icon} {s.type}</span>)}</div>
         </div>
       ) : groups.length === 0 && !busy ? (
-        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center"><p className="text-3xl mb-2">🔎</p><p className="text-sm text-gray-500">No matches. Try a different term (min 2 characters).</p></div>
+        <div className="bg-white rounded-xl border border-gray-200 p-8 text-center"><p className="text-3xl mb-2">🔎</p><p className="text-sm text-gray-500">{failed ? "The search could not be completed." : "No matches in the sources searched for your account. Try a different term (min 2 characters)."}</p></div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {groups.map(g => (
