@@ -128,7 +128,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_progress_default_period" | "professional_documents_ai" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
-  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
+  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_go_deeper_structured" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_global_search" | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_search_history"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
@@ -1109,6 +1109,16 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Prepare one lesson ahead" }, { value: "off", label: "Off: each lesson is written when the student opens it" }],
     fallback: "off",
     limitReason: "One lesson ahead at most. Default: off, because a prepared lesson the student never opens still costs allowance.",
+  },
+  // SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): Learn's Go deeper as a structured round with three levels. Off: Go deeper is exactly as it was
+  // (scholar-learn-deeper-v2). Saved rounds of either form are shown as they are whatever this says.
+  {
+    key: "scholar_go_deeper_structured", kind: "choice", product: "Scholar",
+    label: "Learn: structured Go deeper",
+    help: "Whether Go deeper teaches one major concept as a structured round: a focus question, sections that say whether they come from the student's notes or are Scholar's own explanation, misconceptions and limits, a reasoning check and takeaways, at three levels (Understand, Explore, Advanced). One AI call a round, as before. Published research is used only through the existing research controls. Off: Go deeper is as it was. Saved rounds are never changed.",
+    options: [{ value: "on", label: "Structured rounds" }, { value: "off", label: "Off: Go deeper as it was" }],
+    fallback: "off",
+    limitReason: "Default: off until the owner activates it.",
   },
   // ── COMPETEN-SCHOLAR-REVISION-01 (Stage 4): REVISION, in the existing engine (owner GO s9) ──
   // What is offered and its defaults. The rules beneath are not settings: grounding and the identifier screen on
@@ -2586,6 +2596,8 @@ export type IndividualPolicy = {
   scholarStudyPlan: boolean;
   /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
   scholarLearnPrepareNext: boolean;
+  /** SCHOLAR-GO-DEEPER-001: Go deeper as a structured round. Default off. */
+  scholarGoDeeperStructured: boolean;
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -2833,6 +2845,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarQuestionOfferDays: Number(clampChoice(policyDef("scholar_question_offer_days") as ChoicePolicy, published.get(policyPath("scholar_question_offer_days")))) as 30 | 60 | 90,
     scholarStudyPlan: clampChoice(policyDef("scholar_study_plan") as ChoicePolicy, published.get(policyPath("scholar_study_plan"))) === "on",
     scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
+    scholarGoDeeperStructured: clampChoice(policyDef("scholar_go_deeper_structured") as ChoicePolicy, published.get(policyPath("scholar_go_deeper_structured"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),
