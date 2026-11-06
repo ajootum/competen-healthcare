@@ -38,12 +38,13 @@ Reopening a saved step, hint, example or explanation made **no model call** in t
 | Duplicates removed | The question appears once on the page. The panel adds nothing to the thread. |
 | Just explain it is substantial | About 300 words in sections, with mechanisms and a common mistake. The learner can go back. |
 | Research-grounded expansion | **Not exercised.** It uses the same seam as Go Deeper, which was tested with a labelled stand-in; staging has no active research. Production research stays off. |
-| Mobile and tablet | No sideways scroll at 390, 820 or 1440 wide. The answer box sits directly under the question. |
+| Mobile and tablet | No sideways scroll at 390, 820 or 1440 wide. The answer box sits directly under the question. After a new step, focus moves to its heading, so a phone's keyboard does not open over the teaching. |
 | Notes | **Not yet wired.** `MyIdeasBox` is not on main. `SectionNote` is in place for it. |
 
 ## Walk notes
 
-- The final walk ran on a lesson already used by earlier runs, so its teaching, hint, example and explanation were served from saved (0 calls), and it reads progress before and after instead of from zero. Earlier runs on this same flow made each of those as one call: see the ledger and the cost table. The first run read "Nothing answered yet" on opening.
-- The clinical-risk gate did not ask on these answers, so its question in the panel was **not exercised in the browser**; it is covered by code path only.
-- "After reopening" in the walk result shows the state before the follow-up fix: reopening now follows new questions the feedback offered. That is unit tested, not walked.
-- Dev-server recompiles caused some 500s during earlier runs of the walk. The final run had none.
+- The final walk ran after the independent review's fixes, from a clean start on this lesson: 6 model calls, USD 0.13, each teach, hint, example and judged answer one call. On reopening it made no call and came back at "Step 2 of 3", "1 understood".
+- It answered "not yet" to a wrong answer and "understood" to a sound one. The sound answer was the judge's own key points, which is a test of the path, not of how hard the judge is.
+- The clinical-risk gate did not ask on these answers, so its question in the panel was **not exercised in the browser**. It is covered by reading the code path and by the review.
+- The transcript and the cost table are from the counted test, before the review's fixes to the checks. The prompts for teaching did not change after it, except that a step or explanation now also asks for flags.
+- Dev-server recompiles caused some 500s in earlier runs of the walk. The final run had none.
