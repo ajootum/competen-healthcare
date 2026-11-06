@@ -39,7 +39,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const v = validatePatch(raw);
   if (!v.ok) return json({ error: v.message }, 400);
   const p = v.patch;
-  if ([p.body ?? "", p.title ?? "", (p.tags ?? []).join(" "), p.sectionLabel ?? ""].some(t => findPatientIdentifiers(t).length > 0)) return json({ error: NOTE_IDENTIFIER_REFUSAL, reason: "identifier" }, 422);
+  if ([p.body ?? "", p.title ?? "", (p.tags ?? []).join(" "), p.sectionLabel ?? "", p.link?.targetKind === "topic" ? p.link.topic : ""].some(t => findPatientIdentifiers(t).length > 0)) return json({ error: NOTE_IDENTIFIER_REFUSAL, reason: "identifier" }, 422);
   // A framework competency is not a learner row, so 1000 keeps it as a hint: only one the learner can see may be linked.
   if (p.competencyId) {
     const list = (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies;

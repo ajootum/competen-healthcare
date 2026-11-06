@@ -54,7 +54,9 @@ export function NoteCard({ card, pinnable = true }: { card: NotebookCard; pinnab
           {n.quote && !card.headline && <p className="mt-1 line-clamp-2 break-words border-l-4 border-[var(--learn-border)] pl-2 text-[13px] italic text-gray-800"><span className="sr-only">You highlighted: </span>{n.quote}</p>}
           <p className="mt-1.5 flex flex-wrap gap-x-2 text-[12px] text-gray-700">
             {n.kind !== "note" && <span className="font-semibold">{n.kind === "highlight" ? "Highlight" : "Summary"}</span>}
-            <span>{card.where ?? (n.wasOn ? `Free-standing. Was linked to ${n.wasOn}, since removed` : "Free-standing")}</span>
+            {n.topic
+              ? <Link href={`${notebookHref()}?topic=${encodeURIComponent(n.topic)}`} className={`font-semibold text-[var(--learn-ink)] underline underline-offset-2 ${focusRing}`}>Topic: {n.topic}</Link>
+              : <span>{card.where ?? (n.wasOn ? `Free-standing. Was linked to ${n.wasOn}, since removed` : "Free-standing")}</span>}
             <span>· Written {day(n.createdAt)}{edited ? `, edited ${day(n.updatedAt)}` : ""}</span>
           </p>
           {n.tags.length > 0 && (
@@ -102,7 +104,7 @@ export function StartWriting({ userId }: { userId: string }) {
   );
 }
 
-export function NotebookSearch({ q, tags, tag, material, materials }: { q: string; tags: string[]; tag: string | null; material: string | null; materials: { id: string; title: string }[] }) {
+export function NotebookSearch({ q, tags, tag, material, materials, topics = [], topic = null }: { q: string; tags: string[]; tag: string | null; material: string | null; materials: { id: string; title: string }[]; topics?: string[]; topic?: string | null }) {
   const field = `min-h-[44px] rounded-xl border border-gray-300 bg-white px-3 text-[15px] text-gray-900 ${focusRing}`;
   return (
     <form role="search" action={notebookHref()} className="mt-4" aria-label="Search my notes">
@@ -119,8 +121,17 @@ export function NotebookSearch({ q, tags, tag, material, materials }: { q: strin
           </>
         )}
         {tag && <input type="hidden" name="tag" value={tag} />}
+        {topic && <input type="hidden" name="topic" value={topic} />}
         <button type="submit" className={`inline-flex min-h-[44px] items-center rounded-xl border border-gray-900 bg-gray-900 px-4 text-[14px] font-semibold text-white pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Search</button>
       </div>
+      {topics.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Show one topic" data-testid="notebook-topics">
+          {topics.map(t => (
+            <Link key={t} href={topic === t ? notebookHref() : `${notebookHref()}?topic=${encodeURIComponent(t)}`} aria-current={topic === t ? "true" : undefined}
+              className={`inline-flex min-h-[32px] items-center rounded-full border px-2.5 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing} ${topic === t ? "border-gray-900 bg-gray-900 text-white" : "border-gray-300 bg-white text-gray-800"}`}>Topic: {t}</Link>
+          ))}
+        </div>
+      )}
       {tags.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5" role="group" aria-label="Show one tag">
           {tags.map(t => (

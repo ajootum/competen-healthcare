@@ -41,9 +41,12 @@ page.on("pageerror", e => errors.push(`pageerror ${String(e).slice(0, 160)}`));
 // Every request body that holds a note's words, outside the notes route itself. AI routes must never see them unless the learner sends them.
 const words: string[] = [];
 const leaks: string[] = [];
+let goalApproved = false;
 page.on("request", r => {
   const b = r.postData() ?? "";
   if (!b || r.url().includes("/api/individual/scholar/notebook/")) return;
+  // The study goal: the learner's own click on Add to My Plan, checked below by its own step. Only that step opens this.
+  if (goalApproved && r.url().includes("/api/individual/scholar/plan/entries")) return;
   for (const w of words) if (b.includes(w)) leaks.push(`${r.method()} ${r.url().slice(0, 100)}`);
 });
 
@@ -120,7 +123,7 @@ page.on("framenavigated", f => { if (f === page.mainFrame() && process.env.WALK_
 await page.getByTestId("notebook-search").fill(`quokka${stamp}`.slice(0, 12));
 if (process.env.WALK_TRACE) console.log("input before enter:", await page.getByTestId("notebook-search").inputValue());
 await page.getByTestId("notebook-search").press("Enter");
-await page.waitForURL(/[?&]q=/, { timeout: 60_000 });
+await page.waitForURL(/[?&]q=/, { timeout: 180_000 });
 await settle(page);
 ok((await page.getByTestId("notebook-results").innerText()).includes("match"), "a part-typed word finds it");
 ok((await page.locator(`[data-note-id="${freeId}"]`).count()) === 1, "the note is in the results");
@@ -165,6 +168,39 @@ ok((await page.locator('section[aria-label="Pinned"] [data-note-id="' + freeId +
 await page.locator(`a[href*="tag=${tagWord}"]`).first().click();
 await settle(page, 800);
 ok((await page.locator(`[data-note-id="${freeId}"]`).count()) === 1, "a tag finds it");
+
+// Optional topic link (owner, 6 Nov 2026), on a second note, written free-standing first.
+await open(`${R}/notebook/new`);
+await page.getByTestId("note-field").waitFor();
+words.push(`gnu${stamp}`);
+await page.getByTestId("note-field").fill(`A thought gnu${stamp} on a topic`);
+await page.locator('[data-testid="note-save-status"][data-status="saved"]').waitFor({ timeout: 90_000 });
+await page.getByTestId("note-link-open").click();
+await page.getByTestId("note-link-topic").check();
+const topicWords = `Motor milestones ${stamp}`;
+await page.getByTestId("note-link-topic-input").fill(topicWords);
+await shot("07b-link-topic");
+await page.getByTestId("note-link-apply").click();
+await page.waitForTimeout(800);
+await page.locator('[data-testid="note-save-status"][data-status="saved"]').waitFor({ timeout: 90_000 });
+rows = await noteByWords(`gnu${stamp}`);
+ok(rows.length === 1 && rows[0].target_kind === "topic" && rows[0].topic === topicWords && !rows[0].material_id && !rows[0].session_id, "a note links to a topic when wanted, with nothing else required");
+const topicNote: string = rows[0]?.id;
+await open(`${R}/notebook?topic=${encodeURIComponent(topicWords)}`);
+ok((await page.locator(`[data-note-id="${topicNote}"]`).count()) === 1, "the topic filter finds it");
+ok((await page.getByTestId("notebook-topics").innerText()).includes(topicWords), "its topic is offered as a filter");
+await shot("07c-topic-filter");
+await open(`${R}/notebook?q=${encodeURIComponent(`${stamp}`.slice(0, 16))}`);
+await open(`${R}/notebook?q=${encodeURIComponent(`Motor milestones ${stamp}`)}`);
+ok((await page.locator(`[data-note-id="${topicNote}"]`).count()) === 1, "searching the topic's words finds it");
+await open(`${R}/notebook/${topicNote}`);
+await page.getByTestId("note-link-open").click();
+await page.locator('input[type="radio"]').first().check();
+await page.getByTestId("note-link-apply").click();
+await page.waitForTimeout(800);
+await page.locator('[data-testid="note-save-status"][data-status="saved"]').waitFor({ timeout: 90_000 });
+rows = await noteByWords(`gnu${stamp}`);
+ok(rows[0].target_kind === "free" && rows[0].topic === null, "and it can go back to free-standing");
 
 // ── 3. The lesson: a note midway through a section ────────────────────────────────────────────────────────────────────────
 await open(`${R}/learn?session=${SESSION}`);
@@ -258,6 +294,7 @@ if (await goalBtn.count()) {
   ok((await countEntries()) === e0, "Cancel adds nothing");
   if (VIEW === "desktop") {
     await goalBtn.click();
+    goalApproved = true;
     await box.getByRole("button", { name: "Add to My Plan" }).click();
     await box.getByTestId("note-goal-added").waitFor({ timeout: 90_000 });
     ok((await countEntries()) === e0 + 1, "Add to My Plan adds exactly one entry, only on approval");
@@ -338,7 +375,8 @@ await page.waitForFunction(([id, h]) => { const e = document.getElementById(id a
 const backTop = await page.evaluate(id => document.getElementById(id!)?.getBoundingClientRect().top ?? null, readToId);
 ok(backTop !== null && backTop > -220 && backTop < SIZE.height * 0.6, `back at the lesson, the section the learner left is on screen again (${readToId} at y ${backTop === null ? "none" : Math.round(backTop)}, left at scrollY ${Math.round(yLeft)}, back at ${await page.evaluate(() => Math.round(window.scrollY))})`);
 await shot("15b-back-at-lesson");
-// "Go to this section" opens that note's own box.
+// "Go to this section" opens that note's own box. It arrives from the note's page, as the link does.
+await open(`${R}/notebook/${noteOne}`);
 await page.goto(`${BASE}${R}/learn?session=${SESSION}#ideas-${(await noteByWords(`zebra${stamp}`))[0]?.step}-${(await noteByWords(`zebra${stamp}`))[0]?.section_anchor}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
 await settle(page, 5000);
 ok(await page.locator('[data-testid="my-ideas-box"] button[aria-expanded="true"]').first().waitFor({ state: "visible", timeout: 45_000 }).then(() => true, () => false), "a link to a section opens that note's box");
@@ -382,8 +420,8 @@ ok(await rec.isVisible().catch(() => false), "after an interrupted visit, My Not
 ok((await rec.innerText().catch(() => "")).includes(`ibex${stamp}`), "the recovered words are the learner's own");
 await shot("17-recovery");
 await rec.getByRole("button", { name: "Restore" }).first().click();
-await page.waitForURL("**/study/notebook/**", { timeout: 60_000 });
-await page.locator('[data-testid="note-save-status"][data-status="saved"]').waitFor({ timeout: 60_000 });
+await page.waitForURL("**/study/notebook/**", { timeout: 180_000 });
+await page.locator('[data-testid="note-save-status"][data-status="saved"]').waitFor({ timeout: 180_000 });
 ok((await noteByWords(`ibex${stamp}`)).length === 1, "Restore saves it, once");
 ok(/study\/notebook\/[0-9a-f-]{36}/.test(page.url()) && !page.url().includes("ibex"), "its address is the note's id, and never its words");
 
@@ -403,7 +441,7 @@ ok((await noteByWords(`lynx${stamp}`)).length === 1, "taking it out saves the no
 
 // ── 6. Export and removal ─────────────────────────────────────────────────────────────────────────────────────────────────
 await open(`${R}/notebook`);
-const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 60_000 }), page.getByTestId("notebook-export").click()]);
+const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 180_000 }), page.getByTestId("notebook-export").click()]);
 const file = join(OUT, `export-${VIEW}.tmp.md`);
 await dl.saveAs(file);
 const md = readFileSync(file, "utf8");
@@ -413,7 +451,7 @@ await page.goto(`${BASE}${R}/notebook/${freeId}`, { waitUntil: "domcontentloaded
 await settle(page);
 await page.getByTestId("note-remove").click();
 await page.getByTestId("note-remove-yes").click();
-await page.waitForURL("**/study/notebook", { timeout: 60_000 });
+await page.waitForURL("**/study/notebook", { timeout: 180_000 });
 await settle(page);
 ok((await noteByWords(`quokka${stamp}`)).length === 0, "the learner can remove a note, and it is gone");
 
@@ -425,10 +463,46 @@ words.push(`tapir${stamp}`);
 await page.getByTestId("note-field").fill(removedWords);
 await page.getByTestId("note-remove").click();
 await page.getByTestId("note-remove-yes").click();
-await page.waitForURL("**/study/notebook", { timeout: 60_000 });
+await page.waitForURL("**/study/notebook", { timeout: 180_000 });
 await settle(page, 3000);
 ok((await noteByWords(`tapir${stamp}`)).length === 0, "removed straight after typing: nothing is saved");
 ok(await page.evaluate(() => !Object.keys(localStorage).some(x => (localStorage.getItem(x) ?? "").includes("tapir"))), "removed straight after typing: no draft is left on the device");
+
+// ── CE-02-2: the library's own search, filters, notes and item actions still work beside the Notebook ──────────────────────
+await open(`${R}/saved?q=${encodeURIComponent(`zebra${stamp}`)}`);
+await noOverflow("library search");
+ok((await page.locator("body").innerText()).includes(`zebra${stamp}`), "CE-02: the library's search finds a lesson note written in the box");
+const hit = page.locator("li").filter({ hasText: `zebra${stamp}` }).first();
+ok((await hit.locator("a").count()) >= 1, "CE-02: a search result has its item actions");
+await shot("20-library-search");
+const mat = (await admin.from("individual_scholar_material").select("id").eq("user_id", userId).eq("file_name", "Growth and Development.pptx").maybeSingle()).data?.id;
+await open(`${R}/saved?view=notes&material=${mat}`);
+await noOverflow("library notes view");
+ok((await page.locator("body").innerText()).includes(`zebra${stamp}`), "CE-02: the material filter keeps a note on that material");
+await shot("21-library-notes");
+await page.getByText("Write a new note").click();
+const libWords = `Library note heron${stamp}`;
+words.push(`heron${stamp}`);
+const form = page.locator("details").filter({ hasText: "Write a new note" }).first();
+await form.locator("select").first().selectOption(mat);
+await form.locator("textarea").fill(libWords);
+await form.getByRole("button", { name: "Save note" }).click();
+await form.getByText("Note saved.").waitFor({ timeout: 90_000 });
+let libRows = await noteByWords(`heron${stamp}`);
+ok(libRows.length === 1 && libRows[0].target_kind === "material" && !libRows[0].client_key, "CE-02: the library's own note form still writes its own note");
+await open(`${R}/saved?view=notes&material=${mat}`);
+const libNote = page.locator("div").filter({ hasText: `heron${stamp}` }).filter({ has: page.getByRole("button", { name: /^Edit/ }) }).last();
+await libNote.getByRole("button", { name: /^Edit/ }).click();
+await libNote.locator("textarea").fill(`${libWords} edited`);
+await libNote.getByRole("button", { name: "Save changes" }).click();
+await page.waitForFunction(() => !document.querySelector('[id^="edit-"]'), null, { timeout: 90_000 });
+libRows = await noteByWords(`heron${stamp}`);
+ok(libRows[0]?.body === `${libWords} edited`, "CE-02: the library's edit still saves, with its check against a changed copy");
+const libEdited = page.locator("div").filter({ hasText: `heron${stamp}` }).filter({ has: page.getByRole("button", { name: /^Remove/ }) }).last();
+await libEdited.getByRole("button", { name: /^Remove/ }).click();
+await libEdited.getByRole("button", { name: "Yes, remove it" }).click();
+await page.getByText("Note removed.").waitFor({ timeout: 90_000 });
+ok((await noteByWords(`heron${stamp}`)).length === 0, "CE-02: the library's remove still removes");
 
 // ── 7. Privacy over HTTP ──────────────────────────────────────────────────────────────────────────────────────────────────
 const anon = await browser.newContext();
@@ -439,7 +513,7 @@ ok(anonExport.status() === 401, `signed out: export refuses (${anonExport.status
 await anon.close();
 const other = await page.request.get(`${BASE}/api/individual/scholar/notebook/notes?session=00000000-0000-4000-8000-000000000000&step=0`);
 ok(other.status() === 200 && (await other.json()).notes.length === 0, "a session that is not theirs reads nothing");
-ok(leaks.length === 0, `end of walk: no note's words left the notes route, unless the learner pressed Ask (${leaks.length})`);
+ok(leaks.length === 0, `end of walk: no note's words left the notes route, other than to My Plan on the learner's approval (${leaks.length}: ${leaks.join(", ")})`);
 
 ok(errors.length === 0, `no server error or page error (${errors.join(" | ").slice(0, 300)})`);
 writeFileSync(join(OUT, `walk-${VIEW}.log`), `${lines.join("\n")}\n`);

@@ -29,8 +29,8 @@
 | CE-01-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-01-3 | CE | P2 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-02 | CE | P1 | Engineering (CE) | Live — verification pending | Open children CE-02-1..2 | — |
-| CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) | Not started | Needs a schema decision (820 has no topic target) | — |
-| CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
+| CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) | Built on branch, awaiting owner GO | Owner decided 6 Nov 2026: optional topic-linked notes. Migration 1001 on staging, not production | — |
+| CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) | Walked on staging, awaiting owner GO | Recorded in `docs/evidence/COMPETEN-NOTEBOOK-001/` | — |
 | CE-03 | CE | P1 *(proposed)* | Engineering (CE) | Live — verification pending | Production signed-in walk | — |
 | CE-04A | CE | P0 | CE-04/05 session (PR #275) | Blocked | Patient voice stays off (D-11): a case author supplies the patient script and an independent clinician approves the complete case and permitted responses | — |
 | CE-04B | CE | P1 | CE-04/05 session (PR #275) | Ready for review | — (verified on staging) | — |

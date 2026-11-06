@@ -35,6 +35,7 @@ Source: `learningTone` in `src/lib/design/tokens.ts`. Tones are named by what th
 | `practice` | teal | Practise this lesson |
 | `quickCheck` | lilac | Quick check |
 | `notes` | cream | Your notes: the uploaded notes and the learner's own notes |
+| `ideas` | warm amber | My Ideas & Notes: what the learner writes in My Notebook, Quick Note and the lesson's capture box (COMPETEN-NOTEBOOK-001). Distinct from AI teaching and research, and from `caution`, whose amber is a clinical warning with a heading that says so |
 | `sources` | lavender-grey | Sources and citations |
 | `next` | cyan | What next?, the suggested next step, Continue where you stopped, the lesson navigator |
 | `memory` | rose | Memory aid callout. It has its own identity, distinct from `aiBeyond` sky and `quickCheck` lilac |

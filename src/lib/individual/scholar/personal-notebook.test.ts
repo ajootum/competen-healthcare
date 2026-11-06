@@ -41,9 +41,25 @@ describe("capture needs only words", () => {
   });
 });
 
+describe("a topic link", () => {
+  it("is optional, and needs real words within the bounds the database keeps", () => {
+    expect(parseNoteLink({ targetKind: "topic", topic: "  Motor   development " })).toEqual({ targetKind: "topic", topic: "Motor development" });
+    expect(parseNoteLink({ targetKind: "topic", topic: "x" })).toBeNull();
+    expect(parseNoteLink({ targetKind: "topic", topic: "a".repeat(121) })).toBeNull();
+    expect(parseNoteLink({ targetKind: "topic" })).toBeNull();
+    expect(validateCreate({ clientKey: K, body: "x", context: { link: { targetKind: "topic", topic: "Motor development" } } })).toMatchObject({ ok: true, note: { context: { link: { targetKind: "topic", topic: "Motor development" } } } });
+  });
+  it("writes the topic and clears every other target. Any other link clears the topic", () => {
+    expect(linkColumns({ targetKind: "topic", topic: "Motor development" })).toEqual({ target_kind: "topic", artefact_id: null, material_id: null, chunk_id: null, session_id: null, step: null, topic: "Motor development" });
+    expect(linkColumns({ targetKind: "free" }).topic).toBeNull();
+    expect(linkColumns({ targetKind: "material", materialId: M }).topic).toBeNull();
+    expect(linkColumns({ targetKind: "lesson", sessionId: S, step: 1, materialId: null, chunkId: null }).topic).toBeNull();
+  });
+});
+
 describe("linkColumns", () => {
   it("names every column, so moving a note leaves nothing behind", () => {
-    expect(linkColumns({ targetKind: "free" })).toEqual({ target_kind: "free", artefact_id: null, material_id: null, chunk_id: null, session_id: null, step: null });
+    expect(linkColumns({ targetKind: "free" })).toEqual({ target_kind: "free", artefact_id: null, material_id: null, chunk_id: null, session_id: null, step: null, topic: null });
     expect(linkColumns({ targetKind: "material", materialId: M })).toMatchObject({ material_id: M, chunk_id: null, session_id: null, step: null });
     expect(linkColumns({ targetKind: "lesson", sessionId: S, step: 3, materialId: M, chunkId: C })).toMatchObject({ session_id: S, step: 3, material_id: M, chunk_id: C });
   });

@@ -4,7 +4,7 @@ import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { describeNotes } from "@/lib/individual/scholar/personal-notebook-data";
 import { NOTEBOOK_PAGE } from "@/lib/individual/scholar/personal-notebook";
-import { countDue, isUuid, listLearningSessions, listMaterials, listNotebookNotes, notebookOffered, notebookSchema, notebookTags, searchNotebook, type NotebookNote } from "@/lib/individual/scholar/store";
+import { countDue, isUuid, listLearningSessions, listMaterials, listNotebookNotes, notebookOffered, notebookSchema, notebookTags, notebookTopics, searchNotebook, type NotebookNote } from "@/lib/individual/scholar/store";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
@@ -44,30 +44,31 @@ export default async function NotebookPage({ params, searchParams }: { params: P
   const q = one(search.q).replace(/\s+/g, " ").trim().slice(0, 200);
   const tag = one(search.tag).trim().slice(0, 40) || null;
   const material = isUuid(one(search.material)) ? one(search.material) : null;
+  const topic = one(search.topic).replace(/\s+/g, " ").trim().slice(0, 120) || null;
   const rawPage = Number(one(search.page));
   const pageNo = Number.isInteger(rawPage) && rawPage >= 1 && rawPage <= 200 ? rawPage : 1;
   const offset = (pageNo - 1) * NOTEBOOK_PAGE;
-  const filtered = !!(q || tag || material);
+  const filtered = !!(q || tag || material || topic);
 
-  const [materialsR, tags] = await Promise.all([listMaterials(ctx.admin, ctx.userId), notebookTags(ctx.admin, ctx.userId)]);
+  const [materialsR, tags, topics] = await Promise.all([listMaterials(ctx.admin, ctx.userId), notebookTags(ctx.admin, ctx.userId), notebookTopics(ctx.admin, ctx.userId)]);
   const materials = (materialsR.ok ? materialsR.data : []).map(m => ({ id: m.id, title: m.title, mime: m.mimeType }));
 
   let pinned: NotebookNote[] = [], recent: NotebookNote[] = [], relatedNow: NotebookNote[] = [], more = false, unreadable = false, relatedTitle = "";
   let hits: { note: NotebookNote; headline: string }[] = [], total = 0, cutOff = false;
   if (q) {
     // With a tag or material as well, the best fifty matches are read and filtered here, on one page, and the page says so if there were more.
-    const narrowed = !!(tag || material);
+    const narrowed = !!(tag || material || topic);
     const r = await searchNotebook(ctx.admin, ctx.userId, q, narrowed ? 50 : NOTEBOOK_PAGE, narrowed ? 0 : offset);
     if (!r.ok) unreadable = true;
     else {
-      hits = r.data.hits.filter(h => (!tag || h.note.tags.includes(tag)) && (!material || h.note.materialId === material));
+      hits = r.data.hits.filter(h => (!tag || h.note.tags.includes(tag)) && (!material || h.note.materialId === material) && (!topic || h.note.topic === topic));
       total = narrowed ? hits.length : r.data.total;
       more = !narrowed && offset + r.data.hits.length < r.data.total;
       cutOff = narrowed && r.data.total > 50;
     }
   } else {
     const [recentR, pinnedR, sessions] = await Promise.all([
-      listNotebookNotes(ctx.admin, ctx.userId, { tag, materialId: material, limit: NOTEBOOK_PAGE, offset }),
+      listNotebookNotes(ctx.admin, ctx.userId, { tag, materialId: material, topic, limit: NOTEBOOK_PAGE, offset }),
       filtered || pageNo > 1 ? Promise.resolve(null) : listNotebookNotes(ctx.admin, ctx.userId, { pinned: true, limit: 12 }),
       filtered || pageNo > 1 ? Promise.resolve(null) : listLearningSessions(ctx.admin, ctx.userId, 1),
     ]);
@@ -89,7 +90,7 @@ export default async function NotebookPage({ params, searchParams }: { params: P
   const rest = recent.filter(n => !shownPinned.has(n.id) && !shownRelated.has(n.id));
   const where = await describeNotes(ctx.admin, ctx.userId, [...pinned, ...recent, ...relatedNow, ...hits.map(h => h.note)], materials);
   const card = (note: NotebookNote, headline?: string): NotebookCard => ({ note, where: where.get(note.id)?.where ?? null, headline: headline ?? null });
-  const pageHref = (n: number) => { const u = new URLSearchParams(); if (q) u.set("q", q); if (tag) u.set("tag", tag); if (material) u.set("material", material); u.set("page", String(n)); return `?${u}`; };
+  const pageHref = (n: number) => { const u = new URLSearchParams(); if (q) u.set("q", q); if (tag) u.set("tag", tag); if (material) u.set("material", material); if (topic) u.set("topic", topic); u.set("page", String(n)); return `?${u}`; };
   const nothing = !pinned.length && !recent.length && !hits.length;
 
   return (
@@ -97,7 +98,7 @@ export default async function NotebookPage({ params, searchParams }: { params: P
       {header}
       <div data-testid="my-notebook">
         <StartWriting userId={ctx.userId} />
-        <NotebookSearch q={q} tags={tags} tag={tag} material={material} materials={materials} />
+        <NotebookSearch q={q} tags={tags} tag={tag} material={material} materials={materials} topics={topics} topic={topic} />
         {unreadable && <div className="mt-4"><Unreadable what="your notes" /></div>}
         {q && !unreadable && <p role="status" className="mt-3 text-[13.5px] text-gray-700" data-testid="notebook-results">{total === 0 ? <>Nothing in your notes matches &ldquo;{q}&rdquo;.</> : <>{total} note{total === 1 ? "" : "s"} match &ldquo;{q}&rdquo;.</>}{cutOff ? " Only the 50 best matches were checked against your filter. Try more words to narrow it." : ""}</p>}
         {hits.length > 0 && <NotebookSection title="Search results">{hits.map(h => <NoteCard key={h.note.id} card={card(h.note, h.headline)} />)}</NotebookSection>}

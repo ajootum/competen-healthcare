@@ -1,0 +1,33 @@
+--- key state before
+   "value": "on"
+Committed 2026-11-06T17:14:16.110Z
+   "value": "on"
+--- verify before 1001 (red)
+FAILED, rolled back: topic column missing
+--- precheck
+  "notes": "122",
+  "note_text_md5": "dbab4adb1bac2da321ae240850fcf02a",
+--- apply twice
+sha256 73cfa2ba5d044e96bc4dbcddb0bb2dce9368ff13d5a661371be538473c7733ca
+Committed 2026-11-06T17:15:15.586Z
+sha256 73cfa2ba5d044e96bc4dbcddb0bb2dce9368ff13d5a661371be538473c7733ca
+Committed 2026-11-06T17:15:45.542Z
+--- verify twice
+sha256 a19e90d9a3e4174e02545568a00481f9aeb3da10b2130cf9a758bb55f75edfeb
+notice: VERIFY-1001 PASS
+notice: VERIFY-1001 PASS
+--- 1000 verify still passes
+notice: VERIFY-1000 PASS
+--- prod verify on staging
+16
+8
+0
+0
+--- planted
+FAILED, rolled back: planted: marker expected false
+--- rollback rehearsal (undone)
+sha256 59bf6654f1549c24eeb96baba0317da8f24ebf8033d2dc07f1b7c5a726938399
+Rolled back 2026-11-06T17:18:50.042Z
+--- precheck after
+  "notes": "122",
+  "note_text_md5": "dbab4adb1bac2da321ae240850fcf02a",

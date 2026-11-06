@@ -76,6 +76,13 @@ describe("POST", () => {
     }
     expect(create).not.toHaveBeenCalled();
   });
+  it("screens a topic's words too", async () => {
+    const res = await POST(req({ clientKey: K, body: "x", context: { link: { targetKind: "topic", topic: "MRN: 12345678" } } }));
+    expect(res.status).toBe(422);
+    expect(create).not.toHaveBeenCalled();
+    expect((await item.PATCH(req({ expectedRevision: 1, link: { targetKind: "topic", topic: "MRN: 12345678" } }, "PATCH"), ctx)).status).toBe(422);
+    expect(update).not.toHaveBeenCalled();
+  });
   it("a retry reports the note it finds and what it holds, and is not audited twice", async () => {
     create.mockResolvedValue({ ok: true, id: N, revision: 3, existing: true, stored: { body: "older", title: null, tags: [] } });
     const res = await POST(req({ clientKey: K, body: "newer" }));

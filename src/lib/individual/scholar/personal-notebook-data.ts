@@ -39,6 +39,10 @@ export async function describeNotes(admin: Admin, userId: string, notes: readonl
   const out = new Map<string, NoteWhere>();
   for (const n of notes) {
     if (n.targetKind === "free") { out.set(n.id, FREE); continue; }
+    if (n.targetKind === "topic") {
+      out.set(n.id, { where: `Topic: ${n.topic}`, openHref: `study/saved?topic=${encodeURIComponent(n.topic ?? "")}`, openLabel: "This topic in My Library", sectionHref: null, picture: null });
+      continue;
+    }
     const ses = n.sessionId ? sesById.get(n.sessionId) : undefined, art = n.artefactId ? artById.get(n.artefactId) : undefined;
     const materialId = n.materialId ?? art?.materialId ?? null;
     const chunk = n.chunkId ? chunkById.get(n.chunkId) : undefined;
@@ -78,7 +82,8 @@ export function relatedByTags(note: Pick<NotebookNote, "id" | "tags">, others: r
 export async function relatedToNote(admin: Admin, userId: string, note: NotebookNote, materials: readonly MaterialName[]): Promise<RelatedLink[]> {
   const list = await listNotebookNotes(admin, userId, { limit: 300 });
   const others = list.ok ? list.data.rows : [];
-  const tagged = relatedByTags(note, others).map(r => ({ href: `study/notebook/${r.id}`, label: r.label, why: r.why }));
+  const onTopic = note.topic ? others.filter(o => o.id !== note.id && o.topic === note.topic).slice(0, 5).map(o => ({ href: `study/notebook/${o.id}`, label: noteHeading(o, 70), why: "On the same topic" })) : [];
+  const tagged = [...onTopic, ...relatedByTags(note, others).map(r => ({ href: `study/notebook/${r.id}`, label: r.label, why: r.why }))];
   const anchorOf = (n: NotebookNote): NoteAnchor => ({ id: n.id, materialId: n.materialId, chunkIds: n.chunkId ? [n.chunkId] : [] });
   const anchor = anchorOf(note);
   if (!anchor.materialId && !anchor.chunkIds.length) return tagged;

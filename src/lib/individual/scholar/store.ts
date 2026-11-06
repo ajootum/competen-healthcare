@@ -5763,29 +5763,31 @@ export async function clearSearchHistory(admin: Admin, userId: string): Promise<
 // The audit rows (in the route) hold codes only, never a note's words.
 
 export type NotebookNote = {
-  id: string; kind: "note" | "highlight" | "summary" | "bookmark"; targetKind: "free" | "material" | "section" | "lesson" | "artefact";
+  id: string; kind: "note" | "highlight" | "summary" | "bookmark"; targetKind: "free" | "topic" | "material" | "section" | "lesson" | "artefact";
   title: string | null; body: string | null; quote: string | null; tags: string[]; pinnedAt: string | null; revision: number;
   /** Written through the Notebook. An older note keeps its 820 rules: it can move between targets, but it cannot be free-standing. */
   viaNotebook: boolean;
   artefactId: string | null; materialId: string | null; chunkId: string | null; sessionId: string | null; step: number | null;
   sectionLabel: string | null; sectionAnchor: string | null; capturedIn: string | null; competencyId: string | null; studyId: string | null; wasOn: string | null;
+  /** The topic it is linked to (1001), in the words of the topic. */
+  topic: string | null;
   createdAt: string; updatedAt: string;
 };
 
-const NOTEBOOK_COLS = "id, kind, target_kind, title, body, quote, tags, pinned_at, revision, client_key, artefact_id, material_id, chunk_id, session_id, step, section_label, section_anchor, captured_in, competency_id, study_id, was_on, created_at, updated_at";
+const NOTEBOOK_COLS = "id, kind, target_kind, title, body, quote, tags, pinned_at, revision, client_key, artefact_id, material_id, chunk_id, session_id, step, section_label, section_anchor, captured_in, competency_id, study_id, was_on, topic, created_at, updated_at";
 const toNotebookNote = (r: any): NotebookNote => ({
   id: r.id, kind: r.kind, targetKind: r.target_kind, title: r.title ?? null, body: r.body ?? null, quote: r.quote ?? null, tags: Array.isArray(r.tags) ? r.tags : [],
   pinnedAt: r.pinned_at ?? null, revision: Number(r.revision), viaNotebook: !!r.client_key,
   artefactId: r.artefact_id ?? null, materialId: r.material_id ?? null, chunkId: r.chunk_id ?? null, sessionId: r.session_id ?? null, step: Number.isInteger(r.step) ? r.step : null,
-  sectionLabel: r.section_label ?? null, sectionAnchor: r.section_anchor ?? null, capturedIn: r.captured_in ?? null, competencyId: r.competency_id ?? null, studyId: r.study_id ?? null, wasOn: r.was_on ?? null,
+  sectionLabel: r.section_label ?? null, sectionAnchor: r.section_anchor ?? null, capturedIn: r.captured_in ?? null, competencyId: r.competency_id ?? null, studyId: r.study_id ?? null, wasOn: r.was_on ?? null, topic: r.topic ?? null,
   createdAt: r.created_at, updatedAt: r.updated_at,
 });
 
 let notebook1000: boolean | null = null;
-/** Whether migration 1000 is applied on this environment. A transient error is "no" for now, and asked again. */
+/** Whether migrations 1000 and 1001 are applied on this environment (1001 depends on 1000). A transient error is "no" for now, and asked again. */
 export async function notebookSchema(admin: Admin): Promise<boolean> {
   if (notebook1000 !== null) return notebook1000;
-  const { data, error } = await admin.rpc("individual_scholar_notebook_1000");
+  const { data, error } = await admin.rpc("individual_scholar_notebook_1001");
   if (!error) return (notebook1000 = data === true);
   if (isMissingRpc(error)) return (notebook1000 = false);
   return false;
@@ -5881,7 +5883,7 @@ export async function getNotebookNote(admin: Admin, userId: string, id: string):
   return { ok: true, data: data ? toNotebookNote(data) : null };
 }
 
-export type NotebookFilter = { pinned?: boolean; tag?: string | null; materialId?: string | null; free?: boolean };
+export type NotebookFilter = { pinned?: boolean; tag?: string | null; materialId?: string | null; free?: boolean; topic?: string | null };
 
 /** The caller's notes, last changed first, or pinned first-pinned-newest. A page of `limit`, and whether there is more. */
 export async function listNotebookNotes(admin: Admin, userId: string, o: NotebookFilter & { limit: number; offset?: number }): Promise<Read<{ rows: NotebookNote[]; more: boolean }>> {
@@ -5891,6 +5893,7 @@ export async function listNotebookNotes(admin: Admin, userId: string, o: Noteboo
   if (o.tag) q = q.contains("tags", [o.tag]);
   if (o.materialId && isUuid(o.materialId)) q = q.eq("material_id", o.materialId);
   if (o.free) q = q.eq("target_kind", "free");
+  if (o.topic) q = q.eq("topic", o.topic);
   q = o.pinned ? q.order("pinned_at", { ascending: false }) : q.order("updated_at", { ascending: false });
   const { data, error } = await q.order("id", { ascending: false }).range(offset, offset + o.limit);
   if (error) return fail(error);
@@ -5919,6 +5922,13 @@ export async function searchNotebook(admin: Admin, userId: string, query: string
   if (rErr) return fail(rErr);
   const byId = new Map(((rows ?? []) as any[]).map(r => [r.id, toNotebookNote(r)]));
   return { ok: true, data: { total: Number(found[0].total ?? 0), hits: found.flatMap(f => { const note = byId.get(f.id); return note ? [{ note, headline: String(f.headline ?? "") }] : []; }) } };
+}
+
+/** The topics the caller has linked notes to, for the page's filter. */
+export async function notebookTopics(admin: Admin, userId: string): Promise<string[]> {
+  const { data, error } = await admin.from("individual_scholar_note").select("topic").eq("user_id", userId).eq("target_kind", "topic").order("updated_at", { ascending: false }).limit(500);
+  if (error) return [];
+  return [...new Set(((data ?? []) as { topic: string }[]).map(r => r.topic))].slice(0, 30);
 }
 
 /** The tags the caller has used, most used first (read from their newest notes). */

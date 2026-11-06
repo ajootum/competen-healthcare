@@ -13,6 +13,9 @@ export const NOTEBOOK_TITLE_MAX = 200;
 export const NOTEBOOK_TAGS_MAX = 12;
 export const NOTEBOOK_TAG_MAX = 32;
 export const NOTEBOOK_LABEL_MAX = 200;
+/** The bounds migration 1001 keeps, the same as a 414 session topic. */
+export const NOTEBOOK_TOPIC_MIN = 2;
+export const NOTEBOOK_TOPIC_MAX = 120;
 export const NOTEBOOK_PAGE = 25;
 
 export const CAPTURED_IN = ["home", "learn", "revise", "apply", "evaluate", "library", "plan", "progress", "notebook", "other"] as const;
@@ -68,6 +71,8 @@ export function cleanTags(raw: unknown): string[] {
 
 export type NoteLink =
   | { targetKind: "free" }
+  /** Owner, 6 Nov 2026: "Permit optional topic-linked and free-standing notebook entries." A topic is a label in this product, so it is its words. */
+  | { targetKind: "topic"; topic: string }
   | { targetKind: "material"; materialId: string }
   | { targetKind: "section"; materialId: string; chunkId: string }
   | { targetKind: "lesson"; sessionId: string; step: number; materialId: string | null; chunkId: string | null };
@@ -87,6 +92,10 @@ export function parseNoteLink(raw: unknown): NoteLink | null {
   const r = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
   switch (r.targetKind) {
     case "free": return { targetKind: "free" };
+    case "topic": {
+      const topic = oneLine(r.topic, NOTEBOOK_TOPIC_MAX + 1);
+      return topic && topic.length >= NOTEBOOK_TOPIC_MIN && topic.length <= NOTEBOOK_TOPIC_MAX ? { targetKind: "topic", topic } : null;
+    }
     case "material": return isId(r.materialId) ? { targetKind: "material", materialId: r.materialId } : null;
     case "section": return isId(r.materialId) && isId(r.chunkId) ? { targetKind: "section", materialId: r.materialId, chunkId: r.chunkId } : null;
     case "lesson": {
@@ -102,10 +111,11 @@ export function parseNoteLink(raw: unknown): NoteLink | null {
 export const linkColumns = (l: NoteLink) => ({
   target_kind: l.targetKind,
   artefact_id: null,
-  material_id: l.targetKind === "free" ? null : l.materialId,
+  material_id: l.targetKind === "free" || l.targetKind === "topic" ? null : l.materialId,
   chunk_id: l.targetKind === "section" || l.targetKind === "lesson" ? l.chunkId : null,
   session_id: l.targetKind === "lesson" ? l.sessionId : null,
   step: l.targetKind === "lesson" ? l.step : null,
+  topic: l.targetKind === "topic" ? l.topic : null,
 });
 
 // ── REQUESTS ──

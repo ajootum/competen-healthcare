@@ -25,7 +25,7 @@ export async function GET() {
   const now = new Date().toISOString();
   const text = notesToMarkdown(r.data.map(n => ({
     title: n.title, body: n.body, quote: n.quote, tags: n.tags, createdAt: n.createdAt, updatedAt: n.updatedAt,
-    where: [n.sessionId ? lessons.get(n.sessionId) ?? null : n.materialId ? titles.get(n.materialId) ?? null : null, n.step !== null ? `lesson ${n.step + 1}` : null, n.sectionLabel].filter(Boolean).join(", ") || null,
+    where: [n.topic ? `topic ${n.topic}` : null, n.sessionId ? lessons.get(n.sessionId) ?? null : n.materialId ? titles.get(n.materialId) ?? null : null, n.step !== null ? `lesson ${n.step + 1}` : null, n.sectionLabel].filter(Boolean).join(", ") || null,
   })), now);
   await audit(ctx, "individual_scholar_notebook_exported", "individual_scholar_note", null, { count: r.data.length });
   return new NextResponse(text, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Content-Disposition": `attachment; filename="my-notebook-${now.slice(0, 10)}.md"`, "Cache-Control": "private, no-store" } });

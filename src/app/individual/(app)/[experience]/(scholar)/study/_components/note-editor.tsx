@@ -23,6 +23,7 @@ const field = `mt-1 block w-full min-h-[44px] rounded-xl border border-[var(--le
 export type LinkOptions = {
   materials: { id: string; title: string }[];
   lessons: { id: string; title: string; connected: boolean }[];
+  topics: string[];
   competencies: { id: string; title: string }[] | null;
 };
 
@@ -74,9 +75,9 @@ function Editor({ userId, clientKey, context, options, draft, note, where, relat
   const remove = async () => {
     // Nothing waiting may save after this, and a save on its way is removed with the rest.
     const id = (await saver.discard()) ?? note?.id;
-    if (!id) { router.push(notebookHref()); return; }
+    if (!id) { window.location.assign(notebookHref()); return; }
     const res = await fetch(`/api/individual/scholar/notebook/notes/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
-    if (res?.ok || res?.status === 404) { router.push(notebookHref()); return; }
+    if (res?.ok || res?.status === 404) { window.location.assign(notebookHref()); return; }
     saver.resume();
     setMsg("That could not be removed just now. It is still here.");
   };
@@ -144,7 +145,8 @@ function Editor({ userId, clientKey, context, options, draft, note, where, relat
 function NoteLinks({ saver, note, draftContext, where, options }: { saver: ReturnType<typeof useNoteSaver>["saver"]; note: NotebookNote | null; draftContext: NoteContext; where: NoteWhere | null; options: LinkOptions }) {
   const uid = useId();
   const initial = note ?? null;
-  const [kind, setKind] = useState<"none" | "lesson" | "section">(initial?.targetKind === "lesson" ? "lesson" : initial?.targetKind === "section" || initial?.targetKind === "material" ? "section" : "none");
+  const [kind, setKind] = useState<"none" | "lesson" | "section" | "topic">(initial?.targetKind === "lesson" ? "lesson" : initial?.targetKind === "section" || initial?.targetKind === "material" ? "section" : initial?.targetKind === "topic" ? "topic" : "none");
+  const [topic, setTopic] = useState(initial?.topic ?? "");
   const [sessionId, setSessionId] = useState(initial?.sessionId ?? "");
   const [steps, setSteps] = useState<{ step: number; title: string }[] | null>(null);
   const [step, setStep] = useState(initial?.step !== null && initial?.step !== undefined ? String(initial.step) : "");
@@ -175,13 +177,17 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
     return () => { live = false; };
   }, [open, kind, materialId]);
 
-  const startKey = useState(() => JSON.stringify([kind, sessionId, step, materialId, chunkId]))[0];
+  const startKey = useState(() => JSON.stringify([kind, sessionId, step, materialId, chunkId, topic]))[0];
   const apply = () => {
     // Only what changed: adding a competency must not take the note off its section.
-    const linkChanged = !fixedTarget && JSON.stringify([kind, sessionId, step, materialId, chunkId]) !== startKey;
+    const linkChanged = !fixedTarget && JSON.stringify([kind, sessionId, step, materialId, chunkId, topic]) !== startKey;
     let link: NoteLink | null = null;
     let label: string | null = null;
     if (kind === "none") { if (canFree) link = { targetKind: "free" }; }
+    else if (kind === "topic") {
+      const words = topic.replace(/\s+/g, " ").trim();
+      if (words.length >= 2 && words.length <= 120 && canFree) { link = { targetKind: "topic", topic: words }; label = `Topic: ${words}`; }
+    }
     else if (kind === "lesson" && sessionId && step !== "") {
       link = { targetKind: "lesson", sessionId, step: Number(step), materialId: null, chunkId: null };
       label = `${options.lessons.find(l => l.id === sessionId)?.title ?? "Your lesson"} · Lesson ${Number(step) + 1}`;
@@ -218,10 +224,17 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
               <legend className="text-[12.5px] font-semibold text-gray-800">Link this note to</legend>
               <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1">
                 {canFree && <label className="inline-flex min-h-[40px] items-center gap-2 text-[14px] text-gray-900"><input type="radio" className="h-5 w-5" name={`${uid}-k`} checked={kind === "none"} onChange={() => setKind("none")} />Nothing</label>}
+                {canFree && <label className="inline-flex min-h-[40px] items-center gap-2 text-[14px] text-gray-900"><input type="radio" className="h-5 w-5" name={`${uid}-k`} checked={kind === "topic"} onChange={() => setKind("topic")} data-testid="note-link-topic" />A topic</label>}
                 <label className="inline-flex min-h-[40px] items-center gap-2 text-[14px] text-gray-900"><input type="radio" className="h-5 w-5" name={`${uid}-k`} checked={kind === "lesson"} onChange={() => setKind("lesson")} data-testid="note-link-lesson" />A lesson</label>
                 <label className="inline-flex min-h-[40px] items-center gap-2 text-[14px] text-gray-900"><input type="radio" className="h-5 w-5" name={`${uid}-k`} checked={kind === "section"} onChange={() => setKind("section")} data-testid="note-link-section" />A material, section, slide or picture</label>
               </div>
             </fieldset>
+          )}
+          {kind === "topic" && !fixedTarget && (
+            <label className="block text-[12.5px] font-semibold text-gray-800">Topic: choose one of yours, or type your own
+              <input value={topic} maxLength={120} list={`${uid}-topics`} onChange={e => setTopic(e.target.value)} className={field} data-testid="note-link-topic-input" />
+              <datalist id={`${uid}-topics`}>{options.topics.map(t => <option key={t} value={t} />)}</datalist>
+            </label>
           )}
           {kind === "lesson" && !fixedTarget && (
             <div className="grid gap-2 sm:grid-cols-2">
