@@ -51,8 +51,9 @@ export async function loadAccess(store: LifeosStore, principal: Principal, works
     const tenant = await store.get("lifeos_tenant", String(ws.tenant_id));
     if (!tenant || tenant.status !== "active") throw new LifeosError("forbidden", "This organisation is not active.");
   }
-  const grants = await store.liveGrants(workspaceId, principal.individualId);
-  return { individualId: principal.individualId, workspaceId, role: m.role as AccessContext["role"], grants: grants.map(toLiveGrant) };
+  const ownRecordsOnly = principal.kind !== "session";
+  const grants = ownRecordsOnly ? [] : await store.liveGrants(workspaceId, principal.individualId);
+  return { individualId: principal.individualId, workspaceId, role: m.role as AccessContext["role"], grants: grants.map(toLiveGrant), ownRecordsOnly };
 }
 
 /** Reads one record the caller may read, or answers not_found. */
@@ -156,6 +157,7 @@ async function planCreate(c: RequestContext, ctx: AccessContext, def: ResourceDe
   const parsed = def.create.safeParse(input);
   if (!parsed.success) throw validationError(parsed.error);
   const fields = parsed.data as Record<string, unknown>;
+  if (fields.accessScope !== undefined && fields.accessScope !== "private") assertSignedIn(c, SHARING_NEEDS_THE_PERSON);
   await assertRefsReadable(c, ctx, def, fields);
   const id = crypto.randomUUID();
   const base: Row = { id, workspace_id: ctx.workspaceId, owner_individual_id: ctx.individualId, ...stamp(prov), ...snakeFields(fields) };
@@ -181,6 +183,12 @@ async function planCreate(c: RequestContext, ctx: AccessContext, def: ResourceDe
       return { id, ops: [{ t: def.table, op: "insert", values: base }] };
   }
 }
+
+const SHARING_NEEDS_THE_PERSON = "Who can see a record is the person's own decision, made signed in.";
+
+const assertSignedIn = (c: RequestContext, message: string) => {
+  if (c.principal.kind !== "session") throw new LifeosError("forbidden", message);
+};
 
 async function assertOwnsResource(c: RequestContext, ctx: AccessContext, resourceType: string, resourceId: string) {
   const def = Object.values(RESOURCES).find(r => r.entity === resourceType);
@@ -244,6 +252,7 @@ async function planPatch(c: RequestContext, ctx: AccessContext, def: ResourceDef
   if (fields.accessScope !== undefined && fields.accessScope !== row.access_scope && row.owner_individual_id !== ctx.individualId) {
     throw new LifeosError("forbidden", "Only the owner can change who can see this record.");
   }
+  if (fields.accessScope !== undefined && fields.accessScope !== row.access_scope) assertSignedIn(c, SHARING_NEEDS_THE_PERSON);
   if (def.name === "weekly-reviews" && row.status === "final") throw new LifeosError("conflict", "A finalised review cannot be edited.");
   await assertRefsReadable(c, ctx, def, fields);
   return { id, ops: [update(def, row, { ...snakeFields(fields), ...stamp(prov) }, expectedVersion)] };
@@ -270,6 +279,7 @@ async function planTransition(c: RequestContext, ctx: AccessContext, def: Resour
       const ops: Op[] = [update(def, row, values, expectedVersion)];
       if (from === "delegated") {
         if (row.owner_individual_id !== ctx.individualId) throw new LifeosError("forbidden", "Only the owner can close a delegation.");
+        assertSignedIn(c, "Closing a delegation needs the person, signed in.");
         // Completing or dropping a delegated commitment closes the delegation, so nothing is left waiting on it.
         const [active] = await c.store.where(DELEGATION.table, { workspace_id: ctx.workspaceId, commitment_id: id, status: "active" }, { limit: 1 });
         if (active) ops.push(...await planCloseDelegation(c, ctx, active, to === "done" ? "completed" : "cancelled", prov));
@@ -397,6 +407,25 @@ export async function listMembers(c: RequestContext, workspaceId: string): Promi
   return c.store.where("lifeos_membership", { workspace_id: workspaceId }, { limit: INTERNAL_READ_LIMIT });
 }
 
+/**
+ * Everything that ends with a membership, on leaving or on being removed: access the person gave, access they received, and
+ * their open invitations. Coming back later, by a new invitation, starts from nothing.
+ */
+async function endMembershipOps(c: RequestContext, workspaceId: string, m: Row, source: Provenance["source"]): Promise<Op[]> {
+  const individualId = String(m.individual_id);
+  const revoked = () => ({ status: "revoked", revoked_at: new Date().toISOString() });
+  const [given, received, invited] = await Promise.all([
+    c.store.where(GRANT.table, { workspace_id: workspaceId, owner_individual_id: individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT }),
+    c.store.where(GRANT.table, { workspace_id: workspaceId, grantee_individual_id: individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT }),
+    c.store.where("lifeos_invitation", { workspace_id: workspaceId, owner_individual_id: individualId, status: "pending" }, { limit: INTERNAL_READ_LIMIT }),
+  ]);
+  return [
+    { t: "lifeos_membership", op: "update", id: String(m.id), workspace_id: workspaceId, values: { status: "left", provenance_source: source } },
+    ...[...given, ...received].map(g => update(GRANT, g, revoked())),
+    ...invited.map((i): Op => ({ t: "lifeos_invitation", op: "update", id: String(i.id), workspace_id: workspaceId, values: { status: "revoked", provenance_source: source } })),
+  ];
+}
+
 /** Leaving ends access to this workspace. The personal workspace is separate and untouched. */
 export async function leaveWorkspace(c: RequestContext, workspaceId: string): Promise<WriteResult> {
   return commit(c, workspaceId, null, async () => {
@@ -405,13 +434,27 @@ export async function leaveWorkspace(c: RequestContext, workspaceId: string): Pr
     if (!ws || ws.kind === "personal") throw new LifeosError("conflict", "You cannot leave your personal workspace.");
     const [m] = await c.store.where("lifeos_membership", { workspace_id: workspaceId, individual_id: c.principal.individualId }, { limit: 1 });
     if (ownsWorkspace(String(m.role))) throw new LifeosError("conflict", "The owner of an organisation workspace cannot leave it.");
-    const given = await c.store.where(GRANT.table, { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
-    const invited = await c.store.where("lifeos_invitation", { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "pending" }, { limit: INTERNAL_READ_LIMIT });
-    return [
-      { t: "lifeos_membership", op: "update", id: String(m.id), workspace_id: workspaceId, values: { status: "left", provenance_source: "user" } },
-      ...given.map(g => update(GRANT, g, { status: "revoked", revoked_at: new Date().toISOString() })),
-      ...invited.map((i): Op => ({ t: "lifeos_invitation", op: "update", id: String(i.id), workspace_id: workspaceId, values: { status: "revoked", provenance_source: "user" } })),
-    ];
+    return endMembershipOps(c, workspaceId, m, "user");
+  });
+}
+
+/**
+ * An organisation ending someone's access. It removes them from this workspace only: their private records stay theirs and
+ * stay unread, and their personal workspace is untouched. Nobody removes the owner, and only the owner removes an admin.
+ */
+export async function removeMember(c: RequestContext, workspaceId: string, membershipId: string): Promise<WriteResult> {
+  return commit(c, workspaceId, null, async () => {
+    const ctx = await loadAccess(c.store, c.principal, workspaceId);
+    if (!managesWorkspace(ctx.role)) throw new LifeosError("forbidden", "Only a workspace owner or admin can remove someone.");
+    const ws = await c.store.get("lifeos_workspace", workspaceId);
+    if (!ws || ws.kind === "personal") throw new LifeosError("conflict", "A personal workspace has no members to remove.");
+    const m = await c.store.get("lifeos_membership", membershipId);
+    if (!m || m.workspace_id !== workspaceId) throw notFound();
+    if (m.individual_id === ctx.individualId) throw new LifeosError("conflict", "Use leave to end your own membership.");
+    if (ownsWorkspace(String(m.role))) throw new LifeosError("forbidden", "The owner of an organisation workspace cannot be removed.");
+    if (managesWorkspace(String(m.role)) && !ownsWorkspace(ctx.role)) throw new LifeosError("forbidden", "Only the owner can remove an admin.");
+    if (m.status !== "active" && m.status !== "suspended") throw new LifeosError("conflict", "This person is no longer a member.");
+    return endMembershipOps(c, workspaceId, m, "user");
   });
 }
 

@@ -12,7 +12,7 @@ const THEM = "22222222-2222-4222-8222-222222222222";
 const REC = "33333333-3333-4333-8333-333333333333";
 const WS = "44444444-4444-4444-8444-444444444444";
 
-const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({ individualId: ME, workspaceId: WS, role: "member", grants: [], ...over });
+const ctx = (over: Partial<AccessContext> = {}): AccessContext => ({ individualId: ME, workspaceId: WS, role: "member", grants: [], ownRecordsOnly: false, ...over });
 const theirs = { id: REC, owner_individual_id: THEM, access_scope: "private" };
 const grant = (over: Partial<LiveGrant> = {}): LiveGrant => ({ ownerIndividualId: THEM, resourceType: "commitment", resourceId: REC, capability: "read", ...over });
 
@@ -24,6 +24,15 @@ describe("access: default private, explicit otherwise", () => {
   it("an organisation admin or owner cannot read a member's private record", () => {
     expect(canRead(ctx({ role: "admin" }), "commitment", theirs)).toBe(false);
     expect(canRead(ctx({ role: "owner" }), "commitment", theirs)).toBe(false);
+  });
+  it("an app's token reaches only the approving person's own records, whatever their role or grants", () => {
+    const app = (over: Partial<AccessContext> = {}) => ctx({ ownRecordsOnly: true, ...over });
+    const shared = { ...theirs, access_scope: "workspace" };
+    expect(canRead(app(), "commitment", shared)).toBe(false);
+    expect(canWrite(app({ role: "admin" }), "commitment", shared)).toBe(false);
+    expect(canRead(app({ grants: [grant()] }), "commitment", theirs)).toBe(false);
+    expect(canRead(app(), "commitment", { ...theirs, owner_individual_id: ME })).toBe(true);
+    expect(visibilityFilter(app({ grants: [grant()] }), "commitment")).toBe(`owner_individual_id.eq.${ME}`);
   });
   it("the owner reads and writes", () => {
     const mine = { ...theirs, owner_individual_id: ME };

@@ -143,9 +143,9 @@ async function main() {
     () => ok("H2a", false, "an entitlement that ended before it started is refused"),
     () => ok("H2a", true, "an entitlement that ended before it started is refused"),
   );
-  const past = new Date(Date.now() + 1000).toISOString();
+  const past = new Date(Date.now() + 6000).toISOString();
   const shortId = await grantEntitlement(store, pa.individualId, { individualId: pa.individualId, source: "direct", endsAt: past });
-  await new Promise(r => setTimeout(r, 2000));
+  await new Promise(r => setTimeout(r, 8000));
   const lapsed = await http(A, "GET", "/me");
   ok("H2", lapsed.status === 403, "an entitlement that has lapsed admits nobody, judged by the database clock", lapsed);
   const liveId = await grantEntitlement(store, pa.individualId, { individualId: pa.individualId, source: "platform_grant", planCode: "harness" });

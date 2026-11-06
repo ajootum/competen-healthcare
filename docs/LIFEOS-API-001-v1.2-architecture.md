@@ -161,7 +161,7 @@ Commitment transitions:
 
 **Row-level security.** RLS is on for every `lifeos_*` table with zero policies, and `anon` and `authenticated` hold no privileges, so a browser cannot reach any table or the writer. The per-person rules above run in the service, behind the service role, and the schema's composite keys hold the workspace boundary. Per-person RLS policies are not used: nothing would exercise them through the service role, and they would open a second path to the tables.
 
-Principals have a `kind` (`session` today, `delegated_token` at step 9) and `scopes`. A session holds all scopes. Each route declares the scope it needs, so user-delegated third-party access later narrows what a token can do without new authorisation code. **There is no master API key, in a browser or anywhere else.**
+Principals have a `kind` (`session` today, `delegated_token` at step 9) and `scopes`. A `delegated_token` reaches only records the approving person owns: workspace sharing, grants and delegation apply to people signed in, not to apps. A session holds all scopes. Each route declares the scope it needs, so user-delegated third-party access later narrows what a token can do without new authorisation code. **There is no master API key, in a browser or anywhere else.**
 
 ## 6. API
 

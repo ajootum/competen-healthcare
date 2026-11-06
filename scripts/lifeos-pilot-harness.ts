@@ -261,6 +261,24 @@ async function main() {
     const dp = await dead.newPage();
     const deadRes = await dp.goto(`${BASE}/lifeos/invite/not-a-real-token-at-all-${RUN}`, { timeout: 120000 });
     ok("U6", deadRes?.status() === 404, "a dead link shows nothing", deadRes?.status());
+
+    // ---- the organisation ends someone's access, on screen ----
+    op.on("dialog", d => { void d.accept(); });
+    await op.reload({ timeout: 120000 });
+    await op.locator("#lo-ws").waitFor({ timeout: 90000 });
+    await op.locator("#lo-ws").selectOption({ label: "Pilot Org" });
+    await op.locator("aside nav").getByRole("button", { name: "Organisation" }).click();
+    await op.getByRole("heading", { name: "People", exact: true }).waitFor({ timeout: 60000 });
+    await op.getByText(/· member$/).last().waitFor({ timeout: 60000 });
+    const ownerRemovable = await op.getByText(/· owner$/).first().locator("..").getByRole("button", { name: "Remove", exact: true }).count();
+    const before = await op.getByText(/· member$/).count();
+    ok("U7", before >= 1 && ownerRemovable === 0, "the owner sees the people in the organisation, and cannot remove the owner", [before, ownerRemovable]);
+    await op.getByText(/· member$/).last().locator("..").getByRole("button", { name: "Remove", exact: true }).click();
+    await op.waitForFunction(n => [...document.querySelectorAll("span")].filter(e => /· member$/.test(e.textContent ?? "")).length === n - 1, before, { timeout: 60000 });
+    ok("U8", true, "removing someone takes them off the list");
+    await ip.goto(`${BASE}/lifeos`, { timeout: 120000 });
+    await ip.getByRole("heading", { name: "LifeOS is not enabled for this account" }).waitFor({ timeout: 90000 });
+    ok("U9", true, "and access that came only through the organisation ends");
   } finally {
     await browser.close();
   }

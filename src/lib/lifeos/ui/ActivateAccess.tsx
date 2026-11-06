@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, downloadExport, get, post } from "./client";
+import { ConnectedAppsCard } from "./ConnectedApps";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 delivery step 6. A signed-in person without LifeOS. If they are eligible, they may choose to turn it on.
@@ -48,6 +49,7 @@ export function ActivateAccess() {
               <p>Your records are kept. <button onClick={() => { downloadExport().catch(() => setError("Your records could not be prepared just now.")); }}>Download my records</button></p>
             )}
             {error && <div className={styles.alert} role="alert"><span>{error}</span></div>}
+            {status !== null && status.hasRecords && <ConnectedAppsCard />}
           </>
         )}
         {canOffer && status.terms && (

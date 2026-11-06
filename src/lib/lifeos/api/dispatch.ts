@@ -29,6 +29,8 @@ export type DispatchDeps = {
   session?: () => Promise<SessionIdentity>;
   /** Whether an entitlement's source still stands, for a bearer token, which has no session to ask. */
   sourceStands?: (entitlement: Record<string, unknown>, individualId: string) => Promise<boolean>;
+  /** Whether the person's identity link and sign-in account still stand, for a bearer token, which has no session to ask. */
+  accountStands?: (individualId: string) => Promise<boolean>;
   resolveTxt?: (name: string) => Promise<string[][]>;
   traceId: string;
 };
@@ -46,21 +48,41 @@ function errorResponse(e: LifeosError, traceId: string) {
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const assertIds = (params: Record<string, string>) => {
+  for (const value of Object.values(params)) {
+    if (!UUID.test(value)) throw new LifeosError("not_found", "That was not found.");
+  }
+};
+
+/** An app sees where a record came from only when it came from that app. Another app's id is not its business. */
+const forApp = (data: unknown, clientId: string): unknown => {
+  if (Array.isArray(data)) return data.map(d => forApp(d, clientId));
+  if (data && typeof data === "object" && "provenanceRef" in data) {
+    return { ...data, provenanceRef: data.provenanceRef === clientId ? clientId : null };
+  }
+  return data;
+};
+
 async function run(req: Request, segments: string[], deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
   const matched = matchRoute(req.method, segments);
-  if (matched && matched !== "method_not_allowed" && matched.route.admission === "session") return runSession(req, matched.route, deps);
+  const bearer = (req.headers.get("authorization") ?? "").match(/^Bearer\s+(\S+)$/i)?.[1] ?? null;
+  if (matched && matched !== "method_not_allowed" && matched.route.admission === "session") {
+    // A session route answers a person, never an app, whatever cookies come with the token.
+    if (bearer) {
+      await bearerPrincipal(bearer, deps);
+      throw new LifeosError("forbidden", "This is not available to apps.");
+    }
+    return runSession(req, matched.route, matched.params, deps);
+  }
   if (matched && matched !== "method_not_allowed" && matched.route.admission === "open") return runOpen(req, matched.route, deps);
 
-  const bearer = (req.headers.get("authorization") ?? "").match(/^Bearer\s+(\S+)$/i)?.[1] ?? null;
   const principal = bearer ? await bearerPrincipal(bearer, deps) : await deps.authenticate();
 
   if (!matched) throw new LifeosError("not_found", "That was not found.");
   if (matched === "method_not_allowed") throw new LifeosError("method_not_allowed", "That method is not available here.");
   const { route, params } = matched;
 
-  for (const value of Object.values(params)) {
-    if (!UUID.test(value)) throw new LifeosError("not_found", "That was not found.");
-  }
+  assertIds(params);
   // THE PUBLIC BOUNDARY: a delegated token reaches only routes on the approved list, whatever scopes it holds.
   if (principal.kind === "delegated_token" && route.visibility !== "public") throw new LifeosError("forbidden", "This is not available to apps.");
   if (route.scope && !hasScope(principal, route.scope)) throw new LifeosError("forbidden", "This access does not include that action.");
@@ -89,6 +111,8 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
     }
     idempotencyKey = req.headers.get("idempotency-key");
     if (!idempotencyKey || idempotencyKey.length > 255) throw new LifeosError("validation_failed", "Every write needs an Idempotency-Key header of at most 255 characters.");
+    // Keys are per person in the database. Each app, and the person signed in, keeps its own, so one cannot retrieve another's record.
+    if (principal.clientId) idempotencyKey = `client:${principal.clientId}:${createHash("sha256").update(idempotencyKey).digest("hex")}`;
     const raw = await req.text();
     try {
       body = raw ? JSON.parse(raw) : {};
@@ -107,7 +131,7 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
     params, body, query,
   });
   return json(result.status ?? 200, {
-    data: result.data,
+    data: principal.clientId ? forApp(result.data, principal.clientId) : result.data,
     meta: {
       traceId: deps.traceId,
       ...(result.nextCursor !== undefined ? { nextCursor: result.nextCursor } : {}),
@@ -116,12 +140,22 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
   });
 }
 
+/**
+ * The same questions a signed-in person's request answers, asked for the person an app acts for: their identity link and
+ * account, then their admission. With nothing able to answer, the answer is no.
+ */
+const subjectCheck = (deps: DispatchDeps & { store: LifeosStore }) => async (individualId: string): Promise<void> => {
+  if (!(deps.accountStands && await deps.accountStands(individualId))) throw new LifeosError("forbidden", "This account is not active.");
+  await assertAdmitted(deps.store, individualId, async e => (deps.sourceStands ? deps.sourceStands(e, individualId) : false));
+};
+
 /** A bearer token: the public flag first, then the token, then the same admission a signed-in person passes. */
 async function bearerPrincipal(token: string, deps: DispatchDeps & { store: LifeosStore }): Promise<Principal> {
   if (!(await deps.store.flagEnabled(PUBLIC_API_FLAG))) throw new LifeosError("not_found", "That was not found.");
   const { principal, individualId } = await principalFromToken(deps.store, token);
-  await assertAdmitted(deps.store, individualId, async e => (deps.sourceStands ? deps.sourceStands(e, individualId) : true)).catch(() => {
-    throw new LifeosError("unauthenticated", "This access token is not valid.");
+  await subjectCheck(deps)(individualId).catch((e: unknown) => {
+    if (e instanceof LifeosError && e.code === "forbidden") throw new LifeosError("unauthenticated", "This access token is not valid.");
+    throw e;
   });
   return principal;
 }
@@ -140,12 +174,13 @@ async function runOpen(req: Request, route: Route, deps: DispatchDeps & { store:
     else if (type.startsWith("application/json")) body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     else return Response.json({ error: "invalid_request" }, { status: 400 });
   }
-  return route.openHandler!({ store: deps.store, body });
+  return route.openHandler!({ store: deps.store, body, assertSubject: subjectCheck(deps) });
 }
 
 /** The door before holding LifeOS: a signed-in session, its own rate limit, the same request rules, and no principal. */
-async function runSession(req: Request, route: Route, deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
+async function runSession(req: Request, route: Route, params: Record<string, string>, deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
   if (!deps.session) throw new LifeosError("forbidden", "This is not available here.");
+  assertIds(params);
   const identity = await deps.session();
   const limit = RATE_LIMITS[route.bucket];
   const rate = await deps.store.rateTake(`session:${identity.subject}`, route.bucket, limit.max, limit.windowSeconds);
@@ -163,7 +198,7 @@ async function runSession(req: Request, route: Route, deps: DispatchDeps & { sto
     const parsed = route.input?.safeParse(body);
     if (parsed && !parsed.success) throw new LifeosError("validation_failed", "Some of those values are not valid.", { details: parsed.error.issues.map(i => ({ path: i.path.join("."), message: i.message })) });
   }
-  const result = await route.sessionHandler!({ store: deps.store, identity, body });
+  const result = await route.sessionHandler!({ store: deps.store, identity, body, params });
   return json(result.status ?? 200, { data: result.data, meta: { traceId: deps.traceId } });
 }
 
