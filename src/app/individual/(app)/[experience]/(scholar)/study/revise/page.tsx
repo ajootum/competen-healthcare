@@ -1,3 +1,5 @@
+import { Suspense } from "react";
+import { Deferred, SectionLoading } from "../_components/deferred";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
 import Link from "next/link";
@@ -252,11 +254,12 @@ export default async function Revise({ params, searchParams }: { params: Promise
     ));
   }
 
-  const planToday = view === "today" || view === "priorities" ? await loadToday(ctx, policy, { now, tz, today, readOnly: true }).catch(() => null) : null;
-  const plan = planToday?.ok ? planToday : null;
-
   // ── Today ──
+  // SCHOLAR-PERF-02: the plan and retention reads are the slowest here, so the heading and tabs show first and the queue arrives when it is ready.
   if (view === "today") {
+    const todayBody = async () => {
+    const planToday = await loadToday(ctx, policy, { now, tz, today, readOnly: true }).catch(() => null);
+    const plan = planToday?.ok ? planToday : null;
     const toFix = policy.scholarMistakeNotebook === "on" ? await mistakeToFixCount(ctx.admin, ctx.userId) : null;
     // SALE-2026-11 R2: due retrieval (SALE-08). Null while its key is off. Prerequisite reviews and transfer checks are in Insights.
     const retention = await loadRetentionView(ctx.admin, ctx.userId, policy, now.toISOString(), { today });
@@ -279,7 +282,7 @@ export default async function Revise({ params, searchParams }: { params: Promise
       })) : [],
       priorities: plan?.settings.priorities ?? [],
     });
-    return frame("today", (
+    return (
       <div className="space-y-4">
         {!rows.ok && <Unreadable what="your revision history" />}
         <TodayQueue items={queue}
@@ -291,11 +294,14 @@ export default async function Revise({ params, searchParams }: { params: Promise
           return startForm(!!scope, "Or choose how to revise", null, scope);
         })()}
       </div>
-    ));
+    );
+    };
+    return frame("today", <Suspense fallback={<SectionLoading label="Loading what to revise today" rows={4} />}><Deferred content={todayBody()} /></Suspense>);
   }
 
   // ── My Priorities: the learner's own, from My Plan. Read here, changed only there ──
   if (view === "priorities") {
+    const planToday = await loadToday(ctx, policy, { now, tz, today, readOnly: true }).catch(() => null);
     const planHref = withStudy(studyHref("plan"), sid);
     if (!planToday?.ok) return frame("priorities", <StatePanel title="My Plan is not available here" actions={<Link href={withStudy(reviseHref("today"), sid)} className={toneAction.secondary}>Back to Today</Link>}><p>{planToday ? "Your priorities come from My Plan, which is not offered here." : "Your plan could not be read just now."} Revision itself is not affected.</p></StatePanel>);
     const s = planToday.settings, exam = s.examDate && s.examDate >= today ? s.examDate : null;
