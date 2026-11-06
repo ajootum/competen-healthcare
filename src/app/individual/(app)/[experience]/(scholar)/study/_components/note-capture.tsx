@@ -5,6 +5,8 @@ import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-lea
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 import { experienceHref } from "@/lib/individual/experiences";
 import { NoteSaver, statusWords, type OtherCopy, type SaverDeps, type SaverSnapshot, type SendReply, type SendRequest } from "@/lib/individual/scholar/note-saver";
+import { closeNoteDrafts, noteDraftsClosed, sweepDrafts, trackOpenNote } from "@/lib/individual/scholar/note-drafts";
+import { createClient } from "@/lib/supabase/client";
 import { IDEAS, NOTEBOOK_BODY_MAX, cleanTags, draftKeyOf, draftPrefixOf, parseDraft, type NoteContext, type NoteDraft } from "@/lib/individual/scholar/personal-notebook";
 import type { NotebookNote } from "@/lib/individual/scholar/store";
 
@@ -15,6 +17,15 @@ import type { NotebookNote } from "@/lib/individual/scholar/store";
 const Offered = createContext<{ on: boolean; userId: string | null }>({ on: false, userId: null });
 export function NotebookProvider({ on, userId, children }: { on: boolean; userId: string; children: ReactNode }) {
   const value = useMemo(() => ({ on, userId }), [on, userId]);
+  // Drafts belong to the learner the server says this is. Another tab signing out, or signing in as someone else, closes them here too. A lost connection does neither.
+  useEffect(() => {
+    if (!on) return;
+    try { sweepDrafts(window.localStorage, userId); } catch { /* no storage: nothing is kept */ }
+    const { data } = createClient().auth.onAuthStateChange((event, session) => {
+      if (event === "SIGNED_OUT" || (session && session.user.id !== userId)) closeNoteDrafts();
+    });
+    return () => data.subscription.unsubscribe();
+  }, [on, userId]);
   return <Offered.Provider value={value}>{children}</Offered.Provider>;
 }
 /** The signed-in learner where the Notebook is offered, or null: every capture place then draws nothing. */
@@ -68,7 +79,7 @@ export async function sendNote(r: SendRequest, userId: string): Promise<SendRepl
 
 const localStore: SaverDeps["storage"] = {
   get: k => window.localStorage.getItem(k),
-  set: (k, v) => window.localStorage.setItem(k, v),
+  set: (k, v) => { if (!noteDraftsClosed()) window.localStorage.setItem(k, v); },
   remove: k => window.localStorage.removeItem(k),
 };
 const deps = (userId: string): SaverDeps => ({
@@ -89,10 +100,12 @@ export function useNoteSaver(start: SaverStart): { saver: NoteSaver; snap: Saver
     const online = () => saver.online();
     const hidden = () => { if (document.visibilityState === "hidden") saver.flush(true); };
     const leave = () => saver.flush(true);
+    const untrack = trackOpenNote(saver);
     window.addEventListener("online", online);
     document.addEventListener("visibilitychange", hidden);
     window.addEventListener("pagehide", leave);
     return () => {
+      untrack();
       window.removeEventListener("online", online);
       document.removeEventListener("visibilitychange", hidden);
       window.removeEventListener("pagehide", leave);

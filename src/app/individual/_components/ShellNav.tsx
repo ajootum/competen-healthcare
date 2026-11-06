@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { EXPERIENCES, experienceHref, navFor, bottomNavFor, overflowNavFor, type ExperienceKey, type ShellNavItem } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
+import { closeNoteDrafts, saveOpenNotes } from "@/lib/individual/scholar/note-drafts";
 import { ScholarSidebar } from "./ScholarSidebar";
 import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
@@ -155,7 +156,7 @@ export function AccountMenu({ experience, initials, name, preview = false, schol
 export function SignOutButton() {
   return (
     <button type="button"
-      onClick={async () => { await createClient().auth.signOut(); window.location.assign("/individual"); }}
+      onClick={async () => { await saveOpenNotes(); closeNoteDrafts(); await createClient().auth.signOut(); window.location.assign("/individual"); }}
       className={`rounded-lg border border-gray-200 px-3 py-1.5 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
       Sign out
     </button>

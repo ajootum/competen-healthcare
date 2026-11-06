@@ -266,7 +266,8 @@ export function notesToMarkdown(notes: readonly ExportNote[], exportedAt: string
 // ── A DRAFT ON THIS DEVICE ──
 // Only words the server has not yet confirmed are kept here, under the signed-in learner's id, and gone as soon as they are saved.
 
-export const DRAFT_PREFIX = "cmp-scholar-note-draft:v1:";
+import { DRAFT_PREFIX } from "./note-drafts";
+export { DRAFT_PREFIX };
 export const DRAFT_MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000;
 
 export type NoteDraft = {

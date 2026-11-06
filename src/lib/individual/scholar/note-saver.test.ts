@@ -173,15 +173,43 @@ describe("NoteSaver: nothing is lost", () => {
     expect(sent).toHaveLength(2);
   });
 
-  it("signed out: says so, keeps the draft, does not hammer the server", async () => {
+  it("signed out: says so, keeps nothing on the device, does not hammer the server", async () => {
     const { saver, sent, draft } = rig();
     saver.setBody("x");
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
     sent[0].resolve({ kind: "signed_out" }); await settle();
     expect(saver.getSnapshot().status).toBe("signed_out");
-    expect(draft()).not.toBeNull();
+    expect(saver.getSnapshot().message).toContain("on this screen only");
+    expect(draft()).toBeNull();
     await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[4]);
     expect(sent).toHaveLength(1);
+  });
+
+  it("signed out: writing on keeps no draft, and a save the server takes starts keeping them again", async () => {
+    const { saver, sent, draft } = rig();
+    saver.setBody("x");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    sent[0].resolve({ kind: "signed_out" }); await settle();
+    saver.setBody("xy");
+    await vi.advanceTimersByTimeAsync(DRAFT_DELAY_MS);
+    expect(draft()).toBeNull();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    sent[sent.length - 1].resolve(ok(1)); await settle();
+    saver.setBody("xyz");
+    await vi.advanceTimersByTimeAsync(DRAFT_DELAY_MS);
+    expect(draft()).not.toBeNull();
+  });
+
+  it("sendAndWait sends what is waiting and waits for the answer", async () => {
+    const { saver, sent } = rig();
+    saver.setBody("words");
+    let done = false;
+    const s = saver.sendAndWait().then(() => { done = true; });
+    await settle();
+    expect(sent).toHaveLength(1);
+    expect(done).toBe(false);
+    sent[0].resolve(ok(1)); await s;
+    expect(saver.getSnapshot().status).toBe("saved");
   });
 
   it("a note removed elsewhere keeps the words and saves them as a new note on the next change", async () => {

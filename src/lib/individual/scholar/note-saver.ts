@@ -68,6 +68,8 @@ export class NoteSaver {
   private timer: unknown = null;
   private draftTimer: unknown = null;
   private inFlight = false;
+  /** The server said this learner is signed out. Nothing more is kept on this device until it takes a save from them again. */
+  private noDrafts = false;
   private flight: Promise<void> | null = null;
   private discarded = false;
   private readonly allowBlank: boolean;
@@ -176,6 +178,11 @@ export class NoteSaver {
     this.removeDraft();
     return this.snap.id;
   }
+  /** Send what is waiting and wait for it. A sign-out gives this a moment before it clears the device. */
+  async sendAndWait(): Promise<void> {
+    this.flush();
+    await this.flight;
+  }
   resume() {
     this.discarded = false;
     if (this.isDirty()) { this.writeDraft(); this.schedule(0); }
@@ -195,7 +202,7 @@ export class NoteSaver {
     this.draftTimer = this.deps.setTimer(() => { this.draftTimer = null; this.writeDraft(); }, DRAFT_DELAY_MS);
   }
   private writeDraft() {
-    if (this.discarded || !this.deps.storage || !this.hasWords() || !this.isDirty()) return;
+    if (this.discarded || this.noDrafts || !this.deps.storage || !this.hasWords() || !this.isDirty()) return;
     const d: NoteDraft = { clientKey: this.clientKey, noteId: this.snap.id, revision: this.snap.revision, body: this.snap.body, title: this.snap.title, tags: this.snap.tags, context: this.context, savedAt: this.deps.now() };
     try { this.deps.storage.set(this.key, JSON.stringify(d)); } catch { /* the note still saves */ }
   }
@@ -257,6 +264,7 @@ export class NoteSaver {
           this.set({ id: reply.id, revision: reply.revision, status: "conflict", other: { ...reply.stored, revision: reply.revision }, message: "This note was changed somewhere else since you wrote this.", dirty: true });
           return;
         }
+        this.noDrafts = false;
         this.serverBody = reply.stored ? reply.stored.body ?? "" : sent.body;
         this.serverTitle = reply.stored ? reply.stored.title ?? "" : sent.title;
         this.serverTags = JSON.stringify(reply.stored ? reply.stored.tags : sent.tags);
@@ -291,8 +299,11 @@ export class NoteSaver {
         return;
       case "signed_out":
         this.meta = { ...sent.meta, ...this.meta };
-        this.writeDraft();
-        this.set({ status: "signed_out", message: "You are signed out. Your words are kept on this device. Sign in again to save them.", dirty: true });
+        // Owner, 6 Nov: a device does not keep a learner's words past their session. They stay on the screen only, and the words here say so.
+        this.noDrafts = true;
+        if (this.draftTimer) { this.deps.clearTimer(this.draftTimer); this.draftTimer = null; }
+        this.removeDraft();
+        this.set({ status: "signed_out", message: "You are signed out. These words are on this screen only. Copy them, or sign in again in a new tab and keep writing here to save them.", dirty: true });
         return;
       case "gone":
         // The note was removed elsewhere. The words stay on the screen and on this device, and become a new note only if the learner writes on.

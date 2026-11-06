@@ -26,7 +26,8 @@ The notes are still the one 820 table. No second store and no new table. Existin
 | Develop this idea, Research this question | The existing Ask panel with the note's words to edit. Nothing goes to AI until the learner presses Ask |
 | Make it a study goal | A form with the words and a date. Only "Add to My Plan" adds an entry, through the existing calendar route |
 | Export and deletion | `api/individual/scholar/notebook/export` (one Markdown file). Remove, confirmed in place |
-| Patient information | The warning is shown. Words, title, tags, section label and topic are all screened. A refused note stays on the device until the words are changed |
+| Patient information | The warning is shown. Words, title, tags, section label and topic are all screened. A refused note stays on the device until the words are changed or the session ends |
+| Drafts on a shared device | `src/lib/individual/scholar/note-drafts.ts`. Cleared on sign-out, on a session that has ended and on another account, whichever way that happened. Saved notes are never touched |
 
 ### Decisions taken inside the brief
 
@@ -35,6 +36,7 @@ The notes are still the one 820 table. No second store and no new table. Existin
 - **Autosave is not audited.** It is the learner typing. A first save, a pin, a link, a removal and an export are audited, by code only.
 - **A note is capped at 50,000 characters** for long-form writing. Highlights and summaries keep their 4,000. A long note is edited on its own page, not the library's short form.
 - **The library's older edit now checks the copy it opened from**, so it cannot overwrite newer Notebook words.
+- **Drafts do not outlive the session (owner's instruction).** Three layers, because a sign-out may never run on the device. The Individual sign-out gives waiting words up to 2 seconds to save, clears every draft, and stops the page writing another as it leaves. `NoteDraftGuard` in the root layout asks who is signed in on every page, only if the device holds a draft, and removes what is not theirs. It changes nothing if the answer could not be had, as on a lost connection. An open Notebook hears another tab sign out, and a save refused as signed out removes its draft and keeps the words on screen only, saying so.
 - **A topic is its words.** Topics in this product are text labels, so there is no id to key on.
 
 ## Migrations
@@ -101,6 +103,7 @@ Vitest: `note-saver.test.ts`, `personal-notebook.test.ts`, `personal-notebook-st
 | `walk-touch-check.log` | 2 of 2 | Phone, after the fix: 89 controls on library search and 274 on library notes, none under 44px |
 | `walk-other-learner.log` | 5 of 5 | Signed in as the fixture learner, another learner's note: its page, a change, the export and a search all reach nothing, and the note is unchanged |
 | `walk-topic-link-check.log` | 10 of 10 | The four corrections from the second read, in the browser |
+| `walk-draft-clear-check.log` | 17 of 17 | Drafts on a shared device, in the browser. One real account was available, so another account is a draft planted under a different id, then the real sign-in form |
 | `walk-key-off.log` | 8 of 8 | Policy off: nothing offered, saving and export refused, nothing written |
 
 **Not rerun, on the owner's instruction of 6 Nov** ("Dont run all checks - only the safe and important ones"). The three walk logs were not rerun to clear those reds. The tablet and desktop logs were taken before the corrected check. All three logs predate the second read's four corrections, and tablet and desktop also predate one lint comment and one class on a library link. Those changes were checked by the focused tests, the type check, `walk-touch-check.log` and `walk-topic-link-check.log`. Only the phone run has the touch check.
