@@ -10,6 +10,8 @@ import {
 import { NAV, isScreen, type Screen } from "./nav";
 import { type CommitmentFields, type Lifeos, useLifeos } from "./useLifeos";
 import { useModalFocus } from "./useModalFocus";
+import { signOut } from "../adapters/competen/browser-auth";
+import { type Branding, brandStyle } from "./branding";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 step 5. The shell of the owner-approved baseline: sidebar, bottom bar, Capture, and the dialogs.
@@ -118,8 +120,9 @@ function Search({ l, a }: { l: Lifeos; a: Actions }) {
   );
 }
 
-export function LifeosApp({ initialScreen }: { initialScreen: Screen }) {
-  const l = useLifeos();
+export function LifeosApp({ initialScreen, branding = {}, tenantId = null, tenantName = null }: { initialScreen: Screen; branding?: Branding; tenantId?: string | null; tenantName?: string | null }) {
+  const l = useLifeos(tenantId);
+  const leave = async () => { await signOut(); window.location.href = tenantId ? "/" : "/login"; };
   const [screen, setScreen] = useState<Screen>(initialScreen);
   const [dialog, setDialog] = useState<Dialog | null>(null);
   const [browserTz, setBrowserTz] = useState<string | null>(null);
@@ -155,11 +158,12 @@ export function LifeosApp({ initialScreen }: { initialScreen: Screen }) {
   const workspace = l.workspaces.find(w => w.id === l.workspaceId);
 
   return (
-    <div className={styles.root}>
+    <div className={styles.root} style={brandStyle(branding)}>
       <div className={styles.layout}>
         <aside className={styles.aside}>
-          <h2>Competen <span>LifeOS</span></h2>
-          <p className={styles.tagline}>PERSONAL CHIEF OF STAFF</p>
+          {branding.logoUrl && <img src={branding.logoUrl} alt="" style={{ maxHeight: 40, maxWidth: "100%", padding: "0 10px 8px" }} />}
+          {branding.productName ? <h2>{branding.productName}</h2> : <h2>Competen <span>LifeOS</span></h2>}
+          <p className={styles.tagline}>{tenantName ? tenantName.toUpperCase() : "PERSONAL CHIEF OF STAFF"}</p>
           {l.workspaces.length > 1 && (
             <div className={styles.switcher}>
               <label htmlFor="lo-ws">Workspace</label>
@@ -177,6 +181,7 @@ export function LifeosApp({ initialScreen }: { initialScreen: Screen }) {
           </nav>
           <p className={styles.sidenote}>🔒 Private by default. Nothing is shared unless you share it.</p>
           {l.chosenAccess && <button onClick={() => { if (window.confirm(TURN_OFF)) void l.turnOff(); }}>Turn off LifeOS</button>}
+          <button onClick={() => void leave()}>Sign out</button>
         </aside>
         <main className={styles.main}>
           <header className={styles.header}>
@@ -292,6 +297,7 @@ export function LifeosApp({ initialScreen }: { initialScreen: Screen }) {
           )}
           {MORE.map(k => <button key={k} className={styles.sheetItem} onClick={() => go(k)}>{SCREENS[k].icon} {SCREENS[k].label}</button>)}
           {l.chosenAccess && <button className={styles.sheetItem} onClick={() => { if (window.confirm(TURN_OFF)) void l.turnOff(); }}>Turn off LifeOS</button>}
+          <button className={styles.sheetItem} onClick={() => void leave()}>Sign out</button>
           <p><button onClick={close}>Close</button></p>
         </Modal>
       )}

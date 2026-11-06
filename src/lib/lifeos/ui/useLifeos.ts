@@ -38,7 +38,7 @@ export type CommitmentFields = {
   estimatedMinutes: number | null;
 };
 
-export function useLifeos() {
+export function useLifeos(tenantId: string | null = null) {
   const [me, setMe] = useState<Individual | null>(null);
   const [chosenAccess, setChosenAccess] = useState<Entitlement | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
@@ -62,9 +62,13 @@ export function useLifeos() {
       const m = await get<Me>("/me");
       setMe(m.individual);
       setChosenAccess(m.entitlements.find(e => e.source === "competen_individual") ?? null);
-      setWorkspaces(m.workspaces);
+      // On a tenant's domain the person sees that organisation and their own personal workspace, and no other organisation.
+      const visible = tenantId ? m.workspaces.filter(w => w.kind === "personal" || w.tenantId === tenantId) : m.workspaces;
+      setWorkspaces(visible);
       const saved = typeof window !== "undefined" ? window.localStorage.getItem(WS_KEY) : null;
-      const pick = m.workspaces.find(w => w.id === saved) ?? m.workspaces.find(w => w.kind === "personal") ?? m.workspaces[0];
+      const pick = visible.find(w => w.id === saved)
+        ?? (tenantId ? visible.find(w => w.tenantId === tenantId) : null)
+        ?? visible.find(w => w.kind === "personal") ?? visible[0];
       setWorkspaceId(pick?.id ?? null);
       if (!pick) setLoading(false);
     } catch (e) {
@@ -72,7 +76,7 @@ export function useLifeos() {
       setFatal(e instanceof Error ? e.message : "LifeOS could not be reached.");
       setLoading(false);
     }
-  }, []);
+  }, [tenantId]);
 
   const reload = useCallback(async () => {
     if (!base) return;

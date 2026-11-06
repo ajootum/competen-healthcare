@@ -19,6 +19,8 @@ export type RequestContext = {
   traceId: string;
   idempotencyKey: string | null;
   requestHash: string | null;
+  /** The TXT records at a name. Injected, so the engine holds no network code. */
+  resolveTxt?: (name: string) => Promise<string[][]>;
 };
 
 export type WriteResult = { data: unknown; replayed: boolean };
@@ -129,6 +131,15 @@ async function presentRefs(c: RequestContext, workspaceId: string, def: Resource
   if (!primary) throw notFound();
   const ctx = await loadAccess(c.store, c.principal, workspaceId);
   return present(def, await readable(c, ctx, def, primary.id));
+}
+
+/** Commits ops on a table outside any workspace, and returns its row. The caller has already checked authority. */
+export async function commitOps(c: RequestContext, table: string, plan: () => Promise<Op[]>): Promise<WriteResult> {
+  const r = await commit(c, "", null, plan);
+  const ref = (r.data as Ref[]).find(x => x.t === table);
+  const row = ref ? await c.store.get(table, ref.id) : null;
+  if (!row) throw notFound();
+  return { data: row, replayed: r.replayed };
 }
 
 const update = (def: ResourceDef, row: Row, values: Row, expectedVersion?: number): Op => ({

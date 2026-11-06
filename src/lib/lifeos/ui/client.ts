@@ -55,7 +55,7 @@ export async function all<T>(path: string): Promise<T[]> {
 export type Stamped = { id: string; version: number; workspaceId: string; ownerIndividualId: string; status: string; provenanceSource: string };
 
 export type Individual = { id: string; displayName: string; timezone: string; version: number };
-export type Workspace = { id: string; name: string; kind: "personal" | "organisation" };
+export type Workspace = { id: string; name: string; kind: "personal" | "organisation"; tenantId: string | null };
 export type World = Stamped & { title: string; context: string | null; purpose: string | null; position: number };
 export type Commitment = Stamped & {
   worldId: string | null; title: string; notes: string | null; important: boolean | null; urgent: boolean | null;

@@ -107,6 +107,40 @@ A person with a live Competen Individual entitlement can choose to turn on LifeO
 
 **Known limit:** the interface has no sign-out control of its own yet.
 
+## Stage 4: tenants and custom domains (delivery step 7)
+
+An organisation can offer LifeOS on its own verified domain, under its own name and colour, from the one shared LifeOS. There are no per-tenant copies.
+
+- **The registry:** a tenant's owner sets its name and branding, and claims domains. Branding is validated, so it cannot carry CSS. A member who is not the owner is told the tenant does not exist.
+- **Verification:** a claim serves nothing until a TXT record at `_lifeos-verify.<host>` holds its token. A hostname is unique across all tenants, and our own names cannot be claimed.
+- **Routing:** `src/proxy.ts` calls one pure function, and that function is inert unless `LIFEOS_TENANT_HOSTS=1`. It never answers for a first-party host, and unit tests hold that for every hostname in use today. A tenant's host serves LifeOS and nothing else.
+- **On a tenant's domain:** its own sign-in, with its name and colour. The person sees that organisation and their personal workspace, and no other organisation. This is presentation, not a security boundary: workspace access is enforced by the API as before. On the main host they keep everything they belong to.
+- **Sign out:** the interface now has it, which closes Stage 3's known limit.
+- **The writer:** `lifeos_mutate` now names what it may not write, so a new `lifeos_` table needs no new copy of the function. It still refuses every log, the gate, the terms, views and anything outside `lifeos_`, and the harness checks each one.
+
+### Migration 903-lifeos-tenant-domains.sql
+
+- **Dependencies:** 901. Application order: 901, 902, 903.
+- **Pre-application state on staging:** no `lifeos_tenant_domain` table.
+- **sha256:** `b65a8cd67675da65b30ce5f7a5f9c2e983cc7d4c9ca88bca126c2f4f36ec9b56`
+- **Applied to staging:** twice, the second run a no-op. It writes no row.
+- **Rollback:** [rollback-903.sql](evidence/LIFEOS-API-001/rollback-903.sql), rehearsed on staging inside a rolled-back transaction.
+- **Not applied to production.**
+
+**Verified:** `scripts/lifeos-tenant-harness.ts`, 42 of 42, over real HTTP and in Chromium on a real hostname mapped to this machine. It covers the registry, claims, refusals, the tenant's own sign-in, every other product answering 404 on its domain, unverified and unknown hosts serving nothing, branding, workspace visibility, the main host unaffected, sign-out, a suspended tenant, and the writer's refusals. Unit tests cover the host rule, including that it is inert when off.
+
+**Not verified:**
+
+- **A real verified domain end to end.** No real DNS or Vercel domain was used. The TXT comparison is unit-tested and the API's refusal without the record is tested, but the success path over real DNS has not run, and the verified state in the harness was written directly.
+- **Sign-in over HTTPS on a real tenant domain,** and cookie behaviour there.
+- **The dev server refuses unknown hosts its dev scripts,** so the run used a local, uncommitted `*.lifeos-harness.test` in `allowedDevOrigins`. A production build has no such limit, but none was run here.
+- **Production.** No independent security read was run on this stage.
+
+**Known limits:**
+
+- A tenant's domain has no password reset, and no sign-up page. Stage 5 adds invitations.
+- Adding a domain to the Vercel project is a manual owner step.
+
 ## Not done at this stage
 
 - **No way to get access outside a script.** Provisioning and entitlement grants are `core/provision.ts`, called by the harness. There is no commercial plan or billing behind `lifeos_entitlement` yet. Step 6.

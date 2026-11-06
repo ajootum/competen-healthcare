@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createAdminClientOrNull, createClient } from "@/lib/supabase/server";
 import { currentTraceId } from "@/lib/trace";
@@ -7,6 +8,8 @@ import type { LifeosStore, Principal } from "../../core/types";
 import { supabaseStore } from "../supabase-store";
 import { LIFEOS_CORE_FLAG } from "../../api/dispatch";
 import type { SessionIdentity } from "../../core/optin";
+import { type TenantSite, resolveTenantSite } from "../../core/tenants";
+import { LIFEOS_TENANT_HOSTS_ENV, isFirstPartyHost, normaliseHost } from "../../host";
 
 // ADR-018. THE ONLY FILE IN LIFEOS THAT IMPORTS FROM THE REST OF COMPETEN (scripts/lifeos-seal-harness.ts holds this).
 // A carve-out replaces this one file.
@@ -85,5 +88,22 @@ export async function resolveLifeosShell(): Promise<LifeosShell> {
     if (e instanceof LifeosError && e.code === "unauthenticated") return "AUTH_REQUIRED";
     if (e instanceof LifeosError && e.code === "forbidden") return "NO_ACCESS";
     return "DISABLED";
+  }
+}
+
+export type HostSite = { kind: "first_party" } | { kind: "tenant"; site: TenantSite } | { kind: "none" };
+
+/** What this request's host is. A host that is neither ours nor a tenant's verified, active domain serves nothing. */
+export async function resolveHostSite(): Promise<HostSite> {
+  const host = normaliseHost((await headers()).get("host"));
+  if (!host || isFirstPartyHost(host)) return { kind: "first_party" };
+  if (process.env[LIFEOS_TENANT_HOSTS_ENV] !== "1") return { kind: "none" };
+  const store = lifeosStore();
+  if (!store) return { kind: "none" };
+  try {
+    const site = await resolveTenantSite(store, host);
+    return site ? { kind: "tenant", site } : { kind: "none" };
+  } catch {
+    return { kind: "none" };
   }
 }

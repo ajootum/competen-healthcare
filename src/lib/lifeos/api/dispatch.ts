@@ -25,6 +25,7 @@ export type DispatchDeps = {
   authenticate: () => Promise<Principal>;
   /** Who is signed in, for the routes that come before holding LifeOS. */
   session?: () => Promise<SessionIdentity>;
+  resolveTxt?: (name: string) => Promise<string[][]>;
   traceId: string;
 };
 
@@ -92,7 +93,7 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
   }
 
   const result = await route.handler({
-    ctx: { store: deps.store, principal, traceId: deps.traceId, idempotencyKey, requestHash },
+    ctx: { store: deps.store, principal, traceId: deps.traceId, idempotencyKey, requestHash, resolveTxt: deps.resolveTxt },
     params, body, query,
   });
   return json(result.status ?? 200, {
