@@ -1,0 +1,26 @@
+NOTE 390 open Study: 24 database calls by load
+NOTE 390 sitting on Study for 12 s: 14 database calls, 4 router requests (without this change: 82 calls, 22 requests)
+PASS 390 tap Revise: the bar shows in 17 ms
+PASS 390 tap Revise: the page arrives and the bar goes (10023 ms, 119 database calls)
+PASS 390 tap Apply: the bar shows in 17 ms
+PASS 390 tap Apply: the page arrives and the bar goes (7147 ms, 64 database calls)
+PASS 390 tap Evaluate: the bar shows in 18 ms
+PASS 390 tap Evaluate: the page arrives and the bar goes (7769 ms, 88 database calls)
+PASS 390 tap Learn: the bar shows in 17 ms
+PASS 390 tap Learn: the page arrives and the bar goes (2735 ms, 23 database calls)
+PASS 390 a link on the same page shows no bar
+PASS 390 no sideways scroll
+PASS 390 no page or hydration error ()
+NOTE 1440 open Study: 24 database calls by load
+NOTE 1440 sitting on Study for 12 s: 14 database calls, 4 router requests (without this change: 117 calls, 32 requests)
+PASS 1440 tap Revise: the bar shows in 20 ms
+PASS 1440 tap Revise: the page arrives and the bar goes (9175 ms, 118 database calls)
+PASS 1440 tap Apply: the bar shows in 17 ms
+PASS 1440 tap Apply: the page arrives and the bar goes (6968 ms, 63 database calls)
+PASS 1440 tap Evaluate: the bar shows in 16 ms
+PASS 1440 tap Evaluate: the page arrives and the bar goes (7661 ms, 86 database calls)
+PASS 1440 tap Learn: the bar shows in 16 ms
+PASS 1440 tap Learn: the page arrives and the bar goes (2859 ms, 23 database calls)
+PASS 1440 a link on the same page shows no bar
+PASS 1440 no sideways scroll
+PASS 1440 no page or hydration error ()

@@ -425,11 +425,14 @@ export async function loadHistory(admin: Admin, userId: string, expected: Readon
     if (resp.error || oc.error) return fail(503, "Your assessments could not be read just now.");
     const versionIds = [...new Set(rows.map(r => r.instrument_version_id))] as string[];
     const defs = new Map<string, { loaded: LoadedDefinition; map: Map<string, MappingFact> }>();
-    for (const vid of versionIds) {
+    // Together: each definition takes several round trips, and a learner may have sat several instruments.
+    const loaded = await Promise.all(versionIds.map(async vid => {
       const d = await loadDefinition(admin, vid);
-      if (!d.ok) return fail(503, "Your assessments could not be read just now.");
-      if (d.value) defs.set(vid, { loaded: d.value, map: await loadItemCompetencies(admin, d.value) });
-    }
+      if (!d.ok) return { vid, failed: true as const };
+      return { vid, failed: false as const, value: d.value ? { loaded: d.value, map: await loadItemCompetencies(admin, d.value) } : null };
+    }));
+    if (loaded.some(x => x.failed)) return fail(503, "Your assessments could not be read just now.");
+    for (const x of loaded) if (!x.failed && x.value) defs.set(x.vid, x.value);
     const assessorIds = [...new Set(rows.filter(r => r.respondent_role !== "self" && r.respondent_id).map(r => r.respondent_id))] as string[];
     const names = new Map<string, string | null>();
     if (assessorIds.length) {
