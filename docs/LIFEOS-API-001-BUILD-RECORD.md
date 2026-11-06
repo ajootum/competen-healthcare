@@ -55,9 +55,33 @@ The reader found no injection in `lifeos_mutate`, no trigger bypass, and no way 
 - **Load.** No performance or load test was run.
 - **Per-person database rules.** RLS is deny-all with no per-person policies, by design. See LIFEOS-API-001 section 5.
 
+## Stage 2: the interface (delivery step 5)
+
+The V1.1 baseline rebuilt on the API at `/lifeos`: Calendar, Today, Capture, Commitments, My Worlds, Weekly Plan, Four Quadrants, Weekly Review and Chief of Staff. **No migration.** The gate stays off, so the page answers 404.
+
+- **API-first in practice:** the interface has no database access, and the seal check fails if it imports the service or the adapter.
+- **New API surface:** `PATCH /me` for a person's own settings, and `scheduledFrom` and `scheduledTo` filters on commitments.
+- **Kept from the baseline:** the look, the wording, and the rules: calculated quadrants, inbox until clarified, delegation keeping ownership, proposals needing approval.
+- **Changed from the baseline, as HFE fixes:**
+  - At tablet width the quadrants no longer cramp.
+  - On a phone a More tab reaches the five screens that had no route there.
+  - Touch targets follow the pointer, as CPR-MOB-001 requires.
+  - Focus is visible, dialogs handle Escape, and search is on every screen.
+  - A new person starts empty: the sample data is not seeded.
+
+**Verified:** `scripts/lifeos-ui-harness.ts`, 38 of 38, in Chromium through the real API against staging. It covers the gate, sign-in redirect, a person with no access, worlds, capture, edit, Big Rock, protected time, a second device seeing the same record, complete and reopen, delegation, approving a proposal, plan, review, search, all nine screens at 375, 768 and 1366 px with no sideways scroll, the More tab, the back button, and no uncaught script errors. Screenshots are in `docs/evidence/LIFEOS-API-001/stage-2/`.
+
+**Not verified:** real phones and tablets (widths were emulated), a screen reader, and production. No independent security read was run on this stage, because it adds no access logic beyond `PATCH /me`.
+
+**Known limits:**
+
+- Delegation in the interface names a person or team as text. Choosing an organisation member comes with step 8.
+- Calendar events have no screen yet, since nothing creates them until an integration exists.
+- Search covers open commitments, this week and worlds, and says so when nothing matches.
+- After each change the view reloads from the server, so a slow connection shows disabled buttons rather than instant updates.
+
 ## Not done at this stage
 
-- **No interface.** The prototype still runs on browser storage. Step 5.
 - **No way to get access outside a script.** Provisioning and entitlement grants are `core/provision.ts`, called by the harness. There is no commercial plan or billing behind `lifeos_entitlement` yet. Step 6.
 - **No AI model.** The Chief of Staff is rules only, matching the prototype. Connecting a model is a separate owner decision on what data may be sent.
 - **No custom domains, no tenant admin screens.** Step 7.

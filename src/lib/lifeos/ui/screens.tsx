@@ -2,13 +2,12 @@
 
 import { useState } from "react";
 import type { Commitment, World } from "./client";
+import type { Screen } from "./nav";
 import type { Lifeos } from "./useLifeos";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 step 5. The nine screens of the approved V1.1 baseline, reading real records. Anything not yet known
 // is shown as such: an empty state says what is missing, never a zero that reads like a measurement.
-
-export type Screen = "calendar" | "today" | "capture" | "commitments" | "worlds" | "plan" | "quadrants" | "review" | "ai";
 
 export const SCREENS: Record<Screen, { label: string; icon: string; desc: string }> = {
   calendar: { label: "Calendar", icon: "▦", desc: "Weekly commitments, with important time protected" },

@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
 import { resolveLifeosShell } from "@/lib/lifeos/adapters/competen/guard";
-import { LifeosApp, isScreen } from "@/lib/lifeos/ui/LifeosApp";
+import { LifeosApp } from "@/lib/lifeos/ui/LifeosApp";
+import { isScreen } from "@/lib/lifeos/ui/nav";
 
 // LIFEOS-API-001 step 5. The LifeOS interface. The gate is checked on the server first: off, this page does not exist.
 

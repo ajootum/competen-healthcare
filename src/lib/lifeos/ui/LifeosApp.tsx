@@ -5,18 +5,16 @@ import type { Commitment, World } from "./client";
 import { addDays } from "../core/time";
 import {
   CaptureScreen, Calendar, ChiefOfStaff, Commitments, Plan, Quadrants, Review, SCREENS, Today, Worlds,
-  type Actions, type Screen,
+  type Actions,
 } from "./screens";
+import { NAV, isScreen, type Screen } from "./nav";
 import { type CommitmentFields, type Lifeos, useLifeos } from "./useLifeos";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 step 5. The shell of the owner-approved baseline: sidebar, bottom bar, Capture, and the dialogs.
 
-const NAV: Screen[] = ["calendar", "today", "capture", "commitments", "worlds", "plan", "quadrants", "review", "ai"];
 const BOTTOM: Screen[] = ["calendar", "today", "capture", "commitments"];
 const MORE: Screen[] = ["plan", "worlds", "quadrants", "review", "ai"];
-
-export const isScreen = (s: string | undefined): s is Screen => !!s && (NAV as string[]).includes(s);
 
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);

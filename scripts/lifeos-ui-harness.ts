@@ -73,8 +73,14 @@ const contextFor = async (b: Browser, cookies: { name: string; value: string; ur
   return ctx;
 };
 const nav = (p: Page, label: string) => p.locator("aside nav").getByRole("button", { name: label }).click();
-const settled = async (p: Page) => { await p.waitForFunction(() => !document.querySelector('[role="status"]'), undefined, { timeout: 60000 }); };
+// The page streams, so goto can return before the screen or a redirect has arrived. Wait for the real screen.
+const settled = async (p: Page) => {
+  await p.locator("main h1").first().waitFor({ timeout: 90000 });
+  await p.waitForFunction(() => !document.querySelector('[role="status"]'), undefined, { timeout: 60000 });
+};
 const dialog = (p: Page) => p.getByRole("dialog");
+
+let lastPage: Page | null = null;
 
 async function main() {
   console.log(`LIFEOS UI HARNESS -- target ${verdict.ok ? verdict.ref : "?"} via ${BASE} -- run ${RUN}\n`);
@@ -87,12 +93,14 @@ async function main() {
     ok("G1", off?.status() === 404, "gate off: the page does not exist", off?.status());
     await setGate(true);
     await anonPage.goto(`${BASE}/lifeos/today`, { timeout: 120000 });
+    await anonPage.waitForURL(/\/login/, { timeout: 60000 }).catch(() => {});
     ok("G2", anonPage.url().includes("/login") && decodeURIComponent(anonPage.url()).includes("next=/lifeos/today"), "gate on, signed out: sent to sign-in, and back to this screen afterwards", anonPage.url());
 
     const outsider = await person("outsider");
     const outsiderCtx = await contextFor(browser, outsider.cookies);
     const outsiderPage = await outsiderCtx.newPage();
     await outsiderPage.goto(`${BASE}/lifeos`, { timeout: 120000 });
+    await outsiderPage.getByText("not enabled for this account").waitFor({ timeout: 60000 }).catch(() => {});
     ok("G3", (await outsiderPage.textContent("body"))?.includes("not enabled for this account"), "a signed-in Competen person with no LifeOS access is told so");
 
     const a = await person("a");
@@ -100,6 +108,7 @@ async function main() {
     await grantEntitlement(store, pa.individualId, { individualId: pa.individualId, source: "platform_grant", planCode: "ui-harness" });
     const ctx = await contextFor(browser, a.cookies);
     const p = await ctx.newPage();
+    lastPage = p;
     const consoleErrors: string[] = [];
     p.on("pageerror", e => consoleErrors.push(e.message));
     await p.goto(`${BASE}/lifeos`, { timeout: 120000 });
@@ -109,6 +118,7 @@ async function main() {
 
     // Time zone
     const tzButton = p.getByRole("button", { name: `Use ${TZ}` });
+    await tzButton.waitFor({ timeout: 30000 }).catch(() => {});
     ok("Z1", await tzButton.isVisible(), "a device on another time zone is offered, not silently changed");
     await tzButton.click();
     await tzButton.waitFor({ state: "detached", timeout: 60000 });
@@ -128,7 +138,7 @@ async function main() {
     ok("W1", await p.getByRole("heading", { name: "Team lead" }).isVisible(), "worlds are saved through the API");
 
     // Capture, dated: planned straight away
-    await p.getByRole("button", { name: "＋ Capture" }).click();
+    await p.getByRole("main").getByRole("button", { name: "＋ Capture" }).click();
     const title = `Strategy time ${RUN}`;
     await dialog(p).getByLabel("Commitment").fill(title);
     await dialog(p).getByLabel("Role / world").selectOption({ label: "Team lead · Work" });
@@ -143,7 +153,7 @@ async function main() {
     // Capture, undated: inbox
     const undated = `Call back later ${RUN}`;
     await nav(p, "Capture");
-    await p.getByLabel("Commitment").fill(undated);
+    await p.getByLabel("Commitment", { exact: true }).fill(undated);
     await p.getByRole("button", { name: "Save commitment" }).click();
     await p.locator("div", { hasText: undated }).first().waitFor({ timeout: 60000 });
     await nav(p, "Commitments");
@@ -201,7 +211,7 @@ async function main() {
     ok("G4", (await p.textContent("main"))?.includes("↗ Sister"), "delegation keeps it on my list, waiting on them");
 
     // Chief of Staff: proposal, then the person's decision
-    await p.getByRole("button", { name: "＋ Capture" }).click();
+    await p.getByRole("main").getByRole("button", { name: "＋ Capture" }).click();
     const q2 = `Prepare the plan ${RUN}`;
     await dialog(p).getByLabel("Commitment").fill(q2);
     await dialog(p).getByLabel("Role / world").selectOption({ label: "Team lead · Work" });
@@ -226,8 +236,11 @@ async function main() {
     await nav(p, "Weekly Plan");
     await p.getByLabel("Weekly intention").fill(`Lead with what matters ${RUN}`);
     await p.getByRole("button", { name: "Save intention" }).click();
-    await p.getByRole("button", { name: "Save intention" }).isDisabled();
-    await p.waitForFunction(() => { const b = [...document.querySelectorAll("button")].find(x => x.textContent === "Save intention"); return b?.disabled === true; }, undefined, { timeout: 60000 });
+    for (let i = 0; i < 60; i++) {
+      const row = (await admin.from("lifeos_weekly_plan").select("intention").eq("workspace_id", pa.personalWorkspaceId).limit(5)).data ?? [];
+      if (row.some((r: any) => String(r.intention).includes(RUN))) break;
+      await p.waitForTimeout(1000);
+    }
     await p.reload();
     await settled(p);
     await p.waitForFunction(run => (document.querySelector("#lo-intent") as HTMLTextAreaElement | null)?.value.includes(run), RUN, { timeout: 60000 });
@@ -276,7 +289,8 @@ async function main() {
     await p.goto(`${BASE}/lifeos`);
     await settled(p);
     ok("V-nav1", await p.locator("nav").filter({ hasText: "More" }).getByRole("button", { name: "☰ More" }).isVisible(), "on a phone the bottom bar has a More tab");
-    await p.getByRole("button", { name: "☰ More" }).click();
+    // dispatchEvent, because the dev server's own badge sits over this corner. It does not exist in production.
+    await p.getByRole("button", { name: "☰ More" }).dispatchEvent("click");
     for (const label of ["Weekly Plan", "My Worlds", "Four Quadrants", "Weekly Review", "Chief of Staff"]) {
       ok(`V-more-${label}`, await dialog(p).getByRole("button", { name: label }).isVisible(), `...which reaches ${label}, unreachable on a phone in the prototype`);
     }
@@ -285,7 +299,7 @@ async function main() {
     await p.goBack();
     await p.getByRole("heading", { name: "Calendar", level: 1 }).waitFor({ timeout: 10000 });
     ok("V-back", true, "the browser's back button works between screens");
-    await p.getByRole("button", { name: "＋ Capture" }).click();
+    await p.getByRole("main").getByRole("button", { name: "＋ Capture" }).click();
     await p.keyboard.press("Escape");
     await dialog(p).waitFor({ state: "detached", timeout: 5000 });
     ok("V-esc", true, "Escape closes a dialog");
@@ -295,6 +309,13 @@ async function main() {
     await setGate(false);
     const offAgain = await p.goto(`${BASE}/lifeos`);
     ok("Z9", offAgain?.status() === 404, "gate off again: the page does not exist. Staging is left OFF", offAgain?.status());
+  } catch (e) {
+    // Say what was on screen when the walk stopped.
+    if (lastPage) {
+      console.log(`  STOPPED at ${lastPage.url()}. Alert: ${(await lastPage.locator('[role="alert"]').allTextContents().catch(() => [])).join(" | ").slice(0, 300)}`);
+      if (SHOTS) await lastPage.screenshot({ path: join(SHOTS, "failure.png") }).catch(() => {});
+    }
+    throw e;
   } finally {
     await browser.close();
   }
