@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 // HQ-RECORD-SEARCH-01: the switch for searching HQ records from the palette.
 //
 // ⚠ ABSENT MEANS OFF, AND AN UNREADABLE FLAG MEANS OFF. The row `hq_record_search` in practice_platform_flags is not

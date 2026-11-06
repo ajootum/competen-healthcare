@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { HQ_SPACES } from "../spaces";
 import type { createAdminClient } from "@/lib/supabase/server";
 

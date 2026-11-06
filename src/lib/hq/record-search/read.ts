@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
 import { matchesSearch } from "@/lib/individual/search/match";
 import { hqRecordSearchEnabled } from "./flag";
