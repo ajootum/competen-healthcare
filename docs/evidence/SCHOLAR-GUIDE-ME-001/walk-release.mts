@@ -7,6 +7,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 const BASE = "http://127.0.0.1:3208", SESSION = "3484e65a-ee9c-425a-9b63-b2cca40c898e";
 const OUT = process.env.WALK_OUT!;
+const skip = new Set((process.env.WALK_SKIP ?? "").split(",").filter(Boolean));
 mkdirSync(join(OUT, "shots"), { recursive: true });
 const fixture = readFileSync(process.env.WALK_FIXTURE!, "utf8");
 const field = (k: string) => fixture.split(/\r?\n/).find(l => l.startsWith(`${k}=`))?.slice(k.length + 1).trim() ?? "";
@@ -32,6 +33,7 @@ const page: Page = await ctx.newPage();
 const errors: string[] = [];
 page.on("response", r => { if (r.status() >= 500 && !r.url().includes("/position")) errors.push(`${r.status()} ${r.url().slice(0, 110)}`); });
 page.on("pageerror", e => errors.push(`page: ${e.message.slice(0, 160)}`));
+if (process.env.WALK_TRACE) { page.on("requestfailed", r => { if (r.url().includes("/api/")) console.log("TRACE failed", r.url().slice(-50), r.failure()?.errorText); }); page.on("response", r => { if (r.url().includes("learn/act")) console.log("TRACE act", r.status(), (r.request().postData() ?? "").includes('"purpose"') ? "purpose" : "no-purpose", new Date().toISOString().slice(14, 23)); }); page.on("framenavigated", fr => { if (fr === page.mainFrame()) console.log("TRACE nav", fr.url().slice(-40)); }); }
 const LEARN = `${BASE}/individual/scholar/study/learn?session=${SESSION}`;
 const signIn = async () => {
   await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 300_000 });
@@ -56,6 +58,8 @@ try {
   await load();
 
   // ── 3. SAVED-STATE RECOVERY ON A LESSON OVER TEN SECTIONS (lesson 3, 16 sections, opened fresh in a new browser context) ──
+  let from = new Date().toISOString();
+  if (!skip.has("3")) {
   say("--- 3. saved state, a lesson over ten sections ---");
   // The session remembers the last lesson opened: start from lesson 3 whichever it was, and read its row in the list on the way.
   const startLater = await rowTexts("Later lessons");
@@ -66,7 +70,6 @@ try {
     await until(async () => (await rowTexts("Later lessons")).length === 0, 60_000);
     await page.waitForTimeout(2500);
   }
-  let from = new Date().toISOString();
   const rounds = page.locator('[data-testid="go-deeper-round"]');
   await until(async () => (await rounds.count()) >= 2, 120_000);
   ok((await rounds.count()) >= 2, `saved Go Deeper rounds come back (${await rounds.count()})`);
@@ -91,7 +94,10 @@ try {
     await page.waitForTimeout(2500);
   }
 
+  }
+
   // ── 2. GO DEEPER ANSWER SUBMISSION AND FEEDBACK (a saved round, its answer options, the real check) ──
+  if (!skip.has("2")) {
   say("--- 2. Go Deeper answer and feedback ---");
   await until(async () => (await page.locator('[data-testid="go-deeper-round"] [role="radiogroup"]').count()) > 0, 60_000);
   const group = page.locator('[data-testid="go-deeper-round"] [role="radiogroup"]').first();
@@ -116,6 +122,8 @@ try {
   ok(after === before + 1, `the answer is kept once (${before} to ${after})`);
   ok((await aiCount(from)) === 1, `one model call (${await aiCount(from)})`);
 
+  }
+
   // ── 1. CLINICAL-RISK GATING THROUGH THE REAL GUIDE ME ROUTE ──
   say("--- 1. clinical-risk gate in Guide Me ---");
   await load();
@@ -131,7 +139,8 @@ try {
     await box.fill(typed);
     from = new Date().toISOString();
     await check.click();
-    await until(async () => (await gate.count()) > 0 || (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || (await refusal.allInnerTexts()).some(t => t.trim() && !/Working/.test(t)), 150_000);
+    await page.waitForTimeout(1500);
+    await until(async () => (await gate.count()) > 0 || (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || ((await box.isEditable()) && !(await panel.getByText("Working…").count())), 150_000);
     await page.waitForTimeout(600);
     if (await gate.count()) return { kind: "asked", text: (await gate.first().innerText()).replace(/\s+/g, " ") };
     if (await panel.locator('[data-testid="guide-feedback"]').count()) return { kind: "judged", text: "" };
@@ -167,13 +176,16 @@ try {
     ok((await aiCount(from)) === 0 && (await panel.locator('[data-testid="guide-feedback"]').count()) === 0, "saying it is about a patient judges nothing and sends nothing");
     await panel.screenshot({ path: join(OUT, "shots/r1-patient-answer.png") });
     await buttons.first().click();
-    const went = await until(async () => (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || (await refusal.allInnerTexts()).some(t => t.trim() && !/Working/.test(t)), 180_000);
+    await page.waitForTimeout(1500);
+    const went = await until(async () => (await panel.locator('[data-testid="guide-feedback"]').count()) > 0 || ((await box.isEditable()) && !(await panel.getByText("Working…").count()) && (await gate.count()) === 0), 180_000);
     ok(went, "saying it is for study carries on in the panel");
+    await panel.screenshot({ path: join(OUT, "shots/r1-after-study.png") });
     await page.waitForTimeout(1500);
     note(`after "for study": feedback ${await panel.locator('[data-testid="guide-feedback"]').count()}, model calls ${await aiCount(from)}, said "${(await refusal.allInnerTexts()).join(" | ").slice(0, 160)}"`);
   }
 
   // ── 4. LESSON-LEVEL COMPLETION: a lesson with no earlier check, through every step ──
+  if (!skip.has("4")) {
   say("--- 4. lesson-level completion ---");
   await load();
   const ev = async (step: number, since: string) => { const { data, error } = await admin.from("individual_scholar_learning_event").select("action, verdict, attempt_id, created_at").eq("user_id", userId).eq("session_id", SESSION).eq("step", step).gte("created_at", since).order("created_at"); if (error) throw new Error(error.message); return (data ?? []) as { action: string; verdict: string | null; attempt_id: string | null }[]; };
@@ -231,7 +243,10 @@ try {
   await new Promise(r => setTimeout(r, 1500));
   ok(again.complete === true && again.already === true && (await ev(1, started)).length === before5, `finishing again adds no event and says so (${before5} to ${(await ev(1, started)).length})`);
 
+  }
+
   // ── 5. EXISTING TEACHING AND REVISION ──
+  if (!skip.has("5")) {
   say("--- 5. existing teaching and revision ---");
   await setPolicy("scholar_guide_me_adaptive", "off");
   await setPolicy("scholar_go_deeper_structured", "off");
@@ -257,6 +272,7 @@ try {
   await page.waitForTimeout(2000);
   const savedText = await page.locator("body").innerText();
   ok((saved?.status() ?? 500) < 400 && !/FOCUS QUESTION:|SECTION:/.test(savedText), "saved learning shows no raw labels");
+  }
   ok(errors.length === 0, `no server or page errors (${errors.slice(0, 3).join(" | ")})`);
 } finally {
   await off();

@@ -1,0 +1,23 @@
+Partly understood. A quick check for your own learning. It is not an assessment and does not count towards any competency.
+
+Practice feedback from AI — not a formal exam result or a verified competency.
+
+WHAT YOU GOT RIGHT
+You linked these behaviours to the developing nervous system, which fits that reflexes represent neurological maturation [S5].
+You reasoned that one sign is read with the others rather than alone, which is a sound way to approach a pattern [S1][S2][S10].
+WHAT WAS MISSING
+Feeding draws on taste and smell: sweet fluids are accepted while bitter and sour are resisted, and smell shows in the infant's search for the nipple [S2].
+Sound response is its own strand: the newborn responds with cry, eye movement, cessation of activity and/or startle reaction [S1].
+Eye contact belongs to social development: within a few days the infant interacts with caregivers through eye contact and facial gestures, which strengthen emotional ties [S10].
+MISCONCEPTIONS OR INCORRECT REASONING
+Nothing to correct. Your reasoning does not contradict the passages; it is just general where the notes let you be specific.
+KEY LEARNING POINTS: A MODEL ANSWER FROM YOUR NOTES
+Each behaviour comes from a different area the notes describe: feeding from taste and smell [S2], sound response from hearing [S1], and eye contact from social development [S10].
+Looking at them together covers senses, sound and social interaction at once, rather than any single strand [S1][S2][S10].
+WHAT TO REVISE NEXT
+
+Try naming, for each of the behaviours, which heading in your notes it sits under, using slides 24, 23 and 32 [S2][S1][S10]. Then consider: how does eye contact also connect to the cry of emotional expression [S9]?
+
+Model claude-opus-4-8 · prompt scholar-learn-v3:clarify+scholar-learn-clarify-v3+scholar-learn-cumulative-v1
+
+Saved to your learning record. You can revisit it from this lesson and from Saved learning. It is not an assessment.
