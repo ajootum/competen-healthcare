@@ -89,7 +89,7 @@ export async function scanDeck(bytes: Uint8Array): Promise<DeckScan | null> {
   }
 }
 
-type Index = { unit: "slide" | "page"; visuals: Visual[]; notShown: number };
+type Index = { unit: "slide" | "page"; visuals: Visual[]; notShown: number; noSection: number[] };
 type Indexed = { ok: true; index: Index } | { ok: false; out: Out };
 
 type Settings = { minPx: number; maxPerSlide: number; classify: boolean; textWords: number };
@@ -120,7 +120,9 @@ async function indexOf(ctx: IndividualContext, material: MaterialRow, policy: Se
     unit: pdf ? "page" : "slide", minPx: policy.minPx, maxPerSlide: policy.maxPerSlide, aiRead: new Set(aiRead), emptyUnits: empty,
     pages, classify: policy.classify, textWords: policy.textWords,
   });
-  return { ok: true, index: { unit: pdf ? "page" : "slide", visuals, notShown } };
+  // SCHOLAR-VISUAL-001: the slides or pages with no section of their own, so a picture-only one can be shown where it is in the file.
+  const noSection = [...new Set([...empty, ...(quality?.slideFacts?.blank ?? [])])].sort((a, b) => a - b);
+  return { ok: true, index: { unit: pdf ? "page" : "slide", visuals, notShown, noSection } };
 }
 
 const settingsOf = (policy: { scholarLessonVisualsMinPx: number; scholarLessonVisualsMaxPerSection: number; scholarVisualClassify?: string; scholarVisualTextWords?: number }): Settings => ({
@@ -145,7 +147,7 @@ export async function materialVisuals(ctx: IndividualContext, materialId: string
   if (!opened.supported) return json(200, { unit: "section", visuals: [], notShown: 0 });
   const idx = await indexOf(ctx, opened.material, settingsOf(policy));
   if (!idx.ok) return idx.out;
-  return json(200, { unit: idx.index.unit, visuals: idx.index.visuals, notShown: idx.index.notShown });
+  return json(200, { unit: idx.index.unit, visuals: idx.index.visuals, notShown: idx.index.notShown, noSection: idx.index.noSection });
 }
 
 export type VisualFile = { status: number; error?: string; bytes?: Uint8Array; type?: string; maxAge?: "immutable" | "short" };

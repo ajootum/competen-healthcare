@@ -113,11 +113,14 @@ export function imageKind(bytes: Uint8Array): ImageKind | null {
  */
 export function planPictureSlides(input: {
   emptyUnits: readonly number[]; triedUnits?: readonly number[]; slidesWithSections?: Iterable<number>; cap?: number;
+  /** SCHOLAR-PPTX-READING-01: slides with text and a picture. They have sections already, so only `triedUnits` rules them out, and they come after the picture-only slides. */
+  mixedUnits?: readonly number[];
 }): { slides: number[]; beyondCap: number } {
   const tried = new Set(input.triedUnits ?? []);
   const have = new Set(input.slidesWithSections ?? []);
   const cap = input.cap ?? MAX_AI_SLIDES_PER_MATERIAL;
   const open = [...new Set(input.emptyUnits)].filter(n => Number.isInteger(n) && n > 0 && !tried.has(n) && !have.has(n)).sort((a, b) => a - b);
+  for (const n of [...new Set(input.mixedUnits ?? [])].sort((a, b) => a - b)) if (Number.isInteger(n) && n > 0 && !tried.has(n) && !open.includes(n)) open.push(n);
   const allowed = Math.max(0, cap - tried.size);
   return { slides: open.slice(0, allowed), beyondCap: Math.max(0, open.length - allowed) };
 }

@@ -1,5 +1,6 @@
 import type JSZip from "jszip";
 import type { ImageKind } from "./slide-images";
+import { slideRows, slideSummary, type SlideFacts, type SlideSkipReason } from "./slide-classify";
 import { CHUNK_MAX, CHUNK_TARGET, DOCX_MIME, MAX_MATERIAL_CHARS, MAX_PDF_PAGES, MAX_PPTX_SLIDES, PDF_MIME, PPTX_MIME, TEXT_MIME, type MaterialMime } from "./config";
 
 // ── UPLOAD → TEXT → PAGE-REFERENCED CHUNKS ── COMPETEN-IND-004 s1, COMPETEN-IND-002 s3.2(2) ──────────────
@@ -109,6 +110,10 @@ export type ExtractionQuality = {
    * the same extraction_quality jsonb (no migration; 406's CHECK allows extra keys).
    */
   aiProvenance?: AiReading[];
+  /** SCHOLAR-PPTX-READING-01: why each slide an AI reading was attempted for was not kept. Stored as ai_skipped. */
+  aiSkipped?: { unit: number; reason: SlideSkipReason }[];
+  /** SCHOLAR-PPTX-READING-01: what each slide holds (slide-classify.ts). Stored as slide_facts. Absent before that reading. */
+  slideFacts?: SlideFacts;
 };
 export type AiReading = { units: number[]; model: string; promptVersion: string; extractedAt: string };
 
@@ -132,7 +137,10 @@ export function extractionQuality(mime: MaterialMime, pages: readonly ExtractedP
 }
 
 /** Pure. "Partial" when some pages or slides held no readable text. The sentence the material shows. */
-export function qualitySummary(q: ExtractionQuality | null, opts: { recoverable?: boolean } = {}): { partial: boolean; text: string } {
+export function qualitySummary(q: ExtractionQuality | null, opts: { recoverable?: boolean; picturesShown?: boolean } = {}): { partial: boolean; text: string; heading?: string } {
+  // SCHOLAR-PPTX-READING-01: a presentation whose slides have been classified says what is true of each. A blank slide is no warning.
+  const rows = slideRows(q);
+  if (rows) return slideSummary(rows, opts);
   if (!q) return { partial: false, text: "How completely this file was read was not recorded: it was uploaded before Scholar measured it." };
   const listOf = (u: readonly number[]) => u.length > 8 ? `${u.slice(0, 8).join(", ")} and ${u.length - 8} more` : u.join(", ");
   // SCHOLAR-UPLOAD-FIX: slides read by AI from their pictures are said, every time, never folded into "read".

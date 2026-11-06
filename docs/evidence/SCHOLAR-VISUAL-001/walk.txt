@@ -1,0 +1,92 @@
+NOTE file already on this learner, reused
+PASS upload: slide 37 is blank (blank=37)
+PASS upload: slide 37 is not in the unread list (5,12,16,18)
+PASS upload: slide 36 recorded as grouped
+PASS upload: slide 36 recorded as text with a picture
+PASS material: says Ready to learn
+PASS material: no Partly read
+PASS material: the blank slide sentence
+PASS material: does not say pictures cannot be read
+NOTE details: Reading details Total slides 38 Slides with readable text 27 Slides interpreted from images 0 Slides with mixed content 0 Pictures kept, not interpreted yet 10 Blank slides skipped 1 Slides requiring review 0 Choose a slide to see what happened to it 5 12 16 17 18 29 33 34 35 36 37
+PASS details: slide 37 shows blank
+PASS details: slide 36 says it looked inside groups
+PASS details: slide 36 shows the text taken from inside its groups
+NOTE material: 0 original pictures inline
+FAIL material: every slide holding a picture shows it inline
+FAIL material: slide 5 picture inline
+FAIL material: slide 12 picture inline
+FAIL material: slide 16 picture inline
+FAIL material: slide 18 picture inline
+FAIL material: slide 17 picture inline
+FAIL material: slide 29 picture inline
+FAIL material: slide 33 picture inline
+FAIL material: slide 34 picture inline
+FAIL material: slide 35 picture inline
+FAIL material: slide 36 picture inline
+PASS material: no picture for slide 37
+PASS material: no broken picture
+FAIL material: fitted to width, proportions kept (NaN)
+PASS dialog: larger on request (0 to 1473)
+PASS dialog: moves by scrolling when larger than the panel
+PASS phone: no sideways scrolling (0)
+PASS phone: picture shows and fits (314 of 390)
+PASS tablet: no sideways scrolling (0)
+PASS tablet: picture shows and fits (428 of 820)
+PASS earlier upload: still the old sentence until it is checked
+PASS check again: slide 37 now blank
+PASS check again: 33 sections, none changed or added
+PASS check again twice: same sections
+NOTE check-again audit rows: 4
+NOTE picture reading offered: false
+FAIL no server errors (503 http://127.0.0.1:3205/api/individual/scholar/materials/087a0754-5573-450e-a73c-1d40b4584bf3/analyse ; 503 http://127.0.0.1:3205/api/individual/scholar/materials/087a0754-5573-450e-a73c-1d40b4584bf3/analyse ; 503 http://127.0.0.1:3205/api/individual/scholar/materials/087a0754-5573-450e-a73c-1d40b4584bf3/analyse)
+PASS save path: a picture-only slide and a mixed slide both take a section ({"ok":true,"added":2,"recorded":true})
+PASS save path: no two sections share a place
+PASS save path: slide order kept
+PASS save path: every section keeps its id, so saved lessons still find them
+PASS material: slide 12 gives its specific reason
+PASS material: the interpreted sentence
+PASS material: blank slide still only a skip
+PASS slide 5: the original picture is shown
+PASS slide 5: the AI text says it came from AI
+PASS slide 5: the picture says it is the original
+NOTE details: Reading details Total slides 38 Slides with readable text 27 Slides interpreted from images 1 Slides with mixed content 1 Pictures kept, not interpreted yet 7 Blank slides skipped 1 Slides requiring review 1 Choose a slide to see what happe
+PASS details: slide 36 is mixed once its picture is read
+PASS details: slide 12 needs review
+NOTE learn url: 3205/individual/scholar/study/learn?session=3484e65a-ee9c-425a-9b63-b2cca40c898e
+NOTE learn buttons: ✦ AI help on | 1. Critical sensitive periods Curr | 2. Types of growth and development | 3. Hearing Not started | ✦ Ask about this : Your notes: Gro | ✦ Ask about this : Your notes: Gro | ✦ Ask about this : Your notes: Gro | ✦ Ask about this : Your notes: Gro | View the original slide picture |  | ✦ Ask about this : Your notes: Gro | Mark as read: lesson 1 | Understand | Go deeper | Examples | Practise | Evaluate | Ask Scholar
+NOTE learn figures: 1
+NOTE first: notes start closed; opening them
+PASS saved lesson first: the original picture is shown
+NOTE reopened: notes start closed; opening them
+PASS saved lesson reopened: the original picture is shown
+NOTE posts while opening the lesson: learn/act {"action":"teach","step":0,"depth":"standard","sessionId":"3 ; learn/act {"action":"teach","step":0,"depth":"standard","sessionId":"3
+PASS phone lesson: no sideways scrolling
+PASS another presentation (75 sections): checked, sections unchanged
+NOTE   counts {"total":79,"text":58,"image":0,"mixed":0,"blank":0,"preserved":21,"review":0,"processing":0} blank [] review [] still-unread [42,46,48,78]
+PASS another presentation (49 sections): checked, sections unchanged
+NOTE   counts {"total":49,"text":42,"image":2,"mixed":0,"blank":0,"preserved":5,"review":0,"processing":0} blank [] review [] still-unread []
+PASS a material that is not yours: 404
+PASS ready page: Reading details is there
+PASS ready page: blank slide said as a skip
+PASS material (rerun, waiting for the list): slide 5 picture inline
+PASS material (rerun, waiting for the list): slide 12 picture inline
+PASS material (rerun, waiting for the list): slide 16 picture inline
+PASS material (rerun, waiting for the list): slide 18 picture inline
+PASS material (rerun, waiting for the list): slide 17 picture inline
+PASS material (rerun, waiting for the list): slide 29 picture inline
+PASS material (rerun, waiting for the list): slide 33 picture inline
+PASS material (rerun, waiting for the list): slide 34 picture inline
+PASS material (rerun, waiting for the list): slide 35 picture inline
+PASS material (rerun, waiting for the list): slide 36 picture inline
+PASS material (rerun): no picture for slide 37
+NOTE first: notes start closed; opening them
+PASS saved lesson first: the original picture is shown
+NOTE reopened: notes start closed; opening them
+PASS saved lesson reopened: the original picture is shown
+NOTE posts while opening the lesson: learn/act {"action":"teach","step":0,"depth":"standard","sessionId":"3 ; learn/act {"action":"teach","step":0,"depth":"standard","sessionId":"3
+PASS phone lesson: no sideways scrolling
+PASS another presentation (75 sections): checked, sections unchanged
+NOTE   counts {"total":79,"text":58,"image":0,"mixed":0,"blank":0,"preserved":21,"review":0,"processing":0} blank [] review [] still-unread [42,46,48,78]
+PASS another presentation (49 sections): checked, sections unchanged
+NOTE   counts {"total":49,"text":42,"image":2,"mixed":0,"blank":0,"preserved":5,"review":0,"processing":0} blank [] review [] still-unread []
+PASS a material that is not yours: 404
