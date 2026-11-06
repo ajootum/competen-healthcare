@@ -37,6 +37,11 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
   }
   const learnRules = [...learn].map(([t, roles]) =>
     `.cmp-learn-${t} { ${roles.map(r => `--learn-${r}: var(--cmp-learn-${t}-${r});`).join(" ")} }`);
+  // SEARCH-STANDARD-01: the shared search box uses .cmp-learn-key. Under Professional it takes the product's own colours; Scholar is untouched.
+  const learnThemeRules = [
+    `/* SEARCH-STANDARD-01: the shared search box uses .cmp-learn-key. Under Professional it takes the product's own colours; Scholar is untouched. */`,
+    `[data-cmp-theme="professional"] .cmp-learn-key { --learn-surface: var(--cmp-theme-soft); --learn-border: var(--cmp-theme-border); --learn-accent: var(--cmp-theme-accent); --learn-ink: var(--cmp-theme-strong); }`,
+  ];
   const learnDarkRule = learnDark.length ? [`[data-cmp-scheme="dark"] {`, ...learnDark, "}"] : [];
   return [
     START,
@@ -47,6 +52,7 @@ export function renderBlock(vars: Record<string, string>, fontFamily: string): s
     "}",
     ...themeRules,
     ...learnRules,
+    ...learnThemeRules,
     ...learnDarkRule,
     END,
   ].join("\n");

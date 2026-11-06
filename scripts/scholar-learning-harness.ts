@@ -737,7 +737,7 @@ const researchGoverned = (src: Src) => {
   return act.includes('const askedMode = typeof body?.mode === "string" ? body.mode as LearnSourceMode : "notes";')
     && /if \(!policy\.scholarResearch\.modes\.includes\(askedMode\)\) return NextResponse\.json\(\{[^}]*\}, \{ status: 403 \}\)/.test(act)
     && iMode > 0 && iGate > iMode && iSearch > iGate && iRun > iSearch && (act.match(/learnResearch\(/g) ?? []).length === 1
-    && act.includes('{ question: action === "ask" ? question : null, topics, title: stepTitle }')
+    && act.includes('{ question: action === "ask" ? question : null, topics, title: researchTitle }')
     && svc.includes('if (findPatientIdentifiers(source).length) return { ok: false, reason: "identifier" };')
     && svc.includes("export const isEvidence = (i: ResearchItem) => !!i.abstract && (i.verified.pmid || i.verified.doi === true);")
     && (prov.match(/scholar\.google/g) ?? []).length === 1 && prov.includes("export const scholarSearchUrl = (query: string) => `https://scholar.google.com/scholar?q=${encodeURIComponent(query)}`;")
@@ -1456,7 +1456,7 @@ function main() {
   ok("P61. ⚠ K43 goes red when the search runs without the risk gate, or the query is built from the passages",
     !meteredEverywhere(plant(`${API}/learn/act/route.ts`, "if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: \"risk_raised\" };", ""))
     && !researchGoverned(plant(`${API}/learn/act/route.ts`, "const gate = await scholarRiskGate(ctx, activity, risk);", "const gate = null;"))
-    && !researchGoverned(plant(`${API}/learn/act/route.ts`, "topics, title: stepTitle }", "topics, title: passages.map(p => p.content).join(\" \") }")));
+    && !researchGoverned(plant(`${API}/learn/act/route.ts`, "topics, title: researchTitle }", "topics, title: passages.map(p => p.content).join(\" \") }")));
   ok("P48. ⚠ K30 goes red when the learner view carries the rationale, or a route sends a raw question",
     !answersServerSide(plant(REV, "  const base = { id: q.id, kind: q.kind, stem: q.stem,", "  const base = { id: q.id, kind: q.kind, rationale: q.rationale, stem: q.stem,"))
     && !answersServerSide(plant(`${API}/revision/sessions/route.ts`, "items: ordered.map(revisionItemView), generated, reused", "items: ordered, generated, reused")));

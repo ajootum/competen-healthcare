@@ -1,0 +1,97 @@
+/* LifeOS V1.2. The owner-approved V1.1 prototype's look, kept, with its values as variables so a tenant can brand it.
+   Changes from the prototype are limited to the stated HFE fixes: the md edge at 768px, touch targets on coarse
+   pointers, grids that stop cramping at tablet width, and visible focus. */
+.root {
+  --lo-ink: #183044; --lo-canvas: #f3f7f8; --lo-side: #102e40; --lo-side-ink: #d7e9eb; --lo-side-active: #2b5866;
+  --lo-primary: #116c72; --lo-accent: #167f7b; --lo-mint: #8de4d0; --lo-line: #dfe8eb; --lo-line-2: #cbdade;
+  --lo-muted: #526672; --lo-hover: #e7f4f1;
+  font-family: Inter, system-ui, sans-serif; color: var(--lo-ink); background: var(--lo-canvas); min-height: 100vh;
+}
+.root *, .root *::before, .root *::after { box-sizing: border-box; }
+.root button, .root input, .root select, .root textarea { font: inherit; }
+.root button { cursor: pointer; border: 1px solid #d4e2e6; background: #fff; color: var(--lo-ink); padding: 9px 12px; border-radius: 10px; }
+.root button:hover:not(:disabled) { background: var(--lo-hover); }
+.root button:disabled { opacity: .55; cursor: default; }
+.root :focus-visible { outline: 3px solid var(--lo-accent); outline-offset: 2px; }
+.root button.primary { background: var(--lo-primary); color: #fff; border-color: var(--lo-primary); }
+.root button.primary:hover:not(:disabled) { background: #0d5a5f; }
+.layout { display: grid; grid-template-columns: 225px 1fr; min-height: 100vh; }
+.aside { background: var(--lo-side); color: #fff; padding: 22px 12px; }
+.aside h2 { padding: 0 10px; font-size: 19px; margin: 0 0 4px; }
+.aside h2 span { color: var(--lo-mint); }
+.tagline { padding: 0 10px; color: #9dbcc5; font-size: 12px; margin: 0 0 12px; }
+.root .aside button { display: block; width: 100%; background: transparent; color: var(--lo-side-ink); border: 0; text-align: left; margin: 3px 0; }
+.root .aside button:hover:not(:disabled) { background: #1c4252; }
+.root .aside button.active { background: var(--lo-side-active); color: #fff; }
+.switcher { padding: 0 10px 14px; }
+.switcher label { display: block; font-size: 11px; color: #9dbcc5; margin-bottom: 4px; }
+.switcher select { width: 100%; padding: 8px; border-radius: 9px; border: 1px solid #2b5866; background: #173a4c; color: #fff; }
+.sidenote { padding: 20px 10px; color: #a6c3cb; font-size: 12px; }
+.main { padding: 25px; max-width: 1500px; width: 100%; min-width: 0; }
+.header { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 18px; flex-wrap: wrap; }
+.headerActions { display: flex; gap: 8px; align-items: flex-start; flex-wrap: wrap; }
+.main h1 { font-size: 30px; margin: 4px 0; }
+.main h2 { font-size: 19px; margin: 0 0 12px; }
+.main h3 { font-size: 15px; margin: 8px 0; }
+.muted { color: var(--lo-muted); font-size: 13px; }
+.eyebrow { color: var(--lo-accent); font-size: 11px; letter-spacing: 1.5px; font-weight: 800; text-transform: uppercase; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 15px; align-items: start; }
+.three { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 12px; }
+.card { background: #fff; border: 1px solid var(--lo-line); border-radius: 17px; padding: 18px; margin-bottom: 14px; min-width: 0; }
+.row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.stat { font-size: 28px; font-weight: 800; }
+.week { display: grid; grid-template-columns: repeat(7, minmax(115px, 1fr)); gap: 6px; overflow-x: auto; }
+.day { min-height: 200px; border: 1px solid #dce7e9; border-radius: 11px; padding: 8px; }
+.today { border-color: var(--lo-accent); border-width: 2px; }
+.root button.event { display: block; width: 100%; text-align: left; font-size: 11px; padding: 7px; margin: 5px 0; background: #e9f6f4; border-left: 4px solid #167b79; }
+.root button.protected { background: #fff3db; border-left-color: #d19a33; }
+.root button.doneEvent { opacity: .65; text-decoration: line-through; }
+.task { padding: 12px; border: 1px solid #e1e8ea; border-radius: 12px; margin: 8px 0; }
+.task strong { display: block; }
+.tag { font-size: 11px; background: #edf3f5; padding: 3px 7px; border-radius: 20px; font-weight: 700; }
+.q1 { background: #fff0ec; }
+.q2 { background: #e7f8ec; }
+.q3 { background: #fff8e7; }
+.q4 { background: #f2f3f5; }
+.quadrants { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 12px; }
+.quad { border-radius: 14px; border: 1px solid #dce7e9; padding: 14px; min-height: 170px; min-width: 0; }
+.field { display: grid; gap: 5px; margin: 10px 0; }
+.field label { font-size: 14px; }
+.field input, .field select, .field textarea { padding: 10px; border: 1px solid var(--lo-line-2); border-radius: 9px; width: 100%; background: #fff; color: var(--lo-ink); }
+.field textarea { min-height: 85px; }
+.twoFields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 12px; }
+.check { display: flex; gap: 8px; align-items: center; margin: 10px 0; font-size: 14px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 9px; }
+.root .actions button { font-size: 12px; padding: 6px 8px; }
+.overlay { position: fixed; inset: 0; background: #102b3f99; display: grid; place-items: center; padding: 15px; z-index: 30; }
+.modal { width: min(550px, 100%); max-height: 90vh; overflow: auto; background: #fff; border-radius: 18px; padding: 22px; }
+.notice { padding: 13px; background: #e8f6f3; border-radius: 12px; margin-bottom: 14px; font-size: 14px; }
+.alert { padding: 13px; background: #fff0ec; color: #8a2d12; border-radius: 12px; margin-bottom: 14px; font-size: 14px; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.role { border-left: 4px solid #19867c; }
+.ai { background: #123749; color: #fff; }
+.ai .muted { color: #b9d2d7; }
+.root .ai button { color: var(--lo-ink); }
+.search { position: relative; min-width: min(280px, 100%); }
+.search input { width: 100%; padding: 10px; border: 1px solid var(--lo-line-2); border-radius: 10px; background: #fff; color: var(--lo-ink); }
+.results { position: absolute; top: 100%; left: 0; right: 0; z-index: 25; background: #fff; border: 1px solid var(--lo-line); border-radius: 12px; margin-top: 4px; padding: 6px; max-height: 320px; overflow: auto; box-shadow: 0 8px 24px rgba(16, 24, 40, .12); }
+.root .results button { display: block; width: 100%; text-align: left; border: 0; font-size: 13px; }
+.navmobile { display: none; }
+.root .sheetItem { display: block; width: 100%; text-align: left; margin: 6px 0; }
+
+/* The CPR-MOB-001 edge: below md, the sidebar gives way to a bottom bar of at most five tabs. */
+@media (max-width: 767.98px) {
+  .layout { display: block; }
+  .aside { display: none; }
+  .main { padding: 15px 12px 85px; }
+  .week { grid-template-columns: repeat(7, 125px); }
+  .main h1 { font-size: 25px; }
+  .search { width: 100%; }
+  .navmobile { display: flex; position: fixed; bottom: 0; left: 0; right: 0; background: #fff; border-top: 1px solid #d9e4e8; padding: 7px; justify-content: space-around; z-index: 5; }
+  .root .navmobile button { font-size: 11px; border: 0; padding: 7px 3px; }
+  .root .navmobile button.active { color: var(--lo-accent); font-weight: 700; }
+}
+/* Touch-target size follows the pointer, not the width. */
+@media (pointer: coarse) {
+  .root button, .field input, .field select, .search input, .switcher select { min-height: 44px; }
+  .root .actions button { min-height: 44px; padding: 8px 10px; }
+}

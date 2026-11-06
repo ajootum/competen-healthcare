@@ -1,0 +1,25 @@
+NOTE policy before: no row
+NOTE after terms: /individual/professional
+NOTE page says: C competen PROFESSIONAL Individual account SP Search Walk pro ▾ ⌂ Home ◈ My practice ◎ Needs & plan ✎ Learning & CPD ❖ Credentials & evidence ◇ My competencies ↗ Progress ✦ Personal AI ▣ Competen Passport ◉ Profile & history ⚙ Settings Competen Individual One 
+NOTE after terms: /individual/professional
+PASS policy off: the route answers 404 (404)
+PASS policy on: my own CPD entry is found (200)
+PASS another person's matching entry is not returned
+PASS the other person sees only their own
+PASS not signed in: no results
+PASS a single letter returns nothing (400)
+PASS a term that matches nothing returns nothing
+PASS a Professional-only person cannot use Scholar's search (403)
+NOTE opens at /individual/professional
+PASS browser: Ctrl K, type, and my entry shows
+PASS browser: it says what it searches
+PASS browser: the other person's entry does not show
+NOTE Enter opens /individual/professional
+PASS Enter stays inside Professional
+NOTE after terms: /individual/professional
+PASS tablet: no sideways scrolling
+PASS tablet: the search control is there
+PASS tablet: my entry shows
+PASS no server errors ()
+NOTE policy after: no row
+NOTE temporary people removed: 3

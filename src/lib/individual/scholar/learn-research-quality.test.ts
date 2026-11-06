@@ -52,7 +52,7 @@ const P: ScholarResearchPolicy = { modes: ["notes", "research"], dailyMax: 5, da
 
 describe("Learn Research & Explain: learnResearch leaves gated (cache path, through a fake database)", () => {
   it("only the PubMed systematic review on pyelonephritis reaches generation; the rest are reading with their reason", async () => {
-    const r = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] }, null, null, qualityOf(DEFAULT_POLICY.scholarRecovery));
+    const r = await learnResearch(ctx(CACHED), P, { title: Q, topics: [Q] }, null, null, qualityOf(DEFAULT_POLICY.scholarRecovery));
     expect(r.state).toBe("cached");
     // What the Learn route gives its model (route.ts: researchEvidence(research)).
     expect(researchEvidence(r).map(e => e.title)).toEqual([review.title]);
@@ -65,17 +65,17 @@ describe("Learn Research & Explain: learnResearch leaves gated (cache path, thro
     ]);
   });
   it("without the settings argument the defaults still gate (no caller can get the engine's raw list)", async () => {
-    const r = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] });
+    const r = await learnResearch(ctx(CACHED), P, { title: Q, topics: [Q] });
     expect(researchEvidence(r).map(e => e.title)).toEqual([review.title]);
   });
   it("HQ settings relax exactly as named: on topic off adds nothing the relevance filter has dropped; any_verified alone does not let the untyped OpenAlex item", async () => {
-    const off = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] }, null, null, { ...DEFAULT_QUALITY, evidenceOnTopic: "off" });
+    const off = await learnResearch(ctx(CACHED), P, { title: Q, topics: [Q] }, null, null, { ...DEFAULT_QUALITY, evidenceOnTopic: "off" });
     expect(researchEvidence(off).map(e => e.title)).toEqual([review.title]);
-    const any = await learnResearch(ctx(CACHED), P, { question: Q, topics: [] }, null, null, { ...DEFAULT_QUALITY, evidenceIndexed: "any_verified" });
+    const any = await learnResearch(ctx(CACHED), P, { title: Q, topics: [Q] }, null, null, { ...DEFAULT_QUALITY, evidenceIndexed: "any_verified" });
     expect(externalReferences(any).find(x => x.url === ayurveda.url)?.notUsed).toBe("type_unknown");
   });
   it("when nothing passes: no abstract reaches generation, and every item is still listed as reading", async () => {
-    const r = await learnResearch(ctx([asb, ayurveda, caseReport]), P, { question: Q, topics: [] });
+    const r = await learnResearch(ctx([asb, ayurveda, caseReport]), P, { title: Q, topics: [Q] });
     expect(researchEvidence(r)).toEqual([]);
     expect(externalReferences(r).map(x => x.evidence)).toEqual([false, false]);
   });

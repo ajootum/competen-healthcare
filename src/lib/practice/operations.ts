@@ -76,7 +76,7 @@ export async function loadPracticeOps(admin: any) {
   ]);
 
   const flags: Record<string, boolean> = {};
-  const flagRows = ((flagRes.data ?? []) as any[]).slice()
+  const flagRows = ((flagRes.data ?? []) as any[]).filter(f => (FLAG_ORDER as readonly string[]).includes(f.flag))
     .sort((a, b) => FLAG_ORDER.indexOf(a.flag) - FLAG_ORDER.indexOf(b.flag));
   for (const f of flagRows) flags[f.flag] = !!f.enabled;
 
