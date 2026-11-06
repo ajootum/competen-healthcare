@@ -1,7 +1,8 @@
 // Allow up to 300s: filling a shortfall may write a few small sets of questions, one passage at a time.
 export const maxDuration = 300;
 
-import { existingScenarioOf, type ExistingScenario } from "@/lib/individual/scholar/scenario-variety";
+import { isScenarioQuestion } from "@/lib/individual/scholar/formats";
+import { canWriteAnotherScenario, existingScenarioOf, type ExistingScenario } from "@/lib/individual/scholar/scenario-variety";
 import { NextResponse } from "next/server";
 import { answerOutcome, noCalls, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 import { offerable } from "@/lib/individual/scholar/scenario-service";
@@ -156,7 +157,13 @@ export async function POST(req: Request) {
   // Revise engine quality 2.5: a different question on what was just missed: same section, focused on what its rubric names, never the same question.
   const missed = mode === "quick" && isUuid(body?.followUpOf) ? await getQuestion(ctx.admin, ctx.userId, body.followUpOf) : null;
   if (isUuid(body?.followUpOf) && !missed) return NextResponse.json({ error: "That question could not be found." }, { status: 404 });
-  if (missed) {
+  // SCHOLAR-ANOTHER-SCENARIO-01: the learner asks for another scenario on the section of the one they just did. Written only on this click, under the same preflight,
+  // allowance and checks. It is a new scenario about a different decision, so none already on the section is served in its place.
+  const anotherOf = !missed && mode === "quick" && isUuid(body?.anotherScenarioOf) ? await getQuestion(ctx.admin, ctx.userId, body.anotherScenarioOf) : null;
+  if (isUuid(body?.anotherScenarioOf) && (!anotherOf || !isScenarioQuestion(anotherOf))) return NextResponse.json({ error: "That scenario could not be found." }, { status: 404 });
+  if (anotherOf) {
+    chunkIds = [anotherOf.chunkId]; scopeSections = [anotherOf.chunkId];
+  } else if (missed) {
     const rubric = rubricOfQuestion(missed);
     chunkIds = [missed.chunkId]; scopeSections = [missed.chunkId];
     gapConcepts = new Map([[missed.chunkId, followUpConcepts({ misconceptions: rubric?.misconceptions, keyPoints: rubric?.keyPoints })]]);
@@ -191,9 +198,9 @@ export async function POST(req: Request) {
   const intent: RevisionIntent | null = isRevisionIntent(body?.intent) ? body.intent : null;
   const asIntent = intent ? REVISION_INTENT[intent] : null;
   const offered = missed ? policy.scholarRevisionFormats.filter(f => f !== "flashcard" && f !== "cloze" && f !== "scenario") : policy.scholarRevisionFormats;
-  const formats = (intent ? intentFormats(intent, offered) : pickFormats(missed ? offered : body?.formats, offered)).filter(f => f !== "structured" || (sqie && feedback === "immediate")).filter(f => !needsImmediateFeedback(f) || feedback === "immediate");
+  const formats = anotherOf ? offered.filter(f => f === "scenario") : (intent ? intentFormats(intent, offered) : pickFormats(missed ? offered : body?.formats, offered)).filter(f => f !== "structured" || (sqie && feedback === "immediate")).filter(f => !needsImmediateFeedback(f) || feedback === "immediate");
   if (!formats.length) return NextResponse.json({ error: "None of those question formats is offered here." }, { status: 400 });
-  const quantity = missed ? 1 : asIntent?.quantity ?? (Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity);
+  const quantity = missed || anotherOf ? 1 : asIntent?.quantity ?? (Number.isInteger(body?.quantity) ? Math.min(REVISION_QUANTITY_MAX, Math.max(1, body.quantity)) : policy.scholarRevisionQuantity);
   const asked: RevisionDifficulty | null = asIntent ? asIntent.difficulty : (REVISION_DIFFICULTIES as readonly string[]).includes(body?.difficulty) ? body.difficulty : null;
   let difficulty: RevisionDifficulty = asked ?? (mode === "flashcards" ? policy.scholarFlashcardDifficulty : policy.scholarRevisionDifficulty);
   // SCHOLAR-SQIE-01: where questions come from -- the notes (default), or the notes with approved references.
@@ -218,7 +225,7 @@ export async function POST(req: Request) {
   // prompt and the depth asked for. Otherwise the shortfall is written, under the same call caps, allowance and checks. Everything else behaves as before.
   const repick = () => {
     const shaped = intent || missed ? pool!.items.filter(p => !about(p.id)) : pool!.items;
-    const r = pickQuestions({ mode, pool: shaped, quantity, formats: kinds, difficulty, seed, recentMisses: pool!.misses, depths: aim, exclude, varied: intent === "mixed_challenge" });
+    const r = pickQuestions({ mode, pool: shaped, quantity, formats: kinds, difficulty, seed, recentMisses: pool!.misses, depths: aim, exclude: anotherOf ? shaped.map(p => p.id) : exclude, varied: intent === "mixed_challenge" });
     if (!intent && !missed) return r;
     const fresh = shaped.filter(p => p.current && p.lastAnsweredAt === null && !exclude.includes(p.id) && kinds.includes(p.kind as RevisionFormat) && (!aim.length || (p.depth && aim.includes(p.depth)))).length;
     return { ...r, shortfall: Math.max(r.shortfall, Math.ceil(quantity / 2) - fresh) };
@@ -259,6 +266,8 @@ export async function POST(req: Request) {
   };
   let pool = await poolOf();
   if (!pool) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
+  if (anotherOf && !canWriteAnotherScenario(pool.questions.filter(q => isScenarioQuestion(q) && q.chunkId === anotherOf.chunkId).length))
+    return NextResponse.json({ error: "This section already has a scenario for each kind of decision. Practise those again, or try another section." }, { status: 409 });
   // SCHOLAR-SQIE-01: with no difficulty chosen, the default is the programme level's (else the policy's), stepped up
   // after three right answers and down after two misses in the last three (question-intel.ts adaptDifficulty). A
   // default only: a chosen difficulty is always used as chosen, and nothing is withheld by it.
@@ -273,7 +282,7 @@ export async function POST(req: Request) {
   // A follow-up stays on its own section. If every section is thin, the plan is unchanged. Read once, only when something is about to be written.
   let ranked = false;
   const rankSections = async () => {
-    if (ranked || missed) return;
+    if (ranked || missed || anotherOf) return;
     ranked = true;
     const read = await Promise.all(scopeSections.slice(0, 40).map(async c => ({ c, p: await getPassage(ctx.admin, ctx.userId, c) })));
     const rich = read.filter(x => x.p && !thinForQuestions(x.p.content)).map(x => x.c);
@@ -349,6 +358,7 @@ export async function POST(req: Request) {
         // Identical content is not written twice: a section and format that already has questions at this prompt version is skipped.
         // SCHOLAR-SQIE-LEARNER-01: by the format a question is offered as (cloze, true/false and extended are stored as `short`).
         const existing = new Set(pool.questions.filter(q => q.promptVersion.startsWith(formatPromptVersion(effectiveKind(q)))).map(q => `${q.chunkId}|${effectiveKind(q)}`));
+        if (anotherOf) existing.delete(`${anotherOf.chunkId}|scenario`);
         // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
         // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
         await rankSections();

@@ -853,6 +853,27 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
 const OUTCOME_WORD = { correct: "correct", partial: "partly correct", incorrect: "not correct" } as const;
 const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "an earlier date"; };
 
+/** SCHOLAR-ANOTHER-SCENARIO-01: another scenario on this section, about a different decision. Only on this click, and it says it uses AI. */
+function AnotherScenarioButton({ questionId }: { questionId: string }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  async function go() {
+    setBusy(true); setError("");
+    const r = await call("/api/individual/scholar/revision/sessions", { mode: "quick", anotherScenarioOf: questionId, feedback: "immediate", ...studyField() });
+    setBusy(false);
+    if (!r.ok || !r.json.session?.id) { setError(r.json.error ?? r.json.note ?? "Another scenario could not be written just now. Your saved work is unchanged."); return; }
+    router.push(carry(revisionHref(r.json.session.id)));
+  }
+  return (
+    <>
+      <button type="button" className={btn} disabled={busy} onClick={() => void go()} aria-describedby="another-scenario-ai">{busy ? "Writing a new one…" : "Try another scenario on this"}</button>
+      <span id="another-scenario-ai" className="basis-full text-[12px] text-gray-700">AI writes it from this section of your notes, about a different decision. It uses your AI allowance.</span>
+      {error && <p role="alert" className="basis-full text-[13px] font-semibold text-red-800">{error}</p>}
+    </>
+  );
+}
+
 /** Revise engine quality 2.5: a different question on what was just missed. The server chooses or writes it, and never repeats this one. */
 function FollowUpButton({ questionId }: { questionId: string }) {
   const router = useRouter();
@@ -1062,6 +1083,7 @@ export function FeedbackPanel({ f, sessionId, compact = false, questionId, stem 
         {!f.library && <SourcePictureButton materialId={f.source.materialId} citation={f.source.citation} className={ghost} />}
         {!f.correct && <Link href={learnHref(f.source.chunkId, sessionId)} className={ghost}>Teach me this</Link>}
         {!f.correct && !compact && !f.library && questionId && <FollowUpButton questionId={questionId} />}
+        {!compact && !f.library && questionId && f.scenario && <AnotherScenarioButton questionId={questionId} />}
         {/* CLINICAL-REASONING-01 CR1: from Revision, a case written from the same section. */}
         <Link href={`${studyHref("apply")}?section=${f.source.chunkId}&from=revision`} className={ghost}>Practise in a case</Link>
         {/* SCHOLAR-SQIE-01: more on the same material, a step easier after a miss and harder after a right answer. */}
