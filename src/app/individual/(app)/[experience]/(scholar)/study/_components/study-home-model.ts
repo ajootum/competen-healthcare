@@ -3,13 +3,6 @@ import type { SessionHit } from "@/lib/individual/scholar/learn-search";
 // SCH-HFE-01: what the Study Home says, worked out from existing records. Pure. No percentage is made from steps, and no
 // figure or state stands in for one that was not recorded.
 
-/** The most recent session the learner can actually go back to. Only active sessions with lessons left to open count. */
-export function resumableOf(hits: readonly SessionHit[]): { session: SessionHit | null; blocked: boolean } {
-  const active = hits.filter(h => h.status === "active");
-  const session = active.find(h => h.steps > 0) ?? null;
-  return { session, blocked: !session && active.length > 0 };
-}
-
 /** "Step 1 of 8": the session's own position, kept in range. Null where it has no lessons. */
 export function stepOf(s: Pick<SessionHit, "steps" | "currentStep">): { step: number; of: number; label: string } | null {
   if (s.steps <= 0) return null;

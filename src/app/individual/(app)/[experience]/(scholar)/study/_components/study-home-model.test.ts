@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { SessionHit } from "@/lib/individual/scholar/learn-search";
-import { fileTypeOf, lastActive, materialState, resumableOf, stepOf } from "./study-home-model";
+import { resumableOf } from "@/lib/individual/scholar/resume-session";
+import { fileTypeOf, lastActive, materialState, stepOf } from "./study-home-model";
 
 const hit = (o: Partial<SessionHit>): SessionHit => ({ id: "s", title: "T", topic: null, status: "active", steps: 8, currentStep: 0, sources: [], lastActiveAt: "2026-11-05T10:00:00Z", createdAt: "2026-11-01T10:00:00Z", ...o });
 

@@ -2,7 +2,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
-import { loadIndividualPolicy, shownLearnModes } from "@/lib/individual/policy";
+import { loadIndividualPolicy, shownLearnModes, type IndividualPolicy } from "@/lib/individual/policy";
 import { scholarResearchOperational } from "@/lib/individual/scholar/learn-research";
 import { countDue, getLearningPosition, getLearningPreference, getLearningSession, getRevisionSession, isUuid, learnLessonRecords, learningEvents, librarySchema, listCheckAttempts, listMappings, listMaterials, readConsent, type MaterialRow } from "@/lib/individual/scholar/store";
 import type { CheckHistoryItem } from "@/lib/individual/scholar/learn-check-record";
@@ -11,19 +11,30 @@ import { sectionProfiles, sessionTopics } from "@/lib/individual/scholar/learn";
 import { offeredActions, sessionView } from "@/lib/individual/scholar/learn-view";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
 import { LEARN_ACTION_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
-import { PageHeader, StatePanel, focusRing, secondaryBtn } from "../../../../../_components/chrome";
+import { Notice, PageHeader, StatePanel, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
 import { scholarSpace } from "@/lib/individual/scholar/spaces";
 import type { ServerPosition } from "@/lib/individual/scholar/learn-position";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
 import { searchLibraryTolerant } from "@/lib/individual/scholar/tolerant-search";
 import { learnLanding, parseSearchParams, topicDetail, displaySessionTitle } from "@/lib/individual/scholar/learn-search";
-import { ContinueLearning, LearnSearchBox, MyTopics, RecentlyAdded, SearchResults, TopicDetail, learnHref } from "../_components/learn-landing";
+import { LearnSearchBox, MyTopics, RecentlyAdded, SearchResults, TopicDetail, learnHref } from "../_components/learn-landing";
+import { Suspense } from "react";
+import { headers } from "next/headers";
+import { Deferred, SectionLoading } from "../_components/deferred";
+import { ContinueCard } from "../_components/study-home";
+import { MyLibrarySection, MoreToLearnFrom, RecentLessons, StudyNext, recentLessons } from "../_components/learn-home";
+import type { IndividualContext } from "@/lib/individual/guard";
+import { resumeSession } from "@/lib/individual/scholar/resume-session";
+import { scholarModulesOnce } from "@/lib/individual/scholar/module-access";
+import { loadToday } from "@/lib/individual/scholar/plan-data";
+import { learnerTimeZone, learnerToday } from "@/lib/individual/scholar/learning-definitions";
 // SCHOLAR-SEARCH-HISTORY-01: a submitted search is kept in the learner's own history (policy scholar_search_history, default off).
 import { RecordSearch } from "../_components/search-history-client";
 import { getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { continueStudy, loadStudy, studySessionsOn } from "@/lib/individual/scholar/study-context";
-import { STUDY_SPACE_LABEL, stageHref } from "@/lib/individual/scholar/study-carry";
+import { stageHref } from "@/lib/individual/scholar/study-carry";
+import type { StudySpace } from "@/lib/individual/scholar/study-session";
 import { cleanObjectiveText } from "@/lib/individual/scholar/study-session";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -131,7 +142,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
         </StatePanel>
       ) : !resume && !start ? (
         <>
-          <Discover admin={ctx.admin} userId={ctx.userId} q={q} library={library.ok ? library.data : null} studyOn={studyOn} historyOn={policy.scholarSearchHistory === "on"} />
+          <Discover ctx={ctx} policy={policy} q={q} library={library.ok ? library.data : null} studyOn={studyOn} historyOn={policy.scholarSearchHistory === "on"} />
           {/* COMPETEN-SCHOLAR-EXAM-PAPERS-01: a past paper is learned from in Apply, question by question, with evidence. */}
           {policy.scholarExams.enabled && (
             <p className="mt-5 text-[13.5px] text-gray-600">
@@ -162,7 +173,8 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
  * SCH-LEARN-UX-01: what Learn shows with nothing to start or resume -- a topic, a search's results, or the landing.
  * Reads only, no AI. `library` null: the materials could not be read (said so, never shown as empty).
  */
-async function Discover({ admin, userId, q, library, studyOn, historyOn }: { admin: unknown; userId: string; q: Search; library: MaterialRow[] | null; studyOn: boolean; historyOn: boolean }) {
+async function Discover({ ctx, policy, q, library, studyOn, historyOn }: { ctx: IndividualContext; policy: IndividualPolicy; q: Search; library: MaterialRow[] | null; studyOn: boolean; historyOn: boolean }) {
+  const { admin, userId } = ctx;
   const name = one(q.topicView).trim().slice(0, 200);
   if (name) {
     const page = Math.max(1, Math.min(200, Math.floor(Number(one(q.page)) || 1)));
@@ -187,14 +199,39 @@ async function Discover({ admin, userId, q, library, studyOn, historyOn }: { adm
     return (<><LearnSearchBox q={params.q} studyOn={studyOn} historyOn={historyOn} />{r.showingFor && <p role="status" className="mb-3 text-[14px] text-gray-800" data-testid="showing-results-for">Showing results for <span className="font-semibold">{r.showingFor}</span>. You searched for “{params.q}”.</p>}<SearchResults r={r} />{historyOn && params.q && <RecordSearch activity="material_search" query={params.q} requestKey={one(q.hk) || null} resultCount={found} />}</>);
   }
   const [l, cont] = await Promise.all([learnLanding(admin, userId, library), studyOn ? continueStudy(admin, userId) : null]);
+  // SCH-HFE-01: the next step takes the most reading, so the rest of the landing shows first and it arrives when it is ready.
+  const nextP = nextSection(ctx, policy);
+  const [resume, modules] = await Promise.all([resumeSession(admin, userId, library ?? [], cont), scholarModulesOnce(admin, userId)]);
+  const session = resume.session;
+  const href = session && resume.connectedSpace ? stageHref(resume.connectedSpace as StudySpace, session.id) : session ? learnHref({ session: session.id }) : null;
   return (
-    <>
+    <div className="max-w-[880px] space-y-5" data-learn-home>
+      {session && href && <ContinueCard s={session} href={href} more={false} />}
+      {!session && resume.blocked && <Notice>Your last lesson can no longer be resumed, because the material it was taught from is no longer available. Your learning record is unchanged. You can start something new below.</Notice>}
       <LearnSearchBox studyOn={studyOn} historyOn={historyOn} />
-      <ContinueLearning sessions={l.sessions} total={l.sessionTotal} study={cont ? { title: cont.title, space: STUDY_SPACE_LABEL[cont.space], href: stageHref(cont.space, cont.id) } : null} />
-      <MyTopics groups={l.topicGroups} total={l.topicTotal} />
-      <RecentlyAdded docs={l.recent} studyOn={studyOn} />
-    </>
+      {policy.scholarMyPlan === "on" && (
+        <Suspense fallback={<SectionLoading label="Working out your next step" rows={2} />}><Deferred content={nextP} /></Suspense>
+      )}
+      <RecentLessons sessions={recentLessons(l.sessions ?? [], session?.id ?? null)} unreadable={l.sessions === null} total={l.sessionTotal} />
+      <MyLibrarySection materials={library === null ? null : library.length} savedOn={policy.scholarLearningLibrary === "on"} coursesOn={modules.has("courses")}
+        extra={(
+          <>
+            {l.topicTotal > 0 && <MoreToLearnFrom label={`Your topics (${l.topicTotal})`}><MyTopics groups={l.topicGroups} total={l.topicTotal} bare /></MoreToLearnFrom>}
+            {(l.recent === null || l.recent.length > 0) && <MoreToLearnFrom label="Recently added"><RecentlyAdded docs={l.recent} studyOn={studyOn} bare /></MoreToLearnFrom>}
+          </>
+        )} />
+    </div>
   );
+}
+
+/** Study next: the plan's own recommendation, read without changing anything. A plan that cannot be read says so. */
+async function nextSection(ctx: IndividualContext, policy: IndividualPolicy): Promise<React.ReactNode> {
+  if (policy.scholarMyPlan !== "on") return null;
+  const hdrs = await headers();
+  const t = await loadToday(ctx as never, policy, { now: new Date(), tz: learnerTimeZone(hdrs), today: learnerToday(hdrs), readOnly: true }).catch(() => null);
+  if (!t) return <StudyNext item={null} starting={false} unreadable />;
+  if (!t.ok) return t.reason === "unreadable" ? <StudyNext item={null} starting={false} unreadable /> : null;
+  return <StudyNext item={t.next ? { title: t.next.title, minutes: t.next.minutes ?? null, href: t.next.href ?? null } : null} starting={t.starting} unreadable={false} />;
 }
 
 /**
