@@ -54,8 +54,10 @@ export function PageSearch({ scope, action, name = "q", value, placeholder, hidd
 }
 
 /** The same field, for a list filtered in the browser as the learner types. */
-export function PageSearchInput({ scope, value, onChange, placeholder, inputRef, disabled = false, resultNote }: {
+export function PageSearchInput({ scope, value, onChange, onClear, placeholder, inputRef, disabled = false, resultNote }: {
   scope: string; value: string; onChange: (v: string) => void; placeholder: string;
+  /** Clear search, where blanking the field is not enough (a list the server filtered). Default: blank the field. */
+  onClear?: () => void;
   inputRef?: React.Ref<HTMLInputElement>; disabled?: boolean;
   /** "3 of 12 shown", read out as it changes. */
   resultNote?: string | null;
@@ -69,7 +71,7 @@ export function PageSearchInput({ scope, value, onChange, placeholder, inputRef,
       <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[12.5px] text-gray-700">
         <span>{scope}</span>
         {resultNote && <span role="status">{resultNote}</span>}
-        {value && <button type="button" onClick={() => onChange("")} className={clearCls}>Clear search</button>}
+        {value && <button type="button" onClick={() => (onClear ? onClear() : onChange(""))} className={clearCls}>Clear search</button>}
       </p>
     </div>
   );

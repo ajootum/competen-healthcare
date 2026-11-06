@@ -3,7 +3,7 @@ import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { pageScope } from "@/lib/individual/search/registry";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
-import { osceFilterPrefill, withStudy } from "@/lib/individual/scholar/study-carry";
+import { osceClearSearchHref, osceFilterPrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
@@ -100,7 +100,7 @@ export default async function OscePractice({ params, searchParams }: { params: P
           <h2 id="osce-list-h" className="text-[16px] font-bold text-gray-900">Your stations</h2>
           {all.length > 0 && (
             <PageSearch scope={pageScope("osce")} action={experienceHref("scholar", "study/apply/osce")} name="q" value={filter.q} placeholder="Topic, body system or title" list="osce-topics"
-              hidden={{ study: sid }} className="mt-2" clearHref={withStudy(`${experienceHref("scholar", "study/apply/osce")}${sid ? "?all=1" : ""}`, sid)}
+              hidden={{ study: sid }} className="mt-2" clearHref={withStudy(osceClearSearchHref(experienceHref("scholar", "study/apply/osce"), filter, sid), sid)}
               extra={<datalist id="osce-topics">{facets.topics.map(t => <option key={t} value={t} />)}</datalist>}>
             <div className="mt-2 grid gap-2 md:grid-cols-2">
               <label className="text-[12.5px] font-semibold text-gray-700">Competency
