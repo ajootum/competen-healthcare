@@ -1,6 +1,7 @@
 // Allow up to 60s for AI generation -- the same ceiling the personal AI uses.
 export const maxDuration = 60;
 
+import { researchTitleOf } from "@/lib/individual/scholar/ask-sources";
 import { NextResponse } from "next/server";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
@@ -27,7 +28,7 @@ import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPT
 import { coversLesson } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
-import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope, researchTitleOf } from "@/lib/individual/scholar/learn-research";
+import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope } from "@/lib/individual/scholar/learn-research";
 import { qualityOf } from "@/lib/individual/scholar/source-quality";
 import { findSavedLesson, materialQualities, topicsOfSections } from "@/lib/individual/scholar/store";
 import { aiReadByMaterial, aiReadMark } from "@/lib/individual/scholar/learn-ai-read";

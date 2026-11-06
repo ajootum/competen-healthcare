@@ -46,6 +46,9 @@ export type AskOfferInput = {
  */
 export const TYPED_QUESTIONS_MAY_LEAVE = false as boolean;
 
+/** Pure. ASK-RESEARCH-GUARD-01: a session's title, as research may use it. A topic session's topic and title are what the learner typed, so neither goes out. */
+export const researchTitleOf = (session: { scopeKind: string; title?: string | null; topic?: string | null }): string | null =>
+  session.scopeKind === "topic" ? null : session.topic ?? session.title ?? null;
 /** Pure. What is offered now. Only what can run: a source that cannot is not shown at all. Web is never offered (see above). */
 export function offeredAskSources(i: AskOfferInput): AskSource[] {
   return [

@@ -1,3 +1,4 @@
+import { researchTitleOf } from "./ask-sources";
 import { describe, expect, it } from "vitest";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import {
@@ -5,7 +6,7 @@ import {
   type Passage, type ResearchEvidence,
 } from "./generation";
 import { artefactKey, libraryReferences, relabelReferences } from "./learn";
-import { externalReferences, researchEvidence, type LearnResearch, lessonQuery, nothingButTypedQuestion, withoutTypedQuestion, researchTitleOf } from "./learn-research";
+import { externalReferences, researchEvidence, type LearnResearch, lessonQuery, nothingButTypedQuestion, withoutTypedQuestion } from "./learn-research";
 import { policyPath, resolvePolicy, shownLearnModes } from "../policy";
 
 // COMPETEN-RESEARCH-01: Research & Explain on the ONE Learn engine. The research part is its own kind of content,

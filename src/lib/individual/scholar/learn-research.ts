@@ -136,9 +136,6 @@ export function lessonQuery(input: ResearchInput): ReturnType<typeof researchQue
  */
 export const withoutTypedQuestion = (input: ResearchInput, allowed: boolean = TYPED_QUESTIONS_MAY_LEAVE): ResearchInput =>
   allowed ? input : { ...input, question: null };
-/** Pure. ASK-RESEARCH-GUARD-01: a session's title, as research may use it. A topic session's topic and title are what the learner typed, so neither goes out. */
-export const researchTitleOf = (session: { scopeKind: string; title?: string | null; topic?: string | null }): string | null =>
-  session.scopeKind === "topic" ? null : session.topic ?? session.title ?? null;
 /** Pure. Nothing left to search once the typed question is gone: no search at all, and no attempt to build a query. */
 export const nothingButTypedQuestion = (input: ResearchInput): boolean => !input.title?.trim() && !input.objective?.trim() && !input.concepts?.length && !input.topics.length;
 
