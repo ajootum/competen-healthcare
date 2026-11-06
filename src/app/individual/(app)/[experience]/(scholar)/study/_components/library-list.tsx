@@ -37,7 +37,7 @@ export function LibraryRows({ rows }: { rows: LibraryRow[] }) {
               {r.badge && <span className="mr-1.5 mt-1 inline-block rounded-full bg-[var(--cmp-theme-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-theme-ink)]">{r.badge}</span>}
               {r.warning && <span className="mt-1 inline-block rounded-full bg-[var(--cmp-role-revision-soft)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-role-revision-ink)]">{r.warning}</span>}
             </div>
-            <Link href={r.href} className={`inline-flex min-h-[44px] items-center text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: SCHOLAR.accent }}>
+            <Link prefetch={false} href={r.href} className={`inline-flex min-h-[44px] items-center text-[15px] font-semibold underline-offset-2 hover:underline ${focusRing}`} style={{ color: SCHOLAR.accent }}>
               Open<span className="sr-only"> {r.title}</span> →
             </Link>
           </div>
