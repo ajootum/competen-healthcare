@@ -330,23 +330,42 @@ export const readCount = (facts: readonly LessonFacts[]) => facts.filter(f => f.
 
 // ── SAVED TEACHING, FOUND WITHOUT AI (the open:true fallback, and the records) ──
 
+/** 415 individual_scholar_artefact_source: ordinal between 1 and 10. store.ts saveArtefact keeps the first ten. */
+export const ARTEFACT_SOURCES_MAX = 10;
+
 /**
  * Pure. Whether a saved artefact was written for exactly this lesson: its sources BEGIN with the lesson's own sections
  * (the route saves the lesson's own passages first, then any related ones), as a set -- not merely one that cites them.
  */
-export function coversLesson(sources: readonly string[], chunkIds: readonly string[]): boolean {
+export type SavedFor = { sessionId?: string | null; step?: number | null };
+export type LessonPlace = { sessionId: string; step: number };
+export function coversLesson(sources: readonly string[], chunkIds: readonly string[], at?: { row: SavedFor; lesson: LessonPlace | null }): boolean {
   const want = new Set(chunkIds);
-  if (!want.size || want.size !== chunkIds.length || sources.length < want.size) return false;
+  if (!want.size || want.size !== chunkIds.length) return false;
+  // SCHOLAR-GO-DEEPER-001: 415's artefact_source keeps at most ARTEFACT_SOURCES_MAX sources, while a lesson may hold LESSON_MAX_SECTIONS (16). For a larger lesson
+  // only its first sections are stored, so that is what "written for this lesson" can mean. Before this, every lesson over ten sections found none of its saved
+  // teaching: no TAUGHT SO FAR, so Go deeper and Explain again repeated the lesson, and a reopen did not bring back its other rounds.
+  // The same ten sections could also be another, smaller lesson of the deck, so this takes the row's own record (820) of the lesson it was saved for, and nothing less.
+  if (want.size > ARTEFACT_SOURCES_MAX) return !!at?.lesson && at.row.sessionId === at.lesson.sessionId && at.row.step === at.lesson.step && sources.length === ARTEFACT_SOURCES_MAX && sources.every((id, i) => id === chunkIds[i]);
+  if (sources.length < want.size) return false;
   return sources.slice(0, want.size).every(id => want.has(id));
 }
 
+/**
+ * Pure. The sources a saved answer's [S n] tags mean. The route saves a lesson's own sections first, in order, so for a lesson over the stored limit tags past it are the
+ * lesson's next sections: restored here, so a citation or a picture on [S11] and beyond still works on reopen. Anything else is what was stored.
+ */
+export function restoredSources(sources: readonly string[], chunkIds: readonly string[], at: { row: SavedFor; lesson: LessonPlace | null }): readonly string[] {
+  return chunkIds.length > ARTEFACT_SOURCES_MAX && coversLesson(sources, chunkIds, at) ? chunkIds : sources;
+}
+
 /** Pure. The newest saved artefact for this action, material and lesson chunk set -- any prompt version, depth or mode. */
-export function newestSavedLesson<T extends { action: string; materialId: string; sources: readonly string[]; createdAt: string }>(
-  rows: readonly T[], q: { action: string; materialId?: string | null; chunkIds: readonly string[] },
+export function newestSavedLesson<T extends { action: string; materialId: string; sources: readonly string[]; createdAt: string } & SavedFor>(
+  rows: readonly T[], q: { action: string; materialId?: string | null; chunkIds: readonly string[]; lesson?: LessonPlace | null },
 ): T | null {
   let best: T | null = null;
   for (const r of rows) {
-    if (r.action !== q.action || (q.materialId && r.materialId !== q.materialId) || !coversLesson(r.sources, q.chunkIds)) continue;
+    if (r.action !== q.action || (q.materialId && r.materialId !== q.materialId) || !coversLesson(r.sources, q.chunkIds, { row: r, lesson: q.lesson ?? null })) continue;
     if (!best || r.createdAt > best.createdAt) best = r;
   }
   return best;

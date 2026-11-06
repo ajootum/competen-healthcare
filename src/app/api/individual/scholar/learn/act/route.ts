@@ -24,8 +24,10 @@ import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, cumulativePromptVersion, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
   type LessonBrief, type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
+import { composeDeeperAnswer, deeperSectionText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
+import { citedTags } from "@/lib/individual/scholar/teach-format";
 import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, PRIOR_CHECKS_MAX, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
-import { coversLesson } from "@/lib/individual/scholar/learn-journey";
+import { coversLesson, restoredSources } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope } from "@/lib/individual/scholar/learn-research";
@@ -112,6 +114,10 @@ export const dynamic = "force-dynamic";
 //   first one's lesson. TIMINGS: every audit row carries timing_ms by stage. SALVAGE: a Teach Me lesson whose
 //   unsupported parts were left out (generation.ts checkTeachAnswer) carries salvage { removed, note }.
 
+// SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): where policy scholar_go_deeper_structured is on, Go deeper is a structured round (deeper-format.ts) at the
+// request's depth (Understand = brief, Explore = standard, Advanced = detailed), still one AI call, its Scholar sections checked and classified here.
+// SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): where policy scholar_go_deeper_structured is on, Go deeper is a structured round (deeper-format.ts) at the
+// request's depth (Understand = brief, Explore = standard, Advanced = detailed), still one AI call, its Scholar sections checked and classified here.
 const CANNED: Record<ClassicLearnAction | "check", string> = {
   teach: "Teach me this step.", explain: "Explain this.", simplify: "Explain this as simply as possible.", deeper: "Help me understand this in more depth.",
   examples: "Give me examples of this in practice.", summary: "Summarise the important learning points.", ask: "", check: "Check my understanding of this.",
@@ -252,7 +258,8 @@ export async function POST(req: Request) {
   // contextual actions and for an open (alsoSaved); Teach me itself and Ask never carry it.
   const contextual = CONTEXT_ACTIONS.includes(action);
   const lessonRecords = contextual || open ? await listArtefacts(ctx.admin, ctx.userId, { chunkIds: stepIds, limit: 40 }).then(r => (r.ok ? r.data : []), () => []) : [];
-  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const lessonPlace = sessionId ? { sessionId, step } : null;
+  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds, { row: a, lesson: lessonPlace })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const taughtSoFar: TaughtSoFar | null = contextual ? buildTaughtSoFar(ownRecords, priorChecks, { objective: lesson?.objective ?? null, focus: lesson?.focus ?? null }) : null;
   const taughtBlock = taughtSoFar ? taughtSoFarBlock(taughtSoFar) : null;
   /** The lesson brief the prompt reads: its title, objective and its own sections' headings, in order. */
@@ -314,13 +321,19 @@ export async function POST(req: Request) {
   ]);
   const topics = topicMap ? [...new Set([...topicMap.values()].flat())] : [];
   let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? meant : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
-  const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
+  // SCHOLAR-GO-DEEPER-001: in a structured round Scholar's own explanation is its own marked section, and research its own marked part, so the two sit side by side:
+  // evidence and educational inference kept apart, not one traded for the other. Every other action keeps the rule: with research, no background.
+  const background = policy.scholarBeyondNotes === "labelled" && (mode !== "research" || (action === "deeper" && policy.scholarGoDeeperStructured));
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
   const hasHistory = Array.isArray(body?.history) && body.history.length > 0;
   const oneMaterial = new Set(passages.map(p => p.materialId)).size === 1;
   const storable = isArtefactAction(action) && !hasHistory && oneMaterial;
-  const baseVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
+  // SCHOLAR-GO-DEEPER-001: Go deeper as a structured round, where policy says (default off). v2 stays in force with it off, and a round saved
+  // under v2 stays what it is either way: it is shown (alsoSaved, findSavedLesson), counted in TAUGHT SO FAR and in the round limit, never regenerated.
+  const deeperStructured = action === "deeper" && policy.scholarGoDeeperStructured;
+  const deeperVersion = { deeperStructured };
+  const baseVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction, deeperVersion) : learnPromptVersion(action as LearnAction, deeperVersion);
   // SCHOLAR-CUMULATIVE-TEACHING-01: an answer built on taught ground carries the cumulative suffix and the ground's fingerprint in its key.
   const promptVersion = taughtBlock ? cumulativePromptVersion(baseVersion) : baseVersion;
   const context = taughtBlock && taughtSoFar ? taughtHash(taughtSoFar) : null;
@@ -350,7 +363,8 @@ export async function POST(req: Request) {
   const lessonScope: LessonScope | null = lesson ? { title: lesson.title, objective: lesson.objective, focus: lesson.focus } : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
-    const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
+    // SCHOLAR-GO-DEEPER-001: a lesson over the stored source limit keeps its later citations (learn-journey.ts restoredSources).
+    const src = restoredSources(a.sources, stepIds, { row: a, lesson: lessonPlace }).map(id => byId.get(id)).filter((p): p is Passage => !!p);
     // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
     // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
     const split = splitLearnAnswer(a.content);
@@ -363,7 +377,7 @@ export async function POST(req: Request) {
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
       research: restored.retrieved ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: restored.message, references: external, excludedCount: restored.excluded.length, ...(restored.text ? { text: restored.text } : {}) } : null,
-      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
+      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...(a.action === "deeper" && policy.scholarGoDeeperStructured ? { goDeeperLevels: true } : {}), ...extra,
     };
   };
   // SCHOLAR-CUMULATIVE-TEACHING-01: on an OPEN, the lesson's other saved teaching (Go deeper rounds, examples, explanations), oldest
@@ -394,7 +408,7 @@ export async function POST(req: Request) {
   // SCHOLAR-PERSISTENT-LEARNING-01: the exact key missed -- the newest lesson saved for this chunk set, under any version or
   // settings. Its sources beyond this request's passages are read (the learner's own, by id) so its [S n] tags stay true.
   if ((open || prepare) && body?.fresh !== true && isArtefactAction(action) && !recovery && !hasHistory) {
-    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds });
+    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds, lesson: lessonPlace });
     const missing = earlier ? earlier.sources.filter(id => !passages!.some(p => p.chunkId === id)) : [];
     const extra = earlier && missing.length ? await ownPassages(ctx.admin, ctx.userId, missing) : [];
     clock.mark("cache_fallback");
@@ -538,7 +552,7 @@ export async function POST(req: Request) {
   clock.mark("research");
   const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
     teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined,
-    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) }, ai.run);
+    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks), deeperStructured }, ai.run);
   clock.mark("generate");
   const refusal = ai.refusal();
   if (refusal) await closeFlight("refused");
@@ -563,6 +577,24 @@ export async function POST(req: Request) {
   // SCHOLAR-RESEARCH-RELEVANCE-02: a summary that declares its own sources irrelevant cites nothing, shows nothing, saves nothing.
   if (research && rr?.ok) { const w = withdrawDeclaredIrrelevant(research, rr.text); if (w !== research) { Object.assign(research, w); rr = null; } }
   if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
+  // SCHOLAR-GO-DEEPER-001: Scholar's own explanation is classified by the same published rules as research text. A section (or a Scholar takeaway)
+  // that would lift the request above its own tier is left out and counted; the model restriction for that tier was set before the call.
+  if (deeperStructured && r.ok && r.check.ok) {
+    const round = parseDeeperAnswer(r.check.text);
+    const texts = round ? [...round.sections.filter(s => s.source === "scholar").map(deeperSectionText), ...round.takeaways.filter(t => !citedTags(t).length)] : [];
+    if (round && texts.length) {
+      const within = await withinRequestRisk(ctx.admin, activity, risk, texts);
+      if (within.some(ok => !ok)) {
+        let i = 0;
+        const sections = round.sections.filter(s => (s.source === "scholar" ? within[i++] : true));
+        const takeaways = round.takeaways.filter(t => (citedTags(t).length ? true : within[i++]));
+        const text = composeDeeperAnswer({ ...round, sections, takeaways });
+        const removed = round.sections.length - sections.length + round.takeaways.length - takeaways.length;
+        const was = r.check.salvaged;
+        r.check = { ok: true, text, cited: citedTags(text).sort((a, b) => a - b), salvaged: { removed: (was?.removed ?? 0) + removed, parts: { overview: false, points: was?.parts.points ?? 0, example: false, questions: was?.parts.questions ?? 0, sections: (was?.parts.sections ?? 0) + removed, relabelled: was?.parts.relabelled }, violations: was?.violations ?? [] } };
+      }
+    }
+  }
   // An Ask me / Challenge me answer must hold exactly ONE question: it is what the learner's reply is judged against (`clarify`).
   const asksQuestion = action === "ask_me" || action === "challenge";
   const askedQuestion = asksQuestion && r.ok && r.check.ok ? extractQuestion(r.check.text) : null;
@@ -666,7 +698,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   }
 
   const sources = passages.map(sourceOf);
-  const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
+  const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId, ...(deeperStructured ? { goDeeperLevels: true } : {}),
     references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields, ...(spelling ? { spelling } : {}),
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.

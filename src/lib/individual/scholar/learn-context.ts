@@ -20,6 +20,7 @@
 
 import { parseCheckFeedback } from "./learn-check";
 import { parseTeachAnswer, questionText } from "./teach-format";
+import { deeperSectionText, parseDeeperAnswer } from "./deeper-format";
 
 /** A saved teaching record of this lesson (store.ts ArtefactRow, the fields read here). */
 export type TaughtRecord = { action: string; content: string; background?: string | null; createdAt?: string | null };
@@ -109,6 +110,14 @@ export const priorCheckTexts = (checks: readonly PriorCheck[]): string[] => chec
 /** Pure. One saved record as a round: its parts (structured) or its bullets and first sentences (free text), each capped. */
 function roundOf(r: TaughtRecord): TaughtRound {
   const round: TaughtRound = { action: r.action, concepts: [], understanding: [], examples: [], questions: [] };
+  // SCHOLAR-GO-DEEPER-001: a structured round tells what it taught: the question it explored, each section's heading and first sentence, its takeaways.
+  const deep = r.action === "deeper" ? parseDeeperAnswer(r.content) : null;
+  if (deep) {
+    add(round.understanding, [deep.focus, ...deep.sections.map(s => `${s.title}: ${firstSentence(deeperSectionText(s).split("\n")[0] ?? "")}`)], ROUND_MAX.understanding);
+    add(round.concepts, deep.takeaways, ROUND_MAX.concepts);
+    add(round.questions, deep.questions.map(q => questionText(q.text)), ROUND_MAX.questions);
+    return round;
+  }
   const parts = parseTeachAnswer(r.content);
   if (parts) {
     if (parts.overview && !parts.understanding?.length) add(round.understanding, [firstSentence(parts.overview)], ROUND_MAX.understanding);

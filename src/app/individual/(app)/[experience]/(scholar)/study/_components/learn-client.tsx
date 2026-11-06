@@ -38,6 +38,8 @@ import { JourneyBar, JourneyOutline, type NavLesson } from "./learn-journey-nav"
 import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
+import { GoDeeperCard, type GoDeeperLevels } from "./go-deeper-view";
+import { GO_DEEPER_COPY, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
 import { AskAbout, type AskAboutProps } from "./ask-panel";
 import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context";
@@ -56,7 +58,7 @@ import { CHECK_MARKING_LABEL, CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE
 import { CHECK_VERDICT_LABEL } from "@/lib/individual/scholar/config";
 import { AdaptiveNext, type AdaptiveUi, type AdaptiveView } from "./learn-adaptive";
 import { CONFIDENCE_LABEL, CONFIDENCE_VALUES, NEED_LABEL, pickDifferentQuestion, type StatedConfidence } from "@/lib/individual/scholar/learning-need";
-import { ActionRow, CitationChip, FeedbackParts, InlineNote, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, NotesText, QuestionCard, RefChip, SectionCard, SourceLink, VerdictLine, learnAction, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
+import { DisclaimerBadge, ActionRow, CitationChip, FeedbackParts, InlineNote, LearningDisclosure, LearningIcon, LearningSection, LearningSectionHead, NotesText, QuestionCard, RefChip, SectionCard, SourceLink, VerdictLine, learnAction, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
 import { shortRef } from "@/lib/individual/scholar/notes-layout";
 import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
 // SCHOLAR-SEARCH-HISTORY-01: an answered Ask Scholar question is kept in the learner's own history (their words and where, never the answer).
@@ -146,6 +148,10 @@ type Reply = {
   depthReached?: { message: string; suggestion: string | null; next: readonly { key: string; label: string }[]; rounds?: number; cap?: boolean } | null;
   /** SCHOLAR-CUMULATIVE-TEACHING-01: on an open, the lesson's other saved teaching (Go deeper rounds, examples ...), oldest first, no AI. */
   alsoSaved?: Reply[];
+  /** SCHOLAR-GO-DEEPER-001: policy offers structured rounds, so the level control is drawn. A saved structured round shows whatever this says. */
+  goDeeperLevels?: boolean;
+  /** The depth this reply was written at: a Go deeper round's level. */
+  depth?: string;
 };
 /** `extra` and `target`: the request as it was made, so "Explain using approved references" can make it again. `step`: the lesson it belongs to. */
 type Card = { id: number; asked?: string; reply: Reply; extra?: Record<string, unknown>; target?: "lesson" | "ask"; step?: number };
@@ -950,6 +956,18 @@ export function LearnWorkspace(props: {
     const r = await act("check", {}, "lesson", undefined, st.step);
     if (r?.checkQuestion) setCheck(openCheck(st.step, r.checkQuestion));
   }
+  // SCHOLAR-GO-DEEPER-001: Go deeper, at the level asked for (a depth), and the new round brought into view. Choosing an answer option opens the
+  // lesson's own check beneath the question with that choice written in: the reasons are the learner's, and clarify judges them as for any check.
+  const goDeeper = async (st: Step, depth?: string) => {
+    const r = await act("deeper", depth ? { depth } : {}, "lesson", undefined, st.step);
+    if (r?.goDeeperLevels && r.answer) window.setTimeout(() => { const all = document.querySelectorAll('[data-testid="go-deeper-round"]'); all[all.length - 1]?.scrollIntoView({ block: "start" }); }, 60);
+  };
+  const chooseOption = (st: Step, q: string, option: string) => {
+    const written = `I chose: ${option}\nBecause: `;
+    // A different choice keeps the reasons already written: only the choice line changes.
+    setCheck(c => (c && c.step === st.step ? (c.question !== questionText(q) || c.feedback ? c : { ...c, answer: `${written}${c.answer.replace(/^I chose: [^\n]*\n(?:Because: ?)?/, "")}` }) : openCheck(st.step, q, written)));
+    setTimeout(() => document.getElementById("check-answer")?.focus(), 0);
+  };
   /** An Ask me / Challenge question, answered in the lesson's own check (clarify records the informal verdict). */
   const checkThis = (st: Step, q: string) => { setCheck(openCheck(st.step, q)); setTimeout(() => document.getElementById("check-answer")?.focus(), 0); };
   // SCHOLAR-UNDERSTANDING-CHECKS-01: EVERY outcome of Check my answer is shown beneath the answer, which is kept:
@@ -1189,8 +1207,10 @@ export function LearnWorkspace(props: {
     const judged = !!fb && !c.noAi && !!fb.answer;
     const noAi: CheckNoAiReason | null = c.noAi ?? (errorHere ? "error" : clarifyHere ? "clarify" : unavailable ? "unavailable" : null);
     // The self-review's reference: the saved lesson's key points and the sections the question cites (learn-check.ts, no AI).
-    const teach = lastTeachOf(st);
-    const ref = referenceAnswer({ rawQuestion: c.raw, lessonPoints: teach ? parseTeachAnswer(teach.reply.answer!)?.points ?? [] : [], sources: teach?.reply.sources ?? [] });
+    // SCHOLAR-GO-DEEPER-001: a question of a Go deeper round is reviewed against that round's own takeaways and sources.
+    const fromRound = (cards[st.step] ?? []).find(x => x.reply.action === "deeper" && !!x.reply.answer && !!c.raw && !!parseDeeperAnswer(x.reply.answer)?.questions.some(q => q.text === c.raw));
+    const teach = fromRound ?? lastTeachOf(st);
+    const ref = referenceAnswer({ rawQuestion: c.raw, lessonPoints: fromRound ? parseDeeperAnswer(fromRound.reply.answer!)?.takeaways.filter(t => citedTags(t).length > 0) ?? [] : teach ? parseTeachAnswer(teach.reply.answer!)?.points ?? [] : [], sources: teach?.reply.sources ?? [] });
     // The self-review stands in for a judgement that is not shown; beside a judgement, Review source shows only the sources.
     const showSelfReview = (answered && !!noAi && noAi !== "clarify") || (c.reviewing && !judged);
     const parts = judged ? parseCheckFeedback(fb!.answer!) : null;
@@ -1222,7 +1242,7 @@ export function LearnWorkspace(props: {
         )}
         {!answered && !working && (
           <div className="mt-2 flex flex-wrap gap-2">
-            <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !c.answer.trim() || !!unavailable}>{CHECK_BUTTON.submit}</button>
+            <button type="submit" className={btn} style={{ background: accent }} disabled={!!busy || !c.answer.trim() || /^I chose: [^\n]*\nBecause:\s*$/.test(c.answer) || !!unavailable}>{CHECK_BUTTON.submit}</button>
             {unavailable && c.answer.trim() && <button type="button" className={ghost} onClick={() => setCheck({ ...c, reviewing: true, feedback: null })}>{CHECK_SELF_REVIEW_LABEL}</button>}
             <button type="button" className={ghost} onClick={() => setCheck(null)}>{CHECK_BUTTON.skip}</button>
           </div>
@@ -1323,7 +1343,13 @@ export function LearnWorkspace(props: {
     const canCheck = offerCheck && !myCheck && !busy && !offReason("check");
     const verdict = progress[st.step]?.verdict ?? j?.activities[i]?.verdict ?? null;
     const checked = !!verdict || thread.some(c => !!c.reply.verdict);
-    const checkInline = !!myCheck && !!lastTeach && teachQuestions.some(q => questionText(q) === myCheck.question);
+    // SCHOLAR-GO-DEEPER-001: a structured round's questions are answered under the question, as a lesson's are.
+    const deeperRounds = thread.filter(c => c.reply.action === "deeper" && !!c.reply.answer && !c.reply.withheld && !!parseDeeperAnswer(c.reply.answer));
+    const deeperQuestions = deeperRounds.flatMap(c => (parseDeeperAnswer(c.reply.answer!)?.questions ?? []).filter(q => answerable(st, c.reply, q.text)).map(q => q.text));
+    const newestRound = deeperRounds[deeperRounds.length - 1] ?? null;
+    const roundsByDepth: Partial<Record<string, string>> = {};
+    thread.forEach((c, k) => { if (deeperRounds.includes(c) && c.reply.depth) roundsByDepth[c.reply.depth] = lessonAnchorId(st.step, `a${k}`); });
+    const checkInline = !!myCheck && ((!!lastTeach && teachQuestions.some(q => questionText(q) === myCheck.question)) || deeperQuestions.some(q => questionText(q) === myCheck.question));
     const acts = j?.activities[i] ?? {};
     const canTeach = !!group.primary && props.consent && !offReason(group.primary);
     const first = st.sections[0];
@@ -1352,7 +1378,7 @@ export function LearnWorkspace(props: {
         onClick: () => dispatch({ type: "requestTeach", index: i }) }] : []),
       // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper is a contextual action that may be chosen again: each round extends the last (the server knows the rounds).
       ...(props.actions.includes("deeper") ? [{ key: "deeper", label: working("deeper") ? "Working…" : acts.deeper ? "Go deeper again" : "Go deeper", done: !!acts.deeper, disabled: busyHere || !props.consent || !!offReason("deeper"),
-        describedBy: offReason("deeper") ? "learn-ai-why" : undefined, onClick: () => void act("deeper", {}, "lesson", undefined, st.step) }] : []),
+        describedBy: offReason("deeper") ? "learn-ai-why" : undefined, onClick: () => void goDeeper(st) }] : []),
       ...(props.actions.includes("examples") ? [{ key: "examples", label: working("examples") ? "Working…" : "Examples", done: !!acts.examples, disabled: busyHere || !props.consent || !!offReason("examples"),
         describedBy: offReason("examples") ? "learn-ai-why" : undefined, onClick: () => void act("examples", {}, "lesson", undefined, st.step) }] : []),
       ...(offerCheck ? [{ key: "check", label: working("check") ? "Writing a check…" : checked ? "Check again" : "Check", done: checked, disabled: !canCheck || busyHere,
@@ -1391,11 +1417,13 @@ export function LearnWorkspace(props: {
               Lesson text hidden while you recall
               <button type="button" onClick={() => setRecalling(m => ({ ...m, [st.step]: false }))} className={`inline-flex min-h-[44px] items-center font-semibold underline pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Show it</button>
             </p>
-          ) : thread.map((c, k) => (c.id === myCheck?.cardId ? null : <ReplyCard key={c.id} card={c} labels={props.labels} anchorId={lessonAnchorId(st.step, `a${k}`)} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true }, "lesson", undefined, st.step) : undefined}
+          ) : thread.map((c, k) => (c.id === myCheck?.cardId ? null : <ReplyCard key={c.id} card={c} labels={props.labels} anchorId={lessonAnchorId(st.step, `a${k}`)} onFresh={c.reply.saved && props.consent ? () => act(c.reply.action, { fresh: true, ...(c.reply.action === "deeper" && c.reply.depth ? { depth: c.reply.depth } : {}) }, "lesson", undefined, st.step) : undefined}
             onRephrase={props.actions.includes("ask") ? () => rephrase("") : undefined} recover={recoverFor(c, st)} wider={widerFor(c, st)} expansions={expansionsFor(c, st)}
-            onAnswer={canCheck && c === lastTeach ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
-            renderCheck={c === lastTeach && checkInline ? q => (questionText(q) === myCheck?.question ? checkPanel(st, true) : null) : undefined}
-            answered={c === lastTeach ? q => { const h = (checks[st.step] ?? []).filter(x => x.question === questionText(q)).at(-1); return h ? checkOutcomeLabel(h, CHECK_VERDICT_LABEL) : null; } : undefined}
+            onAnswer={canCheck && (c === lastTeach || deeperRounds.includes(c)) ? q => void startCheck(st, q) : undefined} canAnswer={q => answerable(st, c.reply, q)}
+            onChoose={deeperRounds.includes(c) && offerCheck && !busy && !offReason("check") ? (q, option) => { if (!myCheck || myCheck.question === questionText(q)) chooseOption(st, q, option); } : undefined}
+            deeperLevels={c === newestRound && c.reply.goDeeperLevels ? { saved: roundsByDepth, busy: !!busy, onLevel: props.consent && !offReason("deeper") ? depth => void goDeeper(st, depth) : undefined } : null}
+            renderCheck={(c === lastTeach || deeperRounds.includes(c)) && checkInline ? q => (questionText(q) === myCheck?.question ? checkPanel(st, true) : null) : undefined}
+            answered={c === lastTeach || deeperRounds.includes(c) ? q => { const h = (checks[st.step] ?? []).filter(x => x.question === questionText(q)).at(-1); return h ? checkOutcomeLabel(h, CHECK_VERDICT_LABEL) : null; } : undefined}
             placement={props.checkPlacement ?? "distributed"} ask={lessonAsk(st, session, c.reply)} />))}
           {preparing && (
             <div role="status" className="flex items-start gap-3 rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
@@ -1633,7 +1661,7 @@ export function LearnWorkspace(props: {
             <ContinueCard accent={accent} last={lastLesson} completed={session.status === "completed"} disabled={!!busy}
               next={!lastLesson ? { number: curIdx + 2, title: session.steps[curIdx + 1].title || `Lesson ${curIdx + 2}` } : null}
               blockedReason={canContinue ? undefined : RECALL_WAIT_REASON} onContinue={continueNext} onPrevious={curIdx > 0 ? previous : undefined} onFinish={() => void finish()} onReview={() => select(0)}
-              onDeeper={props.actions.includes("deeper") && props.consent && !offReason("deeper") ? () => void act("deeper", {}, "lesson", undefined, active.step) : undefined}
+              onDeeper={props.actions.includes("deeper") && props.consent && !offReason("deeper") ? () => void goDeeper(active) : undefined}
               onPractise={() => { setPracticeOpen(m => ({ ...m, [active.step]: true })); scrollToLesson(active.step); }}
               otherTopicHref={experienceHref("scholar", "study/learn")}
               suggestion={adaptive[active.step] ? { label: NEED_LABEL[adaptive[active.step]!.decision.need], why: adaptive[active.step]!.decision.reason, href: `#adaptive-next-${active.step}` } : null} />
@@ -1768,7 +1796,9 @@ function lessonAsk(st: { step: number; title: string; sections: { chunkId: strin
   };
 }
 
-function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask, placement, answered }: {
+function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover, wider, onAnswer, canAnswer, expansions = [], renderCheck, anchorId, ask, placement, answered, onChoose, deeperLevels = null }: {
+  /** SCHOLAR-GO-DEEPER-001: choosing an answer option of a round's question; the level control, on the lesson's newest round only. */
+  onChoose?: (q: string, option: string) => void; deeperLevels?: GoDeeperLevels | null;
   /** LESSON REDESIGN: a lesson question's answered state (the latest kept attempt's outcome), or null when not answered yet. */
   answered?: (q: string) => string | null;
   /** The lesson-level "Ask about this" (the lesson thread only; not the short Ask replies or a saved list). */
@@ -1812,6 +1842,9 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
     );
   }
   const cited = new Set(r.cited ?? []);
+  // SCHOLAR-GO-DEEPER-001: a structured round has its own card (go-deeper-view.tsx). An earlier round has none of its labels and is shown as it was.
+  const round = r.action === "deeper" && r.answer && !r.withheld ? parseDeeperAnswer(r.answer) : null;
+  const deep = compact ? null : round;
   // LESSON REDESIGN: a lesson's teaching is the Teach me card (sage); its end-of-lesson checks are their own card (lavender),
   // then its sources, the AI background beyond the notes (sky) and the saved line. A check's feedback in the thread is
   // lavender. Short Ask replies (compact) keep the plain card.
@@ -1835,13 +1868,13 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           {r.verdict && (
             <FormativeAiLabel className="mt-1" />
           )}
-          <div className={teachCard ? "mt-3" : "mt-2"}><AiBadge /></div>
-          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{SOURCE_KIND_LABEL.notes}</p>
+          <div className={teachCard ? "mt-3" : "mt-2"}>{round ? <DisclaimerBadge>{GO_DEEPER_COPY.ai}</DisclaimerBadge> : <AiBadge />}</div>
+          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{round ? GO_DEEPER_COPY.subtitle : SOURCE_KIND_LABEL.notes}</p>
           {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). LESSON REDESIGN:
               the listening and asking tools sit on their own row, apart from the reading text. */}
           {r.answer && (
             <div role="group" aria-label="Lesson tools" className={`mt-2 flex flex-wrap items-start gap-2 ${teachCard ? "rounded-xl bg-[var(--cmp-app-surface)] p-2 ring-1 ring-[var(--learn-border)]" : ""}`}>
-              <ReadAloudButton text={r.answer} about="this lesson" />
+              <ReadAloudButton text={round ? deeperSourcedText(round) : r.answer} about="this lesson" />
               {ask && <AskAbout {...ask} />}
             </div>
           )}
@@ -1874,7 +1907,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           </LearningSection>
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
-      {r.research && <ResearchBlock x={r.research} />}
+      {r.research && !(deep && r.research.text) && <ResearchBlock x={r.research} />}
       {r.withheld && recover && <RecoveryFlow request={recover.request} explain={recover.explain} expansions={expansions} />}
       {r.withheld && !recover && <ExpansionRow expansions={expansions} />}
       {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
@@ -1897,6 +1930,24 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
         <AiFeedback kind="explanation" target={r.artefactId ? "artefact" : "action"} refId={r.artefactId ?? r.actionId} />
       )}
     </>
+  );
+  if (deep) return (
+    <GoDeeperCard parts={deep} depth={r.depth} anchorId={anchorId} sources={r.sources} cite={t => <Cited text={t} sources={r.sources} />} levels={deeperLevels}
+      onAnswer={onAnswer} onChoose={onChoose} canAnswer={canAnswer} renderCheck={renderCheck} answered={answered}
+      research={r.research?.text ? <ResearchBlock x={r.research} /> : null} researchState={r.research?.text ? "shown" : r.research ? "looked" : "none"}
+      tools={(
+        <div role="group" aria-label="Lesson tools" className="flex flex-wrap items-center gap-2">
+          <ReadAloudButton text={deeperSourcedText(deep)} about="this round" />
+          {ask && <AskAbout {...ask} />}
+        </div>
+      )}
+      salvage={(
+        <>
+          {r.salvage && <div className="mt-3 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2.5"><p className="text-[13.5px] text-gray-900">{r.salvage.note}</p></div>}
+          {replyState(r) === "partial" && r.grounding && <NotCovered terms={r.grounding.uncoveredTerms} wider={wider} expansions={expansions} />}
+        </>
+      )}
+      sourcesAndMore={tail} />
   );
   if (teachCard) return (
     <article id={anchorId} className={anchorId ? "scroll-mt-4" : undefined}>
@@ -1964,7 +2015,9 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
   }
   // SCHOLAR-PERSISTENT-LEARNING-01 item 4: PROGRESSIVE -- the start first, the rest one click away (no new AI call).
   if (!parts) {
-    const { lead, more } = progressiveSplit(text);
+    // SCHOLAR-GO-DEEPER-001: where a structured round is shown in brief (a saved list), it reads as plain text, never its labels.
+    const round = action === "deeper" ? parseDeeperAnswer(text) : null;
+    const { lead, more } = progressiveSplit(round ? deeperSourcedText(round) : text);
     return (
       <div id={idPrefix ? `${idPrefix}-tx` : undefined} className="mt-1 break-words text-[14.5px] leading-relaxed text-gray-800">
         <div className="whitespace-pre-wrap"><Cited text={lead} sources={sources} /></div>
