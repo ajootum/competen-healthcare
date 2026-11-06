@@ -36,6 +36,7 @@ export type CommitmentFields = {
   scheduledOn: string | null;
   scheduledTime: string | null;
   estimatedMinutes: number | null;
+  accessScope?: "private" | "workspace";
 };
 
 export function useLifeos(tenantId: string | null = null) {
@@ -205,8 +206,13 @@ export function useLifeos(tenantId: string | null = null) {
 
   const toggleRock = useCallback((c: Commitment, on: boolean) => act(() => setRock(c, on)), [act, setRock]);
 
-  const delegate = useCallback((c: Commitment, label: string, followUpOn: string) =>
-    act(() => post(`${base}/delegations`, { commitmentId: c.id, delegateeLabel: label, followUpOn })), [act, base]);
+  const delegate = useCallback((c: Commitment, person: { label: string } | { individualId: string }, followUpOn: string) =>
+    act(() => post(`${base}/delegations`, {
+      commitmentId: c.id, followUpOn,
+      ...("individualId" in person ? { delegateeIndividualId: person.individualId } : { delegateeLabel: person.label }),
+    })), [act, base]);
+
+  const loadDirectory = useCallback(async () => (base ? get<{ individualId: string; displayName: string }[]>(`${base}/directory`) : []), [base]);
 
   const saveWorld = useCallback((w: World | null, f: { title: string; context: string | null; purpose: string | null }) => act(() => (
     w ? patch(`${base}/worlds/${w.id}`, { ...f, expectedVersion: w.version }) : post(`${base}/worlds`, f)
@@ -241,7 +247,7 @@ export function useLifeos(tenantId: string | null = null) {
 
   return {
     chosenAccess, turnOff, me, workspaces, workspaceId, chooseWorkspace, offset, setOffset, today, weekStart, days, timeZone, data, loading, busy, error, setError, fatal,
-    retry: reload, capture, saveCommitment, toggleDone, toggleRock, delegate, saveWorld, saveIntention, saveReview, generate, decide, applyBrowserTimeZone,
+    loadDirectory, retry: reload, capture, saveCommitment, toggleDone, toggleRock, delegate, saveWorld, saveIntention, saveReview, generate, decide, applyBrowserTimeZone,
   };
 }
 

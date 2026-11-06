@@ -66,6 +66,7 @@ export async function requireLifeosSession(): Promise<SessionIdentity> {
     issuer: ISSUER_COMPETEN_AUTH,
     subject: user.id,
     displayName: String(profile?.full_name ?? "").trim() || "LifeOS member",
+    email: user.email ?? null,
     competenIndividualLive: await competenIndividualLive(user.id),
   };
 }
@@ -105,5 +106,16 @@ export async function resolveHostSite(): Promise<HostSite> {
     return site ? { kind: "tenant", site } : { kind: "none" };
   } catch {
     return { kind: "none" };
+  }
+}
+
+/** The signed-in address, for the invitation page. It grants nothing. */
+export async function readSignedInEmail(): Promise<string | null> {
+  try {
+    const supabase = await createClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    return user?.email ?? null;
+  } catch {
+    return null;
   }
 }

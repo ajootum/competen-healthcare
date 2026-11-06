@@ -10,3 +10,18 @@ export async function signIn(email: string, password: string): Promise<{ ok: tru
 export async function signOut(): Promise<void> {
   await createClient().auth.signOut({ scope: "local" });
 }
+
+/**
+ * For someone new: an email link to the invited address, with no password. A password chosen at sign-up would let whoever
+ * held the invitation link set the invitee's password before they confirmed the address.
+ */
+export async function emailMeALink(email: string, returnTo: string): Promise<boolean> {
+  const { error } = await createClient().auth.signInWithOtp({ email, options: { emailRedirectTo: returnTo, shouldCreateUser: true } });
+  return !error;
+}
+
+/** Sets a password for the signed-in person, once they have proved they control the address. */
+export async function choosePassword(password: string): Promise<boolean> {
+  const { error } = await createClient().auth.updateUser({ password });
+  return !error;
+}

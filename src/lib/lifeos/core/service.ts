@@ -406,9 +406,11 @@ export async function leaveWorkspace(c: RequestContext, workspaceId: string): Pr
     const [m] = await c.store.where("lifeos_membership", { workspace_id: workspaceId, individual_id: c.principal.individualId }, { limit: 1 });
     if (ownsWorkspace(String(m.role))) throw new LifeosError("conflict", "The owner of an organisation workspace cannot leave it.");
     const given = await c.store.where(GRANT.table, { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
+    const invited = await c.store.where("lifeos_invitation", { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "pending" }, { limit: INTERNAL_READ_LIMIT });
     return [
       { t: "lifeos_membership", op: "update", id: String(m.id), workspace_id: workspaceId, values: { status: "left", provenance_source: "user" } },
       ...given.map(g => update(GRANT, g, { status: "revoked", revoked_at: new Date().toISOString() })),
+      ...invited.map((i): Op => ({ t: "lifeos_invitation", op: "update", id: String(i.id), workspace_id: workspaceId, values: { status: "revoked", provenance_source: "user" } })),
     ];
   });
 }

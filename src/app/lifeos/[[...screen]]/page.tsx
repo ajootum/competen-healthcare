@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notFound, redirect } from "next/navigation";
-import { resolveHostSite, resolveLifeosShell } from "@/lib/lifeos/adapters/competen/guard";
+import { lifeosStore, readSignedInEmail, resolveHostSite, resolveLifeosShell } from "@/lib/lifeos/adapters/competen/guard";
+import { previewInvitation } from "@/lib/lifeos/core/invitations";
+import { Invite } from "@/lib/lifeos/ui/Invite";
 import { ActivateAccess } from "@/lib/lifeos/ui/ActivateAccess";
 import { LifeosApp } from "@/lib/lifeos/ui/LifeosApp";
 import { SignIn } from "@/lib/lifeos/ui/SignIn";
@@ -14,7 +16,8 @@ export const metadata: Metadata = { title: { absolute: "LifeOS" }, robots: { ind
 export default async function LifeosPage({ params }: { params: Promise<{ screen?: string[] }> }) {
   const { screen } = await params;
   const name = screen?.[0];
-  if ((screen?.length ?? 0) > 1 || (name !== undefined && !isScreen(name))) notFound();
+  const inviteToken = screen?.length === 2 && name === "invite" ? screen[1] : null;
+  if (!inviteToken && ((screen?.length ?? 0) > 1 || (name !== undefined && !isScreen(name)))) notFound();
 
   const host = await resolveHostSite();
   if (host.kind === "none") notFound();
@@ -22,6 +25,12 @@ export default async function LifeosPage({ params }: { params: Promise<{ screen?
 
   const shell = await resolveLifeosShell();
   if (shell === "DISABLED") notFound();
+  if (inviteToken) {
+    const store = lifeosStore();
+    const invite = store ? await previewInvitation(store, inviteToken).catch(() => null) : null;
+    if (!invite) notFound();
+    return <Invite token={inviteToken} {...invite} signedInEmail={await readSignedInEmail()} branding={site?.branding ?? {}} />;
+  }
   // On a tenant's domain the person signs in under its name, and never leaves it.
   if (shell === "AUTH_REQUIRED" && site) return <SignIn branding={site.branding} name={site.name} />;
   if (shell === "AUTH_REQUIRED") redirect(`/login?next=${encodeURIComponent(name ? `/lifeos/${name}` : "/lifeos")}`);
