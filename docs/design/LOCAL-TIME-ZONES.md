@@ -82,10 +82,11 @@ timestamps, so it should not arise.
 
 ## Order of conversion
 
-Do not convert the ~720 calls at once. `src/lib/datetime.scholar-census.test.ts` fails if a Scholar file formats a new
-time outside this route, and lists what is left.
+Do not convert the ~720 calls at once. `src/lib/datetime.scholar-census.test.ts` fails if a file in Scholar's page tree
+formats a new time outside this route, and lists what is left there. It does not cover the `src/lib` files in step 3.
 
-1. **This change:** Scholar pages and client components, including every Scholar screen that shows a time of day.
+1. **This change:** Scholar pages and client components. It covers six of the seven places that show a time of day.
+   The seventh is the session title from `learn-search`, in step 3.
 2. **After the Scholar coordinated release merges:** the Scholar server parts those branches are editing, or that need
    a prop passed down (`saved-library-view`, `notebook-view`, `apply-parts`, `evaluate-parts`, `monthly-progress`,
    `progress-view`, `library-rows`, `study-home-model`).
