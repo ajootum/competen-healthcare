@@ -7,6 +7,7 @@ import { individualShell, gatedMetadata } from "../../_components/shell-context"
 import { SCHOLAR_ICONS } from "@/lib/individual/scholar/brand";
 import { ExperienceMark, ExperienceSwitcher, StatePanel, focusRing, secondaryBtn } from "../../_components/chrome";
 import { SidebarNav, BottomNav, AccountMenu, SignOutButton } from "../../_components/ShellNav";
+import { lifeosEntryEnabled } from "@/lib/individual/lifeos-entry";
 import { ScholarDrawer } from "../../_components/ScholarDrawer";
 import { readPreviewRender } from "@/lib/individual/preview/headers";
 // HFE-01 D1: AccountMenu is the one account menu on phone and desktop (every destination the bottom bar cannot hold).
@@ -170,6 +171,7 @@ export default async function ExperienceLayout({ children, params }: {
   // COMPETEN-LEARNING-01: one link to the member-only Learning area, only while learning_app is on (ADR-017).
   // MY PLAN PERF: the three shell reads below are independent of each other, so they are made together (they were three steps in a row).
   const learningP = learningEnabled(shell.ctx.admin);
+  const lifeosP = lifeosEntryEnabled(shell.ctx.admin);
 
   // Scholar HFE redesign (2026-10-26): the Scholar shell carries the agreed prototype's palette (.cmp-scholar,
   // globals.css), its AI help switch at the right of every page heading, and its footer. The structure --
@@ -211,7 +213,7 @@ export default async function ExperienceLayout({ children, params }: {
           <div className="hidden md:flex md:ml-auto items-center gap-2.5 text-[13px]">
             <span className="rounded-full bg-[var(--cmp-app-bg)] px-2.5 py-1 text-[11px] font-semibold text-[var(--cmp-app-text-secondary)] ring-1 ring-[var(--cmp-app-border)]">Individual account</span>
           </div>
-          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} preview={previewing} scholarModules={scholarModules} />
+          <AccountMenu experience={experience} initials={initials} name={profile.fullName ?? profile.email ?? "Your account"} preview={previewing} scholarModules={scholarModules} lifeos={await lifeosP} />
         </div>
       </header>
 

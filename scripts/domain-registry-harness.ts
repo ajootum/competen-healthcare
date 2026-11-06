@@ -298,6 +298,10 @@ ok("7c. ⚠ it was NOT repointed at the practice gateway, which would break ever
  * not something that happens because a literal was convenient.
  */
 const HOSTNAME_ALLOWLIST: Record<string, string> = {
+  "src/lib/lifeos/host.ts":
+    "ADR-018: the suffix that marks a host as first-party, so a tenant's domain can never be mistaken for ours. It cannot read the registry because it runs in the proxy on every request and imports nothing by design.",
+  "src/lib/lifeos/host.test.ts":
+    "Proves that rule against each first-party hostname in use, written out literally so a change to the rule cannot change the test as well.",
   "src/lib/marketing/site.ts":
     "SITE_URL's production default. metadataBase must be absolute in production or every social card points at localhost -- and it is the public gateway (www), which the registry also names.",
   "src/lib/practice/identity-service.ts":
