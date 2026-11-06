@@ -96,7 +96,7 @@ describe("the order of the door", () => {
 });
 
 describe("the door before holding LifeOS", () => {
-  const identity = { issuer: "i", subject: "s", displayName: "d", competenIndividualLive: true };
+  const identity = { issuer: "i", subject: "s", displayName: "d", email: null, competenIndividualLive: true };
   const call2 = (store: LifeosStore, session?: () => Promise<typeof identity>) => dispatch(
     new Request("http://x/api/lifeos/v1/access/status"), ["access", "status"],
     { store, authenticate: async () => { throw new LifeosError("forbidden", "no"); }, session, traceId: "t" },

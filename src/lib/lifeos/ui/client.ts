@@ -55,12 +55,12 @@ export async function all<T>(path: string): Promise<T[]> {
 export type Stamped = { id: string; version: number; workspaceId: string; ownerIndividualId: string; status: string; provenanceSource: string };
 
 export type Individual = { id: string; displayName: string; timezone: string; version: number };
-export type Workspace = { id: string; name: string; kind: "personal" | "organisation" };
+export type Workspace = { id: string; name: string; kind: "personal" | "organisation"; tenantId: string | null };
 export type World = Stamped & { title: string; context: string | null; purpose: string | null; position: number };
 export type Commitment = Stamped & {
   worldId: string | null; title: string; notes: string | null; important: boolean | null; urgent: boolean | null;
   quadrant: "q1" | "q2" | "q3" | "q4" | null; dueOn: string | null; scheduledOn: string | null; scheduledTime: string | null;
-  estimatedMinutes: number | null; completedAt: string | null;
+  estimatedMinutes: number | null; completedAt: string | null; accessScope: "private" | "workspace";
 };
 export type Delegation = Stamped & { commitmentId: string; delegateeLabel: string | null; followUpOn: string };
 export type ProtectedBlock = Stamped & { commitmentId: string | null; worldId: string | null; label: string; startsAt: string; endsAt: string };

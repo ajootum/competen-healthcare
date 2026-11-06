@@ -1,4 +1,5 @@
 import { dispatch } from "@/lib/lifeos/api/dispatch";
+import { resolveTxt } from "node:dns/promises";
 import { lifeosStore, lifeosTraceId, requireLifeosPrincipal, requireLifeosSession } from "@/lib/lifeos/adapters/competen/guard";
 
 // LIFEOS-API-001 section 2. The one door to LifeOS. Every endpoint is served from the route table through dispatch,
@@ -16,6 +17,7 @@ async function handle(req: Request, { params }: Context) {
     store,
     authenticate: () => (store ? requireLifeosPrincipal(store) : Promise.reject(new Error("unreachable"))),
     session: () => requireLifeosSession(),
+    resolveTxt,
     traceId: await lifeosTraceId(),
   });
 }

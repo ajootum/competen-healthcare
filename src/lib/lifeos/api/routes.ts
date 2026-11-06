@@ -4,6 +4,8 @@ import {
 } from "../core/contracts";
 import { RESOURCES, RESOURCE_NAMES, type ResourceName, camelRow } from "../core/resources";
 import * as svc from "../core/service";
+import * as tenants from "../core/tenants";
+import * as invitations from "../core/invitations";
 import type { RequestContext } from "../core/service";
 import { type SessionIdentity, accessStatus, activateFromCompetenIndividual } from "../core/optin";
 import type { LifeosStore, Row } from "../core/types";
@@ -86,6 +88,11 @@ function resourceRoutes(name: ResourceName): Route[] {
   return routes;
 }
 
+const presentTenant = (r: Row) => tenants.TenantV1.parse(camelRow(r));
+const presentDomain = (r: Row) => tenants.TenantDomainV1.parse(camelRow(r));
+
+const presentInvitation = (r: Row) => invitations.InvitationV1.parse(camelRow(r));
+
 const noPrincipal = async (): Promise<HandlerResult> => { throw new Error("session route reached the principal path"); };
 
 export const ROUTES: Route[] = [
@@ -101,6 +108,11 @@ export const ROUTES: Route[] = [
       const r = await activateFromCompetenIndividual(store, identity, ActivateInput.parse(body).termsVersion);
       return { status: r.created ? 201 : 200, data: r };
     },
+  },
+  {
+    method: "POST", path: "/access/invitation", summary: "The invited person accepts, signed in with the invited address", visibility: "internal", scope: null, bucket: "write", input: invitations.AcceptInput, output: z.object({ workspaceId: z.string(), individualId: z.string() }),
+    admission: "session", handler: noPrincipal,
+    sessionHandler: async ({ store, identity, body }) => ({ data: await invitations.acceptInvitation(store, identity, invitations.AcceptInput.parse(body).token, null) }),
   },
   {
     method: "POST", path: "/me/entitlements/:id/end", summary: "Turn off LifeOS access the person chose. Their records are kept.", visibility: "internal", scope: null, bucket: "write", input: VersionInput, output: EntitlementV1,
@@ -157,6 +169,53 @@ export const ROUTES: Route[] = [
   {
     method: "POST", path: "/workspaces/:ws/suggestions/:id/dismiss", summary: "The person's decision to dismiss a suggestion", visibility: "internal", scope: "suggestions:write", bucket: "write", input: z.object({}).strict(), output: SuggestionV1,
     handler: async ({ ctx, params }) => changed(await svc.dismissSuggestion(ctx, params.ws, params.id)),
+  },
+  {
+    method: "GET", path: "/tenants", summary: "Tenants the caller is accountable for", visibility: "internal", scope: "tenants:read", bucket: "read", output: tenants.TenantV1, list: true,
+    handler: async ({ ctx }) => ({ data: (await tenants.listOwnedTenants(ctx)).map(presentTenant), nextCursor: null }),
+  },
+  {
+    method: "GET", path: "/tenants/:tenant", summary: "One tenant, for its owner", visibility: "internal", scope: "tenants:read", bucket: "read", output: tenants.TenantV1,
+    handler: async ({ ctx, params }) => ({ data: presentTenant(await tenants.readTenant(ctx, params.tenant)) }),
+  },
+  {
+    method: "PATCH", path: "/tenants/:tenant", summary: "A tenant's name and branding", visibility: "internal", scope: "tenants:write", bucket: "write", input: tenants.TenantPatchInput, output: tenants.TenantV1,
+    handler: async ({ ctx, params, body }) => { const r = await tenants.patchTenant(ctx, params.tenant, body); return { data: presentTenant(r.data as Row), replayed: r.replayed }; },
+  },
+  {
+    method: "GET", path: "/tenants/:tenant/domains", summary: "A tenant's domains", visibility: "internal", scope: "tenants:read", bucket: "read", output: tenants.TenantDomainV1, list: true,
+    handler: async ({ ctx, params }) => ({ data: (await tenants.listDomains(ctx, params.tenant)).map(presentDomain), nextCursor: null }),
+  },
+  {
+    method: "POST", path: "/tenants/:tenant/domains", summary: "Claim a domain. It serves nothing until verified.", visibility: "internal", scope: "tenants:write", bucket: "write", input: tenants.DomainCreateInput, output: tenants.TenantDomainV1,
+    handler: async ({ ctx, params, body }) => { const r = await tenants.addDomain(ctx, params.tenant, body); return { status: r.replayed ? 200 : 201, data: presentDomain(r.data as Row), replayed: r.replayed }; },
+  },
+  {
+    method: "POST", path: "/tenants/:tenant/domains/:domain/verify", summary: "Check the domain's TXT record", visibility: "internal", scope: "tenants:write", bucket: "write", input: tenants.DomainActionInput, output: tenants.TenantDomainV1,
+    handler: async ({ ctx, params, body }) => { const r = await tenants.verifyDomain(ctx, params.tenant, params.domain, body); return { data: presentDomain(r.data as Row), replayed: r.replayed }; },
+  },
+  {
+    method: "POST", path: "/tenants/:tenant/domains/:domain/remove", summary: "Stop serving a domain", visibility: "internal", scope: "tenants:write", bucket: "write", input: tenants.DomainActionInput, output: tenants.TenantDomainV1,
+    handler: async ({ ctx, params, body }) => { const r = await tenants.removeDomain(ctx, params.tenant, params.domain, body); return { data: presentDomain(r.data as Row), replayed: r.replayed }; },
+  },
+  {
+    method: "GET", path: "/workspaces/:ws/directory", summary: "Names of a workspace's active members, for delegating", visibility: "internal", scope: "workspaces:read", bucket: "read", output: z.object({ individualId: z.string(), displayName: z.string() }), list: true,
+    handler: async ({ ctx, params }) => ({ data: await invitations.workspaceDirectory(ctx, params.ws), nextCursor: null }),
+  },
+  {
+    method: "GET", path: "/workspaces/:ws/invitations", summary: "Open invitations, for a workspace owner or admin", visibility: "internal", scope: "workspaces:manage", bucket: "read", output: invitations.InvitationV1, list: true,
+    handler: async ({ ctx, params }) => ({ data: (await invitations.listInvitations(ctx, params.ws)).map(presentInvitation), nextCursor: null }),
+  },
+  {
+    method: "POST", path: "/workspaces/:ws/invitations", summary: "Invite one address. The link is returned once and only its hash is kept.", visibility: "internal", scope: "workspaces:manage", bucket: "write", input: invitations.InviteInput, output: z.object({ invitation: invitations.InvitationV1, token: z.string().nullable() }),
+    handler: async ({ ctx, params, body }) => {
+      const r = await invitations.createInvitation(ctx, params.ws, body);
+      return { status: r.replayed ? 200 : 201, data: { invitation: presentInvitation(r.row), token: r.token }, replayed: r.replayed };
+    },
+  },
+  {
+    method: "POST", path: "/workspaces/:ws/invitations/:id/revoke", summary: "Withdraw an open invitation", visibility: "internal", scope: "workspaces:manage", bucket: "write", input: invitations.InviteActionInput, output: invitations.InvitationV1,
+    handler: async ({ ctx, params, body }) => { const r = await invitations.revokeInvitation(ctx, params.ws, params.id, body); return { data: presentInvitation(r.data as Row), replayed: r.replayed }; },
   },
   // Fixed paths above win over the parameterised resource routes below.
   ...RESOURCE_NAMES.flatMap(resourceRoutes),
