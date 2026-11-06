@@ -23,7 +23,7 @@ import { Suspense } from "react";
 import { headers } from "next/headers";
 import { Deferred, SectionLoading } from "../_components/deferred";
 import { ContinueCard } from "../_components/study-home";
-import { LearningLibrary, MoreToLearnFrom, RecentLessons, StudyNext, recentLessons } from "../_components/learn-home";
+import { MyLibrarySection, MoreToLearnFrom, RecentLessons, StudyNext, recentLessons } from "../_components/learn-home";
 import type { IndividualContext } from "@/lib/individual/guard";
 import { resumeSession } from "@/lib/individual/scholar/resume-session";
 import { scholarModulesOnce } from "@/lib/individual/scholar/module-access";
@@ -213,7 +213,7 @@ async function Discover({ ctx, policy, q, library, studyOn, historyOn }: { ctx: 
         <Suspense fallback={<SectionLoading label="Working out your next step" rows={2} />}><Deferred content={nextP} /></Suspense>
       )}
       <RecentLessons sessions={recentLessons(l.sessions ?? [], session?.id ?? null)} unreadable={l.sessions === null} total={l.sessionTotal} />
-      <LearningLibrary materials={library === null ? null : library.length} savedOn={policy.scholarLearningLibrary === "on"} coursesOn={modules.has("courses")}
+      <MyLibrarySection materials={library === null ? null : library.length} savedOn={policy.scholarLearningLibrary === "on"} coursesOn={modules.has("courses")}
         extra={(
           <>
             {l.topicTotal > 0 && <MoreToLearnFrom label={`Your topics (${l.topicTotal})`}><MyTopics groups={l.topicGroups} total={l.topicTotal} bare /></MoreToLearnFrom>}

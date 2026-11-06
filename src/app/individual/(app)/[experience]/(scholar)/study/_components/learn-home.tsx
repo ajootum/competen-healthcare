@@ -80,7 +80,7 @@ export function StudyNext({ item, starting, unreadable }: { item: StudyNextItem 
   );
 }
 
-export function LearningLibrary({ materials, savedOn, coursesOn, extra }: { materials: number | null; savedOn: boolean; coursesOn: boolean; extra?: ReactNode }) {
+export function MyLibrarySection({ materials, savedOn, coursesOn, extra }: { materials: number | null; savedOn: boolean; coursesOn: boolean; extra?: ReactNode }) {
   const count = materials === null ? "Could not be counted just now" : materials === 0 ? "Nothing uploaded yet" : `${materials} ${materials === 1 ? "material" : "materials"}`;
   return (
     <section aria-labelledby="learn-library-h" className="cmp-learn-key" data-learn-library>
@@ -93,7 +93,7 @@ export function LearningLibrary({ materials, savedOn, coursesOn, extra }: { mate
       {coursesOn && (
         <>
           <p className="mb-1 mt-3 px-0.5 text-[12px] font-semibold text-gray-600">From Competen</p>
-          <div className={box}><Row href={experienceHref("scholar", "courses")} title="Courses" detail="Learning provided by Competen, separate from your own notes" icon="book" /></div>
+          <div className={box}><Row href={experienceHref("scholar", "courses")} title="Courses & Training" detail="Learning provided by Competen, separate from your own notes" icon="book" /></div>
         </>
       )}
       {extra}
