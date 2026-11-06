@@ -31,13 +31,15 @@ export function MyIdeasBox({ chunkId = null, materialId = null, sectionLabel, an
   useEffect(() => { if (nb && scope?.sessionId) scope.load(); }, [nb, scope]);
   const arrived = useRef(false);
   const notesRead = scope !== null && scope.notes !== null;
+  const lessonStep = scope?.step ?? null;
   useEffect(() => {
-    if (!notesRead || arrived.current || window.location.hash !== `#ideas-${scope.step}-${anchor}`) return;
+    if (!notesRead || arrived.current || window.location.hash !== `#ideas-${lessonStep}-${anchor}`) return;
     // Once only: later changes to the notes must not pull the page back here.
     arrived.current = true;
-    const t = window.setTimeout(() => { setOpen(true); setEverOpened(true); setWriterKey(k => k ?? newClientKey()); root.current?.scrollIntoView({ block: "center" }); }, 400);
-    return () => window.clearTimeout(t);
-  }, [notesRead, scope, anchor]);
+    const folded = root.current?.closest("details");
+    if (folded && !folded.open) folded.open = true;
+    window.setTimeout(() => { setOpen(true); setEverOpened(true); setWriterKey(k => k ?? newClientKey()); root.current?.scrollIntoView({ block: "center" }); }, 400);
+  }, [notesRead, lessonStep, anchor]);
 
   if (!nb || !scope || !scope.sessionId) return null;
   const context: NoteContext = {
@@ -71,17 +73,18 @@ export function MyIdeasBox({ chunkId = null, materialId = null, sectionLabel, an
           <p className="cmp-learn-ink text-[13px]">{IDEAS.linkedLine}</p>
           <p className="mt-0.5 text-[12px] text-gray-700">{IDEAS.patientWarning}</p>
           {scope.failed && <p role="status" className="mt-1.5 text-[12.5px] text-gray-900">Your earlier notes could not be read just now. They are unchanged. <button type="button" className={learnAction.link} onClick={scope.reload}>Try again</button></p>}
-          {listed.length > 0 && (
-            <ul className="mt-2 space-y-1.5" aria-label="Your earlier notes here">
-              {listed.map(n => <li key={n.id}><ExistingNote note={n} userId={nb.userId} onRemoved={() => scope.remove(n.id)} /></li>)}
-            </ul>
-          )}
+          {/* The field first, so earlier notes never push it off the screen when the box opens. */}
           <div className="mt-2.5">
             {writerKey && (
               <BoxWriter key={writerKey} clientKey={writerKey} userId={nb.userId} context={context} autoFocus={open}
                 onState={setCurrent} onAnother={another} onClose={() => expand(false)} chunkIds={chunkId ? [chunkId] : []} materialId={materialId ?? scope.materialId} sessionId={scope.sessionId} step={scope.step} />
             )}
           </div>
+          {listed.length > 0 && (
+            <ul className="mt-3 space-y-1.5" aria-label="Your earlier notes here">
+              {listed.map(n => <li key={n.id}><ExistingNote note={n} userId={nb.userId} onRemoved={() => scope.remove(n.id)} /></li>)}
+            </ul>
+          )}
           <p className="mt-2.5 text-[12.5px]"><Link href={notebookHref()} className={learnAction.link}>All my notes in My Notebook</Link></p>
         </div>
       )}

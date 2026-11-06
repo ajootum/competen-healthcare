@@ -76,7 +76,7 @@ function Editor({ userId, clientKey, context, options, draft, note, where, relat
     const id = (await saver.discard()) ?? note?.id;
     if (!id) { router.push(notebookHref()); return; }
     const res = await fetch(`/api/individual/scholar/notebook/notes/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
-    if (res?.ok || res?.status === 404) { router.push(notebookHref()); router.refresh(); return; }
+    if (res?.ok || res?.status === 404) { router.push(notebookHref()); return; }
     saver.resume();
     setMsg("That could not be removed just now. It is still here.");
   };

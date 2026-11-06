@@ -50,7 +50,8 @@ page.on("request", r => {
 const shot = (name: string) => page.screenshot({ path: join(OUT, "shots", `${VIEW}-${name}.png`) });
 const settle = async (p: Page, ms = 600) => { await p.waitForLoadState("networkidle", { timeout: 90_000 }).catch(() => {}); await p.waitForTimeout(ms); };
 const open = async (path: string) => {
-  await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 300_000 });
+  // A navigation the page itself has just started (a refresh after removing a note) can abort this one: it is simply asked again.
+  await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 300_000 }).catch(async () => { await page.waitForTimeout(1500); await page.goto(`${BASE}${path}`, { waitUntil: "domcontentloaded", timeout: 300_000 }); });
   await settle(page);
   // A dev server hydrates slowly: wait until the shell control answers, as a learner would see it react.
   await page.waitForFunction(() => { const b = document.querySelector("[data-testid=\"quick-note-button\"]"); return !!b && Object.keys(b).some(k => k.startsWith("__reactProps")); }, null, { timeout: 120_000 });
@@ -172,10 +173,13 @@ await page.waitForTimeout(1500);
 const revealNotes = async () => {
   await page.locator('[data-testid="my-ideas-box"]').first().waitFor({ state: "attached", timeout: 90_000 });
   // Saved teaching and the saved reading place arrive after the notes. A learner sees them settle, then reads.
-  await settle(page, 4000);
-  const closed = page.locator('details:not([open]):has([data-testid="my-ideas-box"]) > summary').first();
-  if (await closed.count()) await closed.click();
-  await page.waitForTimeout(300);
+  await settle(page, 2000);
+  // The notes panel folds by itself when saved teaching arrives, so it is checked until it stays open.
+  for (let i = 0; i < 5; i++) {
+    const closed = page.locator('details:not([open]):has([data-testid="my-ideas-box"]) > summary').first();
+    if (await closed.count()) await closed.click();
+    await page.waitForTimeout(1500);
+  }
 };
 await revealNotes();
 const box = page.getByTestId("my-ideas-box").first();
@@ -313,26 +317,31 @@ await open(`${R}/notebook?q=${encodeURIComponent(`zebra${stamp}`)}`);
 ok((await page.locator(`[data-note-id="${noteOne}"]`).count()) === 1, "the same note appears in My Notebook");
 ok(/Growth and Development/.test(await page.locator(`[data-note-id="${noteOne}"]`).innerText()), "it says which lesson it is on");
 await shot("15-notebook-lesson-note");
+// Read to a section further down, leave for a note, come back: the same section is where the learner left it.
+await open(`${R}/learn?session=${SESSION}`);
+await revealNotes();
+const readTo = page.locator('li[id^="lesson-"]').nth(2);
+const readToId = await readTo.getAttribute("id");
+await page.evaluate(id => { const e = document.getElementById(id!)!; window.scrollBy(0, e.getBoundingClientRect().top - 80); }, readToId);
+await page.mouse.wheel(0, 1);
+await page.waitForTimeout(3500);
+const yLeft = await page.evaluate(() => window.scrollY);
 await page.goto(`${BASE}${R}/notebook/${noteOne}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
 await settle(page);
 ok((await page.getByTestId("note-back-to-lesson").count()) === 1, "the note offers the way back to its lesson");
-const placeBefore = (await admin.from("individual_scholar_learning_position").select("card_id").eq("user_id", userId).eq("session_id", SESSION).maybeSingle()).data?.card_id ?? null;
+await shot("15a-note-way-back");
 await page.getByTestId("note-back-to-lesson").click();
 await page.waitForURL(`**/study/learn?session=${SESSION}**`, { timeout: 120_000 });
-await settle(page, 4000);
-const placeAfter = (await admin.from("individual_scholar_learning_position").select("card_id").eq("user_id", userId).eq("session_id", SESSION).maybeSingle()).data?.card_id ?? null;
-ok(placeAfter === placeBefore, `back at the lesson, its saved reading place is unchanged (${placeBefore})`);
-note(`reopened at scrollY ${await page.evaluate(() => Math.round(window.scrollY))}`);
+await settle(page, 1000);
+// The lesson's notes, then its saved teaching, then the place: on a dev server this takes a while.
+await page.waitForFunction(([id, h]) => { const e = document.getElementById(id as string); if (!e) return false; const y = e.getBoundingClientRect().top; return e.getClientRects().length > 0 && y > -220 && y < (h as number) * 0.6; }, [readToId, SIZE.height], { timeout: 45_000 }).catch(() => {});
+const backTop = await page.evaluate(id => document.getElementById(id!)?.getBoundingClientRect().top ?? null, readToId);
+ok(backTop !== null && backTop > -220 && backTop < SIZE.height * 0.6, `back at the lesson, the section the learner left is on screen again (${readToId} at y ${backTop === null ? "none" : Math.round(backTop)}, left at scrollY ${Math.round(yLeft)}, back at ${await page.evaluate(() => Math.round(window.scrollY))})`);
 await shot("15b-back-at-lesson");
 // "Go to this section" opens that note's own box.
-await page.goto(`${BASE}${R}/learn?session=${SESSION}#ideas-0-${(await noteByWords(`zebra${stamp}`))[0]?.section_anchor}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+await page.goto(`${BASE}${R}/learn?session=${SESSION}#ideas-${(await noteByWords(`zebra${stamp}`))[0]?.step}-${(await noteByWords(`zebra${stamp}`))[0]?.section_anchor}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
 await settle(page, 5000);
-{
-  const closed = page.locator('details:not([open]):has([data-testid="my-ideas-box"]) > summary').first();
-  if (await closed.count()) await closed.click();
-  await page.waitForTimeout(800);
-}
-ok(await page.locator('[data-testid="my-ideas-box"] button[aria-expanded="true"]').first().isVisible().catch(() => false), "a link to a section opens that note's box");
+ok(await page.locator('[data-testid="my-ideas-box"] button[aria-expanded="true"]').first().waitFor({ state: "visible", timeout: 45_000 }).then(() => true, () => false), "a link to a section opens that note's box");
 
 // ── 4. Network loss, and an interrupted visit ─────────────────────────────────────────────────────────────────────────────
 await qbtn.click();

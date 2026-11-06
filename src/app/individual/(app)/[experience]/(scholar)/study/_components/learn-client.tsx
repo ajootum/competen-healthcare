@@ -642,6 +642,9 @@ export function LearnWorkspace(props: {
     const hasContent = (live.cards[pp.step]?.length ?? 0) > 0;
     if (anchorEl) {
       pendingPlace.current = null;
+      // COMPETEN-NOTEBOOK-001: the place may be inside the lesson's notes, which fold away when saved teaching is on the page. Unfolded, or it could not be found again.
+      const folded = anchorEl.closest("details");
+      if (folded && !folded.open) folded.open = true;
       anchorEl.scrollIntoView({ behavior: "auto", block: "start" });
       return true;
     }
@@ -902,6 +905,17 @@ export function LearnWorkspace(props: {
    * teaching opens with no AI; Guided learning teaches only a lesson with nothing saved. Only this moves current_step and
    * the 790 position (furthest_step only ever grows).
    */
+  // COMPETEN-NOTEBOOK-001: "Go to this section" from a note (#ideas-<step>-<anchor>) opens that note's lesson. The box there opens itself, once the notes are read.
+  const noteLessonAsked = useRef(false);
+  const selectRef = useRef<((i: number) => void) | null>(null);
+  useEffect(() => {
+    if (noteLessonAsked.current || !session || !journey) return;
+    noteLessonAsked.current = true;
+    const m = /^#ideas-(\d+)-/.exec(window.location.hash);
+    if (!m) return;
+    const i = session.steps.findIndex(s => s.step === Number(m[1]));
+    if (i >= 0 && i !== journey.current) selectRef.current?.(i);
+  }, [session, journey]);
   const select = useCallback((i: number, how: "select" | "next" = "select") => {
     const j = jRef.current;
     if (!session || !j) return;
@@ -919,6 +933,7 @@ export function LearnWorkspace(props: {
     if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step, ...(move ? { move } : {}) }, "PATCH");
     syncRef.current?.event(how === "next" ? "continue" : "jump");
   }, [session, dispatch, guided, scrollToLesson, wantPlace, applyPlace]);
+  useEffect(() => { selectRef.current = select; }, [select]);
   /** Next lesson: the one after the ACTIVE lesson, opened (saved) or taught (Guided, nothing saved) in one action. */
   const next = useCallback(() => { const j = jRef.current; if (j && j.current < j.count - 1) select(j.current + 1, "next"); }, [select]);
   const previous = useCallback(() => { const j = jRef.current; if (j && j.current > 0) select(j.current - 1); }, [select]);
