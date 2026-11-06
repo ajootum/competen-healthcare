@@ -4,6 +4,18 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { matchHqDestinations, type HqDestination } from "@/lib/hq/search-catalogue";
+import type { HqRecordSourceView } from "@/lib/hq/record-search/registry";
+
+// HQ-RECORD-SEARCH-01: optional record sources. With none (the default) this component makes no fetch and behaves exactly as
+// before. The server hands down only sources the viewer holds the capability for, with the flag on. It can still be wrong: the
+// layout uses the union of appointments and the route uses the ACTIVE context, so a source may answer 403. That source is then
+// dropped for the session and shows nothing (no message that would say what the person is missing). Never probe every route:
+// each refusal writes hq_access_observation. A 502 is a failed source and is SAID, never shown as "nothing found".
+type RecordHit = { id: string; code: string | null; title: string; href: string };
+type RecordEntry = { status: "ok"; hits: RecordHit[]; more: boolean } | { status: "failed" };
+const DEBOUNCE_MS = 280;
+const MIN_CHARS = 2;
+const safeHref = (h: string) => h.startsWith("/super-admin/") && !h.startsWith("//");
 
 // COMP-HQ-ACCESS-001 s15 -- "Search HQ / Go to..." for people who live in this console.
 //
@@ -21,7 +33,7 @@ import { matchHqDestinations, type HqDestination } from "@/lib/hq/search-catalog
 // feature for the person who wrote it (s21's "do not rely solely on gestures" reasoning, applied to
 // key combinations).
 
-export default function HqSearchLauncher({ destinations }: { destinations: HqDestination[] }) {
+export default function HqSearchLauncher({ destinations, recordSources = [] }: { destinations: HqDestination[]; recordSources?: HqRecordSourceView[] }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -30,6 +42,13 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
   const panel = useRef<HTMLDivElement>(null);
 
   const results = matchHqDestinations(destinations, query);
+
+  // Record search state: results are stored WITH the query they answer, so loading is derived (no synchronous setState in an effect).
+  const [rec, setRec] = useState<{ q: string; by: Record<string, RecordEntry> }>({ q: "", by: {} });
+  const [dropped, setDropped] = useState<string[]>([]);
+  const liveSources = recordSources.filter(s => !dropped.includes(s.key));
+  const recQuery = query.trim().length >= MIN_CHARS ? query.trim() : "";
+  const sourcesKey = liveSources.map(s => s.key).join(",");
 
   // Defined above the effects so all three ways out -- Escape, the backdrop, and choosing a result --
   // close the same way. The setters are stable, so the empty dependency list is honest.
@@ -65,6 +84,39 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
    */
   useModalFocus(open, panel, close);
 
+  useEffect(() => {
+    if (!open || !recQuery || !sourcesKey) return;
+    const ctl = new AbortController();
+    const timer = setTimeout(() => {
+      setRec({ q: recQuery, by: {} });
+      for (const src of sourcesKey.split(",")) {
+        const source = recordSources.find(s => s.key === src);
+        if (!source) continue;
+        fetch(`${source.endpoint}?q=${encodeURIComponent(recQuery)}`, { signal: ctl.signal, credentials: "same-origin" })
+          .then(async r => {
+            if (r.status === 401 || r.status === 403 || r.status === 404) { setDropped(d => (d.includes(src) ? d : [...d, src])); return; }
+            if (!r.ok) throw new Error("source failed");
+            const j = await r.json() as { hits?: RecordHit[]; more?: boolean };
+            setRec(cur => (cur.q === recQuery ? { q: cur.q, by: { ...cur.by, [src]: { status: "ok", hits: j.hits ?? [], more: j.more === true } } } : cur));
+          })
+          .catch(e => {
+            if ((e as { name?: string })?.name === "AbortError") return;
+            setRec(cur => (cur.q === recQuery ? { q: cur.q, by: { ...cur.by, [src]: { status: "failed" } } } : cur));
+          });
+      }
+    }, DEBOUNCE_MS);
+    return () => { clearTimeout(timer); ctl.abort(); };
+    // recordSources is a stable server-provided prop; sourcesKey captures what matters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, recQuery, sourcesKey]);
+
+  const answered = rec.q === recQuery && recQuery !== "";
+  const groups = liveSources.map(s => ({ source: s, entry: answered ? rec.by[s.key] : undefined }));
+  const recordItems = groups.flatMap(g => (g.entry?.status === "ok" ? g.entry.hits : []));
+  const loading = liveSources.length > 0 && recQuery !== "" && groups.some(g => !g.entry);
+  const anyFailed = groups.some(g => g.entry?.status === "failed");
+  const total = results.length + recordItems.length;
+
   const go = (href: string) => { close(); router.push(href); };
 
   // ⚠ THIS WAS STYLED FOR A DARK HEADER AND RENDERS ON A WHITE ONE. `border-white/15` is invisible
@@ -92,15 +144,20 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
         <input ref={inputRef} value={query}
           onChange={e => { setQuery(e.target.value); setCursor(0); }}
           onKeyDown={e => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setCursor(c => Math.min(c + 1, results.length - 1)); }
+            if (e.key === "ArrowDown") { e.preventDefault(); setCursor(c => Math.min(c + 1, total - 1)); }
             if (e.key === "ArrowUp") { e.preventDefault(); setCursor(c => Math.max(c - 1, 0)); }
             if (e.key === "Enter" && results[cursor]) { e.preventDefault(); go(results[cursor].href); }
+            else if (e.key === "Enter" && recordItems[cursor - results.length]) {
+              e.preventDefault();
+              const h = recordItems[cursor - results.length];
+              if (safeHref(h.href)) go(h.href);
+            }
           }}
           placeholder="Go to... try practice incidents"
           aria-label="Search HQ destinations"
           className="w-full rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-[14px] text-white outline-none placeholder:text-gray-500 focus:border-teal-500/50" />
 
-        {query.trim() !== "" && results.length === 0 && (
+        {query.trim() !== "" && results.length === 0 && !(liveSources.length > 0 && (loading || anyFailed || recordItems.length > 0)) && (
           // ⚠ THE HONEST SENTENCE. "Nothing matches" and "you may not open that" are different facts,
           // and this launcher can only ever say the first -- an unauthorised destination is not in
           // this list to be missed. Saying more would leak exactly what s15 forbids.
@@ -126,6 +183,45 @@ export default function HqSearchLauncher({ destinations }: { destinations: HqDes
               </li>
             ))}
           </ul>
+        )}
+
+        {liveSources.length > 0 && recQuery !== "" && (
+          <div className="mt-2" aria-label="Records">
+            {loading && <p role="status" aria-live="polite" className="px-2 py-2 text-[12.5px] text-gray-400">Searching records…</p>}
+            {(() => {
+              let offset = results.length;
+              return groups.map(({ source, entry }) => {
+                if (!entry) return null;
+                const heading = `${source.product} · ${source.module} · ${source.recordType}`;
+                if (entry.status === "failed")
+                  return <p key={source.key} role="status" className="px-2 py-2 text-[12.5px] text-amber-300">{source.recordType} search failed: the source could not be read. This is not the same as nothing found.</p>;
+                if (entry.hits.length === 0) return null;
+                const start = offset;
+                offset += entry.hits.length;
+                return (
+                  <section key={source.key} aria-label={heading} className="mt-1">
+                    <h3 className="px-2 pt-1 text-[11px] font-semibold uppercase tracking-wide text-gray-400">{heading}</h3>
+                    <ul className="max-h-48 overflow-y-auto">
+                      {entry.hits.map((h, i) => (
+                        <li key={h.id}>
+                          <button type="button" onClick={() => { if (safeHref(h.href)) go(h.href); }} onMouseEnter={() => setCursor(start + i)}
+                            aria-current={start + i === cursor}
+                            className={`flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left pointer-coarse:min-h-[var(--cmp-touch-min)] ${
+                              start + i === cursor ? "bg-white/10" : "hover:bg-white/5"}`}>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-[13.5px] text-white">{h.title}</span>
+                              {h.code && <span className="block truncate text-[11px] text-gray-400">{h.code}</span>}
+                            </span>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                    {entry.more && <p className="px-2 pb-1 text-[11px] text-gray-400">More {source.recordType.toLowerCase()} records match. Type more to narrow.</p>}
+                  </section>
+                );
+              });
+            })()}
+          </div>
         )}
       </div>
     </>
