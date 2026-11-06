@@ -39,7 +39,7 @@ Reopening a saved step, hint, example or explanation made **no model call** in t
 | Just explain it is substantial | About 300 words in sections, with mechanisms and a common mistake. The learner can go back. |
 | Research-grounded expansion | **Not exercised.** It uses the same seam as Go Deeper, which was tested with a labelled stand-in; staging has no active research. Production research stays off. |
 | Mobile and tablet | No sideways scroll at 390, 820 or 1440 wide. The answer box sits directly under the question. After a new step, focus moves to its heading, so a phone's keyboard does not open over the teaching. |
-| Notes | **Not yet wired.** `MyIdeasBox` is not on main. `SectionNote` is in place for it. |
+| Notes | One `MyIdeasBox` for each step, through `SectionNote`. Tested in `docs/evidence/SCHOLAR-GO-DEEPER-001/notes-walk-result.txt`. |
 
 ## Walk notes
 

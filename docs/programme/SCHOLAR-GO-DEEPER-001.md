@@ -78,7 +78,7 @@ Found by the independent read and left, as notes rather than defects:
 
 - **Evidence packs (SCHOLAR-RESEARCH-TEACH-001).** Not built here. A pack is one more source of `ResearchEvidence` in the route's `evidence` array, and everything downstream exists. With no pack the round works and says no research was consulted. When a pack lands, its id must join `context` in the saved key.
 - **Automatic research.** Unchanged and not used: Go Deeper consults research only through the existing Learn-from research mode and its controls. Production stays off until the owner's separate activation GO.
-- **My Ideas & Notes (COMPETEN-NOTEBOOK-001).** No second capture is built. `SectionNote` in `go-deeper-view.tsx` is drawn after each section and returns nothing until `MyIdeasBox` lands, then it is one line. **Note capture is therefore not yet in Go Deeper.**
+- **My Ideas & Notes (COMPETEN-NOTEBOOK-001).** No second capture is built. `SectionNote` in `go-deeper-view.tsx` draws `MyIdeasBox` after each section, with the section's own anchor (question, section, level and title), so two sections citing one slide keep their notes apart. It follows `scholar_personal_notebook` and draws nothing with it off.
 
 ## 8. Rollback
 

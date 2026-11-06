@@ -57,11 +57,17 @@ export async function describeNotes(admin: Admin, userId: string, notes: readonl
     out.set(n.id, {
       where: n.sectionLabel ? `${base} · ${n.sectionLabel}` : base,
       openHref: open, openLabel: art ? "Open saved lesson" : lesson ? "Back to the lesson" : "Open the material",
-      sectionHref: lesson && n.sectionAnchor ? `${lesson.split("#")[0]}#ideas-${n.step}-${n.sectionAnchor}` : null,
+      sectionHref: noteSectionHref(lesson, n.step, n.sectionAnchor),
       picture: chunk && materialId && unit !== "section" ? { materialId, materialTitle: titles.get(materialId) ?? "Your material", citation: `${titles.get(materialId) ?? "Your material"}, ${location ?? ""}`.replace(/,\s*$/, "") } : null,
     });
   }
   return out;
+}
+
+/** Pure. The link to a note's own section, where that section can be found on arriving. A Guide Me step's box is drawn only while that step is open, so it has none. */
+export function noteSectionHref(lesson: string | null, step: number | null, anchor: string | null): string | null {
+  if (!lesson || !anchor || anchor.startsWith("guide-")) return null;
+  return `${lesson.split("#")[0]}#ideas-${step}-${anchor}`;
 }
 
 export type RelatedLink = { href: string; label: string; why: string };

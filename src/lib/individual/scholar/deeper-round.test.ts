@@ -87,6 +87,13 @@ describe("where a note attaches", () => {
     expect(a).toBe(deeperNoteAnchor("Why does a child control the head before walking?", 6));
     expect(a).not.toBe(deeperNoteAnchor("Why does a child control the head before walking?", 5));
     expect(a).not.toBe(deeperNoteAnchor("Why do reflexes fade?", 6));
+    // The same question, regenerated, can have another section in this place.
+    expect(deeperNoteAnchor("Why do reflexes fade?", 2, "brief", "Reflexes are early")).not.toBe(deeperNoteAnchor("Why do reflexes fade?", 2, "brief", "Control comes later"));
+    expect(deeperNoteAnchor("Why do reflexes fade?", 2, "brief", "Reflexes are early")).toBe(deeperNoteAnchor("Why do reflexes fade?", 2, "brief", "Reflexes are early"));
+    // The same question at another level has other sections.
+    expect(deeperNoteAnchor("Why do reflexes fade?", 2, "brief")).not.toBe(deeperNoteAnchor("Why do reflexes fade?", 2, "detailed"));
+    expect(deeperNoteAnchor("Why do reflexes fade?", 2, "brief")).toBe(deeperNoteAnchor("Why do reflexes fade?", 2, "brief"));
+    expect(deeperNoteAnchor("Why do reflexes fade?", 15, "standard")).toMatch(/^[a-z0-9][a-z0-9_-]{0,39}$/);
   });
 });
 

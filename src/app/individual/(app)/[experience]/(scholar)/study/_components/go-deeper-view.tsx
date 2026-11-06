@@ -1,11 +1,13 @@
 "use client";
 
-import { Fragment, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { AnswerOption, DisclaimerBadge, InlineNote, LearningCallout, LearningDisclosure, LearningIcon, QuestionCard, learnAction, learnBox, learnTone, type LearningIconName } from "@/components/ui/scholar-learning";
 import { GO_DEEPER_COPY, GO_DEEPER_LEVELS, deeperEvidenceStatement, deeperNoteAnchor, levelOfDepth, type DeeperBlock, type DeeperKind, type DeeperParts, type DeeperSection } from "@/lib/individual/scholar/deeper-format";
 import { citedTags, questionText } from "@/lib/individual/scholar/teach-format";
 import { pagesOfCitation } from "@/lib/individual/scholar/material-visuals";
 import { SectionPictures } from "./learn-visuals";
+import { MyIdeasBox } from "./my-ideas-box";
+import { useLessonNotes } from "./note-capture";
 
 // SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): ONE STRUCTURED GO DEEPER ROUND ON THE PAGE. "Simplify the presentation, not the science."
 //
@@ -30,9 +32,16 @@ const KIND_ICON: Record<DeeperKind, LearningIconName> = {
   principle: "bulb", science: "layers", compare: "list", application: "target", misconception: "warn", safety: "warn", limits: "search", advanced: "spark", memory: "bulb",
 };
 
-/** ONE place a section's note is captured. COMPETEN-NOTEBOOK-001's My Ideas & Notes (MyIdeasBox: chunkId, materialId, sectionLabel, anchor) is drawn here when it lands: nothing else changes. No second capture is built. */
-export type SectionNoteProps = { anchor: string; label: string; chunkId: string | null; materialId: string | null };
-export const SectionNote: (props: SectionNoteProps) => ReactNode = () => null;
+/** ONE place a section's note is captured: COMPETEN-NOTEBOOK-001's My Ideas & Notes, and nothing else. It draws nothing with the notebook off, or outside a recorded lesson. */
+export type SectionNoteProps = { anchor: string; label: string; chunkId: string | null; materialId: string | null;
+  /** The lesson's notes are read once. A box that comes back, as a step does when the learner goes back, reads them again, or a note saved a moment ago looks lost. */
+  refresh?: boolean };
+export function SectionNote({ anchor, label, chunkId, materialId, refresh = false }: SectionNoteProps) {
+  const scope = useLessonNotes();
+  useEffect(() => { if (refresh && scope?.notes) scope.reload(); }, [anchor]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Keyed by its anchor: a note being written belongs to its own section, and never follows the learner to the next one.
+  return <MyIdeasBox key={anchor} chunkId={chunkId} materialId={materialId} sectionLabel={label} anchor={anchor} className="mt-3" />;
+}
 
 const firstSource = (section: DeeperSection, sources: readonly Source[]) => {
   const text = section.blocks.map(b => (b.t === "p" ? b.text : b.t === "list" ? b.items.join(" ") : b.t === "flow" ? b.steps.join(" ") : b.rows.flat().join(" "))).join(" ");
@@ -140,7 +149,7 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
       ? <SectionPictures materialId={source.materialId} materialTitle={source.materialTitle} from={pages.from} to={pages.to} first last={false} /> : null;
     if (picture && pageKey) usedPages.add(pageKey);
     // The section's own anchor, not the source's section: two sections citing one slide keep their notes apart.
-    const note = <SectionNote anchor={deeperNoteAnchor(parts.focus, i)} label={s.title} chunkId={null} materialId={source?.materialId ?? sources[0]?.materialId ?? null} />;
+    const note = <SectionNote anchor={deeperNoteAnchor(parts.focus, i, depth ?? null, s.title)} label={s.title} chunkId={null} materialId={source?.materialId ?? sources[0]?.materialId ?? null} refresh={i === 0} />;
     const body = <Blocks blocks={s.blocks} cite={cite} />;
     if (s.kind === "advanced") {
       return (
