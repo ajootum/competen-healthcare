@@ -250,9 +250,27 @@ describe("the route table", () => {
     expect(matchRoute("PATCH", ["workspaces", WS, "suggestions", REC])).toBe("method_not_allowed");
     expect(ROUTES.some(r => r.method === "POST" && r.path === "/workspaces/:ws/suggestions")).toBe(false);
   });
-  it("every route is internal, and the public document is empty", () => {
-    expect(ROUTES.every(r => r.visibility === "internal")).toBe(true);
-    expect(Object.keys((buildOpenApi(ROUTES, "public") as { paths: object }).paths)).toEqual([]);
+  it("the public document holds the approved list, and nothing a person must decide", () => {
+    const doc = JSON.stringify(Object.keys((buildOpenApi(ROUTES, "public") as { paths: object }).paths));
+    expect(doc).toContain("/workspaces/{ws}/commitments");
+    for (const never of ["suggestions", "permission-grants", "invitations", "tenants", "oauth/authorize"]) expect(doc).not.toContain(never);
+  });
+  it("a delegated token cannot reach an internal route, whatever scopes it holds", async () => {
+    const tokenHash = "x";
+    const store = fakeStore({
+      where: vi.fn(async (t: string) => (t === "lifeos_live_oauth_token"
+        ? [{ access_live: true, client_id: REC, individual_id: ME, scopes: ["*", "suggestions:write", "grants:write"], version: 1, id: tokenHash }]
+        : t === "lifeos_live_entitlement" ? [{ source: "direct" }] : [])) as LifeosStore["where"],
+      get: vi.fn(async (t: string) => (t === "lifeos_api_client" ? { status: "approved" } : { status: "active", id: ME })) as LifeosStore["get"],
+    });
+    const req = new Request(`http://x/api/lifeos/v1/workspaces/${WS}/permission-grants`, { headers: { authorization: "Bearer lo_at_x" } });
+    const res = await dispatch(req, ["workspaces", WS, "permission-grants"], { store, authenticate: async () => session, traceId: "t" });
+    expect(res.status).toBe(403);
+  });
+  it("with the public flag off, a bearer token gets not found", async () => {
+    const store = fakeStore({ flagEnabled: vi.fn(async (f: string) => f === "lifeos_core") });
+    const req = new Request(`http://x/api/lifeos/v1/me`, { headers: { authorization: "Bearer lo_at_x" } });
+    expect((await dispatch(req, ["me"], { store, authenticate: async () => session, traceId: "t" })).status).toBe(404);
   });
   it("the OpenAPI document generates, with path templates and the idempotency header", () => {
     const doc = buildOpenApi(ROUTES) as { openapi: string; paths: Record<string, Record<string, { parameters: { name: string }[] }>> };

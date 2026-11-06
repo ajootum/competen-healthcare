@@ -3,9 +3,11 @@ import {
   AccessStatusV1, ActivateInput, AuditEventV1, EntitlementV1, GenerateInput, VersionInput, IndividualV1, MeInput, MembershipV1, SuggestionV1, TransitionInput, WorkspaceV1,
 } from "../core/contracts";
 import { RESOURCES, RESOURCE_NAMES, type ResourceName, camelRow } from "../core/resources";
+import { LifeosError } from "../core/errors";
 import * as svc from "../core/service";
 import * as tenants from "../core/tenants";
 import * as invitations from "../core/invitations";
+import * as oauth from "../core/oauth";
 import type { RequestContext } from "../core/service";
 import { type SessionIdentity, accessStatus, activateFromCompetenIndividual } from "../core/optin";
 import type { LifeosStore, Row } from "../core/types";
@@ -35,7 +37,10 @@ export type Route = {
   output: z.ZodType;
   list?: boolean;
   /** "session": this route comes before holding LifeOS. It has a signed-in identity and no principal. */
-  admission?: "session";
+  /** "session": before holding LifeOS, with a signed-in identity. "open": the standard OAuth endpoints, with no identity. */
+  admission?: "session" | "open";
+  /** A complete response, for an endpoint whose format a standard fixes. */
+  openHandler?: (i: { store: LifeosStore; body: Record<string, unknown> }) => Promise<Response>;
   sessionHandler?: (i: { store: LifeosStore; identity: SessionIdentity; body: unknown }) => Promise<HandlerResult>;
   handler: (i: RouteInput) => Promise<HandlerResult>;
 };
@@ -95,7 +100,50 @@ const presentInvitation = (r: Row) => invitations.InvitationV1.parse(camelRow(r)
 
 const noPrincipal = async (): Promise<HandlerResult> => { throw new Error("session route reached the principal path"); };
 
+const oauthError = (e: unknown) => {
+  if (e instanceof oauth.OAuthError) return Response.json({ error: e.error }, { status: e.status, headers: { "Cache-Control": "no-store" } });
+  throw e;
+};
+
 export const ROUTES: Route[] = [
+  {
+    method: "POST", path: "/oauth/token", summary: "OAuth 2.1 token endpoint: authorization_code with PKCE, and refresh_token", visibility: "public", scope: null, bucket: "write", output: z.record(z.string(), z.unknown()),
+    admission: "open", handler: noPrincipal,
+    openHandler: async ({ store, body }) => {
+      try {
+        const tokens = body.grant_type === "authorization_code" ? await oauth.exchangeCode(store, body)
+          : body.grant_type === "refresh_token" ? await oauth.refreshTokens(store, body)
+          : (() => { throw new oauth.OAuthError("unsupported_grant_type"); })();
+        return Response.json(tokens, { headers: { "Cache-Control": "no-store" } });
+      } catch (e) { return oauthError(e); }
+    },
+  },
+  {
+    method: "POST", path: "/oauth/revoke", summary: "OAuth token revocation (RFC 7009)", visibility: "public", scope: null, bucket: "write", output: z.record(z.string(), z.unknown()),
+    admission: "open", handler: noPrincipal,
+    openHandler: async ({ store, body }) => {
+      await oauth.revokeToken(store, body.token);
+      return new Response(null, { status: 200, headers: { "Cache-Control": "no-store" } });
+    },
+  },
+  {
+    method: "POST", path: "/oauth/authorize", summary: "The signed-in person allows an app. Never reachable with a delegated token.", visibility: "internal", scope: null, bucket: "write", input: oauth.AuthorizeInput, output: z.object({ redirect: z.string() }),
+    handler: async ({ ctx, body }) => {
+      if (ctx.principal.kind !== "session") throw new LifeosError("forbidden", "Allowing an app needs the person, signed in.");
+      return { data: await oauth.approve(ctx.store, ctx.principal.individualId, oauth.AuthorizeInput.parse(body), ctx.traceId) };
+    },
+  },
+  {
+    method: "GET", path: "/me/connected-apps", summary: "Apps the person has allowed", visibility: "internal", scope: null, bucket: "read", output: z.object({ id: z.string(), appName: z.string(), scopes: z.array(z.string()), connectedAt: z.string() }), list: true,
+    handler: async ({ ctx }) => ({ data: await oauth.listConnectedApps(ctx.store, ctx.principal.individualId), nextCursor: null }),
+  },
+  {
+    method: "POST", path: "/me/connected-apps/:id/disconnect", summary: "End an app's access", visibility: "internal", scope: null, bucket: "write", input: z.object({}).strict(), output: z.object({ disconnected: z.boolean() }),
+    handler: async ({ ctx, params }) => {
+      await oauth.disconnectApp(ctx.store, ctx.principal.individualId, params.id);
+      return { data: { disconnected: true } };
+    },
+  },
   {
     method: "GET", path: "/access/status", summary: "Whether this signed-in person may turn on LifeOS", visibility: "internal", scope: null, bucket: "read", output: AccessStatusV1,
     admission: "session", handler: noPrincipal,
@@ -122,7 +170,7 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    method: "GET", path: "/me", summary: "The caller and their workspaces", visibility: "internal", scope: null, bucket: "read", output: MeOutput,
+    method: "GET", path: "/me", summary: "The caller and their workspaces", visibility: "internal", scope: "profile:read", bucket: "read", output: MeOutput,
     handler: async ({ ctx }) => {
       const me = await svc.getMe(ctx);
       return { data: { individual: presentIndividual(me.individual), entitlements: me.entitlements.map(r => EntitlementV1.parse(camelRow(r))), workspaces: me.workspaces.map(presentWorkspace) } };
@@ -133,7 +181,7 @@ export const ROUTES: Route[] = [
     handler: async ({ ctx, body }) => ({ data: presentIndividual(await svc.updateMe(ctx, body)) }),
   },
   {
-    method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of", visibility: "internal", scope: null, bucket: "read", output: WorkspaceV1, list: true,
+    method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of", visibility: "internal", scope: "profile:read", bucket: "read", output: WorkspaceV1, list: true,
     handler: async ({ ctx }) => ({ data: (await svc.listWorkspaces(ctx)).map(presentWorkspace), nextCursor: null }),
   },
   {
@@ -220,10 +268,29 @@ export const ROUTES: Route[] = [
   // Fixed paths above win over the parameterised resource routes below.
   ...RESOURCE_NAMES.flatMap(resourceRoutes),
   {
+    method: "GET", path: "/public/openapi.json", summary: "The public API's OpenAPI document", visibility: "public", scope: null, bucket: "read", output: z.record(z.string(), z.unknown()),
+    admission: "open", handler: noPrincipal,
+    openHandler: async () => Response.json(buildOpenApi(ROUTES, "public"), { headers: { "Cache-Control": "public, max-age=300" } }),
+  },
+  {
     method: "GET", path: "/openapi.json", summary: "This API's OpenAPI document", visibility: "internal", scope: null, bucket: "read", output: z.record(z.string(), z.unknown()),
     handler: async () => ({ data: buildOpenApi(ROUTES) }),
   },
 ];
+
+/**
+ * THE PUBLIC API BOUNDARY. Only these capabilities are reachable with a delegated token. Adding one is a product decision,
+ * written here and held by scripts/lifeos-seal-harness.ts. Approving apps, deciding suggestions, sharing, grants, tenants and
+ * invitations stay with the person.
+ */
+export const PUBLIC_ROUTES: readonly string[] = [
+  "GET /me", "GET /workspaces",
+  "GET /workspaces/:ws/commitments", "POST /workspaces/:ws/commitments",
+  "GET /workspaces/:ws/commitments/:id", "PATCH /workspaces/:ws/commitments/:id", "POST /workspaces/:ws/commitments/:id/transition",
+  "GET /workspaces/:ws/worlds", "GET /workspaces/:ws/worlds/:id",
+  "GET /workspaces/:ws/calendar-events", "GET /workspaces/:ws/protected-blocks",
+];
+for (const r of ROUTES) if (PUBLIC_ROUTES.includes(`${r.method} ${r.path}`)) r.visibility = "public";
 
 export function matchRoute(method: string, segments: string[]): { route: Route; params: Record<string, string> } | "method_not_allowed" | null {
   let pathMatched = false;
