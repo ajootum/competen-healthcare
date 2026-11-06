@@ -20,6 +20,7 @@
 
 import { parseCheckFeedback } from "./learn-check";
 import { parseTeachAnswer, questionText } from "./teach-format";
+import { deeperSectionText, parseDeeperAnswer } from "./deeper-format";
 
 /** A saved teaching record of this lesson (store.ts ArtefactRow, the fields read here). */
 export type TaughtRecord = { action: string; content: string; background?: string | null; createdAt?: string | null };
@@ -57,7 +58,7 @@ const ITEM_MAX = 170;
 export const ROUND_MAX = { concepts: 9, understanding: 8, examples: 1, questions: 2 } as const;
 const OPEN_MAX = 8, LABEL_MAX = 30;
 const PRIOR_LIMITS = { question: 400, answer: 1500, feedback: 3000 } as const;
-const ACTION_WORDS: Record<string, string> = { teach: "Teach me (the lesson)", deeper: "Go deeper", explain: "Explain again", simplify: "Simplify", examples: "Examples", summary: "Summary" };
+const ACTION_WORDS: Record<string, string> = { guide: "Guide me", teach: "Teach me (the lesson)", deeper: "Go deeper", explain: "Explain again", simplify: "Simplify", examples: "Examples", summary: "Summary" };
 
 const plain = (s: string) => s.replace(/\[(?:[SRE]\d+|AI)\]/g, "").replace(/\*\*|__|^#+\s*/g, "").replace(/\s+/g, " ").replace(/\s+([?.!,;:])/g, "$1").trim();
 const clip = (s: string, n = ITEM_MAX) => (s.length <= n ? s : `${s.slice(0, s.lastIndexOf(" ", n) > n / 2 ? s.lastIndexOf(" ", n) : n).replace(/[\s,;:]+$/, "")}…`);
@@ -109,6 +110,14 @@ export const priorCheckTexts = (checks: readonly PriorCheck[]): string[] => chec
 /** Pure. One saved record as a round: its parts (structured) or its bullets and first sentences (free text), each capped. */
 function roundOf(r: TaughtRecord): TaughtRound {
   const round: TaughtRound = { action: r.action, concepts: [], understanding: [], examples: [], questions: [] };
+  // SCHOLAR-GO-DEEPER-001: a structured round tells what it taught: the question it explored, each section's heading and first sentence, its takeaways.
+  const deep = parseDeeperAnswer(r.content);
+  if (deep) {
+    add(round.understanding, [deep.focus, ...deep.sections.map(s => `${s.title}: ${firstSentence(deeperSectionText(s).split("\n")[0] ?? "")}`)], ROUND_MAX.understanding);
+    add(round.concepts, deep.takeaways, ROUND_MAX.concepts);
+    add(round.questions, deep.questions.map(q => questionText(q.text)), ROUND_MAX.questions);
+    return round;
+  }
   const parts = parseTeachAnswer(r.content);
   if (parts) {
     if (parts.overview && !parts.understanding?.length) add(round.understanding, [firstSentence(parts.overview)], ROUND_MAX.understanding);

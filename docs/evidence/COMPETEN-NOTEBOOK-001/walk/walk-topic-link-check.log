@@ -1,0 +1,10 @@
+PASS [topic link] the first topic saves
+PASS [topic link] an identifier as a topic is refused, and the note keeps its topic
+PASS [topic link] going back to the earlier topic clears the refusal
+PASS [topic link] correcting a refused topic saves, with no change to the words
+PASS [topic link] topic B, then A, then B again ends on B
+PASS [topic link] the note opens its topic's notes in My Notebook
+PASS [topic link] and that page holds this note
+PASS [topic link] offline: nothing saved yet
+PASS [topic link] a restored draft says the topic it will save
+PASS [topic link] and it saves on that topic

@@ -1,0 +1,7 @@
+NOTE [other learner] one labelled probe note written on a competen.test account, because staging held no other learner's note
+PASS [other learner] their note's page shows none of their words (200)
+NOTE [other learner] this note is on no session, so the lesson route was not asked
+PASS [other learner] a change to their note is not found (404)
+PASS [other learner] the export holds none of their words (200)
+PASS [other learner] searching their words finds none of their note (200)
+PASS [other learner] their note is unchanged

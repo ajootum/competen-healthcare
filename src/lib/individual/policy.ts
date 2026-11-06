@@ -128,8 +128,8 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "professional_progress_default_period" | "professional_documents_ai" | "professional_global_search" | "scholar_recovery_default_mode" | "scholar_recovery_external"
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance" | "scholar_teach_research"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
-  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_global_search" | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_search_history"
+  | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_go_deeper_structured" | "scholar_guide_me_adaptive" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
+  | "scholar_global_search" | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_personal_notebook" | "scholar_search_history"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
@@ -1112,6 +1112,25 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "off",
     limitReason: "One lesson ahead at most. Default: off, because a prepared lesson the student never opens still costs allowance.",
   },
+  // SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): Learn's Go deeper as a structured round with three levels. Off: Go deeper is exactly as it was
+  // (scholar-learn-deeper-v2). Saved rounds of either form are shown as they are whatever this says.
+  {
+    key: "scholar_go_deeper_structured", kind: "choice", product: "Scholar",
+    label: "Learn: structured Go deeper",
+    help: "Whether Go deeper teaches one major concept as a structured round: a focus question, sections that say whether they come from the student's notes or are Scholar's own explanation, misconceptions and limits, a reasoning check and takeaways, at three levels (Understand, Explore, Advanced). One AI call a round, as before. Published research is used only through the existing research controls. Off: Go deeper is as it was. Saved rounds are never changed.",
+    options: [{ value: "on", label: "Structured rounds" }, { value: "off", label: "Off: Go deeper as it was" }],
+    fallback: "off",
+    limitReason: "Default: off until the owner activates it.",
+  },
+  // SCHOLAR-GUIDE-ME-001 (owner, 6 Nov 2026): Guide me as an adaptive, scaffolded teacher. Off: Guide me is exactly as it was.
+  {
+    key: "scholar_guide_me_adaptive", kind: "choice", product: "Scholar",
+    label: "Learn: adaptive Guide me",
+    help: "Whether Guide me teaches a step, asks one meaningful question, judges what the learner actually wrote with the existing understanding check, and decides the next move from it. Hints, an example and a direct explanation are separate choices, and none counts as a step done. Progress shows only what happened. Off: Guide me is as it was.",
+    options: [{ value: "on", label: "Adaptive" }, { value: "off", label: "Off: Guide me as it was" }],
+    fallback: "off",
+    limitReason: "Default: off until the owner activates it.",
+  },
   // ── COMPETEN-SCHOLAR-REVISION-01 (Stage 4): REVISION, in the existing engine (owner GO s9) ──
   // What is offered and its defaults. The rules beneath are not settings: grounding and the identifier screen on
   // every generated item, private_formative only (416), deterministic marking where the kind allows it, AI
@@ -1294,6 +1313,15 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offer the Notebook" }, { value: "off", label: "Do not offer" }],
     fallback: "off",
     limitReason: "Personal summaries need migration 975 (without it the Notebook works without them). Practice uses the existing Revise generation, allowance and model routing unchanged. Default: off.",
+  },
+  // COMPETEN-NOTEBOOK-001 P1 + SCHOLAR-NOTEBOOK-UX-002 (owner, 6 Nov 2026): My Notebook, Quick Note and My Ideas & Notes. Off until HQ publishes it.
+  {
+    key: "scholar_personal_notebook", kind: "choice", product: "Scholar",
+    label: "Notebook: My Notebook and Quick Note",
+    help: "Whether Scholar offers My Notebook, the Quick Note control on every Scholar page and the My Ideas & Notes box in Learn. Learners write at once with nothing required: autosave, draft recovery, search, tags, pins and optional links to lessons, sections, competencies and study sessions. Learner-owned and private; never shared with employers or other learners, and never sent to AI unless the learner asks.",
+    options: [{ value: "on", label: "Offer My Notebook" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "Needs migration 1000 and the learning library on (without either nothing is offered and nothing is written). Notes written here are kept out of the Ask saved-learning source. No AI of its own. Default: off.",
   },
   // SCHOLAR-SEARCH-HISTORY-01 (owner directive 4 Nov 2026, P1, SALE learner continuity): My Search History in the library.
   {
@@ -2587,6 +2615,7 @@ export type IndividualPolicy = {
   scholarNextBestActionMax: number;
   scholarActiveNotebook: "on" | "off";
   /** SCHOLAR-SEARCH-HISTORY-01: My Search History in the library (migration 992). Default off. */
+  scholarPersonalNotebook: "on" | "off";
   scholarSearchHistory: "on" | "off";
   scholarGlobalSearch: "on" | "off";
   /** SEARCH-STANDARD-01: Global Search across Professional. Default off. */
@@ -2622,6 +2651,10 @@ export type IndividualPolicy = {
   scholarStudyPlan: boolean;
   /** SCHOLAR-GUIDED-LEARNING-01. Whether Learn may prepare the next lesson ahead (one at most). Default off. */
   scholarLearnPrepareNext: boolean;
+  /** SCHOLAR-GO-DEEPER-001: Go deeper as a structured round. Default off. */
+  scholarGoDeeperStructured: boolean;
+  /** SCHOLAR-GUIDE-ME-001: Guide me as an adaptive teacher. Default off. */
+  scholarGuideMeAdaptive: boolean;
   scholarSrsMasteryReps: number;
   scholarSrsMasteryDays: number;
   scholarSrsMaxIntervalDays: number;
@@ -2846,6 +2879,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarNextBestAction: clampChoice(policyDef("scholar_next_best_action") as ChoicePolicy, published.get(policyPath("scholar_next_best_action"))) as "on" | "off",
     scholarNextBestActionMax: int("scholar_next_best_action_max"),
     scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
+    scholarPersonalNotebook: clampChoice(policyDef("scholar_personal_notebook") as ChoicePolicy, published.get(policyPath("scholar_personal_notebook"))) as "on" | "off",
     scholarSearchHistory: clampChoice(policyDef("scholar_search_history") as ChoicePolicy, published.get(policyPath("scholar_search_history"))) as "on" | "off",
     scholarGlobalSearch: clampChoice(policyDef("scholar_global_search") as ChoicePolicy, published.get(policyPath("scholar_global_search"))) as "on" | "off",
     professionalGlobalSearch: clampChoice(policyDef("professional_global_search") as ChoicePolicy, published.get(policyPath("professional_global_search"))) as "on" | "off",
@@ -2871,6 +2905,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarQuestionOfferDays: Number(clampChoice(policyDef("scholar_question_offer_days") as ChoicePolicy, published.get(policyPath("scholar_question_offer_days")))) as 30 | 60 | 90,
     scholarStudyPlan: clampChoice(policyDef("scholar_study_plan") as ChoicePolicy, published.get(policyPath("scholar_study_plan"))) === "on",
     scholarLearnPrepareNext: clampChoice(policyDef("scholar_learn_prepare_next") as ChoicePolicy, published.get(policyPath("scholar_learn_prepare_next"))) === "on",
+    scholarGoDeeperStructured: clampChoice(policyDef("scholar_go_deeper_structured") as ChoicePolicy, published.get(policyPath("scholar_go_deeper_structured"))) === "on",
+    scholarGuideMeAdaptive: clampChoice(policyDef("scholar_guide_me_adaptive") as ChoicePolicy, published.get(policyPath("scholar_guide_me_adaptive"))) === "on",
     scholarSrsMasteryReps: int("scholar_srs_mastery_reps"),
     scholarSrsMasteryDays: int("scholar_srs_mastery_days"),
     scholarSrsMaxIntervalDays: int("scholar_srs_max_interval_days"),

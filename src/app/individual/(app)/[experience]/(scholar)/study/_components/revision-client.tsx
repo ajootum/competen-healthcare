@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { NotePageMark } from "./note-capture";
 import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { useRouter } from "next/navigation";
@@ -595,6 +596,8 @@ export function QuestionRunner({ item, sessionId, feedbackMode, answered, onAnsw
             footer={back ? (
               <div className="mx-auto mt-3 max-w-xl rounded-xl bg-[var(--learn-surface)] p-3">
                 {/* SCHOLAR-FLASHCARDS-01: a card the student wrote, or a library card, says so -- never "your notes". */}
+                {/* COMPETEN-NOTEBOOK-001: Quick Note, opened on this card, attaches to the section it came from. */}
+                {!(back.card && back.card.origin !== "notes") && <NotePageMark materialId={back.source.materialId} chunkId={back.source.chunkId} label={back.source.citation} />}
                 <p className={smallCaps}>{back.card?.origin === "learner" ? "Your card" : back.card?.origin === "library" ? "The Competen library" : "What your notes say"}</p>
                 {back.card && back.card.origin !== "notes" ? <p className="mt-1 text-[12.5px] text-gray-600">{back.card.originLabel}</p>
                   : <p className="mt-1 text-[12.5px] text-gray-600">From your notes: <Link href={sourceHref(back.source.materialId, back.source.chunkId)} className={`underline ${focusRing}`}>{back.source.citation}</Link></p>}

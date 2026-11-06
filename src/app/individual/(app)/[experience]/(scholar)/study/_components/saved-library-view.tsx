@@ -1,5 +1,6 @@
 import { INTEGRATED_KEY, INTEGRATED_LABEL, isIntegratedVersion } from "@/lib/individual/scholar/teach-format";
 import { SavedEvidenceList } from "./saved-evidence";
+import { GO_DEEPER_COPY, deeperResearchText, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
@@ -23,7 +24,7 @@ import {
 import { resolveFilterScope } from "@/lib/individual/scholar/library-scope";
 import { rankChunks, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import { UNIT_OF } from "@/lib/individual/scholar/config";
-import { coversLesson } from "@/lib/individual/scholar/learn-journey";
+import { coversLesson, isGuideTurnVersion } from "@/lib/individual/scholar/learn-journey";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
@@ -55,7 +56,7 @@ const EXPORT_FORM = "saved-lessons-export";
 const ukDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }); };
 const pill = "inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-700";
 const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const linkCls = `font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`;
+const linkCls = `pointer-coarse:inline-flex pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:items-center font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`;
 const field = `mt-1 block w-full min-w-0 min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const actionCls = `inline-flex min-h-[40px] items-center px-1 font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
@@ -298,6 +299,8 @@ function itemTitle(a: ArtefactRow, c: ItemCtx): string {
 }
 
 function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open?: boolean }) {
+  // SCHOLAR-GUIDE-ME-001: a Guide Me turn is part of that activity, not a saved lesson of its own.
+  if (isGuideTurnVersion(a.promptVersion)) return null;
   const l = c.links.get(a.id) ?? null;
   const live = l && c.sessions.has(l.sessionId) ? l : null;
   const counts = a.sources.reduce((t, id) => { const x = c.counts.get(id); return x ? { cards: t.cards + x.cards, questions: t.questions + x.questions, attempts: t.attempts + x.attempts } : t; }, { cards: 0, questions: 0, attempts: 0 });
@@ -351,12 +354,16 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
 const urlWithVersion = (id: string) => `${href("study/saved")}?version=${encodeURIComponent(id)}`;
 
 function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> }) {
+  // SCHOLAR-GO-DEEPER-001: a saved structured round says where each section comes from, so Scholar's explanation is never read as the notes.
+  const round = parseDeeperAnswer(a.content);
+  const research = round ? deeperResearchText(a.content) : null;
+  const shown = round ? `${deeperSourcedText(round)}${research ? `\n\n${GO_DEEPER_COPY.research}\n${research}` : ""}` : a.content;
   return (
     <>
-      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{isIntegratedVersion(a.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
-      {isIntegratedVersion(a.promptVersion) && <p className="mt-0.5 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
-      <ReadAloudButton text={a.content} about="this saved lesson" className="mt-1" />
-      <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{a.content}</div>
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{round ? GO_DEEPER_COPY.subtitle : isIntegratedVersion(a.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
+      {!round && isIntegratedVersion(a.promptVersion) && <p className="mt-0.5 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
+      <ReadAloudButton text={shown} about="this saved lesson" className="mt-1" />
+      <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{shown}</div>
       <ul className="mt-2 space-y-0.5">
         {a.sources.map((chunkId, i) => (
           <li key={chunkId} className="text-[12.5px]"><span className="font-mono font-bold" style={{ color: SCHOLAR.accent }}>[S{i + 1}]</span>{" "}
@@ -631,6 +638,8 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mo
     if (h.kind === "artefact") return urlWithVersion(h.id);
     if (h.artefactId) return urlWithVersion(h.artefactId);
     if (h.materialId) return href(h.chunkId ? `study/${h.materialId}#c-${h.chunkId}` : `study/${h.materialId}`);
+    // COMPETEN-NOTEBOOK-001: a free-standing note has no lesson or material. It opens in My Notebook.
+    if (h.kind === "note") return href(`study/notebook/${encodeURIComponent(h.id)}`);
     return href("study/saved");
   };
   const title = (h: LibraryHit) => h.kind === "lesson" ? displaySessionTitle(h.label)

@@ -27,8 +27,12 @@ import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, cumulativePromptVersion, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
   type LessonBrief, type Passage, type TutorTurn,
 } from "@/lib/individual/scholar/generation";
+import type { GuideContext } from "@/lib/individual/scholar/generation";
+import { composeDeeperAnswer, deeperSectionText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
+import { guideGround, guideKeyContext, guidePrompt, guideStepCount, guideVersionTurn, isUncertainAnswer, parseGuideAsk } from "@/lib/individual/scholar/guide-me";
+import { citedTags } from "@/lib/individual/scholar/teach-format";
 import { CONTEXT_ACTIONS, DEPTH_REACHED_CAP_MESSAGE, DEPTH_REACHED_MESSAGE, DEPTH_REACHED_NEXT, PRIOR_CHECKS_MAX, buildTaughtSoFar, parsePriorChecks, priorCheckTexts, taughtHash, taughtSoFarBlock, type TaughtSoFar } from "@/lib/individual/scholar/learn-context";
-import { coversLesson } from "@/lib/individual/scholar/learn-journey";
+import { coversLesson, isGuideAidVersion, isGuideTurnVersion, restoredSources } from "@/lib/individual/scholar/learn-journey";
 import { loadLearnerCatalogue, loadTutorContext } from "@/lib/individual/scholar/competency-view";
 import { LESSON_MAX_SECTIONS, TEACH_THIN_CHARS, artefactKey, governedReferences, isArtefactAction, lessonOutline, libraryReferences, referenceSource, relabelReferences, sectionProfile, type LessonOutline } from "@/lib/individual/scholar/learn";
 import { contextOf, externalReferences, learnResearch, restoreResearch, researchEvidence, scholarResearchOperational, withLessonScope, withdrawDeclaredIrrelevant, type ExternalReference, type LearnResearch, type LessonScope } from "@/lib/individual/scholar/learn-research";
@@ -115,6 +119,10 @@ export const dynamic = "force-dynamic";
 //   first one's lesson. TIMINGS: every audit row carries timing_ms by stage. SALVAGE: a Teach Me lesson whose
 //   unsupported parts were left out (generation.ts checkTeachAnswer) carries salvage { removed, note }.
 
+// SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): where policy scholar_go_deeper_structured is on, Go deeper is a structured round (deeper-format.ts) at the
+// request's depth (Understand = brief, Explore = standard, Advanced = detailed), still one AI call, its Scholar sections checked and classified here.
+// SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): where policy scholar_go_deeper_structured is on, Go deeper is a structured round (deeper-format.ts) at the
+// request's depth (Understand = brief, Explore = standard, Advanced = detailed), still one AI call, its Scholar sections checked and classified here.
 const CANNED: Record<ClassicLearnAction | "check", string> = {
   teach: "Teach me this step.", explain: "Explain this.", simplify: "Explain this as simply as possible.", deeper: "Help me understand this in more depth.",
   examples: "Give me examples of this in practice.", summary: "Summarise the important learning points.", ask: "", check: "Check my understanding of this.",
@@ -138,6 +146,11 @@ export async function POST(req: Request) {
   const isCheck = action === "check" || action === "clarify";
   const teaching = isTeachingAction(action);
   if (!isLearnAction(action) && !isCheck) return NextResponse.json({ error: "Unknown learning action." }, { status: 400 });
+  // SCHOLAR-GUIDE-ME-001: one Guide Me turn travels as the explain kind (saved, deduped and researched like it), so it needs both offered: Guide me here, Explain at the gate below.
+  const guideAsk = action === "explain" && policy.scholarGuideMeAdaptive && policy.scholarLearningActions.includes("guide") ? parseGuideAsk(body?.guide) : null;
+  const guidedClarify = action === "clarify" && policy.scholarGuideMeAdaptive && body?.guided === true;
+  // "I don't know" is met with help, never a verdict, whatever a client sends: nothing is judged, kept or spent.
+  if (guidedClarify && isUncertainAnswer(typeof body?.answer === "string" ? body.answer : "")) return NextResponse.json({ action, uncertain: true });
   if (isLearnAction(action) && !policy.scholarLearningActions.includes(action)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
   // SCHOLAR-GUIDED-LEARNING-01: open (no AI ever) and prepare (the next lesson, policy-gated, default off).
   const prepare = body?.prepare === true, open = body?.open === true && !prepare;
@@ -152,7 +165,8 @@ export async function POST(req: Request) {
   if (!policy.scholarResearch.modes.includes(askedMode)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
   // ADDENDUM V2: an inactive mode is never available -- research only while the engine has it operational.
   if (askedMode === "research" && !(await scholarResearchOperational(ctx.admin))) return NextResponse.json({ error: "Research & Explain is not available on Scholar at the moment." }, { status: 403 });
-  const mode: LearnSourceMode = RESEARCH_ACTIONS.includes(action as LearnAction) ? askedMode : "notes";
+  // SCHOLAR-GUIDE-ME-001: research is for teaching. A hint or an example does not pay for a search.
+  const mode: LearnSourceMode = RESEARCH_ACTIONS.includes(action as LearnAction) && !(guideAsk && (guideAsk.turn === "hint" || guideAsk.turn === "example")) ? askedMode : "notes";
   // SCHOLAR-SQIE-02, "Explain using approved references": recovery { id, mode, question }. Only those are read -- never
   // evidence, ids or text -- and the evidence is found again on the server below. A check or clarification never takes one.
   const recoveryAsked = isCheck || teaching ? null : parseRecoveryRequest(body?.recovery, "notes_only", QUESTION_MAX);
@@ -184,7 +198,7 @@ export async function POST(req: Request) {
   const variant = parseSpellingVariant(body?.spellingVariant);
   let spelt = action === "ask" ? normaliseLearnerText(question, { variant }) : null;
   const searchText = spelt && spelt.display !== question ? `${question} ${spelt.display}` : question;
-  if ([question, spelt?.display ?? "", answer, ...(teachingRequest ? teachingTexts(teachingRequest) : []), ...priorCheckTexts(priorChecks)].some(t => t && findPatientIdentifiers(t).length))
+  if ([question, spelt?.display ?? "", answer, guideAsk?.question ?? "", ...(teachingRequest ? teachingTexts(teachingRequest) : []), ...priorCheckTexts(priorChecks)].some(t => t && findPatientIdentifiers(t).length))
     return NextResponse.json({ error: "That looks like it identifies a patient. Remove it and try again." }, { status: 422 });
 
   // ── the passages: the step's own sections, by the caller's id ──
@@ -255,8 +269,11 @@ export async function POST(req: Request) {
   // contextual actions and for an open (alsoSaved); Teach me itself and Ask never carry it.
   const contextual = CONTEXT_ACTIONS.includes(action);
   const lessonRecords = contextual || open ? await listArtefacts(ctx.admin, ctx.userId, { chunkIds: stepIds, limit: 40 }).then(r => (r.ok ? r.data : []), () => []) : [];
-  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  const taughtSoFar: TaughtSoFar | null = contextual ? buildTaughtSoFar(ownRecords, priorChecks, { objective: lesson?.objective ?? null, focus: lesson?.focus ?? null }) : null;
+  const lessonPlace = sessionId ? { sessionId, step } : null;
+  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds, { row: a, lesson: lessonPlace })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  // SCHOLAR-GUIDE-ME-001: a Guide Me step or explanation is taught ground, told as what it was. A hint or an example is help with a question, not teaching, so it is not ground and moves no saved key.
+  const taughtRecords = ownRecords.filter(a => !isGuideAidVersion(a.promptVersion)).map(a => (isGuideTurnVersion(a.promptVersion) ? { ...a, action: "guide" } : a));
+  const taughtSoFar: TaughtSoFar | null = contextual ? buildTaughtSoFar(taughtRecords, priorChecks, { objective: lesson?.objective ?? null, focus: lesson?.focus ?? null }) : null;
   const taughtBlock = taughtSoFar ? taughtSoFarBlock(taughtSoFar) : null;
   /** The lesson brief the prompt reads: its title, objective and its own sections' headings, in order. */
   const lessonBrief: LessonBrief | null = lesson ? { title: lesson.title, objective: lesson.objective, sections: [...new Set(passages.filter(p => stepIds.includes(p.chunkId)).map(p => sectionProfile(p.content).heading).filter((h): h is string => !!h))] } : null;
@@ -317,7 +334,9 @@ export async function POST(req: Request) {
   ]);
   const topics = topicMap ? [...new Set([...topicMap.values()].flat())] : [];
   let references = mode === "notes" ? linked : [...linked, ...libraryReferences([action === "ask" ? meant : "", stepTitle ?? "", ...topics].join(" "), refSource, linked)];
-  const background = policy.scholarBeyondNotes === "labelled" && mode !== "research";
+  // SCHOLAR-GO-DEEPER-001: in a structured round Scholar's own explanation is its own marked section, and research its own marked part, so the two sit side by side:
+  // evidence and educational inference kept apart, not one traded for the other. Every other action keeps the rule: with research, no background.
+  const background = policy.scholarBeyondNotes === "labelled" && (mode !== "research" || (action === "deeper" && policy.scholarGoDeeperStructured) || !!guideAsk);
 
   // ── s8: a saved artefact for exactly this request is returned, not regenerated ──
   const hasHistory = Array.isArray(body?.history) && body.history.length > 0;
@@ -326,10 +345,19 @@ export async function POST(req: Request) {
   // SCHOLAR-RESEARCH-TEACH-001 P1 (default off, its own switch): a first Teach Me, from the notes and an evidence pack together. It has its own prompt
   // version, so its key is its own. The evidence is prepared further down, after every saved-lesson lookup has missed, so a saved lesson never searches.
   const teachResearch = policy.scholarTeachResearch.on && action === "teach" && mode === "notes" && !recovery && storable;
-  const baseVersion = teachResearch ? integratedPromptVersion() : mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
+  // SCHOLAR-GO-DEEPER-001: Go deeper as a structured round, where policy says (default off). v2 stays in force with it off, and a round saved
+  // under v2 stays what it is either way: it is shown (alsoSaved, findSavedLesson), counted in TAUGHT SO FAR and in the round limit, never regenerated.
+  const deeperStructured = action === "deeper" && policy.scholarGoDeeperStructured;
+  // SCHOLAR-GUIDE-ME-001: how many steps the lesson has and what this one covers, decided here from its own headings. The same turn on the same step is the same answer, whatever has been taught since, so it is reused.
+  const guideOf = guideStepCount(lessonBrief?.sections?.length ?? 1);
+  const guideContext: GuideContext | null = guideAsk ? { turn: guideAsk.turn, step: Math.min(guideAsk.step, guideOf - 1), of: guideOf, ground: guideGround(lessonBrief?.sections ?? [], Math.min(guideAsk.step, guideOf - 1), guideOf), level: guideAsk.level } : null;
+  const guideFields = guideContext ? { guide: { step: guideContext.step, of: guideContext.of, turn: guideContext.turn } } : {};
+  const deeperVersion = { deeperStructured, guide: guideContext ? guideVersionTurn(guideContext.turn, guideContext.step) : null };
+  const baseVersion = teachResearch ? integratedPromptVersion() : mode === "research" ? learnResearchPromptVersion(action as LearnAction, deeperVersion) : learnPromptVersion(action as LearnAction, deeperVersion);
   // SCHOLAR-CUMULATIVE-TEACHING-01: an answer built on taught ground carries the cumulative suffix and the ground's fingerprint in its key.
-  const promptVersion = taughtBlock ? cumulativePromptVersion(baseVersion) : baseVersion;
-  const context = taughtBlock && taughtSoFar ? taughtHash(taughtSoFar) : null;
+  // SCHOLAR-GUIDE-ME-001: the same turn on the same step is the same saved answer, whatever has been taught since: its first save must be found again once it is itself taught ground.
+  const promptVersion = taughtBlock && !guideAsk ? cumulativePromptVersion(baseVersion) : baseVersion;
+  const context = guideContext && guideAsk ? guideKeyContext({ ...guideContext, question: guideAsk.question }, guideOf) : taughtBlock && taughtSoFar ? taughtHash(taughtSoFar) : null;
   // SCHOLAR-SQIE-02: an explanation from recovered evidence is never a saved artefact, and never served from one.
   const key = storable && !recovery ? artefactKey({ action, depth, chunkIds: passages.map(p => p.chunkId), promptVersion, references, background, mode, context }) : null;
   // SCHOLAR-GUIDED-LEARNING-01: a lesson saved under an earlier Teach Me version is still this lesson (same structure and
@@ -364,7 +392,8 @@ export async function POST(req: Request) {
   const lessonScope: LessonScope | null = lesson ? { title: lesson.title, objective: lesson.objective, focus: lesson.focus } : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
-    const src = a.sources.map(id => byId.get(id)).filter((p): p is Passage => !!p);
+    // SCHOLAR-GO-DEEPER-001: a lesson over the stored source limit keeps its later citations (learn-journey.ts restoredSources).
+    const src = restoredSources(a.sources, stepIds, { row: a, lesson: lessonPlace }).map(id => byId.get(id)).filter((p): p is Passage => !!p);
     // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
     // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
     // A lesson from the three sources has no research part: a line that happens to begin "From research" is teaching, and must not be cut off there.
@@ -380,18 +409,20 @@ export async function POST(req: Request) {
       research: isIntegratedVersion(a.promptVersion) && external.length ? lessonEvidence(external, "cached")
         : teachResearchOn && a.action === "teach" ? lessonEvidence([], "cached")
         : restored.retrieved ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: restored.message, references: external, excludedCount: restored.excluded.length, ...(restored.text ? { text: restored.text } : {}) } : null,
-      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
+      saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...(a.action === "deeper" && policy.scholarGoDeeperStructured ? { goDeeperLevels: true } : {}), ...guideFields, ...extra,
     };
   };
   // SCHOLAR-CUMULATIVE-TEACHING-01: on an OPEN, the lesson's other saved teaching (Go deeper rounds, examples, explanations), oldest
   // first, so the thread shows what has already been covered -- read, never generated. At most six; the opened one is not repeated.
-  const alsoSaved = (opened: ArtefactRow) => (open && ownRecords.length ? { alsoSaved: ownRecords.filter(a => a.id !== opened.id && a.action !== opened.action).slice(-6).map(a => savedReply(a, { cached: true })) } : {});
+  const alsoSaved = (opened: ArtefactRow) => (open && ownRecords.length ? { alsoSaved: ownRecords.filter(a => a.id !== opened.id && a.action !== opened.action && !isGuideTurnVersion(a.promptVersion)).slice(-6).map(a => savedReply(a, { cached: true })) } : {});
   // SCHOLAR-PERSISTENT-LEARNING-01, THE POSITION RULE: a lesson answered here moves current_step only FORWARD (a reply that
   // lands after the learner went back never pulls it back); moving back is the learner's explicit PATCH sessions/[id].
   const advances = sessionStep === null || step > sessionStep;
   // The learner opened a saved lesson: recorded as before (the two writes are independent, so together).
+  // SCHOLAR-GUIDE-ME-001 + owner decision RELEASE-001 item 3: no turn of the guided activity marks the lesson. Each step's answer is kept as it is judged; the lesson counts when the activity is complete (learn/guide-complete).
+  const guideRecords = !guideAsk;
   const openedSaved = async (saved: ArtefactRow) => {
-    if (recorded && sessionId && policy.scholarLearningHistory === "record") await Promise.all([
+    if (recorded && sessionId && guideRecords && policy.scholarLearningHistory === "record") await Promise.all([
       recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action, verdict: null, chunkIds: saved.sources }),
       open || !advances ? Promise.resolve("ok" as const) : updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }),
     ]);
@@ -410,8 +441,8 @@ export async function POST(req: Request) {
   }
   // SCHOLAR-PERSISTENT-LEARNING-01: the exact key missed -- the newest lesson saved for this chunk set, under any version or
   // settings. Its sources beyond this request's passages are read (the learner's own, by id) so its [S n] tags stay true.
-  if ((open || prepare) && body?.fresh !== true && isArtefactAction(action) && !recovery && !hasHistory) {
-    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds });
+  if ((open || prepare) && !guideAsk && body?.fresh !== true && isArtefactAction(action) && !recovery && !hasHistory) {
+    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds, lesson: lessonPlace });
     const missing = earlier ? earlier.sources.filter(id => !passages!.some(p => p.chunkId === id)) : [];
     const extra = earlier && missing.length ? await ownPassages(ctx.admin, ctx.userId, missing) : [];
     clock.mark("cache_fallback");
@@ -427,7 +458,7 @@ export async function POST(req: Request) {
   }
   if (prepare && !key) return notPrepared("not_storable", { step });
   // OPEN: nothing saved, so the client is told to ask for it (or that it is being written) -- no AI, no allowance read.
-  if (open) return NextResponse.json({ action, step, depth, ...lessonFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate", ...(teachResearch ? { teachResearch: true } : {}) });
+  if (open) return NextResponse.json({ action, step, depth, ...lessonFields, ...guideFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate", ...(teachResearch ? { teachResearch: true } : {}) });
   if (prepare && key && (await flightActive(ctx, key))) return notPrepared("in_flight", { step });
 
   // ── SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper has a round limit by AI (policy scholar_learn_deeper_rounds_max, LE-04); beyond it the answer is "depth reached", no call ──
@@ -443,13 +474,15 @@ export async function POST(req: Request) {
   // ── s7: continuity -- no new AI where the standing (or the allowance) says no; what is saved stays available ──
   const continuity = async (message: string, insufficient: boolean) => {
     const saved = await listArtefacts(ctx.admin, ctx.userId, { chunkIds: passages!.map(p => p.chunkId) });
-    return NextResponse.json({ action, step, ...lessonFields, continuity: { message, insufficient }, saved: saved.ok ? saved.data.slice(0, 5).map(a => savedReply(a)) : [] });
+    return NextResponse.json({ action, step, ...lessonFields, continuity: { message, insufficient }, saved: saved.ok ? saved.data.filter(a => !isGuideTurnVersion(a.promptVersion)).slice(0, 5).map(a => savedReply(a)) : [] });
   };
   // The tutor context is a read the AI call needs and nothing before it decides on: started now, awaited after the gates.
   const tutorP = loadTutorContext(ctx.admin, ctx.userId, passages.map(p => p.chunkId));
   tutorP.catch(() => {});
   // A teaching action is metered as the nearest existing activity (the engine refuses an unlisted code; learn-teaching.ts).
-  const activity = meteredActivity(action) as ScholarAiActivity;
+  // SCHOLAR-GUIDE-ME-001: a Guide Me turn may carry Scholar's own science, so it is metered and routed as Go deeper is (same eligibility, same clinical-risk rules), not as a plain Explain.
+  // On the counted test the plain Explain route wrote a confident and doubtful claim about sleep and thresholds. Accuracy decides this, at about two to three times the cost of a turn.
+  const activity = (guideAsk ? "deeper" : meteredActivity(action)) as ScholarAiActivity;
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), activity);
   if (!standing.available) return prepare ? notPrepared("unavailable", { step }) : continuity(standing.message ?? "", standing.insufficient);
   const pre = await aiPreflight(ctx);
@@ -501,7 +534,7 @@ export async function POST(req: Request) {
     const t = raw as { speaker?: unknown; text?: unknown } | null;
     return (t?.speaker === "tutor" || t?.speaker === "student") && typeof t.text === "string" && t.text.trim() ? [{ speaker: t.speaker, text: t.text.trim().slice(0, 1500) }] : [];
   });
-  const prompt = teachingRequest ? teachingPrompt(teachingRequest, examEvidence) : action === "ask" ? meant : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as ClassicLearnAction | "check"];
+  const prompt = guideAsk ? guidePrompt(guideAsk) : teachingRequest ? teachingPrompt(teachingRequest, examEvidence) : action === "ask" ? meant : action === "clarify" ? `Your check question was: ${checkQuestion}\nMy answer: ${answer}` : CANNED[action as ClassicLearnAction | "check"];
 
   // AI-FAIR-USE-01: through the Holdings allowance, the learning action as the activity. A refusal becomes
   // Learning Continuity (s7): said plainly, with what is saved for these sections -- and nothing was sent.
@@ -565,7 +598,7 @@ export async function POST(req: Request) {
   clock.mark("research");
   const learnArgs = { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
     teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined,
-    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) };
+    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks), deeperStructured, guide: guideContext, guidedClarify };
   let r: Awaited<ReturnType<typeof runLearn>> | IntegratedResult = pack?.state === "ready"
     ? await runIntegratedTeach(ctx.userId, { question: prompt, passages, references, depth, learnerContext, lesson: lessonBrief, evidence: pack.evidence }, ai.run)
     : await runLearn(ctx.userId, { ...learnArgs }, ai.run);
@@ -608,6 +641,24 @@ export async function POST(req: Request) {
   // SCHOLAR-RESEARCH-RELEVANCE-02: a summary that declares its own sources irrelevant cites nothing, shows nothing, saves nothing.
   if (research && rr?.ok) { const w = withdrawDeclaredIrrelevant(research, rr.text); if (w !== research) { Object.assign(research, w); rr = null; } }
   if (rr?.ok && !(await withinRequestRisk(ctx.admin, activity, risk, [rr.text]))[0]) rr = { ok: false, reason: "risk_raised" };
+  // SCHOLAR-GO-DEEPER-001: Scholar's own explanation is classified by the same published rules as research text. A section (or a Scholar takeaway)
+  // that would lift the request above its own tier is left out and counted; the model restriction for that tier was set before the call.
+  if ((deeperStructured || guideContext) && r.ok && r.check.ok) {
+    const round = parseDeeperAnswer(r.check.text);
+    const texts = round ? [...round.sections.filter(s => s.source === "scholar").map(deeperSectionText), ...round.takeaways.filter(t => !citedTags(t).length)] : [];
+    if (round && texts.length) {
+      const within = await withinRequestRisk(ctx.admin, activity, risk, texts);
+      if (within.some(ok => !ok)) {
+        let i = 0;
+        const sections = round.sections.filter(s => (s.source === "scholar" ? within[i++] : true));
+        const takeaways = round.takeaways.filter(t => (citedTags(t).length ? true : within[i++]));
+        const text = composeDeeperAnswer({ ...round, sections, takeaways });
+        const removed = round.sections.length - sections.length + round.takeaways.length - takeaways.length;
+        const was = r.check.salvaged;
+        r.check = { ok: true, text, cited: citedTags(text).sort((a, b) => a - b), salvaged: { removed: (was?.removed ?? 0) + removed, parts: { overview: false, points: was?.parts.points ?? 0, example: false, questions: was?.parts.questions ?? 0, sections: (was?.parts.sections ?? 0) + removed, relabelled: was?.parts.relabelled }, violations: was?.violations ?? [] } };
+      }
+    }
+  }
   // An Ask me / Challenge me answer must hold exactly ONE question: it is what the learner's reply is judged against (`clarify`).
   const asksQuestion = action === "ask_me" || action === "challenge";
   const askedQuestion = asksQuestion && r.ok && r.check.ok ? extractQuestion(r.check.text) : null;
@@ -707,14 +758,15 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     if (kept && q && response) await keepCheckSnapshot(ctx, kept, { questionId: q.id, response, correct: r.verdict === "understood", score: r.verdict ? VERDICT_SCORE[r.verdict] : null, marking: "ai_evaluation" });
   }
   if (recorded && sessionId && shown && policy.scholarLearningHistory === "record") {
-    await Promise.all([
-      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId), attemptId: keptCheck?.id ?? null }),
+    // SCHOLAR-GUIDE-ME-001: a hint or an example shown is not learning done (guideRecords).
+    if (guideRecords) await Promise.all([
+      recordLearningEvent(ctx.admin, ctx.userId, { sessionId, step, action: learningEventAction(action), verdict: guidedClarify ? null : eventVerdict(action, r.verdict), chunkIds: passages.map(p => p.chunkId), attemptId: keptCheck?.id ?? null }),
       advances ? updateLearningSession(ctx.admin, ctx.userId, sessionId, { currentStep: step }) : Promise.resolve("ok" as const),
     ]);
   }
 
   const sources = passages.map(sourceOf);
-  const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId,
+  const base = { action, step, depth, label: AI_LABEL, provenance: { model: r.model, promptVersion: r.promptVersion }, sources, passageIds: passages.map(p => p.chunkId), actionId: ai.actionId, ...(deeperStructured ? { goDeeperLevels: true } : {}), ...guideFields,
     references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields, ...(spelling ? { spelling } : {}),
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.

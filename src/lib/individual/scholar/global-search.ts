@@ -37,6 +37,8 @@ export function savedHitPath(h: Pick<LibraryHit, "kind" | "id" | "label" | "sess
   if (h.kind === "flashcard" || h.kind === "card_note") return cardHrefPath(h.label);
   if (h.sessionId && h.step !== null) return lessonHrefPath(h.sessionId, h.step);
   if (h.materialId) return h.chunkId ? `study/${h.materialId}#c-${h.chunkId}` : `study/${h.materialId}`;
+  // COMPETEN-NOTEBOOK-001: a free-standing note has no lesson or material. It opens in My Notebook.
+  if (h.kind === "note" && !h.artefactId) return `study/notebook/${encodeURIComponent(h.id)}`;
   return "study/saved";
 }
 

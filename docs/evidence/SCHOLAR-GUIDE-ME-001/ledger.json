@@ -1,0 +1,126 @@
+{
+ "calls": 20,
+ "usd": 0.35615,
+ "runs": [
+  {
+   "name": "old",
+   "calls": 1,
+   "cost_usd": 0.006876,
+   "ok": true
+  },
+  {
+   "name": "teach0",
+   "calls": 1,
+   "cost_usd": 0.009111,
+   "ok": true
+  },
+  {
+   "name": "hint1",
+   "calls": 1,
+   "cost_usd": 0.008487,
+   "ok": true
+  },
+  {
+   "name": "example",
+   "calls": 1,
+   "cost_usd": 0.009252,
+   "ok": true
+  },
+  {
+   "name": "explain",
+   "calls": 1,
+   "cost_usd": 0.010356,
+   "ok": true
+  },
+  {
+   "name": "wrong",
+   "calls": 1,
+   "cost_usd": 0.02229,
+   "ok": true
+  },
+  {
+   "name": "right",
+   "calls": 1,
+   "cost_usd": 0.021955,
+   "ok": true
+  },
+  {
+   "name": "teach0",
+   "calls": 1,
+   "cost_usd": 0.021035,
+   "ok": true
+  },
+  {
+   "name": "hint1",
+   "calls": 1,
+   "cost_usd": 0.014265,
+   "ok": false
+  },
+  {
+   "name": "hint2",
+   "calls": 1,
+   "cost_usd": 0.01469,
+   "ok": true
+  },
+  {
+   "name": "example",
+   "calls": 1,
+   "cost_usd": 0.01945,
+   "ok": true
+  },
+  {
+   "name": "explain",
+   "calls": 1,
+   "cost_usd": 0.026975,
+   "ok": true
+  },
+  {
+   "name": "wrong",
+   "calls": 1,
+   "cost_usd": 0.023655,
+   "ok": false
+  },
+  {
+   "name": "partial",
+   "calls": 1,
+   "cost_usd": 0.02301,
+   "ok": true
+  },
+  {
+   "name": "right",
+   "calls": 1,
+   "cost_usd": 0.020625,
+   "ok": true
+  },
+  {
+   "name": "teach1",
+   "calls": 1,
+   "cost_usd": 0.022455,
+   "ok": true
+  },
+  {
+   "name": "hint1",
+   "calls": 1,
+   "cost_usd": 0.01359,
+   "ok": true
+  },
+  {
+   "name": "wrong",
+   "calls": 1,
+   "cost_usd": 0.023805,
+   "ok": true
+  },
+  {
+   "name": "right",
+   "calls": 1,
+   "cost_usd": 0.02201,
+   "ok": true
+  },
+  {
+   "name": "teach1",
+   "calls": 1,
+   "cost_usd": 0.022255,
+   "ok": true
+  }
+ ]
+}

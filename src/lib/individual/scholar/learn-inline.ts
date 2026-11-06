@@ -44,7 +44,7 @@ export type InlineLesson = {
 /** Pure. Words in a text, citation tags ([S1]) not counted. */
 export function wordCount(text: string | null | undefined): number {
   if (!text) return 0;
-  return text.replace(/\[[SRE]\d+\]/g, " ").split(/\s+/).filter(Boolean).length;
+  return text.replace(/\[(?:[SRE]\d+|AI)\]/g, " ").split(/\s+/).filter(Boolean).length;
 }
 
 /**
