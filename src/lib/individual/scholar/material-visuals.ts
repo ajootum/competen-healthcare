@@ -44,8 +44,8 @@ export const LABEL_DIAGRAM = "Diagram or picture";
 
 export type Visual = {
   key: string;
-  unit: "slide" | "page";
-  /** The slide or page number (1-based), the same numbering as a section's pageFrom. */
+  unit: "slide" | "page" | "section";
+  /** The slide or page number (1-based), the same numbering as a section's pageFrom. A Word file: the section's ordinal. */
   n: number;
   /** The picture's part inside the file (ppt/media/... or a PDF image object "x12"); null for a whole PDF page. */
   media: string | null;
@@ -214,7 +214,7 @@ export function classifyPage(info: PageInfo | undefined, textWords: number = DEF
 }
 
 export type BuildOptions = {
-  unit?: "slide" | "page"; minPx?: number; maxPerSlide?: number; aiRead?: ReadonlySet<number>;
+  unit?: "slide" | "page" | "section"; minPx?: number; maxPerSlide?: number; aiRead?: ReadonlySet<number>;
   /** Pages' text info (pageInfoOf). Absent: no page is known to have text. */
   pages?: ReadonlyMap<number, PageInfo>;
   /** scholar_visual_classify: false = every picture is simply shown (category visual, behaviour image). */
@@ -229,9 +229,10 @@ function decorate(v: Bare, o: BuildOptions): Visual {
   const cls: PageClass = o.classify === false
     ? { category: "visual", behaviour: "image", label: LABEL_DIAGRAM, title: classifyPage(info).title, hasText: false }
     : classifyPage(info, o.textWords);
-  const word = v.unit === "slide" ? "slide" : "page";
+  const word = v.unit;
   const caption = cls.title ? `${cls.title} · ${word} ${v.n}`
     : v.kind === "pdf_page" ? `Page ${v.n} · original page`
+    : word === "section" ? `Section ${v.n} · original picture from your document`
     : `${word === "slide" ? "Slide" : "Page"} ${v.n} · original picture from your ${word === "slide" ? "presentation" : "pages"}`;
   const chart = cls.label === LABEL_SCORING || cls.label === LABEL_TABLE;
   const safeText = o.classify !== false && v.aiRead && cls.behaviour === "both" && chart && info ? cleanText(info.text).slice(0, MAX_SAFE_TEXT) || null : null;
@@ -263,9 +264,10 @@ export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { 
   const visuals: Visual[] = [];
   for (const n of [...bySlide.keys()].sort((a, b) => a - b)) {
     const seen = new Set<string>();
-    const ranked = (bySlide.get(n) as PictureFact[])
-      .sort((a, b) => area(b) - area(a) || b.bytes - a.bytes || (a.media < b.media ? -1 : a.media > b.media ? 1 : 0))
-      .map(p => ({ p, key: p.via === "page" ? `p${n}` : unit === "page" ? `p${n}-${p.sha}` : `${n}-${p.sha}` }))
+    // A Word file keeps the document's own order. A slide or page has no reading order for its pictures, so the largest comes first.
+    const inOrder = bySlide.get(n) as PictureFact[];
+    const ranked = (unit === "section" ? inOrder : inOrder.sort((a, b) => area(b) - area(a) || b.bytes - a.bytes || (a.media < b.media ? -1 : a.media > b.media ? 1 : 0)))
+      .map(p => ({ p, key: p.via === "page" ? `p${n}` : unit === "page" ? `p${n}-${p.sha}` : unit === "section" ? `s${n}-${p.sha}` : `${n}-${p.sha}` }))
       .filter(x => { if (seen.has(x.key)) return false; seen.add(x.key); return true; })
       .slice(0, maxPerSlide);
     for (const { p, key } of ranked) {
@@ -353,7 +355,9 @@ export function visualsForLesson(visuals: readonly Visual[], noSection: readonly
 }
 
 /** Pure. A visual key as the URL carries it, or null when it is not one (nothing else is ever looked up). */
-export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | { kind: "whole"; n: number; sha: string } | null {
+export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | { kind: "whole"; n: number; sha: string } | { kind: "section"; n: number; sha: string } | null {
+  const section = /^s([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
+  if (section) return { kind: "section", n: Number(section[1]), sha: section[2] };
   const whole = /^w([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
   if (whole) return { kind: "whole", n: Number(whole[1]), sha: whole[2] };
   const slide = /^([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
@@ -372,7 +376,8 @@ export const CONTENT_TYPE: Record<ImageKind, string> = { png: "image/png", jpeg:
  */
 export function canServeVisual(material: { userId?: string; mimeType: string } | null | undefined, userId: string): "ok" | "not_found" | "not_supported" {
   if (!material || (material.userId !== undefined && material.userId !== userId)) return "not_found";
-  return material.mimeType === "application/pdf" || material.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ? "ok" : "not_supported";
+  return material.mimeType === "application/pdf" || material.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    || material.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ? "ok" : "not_supported";
 }
 
 /** The URL of the visuals list of a material, and of one picture (or PDF page) in it. */
@@ -382,15 +387,16 @@ export const visualUrl = (materialId: string, key: string) => `${visualsListUrl(
 export const wholeSlidesUrl = (materialId: string) => `/api/individual/scholar/materials/${materialId}/whole-slides`;
 
 /**
- * Pure. The unit and range a citation names ("Deck, slide 12" / "Notes, pages 3-4"), or null for a Word / text "section N"
- * citation (nothing to look up). Used where only the citation is at hand (Flashcards, Revise).
+ * Pure. The unit and range a citation names ("Deck, slide 12" / "Notes, pages 3-4" / "Report, section 4"), or null when it names none.
+ * Used where only the citation is at hand (Flashcards, Revise). A section of a Word file holds the pictures placed there; a text file's holds none.
  */
-export function pagesOfCitation(citation: string): { unit: "slide" | "page"; from: number; to: number } | null {
-  const m = /\b(slide|page)s?\s+(\d{1,5})(?:\s*[-–]\s*(\d{1,5}))?\s*$/i.exec(citation.trim());
+export function pagesOfCitation(citation: string): { unit: "slide" | "page" | "section"; from: number; to: number } | null {
+  const m = /\b(slide|page|section)s?\s+(\d{1,5})(?:\s*[-–]\s*(\d{1,5}))?\s*$/i.exec(citation.trim());
   if (!m) return null;
   const from = Number(m[2]);
   const to = m[3] ? Number(m[3]) : from;
-  return { unit: m[1].toLowerCase() === "slide" ? "slide" : "page", from, to: Math.max(from, to) };
+  const named = m[1].toLowerCase();
+  return { unit: named === "slide" ? "slide" : named === "section" ? "section" : "page", from, to: Math.max(from, to) };
 }
 
 /** Pure. The visuals for a lesson's sections (each a slide / page range), in order, without repeats. */

@@ -1,0 +1,32 @@
+NOTE sections: 8. 1: ALPHA; 2: BRAVO; 3: CHARLIE; 4: DELTA; 5: ECHO; 6: FOXTROT; 7: GOLF; 8: HOTEL+INDIA
+PASS policy off: no picture, as today
+PASS policy off: the list is empty
+NOTE pictures: image1.png@s1, image2.jpg@s2, image3.jpg@s4, image4.png@s5, image5.jpg@s8, image6.jpeg@s8. Cannot be shown, in sections: 8
+PASS all six pictures, in the document's order
+PASS the picture before any text goes with the first section
+PASS the picture after BRAVO's text is in BRAVO's section (2)
+PASS the picture in the table is with its label (4)
+PASS the floating picture is where it is anchored (5)
+PASS the picture Word writes twice counts once, after HOTEL (8)
+PASS the last picture goes with the last section
+PASS the EMF is known not to be shown
+PASS image1.png: the original bytes, exactly
+PASS image2.jpg: the original bytes, exactly
+PASS image3.jpg: the original bytes, exactly
+PASS image4.png: the original bytes, exactly
+PASS image5.jpg: the original bytes, exactly
+PASS image6.jpeg: the original bytes, exactly
+PASS refused with no session (401)
+PASS six pictures in the notes (6)
+PASS captioned by section, labelled original
+PASS the section with the EMF says so, with the original file a link away
+PASS the dialog names the section and says the picture is unchanged
+PASS tablet: no sideways scrolling (0)
+PASS tablet: a picture fits (428 of 820)
+PASS phone: no sideways scrolling (0)
+PASS phone: a picture fits (314 of 390)
+PASS nothing drawn, nothing new stored
+PASS policy off: a picture is not served
+PASS deleting the test file (200)
+PASS no server or page errors ()
+NOTE policy restored: "no row"

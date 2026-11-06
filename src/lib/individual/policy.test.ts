@@ -122,7 +122,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarLessonVisuals: "on", scholarLessonVisualsMaxPerSection: 3, scholarLessonVisualsMinPx: 120,
       scholarVisualClassify: "on", scholarVisualTextWords: 40,
       // SCHOLAR-VISUAL-001 phase 2: off until HQ turns it on, and it needs migration 1010.
-      scholarWholeSlides: "off", scholarWholeSlidesMax: 80,
+      scholarWholeSlides: "off", scholarWholeSlidesMax: 80, scholarWordPictures: "off",
       scholarMyPlan: "on", scholarModuleAccess: { courses: { mode: "private", users: [], groups: [] }, competencies: { mode: "private", users: [], groups: [] } }, scholarPlanProposal: "on", scholarPlanStartedSignal: "learning", scholarPlanSectionMinutes: 12, scholarPlanRuleOrder: ["due_revision", "gaps", "unfinished", "exam", "deadline", "consolidate", "coverage", "competency"], scholarAssessmentInstruments: [],
       scholarPlanWeeklyReflection: "on", scholarPlanMaxWeeklyMinutes: 600,
       // LEARNING-CLOSE-2026-11 D02 / LE-04: three cumulative Go deeper rounds by default, configurable in HQ.

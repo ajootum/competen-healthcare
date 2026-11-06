@@ -1429,7 +1429,7 @@ export function LearnWorkspace(props: {
             actions. Hidden while the learner recalls the lesson, so a picture cannot give the answer away. */}
         {props.visuals?.on && hasLesson && !recalling[st.step] && (
           <LearnVisuals enabled max={props.visuals.max}
-            sections={st.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: x.materialTitle, unit: x.unit, pageFrom: x.pageFrom, pageTo: x.pageTo }))} />
+            sections={st.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: x.materialTitle, unit: x.unit, pageFrom: x.pageFrom, pageTo: x.pageTo, citation: x.citation }))} />
         )}
 
         {/* SCHOLAR-INLINE-CHECKS-01: short checks inside the lesson, after its teaching and before its actions. Additive; every one is optional
