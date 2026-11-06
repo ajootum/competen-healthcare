@@ -1,0 +1,20 @@
+PASS 390 Home: the cards show at 3428 ms, the activity arrives at 8657 ms
+PASS 390 Home: the activity rows arrive
+PASS 390 Home: no loading shape is left behind
+PASS 390 Revise: the heading shows at 11678 ms, the queue arrives at 19929 ms
+PASS 390 Revise: the queue and form arrive
+PASS 390 Revise: the tabs stay
+PASS 390 Revise priorities still loads
+PASS 390 no sideways scroll
+PASS 390 no AI or session call
+PASS 390 no page or hydration error ()
+PASS 1440 Home: the cards show at 3340 ms, the activity arrives at 8881 ms
+PASS 1440 Home: the activity rows arrive
+PASS 1440 Home: no loading shape is left behind
+PASS 1440 Revise: the heading shows at 6040 ms, the queue arrives at 11491 ms
+PASS 1440 Revise: the queue and form arrive
+PASS 1440 Revise: the tabs stay
+PASS 1440 Revise priorities still loads
+PASS 1440 no sideways scroll
+PASS 1440 no AI or session call
+PASS 1440 no page or hydration error ()

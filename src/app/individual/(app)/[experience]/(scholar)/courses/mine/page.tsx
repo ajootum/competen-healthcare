@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
-import { SCHOLAR } from "@/lib/individual/experiences";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { scopeLine } from "@/lib/individual/search/registry";
+import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { learningEnabled } from "@/lib/learning/policy";
 import { myRecords } from "@/lib/learning/record";
 import { learningRecordHref } from "@/lib/individual/professional/learning";
@@ -7,7 +9,7 @@ import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_com
 import { requireScholarModule } from "@/lib/individual/scholar/module-access";
 import { PageHeader, Unreadable } from "@/app/individual/_components/chrome";
 import { EmptyLine, RowList, TextLink } from "../../_module/module-parts";
-import { myCoursesView } from "../courses-view";
+import { filterCourses, myCoursesView } from "../courses-view";
 
 export const dynamic = "force-dynamic";
 
@@ -19,7 +21,7 @@ export async function generateMetadata(): Promise<Metadata> { return gatedModule
 
 const fmt = (d: string) => new Date(d).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
-export default async function MyCourses({ params }: { params: Promise<{ experience: string }> }) {
+export default async function MyCourses({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
@@ -28,14 +30,19 @@ export default async function MyCourses({ params }: { params: Promise<{ experien
   const on = await learningEnabled(ctx.admin);
   const records = on ? await myRecords(ctx.admin, ctx.userId).catch(() => null) : [];
   const view = myCoursesView(on, records);
+  const rawQ = (await searchParams).q;
+  const q = typeof rawQ === "string" ? rawQ.slice(0, 200).trim() : "";
+  const shown = view.kind === "items" ? filterCourses(view.items, q) : [];
   return (
     <>
       <PageHeader accent={x.accent} eyebrow="Courses & Training" title="My Courses" intro="The courses you are taking now." />
+      {view.kind === "items" && <PageSearch scope={scopeLine("courses")} action={experienceHref("scholar", "courses/mine")} value={q} placeholder="Search the courses you are taking" clearHref={experienceHref("scholar", "courses/mine")} />}
       {view.kind === "unreadable" ? <Unreadable what="courses" />
         : view.kind === "empty" ? <EmptyLine>{view.text}</EmptyLine>
+          : shown.length === 0 ? <EmptyLine>No course matches that search.</EmptyLine>
           : (
             <RowList>
-              {view.items.map(c => (
+              {shown.map(c => (
                 <li key={c.id} className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 py-3">
                   <div className="min-w-0">
                     <TextLink href={learningRecordHref(c.id)} accent={x.accent}>{c.title}</TextLink>
