@@ -26,23 +26,24 @@ export const escapeLike = (q: string) => q.replace(/[\\%_]/g, m => "\\" + m);
 
 // capability: the HQ capability that opens the page this source mirrors. null = owner only (no page found
 // that governs this source, so nothing is widened).
-type Source = { capability: string | null; activeOnly?: boolean; type: string; icon: string; table: string; cols: string[]; select: string; label: (r: any) => string; sub?: (r: any) => string | null; href: (r: any) => string };
+// open: a literal table name in each read, so the plane-boundary scanner can see what this reads (HQ-PLATFORM-SEARCH-REGATE).
+type Source = { capability: string | null; activeOnly?: boolean; type: string; icon: string; table: string; open: (a: any) => any; cols: string[]; select: string; label: (r: any) => string; sub?: (r: any) => string | null; href: (r: any) => string };
 
 const SOURCES: Source[] = [
-  { capability: "hq.platform.operations.view", type: "Tenants", icon: "🏢", table: "tenants", cols: ["name", "slug"], select: "id, name, slug", label: r => r.name ?? r.slug ?? "Tenant", sub: r => r.slug ?? null, href: r => `/super-admin/platform-ops/tenants/${r.id}` },
-  { capability: "hq.platform.tenants.view", type: "Organisations", icon: "🏛️", table: "hospitals", cols: ["name"], select: "id, name", label: r => r.name ?? "Organisation", href: () => `/super-admin/organisations` },
-  { capability: "hq.platform.users.view", type: "Users", icon: "👤", table: "profiles", cols: ["full_name", "email"], select: "id, full_name, email", label: r => r.full_name ?? r.email ?? "User", sub: r => r.email ?? null, href: r => `/super-admin/users?user=${r.id}` },
-  { capability: "hq.learning.competencies.view", type: "Frameworks", icon: "📐", table: "frameworks", activeOnly: true, cols: ["name"], select: "id, name", label: r => r.name ?? "Framework", href: r => `/super-admin/competencies` },
-  { capability: null, type: "Competencies", icon: "🎯", table: "framework_competencies", cols: ["name", "code"], select: "id, name, code", label: r => r.name ?? "Competency", sub: r => r.code ?? null, href: () => `/super-admin/competencies` },
-  { capability: "hq.platform.operations.view", type: "Workspaces", icon: "🗂️", table: "plat_workspaces", cols: ["label", "code", "description"], select: "id, code, label", label: r => r.label ?? r.code ?? "Workspace", sub: r => r.code ?? null, href: () => `/super-admin/platform-ops/workspaces` },
-  { capability: "hq.platform.audit.view", type: "Activity", icon: "📜", table: "audit_log", cols: ["entity_name", "action"], select: "id, entity_name, action, created_at", label: r => r.entity_name ?? ((r.action ?? "").replace(/_/g, " ") || "Activity"), sub: r => (r.action ?? "").replace(/_/g, " ") || null, href: () => `/super-admin/audit` },
+  { capability: "hq.platform.operations.view", type: "Tenants", icon: "🏢", table: "tenants", open: (a: any) => a.from("tenants"), cols: ["name", "slug"], select: "id, name, slug", label: r => r.name ?? r.slug ?? "Tenant", sub: r => r.slug ?? null, href: r => `/super-admin/platform-ops/tenants/${r.id}` },
+  { capability: "hq.platform.tenants.view", type: "Organisations", icon: "🏛️", table: "hospitals", open: (a: any) => a.from("hospitals"), cols: ["name"], select: "id, name", label: r => r.name ?? "Organisation", href: () => `/super-admin/organisations` },
+  { capability: "hq.platform.users.view", type: "Users", icon: "👤", table: "profiles", open: (a: any) => a.from("profiles"), cols: ["full_name", "email"], select: "id, full_name, email", label: r => r.full_name ?? r.email ?? "User", sub: r => r.email ?? null, href: r => `/super-admin/users?user=${r.id}` },
+  { capability: "hq.learning.competencies.view", type: "Frameworks", icon: "📐", table: "frameworks", open: (a: any) => a.from("frameworks"), activeOnly: true, cols: ["name"], select: "id, name", label: r => r.name ?? "Framework", href: r => `/super-admin/competencies` },
+  { capability: null, type: "Competencies", icon: "🎯", table: "framework_competencies", open: (a: any) => a.from("framework_competencies"), cols: ["name", "code"], select: "id, name, code", label: r => r.name ?? "Competency", sub: r => r.code ?? null, href: () => `/super-admin/competencies` },
+  { capability: "hq.platform.operations.view", type: "Workspaces", icon: "🗂️", table: "plat_workspaces", open: (a: any) => a.from("plat_workspaces"), cols: ["label", "code", "description"], select: "id, code, label", label: r => r.label ?? r.code ?? "Workspace", sub: r => r.code ?? null, href: () => `/super-admin/platform-ops/workspaces` },
+  { capability: "hq.platform.audit.view", type: "Activity", icon: "📜", table: "audit_log", open: (a: any) => a.from("audit_log"), cols: ["entity_name", "action"], select: "id, entity_name, action, created_at", label: r => r.entity_name ?? ((r.action ?? "").replace(/_/g, " ") || "Activity"), sub: r => (r.action ?? "").replace(/_/g, " ") || null, href: () => `/super-admin/audit` },
 ];
 
 async function searchSource(admin: any, src: Source, q: string, perSource: number, owner: boolean): Promise<SearchGroup | null> {
   try {
     const e = escapeLike(q);
     const or = src.cols.map(c => `${c}.ilike.%${e}%`).join(",");
-    let query = admin.from(src.table).select(src.select).or(or).limit(perSource);
+    let query = src.open(admin).select(src.select).or(or).limit(perSource);
     // The frameworks page lists active frameworks only; a delegate sees no more than that. The owner keeps today's behaviour.
     // and a hospital's own framework stays with that hospital, so a delegate's search covers shared frameworks only.
     if (src.activeOnly && !owner) query = query.eq("is_active", true).is("hospital_id", null);
