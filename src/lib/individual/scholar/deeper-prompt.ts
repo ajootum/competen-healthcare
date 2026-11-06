@@ -62,7 +62,7 @@ const DETERMINISTIC = /\b(?:always|definitely|certainly|invariably|necessarily)\
 const PATIENT_DIRECTIVE = /\byou (?:should|must|need to)\s+(?:give|prescribe|start|stop|administer|treat|diagnose|refer|withhold|discharge)\b|\b(?:prescribe|administer)\b/i;
 
 /** A figure in words the shared background check does not list, and an age or time named by an ordinal. Scholar states none: the notes hold the numbers. */
-const FIGURE_WORDS = /(?:thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|sixty|seventy|eighty|ninety|million|billion|half|dozen|majority)|(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|twelfth)s+(?:year|month|week|day|trimester|decade)/i;
+const FIGURE_WORDS = /\b(?:thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|sixty|seventy|eighty|ninety|million|billion|half|dozen|majority)\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|twelfth)\s+(?:year|month|week|day|trimester|decade)\b/i;
 
 export type ClaimViolation = "scholarly_claim" | "deterministic" | "patient_directive" | "figure_word";
 
