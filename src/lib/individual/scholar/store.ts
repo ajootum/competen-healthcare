@@ -3231,12 +3231,20 @@ export async function addNote(admin: Admin, userId: string, n: NoteInput): Promi
   return { ok: false, error: code === "23503" ? "not_found" : "failed" };
 }
 
-/** Change the text of one of the caller's notes or highlights (a bookmark has none). */
-export async function updateNote(admin: Admin, userId: string, id: string, patch: { body: string | null }): Promise<"ok" | "not_found" | "invalid" | "failed"> {
+/**
+ * Change the text of one of the caller's notes or highlights (a bookmark has none). COMPETEN-NOTEBOOK-001: with `updatedAt` (the copy the form was
+ * opened from), a note changed since, in My Notebook or elsewhere, is left alone and answers "conflict", so its newer words are never overwritten.
+ */
+export async function updateNote(admin: Admin, userId: string, id: string, patch: { body: string | null; updatedAt?: string | null }): Promise<"ok" | "not_found" | "invalid" | "failed" | "conflict" | { updatedAt: string }> {
   if (!isUuid(id) || !(await librarySchema(admin, userId))) return "not_found";
-  const { data, error } = await admin.from("individual_scholar_note").update({ body: patch.body }).eq("user_id", userId).eq("id", id).neq("kind", "bookmark").select("id");
+  let q = admin.from("individual_scholar_note").update({ body: patch.body }).eq("user_id", userId).eq("id", id).neq("kind", "bookmark");
+  if (patch.updatedAt) q = q.eq("updated_at", patch.updatedAt);
+  const { data, error } = await q.select("id, updated_at");
   if (error) return String(error.code ?? "") === "23514" ? "invalid" : "failed";
-  return (data ?? []).length ? "ok" : "not_found";
+  if ((data ?? []).length) return { updatedAt: data[0].updated_at };
+  if (!patch.updatedAt) return "not_found";
+  const { data: had } = await admin.from("individual_scholar_note").select("id").eq("user_id", userId).eq("id", id).neq("kind", "bookmark").maybeSingle();
+  return had ? "conflict" : "not_found";
 }
 
 /** Remove one of the caller's notes, bookmarks or highlights. Only theirs: another id simply is not found. */
@@ -5785,7 +5793,8 @@ export async function createNotebookNote(admin: Admin, userId: string, n: Create
 
 export type UpdateResult =
   | { ok: true; id: string; revision: number }
-  | { ok: false; error: "not_found" | "invalid" | "failed" }
+  /** not_found: the note. target: what it was being linked to. The page treats them very differently. */
+  | { ok: false; error: "not_found" | "target" | "invalid" | "failed" }
   | { ok: false; error: "conflict"; current: { body: string | null; title: string | null; tags: string[]; revision: number } };
 
 /** A change to one of the caller's notes, made from the revision they hold. A different revision changes nothing and returns the stored copy. */
@@ -5801,7 +5810,7 @@ export async function updateNotebookNote(admin: Admin, userId: string, id: strin
   if (p.link) {
     if ((p.link.targetKind === "section" || p.link.targetKind === "lesson") && p.link.chunkId) {
       const own = await ownChunk(admin, userId, p.link.materialId!, p.link.chunkId);
-      if (own !== "ok") return { ok: false, error: own };
+      if (own !== "ok") return { ok: false, error: own === "not_found" ? "target" : "failed" };
     }
     Object.assign(set, linkColumns(p.link), { section_label: p.sectionLabel ?? null, section_anchor: p.sectionAnchor ?? null, was_on: null });
   }
@@ -5809,7 +5818,7 @@ export async function updateNotebookNote(admin: Admin, userId: string, id: strin
   const { data, error } = await admin.from("individual_scholar_note").update(set).eq("user_id", userId).eq("id", id).eq("revision", p.expectedRevision).neq("kind", "bookmark").select("id, revision");
   if (error) {
     const code = String(error.code ?? "");
-    return { ok: false, error: code === "23514" ? "invalid" : code === "23503" ? "not_found" : "failed" };
+    return { ok: false, error: code === "23514" ? "invalid" : code === "23503" ? "target" : "failed" };
   }
   if ((data ?? []).length) return { ok: true, id: data[0].id, revision: Number(data[0].revision) };
   const { data: had, error: hErr } = await admin.from("individual_scholar_note").select("kind, revision, body, title, tags").eq("user_id", userId).eq("id", id).maybeSingle();

@@ -31,7 +31,7 @@ export type MetaPatch = { title?: string; tags?: string[]; pinned?: boolean; lin
 
 export type SendRequest =
   | { op: "create"; clientKey: string; body: string; title: string; tags: string[]; context: NoteContext; keepalive: boolean }
-  | ({ op: "update"; id: string; expectedRevision: number; body?: string; keepalive: boolean } & MetaPatch);
+  | ({ op: "update"; id: string; expectedRevision: number; body?: string | null; keepalive: boolean } & MetaPatch);
 
 export type SaverDeps = {
   send: (r: SendRequest) => Promise<SendReply>;
@@ -54,7 +54,13 @@ export const AUTOSAVE_DELAY_MS = 1200;
 export const DRAFT_DELAY_MS = 300;
 export const RETRY_BACKOFF_MS = [2000, 5000, 15000, 30000, 60000] as const;
 
-type Start = { userId: string; clientKey: string; id?: string | null; revision?: number | null; body?: string; title?: string; tags?: string[]; context: NoteContext; dirtyFromDraft?: boolean };
+type Start = {
+  userId: string; clientKey: string; id?: string | null; revision?: number | null; body?: string; title?: string; tags?: string[]; context: NoteContext; dirtyFromDraft?: boolean;
+  /** A highlight's words are its quote, so its comment may be emptied. A note's words may not. */
+  allowBlank?: boolean;
+};
+const wordsKey = (w: { body: string | null; title: string | null; tags: readonly string[] }) => JSON.stringify([w.body ?? "", w.title ?? "", w.tags]);
+const sameLink = (a: NoteContext, b: NoteContext) => JSON.stringify(a.link) === JSON.stringify(b.link);
 
 export class NoteSaver {
   private snap: SaverSnapshot;
@@ -62,6 +68,11 @@ export class NoteSaver {
   private timer: unknown = null;
   private draftTimer: unknown = null;
   private inFlight = false;
+  private flight: Promise<void> | null = null;
+  private discarded = false;
+  private readonly allowBlank: boolean;
+  /** Words sent with no answer. One of them may have landed, so a later refusal holding them is our own save, not someone else's change. */
+  private unconfirmed: string[] = [];
   private retries = 0;
   private serverBody: string;
   private serverTitle: string;
@@ -75,6 +86,7 @@ export class NoteSaver {
     this.clientKey = start.clientKey;
     this.context = start.context;
     this.key = draftKeyOf(start.userId, start.clientKey);
+    this.allowBlank = !!start.allowBlank;
     const body = start.body ?? "", title = start.title ?? "", tags = start.tags ?? [];
     this.serverBody = start.dirtyFromDraft ? "" : body;
     this.serverTitle = start.dirtyFromDraft ? "" : title;
@@ -104,7 +116,7 @@ export class NoteSaver {
     this.set({ ...p, status: "typing", message: null, dirty: true });
     this.scheduleDraft();
     // Blank: nothing to send. The server keeps the last words and they are never replaced by nothing.
-    if (!this.hasWords()) { this.cancelTimer(); this.set({ status: "idle" }); return; }
+    if (!this.hasWords() && !(this.allowBlank && this.snap.id)) { this.cancelTimer(); this.set({ status: "idle" }); return; }
     this.retries = 0;
     this.schedule(AUTOSAVE_DELAY_MS);
   }
@@ -149,54 +161,100 @@ export class NoteSaver {
     this.removeDraft();
   }
 
+  /**
+   * The learner removed this note. Nothing more is sent or kept on this device: words waiting to save would bring it back. Waits for a save
+   * already on its way, and says the note's id, so that one can be removed too. resume() undoes this if the removal then fails.
+   */
+  async discard(): Promise<string | null> {
+    this.discarded = true;
+    this.cancelTimer();
+    if (this.draftTimer) { this.deps.clearTimer(this.draftTimer); this.draftTimer = null; }
+    this.removeDraft();
+    await this.flight;
+    this.removeDraft();
+    return this.snap.id;
+  }
+  resume() {
+    this.discarded = false;
+    if (this.isDirty()) { this.writeDraft(); this.schedule(0); }
+  }
+
   // ── internals ──
 
   private cancelTimer() { if (this.timer !== null) { this.deps.clearTimer(this.timer); this.timer = null; } }
   private schedule(ms: number) {
     this.cancelTimer();
+    if (this.discarded) return;
     this.timer = this.deps.setTimer(() => { this.timer = null; void this.run(false); }, ms);
   }
   private scheduleDraft() {
     if (this.draftTimer) this.deps.clearTimer(this.draftTimer);
+    if (this.discarded) return;
     this.draftTimer = this.deps.setTimer(() => { this.draftTimer = null; this.writeDraft(); }, DRAFT_DELAY_MS);
   }
   private writeDraft() {
-    if (!this.deps.storage || !this.hasWords() || !this.isDirty()) return;
+    if (this.discarded || !this.deps.storage || !this.hasWords() || !this.isDirty()) return;
     const d: NoteDraft = { clientKey: this.clientKey, noteId: this.snap.id, revision: this.snap.revision, body: this.snap.body, title: this.snap.title, tags: this.snap.tags, context: this.context, savedAt: this.deps.now() };
     try { this.deps.storage.set(this.key, JSON.stringify(d)); } catch { /* the note still saves */ }
   }
   private removeDraft() { try { this.deps.storage?.remove(this.key); } catch { /* nothing to do */ } }
 
-  private async run(keepalive: boolean): Promise<void> {
-    if (this.inFlight || !this.isDirty()) return;
-    if (!this.hasWords()) return;
-    // These wait for the learner: typing changes the status and sends again.
-    if (this.snap.status === "refused" || this.snap.status === "conflict" || this.snap.status === "signed_out") return;
+  private run(keepalive: boolean): Promise<void> {
+    if (this.discarded || this.inFlight || !this.isDirty()) return Promise.resolve();
+    // Blank words are not sent: a note needs some. A pin or a link on a highlight with no comment still goes.
+    const blank = !this.hasWords();
+    if (blank && (!this.snap.id || (!this.allowBlank && this.snap.body !== this.serverBody))) {
+      if (this.snap.status === "typing") this.set({ status: "idle" });
+      return Promise.resolve();
+    }
+    // These wait for the learner: typing changes the status and sends again. "failed": the note is gone, and it comes back only if they write on.
+    if (this.snap.status === "refused" || this.snap.status === "conflict" || this.snap.status === "signed_out" || this.snap.status === "failed") return Promise.resolve();
     this.inFlight = true;
+    this.flight = this.send(keepalive, blank).finally(() => { this.flight = null; });
+    return this.flight;
+  }
+
+  private async send(keepalive: boolean, blank: boolean): Promise<void> {
     const body = this.snap.body, title = this.snap.title, tags = this.snap.tags, meta = this.meta;
     this.meta = {};
     this.set({ status: "saving" });
     const req: SendRequest = this.snap.id && this.snap.revision !== null
       ? {
         op: "update", id: this.snap.id, expectedRevision: this.snap.revision, keepalive,
-        ...(body !== this.serverBody ? { body } : {}),
+        ...(body !== this.serverBody ? { body: blank ? null : body } : {}),
         ...(title !== this.serverTitle ? { title } : {}),
         ...(JSON.stringify(tags) !== this.serverTags ? { tags } : {}),
         ...meta,
       }
       : { op: "create", clientKey: this.clientKey, body, title, tags, context: this.context, keepalive };
+    const sentContext = this.context;
     let reply: SendReply;
     try { reply = await this.deps.send(req); } catch { reply = { kind: "retry" }; }
     this.inFlight = false;
     // The first save writes the words and their context. A pin or a link chosen before it arrived follows as an update.
     if (req.op === "create") this.meta = { ...meta, ...this.meta };
+    // Unlinked while the first save was on its way: the screen said free-standing, so the note follows.
+    if (req.op === "create" && reply.kind === "ok" && !sameLink(sentContext, this.context)) {
+      this.meta = { link: this.context.link, sectionLabel: this.context.sectionLabel, sectionAnchor: this.context.sectionAnchor, ...this.meta };
+    }
     this.settle(reply, { body, title, tags, meta: req.op === "create" ? {} : meta });
   }
 
   private settle(reply: SendReply, sent: { body: string; title: string; tags: string[]; meta: MetaPatch }) {
+    if (this.discarded) {
+      if (reply.kind === "ok") this.snap = { ...this.snap, id: reply.id, revision: reply.revision };
+      return;
+    }
     switch (reply.kind) {
       case "ok": {
         this.retries = 0;
+        this.unconfirmed = [];
+        // A retried first save found the note. At revision 1 it holds our own earlier words. Above that it has been edited since, so ours are the older ones and it asks.
+        if (reply.stored && reply.revision > 1 && wordsKey(reply.stored) !== wordsKey(sent)) {
+          this.writeDraft();
+          this.set({ id: reply.id, revision: reply.revision, status: "conflict", other: { ...reply.stored, revision: reply.revision }, message: "This note was changed somewhere else since you wrote this.", dirty: true });
+          return;
+        }
         this.serverBody = reply.stored ? reply.stored.body ?? "" : sent.body;
         this.serverTitle = reply.stored ? reply.stored.title ?? "" : sent.title;
         this.serverTags = JSON.stringify(reply.stored ? reply.stored.tags : sent.tags);
@@ -208,9 +266,12 @@ export class NoteSaver {
       }
       case "conflict": {
         // A retry of a save that had landed: the stored words are ours. That is a success, not a conflict.
-        const same = (reply.current.body ?? "") === sent.body && (reply.current.title ?? "") === sent.title && JSON.stringify(reply.current.tags) === JSON.stringify(sent.tags);
-        if (same) {
-          this.serverBody = sent.body; this.serverTitle = sent.title; this.serverTags = JSON.stringify(sent.tags);
+        const held = wordsKey(reply.current);
+        if (held === wordsKey(sent) || this.unconfirmed.includes(held)) {
+          this.unconfirmed = [];
+          this.serverBody = reply.current.body ?? ""; this.serverTitle = reply.current.title ?? ""; this.serverTags = JSON.stringify(reply.current.tags);
+          // A pin or a link sent from the old revision did not land: it goes again from this one.
+          this.meta = { ...sent.meta, ...this.meta };
           const dirty = this.isDirty();
           this.set({ revision: reply.current.revision, savedAt: this.deps.now(), status: dirty ? "typing" : "saved", message: null, dirty });
           if (dirty) this.schedule(AUTOSAVE_DELAY_MS); else this.removeDraft();
@@ -232,12 +293,13 @@ export class NoteSaver {
         this.set({ status: "signed_out", message: "You are signed out. Your words are kept on this device. Sign in again to save them.", dirty: true });
         return;
       case "gone":
-        // The note was removed elsewhere. The words on the screen go back as a new note on the next change, never silently dropped.
+        // The note was removed elsewhere. The words stay on the screen and on this device, and become a new note only if the learner writes on.
+        this.set({ status: "failed", id: null, revision: null, message: "This note was removed somewhere else. Your words are kept on this device. Keep writing to save them as a new note.", dirty: true });
         this.writeDraft();
-        this.set({ status: "failed", id: null, revision: null, message: "This note was removed somewhere else. Your words are kept on this device.", dirty: true });
         return;
       case "retry": {
         this.meta = { ...sent.meta, ...this.meta };
+        this.unconfirmed = [...this.unconfirmed, wordsKey(sent)].slice(-10);
         this.writeDraft();
         const wait = RETRY_BACKOFF_MS[Math.min(this.retries, RETRY_BACKOFF_MS.length - 1)];
         this.retries += 1;

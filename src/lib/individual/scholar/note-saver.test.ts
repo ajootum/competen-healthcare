@@ -139,14 +139,24 @@ describe("NoteSaver: nothing is lost", () => {
     expect(saver.getSnapshot().status).toBe("retrying");
   });
 
-  it("a retried first save that finds the note holding older words sends the newer words as an update", async () => {
+  it("a retried first save that finds our own earlier words (revision 1) sends the newer words as an update", async () => {
     const { saver, sent } = rig();
     saver.setBody("newer words");
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
-    sent[0].resolve({ kind: "ok", id: "note-1", revision: 3, stored: { body: "older", title: null, tags: [] } }); await settle();
+    sent[0].resolve({ kind: "ok", id: "note-1", revision: 1, stored: { body: "older", title: null, tags: [] } }); await settle();
     expect(saver.getSnapshot().dirty).toBe(true);
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
-    expect(sent[1].req).toMatchObject({ op: "update", expectedRevision: 3, body: "newer words" });
+    expect(sent[1].req).toMatchObject({ op: "update", expectedRevision: 1, body: "newer words" });
+  });
+
+  it("a restored draft that finds the note edited since (above revision 1) asks: old words never overwrite newer ones", async () => {
+    const { saver, sent } = rig();
+    saver.setBody("words from before");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    sent[0].resolve({ kind: "ok", id: "note-1", revision: 3, stored: { body: "edited on my phone", title: null, tags: [] } }); await settle();
+    expect(saver.getSnapshot()).toMatchObject({ status: "conflict", id: "note-1", revision: 3, other: { body: "edited on my phone", revision: 3 } });
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[4]);
+    expect(sent).toHaveLength(1);
   });
 
   it("a refusal (a patient identifier) stops, says why and keeps the words here. Changing them sends again", async () => {
@@ -181,6 +191,8 @@ describe("NoteSaver: nothing is lost", () => {
     sent[0].resolve({ kind: "gone" }); await settle();
     expect(saver.getSnapshot()).toMatchObject({ status: "failed", id: null });
     expect(draft()).not.toBeNull();
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[4]);
+    expect(sent).toHaveLength(1); // not recreated by itself, only if they write on
     saver.setBody("still mine, more");
     await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
     expect(sent[1].req).toMatchObject({ op: "create", body: "still mine, more" });
@@ -240,6 +252,101 @@ describe("NoteSaver: a copy changed elsewhere", () => {
     b.saver.useOther();
     expect(b.saver.getSnapshot()).toMatchObject({ status: "saved", body: "from my phone", revision: 9, dirty: false });
     expect(b.draft()).toBeNull();
+  });
+});
+
+describe("NoteSaver: removing a note", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("words waiting to save are never sent after Remove, and the draft goes", async () => {
+    const { saver, sent, draft } = rig();
+    saver.setBody("Do not keep this");
+    await vi.advanceTimersByTimeAsync(DRAFT_DELAY_MS);
+    expect(draft()).not.toBeNull();
+    expect(await saver.discard()).toBeNull();
+    saver.flush();
+    await vi.advanceTimersByTimeAsync(RETRY_BACKOFF_MS[4]);
+    expect(sent).toHaveLength(0);
+    expect(draft()).toBeNull();
+  });
+
+  it("a save already on its way is waited for, and its id returned so it can be removed too, with no draft left", async () => {
+    const { saver, sent, draft } = rig();
+    saver.setBody("On its way");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    const out = saver.discard();
+    sent[0].resolve(ok(1)); await settle();
+    expect(await out).toBe("note-1");
+    expect(draft()).toBeNull();
+  });
+
+  it("a failed removal resumes saving", async () => {
+    const { saver, sent } = rig({ id: "note-1", revision: 2, body: "old" });
+    saver.setBody("new words");
+    await saver.discard();
+    saver.resume();
+    await settle();
+    expect(sent[0].req).toMatchObject({ op: "update", body: "new words" });
+  });
+});
+
+describe("NoteSaver: the corners a review found", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("a lost reply and more typing is not a conflict: the stored words are an earlier send of ours", async () => {
+    const { saver, sent } = rig({ id: "note-1", revision: 2, body: "old" });
+    saver.setBody("first");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    sent[0].resolve({ kind: "retry" }); await settle();
+    saver.setBody("first and second");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    sent[1].resolve({ kind: "conflict", current: { body: "first", title: "", tags: [], revision: 3 } }); await settle();
+    expect(saver.getSnapshot().status).toBe("typing");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    expect(sent[2].req).toMatchObject({ op: "update", expectedRevision: 3, body: "first and second" });
+  });
+
+  it("a pin refused for an old revision, with the same words, goes again and is not lost", async () => {
+    const { saver, sent } = rig({ id: "note-1", revision: 2, body: "same" });
+    saver.patch({ pinned: true });
+    await settle();
+    sent[0].resolve({ kind: "conflict", current: { body: "same", title: "", tags: [], revision: 5 } }); await settle();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    expect(sent[1].req).toMatchObject({ op: "update", expectedRevision: 5, pinned: true });
+  });
+
+  it("a highlight with no comment can still be pinned, and its comment can be emptied", async () => {
+    const { saver, sent } = rig({ id: "note-1", revision: 2, body: "", allowBlank: true });
+    saver.patch({ pinned: true });
+    await settle();
+    expect(sent[0].req).toMatchObject({ op: "update", pinned: true });
+    sent[0].resolve(ok(3)); await settle();
+    const b = rig({ id: "note-2", revision: 2, body: "a comment", allowBlank: true });
+    b.saver.setBody("");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    expect(b.sent[0].req).toMatchObject({ op: "update", body: null });
+  });
+
+  it("a note emptied by mistake is never saved blank, and a pin does not stick on Saving", async () => {
+    const { saver, sent } = rig({ id: "note-1", revision: 2, body: "words" });
+    saver.setBody("");
+    saver.patch({ pinned: true });
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    expect(sent).toHaveLength(0);
+    expect(saver.getSnapshot().status).toBe("idle");
+  });
+
+  it("unlinked while the first save was on its way: the note follows the screen", async () => {
+    const lesson = { ...FREE_CONTEXT, link: { targetKind: "lesson" as const, sessionId: "s", step: 0, materialId: null, chunkId: null } };
+    const { saver, sent } = rig({ context: lesson });
+    saver.setBody("x");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    saver.setContext(FREE_CONTEXT);
+    sent[0].resolve(ok(1)); await settle();
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    expect(sent[1].req).toMatchObject({ op: "update", expectedRevision: 1, link: { targetKind: "free" } });
   });
 });
 

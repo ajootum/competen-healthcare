@@ -44,9 +44,12 @@ export async function POST(req: Request) {
   if (isGuardRefusal(ctx)) return ctx;
   const refused = await gate(ctx);
   if (refused) return refused;
-  const v = validateCreate(await req.json().catch(() => null));
+  const raw = await req.json().catch(() => null);
+  // Written for someone else: a retry waiting after a sign-out, and another person now signed in on this device.
+  if (raw?.forUser && raw.forUser !== ctx.userId) return json({ error: "Not signed in" }, 401);
+  const v = validateCreate(raw);
   if (!v.ok) return json({ error: v.message, reason: v.problem }, 400);
-  if ([v.note.body, v.note.title ?? "", v.note.tags.join(" ")].some(t => findPatientIdentifiers(t).length > 0)) return json({ error: NOTE_IDENTIFIER_REFUSAL, reason: "identifier" }, 422);
+  if ([v.note.body, v.note.title ?? "", v.note.tags.join(" "), v.note.context.sectionLabel ?? ""].some(t => findPatientIdentifiers(t).length > 0)) return json({ error: NOTE_IDENTIFIER_REFUSAL, reason: "identifier" }, 422);
   const r = await createNotebookNote(ctx.admin, ctx.userId, v.note);
   if (!r.ok) {
     const [status, error] = r.error === "not_found" ? [404, "That lesson or section could not be found."] : r.error === "limit" ? [409, "You have reached the most notes that can be kept. Remove some to add more."] : [503, "Your note could not be saved just now."];

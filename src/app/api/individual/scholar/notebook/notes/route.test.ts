@@ -122,9 +122,23 @@ describe("PATCH", () => {
     expect(res.status).toBe(409);
     expect(await res.json()).toMatchObject({ conflict: true, current: { revision: 9 } });
   });
+  it("a link to something gone is 422, never the note's own 404, so the page does not treat the note as removed", async () => {
+    update.mockResolvedValue({ ok: false, error: "target" });
+    const res = await item.PATCH(req({ expectedRevision: 1, link: { targetKind: "free" } }, "PATCH"), ctx);
+    expect(res.status).toBe(422);
+    expect((await res.json()).reason).toBe("target");
+  });
+  it("words written for another learner are refused, on a first save and on a change", async () => {
+    expect((await POST(req({ forUser: K, clientKey: K, body: "x" }))).status).toBe(401);
+    expect((await item.PATCH(req({ forUser: K, expectedRevision: 1, body: "x" }, "PATCH"), ctx)).status).toBe(401);
+    expect(create).not.toHaveBeenCalled(); expect(update).not.toHaveBeenCalled();
+    expect((await POST(req({ forUser: USER, clientKey: K, body: "x" }))).status).toBe(200);
+  });
   it("another learner's note is simply not found", async () => {
     update.mockResolvedValue({ ok: false, error: "not_found" });
-    expect((await item.PATCH(req({ expectedRevision: 1, body: "x" }, "PATCH"), ctx)).status).toBe(404);
+    const missing = await item.PATCH(req({ expectedRevision: 1, body: "x" }, "PATCH"), ctx);
+    expect(missing.status).toBe(404);
+    expect((await missing.json()).reason).toBe("not_found");
     expect(update.mock.calls[0][1]).toBe(USER);
   });
   it("screens an edit for patient identifiers", async () => {
@@ -132,7 +146,7 @@ describe("PATCH", () => {
     expect(update).not.toHaveBeenCalled();
   });
   it("only a competency the learner can see may be linked", async () => {
-    expect((await item.PATCH(req({ expectedRevision: 1, competencyId: K }, "PATCH"), ctx)).status).toBe(404);
+    expect((await item.PATCH(req({ expectedRevision: 1, competencyId: K }, "PATCH"), ctx)).status).toBe(422);
     expect((await item.PATCH(req({ expectedRevision: 1, competencyId: N }, "PATCH"), ctx)).status).toBe(200);
   });
   it("typing is not audited. A pin or a link is, by code only", async () => {

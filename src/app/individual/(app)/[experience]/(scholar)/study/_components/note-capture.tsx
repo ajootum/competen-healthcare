@@ -41,26 +41,29 @@ async function post(url: string, method: string, body: unknown, keepalive: boole
 }
 const refused = (json: Record<string, unknown>): SendReply => ({ kind: "refused", message: typeof json.error === "string" ? json.error : "That could not be saved." });
 
-export async function sendNote(r: SendRequest): Promise<SendReply> {
+/** A save carries whose words these are, so a retry still waiting after a sign-out and someone else's sign-in is refused, not written to their notebook. */
+export async function sendNote(r: SendRequest, userId: string): Promise<SendReply> {
+  const okReply = (json: Record<string, unknown>): SendReply | null => (typeof json.id === "string" && Number.isInteger(json.revision) ? { kind: "ok", id: json.id, revision: json.revision as number, ...(json.stored ? { stored: json.stored as { body: string | null; title: string | null; tags: string[] } } : {}) } : null);
   if (r.op === "create") {
-    const body = { clientKey: r.clientKey, body: r.body, title: r.title || null, tags: r.tags, context: r.context };
+    const body = { forUser: userId, clientKey: r.clientKey, body: r.body, title: r.title || null, tags: r.tags, context: r.context };
     let a = await post(NOTES_URL, "POST", body, r.keepalive);
     // The lesson or section is gone: the words matter more than the link. Saved free-standing, with the section's name kept.
-    if (a?.status === 404) a = await post(NOTES_URL, "POST", { ...body, context: { ...r.context, link: { targetKind: "free" } } }, r.keepalive);
+    if (a?.status === 404) a = await post(NOTES_URL, "POST", { ...body, context: { ...r.context, link: { targetKind: "free" }, studyId: null } }, r.keepalive);
     if (!a || a.status >= 500) return { kind: "retry" };
     if (a.status === 401) return { kind: "signed_out" };
     if (a.status !== 200) return refused(a.json);
-    return { kind: "ok", id: String(a.json.id), revision: Number(a.json.revision), ...(a.json.stored ? { stored: a.json.stored as { body: string | null; title: string | null; tags: string[] } } : {}) };
+    // An answer that is not the route's own (a proxy's page) is not a save: the words stay in the draft.
+    return okReply(a.json) ?? { kind: "retry" };
   }
   const { op: _op, id, keepalive, title, ...rest } = r;
   void _op;
-  const a = await post(`${NOTES_URL}/${encodeURIComponent(id)}`, "PATCH", { ...rest, ...(title !== undefined ? { title: title || null } : {}) }, keepalive);
+  const a = await post(`${NOTES_URL}/${encodeURIComponent(id)}`, "PATCH", { forUser: userId, ...rest, ...(title !== undefined ? { title: title || null } : {}) }, keepalive);
   if (!a || a.status >= 500) return { kind: "retry" };
   if (a.status === 401) return { kind: "signed_out" };
   if (a.status === 409 && a.json.conflict) return { kind: "conflict", current: a.json.current as OtherCopy };
-  if (a.status === 404) return { kind: "gone" };
+  if (a.status === 404 && a.json.reason === "not_found") return { kind: "gone" };
   if (a.status !== 200) return refused(a.json);
-  return { kind: "ok", id: String(a.json.id), revision: Number(a.json.revision) };
+  return okReply(a.json) ?? { kind: "retry" };
 }
 
 const localStore: SaverDeps["storage"] = {
@@ -68,19 +71,19 @@ const localStore: SaverDeps["storage"] = {
   set: (k, v) => window.localStorage.setItem(k, v),
   remove: k => window.localStorage.removeItem(k),
 };
-const deps = (): SaverDeps => ({
-  send: sendNote,
+const deps = (userId: string): SaverDeps => ({
+  send: r => sendNote(r, userId),
   setTimer: (fn, ms) => window.setTimeout(fn, ms),
   clearTimer: t => window.clearTimeout(t as number),
   now: () => Date.now(),
   storage: typeof window === "undefined" ? null : localStore,
 });
 
-export type SaverStart = { userId: string; clientKey: string; id?: string | null; revision?: number | null; body?: string; title?: string; tags?: string[]; context: NoteContext; dirtyFromDraft?: boolean };
+export type SaverStart = { userId: string; clientKey: string; id?: string | null; revision?: number | null; body?: string; title?: string; tags?: string[]; context: NoteContext; dirtyFromDraft?: boolean; allowBlank?: boolean };
 
 /** One note's saver for the life of this component. Leaving, hiding the page or coming back online sends or retries what is waiting. */
 export function useNoteSaver(start: SaverStart): { saver: NoteSaver; snap: SaverSnapshot } {
-  const [saver] = useState(() => new NoteSaver(deps(), start));
+  const [saver] = useState(() => new NoteSaver(deps(start.userId), start));
   const snap = useSyncExternalStore(saver.subscribe, saver.getSnapshot, saver.getSnapshot);
   useEffect(() => {
     const online = () => saver.online();

@@ -62,7 +62,7 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
     const r = await send("POST", { ...target, kind, body, quote });
     setBusy(false);
     if (!r.ok) { setMsg(typeof r.json.error === "string" ? r.json.error : "That could not be saved just now."); return false; }
-    if (!r.json.existing) setNotes(n => [{ id: String(r.json.id), kind, body, quote, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), step: target.step ?? null, artefactId: target.targetKind === "artefact" ? target.artefactId : null }, ...(n ?? [])]);
+    if (!r.json.existing) setNotes(n => [{ id: String(r.json.id), kind, body, quote, createdAt: new Date().toISOString(), updatedAt: null, step: target.step ?? null, artefactId: target.targetKind === "artefact" ? target.artefactId : null }, ...(n ?? [])]);
     return true;
   };
   const remove = async (id: string) => {
@@ -137,10 +137,11 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
     const body = text.trim();
     if (needsText && !body) { setMsg("A note needs some words. Remove it instead if you no longer want it."); return; }
     setSaving(true); setMsg(null);
-    const r = await send("PATCH", { id: note.id, body: body || null });
+    // The copy this form opened from, so a note changed since in My Notebook is not overwritten.
+    const r = await send("PATCH", { id: note.id, body: body || null, ...(note.updatedAt ? { updatedAt: note.updatedAt } : {}) });
     setSaving(false);
     if (!r.ok) { setMsg(typeof r.json.error === "string" ? r.json.error : "That could not be saved just now."); return; }
-    onChanged({ ...note, body: body || null, updatedAt: new Date().toISOString() });
+    onChanged({ ...note, body: body || null, updatedAt: typeof r.json.updatedAt === "string" ? r.json.updatedAt : null });
     setEditing(false);
   };
   return (

@@ -33,19 +33,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const refused = await gate(ctx);
   if (refused) return refused;
   const { id } = await params;
-  const v = validatePatch(await req.json().catch(() => null));
+  const raw = await req.json().catch(() => null);
+  // Written for someone else: a retry waiting after a sign-out, and another person now signed in on this device.
+  if (raw?.forUser && raw.forUser !== ctx.userId) return json({ error: "Not signed in" }, 401);
+  const v = validatePatch(raw);
   if (!v.ok) return json({ error: v.message }, 400);
   const p = v.patch;
-  if ([p.body ?? "", p.title ?? "", (p.tags ?? []).join(" ")].some(t => findPatientIdentifiers(t).length > 0)) return json({ error: NOTE_IDENTIFIER_REFUSAL, reason: "identifier" }, 422);
+  if ([p.body ?? "", p.title ?? "", (p.tags ?? []).join(" "), p.sectionLabel ?? ""].some(t => findPatientIdentifiers(t).length > 0)) return json({ error: NOTE_IDENTIFIER_REFUSAL, reason: "identifier" }, 422);
   // A framework competency is not a learner row, so 1000 keeps it as a hint: only one the learner can see may be linked.
   if (p.competencyId) {
     const list = (await loadLearnerCatalogue(ctx.admin, ctx.userId)).competencies;
-    if (!list?.some(c => c.id === p.competencyId)) return json({ error: PROBLEM.target }, 404);
+    if (!list?.some(c => c.id === p.competencyId)) return json({ error: PROBLEM.target, reason: "target" }, 422);
   }
   const r = await updateNotebookNote(ctx.admin, ctx.userId, id, p);
   if (!r.ok) {
     if (r.error === "conflict") return json({ conflict: true, current: r.current, error: "This note was changed somewhere else." }, 409);
     if (r.error === "not_found") return json({ error: "That note could not be found.", reason: "not_found" }, 404);
+    if (r.error === "target") return json({ error: PROBLEM.target, reason: "target" }, 422);
     if (r.error === "invalid") return json({ error: "That cannot be saved on this note.", reason: "invalid" }, 422);
     return json({ error: "Your note could not be saved just now." }, 503);
   }

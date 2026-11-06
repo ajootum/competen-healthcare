@@ -59,12 +59,17 @@ const noOverflow = async (what: string) => ok(await page.evaluate(() => document
 const noteByWords = async (w: string) => (await admin.from("individual_scholar_note").select("*").eq("user_id", userId).ilike("body", `%${w}%`)).data ?? [];
 const waitSaved = async (scope = page.locator("body")) => { await scope.locator('[data-testid="note-save-status"][data-status="saved"]').first().waitFor({ timeout: 90_000 }); };
 
-await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 300_000 });
-await page.waitForTimeout(1500);
-await page.getByRole("textbox", { name: /email/i }).fill(field("email"));
-await page.locator("input#password").fill(field("password"));
-await page.getByRole("button", { name: /sign in/i }).click();
-await page.waitForFunction(() => !location.pathname.startsWith("/login"), null, { timeout: 180_000 });
+// A dev server may reload the sign-in page while it compiles, so a lost attempt is tried again.
+let signedIn = false;
+for (let i = 0; i < 3 && !signedIn; i++) {
+  await page.goto(`${BASE}/login`, { waitUntil: "networkidle", timeout: 300_000 });
+  await page.waitForTimeout(2500);
+  await page.getByRole("textbox", { name: /email/i }).fill(field("email"));
+  await page.locator("input#password").fill(field("password"));
+  await page.getByRole("button", { name: /sign in/i }).click();
+  signedIn = await page.waitForFunction(() => !location.pathname.startsWith("/login"), null, { timeout: 90_000 }).then(() => true, () => false);
+}
+if (!signedIn) throw new Error("could not sign in");
 
 // ── 1. Open Scholar and write at once ─────────────────────────────────────────────────────────────────────────────────────
 await open("/individual/scholar");
@@ -311,10 +316,23 @@ await shot("15-notebook-lesson-note");
 await page.goto(`${BASE}${R}/notebook/${noteOne}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
 await settle(page);
 ok((await page.getByTestId("note-back-to-lesson").count()) === 1, "the note offers the way back to its lesson");
+const placeBefore = (await admin.from("individual_scholar_learning_position").select("card_id").eq("user_id", userId).eq("session_id", SESSION).maybeSingle()).data?.card_id ?? null;
 await page.getByTestId("note-back-to-lesson").click();
 await page.waitForURL(`**/study/learn?session=${SESSION}**`, { timeout: 120_000 });
-await settle(page, 1500);
-ok(true, "back to the lesson");
+await settle(page, 4000);
+const placeAfter = (await admin.from("individual_scholar_learning_position").select("card_id").eq("user_id", userId).eq("session_id", SESSION).maybeSingle()).data?.card_id ?? null;
+ok(placeAfter === placeBefore, `back at the lesson, its saved reading place is unchanged (${placeBefore})`);
+note(`reopened at scrollY ${await page.evaluate(() => Math.round(window.scrollY))}`);
+await shot("15b-back-at-lesson");
+// "Go to this section" opens that note's own box.
+await page.goto(`${BASE}${R}/learn?session=${SESSION}#ideas-0-${(await noteByWords(`zebra${stamp}`))[0]?.section_anchor}`, { waitUntil: "domcontentloaded", timeout: 120_000 });
+await settle(page, 5000);
+{
+  const closed = page.locator('details:not([open]):has([data-testid="my-ideas-box"]) > summary').first();
+  if (await closed.count()) await closed.click();
+  await page.waitForTimeout(800);
+}
+ok(await page.locator('[data-testid="my-ideas-box"] button[aria-expanded="true"]').first().isVisible().catch(() => false), "a link to a section opens that note's box");
 
 // ── 4. Network loss, and an interrupted visit ─────────────────────────────────────────────────────────────────────────────
 await qbtn.click();
@@ -389,6 +407,19 @@ await page.getByTestId("note-remove-yes").click();
 await page.waitForURL("**/study/notebook", { timeout: 60_000 });
 await settle(page);
 ok((await noteByWords(`quokka${stamp}`)).length === 0, "the learner can remove a note, and it is gone");
+
+// Remove straight after typing: the words waiting to save must not bring the note back.
+await open(`${R}/notebook/new`);
+await page.getByTestId("note-field").waitFor();
+const removedWords = `Do not keep tapir${stamp}`;
+words.push(`tapir${stamp}`);
+await page.getByTestId("note-field").fill(removedWords);
+await page.getByTestId("note-remove").click();
+await page.getByTestId("note-remove-yes").click();
+await page.waitForURL("**/study/notebook", { timeout: 60_000 });
+await settle(page, 3000);
+ok((await noteByWords(`tapir${stamp}`)).length === 0, "removed straight after typing: nothing is saved");
+ok(await page.evaluate(() => !Object.keys(localStorage).some(x => (localStorage.getItem(x) ?? "").includes("tapir"))), "removed straight after typing: no draft is left on the device");
 
 // ── 7. Privacy over HTTP ──────────────────────────────────────────────────────────────────────────────────────────────────
 const anon = await browser.newContext();

@@ -53,14 +53,17 @@ export default async function NotebookPage({ params, searchParams }: { params: P
   const materials = (materialsR.ok ? materialsR.data : []).map(m => ({ id: m.id, title: m.title, mime: m.mimeType }));
 
   let pinned: NotebookNote[] = [], recent: NotebookNote[] = [], relatedNow: NotebookNote[] = [], more = false, unreadable = false, relatedTitle = "";
-  let hits: { note: NotebookNote; headline: string }[] = [], total = 0;
+  let hits: { note: NotebookNote; headline: string }[] = [], total = 0, cutOff = false;
   if (q) {
-    const r = await searchNotebook(ctx.admin, ctx.userId, q, NOTEBOOK_PAGE, offset);
+    // With a tag or material as well, the best fifty matches are read and filtered here, on one page, and the page says so if there were more.
+    const narrowed = !!(tag || material);
+    const r = await searchNotebook(ctx.admin, ctx.userId, q, narrowed ? 50 : NOTEBOOK_PAGE, narrowed ? 0 : offset);
     if (!r.ok) unreadable = true;
     else {
       hits = r.data.hits.filter(h => (!tag || h.note.tags.includes(tag)) && (!material || h.note.materialId === material));
-      total = tag || material ? hits.length : r.data.total;
-      more = !(tag || material) && offset + r.data.hits.length < r.data.total;
+      total = narrowed ? hits.length : r.data.total;
+      more = !narrowed && offset + r.data.hits.length < r.data.total;
+      cutOff = narrowed && r.data.total > 50;
     }
   } else {
     const [recentR, pinnedR, sessions] = await Promise.all([
@@ -96,7 +99,7 @@ export default async function NotebookPage({ params, searchParams }: { params: P
         <StartWriting userId={ctx.userId} />
         <NotebookSearch q={q} tags={tags} tag={tag} material={material} materials={materials} />
         {unreadable && <div className="mt-4"><Unreadable what="your notes" /></div>}
-        {q && !unreadable && <p role="status" className="mt-3 text-[13.5px] text-gray-700" data-testid="notebook-results">{total === 0 ? <>Nothing in your notes matches &ldquo;{q}&rdquo;.</> : <>{total} note{total === 1 ? "" : "s"} match &ldquo;{q}&rdquo;.</>}</p>}
+        {q && !unreadable && <p role="status" className="mt-3 text-[13.5px] text-gray-700" data-testid="notebook-results">{total === 0 ? <>Nothing in your notes matches &ldquo;{q}&rdquo;.</> : <>{total} note{total === 1 ? "" : "s"} match &ldquo;{q}&rdquo;.</>}{cutOff ? " Only the 50 best matches were checked against your filter. Try more words to narrow it." : ""}</p>}
         {hits.length > 0 && <NotebookSection title="Search results">{hits.map(h => <NoteCard key={h.note.id} card={card(h.note, h.headline)} />)}</NotebookSection>}
         {pinned.length > 0 && <NotebookSection title="Pinned" count={pinned.length}>{pinned.map(n => <NoteCard key={n.id} card={card(n)} />)}</NotebookSection>}
         {relatedNow.length > 0 && <NotebookSection title={`Related to your last lesson: ${relatedTitle}`}>{relatedNow.filter(n => !shownPinned.has(n.id)).map(n => <NoteCard key={n.id} card={card(n)} />)}</NotebookSection>}

@@ -57,7 +57,7 @@ function Editor({ userId, clientKey, context, options, draft, note, where, relat
   const { saver, snap } = useNoteSaver({
     userId, clientKey, context,
     ...(draft ? { id: draft.noteId, revision: draft.revision, body: draft.body, title: draft.title, tags: draft.tags, dirtyFromDraft: true } : {}),
-    ...(note ? { id: note.id, revision: note.revision, body: note.body ?? "", title: note.title ?? "", tags: note.tags } : {}),
+    ...(note ? { id: note.id, revision: note.revision, body: note.body ?? "", title: note.title ?? "", tags: note.tags, allowBlank: note.kind === "highlight" } : {}),
   });
   const [tagText, setTagText] = useState((note?.tags ?? draft?.tags ?? []).join(", "));
   const [pinned, setPinned] = useState(!!note?.pinnedAt);
@@ -72,10 +72,12 @@ function Editor({ userId, clientKey, context, options, draft, note, where, relat
   }, [note, snap.id]);
 
   const remove = async () => {
-    const id = snap.id ?? note?.id;
+    // Nothing waiting may save after this, and a save on its way is removed with the rest.
+    const id = (await saver.discard()) ?? note?.id;
     if (!id) { router.push(notebookHref()); return; }
     const res = await fetch(`/api/individual/scholar/notebook/notes/${encodeURIComponent(id)}`, { method: "DELETE" }).catch(() => null);
     if (res?.ok || res?.status === 404) { router.push(notebookHref()); router.refresh(); return; }
+    saver.resume();
     setMsg("That could not be removed just now. It is still here.");
   };
 
@@ -173,7 +175,10 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
     return () => { live = false; };
   }, [open, kind, materialId]);
 
+  const startKey = useState(() => JSON.stringify([kind, sessionId, step, materialId, chunkId]))[0];
   const apply = () => {
+    // Only what changed: adding a competency must not take the note off its section.
+    const linkChanged = !fixedTarget && JSON.stringify([kind, sessionId, step, materialId, chunkId]) !== startKey;
     let link: NoteLink | null = null;
     let label: string | null = null;
     if (kind === "none") { if (canFree) link = { targetKind: "free" }; }
@@ -185,12 +190,13 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
       label = options.materials.find(m => m.id === materialId)?.title ?? "Your material";
       if (chunkId) label = `${label}, ${sections?.find(s => s.id === chunkId)?.label ?? "one section"}`;
     }
-    if (link) {
+    if (link && linkChanged) {
       saver.setContext({ ...draftContext, link, sectionLabel: null, sectionAnchor: null });
       saver.patch({ link, sectionLabel: null, sectionAnchor: null });
       setLinked(label);
     }
-    saver.patch({ competencyId: competencyId || null, studyId: studyId || null });
+    if (competencyId !== (initial?.competencyId ?? "")) saver.patch({ competencyId: competencyId || null });
+    if (studyId !== (initial?.studyId ?? "")) saver.patch({ studyId: studyId || null });
     setOpen(false);
   };
 

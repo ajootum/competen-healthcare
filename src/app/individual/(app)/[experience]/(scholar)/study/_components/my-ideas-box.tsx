@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { IDEAS, noteHeading, type NoteContext } from "@/lib/individual/scholar/personal-notebook";
 import type { NotebookNote } from "@/lib/individual/scholar/store";
+import type { NoteSaver, SaverSnapshot } from "@/lib/individual/scholar/note-saver";
 import { activeStudyId } from "./study-active";
 import { NoteExtras, NoteField, newClientKey, notebookHref, useLessonNotes, useNotebook, useNoteSaver } from "./note-capture";
 import { NoteActions } from "./note-actions";
@@ -28,11 +29,15 @@ export function MyIdeasBox({ chunkId = null, materialId = null, sectionLabel, an
 
   // The read is asked once for the lesson, by the first box drawn. A note link to this section opens it (`#ideas-<step>-<anchor>`).
   useEffect(() => { if (nb && scope?.sessionId) scope.load(); }, [nb, scope]);
+  const arrived = useRef(false);
+  const notesRead = scope !== null && scope.notes !== null;
   useEffect(() => {
-    if (!scope || scope.notes === null || window.location.hash !== `#ideas-${scope.step}-${anchor}`) return;
-    const t = window.setTimeout(() => { setOpen(true); setEverOpened(true); root.current?.scrollIntoView({ block: "center" }); }, 400);
+    if (!notesRead || arrived.current || window.location.hash !== `#ideas-${scope.step}-${anchor}`) return;
+    // Once only: later changes to the notes must not pull the page back here.
+    arrived.current = true;
+    const t = window.setTimeout(() => { setOpen(true); setEverOpened(true); setWriterKey(k => k ?? newClientKey()); root.current?.scrollIntoView({ block: "center" }); }, 400);
     return () => window.clearTimeout(t);
-  }, [scope, anchor]);
+  }, [notesRead, scope, anchor]);
 
   if (!nb || !scope || !scope.sessionId) return null;
   const context: NoteContext = {
@@ -101,18 +106,24 @@ function BoxWriter({ clientKey, userId, context, autoFocus, onState, onAnother, 
   );
 }
 
-/** One earlier note: one quiet line, its words on a tap, editable in place with the same autosave. */
+/** One earlier note: its words, editable in place with the same autosave. One saver for its whole life here, so what it shows is always what was last saved. */
 function ExistingNote({ note, userId, onRemoved }: { note: NotebookNote; userId: string; onRemoved: () => void }) {
   const [editing, setEditing] = useState(false);
   const [gone, setGone] = useState(false);
+  // A throwaway key: only a draft is stored under it, never the note.
+  const [key] = useState(() => newClientKey());
+  const { saver, snap } = useNoteSaver({
+    userId, clientKey: key, id: note.id, revision: note.revision, body: note.body ?? "", title: note.title ?? "", tags: note.tags,
+    context: { link: { targetKind: "free" }, sectionLabel: note.sectionLabel, sectionAnchor: note.sectionAnchor, capturedIn: "learn", studyId: null },
+  });
   if (gone) return null;
   return (
     <div className="rounded-xl bg-[var(--cmp-app-surface)] px-3 py-2 ring-1 ring-[var(--learn-border)]" data-testid="my-ideas-existing">
       {editing
-        ? <ExistingEditor note={note} userId={userId} onDone={() => setEditing(false)} onRemoved={() => { setGone(true); onRemoved(); }} />
+        ? <ExistingEditor noteId={note.id} saver={saver} snap={snap} onDone={() => setEditing(false)} onRemoved={() => { setGone(true); onRemoved(); }} />
         : (
           <>
-            <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-900">{note.body}</p>
+            <p className="whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-900">{snap.body}</p>
             <p className="mt-1 flex flex-wrap items-center gap-x-3 text-[12px] text-gray-600">
               <span>{new Date(note.updatedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</span>
               <button type="button" className={learnAction.link} onClick={() => setEditing(true)}>Edit<span className="sr-only"> this note</span></button>
@@ -124,18 +135,15 @@ function ExistingNote({ note, userId, onRemoved }: { note: NotebookNote; userId:
   );
 }
 
-function ExistingEditor({ note, userId, onDone, onRemoved }: { note: NotebookNote; userId: string; onDone: () => void; onRemoved: () => void }) {
-  // The note's own key, or a throwaway one for a note from before the Notebook: only the draft is stored under it, never the note.
-  const [key] = useState(() => newClientKey());
-  const { saver, snap } = useNoteSaver({
-    userId, clientKey: key, id: note.id, revision: note.revision, body: note.body ?? "", title: note.title ?? "", tags: note.tags,
-    context: { link: { targetKind: "free" }, sectionLabel: note.sectionLabel, sectionAnchor: note.sectionAnchor, capturedIn: "learn", studyId: null },
-  });
+function ExistingEditor({ noteId, saver, snap, onDone, onRemoved }: { noteId: string; saver: NoteSaver; snap: SaverSnapshot; onDone: () => void; onRemoved: () => void }) {
   const [confirming, setConfirming] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   const remove = async () => {
-    const res = await fetch(`/api/individual/scholar/notebook/notes/${encodeURIComponent(note.id)}`, { method: "DELETE" }).catch(() => null);
-    if (res?.ok || res?.status === 404) onRemoved(); else setMsg("That could not be removed just now.");
+    await saver.discard();
+    const res = await fetch(`/api/individual/scholar/notebook/notes/${encodeURIComponent(noteId)}`, { method: "DELETE" }).catch(() => null);
+    if (res?.ok || res?.status === 404) { onRemoved(); return; }
+    saver.resume();
+    setMsg("That could not be removed just now. It is still here.");
   };
   return (
     <>
