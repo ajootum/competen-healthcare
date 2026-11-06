@@ -1,0 +1,69 @@
+# LIFEOS-API-001 — build record, Commitment Engine and API
+
+**Branch:** `lifeos/commitment-engine-01`. **Design:** [LIFEOS-API-001](LIFEOS-API-001-v1.2-architecture.md). **Decision:** [ADR-018](adr/ADR-018-lifeos-sealed-product.md).
+
+## State
+
+| Item | State |
+|---|---|
+| Gate `lifeos_core` | OFF everywhere. No flag row is written by the migration. |
+| Migration 901 | Applied to staging. **Not applied to production.** |
+| Production | Unchanged. Nothing in this PR reads LifeOS tables unless the gate is on, and the gate reads as off while the migration is absent. |
+
+## Migration 901-lifeos-core.sql
+
+- **Dependencies:** none. It references no other migration's objects.
+- **Application order:** any point in the sequence.
+- **Pre-application state on staging:** 0 `lifeos_*` tables, functions and views.
+- **sha256:** `008dfa62f2275da56b6c129813bc4d17a8bda2f3d703741f0c55bcce3361d5ad`
+- **Applied to staging:** twice at this checksum, the second run a no-op. An earlier draft had been applied before it, so a clean apply was also proved: inside one transaction, the rollback SQL, then this file twice, then ROLLBACK, leaving staging untouched. Afterwards 24 tables, 3 views, 7 functions. The migration writes no flag row. The harness later wrote `lifeos_core`, and left it disabled.
+- **Rollback:** [rollback-901.sql](evidence/LIFEOS-API-001/rollback-901.sql), removes every `lifeos_*` object and nothing else. Rehearsed on staging inside that same transaction: 0 tables, views and functions after it ran, and all 24 tables with their rows present after the ROLLBACK.
+- **House rules:** `scripts/migration-house-rules.ts` all clear. It carries the APPLY THIS FILE WHOLE banner.
+
+## Verification
+
+| Check | Where | Result |
+|---|---|---|
+| Unit tests, `src/lib/lifeos` | local | 83 of 83 |
+| Seal, including 13 planted violations | `scripts/lifeos-seal-harness.ts`, local, also in CI | 33 of 33 |
+| Acceptance, real HTTP and real sessions | `scripts/lifeos-acceptance-harness.ts`, against staging | 187 of 187 |
+| Independent security read | a separate reviewer | 8 findings, see below |
+
+**The acceptance run covers:** the gate before authentication, entitlement admission and lapse, the full commitment lifecycle, idempotent retries including six concurrent ones, stale writes, private records hidden from other members and organisation admins, grants and revocation, cross-organisation references refused by the API and by the database, delegation keeping ownership, suggestions changing nothing until accepted, append-only audit with no content, anon and signed-in browser clients refused at the database, rate limits, leaving an organisation with personal work intact, and a suspended tenant.
+
+**One earlier run stopped on a network drop.** The gate failed closed as designed, so that run stopped with an empty 404. The re-run passed in full.
+
+**Findings from the independent read.** The read was of the code as it stood before these fixes.
+
+| Finding | Severity | Outcome |
+|---|---|---|
+| A retry could return a record after access was lost | High | Fixed, tested (A23d) |
+| A write-grant holder could widen a private record's scope | High | Fixed, tested (A23b) |
+| Concurrent accepts could apply a suggestion twice | Medium | Fixed, tested (S25b) |
+| A crafted cursor could test hidden column values | Low | Fixed, tested (L2b) |
+| A non-owner finalising a review published private counts | Low | Fixed, tested (R5b) |
+| Grants outlived the giver leaving | Low | Fixed for leaving, tested (C4b). Lapse is a known limit below. |
+| Archiving an active delegation left grants open | Low | Fixed, tested (D4b) |
+| Another member's block could stop a replan | Low | Fixed in code, no acceptance check of its own |
+| An organisation entitlement outlives the organisation | Low | Known limit below |
+
+The reader found no injection in `lifeos_mutate`, no trigger bypass, and no way for a suggestion to change anything without an accept.
+
+**Not verified:**
+
+- **Production.** Nothing has been applied or deployed there.
+- **Load.** No performance or load test was run.
+- **Per-person database rules.** RLS is deny-all with no per-person policies, by design. See LIFEOS-API-001 section 5.
+
+## Not done at this stage
+
+- **No interface.** The prototype still runs on browser storage. Step 5.
+- **No way to get access outside a script.** Provisioning and entitlement grants are `core/provision.ts`, called by the harness. There is no commercial plan or billing behind `lifeos_entitlement` yet. Step 6.
+- **No AI model.** The Chief of Staff is rules only, matching the prototype. Connecting a model is a separate owner decision on what data may be sent.
+- **No custom domains, no tenant admin screens.** Step 7.
+- **No integration provider, no OAuth, no public routes.** Steps 8 and 9. Every route is `internal`.
+- **Known limits, from the independent read, to close before organisation access is issued (step 7 or 8):**
+  - An organisation entitlement is not tied to the tenant's status or the person's membership, so it outlives them. It exposes no organisation records, because workspace access is checked separately. Nothing issues these entitlements yet.
+  - A person whose entitlement lapses cannot revoke grants they gave until it is renewed. The grants stay as they set them.
+  - Grants made before a person leaves are revoked on leaving. Those on a suspended tenant's workspace stay, and the workspace itself refuses everyone.
+- **Suggestions do not expire automatically,** and `lifeos_idempotency` has no purge job. Neither holds up the gate-off state.
