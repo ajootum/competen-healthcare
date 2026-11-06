@@ -127,13 +127,13 @@ export function GoalFields({ policy, g, idPrefix, sources }: {
 
 // ── The list and reminders (P4) ────────────────────────────────────────────────────────────────────────────
 
-export function PlanOverview({ goals, view, accent }: { goals: PlanGoal[]; view: PlanView; accent: string }) {
+export function PlanOverview({ goals, view, accent, q }: { goals: PlanGoal[]; view: PlanView; accent: string; q?: string | null }) {
   // HFE-01 Wave 4 (F10): filters appear once there is something to filter.
   if (goals.length === 0) return null;
   return (
     <nav aria-label="Filter goals" className="mb-3 flex flex-wrap gap-2">
       {PLAN_VIEWS.map(([v, label]) => (
-        <Link key={v} href={`?plan=${v}#plan-h`} aria-current={view === v ? "page" : undefined}
+        <Link key={v} href={`?plan=${v}${q ? `&q=${encodeURIComponent(q)}` : ""}#plan-h`} aria-current={view === v ? "page" : undefined}
           className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold ${view === v ? "text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
           style={view === v ? { background: accent, borderColor: accent } : undefined}>
           {label} <span className="font-normal">({goals.filter(g => inPlanView(g, v)).length})</span>

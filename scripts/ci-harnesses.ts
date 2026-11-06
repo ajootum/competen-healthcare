@@ -40,6 +40,8 @@ const INCLUDED = [
   // COMP-ENG-002H Track B: the production-target guard, proven against a simulated production
   // identity with no network. §5 requires it to be "version-controlled and permanently blocking".
   "production-guard-harness.ts",
+  // ADR-018: the LifeOS seal. Parses source only, so it needs no database, network or environment.
+  "lifeos-seal-harness.ts",
   // COMP-ENG-002H Track A: next.config.ts and playwright.config.ts must agree about the dev origin.
   // Pure static read of two config files, so it belongs in the no-credential subset.
   "dev-origin-harness.ts",
@@ -286,6 +288,42 @@ const EXCLUDED: Exclusion[] = [
  * reads as pure/local must be screened into INCLUDED or EXCLUDED instead.
  */
 const STAGING_ONLY: Exclusion[] = [
+  {
+    file: "lifeos-public-api-harness.ts",
+    reason:
+      "LIFEOS-API-001 step 9 acceptance. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), Chromium and the staging "
+      + "service-role key. It creates fixture people and an API client per run and turns the staging flags on for its run. Refuses any other project.",
+  },
+  {
+    file: "lifeos-pilot-harness.ts",
+    reason:
+      "LIFEOS-API-001 step 8 acceptance. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), Chromium and the staging "
+      + "service-role key. It creates fixture people and an organisation per run and turns the staging gate on for its run. Refuses any other project.",
+  },
+  {
+    file: "lifeos-tenant-harness.ts",
+    reason:
+      "LIFEOS-API-001 step 7 acceptance. Needs a RUNNING dev server pointed at the staging project with LIFEOS_TENANT_HOSTS=1 (LIFEOS_BASE_URL), Chromium and the "
+      + "staging service-role key. It creates fixture people and a tenant per run and turns the staging gate on for its run. Refuses any other project.",
+  },
+  {
+    file: "lifeos-individual-access-harness.ts",
+    reason:
+      "LIFEOS-API-001 step 6 acceptance. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), the staging service-role "
+      + "key and real sessions. It creates fixture people per run and turns the staging flags on for its run. Refuses any other project.",
+  },
+  {
+    file: "lifeos-ui-harness.ts",
+    reason:
+      "LIFEOS-API-001 step 5 browser walk. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), Chromium and the "
+      + "staging service-role key. It creates one fixture person per run and turns the staging gate on for its run. Refuses any other project.",
+  },
+  {
+    file: "lifeos-acceptance-harness.ts",
+    reason:
+      "LIFEOS-API-001 end-to-end acceptance. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), the "
+      + "staging service-role key and real sessions. It creates fixture identities and turns the staging gate on for its run. Refuses any other project.",
+  },
   {
     file: "scholar-sqie-acceptance-harness.ts",
     reason:

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GO_DEEPER_LEVELS, composeDeeperAnswer, deeperEvidenceStatement, deeperNotesOnlyText, deeperPlainText, deeperResearchText, deeperSectionText, deeperSourcedText, levelOfDepth, parseDeeperAnswer } from "./deeper-format";
+import { GO_DEEPER_LEVELS, composeDeeperAnswer, deeperEvidenceStatement, deeperNoteAnchor, deeperNotesOnlyText, deeperPlainText, deeperResearchText, deeperSectionText, deeperSourcedText, levelOfDepth, parseDeeperAnswer } from "./deeper-format";
 import { DEEPER_MAX_TOKENS, deeperInstruction, notesClaimViolations, notesSectionSupported, scholarClaimViolations } from "./deeper-prompt";
 import { buildTaughtSoFar, taughtSoFarBlock } from "./learn-context";
 import { parseTeachAnswer } from "./teach-format";
@@ -77,6 +77,16 @@ describe("the format", () => {
     expect(deeperEvidenceStatement({ research: "shown", scholar: false })).not.toMatch(/No published research/);
     expect(deeperEvidenceStatement({ research: "looked", scholar: false })).toMatch(/looked for this round/);
     expect(deeperEvidenceStatement({ research: "looked", scholar: false })).not.toMatch(/No published research was consulted/);
+  });
+});
+
+describe("where a note attaches", () => {
+  it("meets the notebook's anchor rule, is stable, and differs by round and section", () => {
+    const a = deeperNoteAnchor("Why does a child control the head before walking?", 6);
+    expect(a).toMatch(/^[a-z0-9][a-z0-9_-]{0,39}$/);
+    expect(a).toBe(deeperNoteAnchor("Why does a child control the head before walking?", 6));
+    expect(a).not.toBe(deeperNoteAnchor("Why does a child control the head before walking?", 5));
+    expect(a).not.toBe(deeperNoteAnchor("Why do reflexes fade?", 6));
   });
 });
 

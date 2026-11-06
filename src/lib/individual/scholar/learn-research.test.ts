@@ -1,3 +1,4 @@
+import { researchTitleOf } from "./ask-sources";
 import { describe, expect, it } from "vitest";
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
 import {
@@ -5,7 +6,7 @@ import {
   type Passage, type ResearchEvidence,
 } from "./generation";
 import { artefactKey, libraryReferences, relabelReferences } from "./learn";
-import { externalReferences, researchEvidence, type LearnResearch } from "./learn-research";
+import { externalReferences, researchEvidence, type LearnResearch, lessonQuery, nothingButTypedQuestion, withoutTypedQuestion } from "./learn-research";
 import { policyPath, resolvePolicy, shownLearnModes } from "../policy";
 
 // COMPETEN-RESEARCH-01: Research & Explain on the ONE Learn engine. The research part is its own kind of content,
@@ -183,5 +184,29 @@ describe("RESEARCH-02: only verified sources are ever shown", () => {
   it("an unverified record is neither evidence nor further reading", () => {
     const R: LearnResearch = { state: "searched", message: null, query: "q", scholarLink: null, items: [rec(1, { pmid: false, doi: true }, "A"), rec(2, { pmid: false, doi: null }, null), rec(3, { pmid: false, doi: true }, null)], evidence: [0], calls: [], codes: [], sourceVersions: {}, excerptChars: 320, furtherReading: true, licensing: {} };
     expect(externalReferences(R).map(r => [r.tag, r.title])).toEqual([["E1", "T1"], [null, "T3"]]);
+  });
+});
+
+describe("ASK-RESEARCH-GUARD-01: what a learner types does not leave Competen", () => {
+  it("\u26a0 takes the typed question out, and with it any name in it", () => {
+    const out = withoutTypedQuestion({ question: "what does troponin mean in sarah okello from kampala", topics: ["troponin"], title: "Chest pain" });
+    expect(out.question).toBeNull();
+    expect(out.topics).toEqual(["troponin"]);
+    const q = lessonQuery(out);
+    expect(q.ok && q.query).toBeTruthy();
+    expect(JSON.stringify(q)).not.toMatch(/sarah|okello|kampala/);
+  });
+  it("\u26a0 is closed by default, and a question alone leaves nothing to search", () => {
+    const typed = withoutTypedQuestion({ question: "my neighbour peter has hiv, explain cd4", topics: [], title: null, plainKeywords: true });
+    expect(nothingButTypedQuestion(typed)).toBe(true);
+  });
+  it("⚠ a topic the learner typed to start a session does not go out", () => {
+    expect(researchTitleOf({ scopeKind: "topic", title: "my neighbour peter hiv", topic: "my neighbour peter hiv" })).toBeNull();
+    expect(researchTitleOf({ scopeKind: "document", title: "Sepsis lecture", topic: null })).toBe("Sepsis lecture");
+    expect(researchTitleOf({ scopeKind: "competency", title: "Recognising sepsis", topic: null })).toBe("Recognising sepsis");
+  });
+  it("a lesson's own topics still search", () => {
+    expect(nothingButTypedQuestion(withoutTypedQuestion({ question: null, topics: ["sepsis"], title: null }))).toBe(false);
+    expect(nothingButTypedQuestion(withoutTypedQuestion({ question: "x y", topics: [], title: "Sepsis" }))).toBe(false);
   });
 });

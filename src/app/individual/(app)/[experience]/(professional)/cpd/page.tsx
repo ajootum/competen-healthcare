@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { EXPERIENCES } from "@/lib/individual/experiences";
+import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
+import { PageSearch } from "../../../../_components/search/PageSearch";
+import { matchesSearch } from "@/lib/individual/search/match";
+import { pageQuery } from "@/lib/individual/search/page-query";
+import { professionalScopeLine } from "@/lib/individual/search/registry-professional";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { cpdHoursByYear } from "@/lib/individual/professional/progress";
 import { CPD_ACTIVITY_LABEL } from "@/lib/individual/professional/vocabulary";
@@ -52,11 +56,12 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Learning & CPD" }); }
 
-export default async function CpdPage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function CpdPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "cpd");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;
+  const q = pageQuery((await searchParams).q);
   const today = new Date().toISOString().slice(0, 10);
   const [record, map, learning, policy, cfg, ready, setting, history, reflections, plan] = await Promise.all([
     loadProfessionalRecord(ctx.admin, ctx.userId), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId),
@@ -85,6 +90,9 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
     ...(cpd ?? []).map(c => ({ key: `c-${c.id}`, date: c.activity_date, title: c.title, kind: labelOf(c.activity_type), source: "Recorded by you" })),
     ...(learning.refs ?? []).map(r => ({ key: `l-${r.recordId}`, date: r.completedOn, title: r.title, kind: r.outcomeLabel, source: "Competen Learning" })),
   ].sort((a, b) => b.date.localeCompare(a.date));
+  const logRows = q && cpd ? cpd.filter(c => matchesSearch([c.title, c.provider ?? "", labelOf(c.activity_type)], q)) : cpd;
+  const historyRows = q ? timeline.filter(t => matchesSearch([t.title, t.kind], q)) : timeline;
+  const here = experienceHref("professional", "cpd");
 
   return (
     <>
@@ -182,9 +190,10 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       )}
 
       <Section id="log-h" title="CPD log" note="Each entry says whether a document is attached. Neither kind is verified by anyone. Corrections keep the earlier version.">
-        {cpd === null ? <Unreadable what="CPD log" /> : cpd.length === 0 ? <Empty>Your activities will appear here.</Empty> : (
+        {cpd !== null && cpd.length > 0 && <PageSearch scope={professionalScopeLine("cpd")} action={`${here}#log-h`} value={q} placeholder="A title, provider or kind of activity" clearHref={`${here}#log-h`} />}
+        {cpd === null ? <Unreadable what="CPD log" /> : cpd.length === 0 ? <Empty>Your activities will appear here.</Empty> : logRows?.length === 0 ? <Empty>Nothing in your CPD log matches &ldquo;{q}&rdquo;.</Empty> : (
           <ul className="divide-y divide-gray-100">
-            {cpd.map(c => {
+            {logRows?.map(c => {
               const earlier = history?.get(c.id) ?? [];
               return (
                 <li key={c.id} className="py-3">
@@ -249,9 +258,9 @@ export default async function CpdPage({ params }: { params: Promise<{ experience
       )}
 
       <Section id="history-h" title="Learning history" note="Everything you learned, newest first, wherever it happened. It stays with you across jobs, professions and countries, and after any course access ends.">
-        {cpd === null ? <Unreadable what="learning history" /> : timeline.length === 0 ? <Empty>Your learning history will appear here.</Empty> : (
+        {cpd === null ? <Unreadable what="learning history" /> : timeline.length === 0 ? <Empty>Your learning history will appear here.</Empty> : historyRows.length === 0 ? <Empty>Nothing in your learning history matches &ldquo;{q}&rdquo;.</Empty> : (
           <ol className="divide-y divide-gray-100">
-            {timeline.slice(0, 200).map(t => (
+            {historyRows.slice(0, 200).map(t => (
               <li key={t.key} className="flex flex-wrap items-baseline justify-between gap-2 py-2">
                 <p className="text-[13.5px] text-gray-900"><span className="font-semibold">{t.title}</span> <span className="text-gray-500">· {t.kind}</span></p>
                 <p className="text-[12.5px] text-gray-600">{fmtDate(t.date)} · {t.source}</p>
