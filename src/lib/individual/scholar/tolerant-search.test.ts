@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 const h = vi.hoisted(() => ({ asked: [] as string[] }));
 vi.mock("./learn-search", () => ({
-  searchLibrary: async (_a: unknown, _u: unknown, p: { q: string }) => {
+  searchLibrary: async (_a: unknown, _u: unknown, p: { q: string; tab?: string }) => {
     h.asked.push(p.q);
     const found = p.q.includes("pneumonia");
     // As Learn does: a tab that is not asked for is not read, so its count is null.
