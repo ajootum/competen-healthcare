@@ -3,7 +3,8 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { ScholarAnswer } from "@/app/individual/_components/scholar-answer/ScholarAnswer";
 import { aiReasonCopy, type AiUnavailableReason } from "@/lib/individual/ai-availability";
-import { STYLE_LABEL, type FollowOn, type MoreItem, type StyleChoice, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
+import { STYLE_LABEL, approachLevel, approachLevelBody, approachLevelNumber, isApproachLevel, type FollowOn, type MoreItem, type StyleChoice, type TeachingStyle } from "@/lib/individual/scholar/learn-style";
+import type { CognitiveLevel } from "@/lib/individual/scholar/question-intel";
 import { LearningSectionHead, StyleCard, learnTone, type LearningIconName, type LearningTone } from "@/components/ui/scholar-learning";
 
 // SCHOLAR-LEARN-STYLE-01 (owner GO, Teaching Style and Practice HFE redesign): HOW SCHOLAR TEACHES THIS LESSON.
@@ -39,12 +40,12 @@ export const APPROACH_LABEL: Record<Approach, string> = {
 
 export type ApproachResult = { ok: boolean; json: Record<string, any> } | null; // eslint-disable-line @typescript-eslint/no-explicit-any
 type Shown = { approach: Approach; text: string; label?: string | null; verdict?: string | null; question?: string | null; evidence?: string | null; explain?: boolean };
-type Ladder = { understood?: number; partly?: number; not_yet?: number };
+type Ladder = { understood?: CognitiveLevel; partly?: CognitiveLevel; not_yet?: CognitiveLevel };
 /** What one approach last showed in one lesson, kept by the page so switching away and back costs no AI call. */
 /** SCHOLAR-CUMULATIVE-TEACHING-01: Guide me is a dialogue -- its turns (the learner's attempts and Scholar's replies) are kept per lesson and sent with the next attempt. */
 export type GuideTurn = { speaker: "tutor" | "student"; text: string };
-export type ApproachMemory = { shown: Shown | null; level: number; hint: number; ladder: { next: Ladder; atChecks: number } | null; turns?: GuideTurn[] };
-const FRESH: ApproachMemory = { shown: null, level: 1, hint: 1, ladder: null };
+export type ApproachMemory = { shown: Shown | null; level: CognitiveLevel | null; hint: number; ladder: { next: Ladder; atChecks: number } | null; turns?: GuideTurn[] };
+const FRESH: ApproachMemory = { shown: null, level: null, hint: 1, ladder: null };
 const GUIDE_TURNS_MAX = 6;
 /** A guide turn as shown in the dialogue list: headings and the callout lines taken off, one line. */
 const turnText = (t: string) => t.replace(/^###[^\n]*\n?/gm, "").replace(/^>.*$/gm, "").replace(/\s+/g, " ").trim().slice(0, 400);
@@ -117,7 +118,7 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
     const question = typeof r.json.checkQuestion === "string" && r.json.checkQuestion.trim() ? r.json.checkQuestion : null;
     const next: ApproachMemory = { ...mem(approach), shown: { approach, text: textOf(r.json) ?? question ?? "", label: typeof r.json.label === "string" ? r.json.label : null, verdict: typeof v === "string" ? v : v?.label ?? null, question,
       evidence: approach === "high_yield" ? evidenceLine(r.json.examEvidence) : null, explain: approach === "guide" && !!r.json.explainDirectly } };
-    if ((approach === "ask_me" || approach === "challenge") && Number.isInteger(r.json.level)) next.level = Number(r.json.level);
+    if ((approach === "ask_me" || approach === "challenge") && isApproachLevel(r.json.level)) next.level = r.json.level;
     if (approach === "challenge" && r.json.nextLevel && typeof r.json.nextLevel === "object") next.ladder = { next: r.json.nextLevel as Ladder, atChecks: checks };
     if (approach === "guide" && Number.isInteger(r.json.nextHintLevel)) next.hint = Math.max(1, Math.min(3, Number(r.json.nextHintLevel)));
     // The dialogue so far: this attempt and Scholar's reply join the lesson's guide turns (bounded; the server bounds them again).
@@ -133,7 +134,7 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
   const challengeLevel = () => {
     const m = mem("challenge");
     const rung = m.ladder && checks > m.ladder.atChecks && verdict ? m.ladder.next[verdict as keyof Ladder] : undefined;
-    return Number.isInteger(rung) ? Number(rung) : m.level;
+    return isApproachLevel(rung) ? rung : approachLevel("challenge", m.level);
   };
   const choose = (s: TeachingStyle) => { setOver(null); setMsg(null); setTyped(""); setMenu(false); onStyle(s); };
   const open = (a: Approach) => { setMsg(null); setTyped(""); setMenu(false); setOver(o => (o === a ? null : a)); };
@@ -178,8 +179,8 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
       )}
       {!showStyles && askAction && <div className="flex justify-end">{askAction}</div>}
 
-      {active === "challenge" && <Go label={busy ? "Writing…" : `Challenge me (level ${challengeLevel()})`} disabled={busy || disabled} accent={accent} onGo={() => { const l = challengeLevel(); patch("challenge", { level: l }); void send("challenge", { action: "challenge", level: l }); }} />}
-      {active === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", { action: "ask_me", level: mem("ask_me").level })} />}
+      {active === "challenge" && <Go label={busy ? "Writing…" : `Challenge me (level ${approachLevelNumber(challengeLevel())})`} disabled={busy || disabled} accent={accent} onGo={() => { const l = challengeLevel(); patch("challenge", { level: l }); void send("challenge", approachLevelBody("challenge", l)); }} />}
+      {active === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", approachLevelBody("ask_me", mem("ask_me").level))} />}
       {active === "high_yield" && <Go label={busy ? "Working…" : "Show the high-yield points"} disabled={busy || disabled} accent={accent} onGo={() => void send("high_yield", { action: "high_yield", depth })} />}
       {(active === "guide" || active === "teach_back") && (
         <form className="mt-3" onSubmit={e => { e.preventDefault(); if (active === "guide") { const turns = mem("guide").turns ?? []; void send("guide", { action: "guide", hintLevel: mem("guide").hint, ...(typed.trim() ? { attempt: typed.trim().slice(0, 1500) } : {}), ...(lastCheck ? { question: lastCheck.question.slice(0, 600) } : {}), ...(turns.length ? { history: turns } : {}) }).then(() => setTyped("")); } else if (typed.trim()) void send("teach_back", { action: "teach_back", explanation: typed.trim() }); }}>
