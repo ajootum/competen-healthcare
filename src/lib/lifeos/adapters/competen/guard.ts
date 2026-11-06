@@ -5,6 +5,7 @@ import { LifeosError } from "../../core/errors";
 import { ISSUER_COMPETEN_AUTH, readActiveIndividual } from "../../core/provision";
 import type { LifeosStore, Principal } from "../../core/types";
 import { supabaseStore } from "../supabase-store";
+import { LIFEOS_CORE_FLAG } from "../../api/dispatch";
 
 // ADR-018. THE ONLY FILE IN LIFEOS THAT IMPORTS FROM THE REST OF COMPETEN (scripts/lifeos-seal-harness.ts holds this).
 // A carve-out replaces this one file.
@@ -30,4 +31,25 @@ export async function requireLifeosPrincipal(store: LifeosStore): Promise<Princi
   if (!user) throw new LifeosError("unauthenticated", "Sign in to use LifeOS.");
   const individual = await readActiveIndividual(store, ISSUER_COMPETEN_AUTH, user.id);
   return { kind: "session", individualId: String(individual.id), scopes: "*", clientId: null };
+}
+
+export type LifeosShell = "DISABLED" | "AUTH_REQUIRED" | "NO_ACCESS" | "READY";
+
+/** For the interface page: the same gate and the same admission as the API, in the same order. */
+export async function resolveLifeosShell(): Promise<LifeosShell> {
+  const store = lifeosStore();
+  if (!store) return "DISABLED";
+  try {
+    if (!(await store.flagEnabled(LIFEOS_CORE_FLAG))) return "DISABLED";
+  } catch {
+    return "DISABLED";
+  }
+  try {
+    await requireLifeosPrincipal(store);
+    return "READY";
+  } catch (e) {
+    if (e instanceof LifeosError && e.code === "unauthenticated") return "AUTH_REQUIRED";
+    if (e instanceof LifeosError && e.code === "forbidden") return "NO_ACCESS";
+    return "DISABLED";
+  }
 }

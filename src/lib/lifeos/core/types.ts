@@ -37,6 +37,8 @@ export type MutateResult = { replayed: boolean; refs: Ref[]; rows: Row[] };
 export type ListQuery = {
   workspaceId: string;
   filters?: Record<string, string>;
+  /** Inclusive date bounds on one column. */
+  range?: { column: string; from?: string; to?: string } | null;
   /** Raw visibility disjunction, built only by core/access.ts from validated ids. */
   visibility?: string | null;
   hasArchive: boolean;

@@ -52,7 +52,7 @@ export function moduleSpecifiers(source: string, name = "x.ts"): string[] {
 const ADAPTER = "src/lib/lifeos/adapters/competen/";
 // Assembled, because scripts/harness-classify.ts reads the literal client package name as "this harness uses a database".
 // This harness parses source only, and belongs in the no-credential CI subset.
-const ALLOWED_EXTERNAL = new Set(["zod", ["@supabase", "supabase-js"].join("/")]);
+const ALLOWED_EXTERNAL = new Set(["zod", ["@supabase", "supabase-js"].join("/"), "react", "next", "next/navigation"]);
 
 /** The reason this file may not import this module, or null when it may. */
 export function importViolation(file: string, spec: string): string | null {
@@ -91,7 +91,7 @@ export const domainTerm = (text: string) => text.match(FORBIDDEN_TERMS)?.[0] ?? 
 console.log("LIFEOS SEAL HARNESS (ADR-018)\n");
 
 // ---- 1. what LifeOS may import ----
-const lifeosFiles = [...walk(join(ROOT, "src/lib/lifeos")), ...walk(join(ROOT, "src/app/api/lifeos"))].map(p => ({ p, r: rel(p) }));
+const lifeosFiles = [...walk(join(ROOT, "src/lib/lifeos")), ...walk(join(ROOT, "src/app/api/lifeos")), ...walk(join(ROOT, "src/app/lifeos"))].map(p => ({ p, r: rel(p) }));
 ok("I0", lifeosFiles.length >= 15, `the walk found the LifeOS tree (${lifeosFiles.length} files), so the rules below ran on something`);
 const importBad: string[] = [];
 for (const { p, r } of lifeosFiles) {
@@ -109,7 +109,7 @@ ok("I2", adapterFiles.length === 1 && adapterFiles[0].r === `${ADAPTER}guard.ts`
 const outsiders: string[] = [];
 for (const p of walk(join(ROOT, "src"))) {
   const r = rel(p);
-  if (r.startsWith("src/lib/lifeos/") || r.startsWith("src/app/api/lifeos/")) continue;
+  if (r.startsWith("src/lib/lifeos/") || r.startsWith("src/app/api/lifeos/") || r.startsWith("src/app/lifeos/")) continue;
   for (const spec of moduleSpecifiers(readFileSync(p, "utf8"), r)) {
     if (spec.includes("lib/lifeos")) outsiders.push(`${r} imports ${spec}`);
   }
@@ -126,6 +126,12 @@ const otherSql = readdirSync(migrationDir).filter(f => f.endsWith(".sql") && !/-
   .filter(f => /\blifeos_/.test(stripSqlComments(readFileSync(join(migrationDir, f), "utf8"))));
 ok("D2", otherSql.length === 0, `no other migration touches a lifeos_ object${otherSql.length ? `: ${otherSql.join(", ")}` : ""}`);
 ok("D3", Object.values(RESOURCES).every(r => r.table.startsWith("lifeos_")), "every resource table is a lifeos_ table");
+
+// ---- 3a. the interface uses only the API ----
+const uiFiles = lifeosFiles.filter(f => f.r.startsWith("src/lib/lifeos/ui/"));
+const uiBad = uiFiles.flatMap(({ p, r }) => moduleSpecifiers(readFileSync(p, "utf8"), r)
+  .filter(spec => /core\/(service|provision|access)|adapters\/|api\/(dispatch|routes)/.test(spec)).map(spec => `${r} imports ${spec}`));
+ok("U1", uiFiles.length >= 4 && uiBad.length === 0, `the interface reaches LifeOS only through the HTTP API${uiBad.length ? `: ${uiBad.join(" | ")}` : ""}`);
 
 // ---- 3b. healthcare-independent ----
 const termHits = [

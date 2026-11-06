@@ -61,6 +61,8 @@ export function supabaseStore(admin: SupabaseClient): LifeosStore {
       assertLifeosTable(table);
       let q = admin.from(table).select("*").eq("workspace_id", l.workspaceId);
       for (const [k, v] of Object.entries(l.filters ?? {})) q = q.eq(k, v);
+      if (l.range?.from) q = q.gte(l.range.column, l.range.from);
+      if (l.range?.to) q = q.lte(l.range.column, l.range.to);
       if (l.hasArchive && !l.includeArchived) q = q.is("archived_at", null);
       if (l.visibility) q = q.or(l.visibility);
       if (l.orderColumn === "seq") {

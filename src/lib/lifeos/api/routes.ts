@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  AuditEventV1, EntitlementV1, GenerateInput, IndividualV1, MembershipV1, SuggestionV1, TransitionInput, VersionInput, WorkspaceV1,
+  AuditEventV1, EntitlementV1, GenerateInput, IndividualV1, MeInput, MembershipV1, SuggestionV1, TransitionInput, VersionInput, WorkspaceV1,
 } from "../core/contracts";
 import { RESOURCES, RESOURCE_NAMES, type ResourceName, camelRow } from "../core/resources";
 import * as svc from "../core/service";
@@ -89,6 +89,10 @@ export const ROUTES: Route[] = [
       const me = await svc.getMe(ctx);
       return { data: { individual: presentIndividual(me.individual), entitlements: me.entitlements.map(r => EntitlementV1.parse(camelRow(r))), workspaces: me.workspaces.map(presentWorkspace) } };
     },
+  },
+  {
+    method: "PATCH", path: "/me", summary: "The caller's own settings", visibility: "internal", scope: null, bucket: "write", input: MeInput, output: IndividualV1,
+    handler: async ({ ctx, body }) => ({ data: presentIndividual(await svc.updateMe(ctx, body)) }),
   },
   {
     method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of", visibility: "internal", scope: null, bucket: "read", output: WorkspaceV1, list: true,

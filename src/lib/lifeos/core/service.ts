@@ -1,4 +1,4 @@
-import { TransitionInput, VersionInput } from "./contracts";
+import { MeInput, TransitionInput, VersionInput } from "./contracts";
 import { type AccessContext, canRead, canWrite, hasScope, isAdmin, toLiveGrant, visibilityFilter } from "./access";
 import { LifeosError, notFound } from "./errors";
 import { MACHINES, assertCommitmentCanMove, assertTransition, missingForWork, resumeStatus } from "./machines";
@@ -335,6 +335,21 @@ export async function getMe(c: RequestContext) {
   return { individual, entitlements, workspaces: await listWorkspaces(c) };
 }
 
+/** A person's own settings. They own this record, so no workspace access applies. */
+export async function updateMe(c: RequestContext, input: unknown): Promise<Row> {
+  const parsed = MeInput.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error);
+  const { expectedVersion, ...fields } = parsed.data;
+  if (Object.keys(fields).length === 0) throw new LifeosError("validation_failed", "Nothing to change.");
+  await commit(c, "", null, async () => [{
+    t: "lifeos_individual", op: "update", id: c.principal.individualId, expected_version: expectedVersion,
+    values: { ...snakeFields(fields), provenance_source: "user" },
+  }]);
+  const row = await c.store.get("lifeos_individual", c.principal.individualId);
+  if (!row) throw notFound();
+  return row;
+}
+
 export async function listWorkspaces(c: RequestContext): Promise<Row[]> {
   const memberships = await c.store.where("lifeos_membership", { individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
   const rows = await Promise.all(memberships.map(m => c.store.get("lifeos_workspace", String(m.workspace_id))));
@@ -402,6 +417,9 @@ export async function listResource(c: RequestContext, workspaceId: string, name:
   const limit = Number(params.limit ?? LIST_DEFAULT);
   const rows = await c.store.list(def.table, {
     workspaceId, filters, visibility: visibilityFilter(ctx, def.entity, def.extraReaderColumn), hasArchive: def.hasArchive,
+    range: def.name === "commitments" && (params.scheduledFrom || params.scheduledTo)
+      ? { column: "scheduled_on", from: params.scheduledFrom as string | undefined, to: params.scheduledTo as string | undefined }
+      : null,
     includeArchived: params.includeArchived === "true", orderColumn: "created_at",
     cursor: params.cursor ? decodeCursor(params.cursor) : null, limit: limit + 1,
   });

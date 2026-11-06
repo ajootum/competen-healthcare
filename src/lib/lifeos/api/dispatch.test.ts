@@ -71,7 +71,7 @@ describe("the order of the door", () => {
   });
   it("an unknown path is a 404 envelope, and a wrong method is a 405", async () => {
     expect(((await (await call("GET", "nope")).json()).error.code)).toBe("not_found");
-    expect((await call("PATCH", "me")).status).toBe(405);
+    expect((await call("POST", "me")).status).toBe(405);
   });
   it("a path id that is not a UUID is a 404 and reaches no query", async () => {
     const store = fakeStore();
