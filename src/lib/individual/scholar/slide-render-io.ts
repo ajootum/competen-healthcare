@@ -2,12 +2,14 @@ import { createHash } from "node:crypto";
 import type { IndividualContext } from "../guard";
 import { isNotProvisioned } from "../access";
 import { loadIndividualPolicy } from "../policy";
-import { BUCKET, PPTX_MIME } from "./config";
+import { BUCKET, PDF_MIME, PPTX_MIME } from "./config";
 import { openOfficeZip, slidePartNames } from "./extract";
+import { buildVisuals } from "./material-visuals";
+import { scanPdfImages } from "./material-visuals-pdf";
 import { scanDeck } from "./material-visuals-io";
 import { deckToPdf, openPdfDrawing, releaseEngine, RenderError, reserveEngine } from "./slide-render-engine";
 import {
-  FONT_PARTS, RENDER_BUDGET_MS, RENDER_ENGINE, aliasFonts, claimDecision, layoutMatters, pagesExpected, renderPath, slidePageMap, slidesToDraw,
+  FONT_PARTS, PDF_RENDER_ENGINE, RENDER_BUDGET_MS, RENDER_ENGINE, RENDER_MAX_BYTES, aliasFonts, claimDecision, layoutMatters, pagesExpected, pdfPagesToDraw, renderPath, slidePageMap, slidesToDraw,
   type RenderUnit,
 } from "./slide-render";
 import { readRender } from "./slide-render-read";
@@ -27,7 +29,7 @@ const sha16 = (b: Uint8Array) => createHash("sha256").update(b).digest("hex").sl
 /** Takes the claim, or says why not. Insert is atomic on the primary key; a reclaim only succeeds against the row just read. */
 async function claim(ctx: IndividualContext, material: MaterialRow, attempts: number, nowIso: string): Promise<boolean | "unavailable"> {
   if (attempts === 1) {
-    const { error } = await ctx.admin.from(TABLE).insert({ material_id: material.id, user_id: ctx.userId, status: "running", attempts: 1, claimed_at: nowIso, engine: RENDER_ENGINE });
+    const { error } = await ctx.admin.from(TABLE).insert({ material_id: material.id, user_id: ctx.userId, status: "running", attempts: 1, claimed_at: nowIso, engine: material.mimeType === PDF_MIME ? PDF_RENDER_ENGINE : RENDER_ENGINE });
     if (!error) return true;
     return isNotProvisioned(error) ? "unavailable" : false;
   }
@@ -46,7 +48,7 @@ export async function startWholeSlides(ctx: IndividualContext, materialId: strin
   if (!r.data) return { out: json(404, { error: "Not found" }) };
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarWholeSlides !== "on" || policy.scholarLessonVisuals !== "on") return { out: json(200, { state: "off" }) };
-  if (r.data.mimeType !== PPTX_MIME) return { out: json(200, { state: "not_needed" }) };
+  if (r.data.mimeType !== PPTX_MIME && r.data.mimeType !== PDF_MIME) return { out: json(200, { state: "not_needed" }) };
   const row = await readRender(ctx, materialId);
   const now = Date.now();
   const decision = claimDecision(row, now);
@@ -63,7 +65,7 @@ export async function startWholeSlides(ctx: IndividualContext, materialId: strin
   if (claimed === "unavailable") return { out: json(200, { state: "off" }) };
   if (!claimed) return { out: json(200, { state: "running" }) };
   const material = r.data;
-  return { out: json(202, { state: "running" }), run: () => drawDeck(ctx, material, attempts, now, policy).finally(releaseEngine) };
+  return { out: json(202, { state: "running" }), run: () => (material.mimeType === PDF_MIME ? drawPdf : drawDeck)(ctx, material, attempts, now, policy).finally(releaseEngine) };
 }
 
 type DrawPolicy = { scholarWholeSlidesMax: number; scholarLessonVisualsMinPx: number };
@@ -74,6 +76,51 @@ async function finish(ctx: IndividualContext, materialId: string, attempts: numb
     status: fields.status, finished_at: new Date().toISOString(), units: fields.units ?? [], not_drawn: fields.notDrawn ?? [], reason: fields.reason ?? null,
   }).eq("user_id", ctx.userId).eq("material_id", materialId).eq("attempts", attempts).select("material_id");
   return !error && (data ?? []).length === 1;
+}
+
+/**
+ * The job for a PDF: its pages that nothing else can show inline, drawn by PDFium. No LibreOffice. A page that draws as one flat colour is not stored: it
+ * may hold something that could not be decoded, and the button to the original page stays. A missing picture is never passed off as a blank page.
+ */
+async function drawPdf(ctx: IndividualContext, material: MaterialRow, attempts: number, started: number, policy: DrawPolicy): Promise<void> {
+  const stored: string[] = [];
+  try {
+    const bytes = await materialBytes(ctx.admin, ctx.userId, material.id);
+    if (!bytes) { await finish(ctx, material.id, attempts, { status: "failed", reason: "file_unreadable" }); return; }
+    const extras = await materialExtras(ctx.admin, ctx.userId, [material.id]);
+    const quality = extras.byId.get(material.id)?.quality ?? null;
+    const empty = quality?.emptyUnits ?? [], aiRead = quality?.aiReadUnits ?? [];
+    const scan = await scanPdfImages(bytes);
+    const { visuals } = buildVisuals(scan, { unit: "page", minPx: policy.scholarLessonVisualsMinPx, maxPerSlide: 99, aiRead: new Set(aiRead), emptyUnits: empty, classify: false });
+    const { draw, notDrawn } = pdfPagesToDraw({ visuals, textless: [...new Set([...empty, ...aiRead])], max: policy.scholarWholeSlidesMax });
+    const devBudget = process.env.NODE_ENV === "production" ? 0 : Number(process.env.SCHOLAR_RENDER_DEV_BUDGET_MS) || 0;
+    const left = () => (devBudget || RENDER_BUDGET_MS) - (Date.now() - started);
+    const units: RenderUnit[] = [];
+    const missed: number[] = [...notDrawn];
+    let total = 0;
+    const drawing = await openPdfDrawing(bytes);
+    try {
+      for (const n of draw) {
+        if (left() < 5000 || total >= RENDER_MAX_BYTES) { missed.push(n); continue; }
+        const { bytes: webp, width, height, blank } = await drawing.draw(n);
+        if (blank || total + webp.byteLength > RENDER_MAX_BYTES) { missed.push(n); continue; }
+        const sha = sha16(webp);
+        const path = renderPath(ctx.userId, material.id, n, sha);
+        const up = await ctx.admin.storage.from(BUCKET).upload(path, Buffer.from(webp), { contentType: "image/webp", upsert: true });
+        if (up.error) throw new RenderError("engine_failed");
+        stored.push(path);
+        total += webp.byteLength;
+        units.push({ n, path, sha, width, height, bytes: webp.byteLength });
+      }
+    } finally {
+      drawing.close();
+    }
+    missed.sort((a, b) => a - b);
+    if (!(await finish(ctx, material.id, attempts, { status: missed.length ? "partial" : "done", units, notDrawn: missed }))) await ctx.admin.storage.from(BUCKET).remove(stored).catch(() => {});
+  } catch (e) {
+    if (stored.length) await ctx.admin.storage.from(BUCKET).remove(stored).catch(() => {});
+    await finish(ctx, material.id, attempts, { status: "failed", reason: e instanceof RenderError ? e.code : "engine_failed" });
+  }
 }
 
 /** The job. Anything that goes wrong leaves the learner with the original pictures, and a reason on the row: never a half-truth on the page. */

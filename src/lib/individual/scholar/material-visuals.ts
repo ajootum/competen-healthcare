@@ -288,12 +288,14 @@ export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { 
 }
 
 /** Pure. A slide drawn whole, classified and captioned like the pictures on it. */
-export function wholeSlideVisual(u: { n: number; sha: string; width: number; height: number; bytes: number }, opts: Pick<BuildOptions, "aiRead" | "pages" | "classify" | "textWords"> = {}): Visual {
+export function wholeSlideVisual(u: { n: number; sha: string; width: number; height: number; bytes: number }, opts: Pick<BuildOptions, "aiRead" | "pages" | "classify" | "textWords" | "unit"> = {}): Visual {
+  const unit = opts.unit ?? "slide";
   const v = decorate({
-    key: `w${u.n}-${u.sha}`, unit: "slide", n: u.n, media: null, kind: "webp", width: u.width, height: u.height, bytes: u.bytes, sha: u.sha, decorative: false,
+    key: `w${u.n}-${u.sha}`, unit, n: u.n, media: null, kind: "webp", width: u.width, height: u.height, bytes: u.bytes, sha: u.sha, decorative: false,
     aiRead: !!opts.aiRead?.has(u.n),
-  }, { ...opts, unit: "slide" });
-  return { ...v, whole: true, caption: v.title ? `${v.title} · slide ${u.n}` : `Slide ${u.n} · the whole slide from your presentation` };
+  }, { ...opts, unit });
+  const word = unit === "slide" ? "slide" : "page";
+  return { ...v, whole: true, caption: v.title ? `${v.title} · ${word} ${u.n}` : unit === "slide" ? `Slide ${u.n} · the whole slide from your presentation` : `Page ${u.n} · the whole page from your file` };
 }
 
 /** Pure. Where a slide is drawn whole, the whole slide stands for its pictures in the notes and the strip. The pictures stay in the list, for the dialog. */

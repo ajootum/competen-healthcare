@@ -1,4 +1,4 @@
-import { buildVisuals, isRepeated, type DeckScan } from "./material-visuals";
+import { buildVisuals, isRepeated, type DeckScan, type Visual } from "./material-visuals";
 import type { SlideFacts } from "./slide-classify";
 
 // ── WHOLE SLIDES: WHICH ONES, IN WHAT ORDER, AND WHEN ── SCHOLAR-VISUAL-001 phase 2 ──────────────────────────────────────
@@ -16,6 +16,10 @@ import type { SlideFacts } from "./slide-classify";
 
 /** Written on the row, so a later engine can tell what drew what. */
 export const RENDER_ENGINE = "libreoffice-wasm-2.7.2+pdfium-3.0.0-lossless";
+/** A PDF needs no LibreOffice: PDFium draws its own pages. */
+export const PDF_RENDER_ENGINE = "pdfium-3.0.0-lossless";
+/** The most stored for one file. A scanned page can be far larger than a slide; the rest keep their original pages. */
+export const RENDER_MAX_BYTES = 60 * 1024 * 1024;
 /** The width of a drawn slide. Wide enough for a phone at 3x and a desktop dialog; the original pictures keep their own size. */
 export const RENDER_WIDTH = 1920;
 /** The whole job, against the route's 300 s. */
@@ -99,6 +103,25 @@ export function slidesToDraw(input: {
   const holdsMore = new Set([...layout, ...(facts?.review ?? []).map(r => r.unit)]);
   const never = new Set([...(facts?.blank ?? []), ...(facts?.decorativeOnly ?? []).filter(n => !holdsMore.has(n))]);
   const ordered = [...wanted].filter(n => Number.isInteger(n) && n > 0 && n <= MAX_NUMBER && !never.has(n) && pages.has(n)).sort((a, b) => a - b);
+  const max = Math.max(1, input.max);
+  return { draw: ordered.slice(0, max), notDrawn: ordered.slice(max) };
+}
+
+/**
+ * Pure. The pages of a PDF to draw, in order. A page is drawn when nothing else can show it inline: an image the browser cannot be handed (kind
+ * pdf_page), a page with no text layer and no picture, and a page with no text layer holding two or more pictures, whose layout is its meaning. A
+ * page of one ordinary picture is not drawn: that picture already shows, in its original bytes, and a scan drawn again would only cost storage.
+ */
+export function pdfPagesToDraw(input: { visuals: readonly Pick<Visual, "n" | "kind">[]; textless: readonly number[]; max: number }): { draw: number[]; notDrawn: number[] } {
+  const none = new Set(input.textless);
+  const counts = new Map<number, number>();
+  const wanted = new Set<number>();
+  for (const v of input.visuals) {
+    if (v.kind === "pdf_page") wanted.add(v.n);
+    else counts.set(v.n, (counts.get(v.n) ?? 0) + 1);
+  }
+  for (const [n, c] of counts) if (c >= 2 && none.has(n)) wanted.add(n);
+  const ordered = [...wanted].filter(n => Number.isInteger(n) && n > 0).sort((a, b) => a - b);
   const max = Math.max(1, input.max);
   return { draw: ordered.slice(0, max), notDrawn: ordered.slice(max) };
 }

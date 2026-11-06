@@ -1,0 +1,31 @@
+NOTE pages without a text layer on record: 2,3,4,5,7
+PASS policy off: the CCITT page keeps its button, as today
+PASS policy off: nothing drawn
+NOTE drawn in about 30s, status done, reason null, engine pdfium-3.0.0-lossless, pages 3,4,5,6,7, not drawn , 2520278 bytes
+PASS drawing finished
+PASS page 3 (CCITT scan) drawn
+PASS page 4 (JPEG 2000) drawn
+PASS page 5 (two pictures and a line) drawn
+PASS page 6 (CMYK picture on a text page) drawn
+PASS page 7 (vector drawing with no text layer) drawn
+PASS page 1, plain text, not drawn
+PASS page 2, one ordinary JPEG, not drawn: it already shows in its original bytes
+PASS a drawn page is not public
+PASS no page is behind a button any more
+PASS page 3 shows inline, said to be drawn
+PASS page 4 shows inline, said to be drawn
+PASS page 5 shows inline, said to be drawn
+PASS page 6 shows inline, said to be drawn
+PASS page 7 shows inline, said to be drawn
+PASS page 2 is labelled original
+PASS dialog: says drawn
+PASS dialog: the original page opens
+PASS tablet: no sideways scrolling (0)
+PASS tablet: a portrait page fits (428 of 820)
+PASS phone: no sideways scrolling (0)
+PASS phone: a portrait page fits (314 of 390)
+PASS failed drawing: the original-page button, nothing claims to be drawn
+PASS deleting the test PDF (200)
+PASS its drawn pages are gone (5)
+PASS no server or page errors ()
+NOTE policy restored: "no row"
