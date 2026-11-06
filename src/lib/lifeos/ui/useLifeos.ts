@@ -72,7 +72,7 @@ export function useLifeos(tenantId: string | null = null) {
       setWorkspaceId(pick?.id ?? null);
       if (!pick) setLoading(false);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) { window.location.href = "/login?next=/lifeos"; return; }
+      if (e instanceof ApiError && e.status === 401) { window.location.reload(); return; }
       setFatal(e instanceof Error ? e.message : "LifeOS could not be reached.");
       setLoading(false);
     }

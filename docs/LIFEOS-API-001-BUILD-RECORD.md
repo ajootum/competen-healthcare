@@ -111,12 +111,26 @@ A person with a live Competen Individual entitlement can choose to turn on LifeO
 
 An organisation can offer LifeOS on its own verified domain, under its own name and colour, from the one shared LifeOS. There are no per-tenant copies.
 
+- **Off until the owner decides on session handling:** see "Open security decision" below. **Do not set `LIFEOS_TENANT_HOSTS=1` before that.**
 - **The registry:** a tenant's owner sets its name and branding, and claims domains. Branding is validated, so it cannot carry CSS. A member who is not the owner is told the tenant does not exist.
-- **Verification:** a claim serves nothing until a TXT record at `_lifeos-verify.<host>` holds its token. A hostname is unique across all tenants, and our own names cannot be claimed.
-- **Routing:** `src/proxy.ts` calls one pure function, and that function is inert unless `LIFEOS_TENANT_HOSTS=1`. It never answers for a first-party host, and unit tests hold that for every hostname in use today. A tenant's host serves LifeOS and nothing else.
+- **Verification:** a claim serves nothing until a TXT record at `_lifeos-verify.<host>` holds its token. Claiming a name proves nothing and blocks nobody. Only one tenant can hold a name verified, which the database enforces (migration 905), and our own names cannot be claimed.
+- **Routing:** `src/proxy.ts` calls one pure function, and that function is inert unless `LIFEOS_TENANT_HOSTS=1`. It never answers for a first-party host, and unit tests hold that for every hostname in use today. A tenant's host serves LifeOS and nothing else, with one recorded exception: the proxy's matcher skips paths ending in an image extension, so those reach the route they name, under that route's own authorisation.
 - **On a tenant's domain:** its own sign-in, with its name and colour. The person sees that organisation and their personal workspace, and no other organisation. This is presentation, not a security boundary: workspace access is enforced by the API as before. On the main host they keep everything they belong to.
 - **Sign out:** the interface now has it, which closes Stage 3's known limit.
 - **The writer:** `lifeos_mutate` now names what it may not write, so a new `lifeos_` table needs no new copy of the function. It still refuses every log, the gate, the terms, views and anything outside `lifeos_`, and the harness checks each one.
+
+### Open security decision: sessions on a tenant's domain
+
+From the independent read of Stages 3 to 5. A person who signs in on an organisation's domain has a full Competen session cookie on a host whose DNS the organisation controls. The organisation could repoint the name to its own server and replay that session, reaching the person's private LifeOS records and any other Competen product they hold. A later registrant of a lapsed domain could do the same. **The domain feature stays off until the owner decides. See the PR.**
+
+### Migration 905-lifeos-domain-uniqueness.sql
+
+- **Dependencies:** 903. Application order: 901, 902, 903, 905. 904 is independent of 905.
+- **Pre-application state on staging:** `lifeos_tenant_domain_hostname_key` present.
+- **sha256:** `0cf78db6ccaad44d978fe8d2f1c4b87ae627c8389953cf01d360086bedea1ea0`
+- **Applied to staging:** twice, the second run a no-op. It writes no row.
+- **Rollback:** [rollback-905.sql](evidence/LIFEOS-API-001/rollback-905.sql), rehearsed on staging inside a rolled-back transaction.
+- **Not applied to production.**
 
 ### Migration 903-lifeos-tenant-domains.sql
 
@@ -127,7 +141,7 @@ An organisation can offer LifeOS on its own verified domain, under its own name 
 - **Rollback:** [rollback-903.sql](evidence/LIFEOS-API-001/rollback-903.sql), rehearsed on staging inside a rolled-back transaction.
 - **Not applied to production.**
 
-**Verified:** `scripts/lifeos-tenant-harness.ts`, 42 of 42, over real HTTP and in Chromium on a real hostname mapped to this machine. It covers the registry, claims, refusals, the tenant's own sign-in, every other product answering 404 on its domain, unverified and unknown hosts serving nothing, branding, workspace visibility, the main host unaffected, sign-out, a suspended tenant, and the writer's refusals. Unit tests cover the host rule, including that it is inert when off.
+**Verified:** `scripts/lifeos-tenant-harness.ts`, 46 of 46, over real HTTP and in Chromium on a real hostname mapped to this machine. It covers the registry, claims, refusals, the tenant's own sign-in, every other product answering 404 on its domain, unverified and unknown hosts serving nothing, branding, workspace visibility, the main host unaffected, sign-out, a suspended tenant, and the writer's refusals. Unit tests cover the host rule, including that it is inert when off.
 
 **Not verified:**
 
@@ -140,6 +154,9 @@ An organisation can offer LifeOS on its own verified domain, under its own name 
 
 - A tenant's domain has no password reset, and no sign-up page. Stage 5 adds invitations.
 - Adding a domain to the Vercel project is a manual owner step.
+- A verified domain is never re-checked, so a lapsed domain stays verified until someone removes it.
+
+**If LifeOS later gets its own domain (owner direction):** the first-party list in `src/lib/lifeos/host.ts` is the only place in LifeOS that names a domain. That new domain must be added there. Otherwise it would read as an unverified tenant and serve nothing. LifeOS sets no cookie domain, its other links are relative, and its email links return to the current address. The two remaining signs of Competen are the `/login` redirect for a signed-out person on a first-party host, which needs a LifeOS sign-in page at that point, and the default product name.
 
 ## Not done at this stage
 
