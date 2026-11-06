@@ -25,8 +25,8 @@ export async function generateMetadata(): Promise<Metadata> { return gatedModule
 export default async function MyCourses({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "courses");
   if (!page) return null;
-  const clock = await readerClock(page.ctx);
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "courses");
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   const on = await learningEnabled(ctx.admin);

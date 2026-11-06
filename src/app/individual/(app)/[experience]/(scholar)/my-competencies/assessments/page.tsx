@@ -33,9 +33,9 @@ const linkBtn = `inline-flex min-h-[44px] items-center rounded-lg border border-
 export default async function Assessments({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string; q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
+  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const clock = await readerClock(page.ctx);
   const when = (iso: string) => formatForReader(iso, clock, "date", "UTC");
-  await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
   const { study, q: rawQ } = await searchParams;
   const q = typeof rawQ === "string" ? rawQ.slice(0, 200).trim() : "";

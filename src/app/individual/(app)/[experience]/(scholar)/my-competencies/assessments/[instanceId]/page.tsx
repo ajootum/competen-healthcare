@@ -22,8 +22,8 @@ export async function generateMetadata(): Promise<Metadata> { return gatedModule
 export default async function AssessmentRunPage({ params }: { params: Promise<{ experience: string; instanceId: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
-  const clock = await readerClock(page.ctx);
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const { instanceId } = await params;
   const base = experienceHref("scholar", "my-competencies/assessments");
