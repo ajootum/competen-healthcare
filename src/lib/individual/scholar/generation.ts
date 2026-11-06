@@ -524,7 +524,7 @@ export type ResearchReason = "no_citation" | "bad_citation" | "mixed" | "uncited
 export type ResearchCheck = { ok: true; text: string; cited: number[]; dropped?: number } | { ok: false; reason: ResearchReason; violations?: PhrasingViolation[] };
 // Doses, units and dose adjustment. Whether a medicine is prescribed is a fact, not a dose: medication ADVICE is judged
 // by the published risk rules on what the research part wrote (withinRequestRisk, risk_raised), not by a word list.
-const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|titrat\w*|bolus|regimen)\b/i;
+export const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|titrat\w*|bolus|regimen)\b/i;
 
 export const RESEARCH_WITHHELD: Record<ResearchReason, string> = {
   no_citation: "The research summary did not say which source each point came from, so it was not shown.",
@@ -579,7 +579,7 @@ export function checkResearchPart(raw: string, evidence: readonly ResearchEviden
 /** A caveat a lead-in must keep: if the first sentence carries one, it is a claim about the evidence, never mere framing. */
 const RESEARCH_CAVEAT = /\b(limited|mixed|weak|preliminary|early (?:evidence|data|stage|studies|findings|results|research)|uncertain|unclear|conflicting|inconsistent|insufficient|small|few|caution|cautious|not|no|cannot|lack|lacks|lacking|only|however)\b/i;
 /** The study-method use of "examined" (the subject is the study or its authors), and only that. */
-const RESEARCH_METHOD_EXAMINED = /\b(stud(?:y|ies)|trial|trials|review|reviews|analysis|analyses|audit|survey|paper|authors|researchers|investigators|it|they)\s+examined\b/gi;
+export const RESEARCH_METHOD_EXAMINED = /\b(stud(?:y|ies)|trial|trials|review|reviews|analysis|analyses|audit|survey|paper|authors|researchers|investigators|it|they)\s+examined\b/gi;
 
 /** Pure. The research part as units: one per sentence of each line, in order, with whether it cites and whether its line is a heading. */
 function researchUnits(t: string): { text: string; words: number; cited: boolean; heading: boolean; index: number }[] {
@@ -732,7 +732,7 @@ export function splitAskParts(raw: string): { main: string; background: string |
 /** Pure. A saved teaching or the learner's own note, as a passage: only its notes part, without the tags of its first answer. */
 export function savedLearningPassage(row: { id: string; kind: "artefact" | "note"; materialId: string | null; createdAt: string; content: string }): Passage {
   const end = /^[\s*_#>-]*(FROM RESEARCH|BEYOND THE NOTES|CHECK THIS):?/im.exec(row.content);
-  const body = (end ? row.content.slice(0, end.index) : row.content).replace(/\s*\[[SRE]\d+\]/g, "").trim();
+  const body = (end ? row.content.slice(0, end.index) : row.content).replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").trim();
   return {
     chunkId: row.id, materialId: row.materialId ?? "", materialTitle: `${row.kind === "note" ? "Your note" : "Saved teaching"}, ${row.createdAt.slice(0, 10)}`,
     ordinal: 0, pageFrom: null, pageTo: null, content: body.slice(0, 1800),

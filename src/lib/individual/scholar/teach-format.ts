@@ -14,9 +14,11 @@
 // the same. An answer saved before the structure (older prompt version) has none of the labels: parseTeachAnswer returns
 // null and the answer is shown as it was written.
 
-export type TeachParts = { overview: string; /** v3 (SCHOLAR-CUMULATIVE-TEACHING-01): the teaching paragraphs; absent on a v1/v2 lesson. */ understanding?: string[]; points: string[]; example: string | null; questions: string[] };
+export type TeachParts = { overview: string; /** v3 (SCHOLAR-CUMULATIVE-TEACHING-01): the teaching paragraphs; absent on a v1/v2 lesson. */ understanding?: string[];
+  /** SCHOLAR-RESEARCH-TEACH-001: where published evidence refines a statement in the notes. Each line says both, with both citations. The notes are never rewritten. */
+  distinctions?: string[]; points: string[]; example: string | null; questions: string[] };
 
-export const TEACH_LABEL = { overview: "OVERVIEW:", understanding: "UNDERSTANDING:", points: "KEY POINTS:", example: "EXAMPLE:", check: "CHECK YOUR UNDERSTANDING:" } as const;
+export const TEACH_LABEL = { overview: "OVERVIEW:", understanding: "UNDERSTANDING:", distinctions: "NOTES AND EVIDENCE:", points: "KEY POINTS:", example: "EXAMPLE:", check: "CHECK YOUR UNDERSTANDING:" } as const;
 /** At most this many understanding-check questions are kept from one Teach Me answer. */
 export const TEACH_MAX_QUESTIONS = 2;
 
@@ -25,6 +27,7 @@ type Part = keyof typeof TEACH_LABEL;
 const LABEL_RE: Record<Part, RegExp> = {
   overview: /^[\s*_#>-]*overview\s*:[\s*_]*/i,
   understanding: /^[\s*_#>-]*understanding\s*:[\s*_]*/i,
+  distinctions: /^[\s*_#>-]*notes\s+and\s+evidence\s*:[\s*_]*/i,
   points: /^[\s*_#>-]*key\s+points\s*:[\s*_]*/i,
   example: /^[\s*_#>-]*example\s*:[\s*_]*/i,
   check: /^[\s*_#>-]*check\s+your\s+understanding\s*:[\s*_]*/i,
@@ -35,7 +38,7 @@ const isBullet = (l: string) => /^\s*(?:[-*•]|\d+[.)])\s+/.test(l);
 
 /** Pure. The labelled parts of a Teach Me answer, or null when it carries no OVERVIEW or KEY POINTS label (an older answer). */
 export function parseTeachAnswer(text: string): TeachParts | null {
-  const buckets: Record<Part, string[]> = { overview: [], understanding: [], points: [], example: [], check: [] };
+  const buckets: Record<Part, string[]> = { overview: [], understanding: [], distinctions: [], points: [], example: [], check: [] };
   let at: Part | null = null, pre: string[] = [], seen = false;
   for (const line of text.split("\n")) {
     const hit = PARTS.find(p => LABEL_RE[p].test(line));
@@ -53,7 +56,8 @@ export function parseTeachAnswer(text: string): TeachParts | null {
   }
   const example = buckets.example.map(l => l.trim()).filter(Boolean).join(" ") || null;
   const questions = buckets.check.map(bullet).filter(Boolean);
-  return { overview, understanding: paragraphsOf(buckets.understanding), points: points.filter(Boolean), example, questions };
+  const distinctions = buckets.distinctions.filter(l => l.trim()).map(bullet).filter(Boolean);
+  return { overview, understanding: paragraphsOf(buckets.understanding), ...(distinctions.length ? { distinctions } : {}), points: points.filter(Boolean), example, questions };
 }
 
 /** Pure. Lines under UNDERSTANDING as paragraphs: a blank line (or a bullet) starts a new one; wrapped lines join the one before. */
@@ -74,6 +78,7 @@ export function composeTeachAnswer(p: TeachParts): string {
   const out: string[] = [];
   if (p.overview.trim()) out.push(`${TEACH_LABEL.overview} ${p.overview.trim()}`);
   if (p.understanding?.length) out.push(`${TEACH_LABEL.understanding}\n${p.understanding.map(x => x.trim()).filter(Boolean).join("\n\n")}`);
+  if (p.distinctions?.length) out.push(`${TEACH_LABEL.distinctions}\n${p.distinctions.map(x => `- ${x.trim()}`).join("\n")}`);
   if (p.points.length) out.push(`${TEACH_LABEL.points}\n${p.points.map(x => `- ${x.trim()}`).join("\n")}`);
   if (p.example?.trim()) out.push(`${TEACH_LABEL.example} ${p.example.trim()}`);
   if (p.questions.length) out.push(`${TEACH_LABEL.check}\n${p.questions.map(x => `- ${x.trim()}`).join("\n")}`);
@@ -84,12 +89,13 @@ export function composeTeachAnswer(p: TeachParts): string {
 export const citedTags = (text: string): number[] => [...new Set([...text.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1])))];
 
 /** Pure. Text cut into plain runs and [S n] citations, so each citation can be shown as a link to its source. */
-export function citationSegments(text: string): ({ text: string } | { tag: number })[] {
-  const out: ({ text: string } | { tag: number })[] = [];
+export function citationSegments(text: string): ({ text: string } | { tag: number } | { evidence: number } | { ai: true })[] {
+  const out: ({ text: string } | { tag: number } | { evidence: number } | { ai: true })[] = [];
   let last = 0;
-  for (const m of text.matchAll(/\[S(\d+)\]/g)) {
+  // SCHOLAR-RESEARCH-TEACH-001: [E n] is a published record and [AI] is Scholar's own explanation. Only a lesson written from the three sources carries them.
+  for (const m of text.matchAll(/\[(?:S(\d+)|E(\d+)|(AI))\]/g)) {
     if (m.index! > last) out.push({ text: text.slice(last, m.index) });
-    out.push({ tag: Number(m[1]) });
+    out.push(m[1] ? { tag: Number(m[1]) } : m[2] ? { evidence: Number(m[2]) } : { ai: true });
     last = m.index! + m[0].length;
   }
   if (last < text.length) out.push({ text: text.slice(last) });

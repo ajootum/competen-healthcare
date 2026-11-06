@@ -3973,6 +3973,33 @@ export async function writeResearchCache(admin: Admin, row: { key: string; provi
   }, { onConflict: "query_hash" }).then((r: unknown) => r, () => {});
 }
 
+// SCHOLAR-RESEARCH-TEACH-001: one shared row per subject topic. A row with the building provider says a search is under way.
+
+/** The topic's row if it has not expired, with its provider, so a claim is told from a result. */
+export async function readResearchTopic(admin: Admin, key: string, nowIso: string): Promise<{ provider: string; sources: unknown[] } | null> {
+  const { data } = await admin.from("individual_scholar_research_cache").select("provider, sources, expires_at").eq("query_hash", key).maybeSingle();
+  if (!data || (data as any).expires_at <= nowIso) return null;
+  return { provider: (data as any).provider, sources: Array.isArray((data as any).sources) ? (data as any).sources : [] };
+}
+
+/**
+ * Atomic. True for exactly one caller: the row is new, or the one there has expired. The insert ignores a conflict and an expired
+ * row is taken over by a conditional update, so two learners cannot both search. Nothing is deleted. Unreadable: false (no search).
+ */
+export async function claimResearchTopic(admin: Admin, key: string, row: { provider: string; policyVersion: string; ms: number; nowIso: string }): Promise<boolean> {
+  const fields = { provider: row.provider, policy_version: row.policyVersion, sources: [], searches: 0, created_at: row.nowIso, expires_at: new Date(new Date(row.nowIso).getTime() + row.ms).toISOString() };
+  const inserted = await admin.from("individual_scholar_research_cache").upsert({ query_hash: key, ...fields }, { onConflict: "query_hash", ignoreDuplicates: true }).select("query_hash");
+  if (inserted.error) return false;
+  if ((inserted.data ?? []).length) return true;
+  const taken = await admin.from("individual_scholar_research_cache").update(fields).eq("query_hash", key).lte("expires_at", row.nowIso).select("query_hash");
+  return !taken.error && (taken.data ?? []).length > 0;
+}
+
+/** A failed search frees its topic at once, by expiring its own claim. A result already written is left alone. */
+export async function releaseResearchTopic(admin: Admin, key: string, provider: string, nowIso: string): Promise<void> {
+  await admin.from("individual_scholar_research_cache").update({ created_at: nowIso, expires_at: new Date(new Date(nowIso).getTime() + 1000).toISOString() }).eq("query_hash", key).eq("provider", provider).then((r: unknown) => r, () => {});
+}
+
 export const EXAM_RESEARCH_ENTITY = "individual_scholar_exam_research";
 
 /** Fresh web research the person ran today (UTC), from the audit rows each one writes. Unreadable: null (refuse). */

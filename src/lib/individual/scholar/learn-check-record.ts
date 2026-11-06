@@ -30,7 +30,7 @@ export const CHECK_DISTRIBUTE_MIN_WORDS = 160;
 export function placeChecks(parts: { understanding?: readonly string[] | null; questions: readonly string[] }, policy: { placement: CheckPlacement; minWords?: number }): { mid: number[]; end: number[] } {
   const all = parts.questions.map((_, i) => i);
   const paras = (parts.understanding ?? []).filter(p => p.trim());
-  const words = paras.reduce((n, p) => n + p.replace(/\[[SRE]\d+\]/g, " ").split(/\s+/).filter(Boolean).length, 0);
+  const words = paras.reduce((n, p) => n + p.replace(/\[(?:[SRE]\d+|AI)\]/g, " ").split(/\s+/).filter(Boolean).length, 0);
   const min = Math.max(0, policy.minWords ?? CHECK_DISTRIBUTE_MIN_WORDS);
   if (policy.placement !== "distributed" || all.length < 2 || paras.length < 2 || words < min) return { mid: [], end: all };
   return { mid: [0], end: all.slice(1) };

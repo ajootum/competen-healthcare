@@ -1412,7 +1412,7 @@ export function LearnWorkspace(props: {
               <button type="button" className={`${ghost} mt-2`} disabled={busyHere} onClick={() => void teachLesson(st.step, lessonMsg.settings)}>Try again</button>
             </div>
           )}
-          {busy && busyAt === st.step && busy !== "ask" && busy !== "clarify" && <p role="status" className="text-[13px] text-gray-500">{mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
+          {busy && busyAt === st.step && busy !== "ask" && busy !== "clarify" && <p role="status" className="text-[13px] text-gray-500">{consulting[st.step] ? "Scholar is reading your notes and consulting approved scholarly sources, using subject terms only…" : mode === "research" ? "Scholar is reading your notes and searching published research…" : "Scholar is reading your notes…"}</p>}
         </div>
         {myCheck && !checkInline && <div className="mt-4">{checkPanel(st, false)}</div>}
         {/* SALE-2026-11 R1 (SALE-06/07): the next teaching step after a kept check, with its reason. Skippable; nothing runs by itself. */}

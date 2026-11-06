@@ -1,5 +1,5 @@
-// Allow up to 60s for AI generation -- the same ceiling the personal AI uses.
-export const maxDuration = 60;
+// SCHOLAR-RESEARCH-TEACH-001: a first lesson with evidence prepares its pack and makes two model calls (measured about a minute), so this route has two minutes, as other long Scholar routes do.
+export const maxDuration = 120;
 
 import { NextResponse } from "next/server";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
@@ -17,7 +17,10 @@ import { isStatedConfidence, parseCheckLevel } from "@/lib/individual/scholar/le
 import { activityState, getScholarAiStanding } from "@/lib/individual/scholar/ai-standing";
 import { purposeFrom } from "@/lib/individual/pilot-ai";
 
-import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskGate } from "@/lib/individual/scholar/http";
+import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, refusalWords, withinRequestRisk, scholarAiRunner, scholarRisk, scholarRiskClear, scholarRiskGate } from "@/lib/individual/scholar/http";
+import { ABSTRACT_ONLY_NOTE, NOT_ENDORSED_NOTE, RESEARCH_NOT_INCLUDED, SUBJECT_TERMS_NOTICE } from "@/lib/individual/scholar/evidence-pack";
+import { prepareEvidencePack, type EvidencePack } from "@/lib/individual/scholar/evidence-pack-service";
+import { beyondNotes, integratedPromptVersion, isIntegratedVersion, notesOnlyProjection, runIntegratedTeach, type IntegratedResult } from "@/lib/individual/scholar/teach-integrated";
 import { rankChunks, spreadAcrossMaterials, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import {
   RESEARCH_ACTIONS, RESEARCH_MARKER, RESEARCH_PROMPT_SUFFIX, RESEARCH_WITHHELD, SUPPLEMENTARY_WITHHELD, cumulativePromptVersion, describeViolations, legacyLearnPromptVersions, learnPromptVersion, learnResearchPromptVersion, passageCitation, passageTag, runLearn, splitLearnAnswer,
@@ -318,7 +321,10 @@ export async function POST(req: Request) {
   const hasHistory = Array.isArray(body?.history) && body.history.length > 0;
   const oneMaterial = new Set(passages.map(p => p.materialId)).size === 1;
   const storable = isArtefactAction(action) && !hasHistory && oneMaterial;
-  const baseVersion = mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
+  // SCHOLAR-RESEARCH-TEACH-001 P1 (default off, its own switch): a first Teach Me, from the notes and an evidence pack together. It has its own prompt
+  // version, so its key is its own. The evidence is prepared further down, after every saved-lesson lookup has missed, so a saved lesson never searches.
+  const teachResearch = policy.scholarTeachResearch.on && action === "teach" && mode === "notes" && !recovery && storable;
+  const baseVersion = teachResearch ? integratedPromptVersion() : mode === "research" ? learnResearchPromptVersion(action as LearnAction) : learnPromptVersion(action as LearnAction);
   // SCHOLAR-CUMULATIVE-TEACHING-01: an answer built on taught ground carries the cumulative suffix and the ground's fingerprint in its key.
   const promptVersion = taughtBlock ? cumulativePromptVersion(baseVersion) : baseVersion;
   const context = taughtBlock && taughtSoFar ? taughtHash(taughtSoFar) : null;
@@ -327,7 +333,9 @@ export async function POST(req: Request) {
   // SCHOLAR-GUIDED-LEARNING-01: a lesson saved under an earlier Teach Me version is still this lesson (same structure and
   // checks), so it is served -- reopening never costs AI because the prompt moved on. Looked up only when the current is absent.
   const legacyKeys = key ? legacyLearnPromptVersions(action as LearnAction).map(v => artefactKey({ action, depth, chunkIds: passages!.map(p => p.chunkId),
-    promptVersion: mode === "research" ? `${v}${RESEARCH_PROMPT_SUFFIX}` : v, references, background, mode })) : [];
+    promptVersion: mode === "research" ? `${v}${RESEARCH_PROMPT_SUFFIX}` : v, references, background, mode }))
+    // Turning the switch on retires nothing: a lesson already saved from the notes is still this lesson, and is served with no AI call.
+    .concat(teachResearch ? [artefactKey({ action, depth, chunkIds: passages!.map(p => p.chunkId), promptVersion: learnPromptVersion("teach"), references, background, mode })] : []) : [];
   const fits = (a: ArtefactRow | null) => !!a && a.sources.every(id => passages!.some(p => p.chunkId === id));
   const findSaved = async (): Promise<ArtefactRow | null> => {
     if (!key) return null;
@@ -345,6 +353,12 @@ export async function POST(req: Request) {
     action, step, depth, mode, cached: true, artefact_id: a.id, dedupe_key: key, legacy: a.promptVersion.indexOf(promptVersion) !== 0, open, recorded,
     salvage_removed: salvagedCount(a.promptVersion), timing_ms: timing, ...extra,
   })); };
+  // SCHOLAR-RESEARCH-TEACH-001: the lesson's references, and the plain sentence when research is not part of it. Read from what is saved: no AI, no search.
+  const teachResearchOn = policy.scholarTeachResearch.on;
+  const lessonEvidence = (references: readonly ExternalReference[], state: string) => ({
+    state, integrated: references.length > 0, label: "Scientific evidence and references", references, query: null, scholarLink: null,
+    message: references.length ? null : RESEARCH_NOT_INCLUDED, notice: references.length ? SUBJECT_TERMS_NOTICE : null, accessNote: references.length ? ABSTRACT_ONLY_NOTE : null, endorsementNote: references.length ? NOT_ENDORSED_NOTE : null,
+  });
   const lessonScope: LessonScope | null = lesson ? { title: lesson.title, objective: lesson.objective, focus: lesson.focus } : null;
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
@@ -360,7 +374,9 @@ export async function POST(req: Request) {
       sources: src.map(sourceOf),
       passageIds: src.map(p => p.chunkId), references: relabelReferences(a.refs, refSource), answer: split.research !== null ? split.main : a.content, cited: src.map((_, i) => i + 1),
       background: a.background ? { text: a.background, label: SUPPLEMENTARY_LABEL } : null, flags: a.flags, verdict: null,
-      research: restored.retrieved ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: restored.message, references: external, excludedCount: restored.excluded.length, ...(restored.text ? { text: restored.text } : {}) } : null,
+      research: isIntegratedVersion(a.promptVersion) && external.length ? lessonEvidence(external, "cached")
+        : teachResearchOn && a.action === "teach" ? lessonEvidence([], "cached")
+        : restored.retrieved ? { state: "cached", label: SOURCE_KIND_LABEL.research, message: restored.message, references: external, excludedCount: restored.excluded.length, ...(restored.text ? { text: restored.text } : {}) } : null,
       saved: { at: a.createdAt, reviewStatus: a.reviewStatus }, artefactId: a.id, ...lessonFields, ...salvageFields(salvagedCount(a.promptVersion)), ...extra,
     };
   };
@@ -408,7 +424,7 @@ export async function POST(req: Request) {
   }
   if (prepare && !key) return notPrepared("not_storable", { step });
   // OPEN: nothing saved, so the client is told to ask for it (or that it is being written) -- no AI, no allowance read.
-  if (open) return NextResponse.json({ action, step, depth, ...lessonFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate" });
+  if (open) return NextResponse.json({ action, step, depth, ...lessonFields, cached: false, open: key && (await flightActive(ctx, key)) ? "in_flight" : "generate", ...(teachResearch ? { teachResearch: true } : {}) });
   if (prepare && key && (await flightActive(ctx, key))) return notPrepared("in_flight", { step });
 
   // ── SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper has a round limit by AI (policy scholar_learn_deeper_rounds_max, LE-04); beyond it the answer is "depth reached", no call ──
@@ -532,11 +548,38 @@ export async function POST(req: Request) {
     // source-quality rules can reach generation below; the rest are listed as reading only.
     research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery), lessonScope);
   }
+  // SCHOLAR-RESEARCH-TEACH-001: the evidence pack. The clinical-risk decision comes first in EVERY metering state: a request no model could answer sends
+  // nothing anywhere. A prepared lesson may use what is already shared and never searches; without all of it, it waits for the learner's own first Teach Me.
+  let pack: EvidencePack | null = null;
+  if (teachResearch) {
+    const clear = await scholarRiskClear(ctx, activity, risk);
+    pack = clear ? await prepareEvidencePack(ctx, { research: policy.scholarResearch, teach: policy.scholarTeachResearch, quality: qualityOf(policy.scholarRecovery) }, {
+      lesson: { headings: [lesson?.title ?? "", lesson?.objective ?? "", ...(lesson?.focus ?? []), ...(lessonBrief?.sections ?? [])], body: passages.map(p => p.content) }, actionId: ai.actionId, search: !prepare,
+    }) : null;
+    if (prepare && !(pack?.state === "ready" && pack.complete)) { await closeFlight("no_evidence_pack"); return notPrepared("no_evidence_pack", { step }); }
+  }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   clock.mark("research");
-  const r = await runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
+  const notesLesson = (run: typeof ai.run) => runLearn(ctx.userId, { action: action as LearnAction | "check" | "clarify", question: prompt, passages, references, depth, background, history, learnerContext, research: evidence, studyContext: study?.text ?? null,
     teaching: teachingRequest ? { level: "level" in teachingRequest ? teachingRequest.level : undefined, hintLevel: teachingRequest.action === "guide" ? teachingRequest.hintLevel : undefined, examEvidence } : undefined,
-    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) }, ai.run);
+    taught: taughtBlock, lesson: lessonBrief, learnerTexts: priorCheckTexts(priorChecks) }, run);
+  let r: Awaited<ReturnType<typeof notesLesson>> | IntegratedResult = pack?.state === "ready"
+    ? await runIntegratedTeach(ctx.userId, { question: prompt, passages, references, depth, learnerContext, lesson: lessonBrief, evidence: pack.evidence }, ai.run)
+    : await notesLesson(ai.run);
+  // What the lesson with evidence came to: its counts, the [E n] it kept, and the reason research is not in it, if it is not.
+  let integrated = r.ok && "integrated" in r ? r.integrated : null;
+  // What research WROTE is read by the same published risk rules as Research & Explain: above the request's own tier, the lesson falls back to its notes sentences.
+  if (integrated && r.ok && r.check.ok) {
+    const beyond = beyondNotes(r.check.text);
+    if (beyond && !(await withinRequestRisk(ctx.admin, activity, risk, [beyond]))[0]) {
+      const only = notesOnlyProjection(r.check.text);
+      r = { ...r, check: only ? { ok: true, text: only, cited: r.check.cited } : { ok: false, reason: "ungrounded" }, integrated: { ...integrated, citedEvidence: [], shown: { ...integrated.shown, evidence: 0, ai: 0 } } } as IntegratedResult;
+      integrated = (r as IntegratedResult).integrated;
+    }
+  }
+  // Research must never cost the learner the lesson: if the lesson with evidence cannot stand, it is taught from the notes, once, and says so.
+  if (integrated && !(r.ok && r.check.ok) && !ai.refusal()) { r = await notesLesson((g, part) => ai.run(g, part ? `retry-${part}` : "retry")); integrated = null; }
+  const packReferences = pack && integrated ? pack.references(integrated.citedEvidence) : [];
   clock.mark("generate");
   const refusal = ai.refusal();
   if (refusal) await closeFlight("refused");
@@ -564,7 +607,8 @@ export async function POST(req: Request) {
   // An Ask me / Challenge me answer must hold exactly ONE question: it is what the learner's reply is judged against (`clarify`).
   const asksQuestion = action === "ask_me" || action === "challenge";
   const askedQuestion = asksQuestion && r.ok && r.check.ok ? extractQuestion(r.check.text) : null;
-  const researchCodes = research ? [`research_${research.state}`, ...research.codes, ...(rr ? [rr.ok ? "research_shown" : `research_${rr.reason}`] : [])] : [];
+  const researchCodes = research ? [`research_${research.state}`, ...research.codes, ...(rr ? [rr.ok ? "research_shown" : `research_${rr.reason}`] : [])]
+    : pack ? [`teach_pack_${pack.state}`, ...pack.codes, ...(packReferences.length ? ["research_shown"] : [])] : [];
   // SCHOLAR-GUIDED-LEARNING-01: a lesson shown with unsupported parts left out (never verified: an outcome "partial").
   const salvaged = r.ok && action !== "check" && r.check.ok ? r.check.salvaged ?? null : null;
   // s8: the shown answer is saved for next time (private formative; replaced when the student asks for a new one).
@@ -577,7 +621,7 @@ export async function POST(req: Request) {
 
 ${RESEARCH_MARKER}
 ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
-      refs: [...references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), ...(research ? externalReferences(research) : [])], dedupeKey: key,
+      refs: [...references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), ...(research ? externalReferences(research) : []), ...packReferences], dedupeKey: key,
       model: r.model, promptVersion: salvaged ? salvagedPromptVersion(r.promptVersion, salvaged.removed) : r.promptVersion, chunkIds: passages.map(p => p.chunkId),
       // SCHOLAR-LIBRARY-01 (820): the lesson of the caller's own recorded session it was saved for (read above by their id).
       lesson: sessionId && sessionStep !== null ? { sessionId, step } : null,
@@ -587,7 +631,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
   const outcomeCode = r.ok ? (action === "check" ? (r.question?.ok ? "shown" : `withheld:${r.question?.reason}`) : r.check.ok ? (asksQuestion && !askedQuestion ? "withheld:malformed" : "shown") : `withheld:${r.check.reason}`) : `error:${r.error}`;
   // The writes are independent, so they run together (the flight closes as the artefact is already saved).
   await Promise.all([closeFlight(outcomeCode), recordScholarOutcome(ctx.admin, ai, {
-    operation: `${mode === "research" ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" || asksQuestion ? "other" : "explanation",
+    operation: `${mode === "research" || integrated ? "individual_scholar_learn_research" : "individual_scholar_learn"}:${action}`, outputKind: action === "check" || asksQuestion ? "other" : "explanation",
     promptVersion: r.ok ? r.promptVersion : null, configVersion: `depth:${depth}${mode === "notes" ? "" : `;mode:${mode}`}`,
     ...(!r.ok ? { outcome: "error" as const, reasons: [`error_${r.error}`, ...researchCodes] }
       : action === "check" ? (r.question?.ok ? { outcome: "accepted" as const, accepted: 1 } : { outcome: "rejected" as const, rejected: 1, reasons: [r.question?.reason ?? "malformed"] })
@@ -612,6 +656,8 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     // SCHOLAR-AI-OPT-01: what the grounding check refused, in its own words ("the number one"), never the answer text.
     withheld_detail: r.ok && action !== "check" && !r.check.ok && r.check.violations?.length ? describeViolations(r.check.violations) : null,
     flags: r.ok ? r.flags.kept.length : 0, verdict: r.ok ? r.verdict : null, model: r.ok ? r.model : null, prompt_version: r.ok ? r.promptVersion : null,
+    // SCHOLAR-RESEARCH-TEACH-001: topics are entries of Competen's own list. Counts and rule codes only, never a sentence, a query or a title.
+    ...(teachResearch ? { teach_research: pack ? { state: pack.state, topics: pack.topics, searched: pack.searched, reused: pack.reused, evidence: pack.items.length, cited: packReferences.length, ms: pack.ms, codes: pack.codes, shown: integrated?.shown ?? null, claims: integrated?.claims ?? null, unsupported: integrated?.unsupported ?? null, verified: integrated?.verified ?? null, dropped: integrated ? integrated.dropped.map(d => d.reason) : null } : { state: "risk_held" } } : {}),
     ...(mode !== "notes" ? { mode, research: research ? { state: research.state, items: research.items.length, evidence: evidence.length, outcome: rr ? (rr.ok ? "shown" : `withheld:${rr.reason}`) : null } : null } : {}),
     // SCHOLAR-GUIDED-LEARNING-01: generated (not cached), whether prepared ahead, the artefact key (for reuse and
     // prepared-and-viewed), what salvage left out (a count and the rule, never the text), whether it was saved, and timings.
@@ -668,7 +714,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     references: references.map((x, i) => ({ tag: `R${i + 1}`, ...x })), kinds: SOURCE_KIND_LABEL, ...lessonFields, ...(spelling ? { spelling } : {}),
     ...(recovered ? { recovered: recoveredReply(recovered, action !== "check" && r.check.ok) } : {}),
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
-    research: research ? {
+    research: teachResearch && !research ? lessonEvidence(packReferences, pack?.searched ? "searched" : "cached") : research ? {
       excludedCount: research.excluded?.length ?? 0,
       state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, references: externalReferences(research),
       message: research.message ?? (evidence.length && !rr ? "The research found did not add to this request, so nothing from it is shown." : !evidence.length && Object.keys(research.notUsed ?? {}).length ? RESEARCH_READING_ONLY
