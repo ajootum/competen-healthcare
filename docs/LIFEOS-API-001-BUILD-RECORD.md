@@ -162,7 +162,7 @@ From the independent read of Stages 3 to 5. A person who signs in on an organisa
 
 Everything an organisation needs to run a pilot, tested on staging against fixture organisations. **No real organisation has been used. Choosing one is the owner's decision.** The runbook is [LIFEOS-PILOT-001](LIFEOS-PILOT-001-runbook.md).
 
-- **Invitations:** a workspace owner or admin invites one address. The link is shown once, works once and lasts 14 days. The database holds only its hash. It works only for a person signed in with that address. LifeOS sends no email: the organisation sends the link.
+- **Invitations:** a workspace owner or admin invites one address. The link is shown once, works once and lasts 14 days. The database holds only its hash. It works only for a person signed in with that address. Someone new proves the address through an email link before any password exists, so nobody holding the invitation link can set the invitee's password first. The organisation sends the invitation link, and the only email LifeOS causes is that sign-in link, sent by the sign-in provider.
 - **Organisation screen:** invitations, name and look, and domains, with no code.
 - **Delegating to a member:** a picker of names, with no addresses. The member can read that one commitment until it closes.
 - **Sharing:** in an organisation, a person chooses who can see a commitment. Private is the default.
@@ -178,12 +178,14 @@ Everything an organisation needs to run a pilot, tested on staging against fixtu
 - **Rollback:** [rollback-904.sql](evidence/LIFEOS-API-001/rollback-904.sql), rehearsed on staging inside a rolled-back transaction.
 - **Not applied to production.**
 
-**Verified:** `scripts/lifeos-pilot-harness.ts`, 37 of 37, over real HTTP and in Chromium on staging, including a person joining an organisation and leaving with their personal work intact and unseen.
+**Findings from the independent read of Stages 3 to 5:** an admin could set an invitee's password ahead of them (fixed), accepting could change a member's role or restore a suspended one (fixed), a retried create returned a dead link (fixed), a suspended domain could re-verify itself (fixed), hostname squatting (fixed), and sessions on a tenant's domain (open, see Stage 4). The read found no injection, token leak, or private-record path in the code.
+
+**Verified:** `scripts/lifeos-pilot-harness.ts`, 43 of 43, over real HTTP and in Chromium on staging, including a person joining an organisation and leaving with their personal work intact and unseen.
 
 **Not verified:**
 
 - A real organisation or real users.
-- The sign-up path of an invitation. Only sign-in was walked, because staging's email confirmation setting decides what sign-up does.
+- The email-link path of an invitation. Only sign-in was walked, because the link arrives by real email.
 - Email confirmation returning to a tenant's domain.
 - Production.
 

@@ -207,7 +207,7 @@ export const ROUTES: Route[] = [
     handler: async ({ ctx, params }) => ({ data: (await invitations.listInvitations(ctx, params.ws)).map(presentInvitation), nextCursor: null }),
   },
   {
-    method: "POST", path: "/workspaces/:ws/invitations", summary: "Invite one address. The link is returned once and only its hash is kept.", visibility: "internal", scope: "workspaces:manage", bucket: "write", input: invitations.InviteInput, output: z.object({ invitation: invitations.InvitationV1, token: z.string() }),
+    method: "POST", path: "/workspaces/:ws/invitations", summary: "Invite one address. The link is returned once and only its hash is kept.", visibility: "internal", scope: "workspaces:manage", bucket: "write", input: invitations.InviteInput, output: z.object({ invitation: invitations.InvitationV1, token: z.string().nullable() }),
     handler: async ({ ctx, params, body }) => {
       const r = await invitations.createInvitation(ctx, params.ws, body);
       return { status: r.replayed ? 200 : 201, data: { invitation: presentInvitation(r.row), token: r.token }, replayed: r.replayed };

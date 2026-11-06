@@ -32,7 +32,7 @@ export function maskEmail(email: string): string {
   return `${local.slice(0, 1)}${"•".repeat(Math.max(local.length - 1, 1))}@${domain}`;
 }
 
-export async function createInvitation(c: RequestContext, workspaceId: string, input: unknown): Promise<{ row: Row; token: string; replayed: boolean }> {
+export async function createInvitation(c: RequestContext, workspaceId: string, input: unknown): Promise<{ row: Row; token: string | null; replayed: boolean }> {
   const f = InviteInput.parse(input);
   const token = randomBytes(32).toString("base64url");
   const r = await commitOps(c, "lifeos_invitation", async () => {
@@ -48,7 +48,8 @@ export async function createInvitation(c: RequestContext, workspaceId: string, i
       },
     }];
   });
-  return { row: r.data as Row, token, replayed: r.replayed };
+  // A retry finds the first invitation, whose token exists only in the first response. Say so rather than hand out a dead link.
+  return { row: r.data as Row, token: r.replayed ? null : token, replayed: r.replayed };
 }
 
 export async function listInvitations(c: RequestContext, workspaceId: string): Promise<Row[]> {
@@ -96,9 +97,12 @@ export async function acceptInvitation(store: LifeosStore, id: SessionIdentity, 
     t: "lifeos_invitation", op: "update", id: String(i.id), workspace_id: workspaceId, expected_version: Number(i.version),
     values: { status: "accepted", accepted_at: new Date().toISOString(), accepted_by: p.individualId, provenance_source: "user" },
   }];
-  if (member) {
+  // An invitation adds someone, or brings back someone who left. It never changes the role of a person already here,
+  // and it cannot restore someone who was suspended.
+  if (member?.status === "suspended") throw new LifeosError("forbidden", "This membership is suspended. Ask the workspace's owner.");
+  if (member?.status === "left" || member?.status === "invited") {
     ops.push({ t: "lifeos_membership", op: "update", id: String(member.id), workspace_id: workspaceId, values: { status: "active", role: i.role, provenance_source: "user" } });
-  } else {
+  } else if (!member) {
     ops.push({ t: "lifeos_membership", op: "insert", values: { workspace_id: workspaceId, individual_id: p.individualId, role: i.role, provenance_source: "user" } });
   }
   const live = await store.where("lifeos_live_entitlement", { individual_id: p.individualId, source: "organisation", tenant_id: String(i.tenant_id) }, { limit: 1 });

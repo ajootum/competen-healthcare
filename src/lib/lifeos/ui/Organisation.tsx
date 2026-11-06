@@ -54,8 +54,8 @@ export function Organisation({ l }: { l: Lifeos }) {
             const el = e.currentTarget;
             const f = new FormData(el);
             void run(async () => {
-              const r = await post<{ token: string }>(`/workspaces/${l.workspaceId}/invitations`, { email: String(f.get("email")), role: String(f.get("role")) });
-              setLink(`${window.location.origin}/lifeos/invite/${r.token}`);
+              const r = await post<{ token: string | null }>(`/workspaces/${l.workspaceId}/invitations`, { email: String(f.get("email")), role: String(f.get("role")) });
+              setLink(r.token ? `${window.location.origin}/lifeos/invite/${r.token}` : null);
               el.reset();
             });
           }}>

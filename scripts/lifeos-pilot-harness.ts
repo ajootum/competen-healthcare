@@ -89,6 +89,11 @@ async function main() {
   const newAcc = await account("new");
 
   // ---- invitations ----
+  const retryKey = randomBytes(8).toString("hex");
+  const firstCreate = await fetch(`${API}${W}/invitations`, { method: "POST", headers: { cookie: ownerAcc.cookie, "content-type": "application/json", "idempotency-key": retryKey }, body: JSON.stringify({ email: `retry-${RUN}@competen.test` }) });
+  const secondCreate = await fetch(`${API}${W}/invitations`, { method: "POST", headers: { cookie: ownerAcc.cookie, "content-type": "application/json", "idempotency-key": retryKey }, body: JSON.stringify({ email: `retry-${RUN}@competen.test` }) });
+  const [fc, sc] = [await firstCreate.json(), await secondCreate.json()];
+  ok("I0", !!fc.data.token && sc.data.token === null && sc.meta.replayed === true && sc.data.invitation.id === fc.data.invitation.id, "retrying a create finds the same invitation, and never hands out a link that would not work", sc);
   const inv = await http(ownerAcc.cookie, "POST", `${W}/invitations`, { email: personAcc.email.toUpperCase() });
   ok("I1", inv.status === 201 && inv.body.data.token?.length >= 40 && inv.body.data.invitation.email === personAcc.email, "an owner invites one address, normalised, and gets a link once", inv.status);
   const token = inv.body.data.token as string;
@@ -166,6 +171,26 @@ async function main() {
   const afterLeave = await http(newAcc.cookie, "GET", "/me");
   ok("N6", leave2.status === 200 && afterLeave.status === 403, "leaving ends access that came only through the organisation", afterLeave.status);
 
+  // ---- accepting cannot change a standing member ----
+  const ownerSelf = await http(ownerAcc.cookie, "POST", `${W}/invitations`, { email: ownerAcc.email, role: "member" });
+  const ownerAccepts = await http(ownerAcc.cookie, "POST", "/access/invitation", { token: ownerSelf.body.data.token });
+  const ownerRole = (await store.where("lifeos_membership", { workspace_id: org.workspaceId, individual_id: owner.individualId }))[0];
+  ok("R1", ownerAccepts.status === 200 && ownerRole.role === "owner" && ownerRole.status === "active", "accepting a member invitation does not demote the owner", ownerRole?.role);
+  const adminAcc = await account("admin");
+  const adminP = await provisionIndividual(store, { issuer: ISSUER_COMPETEN_AUTH, subject: adminAcc.subject, displayName: "An Admin", accessSource: "organisation" });
+  await grantEntitlement(store, adminP.individualId, { individualId: adminP.individualId, source: "platform_grant", planCode: "pilot-harness" });
+  const adminInv = await http(ownerAcc.cookie, "POST", `${W}/invitations`, { email: adminAcc.email, role: "admin" });
+  await http(adminAcc.cookie, "POST", "/access/invitation", { token: adminInv.body.data.token });
+  const selfInvite = await http(adminAcc.cookie, "POST", `${W}/invitations`, { email: adminAcc.email, role: "admin" });
+  const leaves = await http(adminAcc.cookie, "POST", `${W}/leave`, {});
+  const comesBack = await http(adminAcc.cookie, "POST", "/access/invitation", { token: selfInvite.body.data.token });
+  ok("R2", leaves.status === 200 && comesBack.status === 404, "an admin who leaves cannot return through an invitation they wrote for themselves", comesBack.status);
+  const adminInv2 = await http(ownerAcc.cookie, "POST", `${W}/invitations`, { email: adminAcc.email, role: "member" });
+  const [mem] = await store.where("lifeos_membership", { workspace_id: org.workspaceId, individual_id: adminP.individualId });
+  await store.mutate({ actor: owner.individualId, actorKind: "system", idempotencyKey: null, requestHash: null, traceId: null, ops: [{ t: "lifeos_membership", op: "update", id: String(mem.id), workspace_id: org.workspaceId, values: { status: "suspended" } }] });
+  const suspendedBack = await http(adminAcc.cookie, "POST", "/access/invitation", { token: adminInv2.body.data.token });
+  ok("R3", suspendedBack.status === 403, "someone suspended cannot restore themselves by accepting an invitation", suspendedBack.status);
+
   // ---- expiry and revocation ----
   const inv3 = await http(ownerAcc.cookie, "POST", `${W}/invitations`, { email: "gone@competen.test" });
   const revoke = await http(ownerAcc.cookie, "POST", `${W}/invitations/${inv3.body.data.invitation.id}/revoke`, { expectedVersion: 1 });
@@ -204,10 +229,12 @@ async function main() {
     const page = await ip.textContent("main");
     ok("U3", page?.includes("Pilot Org") && !page.includes(browserAcc.email.split("@")[0].slice(1)), "the link names the organisation, and only hints at the address", page?.slice(0, 120));
     ok("U4", page?.includes("cannot read what you keep private"), "it says plainly what the organisation cannot see");
-    await ip.getByLabel("Password").fill("not-the-password");
+    ok("U4b", (await ip.getByRole("button", { name: "Create account" }).count()) === 0 && (await ip.getByText("Choose a password").count()) === 0, "nobody can set a password for the invited address from this link while signed out");
+    ok("U4c", await ip.getByRole("button", { name: "Email me a link" }).isVisible(), "someone new proves the address by email first");
+    await ip.getByLabel("Password, if you already have an account").fill("not-the-password");
     await ip.getByRole("button", { name: "Sign in" }).click();
     await ip.getByText("did not match").waitFor({ timeout: 60000 });
-    await ip.getByLabel("Password").fill(PASSWORD);
+    await ip.getByLabel("Password, if you already have an account").fill(PASSWORD);
     await ip.getByRole("button", { name: "Sign in" }).click();
     await ip.getByRole("button", { name: "Accept and open" }).click({ timeout: 90000 });
     await ip.locator("main h1", { hasText: "Calendar" }).waitFor({ timeout: 90000 });
