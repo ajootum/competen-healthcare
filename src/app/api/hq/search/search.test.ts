@@ -13,12 +13,17 @@ let owner = false;
 let reads: string[] = [];
 let tables: Record<string, any[]> = {};
 let failTable: string | null = null;
+let selects: [string, string][] = [];
+let inserts: [string, any][] = [];
+let failInsert = false;
 
 function query(table: string) {
   reads.push(table);
   let rows = (tables[table] ?? []).map(r => ({ ...r }));
   const b: any = {
-    select: () => b,
+    select: (cols?: string) => { selects.push([table, String(cols)]); return b; },
+    in: (c: string, v: unknown[]) => { rows = rows.filter(r => v.includes(r[c])); return b; },
+    insert: async (row: any) => { inserts.push([table, row]); return { error: failInsert ? { message: "boom" } : null }; },
     eq: (c: string, v: unknown) => { rows = rows.filter(r => r[c] === v); return b; },
     is: (c: string, v: unknown) => { rows = rows.filter(r => (r[c] ?? null) === v); return b; },
     order: () => b, limit: () => b,
@@ -42,6 +47,7 @@ const routes = {
   instruments: { cap: "hq.assessment.studio.view", table: "asmt_instrument", mod: () => import("./instruments/route") },
   frameworks: { cap: "hq.learning.content.view", table: "frameworks", mod: () => import("./frameworks/route") },
   positions: { cap: "hq.platform.users.view", table: "hq_position", mod: () => import("./positions/route") },
+  staff: { cap: "hq.platform.users.view", table: "ogs_offices", mod: () => import("./staff/route") },
 } as const;
 const keys = Object.keys(routes) as (keyof typeof routes)[];
 const call = async (k: keyof typeof routes, q = "alpha") => (await routes[k].mod()).GET(new Request(`http://x/api/hq/search/${k}?q=${q}`));
@@ -58,10 +64,17 @@ const seed = () => ({
     { id: UUID(4), code: "FW-A", name: "Alpha framework", hospital_id: null, is_active: true },
     { id: UUID(5), code: "FW-ALPHA-H", name: "Alpha hospital framework", hospital_id: UUID(99), is_active: true },
   ],
+  ogs_offices: [{ id: "off-hq", office_type: "hq_quality" }, { id: "off-hosp", office_type: "executive" }],
+  ogs_office_appointments: [
+    { id: "ap1", office_id: "off-hq", person_name: "Alpha Person", role: "alpha_lead", status: "active", term_start: null, term_end: null, email: "SECRET@example.org", phone: "SECRET-PHONE", salary: "SECRET-HR" },
+    { id: "ap2", office_id: "off-hosp", person_name: "Alpha Hospital Person", role: "alpha_lead", status: "active", term_start: null, term_end: null },
+    { id: "ap3", office_id: "off-hq", person_name: "Alpha Ended", role: "alpha_lead", status: "ended", term_start: null, term_end: null },
+    { id: "ap4", office_id: "off-hq", person_name: "Alpha Expired", role: "alpha_lead", status: "active", term_start: "2000-01-01", term_end: "2001-01-01" },
+  ],
   hq_position: [{ code: "alpha_lead", name: "Alpha Lead", space: "quality" }, { code: "alpha_x", name: "Alpha Odd", space: "nonsense" }],
 });
 
-beforeEach(() => { held = new Set(); signedIn = true; owner = false; reads = []; failTable = null; tables = seed(); });
+beforeEach(() => { held = new Set(); signedIn = true; owner = false; reads = []; failTable = null; selects = []; inserts = []; failInsert = false; tables = seed(); });
 
 describe("boundary, per type (real hqApiGate)", () => {
   for (const k of keys) {
@@ -152,5 +165,56 @@ describe("ownership and content", () => {
     const r = await (await call("policies")).json();
     expect(r.hits).toHaveLength(8);
     expect(r.more).toBe(true);
+  });
+});
+
+describe("staff directory search", () => {
+  it("returns only the name and the position title of HQ staff in force, in the same four fields", async () => {
+    owner = true;
+    const r = await (await call("staff")).json();
+    expect(r.hits).toEqual([{ id: "ap1", code: "Alpha Lead", title: "Alpha Person", href: "/super-admin/users/appointments" }]);
+    expect(JSON.stringify(r)).not.toMatch(/SECRET|example\.org|salary/);
+  });
+  it("selects no email, phone, employment or profile column, and never reads profiles", async () => {
+    owner = true;
+    await call("staff");
+    const staffSelects = selects.filter(([t]) => t !== "practice_platform_flags");
+    expect(staffSelects.length).toBeGreaterThan(0);
+    for (const [, cols] of staffSelects) expect(cols).not.toMatch(/email|phone|salary|employ|\*|dob|address/i);
+    expect(selects.map(x => x[0])).not.toContain("profiles");
+    expect(selects.find(x => x[0] === "ogs_office_appointments")![1]).toBe("id, office_id, person_name, role, status, term_start, term_end");
+  });
+  it("a position title matches, and a non-match returns nothing", async () => {
+    owner = true;
+    expect((await (await call("staff", "lead")).json()).hits).toHaveLength(1);
+    expect((await (await call("staff", "zzzz")).json()).hits).toHaveLength(0);
+  });
+  it("writes an audit row with the actor, source and count, and no query text", async () => {
+    owner = false; held = new Set([routes.staff.cap]);
+    const r = await call("staff", "alpha%20person");
+    expect(r.status).toBe(200);
+    expect(inserts).toHaveLength(1);
+    const [table, row] = inserts[0];
+    expect(table).toBe("audit_log");
+    expect(row.action).toBe("hq_staff_directory_search");
+    expect(row.new_value).toEqual({ source: "staff", result_count: 1 });
+    expect(JSON.stringify(row)).not.toMatch(/alpha|person/i);
+  });
+  it("a refused, short or flag-off request writes no audit row", async () => {
+    held = new Set(["hq.platform.home.view"]); await call("staff");
+    held = new Set([routes.staff.cap]); await call("staff", "a");
+    tables.practice_platform_flags = []; await call("staff");
+    expect(inserts).toEqual([]);
+  });
+  it("if the search cannot be recorded, nothing is returned (503)", async () => {
+    owner = true; failInsert = true;
+    const r = await call("staff");
+    expect(r.status).toBe(503);
+    expect(JSON.stringify(await r.json())).not.toContain("Alpha Person");
+  });
+  it("other record types write no audit row", async () => {
+    owner = true;
+    await call("policies");
+    expect(inserts).toEqual([]);
   });
 });

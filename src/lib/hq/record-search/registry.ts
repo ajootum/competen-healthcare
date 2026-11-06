@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { HQ_SPACES } from "../spaces";
+import { HQ_SPACES, appointmentInTerm, isHqOfficeType } from "../spaces";
+import { appointmentGrantsAccess } from "@/lib/ogs/lifecycle";
 import type { createAdminClient } from "@/lib/supabase/server";
 
 // HQ-RECORD-SEARCH-01: the four platform-owned record types the HQ palette may search, and nothing else.
@@ -7,7 +8,7 @@ import type { createAdminClient } from "@/lib/supabase/server";
 // ⚠ THIS IS A CLOSED LIST, NOT A FRAMEWORK. Code and title fields only: no description, content or snapshot is read, searched
 // or previewed. Platform-owned rows only: a hospital's framework and an individual's or organisation's instrument are filtered
 // IN THE QUERY (not afterwards). Never add learner records, individual_*, assessment instances or responses, practice_*,
-// hospitals, organisations, tenants, profiles, audit_log, appointments or staff names here. This does NOT extend
+// hospitals, organisations, tenants, profiles or audit_log here. HQ staff NAMES are the one people source (key `staff`): see its entry. This does NOT extend
 // src/lib/individual/search/registry.ts and does NOT touch the plane boundary: these tables are not governed by it.
 //
 // ⚠ ONE ROUTE PER TYPE (src/app/api/hq/search/<key>/route.ts) with a literal hqApiGate([...]), because hq-scan reads the gate
@@ -16,7 +17,7 @@ import type { createAdminClient } from "@/lib/supabase/server";
 
 type Admin = ReturnType<typeof createAdminClient>;
 
-export type HqRecordSearchKey = "policies" | "instruments" | "frameworks" | "positions";
+export type HqRecordSearchKey = "policies" | "instruments" | "frameworks" | "positions" | "staff";
 export type HqSearchRow = { id: string; code: string | null; title: string };
 
 export interface HqRecordSource {
@@ -84,6 +85,32 @@ export const HQ_RECORD_SOURCES: readonly HqRecordSource[] = [
       return ((data ?? []) as any[])
         .filter(r => (HQ_SPACES as readonly string[]).includes(r.space))
         .map(r => ({ id: r.code, code: r.code ?? null, title: r.name ?? r.code ?? "" }));
+    },
+  },
+  {
+    key: "staff", product: PRODUCT, module: "Positions and appointments", recordType: "HQ staff member",
+    capability: "hq.platform.users.view", destination: () => "/super-admin/users/appointments",
+    fields: ["code", "title"], columns: ["id", "office_id", "person_name", "role", "status", "term_start", "term_end"],
+    // ⚠ STAFF DIRECTORY, NAME AND POSITION TITLE ONLY. Title = the person's name (the appointment's own person_name, so profiles is
+    // NOT read at all: no email, phone or any employment field can come back), code = the position's title. HQ offices only
+    // (isHqOfficeType), and only appointments in force today (the board's own grantsAccess && inTerm), so an ended or pending
+    // appointment is not a directory entry. Not learners, not practice staff, not profiles at large. The destination is the page that
+    // lists them, behind the same capability. The route also writes an audit row (no query text) because this is a sensitive search.
+    read: async admin => {
+      const offices = await admin.from("ogs_offices").select("id, office_type").limit(500);
+      if (offices.error) fail(offices.error);
+      const officeIds = ((offices.data ?? []) as any[]).filter(o => isHqOfficeType(o.office_type)).map(o => o.id);
+      if (!officeIds.length) return [];
+      const [appts, pos] = await Promise.all([
+        admin.from("ogs_office_appointments").select("id, office_id, person_name, role, status, term_start, term_end").in("office_id", officeIds).limit(2000),
+        admin.from("hq_position").select("code, name").limit(500),
+      ]);
+      if (appts.error) fail(appts.error);
+      if (pos.error) fail(pos.error);
+      const posName = new Map(((pos.data ?? []) as any[]).map(p => [p.code, p.name]));
+      return ((appts.data ?? []) as any[])
+        .filter(a => a.person_name && String(a.person_name).trim() && appointmentGrantsAccess(a.status) && appointmentInTerm(a.term_start, a.term_end))
+        .map(a => ({ id: a.id, code: posName.get(a.role) ?? a.role ?? null, title: String(a.person_name).trim() }));
     },
   },
 ];

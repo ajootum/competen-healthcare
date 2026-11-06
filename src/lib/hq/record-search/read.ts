@@ -25,7 +25,11 @@ export function matchRecords(source: HqRecordSource, rows: { id: string; code: s
 const NO_STORE = { "Cache-Control": "no-store" };
 
 /** Called by each route AFTER its own hqApiGate has admitted the caller. */
-export async function respondRecordSearch(source: HqRecordSource, admin: any, req: Request): Promise<NextResponse> {
+export async function respondRecordSearch(
+  source: HqRecordSource, admin: any, req: Request,
+  /** A sensitive source records the search before answering; false = it could not be recorded, so nothing is returned. */
+  record?: (resultCount: number) => Promise<boolean>,
+): Promise<NextResponse> {
   // The flag's state is only ever told to somebody the gate has already admitted.
   if (!(await hqRecordSearchEnabled(admin))) return NextResponse.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
@@ -34,5 +38,8 @@ export async function respondRecordSearch(source: HqRecordSource, admin: any, re
   let rows;
   try { rows = await source.read(admin); }
   catch { return NextResponse.json({ error: "The search source could not be read" }, { status: 502, headers: NO_STORE }); }
-  return NextResponse.json(matchRecords(source, rows, q), { headers: NO_STORE });
+  const result = matchRecords(source, rows, q);
+  if (record && !(await record(result.hits.length)))
+    return NextResponse.json({ error: "The search could not be recorded, so it was not run" }, { status: 503, headers: NO_STORE });
+  return NextResponse.json(result, { headers: NO_STORE });
 }

@@ -20,7 +20,12 @@ const FLAGS: Record<string, string> = {
   practice_pilot_provisioning: "Platform-operator pilot provisioning of test workspaces.",
   practice_sign_in: "Practice sign-in page accepts credentials.",
   practice_public_signup: "Self-service individual signup.",
+  // HQ-RECORD-SEARCH-01: shows the record search in the HQ palette. It grants NO data access: every /api/hq/search route still checks
+  // its own capability, and turning it on gives a person without that capability nothing. Its row is not seeded (no migration), so
+  // the first flip creates it.
+  hq_record_search: "HQ palette record search (policies, instruments, frameworks, positions, staff directory).",
 };
+const CREATE_IF_ABSENT = ["hq_record_search"];
 
 // The consequence copy lives in src/lib/practice/operations.ts, imported by the operator page too, so
 // the warning at the moment of the flip and the standing warning afterwards cannot diverge.
@@ -71,22 +76,23 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { data: before } = await c.admin.from("practice_platform_flags").select("enabled").eq("flag", flag).maybeSingle();
-  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!before && !CREATE_IF_ABSENT.includes(flag)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { error } = await c.admin.from("practice_platform_flags")
-    .update({ enabled: body.enabled }).eq("flag", flag);
+  const { error } = before
+    ? await c.admin.from("practice_platform_flags").update({ enabled: body.enabled }).eq("flag", flag)
+    : await c.admin.from("practice_platform_flags").insert({ flag, enabled: body.enabled, note: FLAGS[flag] });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
   await audit(c.admin, {
     actorId: c.userId, eventType: "practice.launch_flag_changed",
     // §7.2 B: "Every change writes an audit event with before/after value, actor, time and reason."
     // Actor and time come from the audit helper itself; the other three are here.
-    payload: { flag, from: before.enabled, to: body.enabled, reason: reason || null },
+    payload: { flag, from: before?.enabled ?? null, to: body.enabled, reason: reason || null },
     correlationId: c.traceId,
   });
 
   return NextResponse.json({
-    flag, enabled: body.enabled, changed: before.enabled !== body.enabled,
+    flag, enabled: body.enabled, changed: (before?.enabled ?? false) !== body.enabled,
     consequence: body.enabled ? (FLAG_CONSEQUENCE[flag] ?? null) : null,
     correlationId: c.traceId,
   });
