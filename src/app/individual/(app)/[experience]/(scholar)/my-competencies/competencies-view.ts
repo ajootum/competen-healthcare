@@ -1,3 +1,4 @@
+import { matchesSearch } from "@/lib/individual/search/match";
 import { EVIDENCE_LABEL, type IndividualPassport } from "@/lib/individual/passport";
 import type { InstanceSummary } from "@/lib/assessment/adapters/scholar/store";
 import { isSelfAssessment } from "@/lib/assessment/adapters/scholar/vocab";
@@ -168,4 +169,14 @@ export function assessmentEvidenceSections(read: InstanceSummary[] | null, repor
     self: section("self-assessed", SELF_EVIDENCE_TITLE, submitted("self"), "No self-assessments submitted yet. Start one in Assessments.", row(EVIDENCE_LABEL.self_assessed)),
     assessor: section("assessor-evaluated", ASSESSOR_EVIDENCE_TITLE, submitted("assessor"), "No assessor-led assessments yet.", row(EVIDENCE_LABEL.assessor_evaluated)),
   };
+}
+
+/** Pure. The rows of each section that answer the search; a section left with none says so instead of looking empty of records. */
+export function filterEvidenceSections(sections: readonly EvidenceSection[], q: string | null | undefined): EvidenceSection[] {
+  if (!q || !q.trim()) return [...sections];
+  return sections.map(s => {
+    if (s.state !== "items") return s;
+    const rows = s.rows.filter(r => matchesSearch([r.title, r.detail ?? "", r.label], q));
+    return rows.length ? { ...s, rows } : { ...s, state: "empty" as const, rows: [], text: "Nothing here matches that search." };
+  });
 }

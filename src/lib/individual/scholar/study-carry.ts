@@ -122,6 +122,15 @@ export function osceFilterPrefill(scope: StudyScope | null): { competency: strin
   return scope.topic ? { q: scope.topic.slice(0, 120) } : null;
 }
 
+/** OSCE practice: where Clear search goes. It clears the words only: the competency, programme, difficulty and source stay as set. */
+export function osceClearSearchHref(path: string, filter: { competency?: string | null; programme?: string | null; difficulty?: string | null; source?: string | null }, studyId: string | null): string {
+  const p = new URLSearchParams();
+  if (studyId) p.set("all", "1");
+  for (const k of ["competency", "programme", "difficulty", "source"] as const) if (filter[k]) p.set(k, String(filter[k]));
+  const s = p.toString();
+  return `${path}${s ? `?${s}` : ""}`;
+}
+
 /** Evaluate: EvaluationStart's default scope (the existing scope kinds). The learner still chooses and starts it. */
 export type EvaluationDefault =
   | { kind: "outcome"; competencyId: string; outcome: string } | { kind: "competency"; competencyId: string } | { kind: "topic"; topic: string }

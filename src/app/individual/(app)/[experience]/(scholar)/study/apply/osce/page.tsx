@@ -1,7 +1,9 @@
 import Link from "next/link";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { pageScope } from "@/lib/individual/search/registry";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
-import { osceFilterPrefill, withStudy } from "@/lib/individual/scholar/study-carry";
+import { osceClearSearchHref, osceFilterPrefill, withStudy } from "@/lib/individual/scholar/study-carry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing, BoundaryNotice } from "../../../../../../_components/chrome";
@@ -97,12 +99,10 @@ export default async function OscePractice({ params, searchParams }: { params: P
         <section aria-labelledby="osce-list-h" className="rounded-2xl border border-[var(--cmp-app-border)] bg-white p-4 md:p-5">
           <h2 id="osce-list-h" className="text-[16px] font-bold text-gray-900">Your stations</h2>
           {all.length > 0 && (
-            <form method="get" role="search" aria-label="Filter your stations" className="mt-2 grid gap-2 md:grid-cols-2">
-              {sid && <input type="hidden" name="study" value={sid} />}
-              <label className="text-[12.5px] font-semibold text-gray-700">Topic or body system
-                <input name="q" defaultValue={filter.q ?? ""} list="osce-topics" className={`mt-0.5 block w-full ${field}`} />
-                <datalist id="osce-topics">{facets.topics.map(t => <option key={t} value={t} />)}</datalist>
-              </label>
+            <PageSearch scope={pageScope("osce")} action={experienceHref("scholar", "study/apply/osce")} name="q" value={filter.q} placeholder="Topic, body system or title" list="osce-topics"
+              hidden={{ study: sid }} className="mt-2" clearHref={withStudy(osceClearSearchHref(experienceHref("scholar", "study/apply/osce"), filter, sid), sid)}
+              extra={<datalist id="osce-topics">{facets.topics.map(t => <option key={t} value={t} />)}</datalist>}>
+            <div className="mt-2 grid gap-2 md:grid-cols-2">
               <label className="text-[12.5px] font-semibold text-gray-700">Competency
                 <select name="competency" defaultValue={filter.competency ?? ""} className={`mt-0.5 block w-full ${field}`}>
                   <option value="">Any</option>{facets.competencies.map(c => <option key={c} value={c}>{competencyName.get(c) ?? "A competency no longer in your catalogue"}</option>)}
@@ -127,7 +127,8 @@ export default async function OscePractice({ params, searchParams }: { params: P
                 <button type="submit" className={`inline-flex min-h-[44px] items-center rounded-xl px-4 text-[14px] font-semibold text-white ${focusRing}`} style={{ background: x.accent }}>Filter</button>
                 {filtered && <Link href={withStudy(`${experienceHref("scholar", "study/apply/osce")}${sid ? "?all=1" : ""}`, sid)} className={`text-[13px] font-semibold underline underline-offset-2 ${focusRing}`}>Clear</Link>}
               </div>
-            </form>
+            </div>
+            </PageSearch>
           )}
           {!stations.ok ? <Unreadable what="your practice stations" /> : all.length === 0 ? <p className="mt-2 text-[14px] text-gray-600">None yet. Make one to start practising.</p>
             : shown.length === 0 ? <p role="status" className="mt-3 text-[14px] text-gray-600">No station matches these filters.</p> : (

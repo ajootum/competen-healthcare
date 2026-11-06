@@ -16,7 +16,8 @@ import StudyNav from "../_components/StudyNav";
 import { scholarSpace } from "@/lib/individual/scholar/spaces";
 import type { ServerPosition } from "@/lib/individual/scholar/learn-position";
 import { LearnWorkspace, type StartScope } from "../_components/learn-client";
-import { learnLanding, parseSearchParams, searchLibrary, topicDetail, displaySessionTitle } from "@/lib/individual/scholar/learn-search";
+import { searchLibraryTolerant } from "@/lib/individual/scholar/tolerant-search";
+import { learnLanding, parseSearchParams, topicDetail, displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { ContinueLearning, LearnSearchBox, MyTopics, RecentlyAdded, SearchResults, TopicDetail, learnHref } from "../_components/learn-landing";
 // SCHOLAR-SEARCH-HISTORY-01: a submitted search is kept in the learner's own history (policy scholar_search_history, default off).
 import { RecordSearch } from "../_components/search-history-client";
@@ -180,10 +181,10 @@ async function Discover({ admin, userId, q, library, studyOn, historyOn }: { adm
   }
   const params = parseSearchParams(q);
   if (params.q || one(q.tab)) {
-    const r = await searchLibrary(admin, userId, params, library ?? []);
+    const r = await searchLibraryTolerant(admin, userId, params, library ?? []);
     // A submitted search (the form's own key, hk) is kept once in the learner's history; paging and tabs carry no key, so they add nothing.
     const found = Object.values(r.counts).every(c => c === null) ? null : Object.values(r.counts).reduce<number>((n, c) => n + (c ?? 0), 0);
-    return (<><LearnSearchBox q={params.q} studyOn={studyOn} historyOn={historyOn} /><SearchResults r={r} />{historyOn && params.q && <RecordSearch activity="material_search" query={params.q} requestKey={one(q.hk) || null} resultCount={found} />}</>);
+    return (<><LearnSearchBox q={params.q} studyOn={studyOn} historyOn={historyOn} />{r.showingFor && <p role="status" className="mb-3 text-[14px] text-gray-800" data-testid="showing-results-for">Showing results for <span className="font-semibold">{r.showingFor}</span>. You searched for “{params.q}”.</p>}<SearchResults r={r} />{historyOn && params.q && <RecordSearch activity="material_search" query={params.q} requestKey={one(q.hk) || null} resultCount={found} />}</>);
   }
   const [l, cont] = await Promise.all([learnLanding(admin, userId, library), studyOn ? continueStudy(admin, userId) : null]);
   return (

@@ -1,3 +1,4 @@
+import { matchesSearch } from "@/lib/individual/search/match";
 import { noProgrammeText } from "@/lib/individual/scholar/classify-view";
 
 // ── COURSES & TRAINING: WHAT EACH DESTINATION SAYS ── SCHOLAR-MODULES-01 ───────────────────────────────────
@@ -87,3 +88,9 @@ export function programmesView(chosen: Read<ChosenProgrammeLike | null>, offered
 /** "Nursing · Level 6 · Uganda", skipping what is not recorded. */
 export const programmeLine = (p: { profession: string; level: string | null; country: string | null }): string =>
   [p.profession, p.level, p.country].filter(Boolean).join(" · ");
+
+// ── SEARCH (Universal Search Standard): the same matcher as every other box, on what each page already lists ──
+
+export const filterCourses = (items: readonly CourseRow[], q: string | null | undefined): CourseRow[] => items.filter(c => matchesSearch([c.title, c.code, c.statusLabel, c.deliveryLabel], q));
+export const filterCompleted = (items: readonly CompletedRow[], q: string | null | undefined): CompletedRow[] => items.filter(c => matchesSearch([c.title, c.outcomeLabel, c.evidenceLabel], q));
+export const filterProgrammes = <T extends ProgrammeSummaryLike>(items: readonly T[], q: string | null | undefined): T[] => items.filter(p => matchesSearch([p.label, p.profession, p.level ?? "", p.country ?? ""], q));

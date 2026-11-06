@@ -1,5 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { pageScope } from "@/lib/individual/search/registry";
+import { matchesSearch } from "@/lib/individual/search/match";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { withStudy } from "@/lib/individual/scholar/study-carry";
 import { FORMATIVE_NOTICE } from "@/lib/individual/scholar/spaces";
@@ -26,22 +29,26 @@ const when = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "
 const chip = "inline-flex items-center rounded-full border border-[var(--cmp-app-border)] bg-[var(--cmp-surface-neutral)] px-2.5 py-0.5 text-[12px] font-semibold text-[var(--cmp-text-neutral)]";
 const linkBtn = `inline-flex min-h-[44px] items-center rounded-lg border border-[var(--cmp-app-control-border)] bg-[var(--cmp-app-surface)] px-3 text-[13.5px] font-semibold text-[var(--cmp-app-text)] hover:bg-[var(--cmp-app-bg)] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
-export default async function Assessments({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string }> }) {
+export default async function Assessments({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ study?: string; q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
-  const { study } = await searchParams;
+  const { study, q: rawQ } = await searchParams;
+  const q = typeof rawQ === "string" ? rawQ.slice(0, 200).trim() : "";
   const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
   const side = await loadSelfSide(ctx.admin, ctx.userId, expectedMap(learner.competencies));
   const base = experienceHref("scholar", "my-competencies/assessments");
   const to = (seg: string) => withStudy(experienceHref("scholar", `study/${seg}`), study);
-  const drafts = side.state === "ready" ? side.summaries.filter(i => i.status === "in_progress" && isSelfAssessment(i)) : [];
-  const done = side.state === "ready" ? side.summaries.filter(i => i.status === "submitted").sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? "")) : [];
+  const offers = side.state === "ready" ? side.offers.filter(c => matchesSearch([c.title, c.code, c.summary ?? ""], q)) : [];
+  const drafts = side.state === "ready" ? side.summaries.filter(i => i.status === "in_progress" && isSelfAssessment(i) && matchesSearch(i.instrumentName, q)) : [];
+  const done = side.state === "ready" ? side.summaries.filter(i => i.status === "submitted" && matchesSearch([i.instrumentName, i.outcomeLabel ?? "", i.assessorName ?? ""], q)).sort((a, b) => (b.submittedAt ?? "").localeCompare(a.submittedAt ?? "")) : [];
   return (
     <>
       <PageHeader accent={SCHOLAR.accent} eyebrow="My Competencies" title="Assessments" intro="Rate yourself against the criteria Competen offers, and keep each attempt." />
       <Notice>{SELF_CLASS_LABEL}. {SELF_NOTICE}</Notice>
+
+      {side.state === "ready" && <PageSearch scope={pageScope("assessments")} action={base} value={q} placeholder="Search assessments by name or code" hidden={{ study }} clearHref={withStudy(base, study)} />}
 
       <Block id="offered-h" title="Start an assessment">
         {side.state === "unreadable" ? <Unreadable what="assessments" />
@@ -50,9 +57,10 @@ export default async function Assessments({ params, searchParams }: { params: Pr
               <p>Assessments are not available yet. Your practice in My Learning is formative and never counts as one.</p>
             </PlaceholderCard>
           ) : side.offers.length === 0 ? <EmptyLine>No assessment is offered to you yet. When Competen offers one it appears here, with Start Self-Assessment as the first thing you can do.</EmptyLine>
+            : offers.length === 0 ? <EmptyLine>No assessment matches that search.</EmptyLine>
             : (
               <ul className="grid gap-3 md:grid-cols-2">
-                {side.offers.map(c => (
+                {offers.map(c => (
                   <li key={c.instrumentId} className="flex flex-col rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
                     <h3 className="text-[16px] font-bold text-gray-900">{c.title}</h3>
                     <p className="mt-0.5 text-[12px] text-gray-500">{c.code} · version {c.versionNo}</p>
@@ -85,7 +93,7 @@ export default async function Assessments({ params, searchParams }: { params: Pr
       {side.state === "ready" && (
         <>
           <Block id="saved-h" title="Saved self-assessments" note="Started and not yet submitted. Your answers are saved as you go.">
-            {drafts.length === 0 ? <EmptyLine>You have no self-assessment in progress.</EmptyLine> : (
+            {drafts.length === 0 ? <EmptyLine>{q ? "No saved self-assessment matches that search." : "You have no self-assessment in progress."}</EmptyLine> : (
               <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white px-4 sm:px-5">
                 {drafts.map(i => (
                   <li key={i.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">
@@ -100,7 +108,7 @@ export default async function Assessments({ params, searchParams }: { params: Pr
             )}
           </Block>
           <Block id="history-h" title="History" note="Submitted assessments. Each attempt is kept, and none is overwritten.">
-            {done.length === 0 ? <EmptyLine>You have not submitted an assessment yet.</EmptyLine> : (
+            {done.length === 0 ? <EmptyLine>{q ? "No submitted assessment matches that search." : "You have not submitted an assessment yet."}</EmptyLine> : (
               <ul className="divide-y divide-gray-100 rounded-2xl border border-gray-200 bg-white px-4 sm:px-5">
                 {done.map(i => (
                   <li key={i.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 py-3">

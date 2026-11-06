@@ -167,7 +167,7 @@ export function RecentlyAdded({ docs, studyOn = false }: { docs: RecentDoc[] | n
     <section aria-labelledby="recent-h" className={card}>
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h2 id="recent-h" className={h2}>Recently added</h2>
-        <Link href={experienceHref("scholar", "study")} className={`${link} text-[13.5px]`} style={{ color: accent }}>Open your Library</Link>
+        <Link href={experienceHref("scholar", "study/library")} className={`${link} text-[13.5px]`} style={{ color: accent }}>Open your Library</Link>
       </div>
       {docs === null ? <p className="mt-2 text-[13.5px] text-gray-600">Your materials could not be read just now.</p>
         : docs.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-600">Nothing uploaded yet. Upload your notes in the Library to start.</p>
