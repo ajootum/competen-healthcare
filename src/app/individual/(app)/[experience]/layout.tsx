@@ -30,7 +30,7 @@ import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
 import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
-import { notebookOffered, notebookSchema } from "@/lib/individual/scholar/personal-notebook-store";
+import { notebookOffered, notebookSchema } from "@/lib/individual/scholar/store";
 import { NotebookProvider } from "./(scholar)/study/_components/note-capture";
 import { QuickNote } from "./(scholar)/study/_components/quick-note";
 import { scholarModulesOnce, type ScholarModuleKey } from "@/lib/individual/scholar/module-access";

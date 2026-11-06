@@ -23,7 +23,9 @@ function readContext(pathname: string): NoteContext {
   };
   const boxes = [...document.querySelectorAll<HTMLElement>("[data-note-box]")].map(el => ({ el, bottom: el.getBoundingClientRect().bottom }));
   const hit = pickReadingBox(boxes, window.innerHeight * 0.35);
-  const c = parse(hit?.el.dataset.noteBox) ?? parse(document.querySelector<HTMLElement>("[data-note-page]")?.dataset.notePage);
+  // Several marks: the newest one on the page (the question now on screen, in Revise).
+  const marks = document.querySelectorAll<HTMLElement>("[data-note-page]");
+  const c = parse(hit?.el.dataset.noteBox) ?? parse(marks[marks.length - 1]?.dataset.notePage);
   return c ? { ...base, ...c, capturedIn, studyId: base.studyId } : base;
 }
 
@@ -88,7 +90,7 @@ function QuickWriter({ userId, clientKey, context, draft, focus, onDirty, onNew,
   const unlink = () => {
     const free: NoteContext = { ...ctx, link: { targetKind: "free" }, sectionLabel: null, sectionAnchor: null };
     setCtx(free);
-    saver.context = free;
+    saver.setContext(free);
     if (snap.id) saver.patch({ link: { targetKind: "free" }, sectionLabel: null, sectionAnchor: null });
   };
   return (

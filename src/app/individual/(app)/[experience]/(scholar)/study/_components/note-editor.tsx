@@ -6,7 +6,7 @@ import { useEffect, useId, useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { experienceHref } from "@/lib/individual/experiences";
 import { FREE_CONTEXT, IDEAS, cleanTags, type NoteContext, type NoteDraft, type NoteLink } from "@/lib/individual/scholar/personal-notebook";
-import type { NotebookNote } from "@/lib/individual/scholar/personal-notebook-store";
+import type { NotebookNote } from "@/lib/individual/scholar/store";
 import type { NoteWhere, RelatedLink } from "@/lib/individual/scholar/personal-notebook-data";
 import { NoteField, newClientKey, notebookHref, readDrafts, useNoteSaver } from "./note-capture";
 import { NoteActions } from "./note-actions";
@@ -186,7 +186,7 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
       if (chunkId) label = `${label}, ${sections?.find(s => s.id === chunkId)?.label ?? "one section"}`;
     }
     if (link) {
-      saver.context = { ...draftContext, link, sectionLabel: null, sectionAnchor: null };
+      saver.setContext({ ...draftContext, link, sectionLabel: null, sectionAnchor: null });
       saver.patch({ link, sectionLabel: null, sectionAnchor: null });
       setLinked(label);
     }

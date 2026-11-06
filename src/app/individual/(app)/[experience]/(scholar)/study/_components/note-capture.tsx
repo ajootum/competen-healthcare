@@ -6,7 +6,7 @@ import { DictateButton } from "@/app/individual/_components/speech/speech-button
 import { experienceHref } from "@/lib/individual/experiences";
 import { NoteSaver, statusWords, type OtherCopy, type SaverDeps, type SaverSnapshot, type SendReply, type SendRequest } from "@/lib/individual/scholar/note-saver";
 import { IDEAS, NOTEBOOK_BODY_MAX, cleanTags, draftKeyOf, draftPrefixOf, parseDraft, type NoteContext, type NoteDraft } from "@/lib/individual/scholar/personal-notebook";
-import type { NotebookNote } from "@/lib/individual/scholar/personal-notebook-store";
+import type { NotebookNote } from "@/lib/individual/scholar/store";
 
 // COMPETEN-NOTEBOOK-001 P1, SCHOLAR-NOTEBOOK-UX-002: what every capture place shares. The provider that says the Notebook is offered (decided
 // once by the server, off by default), the send that talks to the notes route, the saver hook, and the amber writing field with its status.
@@ -151,7 +151,7 @@ export function DraftRecovery({ userId, onRestore, skip }: { userId: string; onR
 
 /** Saving, saved or what went wrong, in words and a shape. A failure says where the words are and offers the one way on. */
 export function SaveLine({ saver, snap, className = "" }: { saver: NoteSaver; snap: SaverSnapshot; className?: string }) {
-  const words = statusWords(snap, Date.now());
+  const words = statusWords(snap);
   const trouble = snap.status === "retrying" || snap.status === "refused" || snap.status === "conflict" || snap.status === "signed_out" || snap.status === "failed";
   return (
     <div className={className} data-testid="note-save-status" data-status={snap.status}>
@@ -216,6 +216,17 @@ export function NoteExtras({ saver, snap, open: startOpen = false }: { saver: No
       </div>
     </details>
   );
+}
+
+/**
+ * Says what this page is about, for Quick Note, which reads it when it is opened. Draws nothing, and sends nothing. Only where the page knows the
+ * learner's own material or section (the server reads every id again by the caller's id when a note is saved).
+ */
+export function NotePageMark({ materialId, chunkId = null, label }: { materialId: string; chunkId?: string | null; label: string }) {
+  const nb = useNotebook();
+  if (!nb) return null;
+  const link = chunkId ? { targetKind: "section", materialId, chunkId } : { targetKind: "material", materialId };
+  return <span hidden data-note-page={JSON.stringify({ link, sectionLabel: label.slice(0, 200) })} />;
 }
 
 // ── THE NOTES OF ONE LESSON ──

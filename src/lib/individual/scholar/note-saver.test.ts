@@ -245,7 +245,7 @@ describe("NoteSaver: a copy changed elsewhere", () => {
 
 describe("statusWords", () => {
   it("says each state in words", () => {
-    const s = (status: Parameters<typeof statusWords>[0]["status"], message: string | null = null) => statusWords({ status, savedAt: 1000, message, dirty: false }, 2000);
+    const s = (status: Parameters<typeof statusWords>[0]["status"], message: string | null = null) => statusWords({ status, message, dirty: false });
     expect(s("saving")).toBe("Saving…");
     expect(s("saved")).toBe("Saved");
     expect(s("retrying", "Not saved yet.")).toBe("Not saved yet.");

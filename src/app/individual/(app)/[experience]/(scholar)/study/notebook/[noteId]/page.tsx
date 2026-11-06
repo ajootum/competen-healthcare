@@ -4,8 +4,7 @@ import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { describeNotes, relatedToNote } from "@/lib/individual/scholar/personal-notebook-data";
 import { noteLinkOptions } from "@/lib/individual/scholar/personal-notebook-options";
-import { getNotebookNote, notebookOffered, notebookSchema } from "@/lib/individual/scholar/personal-notebook-store";
-import { listMaterials } from "@/lib/individual/scholar/store";
+import { getNotebookNote, listMaterials, notebookOffered, notebookSchema } from "@/lib/individual/scholar/store";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../../_components/chrome";
 import { FullNote } from "../../_components/note-editor";
@@ -28,7 +27,7 @@ export default async function NotePage({ params }: { params: Promise<{ experienc
   const policy = await loadIndividualPolicy(ctx.admin);
   const back = <p className="mb-3"><Link href={experienceHref("scholar", "study/notebook")} className={`inline-flex min-h-[40px] items-center gap-1.5 text-[13.5px] font-semibold text-gray-800 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}><span aria-hidden>←</span> My Notebook</Link></p>;
   const header = <>{back}<PageHeader accent={SCHOLAR.accent} eyebrow="Private to you" title="My note" /></>;
-  if (!notebookOffered(policy, await notebookSchema(ctx.admin))) return <>{header}<StatePanel title="My Notebook is not available here yet"><p>Your notes and highlights are still in your learning library.</p></StatePanel></>;
+  if (!notebookOffered(policy, await notebookSchema(ctx.admin))) return <>{header}<StatePanel title="My Notebook is not available here yet"><p>Your notes and highlights are still in My Library.</p></StatePanel></>;
   const r = await getNotebookNote(ctx.admin, ctx.userId, noteId);
   if (!r.ok) return <>{header}<Unreadable what="this note" /></>;
   if (!r.data) return <>{header}<StatePanel title="That note could not be found"><p>It may have been removed.</p></StatePanel></>;

@@ -4,8 +4,8 @@ import { displaySessionTitle } from "./learn-search";
 import { locationLabel, noteAttachedTo } from "./library-organise";
 import { lessonHrefPath, lessonTitleOf } from "./saved-library";
 import { relatedFor, type LibraryIndex, type NoteAnchor } from "./notebook";
-import { artefactsByIds, chunksByIds, listArtefacts, sectionTopicRows, sessionsByIds, type Admin } from "./store";
-import { listNotebookNotes, type NotebookNote } from "./personal-notebook-store";
+import { artefactsByIds, chunksByIds, listArtefacts, listNotebookNotes, sectionTopicRows, sessionsByIds, type Admin, type NotebookNote } from "./store";
+
 import { noteHeading } from "./personal-notebook";
 
 // COMPETEN-NOTEBOOK-001 P1: what a note is attached to, in words and a way back, and what is related to it. Database reads only, every one keyed

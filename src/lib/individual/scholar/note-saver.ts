@@ -87,6 +87,9 @@ export class NoteSaver {
   getSnapshot = () => this.snap;
   private set(p: Partial<SaverSnapshot>) { this.snap = { ...this.snap, ...p }; this.listeners.forEach(l => l()); }
 
+  /** Where a note not yet saved will attach, and what its draft says (the learner unlinked it, or chose a link). */
+  setContext(context: NoteContext) { this.context = context; this.writeDraft(); }
+
   /** The words changed. Kept on this device at once, sent when typing pauses. */
   setBody(body: string) { if (body !== this.snap.body) this.change({ body }); }
   setTitle(title: string) { if (title !== this.snap.title) this.change({ title }); }
@@ -246,11 +249,11 @@ export class NoteSaver {
 }
 
 /** The plain words for a status. Shape and words carry it, never colour alone. */
-export function statusWords(s: Pick<SaverSnapshot, "status" | "savedAt" | "message" | "dirty">, now: number): string {
+export function statusWords(s: Pick<SaverSnapshot, "status" | "message" | "dirty">): string {
   switch (s.status) {
     case "saving": return "Saving…";
     case "typing": return "Saving soon…";
-    case "saved": return now - (s.savedAt ?? now) < 60_000 ? "Saved" : "All changes saved";
+    case "saved": return "Saved";
     case "idle": return s.dirty ? "Not saved: a note needs some words." : "";
     default: return s.message ?? "Not saved yet.";
   }

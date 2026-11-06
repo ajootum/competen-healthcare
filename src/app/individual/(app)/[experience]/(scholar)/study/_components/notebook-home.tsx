@@ -6,7 +6,7 @@ import { useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { experienceHref } from "@/lib/individual/experiences";
 import { IDEAS, NOTEBOOK_PAGE, noteHeading, type NoteDraft } from "@/lib/individual/scholar/personal-notebook";
-import type { NotebookNote } from "@/lib/individual/scholar/personal-notebook-store";
+import type { NotebookNote } from "@/lib/individual/scholar/store";
 import { DraftRecovery, notebookHref } from "./note-capture";
 import { rememberRestoredDraft } from "./note-editor";
 

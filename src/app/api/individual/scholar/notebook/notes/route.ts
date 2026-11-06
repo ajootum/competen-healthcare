@@ -4,7 +4,7 @@ import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 import { NOTE_IDENTIFIER_REFUSAL, validateCreate } from "@/lib/individual/scholar/personal-notebook";
-import { createNotebookNote, lessonNotes, notebookOffered, notebookSchema } from "@/lib/individual/scholar/personal-notebook-store";
+import { createNotebookNote, lessonNotes, notebookOffered, notebookSchema } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";

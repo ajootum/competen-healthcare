@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useEffect, useId, useRef, useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { IDEAS, noteHeading, type NoteContext } from "@/lib/individual/scholar/personal-notebook";
-import type { NotebookNote } from "@/lib/individual/scholar/personal-notebook-store";
+import type { NotebookNote } from "@/lib/individual/scholar/store";
 import { activeStudyId } from "./study-active";
 import { NoteExtras, NoteField, newClientKey, notebookHref, useLessonNotes, useNotebook, useNoteSaver } from "./note-capture";
 import { NoteActions } from "./note-actions";

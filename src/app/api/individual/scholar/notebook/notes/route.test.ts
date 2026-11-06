@@ -16,8 +16,8 @@ vi.mock("@/lib/individual/guard", () => ({
 vi.mock("@/lib/individual/policy", () => ({ loadIndividualPolicy: async () => state.policy }));
 vi.mock("@/lib/individual/scholar/http", () => ({ audit: (...a: unknown[]) => audit(...a), scholarAiRunner: modelCall }));
 vi.mock("@/lib/individual/scholar/competency-view", () => ({ loadLearnerCatalogue: async () => ({ competencies: [{ id: N, title: "A competency" }] }) }));
-vi.mock("@/lib/individual/scholar/store", () => ({ deleteNote: (...a: unknown[]) => remove(...a) }));
-vi.mock("@/lib/individual/scholar/personal-notebook-store", () => ({
+vi.mock("@/lib/individual/scholar/store", () => ({
+  deleteNote: (...a: unknown[]) => remove(...a),
   notebookSchema: async () => state.schema,
   notebookOffered: (p: typeof state.policy, s: boolean) => p.scholarPersonalNotebook === "on" && p.scholarLearningLibrary === "on" && s,
   createNotebookNote: (...a: unknown[]) => create(...a),

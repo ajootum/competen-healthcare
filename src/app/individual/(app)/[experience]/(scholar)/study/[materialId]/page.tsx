@@ -16,6 +16,7 @@ import { pageInfoOf, plannedPages } from "@/lib/individual/scholar/material-visu
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
+import { NotePageMark } from "../_components/note-capture";
 import { PaneGrid } from "@/components/ui/pane-grid";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
@@ -152,6 +153,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       <PageHeader accent={x.accent} eyebrow="Your material" title={m.title}
         intro={`${unit === "section" ? (m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)") : `${FORMAT_LABEL[FORMAT_OF[m.mimeType]]}, ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}`} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
+      <NotePageMark materialId={m.id} label={m.title} />
       {quality && (
         <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.text}</p>
       )}

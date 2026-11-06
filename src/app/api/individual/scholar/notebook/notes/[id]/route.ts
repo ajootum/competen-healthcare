@@ -5,8 +5,7 @@ import { loadLearnerCatalogue } from "@/lib/individual/scholar/competency-view";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 import { NOTE_IDENTIFIER_REFUSAL, PROBLEM, validatePatch } from "@/lib/individual/scholar/personal-notebook";
-import { notebookOffered, notebookSchema, updateNotebookNote } from "@/lib/individual/scholar/personal-notebook-store";
-import { deleteNote } from "@/lib/individual/scholar/store";
+import { deleteNote, notebookOffered, notebookSchema, updateNotebookNote } from "@/lib/individual/scholar/store";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";

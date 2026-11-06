@@ -3,8 +3,7 @@ import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { audit } from "@/lib/individual/scholar/http";
 import { notesToMarkdown } from "@/lib/individual/scholar/personal-notebook";
-import { allNotebookNotes, notebookOffered, notebookSchema } from "@/lib/individual/scholar/personal-notebook-store";
-import { listMaterials, sessionsByIds } from "@/lib/individual/scholar/store";
+import { allNotebookNotes, listMaterials, notebookOffered, notebookSchema, sessionsByIds } from "@/lib/individual/scholar/store";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
