@@ -38,6 +38,10 @@ needed for this check. A reading the learner asks for adds sections and keeps ev
 before it. A long slide shows its pictures once. Selecting a picture opens the existing dialog, which now fits the width first and zooms to 400%, moved by
 scrolling, swiping or the arrow keys. The lesson strip also picks up picture-only slides that follow its sections.
 
+## Reading walk.txt
+
+The `FAIL material: ... picture inline` lines come from a run that waited 2.5 s for the picture list on a cold dev route, on a server just restarted. The first run passed them, and the final rerun, waiting for the list, passes them (`material (rerun...)`). The `no server errors` failure is `/analyse` answering 503 `not_eligible` for this test learner: existing behaviour on a route this change does not touch.
+
 ## Tests
 
 - Unit tests: `slide-classify.test.ts`, `material-visuals.test.ts` and the existing upload, slide-image, visuals, reader and plan-unit tests.

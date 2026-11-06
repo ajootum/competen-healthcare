@@ -66,3 +66,27 @@ NOTE   counts {"total":79,"text":58,"image":0,"mixed":0,"blank":0,"preserved":21
 PASS another presentation (49 sections): checked, sections unchanged
 NOTE   counts {"total":49,"text":42,"image":2,"mixed":0,"blank":0,"preserved":5,"review":0,"processing":0} blank [] review [] still-unread []
 PASS a material that is not yours: 404
+PASS ready page: Reading details is there
+PASS ready page: blank slide said as a skip
+PASS material (rerun, waiting for the list): slide 5 picture inline
+PASS material (rerun, waiting for the list): slide 12 picture inline
+PASS material (rerun, waiting for the list): slide 16 picture inline
+PASS material (rerun, waiting for the list): slide 18 picture inline
+PASS material (rerun, waiting for the list): slide 17 picture inline
+PASS material (rerun, waiting for the list): slide 29 picture inline
+PASS material (rerun, waiting for the list): slide 33 picture inline
+PASS material (rerun, waiting for the list): slide 34 picture inline
+PASS material (rerun, waiting for the list): slide 35 picture inline
+PASS material (rerun, waiting for the list): slide 36 picture inline
+PASS material (rerun): no picture for slide 37
+NOTE first: notes start closed; opening them
+PASS saved lesson first: the original picture is shown
+NOTE reopened: notes start closed; opening them
+PASS saved lesson reopened: the original picture is shown
+NOTE posts while opening the lesson: learn/act {"action":"teach","step":0,"depth":"standard","sessionId":"3 ; learn/act {"action":"teach","step":0,"depth":"standard","sessionId":"3
+PASS phone lesson: no sideways scrolling
+PASS another presentation (75 sections): checked, sections unchanged
+NOTE   counts {"total":79,"text":58,"image":0,"mixed":0,"blank":0,"preserved":21,"review":0,"processing":0} blank [] review [] still-unread [42,46,48,78]
+PASS another presentation (49 sections): checked, sections unchanged
+NOTE   counts {"total":49,"text":42,"image":2,"mixed":0,"blank":0,"preserved":5,"review":0,"processing":0} blank [] review [] still-unread []
+PASS a material that is not yours: 404
