@@ -25,7 +25,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRun
 import { activityOrFallback, activityState, getScholarAiStanding, type ScholarAiActivity } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
-import { GENERATING_MODES, depthOfQuestion, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, rubricOfQuestion, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
+import { GENERATING_MODES, depthOfQuestion, effectiveKind, existingObjectives, scenariosOnSection, keyOf, pickQuestions, planGeneration, rubricOfQuestion, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
 import { missOf, recentMisses, signalsOf } from "@/lib/individual/scholar/misconception";
 import { writeClozeItems } from "@/lib/individual/scholar/cloze-service";
 import { isClozeQuestion } from "@/lib/individual/scholar/cloze";
@@ -403,7 +403,7 @@ export async function POST(req: Request) {
             } else {
               // SCHOLAR-FLASHCARDS-QA-01: flashcards to the policy's level mix (by programme level by default).
               const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
-              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingScenarios: call.kind === "scenario" ? scenariosOnSection(pool.questions, passage.chunkId) : undefined, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
               if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
               if (r.ok && call.kind === "scenario") scenarioStages = scenarioStageCounts(r.kept);
               if (r.ok) {

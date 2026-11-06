@@ -29,7 +29,7 @@ import { resolveScope } from "./learn";
 import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRunner, scholarRisk } from "./http";
 import { activityState, getScholarAiStanding } from "./ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "./generation";
-import { effectiveKind, existingObjectives, keyOf, planGeneration } from "./revision";
+import { effectiveKind, existingObjectives, keyOf, planGeneration, scenariosOnSection } from "./revision";
 import { missOf, recentMisses, signalsOf, type RecentMiss } from "./misconception";
 import { generationContextLoader } from "./question-context";
 import { answerOutcome, recordScholarOutcome } from "./outcome";
@@ -244,7 +244,7 @@ async function generateForTarget(ctx: IndividualContext, req: Request, policy: I
       measured = { accepted: ids.length, rejected: r.check.dropped.length, reasons: r.check.dropped.map(d => d.reason), promptVersion: r.promptVersion };
     } else outcome = `error:${r.error}`;
   } else {
-    const r = await runRevisionQuestions(ctx.userId, call.kind, passage, 3, ai.run, { context, existing: stems, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool, passage.chunkId, call.kind) });
+    const r = await runRevisionQuestions(ctx.userId, call.kind, passage, 3, ai.run, { context, existing: stems, verifyFormats: policy.scholarVerifyFormats, existingScenarios: call.kind === "scenario" ? scenariosOnSection(pool, passage.chunkId) : undefined, existingObjectives: existingObjectives(pool, passage.chunkId, call.kind) });
     if (r.ok) {
       calls = r.calls;
       const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
