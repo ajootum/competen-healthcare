@@ -27,10 +27,15 @@ export async function PATCH(req: NextRequest) {
     : await ctx.admin.from("practice_platform_flags").insert({ flag: HQ_RECORD_SEARCH_FLAG, enabled: body.enabled, note: "HQ palette record search (policies, instruments, frameworks, positions, staff directory)." });
   if (error) return NextResponse.json({ error: "The switch could not be saved just now." }, { status: 503 });
 
-  await audit(ctx.admin, {
+  const audited = await audit(ctx.admin, {
     actorId: ctx.userId, eventType: "practice.launch_flag_changed",
     payload: { flag: HQ_RECORD_SEARCH_FLAG, from: before?.enabled ?? null, to: body.enabled, reason: null },
     correlationId: crypto.randomUUID(),
   });
+  // A change nobody can attribute does not stand: it goes back. An absent row and a false one both read as off.
+  if (!audited) {
+    await ctx.admin.from("practice_platform_flags").update({ enabled: before?.enabled ?? false }).eq("flag", HQ_RECORD_SEARCH_FLAG);
+    return NextResponse.json({ error: "The change could not be recorded, so it was not kept." }, { status: 503 });
+  }
   return NextResponse.json({ flag: HQ_RECORD_SEARCH_FLAG, enabled: body.enabled, changed: (before?.enabled ?? false) !== body.enabled });
 }

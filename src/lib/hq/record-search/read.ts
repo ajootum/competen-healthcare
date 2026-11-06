@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { NextResponse } from "next/server";
-import { matchesSearch } from "@/lib/individual/search/match";
+import { matchesSearch, searchWords } from "@/lib/individual/search/match";
 import { hqRecordSearchEnabled } from "./flag";
 import type { HqRecordSource } from "./registry";
 
@@ -33,7 +33,8 @@ export async function respondRecordSearch(
   // The flag's state is only ever told to somebody the gate has already admitted.
   if (!(await hqRecordSearchEnabled(admin))) return NextResponse.json({ error: "Not found" }, { status: 404, headers: NO_STORE });
   const q = (new URL(req.url).searchParams.get("q") ?? "").trim();
-  if (q.length < HQ_SEARCH_MIN || q.length > HQ_SEARCH_MAX)
+  // Counted after normalising: "%%" or "!!" has no words, would match everything, and would be browsing rather than searching.
+  if (searchWords(q).join("").length < HQ_SEARCH_MIN || q.length > HQ_SEARCH_MAX)
     return NextResponse.json({ error: `Search needs ${HQ_SEARCH_MIN} to ${HQ_SEARCH_MAX} characters` }, { status: 400, headers: NO_STORE });
   let rows;
   try { rows = await source.read(admin); }

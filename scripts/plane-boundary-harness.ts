@@ -558,9 +558,9 @@ const HS_EXPECT: Record<string, { table: string; cols: string[]; filter: RegExp 
   frameworks: { table: "frameworks", cols: ["id", "code", "name"], filter: /\.is\("hospital_id", null\)/ },
   positions: { table: "hq_position", cols: ["code", "name", "space"], filter: /\.limit\(/ },
   // staff directory: name and position title only. profiles is NOT read (no email, phone or HR field is reachable).
-  staff_offices: { table: "ogs_offices", cols: ["id", "office_type"], filter: /\.limit\(/ },
+  staff_offices: { table: "ogs_offices", cols: ["id", "office_type", "is_active", "status"], filter: /\.limit\(/ },
   staff_appointments: { table: "ogs_office_appointments", cols: ["id", "office_id", "person_name", "role", "status", "term_start", "term_end"], filter: /\.in\("office_id"/ },
-  staff_positions: { table: "hq_position", cols: ["code", "name"], filter: /\.limit\(/ },
+  staff_positions: { table: "hq_position", cols: ["code", "name", "is_active"], filter: /\.limit\(/ },
 };
 const hsFiles = [...walk(join(ROOT, "src/lib/hq/record-search")), ...walk(join(ROOT, "src/app/api/hq/search"))].filter(f => !/\.test\.tsx?$/.test(f));
 const hsSites = hsFiles.flatMap(f => extractReads(readFileSync(f, "utf8"), rel(f), ""));
@@ -568,8 +568,8 @@ const hsFound = hsSites.map(x => `${x.table}:${x.select === "columns" ? [...x.co
 const hsWant = [
   ...Object.values(HS_EXPECT).map(e => `${e.table}:${[...e.cols].sort().join(",")}`),
   "practice_platform_flags:enabled",
-  // PATCH /api/hq/search/flag: reads the switch, and writes it (update, or insert on the first flip). It is the only write of the row, gated by hq.platform.governance.manage.
-  "practice_platform_flags:enabled", "practice_platform_flags:none", "practice_platform_flags:none",
+  // PATCH /api/hq/search/flag: reads the switch, and writes it (update, or insert on the first flip). A third write undoes a change that could not be audited. They are the only writes of the row, gated by hq.platform.governance.manage.
+  "practice_platform_flags:enabled", "practice_platform_flags:none", "practice_platform_flags:none", "practice_platform_flags:none",
   "audit_log:none", // the staff route's audit WRITE (no select list): who, source, result count, never the query
 ].sort();
 ok("HS1", JSON.stringify(hsFound) === JSON.stringify(hsWant),

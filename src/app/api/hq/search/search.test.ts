@@ -64,14 +64,16 @@ const seed = () => ({
     { id: UUID(4), code: "FW-A", name: "Alpha framework", hospital_id: null, is_active: true },
     { id: UUID(5), code: "FW-ALPHA-H", name: "Alpha hospital framework", hospital_id: UUID(99), is_active: true },
   ],
-  ogs_offices: [{ id: "off-hq", office_type: "hq_quality" }, { id: "off-hosp", office_type: "executive" }],
+  ogs_offices: [{ id: "off-hq", office_type: "hq_quality" }, { id: "off-hosp", office_type: "executive" }, { id: "off-closed", office_type: "hq_quality", status: "dissolved" }],
   ogs_office_appointments: [
     { id: "ap1", office_id: "off-hq", person_name: "Alpha Person", role: "alpha_lead", status: "active", term_start: null, term_end: null, email: "SECRET@example.org", phone: "SECRET-PHONE", salary: "SECRET-HR" },
     { id: "ap2", office_id: "off-hosp", person_name: "Alpha Hospital Person", role: "alpha_lead", status: "active", term_start: null, term_end: null },
     { id: "ap3", office_id: "off-hq", person_name: "Alpha Ended", role: "alpha_lead", status: "ended", term_start: null, term_end: null },
     { id: "ap4", office_id: "off-hq", person_name: "Alpha Expired", role: "alpha_lead", status: "active", term_start: "2000-01-01", term_end: "2001-01-01" },
+    { id: "ap5", office_id: "off-closed", person_name: "Alpha Closed Office", role: "alpha_lead", status: "active", term_start: null, term_end: null },
+    { id: "ap6", office_id: "off-hq", person_name: "Alpha Retired Position", role: "alpha_old", status: "active", term_start: null, term_end: null },
   ],
-  hq_position: [{ code: "alpha_lead", name: "Alpha Lead", space: "quality" }, { code: "alpha_x", name: "Alpha Odd", space: "nonsense" }],
+  hq_position: [{ code: "alpha_lead", name: "Alpha Lead", space: "quality" }, { code: "alpha_x", name: "Alpha Odd", space: "nonsense" }, { code: "alpha_old", name: "Alpha Retired", space: "nonsense", is_active: false }],
 });
 
 beforeEach(() => { held = new Set(); signedIn = true; owner = false; reads = []; failTable = null; selects = []; inserts = []; failInsert = false; tables = seed(); });
@@ -183,6 +185,10 @@ describe("staff directory search", () => {
     for (const [, cols] of staffSelects) expect(cols).not.toMatch(/email|phone|salary|employ|\*|dob|address/i);
     expect(selects.map(x => x[0])).not.toContain("profiles");
     expect(selects.find(x => x[0] === "ogs_office_appointments")![1]).toBe("id, office_id, person_name, role, status, term_start, term_end");
+  });
+  it("⚠ a query with no words in it is refused, so symbols cannot list everyone", async () => {
+    owner = true;
+    for (const q of ["%25%25", "!!", "--"]) expect((await call("staff", q)).status).toBe(400);
   });
   it("a position title matches, and a non-match returns nothing", async () => {
     owner = true;

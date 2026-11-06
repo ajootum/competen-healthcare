@@ -7,9 +7,10 @@ let held = new Set<string>();
 let owner = false;
 let rows: Record<string, any>[] = [];
 let audits: any[] = [];
+let auditFails = false;
 const admin = {
   from: (t: string) => {
-    if (t === "practice_audit_event") return { insert: async (r: any) => { audits.push(r); return { error: null }; } };
+    if (t === "practice_audit_event") return { insert: async (r: any) => { if (auditFails) return { error: { message: "no" } }; audits.push(r); return { error: null }; } };
     let f: any = null;
     const b: any = {
       select: () => b, eq: (_c: string, v: string) => { f = v; return b; },
@@ -29,7 +30,7 @@ vi.mock("@/lib/hq/context", () => ({
 
 const patch = async (body: any) => (await import("./route")).PATCH(new Request("http://x/api/hq/search/flag", { method: "PATCH", body: JSON.stringify(body) }) as any);
 
-beforeEach(() => { held = new Set(); owner = false; rows = []; audits = []; });
+beforeEach(() => { held = new Set(); owner = false; rows = []; audits = []; auditFails = false; });
 
 describe("the HQ record search switch", () => {
   it("⚠ is refused to the Practice Product Director's right, and writes nothing", async () => {
@@ -56,6 +57,13 @@ describe("the HQ record search switch", () => {
     rows = [{ flag: "hq_record_search", enabled: true }];
     const r = await patch({ enabled: false });
     expect(r.status).toBe(200);
+    expect(rows[0].enabled).toBe(false);
+  });
+  it("\u26a0 a change that cannot be audited does not stand", async () => {
+    owner = true;
+    auditFails = true;
+    const r = await patch({ enabled: true });
+    expect(r.status).toBe(503);
     expect(rows[0].enabled).toBe(false);
   });
   it("refuses a value that is not true or false", async () => {

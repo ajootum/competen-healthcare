@@ -94,22 +94,24 @@ export const HQ_RECORD_SOURCES: readonly HqRecordSource[] = [
     // ⚠ STAFF DIRECTORY, NAME AND POSITION TITLE ONLY. Title = the person's name (the appointment's own person_name, so profiles is
     // NOT read at all: no email, phone or any employment field can come back), code = the position's title. HQ offices only
     // (isHqOfficeType), and only appointments in force today (the board's own grantsAccess && inTerm), so an ended or pending
-    // appointment is not a directory entry. Not learners, not practice staff, not profiles at large. The destination is the page that
+    // appointment is not a directory entry, nor is one in a dissolved, archived or inactive office or a deactivated position: the same test
+    // as HQ authority itself (context.ts resolveHqPositions). Not learners, not practice staff, not profiles at large. The destination is the page that
     // lists them, behind the same capability. The route also writes an audit row (no query text) because this is a sensitive search.
     read: async admin => {
-      const offices = await admin.from("ogs_offices").select("id, office_type").limit(500);
+      const offices = await admin.from("ogs_offices").select("id, office_type, is_active, status").limit(500);
       if (offices.error) fail(offices.error);
-      const officeIds = ((offices.data ?? []) as any[]).filter(o => isHqOfficeType(o.office_type)).map(o => o.id);
+      const officeIds = ((offices.data ?? []) as any[]).filter(o => isHqOfficeType(o.office_type) && o.is_active !== false && o.status !== "dissolved" && o.status !== "archived").map(o => o.id);
       if (!officeIds.length) return [];
       const [appts, pos] = await Promise.all([
         admin.from("ogs_office_appointments").select("id, office_id, person_name, role, status, term_start, term_end").in("office_id", officeIds).limit(2000),
-        admin.from("hq_position").select("code, name").limit(500),
+        admin.from("hq_position").select("code, name, is_active").limit(500),
       ]);
       if (appts.error) fail(appts.error);
       if (pos.error) fail(pos.error);
-      const posName = new Map(((pos.data ?? []) as any[]).map(p => [p.code, p.name]));
+      const live = ((pos.data ?? []) as any[]).filter(p => p.is_active !== false);
+      const posName = new Map(live.map(p => [p.code, p.name]));
       return ((appts.data ?? []) as any[])
-        .filter(a => a.person_name && String(a.person_name).trim() && appointmentGrantsAccess(a.status) && appointmentInTerm(a.term_start, a.term_end))
+        .filter(a => a.person_name && String(a.person_name).trim() && posName.has(a.role) && appointmentGrantsAccess(a.status) && appointmentInTerm(a.term_start, a.term_end))
         .map(a => ({ id: a.id, code: posName.get(a.role) ?? a.role ?? null, title: String(a.person_name).trim() }));
     },
   },
