@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { focusRing } from "@/app/individual/_components/primitives";
 import { aiReadLabel } from "@/lib/individual/scholar/extract";
 import { SLIDE_READING_EVENT, slideCounts, type SlideRow, type SlideStatus } from "@/lib/individual/scholar/slide-classify";
 
@@ -19,6 +18,7 @@ const STATUS_LABEL: Record<SlideStatus, string> = {
   processing: "Reading now",
 };
 
+const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
 const chip = `min-h-[36px] rounded-lg border px-3 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
 function SlidePanel({ materialId, row, extract }: { materialId: string; row: SlideRow; extract: string | undefined }) {

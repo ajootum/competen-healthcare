@@ -113,7 +113,7 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                       : !s.notes && (
                         <InlineNote className="mt-2">
                           This {s.unit} holds no text (a picture, a title or a divider).
-                          {picture && <div className="mt-1.5 flex flex-wrap items-center gap-2"><SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} /></div>}
+                          {s.unit === "page" && <div className="mt-1.5 flex flex-wrap items-center gap-2"><SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} /></div>}
                         </InlineNote>
                       )}
                     {s.notes && (

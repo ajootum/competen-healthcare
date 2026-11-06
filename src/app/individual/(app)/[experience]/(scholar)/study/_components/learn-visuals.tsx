@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { sourceHref } from "./question-view";
-import { arrangeStrip, pagesOfCitation, visualUrl, visualsForPages, visualsForSection, visualsForSections, visualsListUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
+import { arrangeStrip, pagesOfCitation, visualUrl, visualsForLesson, visualsForPages, visualsForSection, visualsListUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
 
 // SCHOLAR-LESSON-VISUALS-01 (owner GO "Visual Learning From Uploaded Presentations"): THE STUDENT'S OWN PICTURES BESIDE THE LESSON.
 //
@@ -170,6 +170,7 @@ export function SectionPictures({ materialId, materialTitle, from, to, first, la
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
                 <img src={visualUrl(materialId, v.key)} alt={`Original picture from ${where.toLowerCase()} of ${materialTitle}`} loading="lazy" decoding="async" width={v.width ?? undefined} height={v.height ?? undefined}
+                  style={v.width && v.height ? { width: `min(100%, ${v.width}px)`, aspectRatio: `${v.width} / ${v.height}` } : undefined}
                   className="mx-auto block h-auto max-h-[70vh] w-auto max-w-full rounded object-contain" />
               )}
             </button>
@@ -228,7 +229,8 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
   const [chosen, setChosen] = useState<{ value: VisualMode | null } | null>(null);
   const mode = chosen ? chosen.value : stored;
   const pick = (value: VisualMode | null) => { setChosen({ value }); writeMode(materialId, value); };
-  const found = reply?.visuals?.length ? visualsForSections(reply.visuals, ranges) : [];
+  // SCHOLAR-VISUAL-001: with the picture-only slides that follow these sections, which have no section of their own to be cited by.
+  const found = reply?.visuals?.length ? visualsForLesson(reply.visuals, reply.noSection ?? [], ranges) : [];
   if (!reply || reply.off || !found.length) return null;
   const arranged = arrangeStrip(found, mode, all ? found.length : max);
   const pages = found[0].unit === "page";

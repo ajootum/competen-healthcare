@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   KEEP_PICTURE_NOTE, LABEL_CHART, LABEL_CLINICAL, LABEL_DIAGRAM, LABEL_SCORING, LABEL_TABLE, arrangeStrip, buildVisuals, classifyPage, effectiveBehaviour, isProse, labelOf, pageInfoOf, plannedPages,
   MIN_VISUAL_BYTES, canServeVisual, deckVisuals, decorativeReason, pagesOfCitation, parseVisualKey, pdfVisuals, slideMedia,
-  visualUrl, visualsForPages, visualsForSections, type DeckScan, type PictureFact, visualsForSection } from "./material-visuals";
+  visualUrl, visualsForPages, visualsForSections, type DeckScan, type PictureFact, visualsForLesson, visualsForSection } from "./material-visuals";
 
 // SCHOLAR-LESSON-VISUALS-01: which of a file's pictures count as content, deterministically and without AI.
 
@@ -257,6 +257,10 @@ describe("SCHOLAR-VISUAL-001: the pictures that belong with a section", () => {
   });
   it("a blank slide with no picture does not break the run after it", () => {
     expect(keys({ from: 7, first: true, last: true }, [8, 9])).toEqual([7, 9]);
+  });
+  it("a lesson's strip includes the picture-only slides after its sections, once each", () => {
+    expect(visualsForLesson(all, [5, 6], [{ pageFrom: 4, pageTo: 4 }, { pageFrom: 4, pageTo: 4 }]).map(x => x.n)).toEqual([4, 5, 6]);
+    expect(visualsForLesson(all, [], [{ pageFrom: 7, pageTo: 7 }]).map(x => x.n)).toEqual([7]);
   });
   it("no slide number: nothing", () => expect(keys({ from: null, first: true, last: true })).toEqual([]));
 });

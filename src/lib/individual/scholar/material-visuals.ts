@@ -325,6 +325,14 @@ export function visualsForSection(visuals: readonly Visual[], noSection: readonl
   return visuals.filter(v => wanted.has(v.n)).slice().sort((a, b) => a.n - b.n);
 }
 
+/** Pure. A lesson's pictures: those its sections cite, and the picture-only slides that follow them. In order, each once. */
+export function visualsForLesson(visuals: readonly Visual[], noSection: readonly number[], ranges: readonly { pageFrom: number | null; pageTo: number | null }[]): Visual[] {
+  const cited = visualsForSections(visuals, ranges as Parameters<typeof visualsForSections>[1]);
+  const following = ranges.flatMap(r => visualsForSection(visuals, noSection, { from: r.pageFrom, to: r.pageTo, first: false, last: true }));
+  const seen = new Set<string>();
+  return [...cited, ...following].filter(v => (seen.has(v.key) ? false : (seen.add(v.key), true))).sort((a, b) => a.n - b.n);
+}
+
 /** Pure. A visual key as the URL carries it, or null when it is not one (nothing else is ever looked up). */
 export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | null {
   const slide = /^([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);

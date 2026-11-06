@@ -133,10 +133,10 @@ export async function POST(req: Request) {
   if (!chunks.length) return refuse(422, EXTRACTION_MESSAGE.no_text, "no_chunks");
 
   // UPLOAD-01 U2: how completely it was read, stored with it and returned -- "partial" is never reported as clean.
+  const quality = extractionQuality(mime, extraction.pages, chunks);
   // SCHOLAR-PPTX-READING-01: and what each slide holds, so a blank slide is not reported as unread. A file it cannot open keeps the plain record.
-  const plainQuality = extractionQuality(mime, extraction.pages, chunks);
   const facts = mime === PPTX_MIME ? await readSlideFacts(bytes, extraction.pages, new Date().toISOString()) : null;
-  const quality = facts ? applySlideFacts(plainQuality, facts) : plainQuality;
+  if (facts) Object.assign(quality, applySlideFacts(quality, facts));
   const created = await createMaterial(ctx.admin, ctx.userId, {
     id: uploadId, path, title: titleFromFileName(fileName), fileName, mime, bytes,
     pageCount: extraction.pageCount, extractor: extraction.extractor, chunks, quality,
