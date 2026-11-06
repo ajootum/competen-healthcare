@@ -23,7 +23,7 @@ Staging only, the fixture learner, Growth and Development, lesson 3 of its sessi
 
 Reopening a saved step, hint, example or explanation made **no model call** in the walk. A blank answer and "I don't know" send nothing. The meter leaves out the cached system prompt, for old and new alike.
 
-**A turn costs about two to three times the old one, on purpose.** The old form ran on the Explain route and gave a hint of about 120 words with no teaching. On that same route, the first version of the new form wrote a confident claim about sleep and thresholds that does not hold, so teaching now routes as Go deeper does. A full step (teach, one answer judged) is about USD 0.045. Production routing follows HQ's eligibility rows.
+**A turn costs about two to three times the old one, on purpose.** The old form ran on the Explain route and gave a hint of about 120 words with no teaching. On that same route, the first version of the new form wrote a confident and doubtful claim about sleep and thresholds, so teaching now routes as Go deeper does. A full step (teach, one answer judged) is about USD 0.045. Production routing follows HQ's eligibility rows.
 
 ## Acceptance
 

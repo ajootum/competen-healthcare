@@ -456,7 +456,7 @@ export async function POST(req: Request) {
   tutorP.catch(() => {});
   // A teaching action is metered as the nearest existing activity (the engine refuses an unlisted code; learn-teaching.ts).
   // SCHOLAR-GUIDE-ME-001: a Guide Me turn may carry Scholar's own science, so it is metered and routed as Go deeper is (same eligibility, same clinical-risk rules), not as a plain Explain.
-  // On the counted test the plain Explain route wrote a confident claim about sleep and thresholds that does not hold. Accuracy decides this, at about three times the cost of a turn.
+  // On the counted test the plain Explain route wrote a confident and doubtful claim about sleep and thresholds. Accuracy decides this, at about two to three times the cost of a turn.
   const activity = (guideAsk ? "deeper" : meteredActivity(action)) as ScholarAiActivity;
   const standing = activityState(await getScholarAiStanding(ctx.admin, ctx.userId), activity);
   if (!standing.available) return prepare ? notPrepared("unavailable", { step }) : continuity(standing.message ?? "", standing.insufficient);
