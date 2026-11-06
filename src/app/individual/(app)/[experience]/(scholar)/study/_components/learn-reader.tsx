@@ -7,7 +7,7 @@ import { LINK_NOT_COMPETENCE, PROPOSED_NOT_LINK, READ_MARK, RELATED_NONE, reader
 import type { LessonRelated } from "@/lib/individual/scholar/store";
 import { experienceHref } from "@/lib/individual/experiences";
 import { sourceHref, studyHref } from "./question-view";
-import { SourcePictureButton } from "./learn-visuals";
+import { SectionPictures, SourcePictureButton } from "./learn-visuals";
 import { ReplayCase } from "./case-client";
 import { lessonFlashcardsHref, req } from "./learn-practice";
 import { AskAbout } from "./ask-panel";
@@ -42,7 +42,9 @@ export function loadReader(sessionId: string, step: number): Promise<ReaderReply
   return p;
 }
 
-export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards }: {
+export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards, hidePictures }: {
+  /** While the learner recalls the lesson, a picture must not give the answer away. */
+  hidePictures?: boolean;
   sessionId: string; step: number; index: number;
   /** The active lesson: its notes are read at once (a saved place inside them must be findable), others only when opened. */
   current: boolean;
@@ -96,8 +98,10 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                 opens it in the material, the text laid out for reading (notes-layout.ts: never a word changed), and ONE action row
                 with Ask about this first. A slide with no text is a calm note with its picture. */}
             <ol className="space-y-3">
-              {loaded.sections.map(s => {
+              {loaded.sections.map((s, i, all) => {
                 const ref = shortRef(s.unit, s.pageFrom, s.pageTo);
+                // SCHOLAR-VISUAL-001: a long slide has several sections; its pictures come once, with the first of them.
+                const sameSlide = (o: typeof s | undefined) => !!o && o.materialId === s.materialId && o.pageFrom === s.pageFrom;
                 const href = carry(sourceHref(s.materialId, s.chunkId));
                 const picture = s.unit !== "section";
                 return (
@@ -111,7 +115,7 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                       : !s.notes && (
                         <InlineNote className="mt-2">
                           This {s.unit} holds no text (a picture, a title or a divider).
-                          {picture && <div className="mt-1.5 flex flex-wrap items-center gap-2"><SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} /></div>}
+                          {s.unit === "page" && <div className="mt-1.5 flex flex-wrap items-center gap-2"><SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} /></div>}
                         </InlineNote>
                       )}
                     {s.notes && (
@@ -122,9 +126,10 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                         <div className="mt-1 border-l-2 border-[var(--learn-border)] pl-3"><NotesText text={s.notes} className="text-gray-800" /></div>
                       </details>
                     )}
+                    {picture && !hidePictures && <SectionPictures materialId={s.materialId} materialTitle={s.materialTitle} from={s.pageFrom} to={s.pageTo} first={!sameSlide(all[i - 1])} last={!sameSlide(all[i + 1])} leading={s.ordinal === 1} />}
                     <ActionRow label={`For ${s.citation}`}>
                       <AskAbout surface="learn" chunkIds={[s.chunkId]} materialId={s.materialId} sessionId={sessionId} step={step} refLabel={`Your notes: ${s.citation}`} label="Ask about this" variant="primary" />
-                      {picture && (s.body || s.notes) && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} />}
+                      {s.unit === "page" && (s.body || s.notes) && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} />}
                     </ActionRow>
                   </SectionCard>
                 );

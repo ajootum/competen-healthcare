@@ -2,13 +2,16 @@
 import type { IndividualContext } from "../guard";
 import { loadIndividualPolicy } from "../policy";
 import { PDF_MIME, PPTX_MIME } from "./config";
-import { chunkPages, findPatientIdentifiers, pictureSlideImages, type SlideImages } from "./extract";
-import { addPictureSlideSections, getMaterial, listChunks, materialBytes, materialExtras } from "./store";
+import { chunkPages, extractMaterial, findPatientIdentifiers, pictureSlideImages, type SlideImages } from "./extract";
+import { pictureReadingInput, slideCounts, slideRows } from "./slide-classify";
+import { readSlideFacts } from "./slide-structure";
+import { addPictureSlideSections, getMaterial, listChunks, materialBytes, materialExtras, saveSlideFacts } from "./store";
 import { AI_ERROR, SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, meteredRefusal, scholarAiRunner, scholarRisk } from "./http";
 import { TRANSCRIBE_PROMPT_VERSION, runTranscription } from "./exam-answer";
 import { EXAM_ACTIVITY, TRANSCRIBE_BATCH } from "./exam-service";
 import { MAX_AI_SLIDES_PER_MATERIAL, SLIDE_IMAGE_LIMITS, hasReadableText, isConvertibleKind, pickPictureSlides, planPictureSlides, type NewChunk } from "./slide-images";
 import { convertToPng } from "./slide-convert";
+import type { SlideSkipReason } from "./slide-classify";
 
 // ── READING PICTURE-ONLY SLIDES WITH AI ── SCHOLAR-UPLOAD-FIX ──────────────────────────────────────────────────────
 //
@@ -29,7 +32,7 @@ import { convertToPng } from "./slide-convert";
 type Out = { status: number; body: Record<string, unknown> };
 const json = (status: number, body: Record<string, unknown>): Out => ({ status, body });
 
-export type SlideSkip = { slide: number; reason: "no_picture" | "unsupported" | "too_large" | "patient_identifier" | "no_text" };
+export type SlideSkip = { slide: number; reason: SlideSkipReason };
 export const SLIDE_EXTRACTOR_TAG = "ai-slides-v1";
 
 /** Pure. Why a slide could not be sent at all, or null when it has a picture to read. */
@@ -44,9 +47,10 @@ export async function pictureSlidePlan(admin: any, userId: string, materialId: s
   const [extras, chunks] = await Promise.all([materialExtras(admin, userId, [materialId]), listChunks(admin, userId, materialId)]);
   const q = extras.byId.get(materialId)?.quality ?? null;
   if (!q || (q.unit !== "slide" && q.unit !== "page") || !chunks.ok) return null;
-  // Nothing (left) to read -- every picture-only slide already read: an empty plan, not a failure.
-  if (!q.emptyUnits.length) return { slides: [], beyondCap: 0 };
-  return planPictureSlides({ emptyUnits: q.emptyUnits, triedUnits: q.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL });
+  // Nothing (left) to read -- every picture already read: an empty plan, not a failure. Blank slides are not offered, and do not use up the cap.
+  const reading = pictureReadingInput(q);
+  if (!reading.emptyUnits.length && !reading.mixedUnits.length) return { slides: [], beyondCap: 0 };
+  return planPictureSlides({ ...reading, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL });
 }
 
 /**
@@ -177,7 +181,7 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   const tried = [...read, ...skipped.map(s => s.slide)];
   // SCHOLAR-IMAGE-RECOVERY: provenance kept on the material -- which model and prompt version read these units, and when.
   const saved = await addPictureSlideSections(ctx.admin, ctx.userId, materialId, {
-    additions, read, tried, extractorTag: SLIDE_EXTRACTOR_TAG,
+    additions, read, tried, extractorTag: SLIDE_EXTRACTOR_TAG, skipped: skipped.map(s => ({ unit: s.slide, reason: s.reason })),
     provenance: model ? { model, promptVersion: TRANSCRIBE_PROMPT_VERSION, extractedAt: new Date().toISOString() } : null,
   });
   await audit(ctx, SCHOLAR_AI_AUDIT_ACTION, "individual_scholar_slide_transcribe", materialId, {
@@ -186,6 +190,27 @@ export async function readPictureSlides(ctx: IndividualContext, req: Request, ma
   });
   if (!saved.ok) return json(500, { error: "The slides were read but could not be saved. Nothing was added. Try again shortly." });
   return json(200, { read, skipped: skipped.sort((a, b) => a.slide - b.slide), remaining: Math.max(0, wanted.length - batch.length), beyondCap: plan.beyondCap });
+}
+
+/**
+ * SCHOLAR-PPTX-READING-01: check a stored presentation's slides again. No AI. The stored file is read and only the quality record is
+ * updated (store.saveSlideFacts), so nothing is duplicated and no lesson, plan, answer or AI reading changes.
+ */
+export async function recheckSlides(ctx: IndividualContext, materialId: string): Promise<Out> {
+  const material = await getMaterial(ctx.admin, ctx.userId, materialId);
+  if (!material.ok) return json(503, { error: "That material could not be read just now." });
+  if (!material.data) return json(404, { error: "Not found" });
+  if (material.data.mimeType !== PPTX_MIME) return json(409, { error: "Only a PowerPoint's slides can be checked this way." });
+  const bytes = await materialBytes(ctx.admin, ctx.userId, materialId);
+  if (!bytes) return json(503, { error: "Your original file could not be read just now. Try again shortly." });
+  const extraction = await extractMaterial(PPTX_MIME, bytes);
+  const facts = extraction.ok ? await readSlideFacts(bytes, extraction.pages, new Date().toISOString()) : null;
+  if (!facts) return json(422, { error: "Your file's slides could not be checked." });
+  const saved = await saveSlideFacts(ctx.admin, ctx.userId, materialId, facts);
+  if (!saved.ok) return json(saved.error === "quality" ? 409 : 503, { error: saved.error === "quality" ? "How this file was read was not recorded, so it cannot be checked again." : "The check could not be saved. Try again shortly." });
+  const rows = slideRows(saved.quality);
+  await audit(ctx, "individual_scholar_material_slides_checked", "individual_scholar_material", materialId, { blank: facts.blank.length, mixed: facts.mixed.length, review: rows?.filter(r => r.status === "review").length ?? 0, version: facts.version });
+  return json(200, { ok: true, counts: rows ? slideCounts(rows) : null });
 }
 
 /**

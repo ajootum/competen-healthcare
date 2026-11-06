@@ -1,3 +1,4 @@
+import { readingAttention } from "@/lib/individual/scholar/slide-classify";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../_components/shell-context";
@@ -71,7 +72,7 @@ export default async function StudyHome({ params, searchParams }: { params: Prom
   const extras = await materialExtras(ctx.admin, ctx.userId, shown.map(m => m.id));
   const recent: MaterialView[] = shown.map(m => ({
     id: m.id, title: displayTitle(m.title), type: fileTypeOf(FORMAT_LABEL[FORMAT_OF[m.mimeType]]),
-    state: materialState({ chunkCount: m.chunkCount, emptyUnits: extras.qualityOn ? extras.byId.get(m.id)?.quality?.emptyUnits.length ?? 0 : 0 }),
+    state: materialState({ chunkCount: m.chunkCount, emptyUnits: extras.qualityOn ? readingAttention(extras.byId.get(m.id)?.quality ?? null) : 0 }),
   }));
 
   const rules = uploadRules(policy);

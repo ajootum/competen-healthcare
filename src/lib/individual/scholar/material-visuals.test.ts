@@ -2,8 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   KEEP_PICTURE_NOTE, LABEL_CHART, LABEL_CLINICAL, LABEL_DIAGRAM, LABEL_SCORING, LABEL_TABLE, arrangeStrip, buildVisuals, classifyPage, effectiveBehaviour, isProse, labelOf, pageInfoOf, plannedPages,
   MIN_VISUAL_BYTES, canServeVisual, deckVisuals, decorativeReason, pagesOfCitation, parseVisualKey, pdfVisuals, slideMedia,
-  visualUrl, visualsForPages, visualsForSections, type DeckScan, type PictureFact,
-} from "./material-visuals";
+  visualUrl, visualsForPages, visualsForSections, type DeckScan, type PictureFact, visualsForLesson, visualsForSection } from "./material-visuals";
 
 // SCHOLAR-LESSON-VISUALS-01: which of a file's pictures count as content, deterministically and without AI.
 
@@ -236,4 +235,32 @@ describe("the recovery card's page list", () => {
     expect(list[4].caption).toBe("Page 36 · Likely an observation chart, scoring tool or table (next to page 35)");
     expect(list.map(p => p.caption).join(" ")).not.toMatch(/\bNEWS|PEWS|ADDS\b/);
   });
+});
+
+describe("SCHOLAR-VISUAL-001: the pictures that belong with a section", () => {
+  const v = (n: number, key = `k${n}`) => ({ key, n }) as unknown as Parameters<typeof visualsForSection>[0][number];
+  const all = [v(1), v(4), v(5), v(6), v(7), v(9)];
+  const keys = (o: Parameters<typeof visualsForSection>[2], none: number[] = [5, 6]) => visualsForSection(all, none, o).map(x => x.n);
+  it("a section shows its own slide", () => expect(keys({ from: 4, first: true, last: false })).toEqual([4]));
+  it("\u26a0 a picture-only slide stays where it is in the file, after the section before it", () => {
+    expect(keys({ from: 4, first: true, last: true })).toEqual([4, 5, 6]);
+    expect(keys({ from: 7, first: true, last: true })).toEqual([7]);
+  });
+  it("a long slide shows its pictures once", () => {
+    expect(keys({ from: 4, first: true, last: false })).toEqual([4]);
+    expect(keys({ from: 4, first: false, last: false })).toEqual([]);
+    expect(keys({ from: 4, first: false, last: true })).toEqual([5, 6]);
+  });
+  it("picture-only slides before the first section come with it", () => {
+    expect(keys({ from: 4, first: true, last: false, leading: true }, [1, 2, 3])).toEqual([1, 4]);
+    expect(keys({ from: 4, first: true, last: false, leading: true }, [2, 3])).toEqual([4]);
+  });
+  it("a blank slide with no picture does not break the run after it", () => {
+    expect(keys({ from: 7, first: true, last: true }, [8, 9])).toEqual([7, 9]);
+  });
+  it("a lesson's strip includes the picture-only slides after its sections, once each", () => {
+    expect(visualsForLesson(all, [5, 6], [{ pageFrom: 4, pageTo: 4 }, { pageFrom: 4, pageTo: 4 }]).map(x => x.n)).toEqual([4, 5, 6]);
+    expect(visualsForLesson(all, [], [{ pageFrom: 7, pageTo: 7 }]).map(x => x.n)).toEqual([7]);
+  });
+  it("no slide number: nothing", () => expect(keys({ from: null, first: true, last: true })).toEqual([]));
 });
