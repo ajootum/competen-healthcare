@@ -2836,7 +2836,7 @@ export async function listArtefacts(admin: Admin, userId: string, opts: { materi
  * mode it was written under (learn-journey.ts newestSavedLesson). Learn/act's open falls back to it when the exact key
  * finds nothing, so a lesson taught under an older prompt or other settings reopens with no AI call. Keyed on user_id.
  */
-export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[] }): Promise<ArtefactRow | null> {
+export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[]; lesson?: { sessionId: string; step: number } | null }): Promise<ArtefactRow | null> {
   if (!q.chunkIds.length) return null;
   const r = await listArtefacts(admin, userId, { chunkIds: [q.chunkIds[0]], ...(q.materialId ? { materialId: q.materialId } : {}) });
   return r.ok ? newestSavedLesson(r.data, q) : null;

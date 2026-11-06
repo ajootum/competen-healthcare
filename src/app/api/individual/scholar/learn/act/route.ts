@@ -256,7 +256,8 @@ export async function POST(req: Request) {
   // contextual actions and for an open (alsoSaved); Teach me itself and Ask never carry it.
   const contextual = CONTEXT_ACTIONS.includes(action);
   const lessonRecords = contextual || open ? await listArtefacts(ctx.admin, ctx.userId, { chunkIds: stepIds, limit: 40 }).then(r => (r.ok ? r.data : []), () => []) : [];
-  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  const lessonPlace = sessionId ? { sessionId, step } : null;
+  const ownRecords = lessonRecords.filter(a => isArtefactAction(a.action) && coversLesson(a.sources, stepIds, { row: a, lesson: lessonPlace })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
   const taughtSoFar: TaughtSoFar | null = contextual ? buildTaughtSoFar(ownRecords, priorChecks, { objective: lesson?.objective ?? null, focus: lesson?.focus ?? null }) : null;
   const taughtBlock = taughtSoFar ? taughtSoFarBlock(taughtSoFar) : null;
   /** The lesson brief the prompt reads: its title, objective and its own sections' headings, in order. */
@@ -361,7 +362,7 @@ export async function POST(req: Request) {
   const savedReply = (a: ArtefactRow, extra: Record<string, unknown> = {}) => {
     const byId = new Map(passages!.map(p => [p.chunkId, p]));
     // SCHOLAR-GO-DEEPER-001: a lesson over the stored source limit keeps its later citations (learn-journey.ts restoredSources).
-    const src = restoredSources(a.sources, stepIds).map(id => byId.get(id)).filter((p): p is Passage => !!p);
+    const src = restoredSources(a.sources, stepIds, { row: a, lesson: lessonPlace }).map(id => byId.get(id)).filter((p): p is Passage => !!p);
     // COMPETEN-RESEARCH-01: a saved Research & Explain answer keeps its research part after the marker, and its
     // external references (kind "external") beside the governed ones -- exactly as the providers returned them.
     const split = splitLearnAnswer(a.content);
@@ -405,7 +406,7 @@ export async function POST(req: Request) {
   // SCHOLAR-PERSISTENT-LEARNING-01: the exact key missed -- the newest lesson saved for this chunk set, under any version or
   // settings. Its sources beyond this request's passages are read (the learner's own, by id) so its [S n] tags stay true.
   if ((open || prepare) && body?.fresh !== true && isArtefactAction(action) && !recovery && !hasHistory) {
-    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds });
+    const earlier = await findSavedLesson(ctx.admin, ctx.userId, { action, materialId: passages[0].materialId, chunkIds: stepIds, lesson: lessonPlace });
     const missing = earlier ? earlier.sources.filter(id => !passages!.some(p => p.chunkId === id)) : [];
     const extra = earlier && missing.length ? await ownPassages(ctx.admin, ctx.userId, missing) : [];
     clock.mark("cache_fallback");

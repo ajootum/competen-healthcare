@@ -47,6 +47,7 @@ export const levelOfDepth = (depth: string | null | undefined) => GO_DEEPER_LEVE
 
 const labelRe = (words: string) => new RegExp(`^[\\s*_#>-]*${words}\\s*:[\\s*_]*`, "i");
 const RE = { focus: labelRe("focus\\s+question"), covers: labelRe("covers"), section: labelRe("section"), check: labelRe("check\\s+your\\s+reasoning"), takeaways: labelRe("key\\s+takeaways") };
+const AFTER_THE_ROUND = /^[\s*_#>-]*(?:FROM RESEARCH|BEYOND THE NOTES|CHECK THIS):?/i;
 const FLOW_RE = /^[\s*_]*flow\s*:[\s*_]*/i;
 const BULLET_RE = /^\s*(?:[-*•]|\d+[.)])\s+/;
 const OPTION_RE = /^\s*[-*•]?\s*\(?([a-d])[).]\s+/i;
@@ -106,6 +107,8 @@ export function parseDeeperAnswer(text: string): DeeperParts | null {
   const sections: (Pick<DeeperSection, "kind" | "source" | "title"> & { lines: string[] })[] = [];
   let at: "focus" | "covers" | "section" | "check" | "takeaways" | null = null;
   for (const line of text.split("\n")) {
+    // The other parts of a saved answer are not the round's (generation.ts splitLearnAnswer): research above all must never run on into a takeaway.
+    if (AFTER_THE_ROUND.test(line)) break;
     if (RE.focus.test(line)) { at = "focus"; focusLines.push(line.replace(RE.focus, "")); continue; }
     if (RE.covers.test(line)) { at = "covers"; coversLines.push(line.replace(RE.covers, "")); continue; }
     if (RE.section.test(line)) { at = "section"; sections.push({ ...sectionHead(line.replace(RE.section, "")), lines: [] }); continue; }
@@ -175,14 +178,28 @@ export function deeperNotesOnlyText(p: DeeperParts): string {
   return [...notes, ...p.takeaways.filter(t => /\[S\d+\]/.test(t))].join("\n\n");
 }
 
+/** A takeaway with no citation is Scholar's own, and says so wherever it is shown. */
+export const takeawayLine = (t: string) => (/\[S\d+\]/.test(t) ? t : `${t} (Scholar’s explanation)`);
+
+/** Pure. A saved answer's research part, which the round's parser stops short of, or null. */
+export function deeperResearchText(content: string): string | null {
+  const m = /^[\s*_#>-]*FROM RESEARCH:?[\s*_]*([\s\S]*?)(?=^[\s*_#>-]*(?:BEYOND THE NOTES|CHECK THIS):?|(?![\s\S]))/im.exec(content);
+  return m?.[1].trim() || null;
+}
+
 /** Pure. A saved round read as text, each section saying where it comes from. */
 export function deeperSourcedText(p: DeeperParts): string {
   return [
     p.focus, p.covers ?? "",
     ...p.sections.map(s => `${s.title} (${s.source === "notes" ? "From your notes" : "Scholar’s explanation, not from your notes"})\n${deeperSectionText(s)}`),
-    ...(p.takeaways.length ? [`Key takeaways\n${p.takeaways.join("\n")}`] : []),
+    ...(p.takeaways.length ? [`Key takeaways\n${p.takeaways.map(takeawayLine).join("\n")}`] : []),
   ].filter(Boolean).join("\n\n");
 }
+
+/** When a heading fails the checks, the section keeps its place under one of these. */
+export const DEEPER_NEUTRAL_HEADING: Record<DeeperKind, string> = {
+  principle: "The principle", science: "The science", compare: "A comparison", application: "In practice", misconception: "A common misconception", safety: "Safety", limits: "The limits", advanced: "Further detail",
+};
 
 /** The headings the page shows: the card, the grey block, the source of each section and the evidence footer. */
 export const GO_DEEPER_COPY = {
@@ -201,11 +218,13 @@ export const GO_DEEPER_COPY = {
 } as const;
 
 /** Pure. The plain statement of what this round rests on. Said on every structured round, so the limit is never left to inference. */
-export function deeperEvidenceStatement(has: { research: boolean; scholar: boolean }): string {
+export function deeperEvidenceStatement(has: { research: "shown" | "looked" | "none"; scholar: boolean }): string {
   const notes = "Sections marked “From your notes” are cited to your own material.";
   const scholar = has.scholar ? " Sections marked “Scholar’s explanation” are general teaching written by AI: they are not from your notes and have not been checked against published research, so check them with your course." : "";
-  const research = has.research
+  const research = has.research === "shown"
     ? " The part marked “From published research” rests only on the abstracts listed here, and abstracts alone cannot settle a question."
-    : " No published research was consulted for this round, so nothing here is a verified research finding.";
+    : has.research === "looked"
+      ? " Published research was looked for this round, but nothing from it is shown here, so nothing here is a verified research finding."
+      : " No published research was consulted for this round, so nothing here is a verified research finding.";
   return `${notes}${scholar}${research}`;
 }

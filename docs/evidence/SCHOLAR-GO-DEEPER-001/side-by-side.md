@@ -5,12 +5,12 @@ Growth and Development, lesson 3 of the fixture's session (slides 23 to 38), sta
 | Run | Words | Sections | Scholar sections | Sentences repeating Teach Me | Misconception | Limits | Model calls | USD |
 |---|---|---|---|---|---|---|---|---|
 | v2 | 423 | lesson parts | 0 | 11 of 21 | no | no | 1 | 0.0340 |
-| understand | 472 | 7 | 4 | 4 of 23 | yes | no | 1 | 0.0309 |
-| explore | 489 | 6 | 3 | 7 of 21 | yes | no | 1 | 0.0317 |
-| advanced | 592 | 8 | 4 | 5 of 28 | yes | yes | 1 | 0.0380 |
+| understand | 501 | 7 | 4 | 3 of 21 | yes | no | 1 | 0.0327 |
+| explore | 513 | 6 | 4 | 5 of 21 | yes | no | 1 | 0.0342 |
+| advanced | 552 | 7 | 5 | 4 of 25 | yes | yes | 1 | 0.0385 |
 | explore2 | 572 | 6 | 4 | 5 of 23 | yes | yes | 1 | 0.0396 |
 
-Teach me itself: 450 words, 1 call, USD 0.0345. Ledger for the whole test: 21 calls, USD 0.68859 (cap 24 calls, USD 2.50). `explore2` is a second round on top of `explore`.
+Teach me itself: 450 words, 1 call, USD 0.0345. Ledger for the whole test: 24 calls, USD 0.79399 (cap 24 calls, USD 2.50). `explore2` is a second round on top of `explore`.
 
 ## Teach Me
 
@@ -45,140 +45,147 @@ CHECK YOUR UNDERSTANDING:
 ## Go Deeper, Explore
 
 ```text
-FOCUS QUESTION: Why does the newborn respond to a sound before it can understand or control anything else?
+FOCUS QUESTION: Why does a newborn's response to sound look like a cry, a startle or stopping what it was doing, rather than a deliberate action?
 
-COVERS: how the hearing response works, why it differs from cognition and voluntary movement, and what the response tells a caregiver.
+COVERS: how the newborn nervous system turns a sound into a whole-body reaction, and how this links to reflexes and movement.
 
-SECTION: principle | notes | The response is there from birth
-The newborn infant usually makes some response to sound from birth, and ordinary sounds are heard well before 10 days of life [S1]. The infant responds with either cry or eye movement, cessation of activity and/or startle reaction [S1].
+SECTION: principle | notes | What a newborn's response to sound actually looks like
+The newborn infant usually makes some response to sound from birth [S1]. That response shows as cry or eye movement, cessation of activity and/or startle reaction [S1].
 
-SECTION: science | scholar | Why hearing works before thinking does
-Hearing is a reflex-like pathway: sound reaches the ear and travels along nerves to lower parts of the brain that act without conscious thought. These lower pathways are ready early, so the infant reacts to sound before the higher thinking parts of the brain have matured.
+These are the same kind of whole-body answers you see in the movement notes: the newborn's movements are random, diffuse and uncoordinated [S3].
 
-This is why a response can be shown as a startle or a pause in movement rather than as understanding of the sound.
+SECTION: science | scholar | Why the response spreads across the whole body
+At this stage the brain pathways that would route a sound to one precise, chosen action are still forming. A signal arriving at an immature nervous system tends to spill outward rather than stay focused.
 
-SECTION: compare | notes | Senses ready versus abilities still forming
-| Ability | What the notes say |
-| Hearing | Some response to sound from birth [S1] |
-| Taste | Well developed, bitter and sour resisted, sweet accepted [S2] |
-| Cognition | Difficult to understand or observe [S8] |
-| Movement | Random, diffuse and uncoordinated [S3] |
+So one sound can trigger many muscles at once: the arms fling out in a startle, the cry begins, ongoing activity halts. The reaction is generated low in the nervous system, below deliberate control, which is why it looks automatic and widespread rather than aimed.
 
-SECTION: misconception | scholar | Responding is not understanding
-It is tempting to read a startle or a cry as the infant knowing what the sound means. In truth an early reflex-like response shows the pathway is working, not that the sound has been understood.
+SECTION: compare | notes | Sound response beside a named reflex
+| Feature | Startle to sound | Moro reflex |
+| Where listed | Hearing [S1] | Reflexes [S6] |
+| Nature | response to a stimulus [S1] | neurological maturation [S5] |
 
-Understanding of sound belongs to the higher brain, which develops later than the basic response.
+SECTION: compare | scholar | Sound response beside a named reflex, beyond your notes
+Both are built-in answers to a stimulus, not learned skills; reflexes represent neurological maturation and most develop before birth.
 
-SECTION: application | notes | Reading the response as a caregiver
-A response such as eye movement, cessation of activity or startle reaction is what tells a caregiver the infant received the sound [S1].
+SECTION: misconception | scholar | Not the same as "hearing clearly"
+It is tempting to read a startle as proof the baby understood the sound. A reaction only tells you the signal reached the nervous system and set off a built-in response; it does not yet mean the baby located, recognised or interpreted the sound.
 
-SECTION: application | scholar | Reading the response as a caregiver, beyond your notes
-One such response on its own is limited; it would be weighed alongside the wider picture of the infant's development, such as the movement and social signs described.
+SECTION: application | scholar | Watching for the response in care
+Because the answer is whole-body, you watch for cry, eye movement, cessation of activity and/or startle reaction after a sound. A single observation sits alongside other information: cognitive development of the newborn is difficult to understand or observe, so one response is read with the whole picture, not alone.
+
+This is general education, not guidance about any particular baby.
 
 CHECK YOUR REASONING:
-- An infant stops moving when a door closes nearby. Which best describes what this shows? [S1]
-  a) The infant understands the door
-  b) The infant made a response to the sound
-  c) The infant's cognition is well developed
-  d) The infant's movement is coordinated
-- Why can a sound response appear before coordinated movement? [S3]
+- If a newborn stops moving when a bell rings, what does that tell you and what does it not yet tell you? [S1]
+- Why might a startle to sound and the Moro reflex be grouped as the same kind of thing? [S5]
+  a) both are learned over the first weeks
+  b) both are built-in responses reflecting neurological maturation
+  c) both fade by 6 months
 
 KEY TAKEAWAYS:
-- The sound response can appear as cry, eye movement, cessation of activity and/or startle reaction [S1].
-- A response shows the hearing pathway is working, not that the sound is understood.
-- Cognition is difficult to observe while hearing and taste already show clear responses [S8][S2].
-- A single response is read alongside the wider developmental picture, not alone [S1].
+- A newborn's response to sound is whole-body because an immature nervous system spreads a signal rather than focusing it.
+- A reaction shows the sound reached the nervous system, not that the baby interpreted it.
 ```
 
 ## Go Deeper, Understand
 
 ```text
-FOCUS QUESTION: Why does hearing in the newborn connect to early social and emotional development rather than being just a sense?
+FOCUS QUESTION: Why does the newborn respond to sound and taste with whole-body reactions rather than deliberate movements?
 
-SECTION: principle | notes | How the newborn shows it has heard
-The newborn infant responds to sounds with either cry or eye movement, cessation of activity and/or startle reaction [S1].
+COVERS: How the newborn's reflex responses to sound and taste reflect an immature nervous system.
 
-SECTION: principle | scholar | How the newborn shows it has heard, beyond your notes
-These same responses are how you read the infant: a cry or eye movement tells you something has been received.
+SECTION: principle | notes | Sound and taste both show up as automatic responses
+The newborn responds to sounds with either cry or eye movement, cessation of activity and/or startle reaction [S1].
 
-SECTION: science | scholar | Why a response to sound matters beyond the ear
-Hearing is not only detecting sound; it is the start of a loop. The infant hears a voice, turns or quietens, the caregiver responds, and the infant learns that signals bring a reply.
+SECTION: principle | scholar | Sound and taste both show up as automatic responses, beyond your notes
+Taste is well developed because bitter and sour fluids are resisted while sweet fluids are accepted.
 
-This loop is how the nervous system builds expectations of other people. Repetition strengthens the pathways that will later support attention and communication.
+SECTION: science | scholar | Why the response is whole-body, not aimed
+At birth the brain's pathways that allow aimed, deliberate movement are still forming. The connections from higher brain centres to the muscles are not yet complete.
 
-SECTION: science | notes | Where hearing meets social development
-Within a few days the infant interacts with caregivers through eye contact, spontaneous or imitative facial gestures [S10]. These interactions strengthen emotional ties with caregivers [S10].
+So a signal arriving from the ear or tongue cannot yet be turned into a precise, chosen action. Instead it triggers built-in circuits lower in the nervous system that fire a broad, automatic response.
 
-The newborn infant expresses emotion through cry for hunger, pain or discomfort sensation [S9].
+This is why hearing a sound produces a startle or a whole-body stilling, and why an unpleasant taste produces resisting rather than a neat turning away.
 
-SECTION: science | scholar | Where hearing meets social development, beyond your notes
-So the same cry serves both as a response to sound and as the infant's way of signalling a need.
+FLOW: sound or taste reaches brain -> no mature pathway to aim a movement -> built-in lower circuit fires -> broad automatic response.
 
-SECTION: misconception | scholar | Why "no response" is not the same as "cannot hear"
-It is tempting to think a quiet infant that does not startle has a hearing problem. But cessation of activity, that is going still, is itself a response, and an infant may answer a sound by quietening rather than by moving.
+SECTION: science | notes | The same immaturity shows in movement
+This fits with the newborn's movement being random, diffuse and uncoordinated [S3].
 
-So the kind of response matters as much as whether there is movement. Reading only for startle can miss the infant who responds by becoming still.
+Reflexes carry out bodily functions and responses to external stimuli [S3], and they represent neurological maturation [S5].
 
-SECTION: application | notes | Putting the signs together
-No single response proves hearing on its own; cry, eye movement, cessation of activity and startle reaction are all described as answers to sound [S1]. Interpreting hearing means watching across these, alongside the eye contact and facial gestures of early interaction [S10].
+SECTION: misconception | scholar | A reaction is not the same as choosing
+It is tempting to read a startle or a resisting as the baby deciding something. It is not a choice.
+
+The response is automatic and built in. As the brain's pathways mature, the broad reflex is gradually replaced by aimed, controlled movement, which is the direction later motor development takes.
+
+SECTION: application | notes | What a response tells and what it does not
+A response such as cry, eye movement, cessation of activity or startle shows the infant registered the sound [S1].
+
+SECTION: application | scholar | What a response tells and what it does not, beyond your notes
+One such response on its own does not confirm how well the infant hears across all sounds; it is interpreted alongside the pattern of responses seen over time.
 
 CHECK YOUR REASONING:
-- An infant goes still and stops moving when a voice begins. Is this best read as no response, or as a response to the sound? [S1]
-- Why might strengthening eye contact and facial gestures depend partly on the infant being able to hear? [S10]
+- Why would a startle reaction, rather than the baby turning its head toward a sound, be expected in a newborn? [S1]
+- If sweet fluids are accepted and sour resisted, what does that let you conclude about the sense of taste? [S2]
+  a) it is well developed
+  b) it is absent
+  c) it depends on smell
 
 KEY TAKEAWAYS:
-- Going still (cessation of activity) is a response to sound, not an absence of one [S1].
-- Hearing feeds a back-and-forth loop with the caregiver that builds emotional ties [S10].
-- The cry is both a response to sound and a way of signalling a need [S9].
+- Newborn responses to sound and taste are automatic because aimed-movement pathways are still forming.
+- The startle and resisting are built-in circuits, not chosen actions.
+- Movement being random, diffuse and uncoordinated reflects the same neurological maturation [S3][S5].
 ```
 
 ## Go Deeper, Advanced (the head-control question)
 
 ```text
-FOCUS QUESTION: Why do a newborn's reflexes and random movements come before the smooth, ordered motor skills like head control and walking?
+FOCUS QUESTION: Why can a newborn's cry, eye movement or startle count as a response to sound when we cannot ask the infant anything?
 
-COVERS: how early reflexes and diffuse movement relate to later ordered motor development, and what this reveals about neurological maturation.
+COVERS: how behavioural responses stand in for hearing, and how caregiver interaction reads those same signals.
 
-SECTION: principle | notes | What the earliest movements look like
-A newborn's movements are random, diffuse and uncoordinated [S3]. Reflexes represent neurological maturation, and most develop before birth [S5]. Reflexes carry out bodily functions and responses to external stimuli [S3].
+SECTION: principle | notes | What a response to sound actually looks like
+The newborn infant responds to sounds with either cry or eye movement, cessation of activity and/or startle reaction [S1].
 
-SECTION: science | scholar | Why reflexes come before voluntary skill
-A reflex is a fixed response wired into the lower parts of the nervous system, below the thinking part of the brain. Because that wiring is laid down early, reflexes are ready at birth while the higher control that directs smooth, chosen movement is still forming.
+The newborn infant usually makes some response to sound from birth, and ordinary sounds are heard well before 10 days of life [S1].
 
-As the higher centres and their connecting pathways mature, they begin to guide and quieten the automatic responses, and ordered skill replaces diffuse movement. This is why early movement is random before it becomes directed.
+SECTION: science | scholar | Why behaviour is the only window
+A newborn cannot report what it hears, so the hearing pathway can only be inferred from what the body does when sound arrives. A sound reaching the ear triggers nerve signals to the brain, and the brain drives a motor or arousal change we can watch from outside.
 
-SECTION: science | scholar | Why head control leads and walking follows
-Nervous maturation tends to advance from the head downward and from the centre of the body outward. Control of the neck and trunk is gained before control of the legs, so a child steadies the head, then pushes up, then cruises and walks.
+FLOW: sound reaches ear -> signal travels to brain -> brain changes behaviour -> we observe the change.
 
-This ordering is why the sequence runs the way it does rather than in any order.
+This is why a change in activity, rather than a spoken answer, is taken as evidence of hearing. The behaviour is a stand-in for a sense we cannot measure directly.
 
-SECTION: science | notes | The sequence the notes trace
-Head control progresses from birth to 4 months [S11]. The child pushes up from the prone position and crawls with the abdomen off the floor [S12]. Later the child cruises along by holding on furniture and pulls to stand [S13], then walks with assistance and walks without assistance [S14].
+SECTION: science | scholar | Why "cessation of activity" is as telling as a startle
+A startle is a large, sudden movement, but stopping an ongoing activity is also a response: the infant redirects attention toward the sound. Both show the brain registered the sound and reorganised what the body was doing.
 
-SECTION: misconception | scholar | Reflexes are not just "practice" for skills
-It is tempting to think a reflex like grasp simply becomes the voluntary grasp through repetition. In truth they run on different wiring: the automatic reflex usually fades as higher control arrives, and the chosen skill is built by the maturing brain, not by the reflex growing up.
+An absence of a dramatic reaction therefore does not mean nothing was heard; the quiet pause carries the same meaning.
 
-SECTION: science | notes | A reflex that fades on schedule
-Rooting and sucking are nutritive, and fade by 6 months [S6].
+SECTION: application | notes | Reading the same signals in care
+Within a few days the infant interacts with caregivers through eye contact, spontaneous or imitative facial gestures [S10]. Eye movement toward a sound and these facial gestures draw on the same looking-and-attending behaviours [S1][S10].
 
-SECTION: limits | notes | What these passages do not settle
-The notes name the sequence of skills but do not give the ages at which each is expected, apart from head control to 4 months and sucking fading by 6 months [S11][S6].
+Interactions strengthen emotional ties with caregivers [S10].
 
-SECTION: limits | scholar | What these passages do not settle, beyond your notes
-They also do not say what should prompt concern if the ordering does not follow as expected.
+SECTION: application | scholar | Reading the same signals in care, beyond your notes
+So the signals that show hearing are also the signals through which social connection is built.
+
+A single response, interpreted on its own, says little; what matters is a pattern of responses considered alongside the infant's overall behaviour.
+
+SECTION: misconception | scholar | "No startle means it did not hear"
+It is tempting to expect a big reaction from every sound and to read calm as no hearing. But a response may be a small eye movement or simply going still, which is easy to miss.
+
+Reading only dramatic signs as "heard" risks overlooking the quieter responses that count equally.
+
+SECTION: limits | scholar | What the notes leave open
+The notes give responses to sound but do not say how loud, how near, or how often a sound must occur to produce them. They also do not describe how to tell a response to sound apart from random movement, which the newborn also shows.
 
 CHECK YOUR REASONING:
-- Why would the appearance of steady head control before walking fit a head-downward pattern of maturation rather than chance? [S11]
-- A nutritive reflex fades by 6 months while chosen hand use grows. What does the fading best show? [S6]
-  a) the reflex turns into the skill
-  b) higher brain control is maturing
-  c) the child is losing an ability
+- An infant stops sucking when a door closes nearby. Why might this count as a response to sound? [S1]
 
 KEY TAKEAWAYS:
-- Reflexes are ready first because their wiring sits in lower, earlier-maturing parts of the nervous system.
-- Movement runs from random to directed as higher control matures and quietens automatic responses.
-- Maturation advancing head-downward explains why head control precedes cruising and walking [S11][S13].
-- A reflex fading, such as rooting and sucking by 6 months, signals maturation, not loss of a skill [S6].
+- Hearing in the newborn is inferred from behaviour, because the infant cannot report it.
+- Cessation of activity is a response to sound just as much as a startle is [S1].
 ```
 
 ## Go Deeper, a second Explore round on top of the first

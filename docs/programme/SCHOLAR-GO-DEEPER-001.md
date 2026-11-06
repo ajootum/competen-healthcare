@@ -24,8 +24,10 @@ One model call a round, as before. The call decides what adds value from TAUGHT 
 | Marked | What it is | Held to |
 |---|---|---|
 | From your notes | What the learner's sections say | Every sentence cites, shares enough content words with what it cites (`sentenceSupported`), and passes the grounding verifier. It adds no firm conclusion or instruction the passages lack. |
-| Scholar's explanation | General science beyond the notes | No tags, digits, counts, doses, drug names, identifiers. Never presented as research ("studies show", "the evidence suggests", a name and year). No firm conclusion from a finding, no instruction about treating someone. Classified by the published risk rules, same as research text. |
+| Scholar's explanation | General science beyond the notes | No tags, digits, counts, doses, identifiers, medicines by name or class (a closed list; hormones as physiology are allowed), or urgent-action or danger wording. Never presented as research ("studies show", "the evidence suggests", a name and year). No firm conclusion from a finding, no instruction about treating someone. Classified by the published risk rules, same as research text. |
 | From published research | Existing FROM RESEARCH part | The existing `checkResearchPart`, unchanged. |
+
+Words that turn a statement false or add a cause (before, after, not, because ...) must also be in what is cited. A flow or table is judged as one claim. Headings, question stems and options answer to the same rules; a heading that fails is replaced by a neutral one. A reply not in this form, or one that does not read back as what was checked, is withheld.
 
 A sentence in a notes section that fails its test is not lost. It **moves** to a Scholar section after it, tags removed, and is judged by the stricter Scholar rules. If it fails those it is left out and counted. So the "From your notes" label stays true and a round is not thrown away for one sentence of inference. A safety section can only come from the notes. At least one notes section must survive or the round is withheld. Dosing, or an invented number in a safety context, withholds the whole round, as lesson salvage already does.
 
@@ -38,7 +40,7 @@ Why: depth is already stored on each saved round, is already in the saved key an
 
 **Round limit is shared.** The existing `scholar_learn_deeper_rounds_max` (default three) counts all rounds at all levels and of both forms, so the cost ceiling per lesson does not change.
 
-**Answer options carry no key.** Options make the learner commit, then choosing one opens the existing check with the choice written in. The learner adds reasons and the existing `clarify` judges them. Stored and scored through the existing mechanism; no second marking path. An option's own citation is removed so it cannot point at its answer.
+**Answer options carry no key.** Options make the learner commit: choosing only marks one, so arrow keys can compare them, and "Answer with this choice" opens the existing check with the choice written in. The learner adds reasons and the existing `clarify` judges them. Stored and scored through the existing mechanism; no second marking path. An option's own citation is removed so it cannot point at its answer.
 
 **Pictures.** The learner's own originals through `SectionPictures` (SCHOLAR-VISUAL-001), under a notes section that cites that page, each page once. Original diagrams are tables and `FLOW` chains drawn as text, so they are accessible and cost nothing. No generated images.
 
@@ -53,12 +55,31 @@ The prompt version is **added**, not replaced. `learnDeeper` stays v2, and `lear
 
 A structured round's Scholar sections are stripped wherever a saved round becomes a passage (`savedLearningPassage`), so Ask across saved learning cannot rest on the model's own words as if they were notes. Saved learning and the PDF export both show each section's source.
 
-## 5. Seams with other work
+## 5. What changes with the policy off
+
+One thing, and it is a bug fix, not the new behaviour. 415 stores at most ten sources for a saved answer, while a lesson can now hold sixteen (LESSON_MAX_SECTIONS, raised by SCHOLAR-CUMULATIVE-TEACHING-01). So every lesson over ten sections found none of its saved teaching:
+
+- Go deeper and Explain again ran with no TAUGHT SO FAR, so they repeated the lesson;
+- a reopen did not bring back the lesson's other rounds;
+- on a reopen, a citation of [S11] or later was a dead tag.
+
+From this change such a lesson finds teaching saved for it, identified by the row's own session and step (820), and rounds already saved count towards the limit at once. Rows with no session and step stay unmatched, as they were. This was the acceptance lesson's own condition: it has sixteen sections. Without the fix, the first run of the walk reached the model with no taught ground. No migration. It takes effect on deploy.
+
+## 6. Known limits
+
+Found by the independent read and left, as notes rather than defects:
+
+- The notes test compares words and a few sense words, so it is not a check of meaning. The wording rules are closed lists. A sentence can pass while saying more than the notes do: the section's label is a strong signal, not a proof, which is why the round states that it is AI-generated and not clinically reviewed.
+- On a lesson with more than six saved teachings, a reopen shows the newest six (`alsoSaved`), so an older round may be hidden while still counting.
+- "Try again" on a Go Deeper check loses the question's tag, so its self-review uses the lesson's points.
+- A table is flattened into a paragraph in the PDF export.
+
+## 7. Seams with other work
 
 - **Evidence packs (SCHOLAR-RESEARCH-TEACH-001).** Not built here. A pack is one more source of `ResearchEvidence` in the route's `evidence` array, and everything downstream exists. With no pack the round works and says no research was consulted. When a pack lands, its id must join `context` in the saved key.
 - **Automatic research.** Unchanged and not used: Go Deeper consults research only through the existing Learn-from research mode and its controls. Production stays off until the owner's separate activation GO.
 - **My Ideas & Notes (COMPETEN-NOTEBOOK-001).** No second capture is built. `SectionNote` in `go-deeper-view.tsx` is drawn after each section and returns nothing until `MyIdeasBox` lands, then it is one line. **Note capture is therefore not yet in Go Deeper.**
 
-## 6. Rollback
+## 8. Rollback
 
-Set `scholar_go_deeper_structured` to off. No migration.
+Set `scholar_go_deeper_structured` to off. No migration. Saved rounds stay readable.

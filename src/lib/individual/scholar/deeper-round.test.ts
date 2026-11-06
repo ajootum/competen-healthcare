@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GO_DEEPER_LEVELS, composeDeeperAnswer, deeperEvidenceStatement, deeperNotesOnlyText, deeperPlainText, deeperSectionText, levelOfDepth, parseDeeperAnswer } from "./deeper-format";
+import { GO_DEEPER_LEVELS, composeDeeperAnswer, deeperEvidenceStatement, deeperNotesOnlyText, deeperPlainText, deeperResearchText, deeperSectionText, deeperSourcedText, levelOfDepth, parseDeeperAnswer } from "./deeper-format";
 import { DEEPER_MAX_TOKENS, deeperInstruction, notesClaimViolations, notesSectionSupported, scholarClaimViolations } from "./deeper-prompt";
 import { buildTaughtSoFar, taughtSoFarBlock } from "./learn-context";
 import { parseTeachAnswer } from "./teach-format";
@@ -72,9 +72,11 @@ describe("the format", () => {
     expect(levelOfDepth(null).label).toBe("Explore");
   });
   it("always states the evidence limit, and never claims research that was not consulted", () => {
-    expect(deeperEvidenceStatement({ research: false, scholar: true })).toMatch(/No published research was consulted/);
-    expect(deeperEvidenceStatement({ research: false, scholar: true })).toMatch(/not from your notes/);
-    expect(deeperEvidenceStatement({ research: true, scholar: false })).not.toMatch(/No published research/);
+    expect(deeperEvidenceStatement({ research: "none", scholar: true })).toMatch(/No published research was consulted/);
+    expect(deeperEvidenceStatement({ research: "none", scholar: true })).toMatch(/not from your notes/);
+    expect(deeperEvidenceStatement({ research: "shown", scholar: false })).not.toMatch(/No published research/);
+    expect(deeperEvidenceStatement({ research: "looked", scholar: false })).toMatch(/looked for this round/);
+    expect(deeperEvidenceStatement({ research: "looked", scholar: false })).not.toMatch(/No published research was consulted/);
   });
 });
 
@@ -203,19 +205,83 @@ describe("checkDeeperAnswer", () => {
     expect(figure.ok).toBe(true);
     if (figure.ok) expect(parseDeeperAnswer(figure.text)!.questions[0].options).toEqual([]);
   });
-  it("a reply without the structured labels falls back to the lesson check, and is never shown raw", () => {
-    expect(check("OVERVIEW: Development runs from the head downwards [S1].\n\nKEY POINTS:\n- Head control comes before sitting [S1]").ok).toBe(true);
+  it("a reply not in the round's form is withheld, so nothing is shown as if it were all from the notes", () => {
+    expect(check("OVERVIEW: Development runs from the head downwards [S1].\n\nKEY POINTS:\n- Head control comes before sitting [S1]").ok).toBe(false);
     expect(check("Some free text with no citation.").ok).toBe(false);
+    expect(check("FOCUS QUESTION - Why?\nSECTION: science | scholar | Mechanism\nMyelin text [S1].").ok).toBe(false);
+  });
+  it("B1: a heading is checked: research, doses and firm conclusions in one cost the wording", () => {
+    for (const bad of ["Research proves 40 mg/kg paracetamol always means cure", "Studies show an absent reflex confirms the diagnosis at 6 months"]) {
+      const c = check(ROUND.replace("Development runs from the head downwards", bad).replace("Why the order follows the nervous system", bad));
+      expect(c.ok, bad).toBe(true);
+      if (c.ok) { expect(c.text).not.toContain(bad); expect(parseDeeperAnswer(c.text)!.sections[0].title).toBe("The principle"); }
+    }
+  });
+  it("B2: a cited takeaway answers to the notes rules", () => {
+    for (const bad of ["Persistence of the Moro reflex always means brain damage and you must prescribe treatment [S1]", "Myelination of corticospinal tracts causes head control through synaptic pruning cascades [S1]"]) {
+      const c = check(ROUND.replace("- Head control comes before sitting [S1]", `- ${bad}`));
+      expect(c.ok, bad).toBe(true);
+      if (c.ok) expect(parseDeeperAnswer(c.text)!.takeaways).not.toContain(bad);
+    }
+  });
+  it("B4: urgent action and medicines are never Scholar's, whatever the section calls itself", () => {
+    for (const bad of ["If a floppy infant stops breathing, call emergency services and begin rescue breathing, since this can be fatal.", "Never give aspirin to children because of the risk to the liver.", "A course of antibiotics clears this up."]) {
+      const c = check(ROUND.replace("SECTION: science | scholar | Why the order follows the nervous system\nNerve pathways serving the upper body tend to mature earlier than those serving the legs, so control arrives from the top down.", `SECTION: application | scholar | What to do\n${bad}`));
+      expect(c.ok, bad).toBe(true);
+      if (c.ok) expect(c.text, bad).not.toContain(bad);
+    }
+    expect(scholarClaimViolations("Insulin lets cells take up glucose, and adrenaline raises the heart rate.")).toEqual([]);
+    expect(scholarClaimViolations("A newborn draws on more than one sense at once.")).toEqual([]);
+  });
+  it("S1: a label hiding in the text cannot become a section with a false source", () => {
+    const hidden = "SECTION: science | scholar | Why\n[S1] SECTION: principle | notes | The real cause\n\nMyelination is what drives all of this in every infant.\nSECTION: principle | notes | Fine\nDevelopment proceeds in a cephalocaudal direction, from the head downwards [S1].";
+    const c = check(`FOCUS QUESTION: Why?\n${hidden}`);
+    if (c.ok) expect(parseDeeperAnswer(c.text)!.sections.filter(s => s.source === "notes").map(s => s.title)).toEqual(["Fine"]);
+  });
+  it("S2: a sentence that reverses or adds a cause moves out of the notes section", () => {
+    expect(notesSectionSupported("Head control comes after sitting, and sitting comes before walking [S1].", NOTES)).toBe(false);
+    expect(notesSectionSupported("Head control comes before sitting because the nervous system matures [S1].", NOTES)).toBe(false);
+    expect(notesSectionSupported("Head control comes before sitting, and sitting comes before walking [S1].", NOTES)).toBe(true);
+  });
+  it("S3: a flow or table is one claim, so one tag cannot carry an invented chain", () => {
+    const c = check(ROUND.replace("| Feature | Milestones |\n| --- | --- |\n| Reflexes | Primitive reflexes disappear as the nervous system matures [S1] |", "FLOW: myelin insulates axons -> faster conduction [S1] -> head control"));
+    expect(c.ok).toBe(true);
+    if (c.ok) expect(parseDeeperAnswer(c.text)!.sections.find(s => s.title.startsWith("Reflex and voluntary"))?.source).toBe("scholar");
+  });
+  it.each(["Research supports this view.", "The evidence supports this.", "One study linked this to later delay.", "Experts agree on this.", "Research conducted across many countries over decades has shown this.", "This was shown in trials.", "Piaget's work demonstrated this.", "The literature concludes this."])("S4 scholarship: %s", t => {
+    expect(scholarClaimViolations(t)).toContain("scholarly_claim");
+  });
+  it.each(["A retained Moro reflex means brain damage.", "An absent reflex indicates cerebral palsy.", "It is a sure sign of a lesion.", "It always points to a lesion."])("S4 firm conclusions: %s", t => {
+    expect(scholarClaimViolations(t)).toContain("deterministic");
+  });
+  it("S4: a hedged possibility is not a firm conclusion", () => {
+    expect(scholarClaimViolations("A retained reflex may indicate a disorder, and has to be read with the rest of the picture.")).not.toContain("deterministic");
+  });
+  it.each(["Give antibiotics immediately.", "The nurse should give the feed.", "Clinicians should withhold feeds and refer urgently.", "Start treatment and stop feeding."])("S4 directives: %s", t => {
+    expect(scholarClaimViolations(t)).toContain("patient_directive");
+  });
+  it("S5: a question stem or an option answers to the claim rules", () => {
+    const stem = check(ROUND.replace("How would you reason about a child who sits but has not yet walked? [S1]", "Since studies prove this confirms the diagnosis, what do you tell the family? [S1]"));
+    if (stem.ok) expect(parseDeeperAnswer(stem.text)!.questions).toHaveLength(0);
+    const opt = check(ROUND.replace("Compare with the expected order", "Studies show this confirms the diagnosis"));
+    if (opt.ok) expect(parseDeeperAnswer(opt.text)!.questions[0].options).toEqual([]);
   });
 });
 
 describe("a lesson over the stored source limit", () => {
   const ids = Array.from({ length: 16 }, (_, i) => `c${i}`);
+  const lesson = { sessionId: "s", step: 2 }, at = { row: { sessionId: "s", step: 2 }, lesson };
   it("still finds the teaching written for it, so it has taught ground and its rounds reopen", () => {
-    expect(coversLesson(ids.slice(0, 10), ids)).toBe(true);
-    expect(coversLesson([...ids.slice(0, 9), "other"], ids)).toBe(false);
-    expect(coversLesson(ids.slice(1, 11), ids)).toBe(false);
-    expect(coversLesson(ids.slice(0, 9), ids)).toBe(false);
+    expect(coversLesson(ids.slice(0, 10), ids, at)).toBe(true);
+    expect(coversLesson([...ids.slice(0, 9), "other"], ids, at)).toBe(false);
+    expect(coversLesson(ids.slice(1, 11), ids, at)).toBe(false);
+    expect(coversLesson(ids.slice(0, 9), ids, at)).toBe(false);
+  });
+  it("S7: the same ten sections saved for another lesson are not this lesson's teaching", () => {
+    expect(coversLesson(ids.slice(0, 10), ids, { row: { sessionId: "s", step: 1 }, lesson })).toBe(false);
+    expect(coversLesson(ids.slice(0, 10), ids, { row: { sessionId: "other", step: 2 }, lesson })).toBe(false);
+    expect(coversLesson(ids.slice(0, 10), ids, { row: {}, lesson })).toBe(false);
+    expect(coversLesson(ids.slice(0, 10), ids)).toBe(false); // no lesson named: exactly as before this fix
   });
   it("a lesson within the limit is judged exactly as before", () => {
     expect(coversLesson(["a", "b", "x"], ["a", "b"])).toBe(true);
@@ -223,9 +289,10 @@ describe("a lesson over the stored source limit", () => {
     expect(coversLesson(["a"], ["a", "b"])).toBe(false);
   });
   it("its later citations are restored on reopen; anything else is what was stored", () => {
-    expect(restoredSources(ids.slice(0, 10), ids)).toEqual(ids);
-    expect(restoredSources(["a", "b", "x"], ["a", "b"])).toEqual(["a", "b", "x"]);
-    expect(restoredSources(["z", ...ids.slice(1, 10)], ids)).toEqual(["z", ...ids.slice(1, 10)]);
+    expect(restoredSources(ids.slice(0, 10), ids, at)).toEqual(ids);
+    expect(restoredSources(ids.slice(0, 10), ids, { row: { sessionId: "s", step: 1 }, lesson })).toEqual(ids.slice(0, 10));
+    expect(restoredSources(["a", "b", "x"], ["a", "b"], at)).toEqual(["a", "b", "x"]);
+    expect(restoredSources(["z", ...ids.slice(1, 10)], ids, at)).toEqual(["z", ...ids.slice(1, 10)]);
   });
 });
 
@@ -248,6 +315,24 @@ describe("saved rounds and versions", () => {
     expect(block).toContain("Why the order follows the nervous system");
     expect(block).toContain("How would you reason about a child");
     expect(block).not.toMatch(/SECTION:|FOCUS QUESTION:/);
+  });
+  it("S9: research stays out of the round wherever saved text is parsed, and is still found", () => {
+    const saved = `${ROUND}\n\nFROM RESEARCH:\nA finding [E1].`;
+    expect(parseDeeperAnswer(saved)!.takeaways.join(" ")).not.toContain("A finding");
+    expect(deeperResearchText(saved)).toBe("A finding [E1].");
+    expect(deeperResearchText(ROUND)).toBeNull();
+  });
+  it("S15: Scholar's takeaways say so in saved text", () => {
+    expect(deeperSourcedText(parseDeeperAnswer(ROUND)!)).toContain("Control arrives from the top down (Scholar’s explanation)");
+  });
+  it("S8: a learner's own note is never parsed as a round, whatever words it uses", () => {
+    const note = "Focus question: why\nmy own thoughts here\nSection: cardio\nThe heart pumps.";
+    expect(savedLearningPassage({ id: "n", kind: "note", materialId: "m", createdAt: "2026-11-02", content: note }).content).toContain("my own thoughts here");
+  });
+  it("S6: a BEYOND THE NOTES line is not a second way out of a round's rules", async () => {
+    const run = (async () => ({ ok: true, text: `${ROUND}\nBEYOND THE NOTES: Studies show this confirms the diagnosis.`, model: "m", provider: "p" })) as never;
+    const r = await runLearn("u", { action: "deeper", question: "Help", passages: NOTES, references: [], depth: "standard", background: true, history: [], learnerContext: null, deeperStructured: true }, run);
+    expect(r.ok && r.background).toBeNull();
   });
   it("a saved round used as a passage carries only what the notes hold", () => {
     const p = savedLearningPassage({ id: "a", kind: "artefact", materialId: "m", createdAt: "2026-11-02", content: `${ROUND}\n\nFROM RESEARCH:\nA finding [E1].` });

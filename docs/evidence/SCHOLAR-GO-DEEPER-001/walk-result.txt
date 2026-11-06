@@ -53,11 +53,15 @@ PASS the learner's own pictures appear under the sections that cite them (1)
 PASS each picture is labelled as the original
 PASS the badge does not claim the round is all from the notes
 PASS desktop: no sideways page scroll
-NOTE desktop: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":30,"t":"Helpful"}]
+NOTE desktop: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":40,"t":"Understand"}]
 PASS tablet: no sideways page scroll
-NOTE tablet: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":30,"t":"Helpful"}]
+NOTE tablet: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":40,"t":"Understand"}]
 PASS phone: no sideways page scroll
-NOTE phone: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":30,"t":"Helpful"}]
+NOTE phone: smallest controls [{"h":25,"t":"Explain it a new way"},{"h":40,"t":"Understand"}]
+PASS arrow keys compare the options without opening the check
+PASS the button opens the check with the choice written in
+PASS a choice with no reason cannot be sent
+PASS another choice keeps the reasons written
 PASS the judged check from the walk is kept through the existing mechanism (marking ai_evaluation, score 0.5, at 2026-11-06T13:38:47.172103+00:00)
 PASS this pass made no model call (0)
 NOTE staging policy left OFF

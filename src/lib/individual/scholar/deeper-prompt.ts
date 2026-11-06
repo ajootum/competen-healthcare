@@ -56,15 +56,20 @@ export function deeperInstruction(opts: { depth: ExplanationDepth; scholar: bool
 // ── THE RULES A SECTION IS HELD TO, beyond checkLearnMain and checkBackgroundText ──
 
 /** Words that present text as verified scholarship. Scholar's own explanation may never use them: the owner's rule, in code. */
-const SCHOLARLY_CLAIM = /\b(?:research|stud(?:y|ies)|trials?|meta-analys[ie]s|systematic reviews?|cohort|the (?:literature|evidence)|evidence|data|guidelines?)\b[^.!?\n]{0,30}\b(?:shows?|showed|shown|demonstrat\w+|proves?|proved|proven|confirm\w*|found|finds|establish\w*|indicat\w+|suggest\w*|reports?|reported|recommends?|states?|says?)\b|\bet al\b|\b(?:published|peer[\s-]reviewed|landmark|randomi[sz]ed)\s+(?:stud|research|trial|evidence|paper)\w*|\b(?:according to|as reported by)\b[^.!?\n]{0,40}\b(?:guidelines?|stud(?:y|ies)|research|who|nice|cdc|journal)\b|\b(?:studies|researchers|scientists)\b/i;
+const SCHOLARLY_CLAIM = /\b(?:research|stud(?:y|ies)|trials?|meta-analys[ie]s|systematic reviews?|cohort|the (?:literature|evidence)|evidence|data|guidelines?|literature)\b[^.!?\n]{0,80}\b(?:shows?|showed|shown|demonstrat\w+|proves?|proved|proven|confirm\w*|found|finds|establish\w*|indicat\w+|suggest\w*|reports?|reported|recommends?|states?|says?|supports?|supported|links?|linked|concludes?|concluded)\b|\bet al\b|\b(?:published|peer[\s-]reviewed|landmark|randomi[sz]ed)\s+(?:stud|research|trial|evidence|paper)\w*|\b(?:according to|as reported by)\b[^.!?\n]{0,40}\b(?:guidelines?|stud(?:y|ies)|research|who|nice|cdc|journal)\b|\b(?:studies|researchers|scientists|experts)\b|\b(?:a|one|another|several|many|some|recent)\s+stud(?:y|ies)\b|\bshown in (?:trials|studies|research)\b|\b\w+['’]s\s+(?:work|research|stud(?:y|ies)|experiments?)\s+(?:demonstrat|show|prov|found)\w*/i;
 /** A firm conclusion from a finding, or a direct instruction about treating someone. */
-const DETERMINISTIC = /\b(?:always|definitely|certainly|invariably|necessarily)\s+(?:means?|indicates?|signals?|confirms?|shows?|proves?|reflects?)\b|\bconfirms? (?:the|a) diagnosis\b|\bis diagnostic of\b|\brules? (?:it |this |that )?out\b|\bproves? that\b|\bmust (?:have|be suffering)\b/i;
-const PATIENT_DIRECTIVE = /\byou (?:should|must|need to)\s+(?:give|prescribe|start|stop|administer|treat|diagnose|refer|withhold|discharge)\b|\b(?:prescribe|administer)\b/i;
+const DETERMINISTIC = /\b(?:always|definitely|certainly|invariably|necessarily)\s+(?:means?|indicates?|signals?|confirms?|shows?|proves?|reflects?|points? to)\b|\bconfirms? (?:the|a) diagnosis\b|\bis diagnostic of\b|\brules? (?:it |this |that )?out\b|\bproves? that\b|\bmust (?:have|be suffering)\b|\bis a (?:sure|definite|certain) sign\b|(?<!\b(?:may|might|can|could|not|never)\s)\b(?:means?|indicates?|signals?|points? to)\b[^.!?\n]{0,40}\b(?:damage|palsy|lesion|disorder|disease|deficit|infection|syndrome|tumou?r|injury|impairment)\b/i;
+const PATIENT_DIRECTIVE = /\byou (?:should|must|need to)\s+(?:give|prescribe|start|stop|administer|treat|diagnose|refer|withhold|discharge)\b|\b(?:prescribe|administer)\b|\b(?:nurses?|clinicians?|doctors?|carers?|staff)\s+(?:should|must)\s+(?:give|withhold|start|stop|refer|treat|diagnose|discharge)\b|\b(?:give|start|stop|withhold|begin)\s+(?:the\s+|a\s+|an\s+|this\s+)?(?:treatment|therapy|medication|medicines?|drugs?|feeds?|oxygen|antibiotics?)\b|\brefer (?:them |the \w+ )?urgently\b/i;
 
 /** A figure in words the shared background check does not list, and an age or time named by an ordinal. Scholar states none: the notes hold the numbers. */
 const FIGURE_WORDS = /\b(?:thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|sixty|seventy|eighty|ninety|million|billion|half|dozen|majority)\b|\b(?:first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|twelfth)\s+(?:year|month|week|day|trimester|decade)\b/i;
 
-export type ClaimViolation = "scholarly_claim" | "deterministic" | "patient_directive" | "figure_word";
+/** Medicines by name or class, a closed list: Scholar names none (the notes may). Hormones as physiology (insulin, adrenaline, cortisol) are not here, because explaining them is teaching. */
+const DRUG_WORDS = /\b(?:paracetamol|acetaminophen|ibuprofen|aspirin|naproxen|diclofenac|morphine|codeine|fentanyl|opioids?|benzodiazepines?|diazepam|midazolam|lorazepam|phenobarbit\w+|antibiotics?|penicillin|amoxicillin|gentamicin|ceftriaxone|antivirals?|steroids?|corticosteroids?|dexamethasone|prednisolone|hydrocortisone|salbutamol|warfarin|heparin|digoxin|furosemide|antidepressants?|antipsychotics?|sedatives?|anticonvulsants?|chemotherapy)\b/i;
+/** Urgent action and danger. "Safety only from the notes" means this wording, whatever a section calls itself. */
+const URGENT_ACTION = /\bemergency services\b|\bambulance\b|\brescue breath\w*|\bresuscitat\w*|\bCPR\b|\bfatal\b|\blife[\s-]threatening\b|\boverdose\b|\b(?:never|do not|don['’]t|must not)\s+(?:give|feed|leave|delay)\b|\bcontraindicat\w*|\bseek (?:urgent|immediate|emergency)\b|\b(?:act|treat|refer|call|respond|escalate)\s+(?:immediately|urgently|at once)\b|\b(?:immediately|urgently)\s+(?:call|give|treat|refer|stop|start|escalate)\b|\bcan (?:kill|be deadly)\b/i;
+
+export type ClaimViolation = "scholarly_claim" | "deterministic" | "patient_directive" | "figure_word" | "drug_name" | "urgent_action";
 
 /** Pure. What Scholar's own explanation may not say. Every rule, whatever the passages hold: it is not from them. */
 export function scholarClaimViolations(text: string): ClaimViolation[] {
@@ -73,6 +78,8 @@ export function scholarClaimViolations(text: string): ClaimViolation[] {
   if (DETERMINISTIC.test(text)) out.push("deterministic");
   if (PATIENT_DIRECTIVE.test(text)) out.push("patient_directive");
   if (FIGURE_WORDS.test(text)) out.push("figure_word");
+  if (DRUG_WORDS.test(text)) out.push("drug_name");
+  if (URGENT_ACTION.test(text)) out.push("urgent_action");
   return out;
 }
 
@@ -102,13 +109,18 @@ export const NOTES_SUPPORT_MIN = 0.4;
 /** Pure. A text as sentences, each with the tags that follow it. "x [S1]." and "x. [S1]" both read as "x [S1]." */
 export const sentencesOf = (text: string) => text.replace(/([.!?])((?:\s*\[[SR]\d+\])+)/g, "$2$1").split(/(?<=[.!?])\s+|\n+/).map(s => s.trim()).filter(Boolean);
 
-/** Pure. Whether one sentence rests on the passages it cites. A short phrase (a table cell, a flow step) under four content words is excused. */
+/** Words that turn a true statement false or add a cause. Word overlap cannot see them ("comes after" and "comes before" share every other word), so each must be in what is cited. */
+const SENSE_WORDS = /\b(?:before|after|not|never|no|because|cause[sd]?|causing|since|therefore|hence|without|unless|only|always|leads?|led|results?|drives?|explains?|due)\b/gi;
+
+/** Pure. Whether one sentence rests on the passages it cites. Under four content words is excused: a flow or table is judged as one unit by the caller, so this excuses only a short phrase. */
 export function sentenceSupported(sentence: string, passages: readonly { content: string }[]): boolean {
   const words = contentWords(sentence.replace(/\[[SR]\d+\]/g, " "));
   if (words.length < 4) return true;
   const tags = [...sentence.matchAll(/\[S(\d+)\]/g)].map(m => Number(m[1]));
   if (!tags.length) return false;
   const body = new Set(contentWords(tags.map(t => passages[t - 1]?.content ?? "").join(" ")).map(stemOf));
+  const cited = ` ${tags.map(t => passages[t - 1]?.content ?? "").join(" ").toLowerCase().replace(/[^\p{L}]+/gu, " ")} `;
+  if ((sentence.replace(/\[[SR]\d+\]/g, " ").match(SENSE_WORDS) ?? []).some(w => !cited.includes(` ${w.toLowerCase()} `))) return false;
   return words.filter(w => body.has(stemOf(w))).length / words.length >= NOTES_SUPPORT_MIN;
 }
 

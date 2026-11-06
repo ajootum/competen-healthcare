@@ -115,12 +115,12 @@ function LevelControl({ current, levels }: { current: string; levels: GoDeeperLe
   );
 }
 
-export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, onAnswer, onChoose, canAnswer, renderCheck, answered, research, hasResearch, tools, salvage, sourcesAndMore }: {
+export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, onAnswer, onChoose, canAnswer, renderCheck, answered, research, researchState, tools, salvage, sourcesAndMore }: {
   parts: DeeperParts; depth: string | null | undefined; anchorId?: string; sources: readonly Source[]; cite: (text: string) => ReactNode;
   levels: GoDeeperLevels | null;
   onAnswer?: (q: string) => void; onChoose?: (q: string, option: string) => void; canAnswer?: (q: string) => boolean; renderCheck?: (q: string) => ReactNode; answered?: (q: string) => string | null;
   /** The research part (ResearchBlock), placed in the sequence after the science. Null: no research in this round. */
-  research: ReactNode; hasResearch: boolean;
+  research: ReactNode; researchState: "shown" | "looked" | "none";
   tools?: ReactNode; salvage?: ReactNode; sourcesAndMore?: ReactNode;
 }) {
   const level = levelOfDepth(depth);
@@ -128,7 +128,7 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
   const usedPages = new Set<string>();
   const hasScholar = parts.sections.some(s => s.source === "scholar");
   const firstAfterScience = parts.sections.findIndex(s => s.kind !== "principle" && s.kind !== "science" && s.kind !== "compare");
-  const researchAt = hasResearch ? (firstAfterScience < 0 ? parts.sections.length : firstAfterScience) : -1;
+  const researchAt = researchState === "shown" ? (firstAfterScience < 0 ? parts.sections.length : firstAfterScience) : -1;
   let n = 0;
   const sectionView = (s: DeeperSection, i: number) => {
     const source = firstSource(s, sources);
@@ -136,7 +136,7 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
     // One original picture per page per round, under the section that cites it (SCHOLAR-VISUAL-001). Scholar's own sections cite nothing, so they show none.
     const pages = source ? pagesOfCitation(source.citation) : null;
     const pageKey = pages && source ? `${source.materialId}:${pages.from}` : null;
-    const picture = pages && source && pageKey && s.source === "notes" && !usedPages.has(pageKey) && usedPages.size < MAX_PICTURE_PAGES && s.kind !== "safety"
+    const picture = pages && source && pageKey && s.source === "notes" && !usedPages.has(pageKey) && usedPages.size < MAX_PICTURE_PAGES && s.kind !== "safety" && s.kind !== "misconception" && s.kind !== "advanced"
       ? <SectionPictures materialId={source.materialId} materialTitle={source.materialTitle} from={pages.from} to={pages.to} first last={false} /> : null;
     if (picture && pageKey) usedPages.add(pageKey);
     const note = <SectionNote anchor={anchor} label={s.title} chunkId={source?.chunkId ?? null} materialId={source?.materialId ?? null} />;
@@ -230,7 +230,7 @@ export function GoDeeperCard({ parts, depth, anchorId, sources, cite, levels, on
       )}
       <section aria-labelledby={`${prefix}-evidence`} className={`${learnTone("sources")} rounded-2xl border border-gray-200 bg-[var(--cmp-app-surface)] p-4 sm:p-5`}>
         <h4 id={`${prefix}-evidence`} className="flex items-center gap-2 text-[15px] font-bold text-gray-900"><LearningIcon name="library" className="h-[18px] w-[18px] text-gray-700" />{GO_DEEPER_COPY.footer}</h4>
-        <InlineNote className="mt-2 text-[13.5px]">{deeperEvidenceStatement({ research: hasResearch, scholar: hasScholar })}</InlineNote>
+        <InlineNote className="mt-2 text-[13.5px]">{deeperEvidenceStatement({ research: researchState, scholar: hasScholar })}</InlineNote>
         {sourcesAndMore}
       </section>
     </article>
@@ -242,17 +242,24 @@ function QuestionView({ index, prefix, text, options, cite, answered, canAnswer,
   onAnswer?: (q: string) => void; onChoose?: (q: string, option: string) => void; renderCheck?: (q: string) => ReactNode;
 }) {
   const [chosen, setChosen] = useState<number | null>(null);
-  const offered = options.length >= 2 && canAnswer && !!onChoose;
+  const hasOptions = options.length >= 2;
+  const offered = hasOptions && canAnswer && !!onChoose;
   return (
-    <QuestionCard question={cite(text)} answered={answered} action={!offered && onAnswer && canAnswer ? { label: "Answer this", onClick: () => onAnswer(text) } : null}>
-      {options.length >= 2 && (
+    <QuestionCard question={cite(text)} answered={answered} action={!hasOptions && onAnswer && canAnswer ? { label: "Answer this", onClick: () => onAnswer(text) } : null}>
+      {hasOptions && (
         <div className="w-full">
           <div role="radiogroup" aria-label={questionText(text)} className="mt-1 space-y-2">
             {options.map((o, i) => (
-              <AnswerOption key={i} name={`${prefix}-q${index}`} checked={chosen === i} mark="" onChange={() => { setChosen(i); if (offered) onChoose!(text, o); }}>{o}</AnswerOption>
+              <AnswerOption key={i} name={`${prefix}-q${index}`} checked={chosen === i} mark="" onChange={() => setChosen(i)}>{o}</AnswerOption>
             ))}
           </div>
-          {offered && <p className="mt-1.5 text-[12.5px] text-gray-700">Choose one, then say why. Your reasons are what Scholar looks at.</p>}
+          {/* Choosing only marks the option, so arrow keys can compare them. Answering is its own step, and says when it is not open. */}
+          {offered
+            ? <div className="mt-2 flex flex-wrap items-center gap-2">
+                <button type="button" disabled={chosen === null} onClick={() => { if (chosen !== null) onChoose!(text, options[chosen]); }} className={learnAction.primary}>Answer with this choice</button>
+                <span className="text-[12.5px] text-gray-700">Then say why. Your reasons are what Scholar looks at.</span>
+              </div>
+            : canAnswer && <p className="mt-1.5 text-[12.5px] text-gray-700">Finish the open check first, then you can answer this one.</p>}
         </div>
       )}
       {renderCheck && <div className="w-full">{renderCheck(text)}</div>}

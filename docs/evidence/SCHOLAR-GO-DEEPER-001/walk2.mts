@@ -61,6 +61,29 @@ for (const [name, w, h] of [["desktop", 1440, 900], ["tablet", 820, 1180], ["pho
   await motor.screenshot({ path: join(OUT, `shots/10-head-control-${name}.png`) });
 }
 await page.setViewportSize({ width: 1440, height: 900 });
+// The answer options, with no model call: arrow keys only move the choice; the button opens the check; another choice keeps the reasons; a choice with no reason cannot be sent.
+const withOptions = rounds.locator('[role="radiogroup"]').first();
+if (await withOptions.count()) {
+  const list = withOptions.locator("input[type=radio]");
+  await list.first().focus();
+  await page.keyboard.press("Space");
+  await page.keyboard.press("ArrowDown");
+  await page.waitForTimeout(400);
+  ok((await page.locator("#check-answer").count()) === 0, "arrow keys compare the options without opening the check");
+  const card = page.locator('[data-testid="go-deeper-round"] li', { has: page.locator('[role="radiogroup"]') }).first();
+  await card.getByRole("button", { name: "Answer with this choice" }).click();
+  await page.waitForTimeout(500);
+  const box = page.locator("#check-answer");
+  ok((await box.inputValue()).startsWith("I chose:"), "the button opens the check with the choice written in");
+  ok(await card.getByRole("button", { name: /Check my answer/i }).isDisabled(), "a choice with no reason cannot be sent");
+  await box.fill(`${await box.inputValue()}my reasons here`);
+  await list.first().check();
+  await card.getByRole("button", { name: "Answer with this choice" }).click();
+  await page.waitForTimeout(400);
+  ok((await box.inputValue()).endsWith("my reasons here"), "another choice keeps the reasons written");
+  await card.screenshot({ path: join(OUT, "shots/11-answer-options.png") });
+  await card.getByRole("button", { name: /^Skip/ }).click().catch(() => {});
+} else say("NOTE no round on the page has options");
 const { data: kept, error } = await admin.from("individual_scholar_attempt").select("marking, score, correct, answered_at").eq("user_id", userId).eq("marking", "ai_evaluation").order("answered_at", { ascending: false }).limit(1);
 ok(!error && !!kept?.[0], `the judged check from the walk is kept through the existing mechanism (marking ${kept?.[0]?.marking}, score ${kept?.[0]?.score}, at ${kept?.[0]?.answered_at})`);
 await setPolicy("off");

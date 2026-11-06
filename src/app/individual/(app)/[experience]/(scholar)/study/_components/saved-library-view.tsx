@@ -1,4 +1,4 @@
-import { GO_DEEPER_COPY, deeperPlainText, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
+import { GO_DEEPER_COPY, deeperResearchText, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
@@ -352,11 +352,12 @@ const urlWithVersion = (id: string) => `${href("study/saved")}?version=${encodeU
 function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> }) {
   // SCHOLAR-GO-DEEPER-001: a saved structured round says where each section comes from, so Scholar's explanation is never read as the notes.
   const round = a.action === "deeper" ? parseDeeperAnswer(a.content) : null;
-  const shown = round ? deeperSourcedText(round) : a.content;
+  const research = round ? deeperResearchText(a.content) : null;
+  const shown = round ? `${deeperSourcedText(round)}${research ? `\n\n${GO_DEEPER_COPY.research}\n${research}` : ""}` : a.content;
   return (
     <>
       <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{round ? GO_DEEPER_COPY.subtitle : SOURCE_KIND_LABEL.notes}</p>
-      <ReadAloudButton text={round ? deeperPlainText(round) : a.content} about="this saved lesson" className="mt-1" />
+      <ReadAloudButton text={shown} about="this saved lesson" className="mt-1" />
       <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{shown}</div>
       <ul className="mt-2 space-y-0.5">
         {a.sources.map((chunkId, i) => (

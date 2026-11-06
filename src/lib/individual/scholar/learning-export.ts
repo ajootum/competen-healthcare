@@ -4,7 +4,7 @@ import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { pdfSafe, pdfUnencodable } from "@/lib/individual/documents/pdf";
 import { parseTeachAnswer, questionText } from "./teach-format";
-import { GO_DEEPER_COPY, deeperSectionText, parseDeeperAnswer } from "./deeper-format";
+import { GO_DEEPER_COPY, deeperResearchText, deeperSectionText, parseDeeperAnswer, takeawayLine } from "./deeper-format";
 
 // ── SAVED LEARNING: THE PDF DOWNLOAD ── owner instruction 1 Nov 2026 (item 2) ───────────────────────────────────────────
 //
@@ -117,7 +117,9 @@ export function teachingBlocks(t: ExportTeaching): Block[] {
       out.push({ t: "small", text: `${s.title} (${s.source === "notes" ? GO_DEEPER_COPY.notes : GO_DEEPER_COPY.scholar})` });
       out.push({ t: "p", text: inline(deeperSectionText(s).split("\n").join(" ")) });
     }
-    if (deep.takeaways.length) { out.push({ t: "small", text: GO_DEEPER_COPY.takeaways }); for (const p of deep.takeaways) out.push({ t: "bullet", text: inline(p) }); }
+    if (deep.takeaways.length) { out.push({ t: "small", text: GO_DEEPER_COPY.takeaways }); for (const p of deep.takeaways) out.push({ t: "bullet", text: inline(takeawayLine(p)) }); }
+    const research = deeperResearchText(t.content);
+    if (research) { out.push({ t: "small", text: GO_DEEPER_COPY.research }); out.push({ t: "p", text: inline(research) }); }
     if (deep.questions.length) { out.push({ t: "small", text: GO_DEEPER_COPY.check }); for (const q of deep.questions) out.push({ t: "bullet", text: inline(questionText(q.text)) }); }
   } else if (parts) {
     if (parts.overview) { out.push({ t: "kv", k: "Overview", v: inline(parts.overview) }); }

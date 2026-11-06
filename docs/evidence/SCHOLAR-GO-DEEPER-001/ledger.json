@@ -1,6 +1,6 @@
 {
- "calls": 21,
- "usd": 0.68859,
+ "calls": 24,
+ "usd": 0.79399,
  "runs": [
   {
    "name": "v2",
@@ -126,6 +126,24 @@
    "name": "explore2",
    "calls": 1,
    "cost_usd": 0.039565,
+   "ok": true
+  },
+  {
+   "name": "understand",
+   "calls": 1,
+   "cost_usd": 0.032655,
+   "ok": true
+  },
+  {
+   "name": "explore",
+   "calls": 1,
+   "cost_usd": 0.03423,
+   "ok": true
+  },
+  {
+   "name": "advanced",
+   "calls": 1,
+   "cost_usd": 0.038505,
    "ok": true
   }
  ]
