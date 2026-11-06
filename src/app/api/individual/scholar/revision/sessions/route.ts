@@ -223,9 +223,11 @@ export async function POST(req: Request) {
     || (q.kind === "structured" && structuredParts(q).some(pt => aboutTheDocument(pt.prompt)))));
   // A sitting the learner chose by intention (or a follow-up) wants new thinking, not only what older prompts left unseen: at least half of it unseen, at the current
   // prompt and the depth asked for. Otherwise the shortfall is written, under the same call caps, allowance and checks. Everything else behaves as before.
+  // SCHOLAR-ANOTHER-SCENARIO-01: the scenarios the section had when asked. The one written now is what this session is for, so it is not among them.
+  let alreadyOnSection: string[] = [];
   const repick = () => {
     const shaped = intent || missed ? pool!.items.filter(p => !about(p.id)) : pool!.items;
-    const r = pickQuestions({ mode, pool: shaped, quantity, formats: kinds, difficulty, seed, recentMisses: pool!.misses, depths: aim, exclude: anotherOf ? shaped.map(p => p.id) : exclude, varied: intent === "mixed_challenge" });
+    const r = pickQuestions({ mode, pool: shaped, quantity, formats: kinds, difficulty, seed, recentMisses: pool!.misses, depths: aim, exclude: anotherOf ? alreadyOnSection : exclude, varied: intent === "mixed_challenge" });
     if (!intent && !missed) return r;
     const fresh = shaped.filter(p => p.current && p.lastAnsweredAt === null && !exclude.includes(p.id) && kinds.includes(p.kind as RevisionFormat) && (!aim.length || (p.depth && aim.includes(p.depth)))).length;
     return { ...r, shortfall: Math.max(r.shortfall, Math.ceil(quantity / 2) - fresh) };
@@ -266,6 +268,7 @@ export async function POST(req: Request) {
   };
   let pool = await poolOf();
   if (!pool) return NextResponse.json({ error: "Your saved questions could not be read just now." }, { status: 503 });
+  if (anotherOf) alreadyOnSection = pool.items.map(p => p.id);
   if (anotherOf && !canWriteAnotherScenario(pool.questions.filter(q => isScenarioQuestion(q) && q.chunkId === anotherOf.chunkId).length))
     return NextResponse.json({ error: "This section already has a scenario for each kind of decision. Practise those again, or try another section." }, { status: 409 });
   // SCHOLAR-SQIE-01: with no difficulty chosen, the default is the programme level's (else the policy's), stepped up
