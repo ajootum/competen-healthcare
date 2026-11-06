@@ -1,3 +1,4 @@
+import { GO_DEEPER_COPY, deeperResearchText, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { scopeLine } from "@/lib/individual/search/registry";
@@ -21,7 +22,7 @@ import {
 import { resolveFilterScope } from "@/lib/individual/scholar/library-scope";
 import { rankChunks, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import { UNIT_OF } from "@/lib/individual/scholar/config";
-import { coversLesson } from "@/lib/individual/scholar/learn-journey";
+import { coversLesson, isGuideTurnVersion } from "@/lib/individual/scholar/learn-journey";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
@@ -296,6 +297,8 @@ function itemTitle(a: ArtefactRow, c: ItemCtx): string {
 }
 
 function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open?: boolean }) {
+  // SCHOLAR-GUIDE-ME-001: a Guide Me turn is part of that activity, not a saved lesson of its own.
+  if (isGuideTurnVersion(a.promptVersion)) return null;
   const l = c.links.get(a.id) ?? null;
   const live = l && c.sessions.has(l.sessionId) ? l : null;
   const counts = a.sources.reduce((t, id) => { const x = c.counts.get(id); return x ? { cards: t.cards + x.cards, questions: t.questions + x.questions, attempts: t.attempts + x.attempts } : t; }, { cards: 0, questions: 0, attempts: 0 });
@@ -349,11 +352,15 @@ function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open
 const urlWithVersion = (id: string) => `${href("study/saved")}?version=${encodeURIComponent(id)}`;
 
 function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> }) {
+  // SCHOLAR-GO-DEEPER-001: a saved structured round says where each section comes from, so Scholar's explanation is never read as the notes.
+  const round = parseDeeperAnswer(a.content);
+  const research = round ? deeperResearchText(a.content) : null;
+  const shown = round ? `${deeperSourcedText(round)}${research ? `\n\n${GO_DEEPER_COPY.research}\n${research}` : ""}` : a.content;
   return (
     <>
-      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
-      <ReadAloudButton text={a.content} about="this saved lesson" className="mt-1" />
-      <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{a.content}</div>
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{round ? GO_DEEPER_COPY.subtitle : SOURCE_KIND_LABEL.notes}</p>
+      <ReadAloudButton text={shown} about="this saved lesson" className="mt-1" />
+      <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{shown}</div>
       <ul className="mt-2 space-y-0.5">
         {a.sources.map((chunkId, i) => (
           <li key={chunkId} className="text-[12.5px]"><span className="font-mono font-bold" style={{ color: SCHOLAR.accent }}>[S{i + 1}]</span>{" "}

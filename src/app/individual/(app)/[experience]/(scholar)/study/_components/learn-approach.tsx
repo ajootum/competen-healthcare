@@ -66,7 +66,9 @@ const Check = () => (
   <svg aria-hidden="true" viewBox="0 0 16 16" className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 8.5l3.2 3.2L13 4.8" /></svg>
 );
 
-export function ApproachControl({ step, style, choices, more, mistake, onStyle, onClassic, working, onExplain, run, onQuestion, lastCheck, verdict, checks, depth, disabled, accent, memory, remember, askAction }: {
+export function ApproachControl({ step, style, choices, more, mistake, onStyle, onClassic, working, onExplain, run, onQuestion, lastCheck, verdict, checks, depth, disabled, accent, memory, remember, askAction, guidePanel }: {
+  /** SCHOLAR-GUIDE-ME-001: where policy offers adaptive Guide me, its panel takes the place of the hint form. Off: exactly as it was. */
+  guidePanel?: React.ReactNode;
   /** LESSON REDESIGN: the page's own Ask Scholar control, shown in this section's header (presentation only). */
   askAction?: React.ReactNode;
   /** The lesson this control is for (keys its memory). */
@@ -181,7 +183,8 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
       {active === "challenge" && <Go label={busy ? "Writing…" : `Challenge me (level ${challengeLevel()})`} disabled={busy || disabled} accent={accent} onGo={() => { const l = challengeLevel(); patch("challenge", { level: l }); void send("challenge", { action: "challenge", level: l }); }} />}
       {active === "ask_me" && <Go label={busy ? "Writing a question…" : "Ask me a question"} disabled={busy || disabled} accent={accent} onGo={() => void send("ask_me", { action: "ask_me", level: mem("ask_me").level })} />}
       {active === "high_yield" && <Go label={busy ? "Working…" : "Show the high-yield points"} disabled={busy || disabled} accent={accent} onGo={() => void send("high_yield", { action: "high_yield", depth })} />}
-      {(active === "guide" || active === "teach_back") && (
+      {active === "guide" && guidePanel}
+      {((active === "guide" && !guidePanel) || active === "teach_back") && (
         <form className="mt-3" onSubmit={e => { e.preventDefault(); if (active === "guide") { const turns = mem("guide").turns ?? []; void send("guide", { action: "guide", hintLevel: mem("guide").hint, ...(typed.trim() ? { attempt: typed.trim().slice(0, 1500) } : {}), ...(lastCheck ? { question: lastCheck.question.slice(0, 600) } : {}), ...(turns.length ? { history: turns } : {}) }).then(() => setTyped("")); } else if (typed.trim()) void send("teach_back", { action: "teach_back", explanation: typed.trim() }); }}>
           {/* SCHOLAR-CUMULATIVE-TEACHING-01: the dialogue so far, so the learner sees what they said and what Scholar answered before the next attempt. */}
           {active === "guide" && (mem("guide").turns?.length ?? 0) > 1 && (
@@ -199,7 +202,7 @@ export function ApproachControl({ step, style, choices, more, mistake, onStyle, 
 
       {msg && <p role="status" className="mt-2 text-[13.5px] text-gray-700">{msg}</p>}
       <div aria-live="polite">
-        {shown && shown.text && active === shown.approach && (
+        {shown && shown.text && active === shown.approach && !(active === "guide" && guidePanel) && (
           <div className={`${learnTone(STYLE_TONE[style] ?? "explain")} mt-3 rounded-xl border border-[var(--learn-border)] bg-[var(--learn-surface)] p-3`}>
             <p className="cmp-learn-ink text-[11.5px] font-bold uppercase tracking-[0.1em]">{APPROACH_LABEL[shown.approach]}{shown.label ? ` · ${shown.label}` : ""}</p>
             {shown.verdict && <p className="mt-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-[13px] font-semibold text-violet-950">{shown.verdict}. An informal check for your own learning.</p>}

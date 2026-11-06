@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
-import { ensureCheckQuestion, findSavedLesson, getLearningSession, getPassage, isUuid, listCheckAttempts, recordCheckAttempt, recordLearningEvent, sectionLinks } from "@/lib/individual/scholar/store";
+import { ensureCheckQuestion, findSavedLesson, getLearningSession, getPassage, isUuid, listArtefacts, listCheckAttempts, recordCheckAttempt, recordLearningEvent, sectionLinks, type ArtefactRow } from "@/lib/individual/scholar/store";
 import { findPatientIdentifiers } from "@/lib/individual/scholar/extract";
 import { parseTeachAnswer, questionText } from "@/lib/individual/scholar/teach-format";
+import { parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { CHECK_NOT_SAVED_NOTE, CHECK_SAVED_NOTE, SELF_GRADE_SCORE, checkResponse, isSelfGrade, type SelfGrade } from "@/lib/individual/scholar/learn-check-record";
 import { QUESTION_MAX } from "@/lib/individual/scholar/config";
 import { keepCheckSnapshot } from "@/lib/individual/scholar/attempt-integrity";
+import { coversLesson, restoredSources } from "@/lib/individual/scholar/learn-journey";
 
 import { adaptiveDecision } from "@/lib/individual/scholar/learning-need-service";
 import { isStatedConfidence, parseCheckLevel } from "@/lib/individual/scholar/learning-need";
@@ -59,18 +61,29 @@ export async function POST(req: Request) {
   if (!here || !here.sections.length) return NextResponse.json({ error: "Not found" }, { status: 404 });
   // The question must be one of this lesson's own (its saved teaching), so nothing typed becomes a question.
   const chunkIds = here.sections.map(x => x.chunkId);
-  const saved = await findSavedLesson(ctx.admin, ctx.userId, { action: "teach", materialId: here.sections[0].materialId, chunkIds });
+  const saved = await findSavedLesson(ctx.admin, ctx.userId, { action: "teach", materialId: here.sections[0].materialId, chunkIds, lesson: { sessionId, step } });
   const parts = saved ? parseTeachAnswer(saved.content) : null;
-  const own = parts?.questions.find(q => questionText(q) === question) ?? null;
+  let own = parts?.questions.find(q => questionText(q) === question) ?? null;
+  // SCHOLAR-GO-DEEPER-001: the checks of a saved structured Go deeper round are this lesson's checks too (still its own saved teaching, nothing typed).
+  let deeperRound: ArtefactRow | null = null, deeperPoints: string[] = [];
+  if (!own) {
+    const rounds = await listArtefacts(ctx.admin, ctx.userId, { chunkIds, limit: 40 }).then(r => (r.ok ? r.data : []), () => []);
+    for (const a of rounds) {
+      if (a.action !== "deeper" || !coversLesson(a.sources, chunkIds, { row: a, lesson: { sessionId, step } })) continue;
+      const round = parseDeeperAnswer(a.content), hit = round?.questions.find(q => questionText(q.text) === question);
+      if (round && hit) { own = hit.text; deeperRound = a; deeperPoints = round.takeaways.filter(t => /\[S\d+\]/.test(t)); break; }
+    }
+  }
   if (!own) return NextResponse.json({ error: "That question is not one of this lesson's checks." }, { status: 400 });
   const cited = Number.isInteger(body?.checkCited) && Number(body.checkCited) >= 1 ? Number(body.checkCited) : null;
-  const sectionId = (cited && saved?.sources[cited - 1]) || here.sections[0].chunkId;
+  const origin = deeperRound ?? saved;
+  const sectionId = (cited && origin && restoredSources(origin.sources, chunkIds, { row: origin, lesson: { sessionId, step } })[cited - 1]) || here.sections[0].chunkId;
   const passage = (await getPassage(ctx.admin, ctx.userId, sectionId)) ?? (await getPassage(ctx.admin, ctx.userId, here.sections[0].chunkId));
   if (!passage) return NextResponse.json({ error: "That section could not be found." }, { status: 404 });
   const links = await sectionLinks(ctx.admin, ctx.userId, [passage.chunkId]).catch(() => []);
   const q = await ensureCheckQuestion(ctx.admin, ctx.userId, {
-    materialId: passage.materialId, chunkId: passage.chunkId, stem: question, keyPoints: parts?.points ?? [], modelAnswer: null, sourceQuote: passage.content.slice(0, 1500),
-    competencyId: links.find(l => l.accepted)?.competencyId ?? null, model: saved?.model ?? "learner", provider: "scholar", promptVersion: saved?.promptVersion ?? "learner:check",
+    materialId: passage.materialId, chunkId: passage.chunkId, stem: question, keyPoints: deeperRound ? deeperPoints : parts?.points ?? [], modelAnswer: null, sourceQuote: passage.content.slice(0, 1500),
+    competencyId: links.find(l => l.accepted)?.competencyId ?? null, model: origin?.model ?? "learner", provider: "scholar", promptVersion: origin?.promptVersion ?? "learner:check",
   });
   const adaptive = q && selfGrade ? await adaptiveDecision(ctx.admin, ctx.userId, policy, {
     sessionId, step, steps: s.data!.steps.map(x => ({ step: x.step })), chunkIds,
