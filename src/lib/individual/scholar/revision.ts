@@ -12,7 +12,7 @@
 // deterministically. That one is AI evaluation (labelled) or the student's own judgement (labelled), never guessed.
 // ⚠ FORMATIVE. Nothing here is assessment, mastery or competence. Mock practice is practice.
 
-import { existingScenarioOf, type ExistingScenario } from "./scenario-variety";
+import { existingScenarioOf, type ExistingScenario, type ScenarioContext } from "./scenario-variety";
 import { createHash } from "node:crypto";
 import { sm2 } from "@/lib/delivery/reinforcement";
 import type { Insufficient, NotMeasured } from "@/lib/competency/progress-model";
@@ -899,10 +899,8 @@ export function buildRevisionInsights(input: {
   };
 }
 
-/** SCHOLAR-SCENARIO-VARIETY-01. Pure. What the scenarios this section already has ask, newest first, from a pool already read. */
-export function scenariosOnSection<Q extends Parameters<typeof isScenarioQuestion>[0] & { stem: string; chunkId: string | null; createdAt?: string | null }>(questions: readonly Q[], chunkId: string): ExistingScenario[] {
-  return questions
-    .filter(q => isScenarioQuestion(q) && q.chunkId === chunkId)
-    .sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")))
-    .map(existingScenarioOf);
+/** SCHOLAR-SCENARIO-VARIETY-01. Pure. What the learner's scenarios in this scope ask, from a pool already read (no new read), for one section. `written`: those made earlier in this request. Newest first. */
+export function scenarioContext<Q extends Parameters<typeof isScenarioQuestion>[0] & { stem: string; chunkId: string | null; createdAt?: string | null }>(questions: readonly Q[], chunkId: string, written: readonly ExistingScenario[] = []): ScenarioContext {
+  const scenarios = questions.filter(q => isScenarioQuestion(q)).sort((a, b) => String(b.createdAt ?? "").localeCompare(String(a.createdAt ?? "")));
+  return { section: scenarios.filter(q => q.chunkId === chunkId).map(existingScenarioOf), other: [...written, ...scenarios.filter(q => q.chunkId !== chunkId).map(existingScenarioOf)] };
 }
