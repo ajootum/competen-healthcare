@@ -1,0 +1,2 @@
+PASS [phone] CE-02: library search, 89 controls measured, under 44px: none
+PASS [phone] CE-02: library notes, 274 controls measured, under 44px: none

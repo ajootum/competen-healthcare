@@ -50,6 +50,8 @@ import { ASK_CHUNK_MAX, askPrefill } from "@/lib/individual/scholar/ask-context"
 import { ActivityRow, ContinueCard, DEPTH_LABEL, DepthSegment, DownloadLink, LessonCard, LessonList, LessonPlaceholder, ResumeBanner, lessonDomId, lessonExportHref, lessonHeadingId, materialExportHref, type Activity, type LessonRow } from "./learn-lesson-card";
 import { LessonPractice } from "./learn-practice";
 import { LessonReader } from "./learn-reader";
+import { LessonNotesScope } from "./note-capture";
+import { MyIdeasBox } from "./my-ideas-box";
 import { RecutPanel } from "./learn-recut-panel";
 import { WORKS_WITHOUT_AI } from "@/lib/individual/scholar/learn-reader";
 import { ApplyCard, QuickCheck, RecallBlock, type BlockCard } from "./learn-inline-check";
@@ -654,6 +656,9 @@ export function LearnWorkspace(props: {
     const hasContent = (live.cards[pp.step]?.length ?? 0) > 0;
     if (anchorEl) {
       pendingPlace.current = null;
+      // COMPETEN-NOTEBOOK-001: the place may be inside the lesson's notes, which fold away when saved teaching is on the page. Unfolded, or it could not be found again.
+      const folded = anchorEl.closest("details");
+      if (folded && !folded.open) folded.open = true;
       anchorEl.scrollIntoView({ behavior: "auto", block: "start" });
       return true;
     }
@@ -914,6 +919,17 @@ export function LearnWorkspace(props: {
    * teaching opens with no AI; Guided learning teaches only a lesson with nothing saved. Only this moves current_step and
    * the 790 position (furthest_step only ever grows).
    */
+  // COMPETEN-NOTEBOOK-001: "Go to this section" from a note (#ideas-<step>-<anchor>) opens that note's lesson. The box there opens itself, once the notes are read.
+  const noteLessonAsked = useRef(false);
+  const selectRef = useRef<((i: number) => void) | null>(null);
+  useEffect(() => {
+    if (noteLessonAsked.current || !session || !journey) return;
+    noteLessonAsked.current = true;
+    const m = /^#ideas-(\d+)-/.exec(window.location.hash);
+    if (!m) return;
+    const i = session.steps.findIndex(s => s.step === Number(m[1]));
+    if (i >= 0 && i !== journey.current) selectRef.current?.(i);
+  }, [session, journey]);
   const select = useCallback((i: number, how: "select" | "next" = "select") => {
     const j = jRef.current;
     if (!session || !j) return;
@@ -931,6 +947,7 @@ export function LearnWorkspace(props: {
     if (session.id) void call(`/api/individual/scholar/learn/sessions/${session.id}`, { currentStep: st.step, ...(move ? { move } : {}) }, "PATCH");
     syncRef.current?.event(how === "next" ? "continue" : "jump");
   }, [session, dispatch, guided, scrollToLesson, wantPlace, applyPlace]);
+  useEffect(() => { selectRef.current = select; }, [select]);
   /** Next lesson: the one after the ACTIVE lesson, opened (saved) or taught (Guided, nothing saved) in one action. */
   const next = useCallback(() => { const j = jRef.current; if (j && j.current < j.count - 1) select(j.current + 1, "next"); }, [select]);
   const previous = useCallback(() => { const j = jRef.current; if (j && j.current > 0) select(j.current - 1); }, [select]);
@@ -1431,6 +1448,7 @@ export function LearnWorkspace(props: {
     const status = navLessons[i].status.label;
     return (
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
+        <LessonNotesScope sessionId={session.id && session.recorded ? session.id : ""} step={st.step} materialId={first?.materialId ?? null} chunkIds={st.sections.map(x => x.chunkId)}>
         {/* SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes first (no AI), with their competencies, what exists to practise with, and Mark as read. */}
         {session.id && session.recorded && (
           <LessonReader hidePictures={!!recalling[st.step]} sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
@@ -1579,6 +1597,7 @@ export function LearnWorkspace(props: {
           aiAllowed={props.consent && !offReason("questions")} applyHref={applyHref} accent={accent}
           onPractised={() => dispatch({ type: "activity", index: i, kind: "practised" })} onApplied={() => dispatch({ type: "activity", index: i, kind: "applied" })} />
         </div>
+        </LessonNotesScope>
       </LessonCard>
     );
   };
@@ -2108,6 +2127,8 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
           {parts.understanding.map((p, i) => <p key={i}><Cited text={p} sources={sources} /></p>)}
         </div>
       )}
+      {/* SCHOLAR-NOTEBOOK-UX-002: a compact place for the learner's own thought, after the teaching itself. Draws nothing where the Notebook is off. */}
+      {only === "lesson" && !!parts.understanding?.length && <MyIdeasBox sectionLabel="Teaching" anchor={`teaching-${action}`} className="my-4" />}
       {questionBlock(placed.mid, idPrefix ? `${idPrefix}-qm` : undefined, "A quick check on what you have just read, before the key points. Optional.")}
       {parts.points.length > 0 && (
         <div id={idPrefix ? `${idPrefix}-kp` : undefined} className="mt-4 rounded-xl bg-[var(--cmp-app-surface)] px-4 py-3 ring-1 ring-[var(--learn-border)]">
@@ -2115,6 +2136,7 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
           <ul className="mt-2 list-disc space-y-1.5 pl-5 marker:text-[var(--learn-accent)]">{parts.points.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
         </div>
       )}
+      {only === "lesson" && parts.points.length > 0 && <MyIdeasBox sectionLabel="Key points" anchor={`points-${action}`} className="my-4" />}
       {parts.example && (
         <ShowMore label="Show more: an example from your notes">
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">

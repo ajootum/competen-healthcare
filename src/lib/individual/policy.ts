@@ -129,7 +129,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_go_deeper_structured" | "scholar_guide_me_adaptive" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
-  | "scholar_global_search" | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_search_history"
+  | "scholar_global_search" | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_personal_notebook" | "scholar_search_history"
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
@@ -1312,6 +1312,15 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offer the Notebook" }, { value: "off", label: "Do not offer" }],
     fallback: "off",
     limitReason: "Personal summaries need migration 975 (without it the Notebook works without them). Practice uses the existing Revise generation, allowance and model routing unchanged. Default: off.",
+  },
+  // COMPETEN-NOTEBOOK-001 P1 + SCHOLAR-NOTEBOOK-UX-002 (owner, 6 Nov 2026): My Notebook, Quick Note and My Ideas & Notes. Off until HQ publishes it.
+  {
+    key: "scholar_personal_notebook", kind: "choice", product: "Scholar",
+    label: "Notebook: My Notebook and Quick Note",
+    help: "Whether Scholar offers My Notebook, the Quick Note control on every Scholar page and the My Ideas & Notes box in Learn. Learners write at once with nothing required: autosave, draft recovery, search, tags, pins and optional links to lessons, sections, competencies and study sessions. Learner-owned and private; never shared with employers or other learners, and never sent to AI unless the learner asks.",
+    options: [{ value: "on", label: "Offer My Notebook" }, { value: "off", label: "Do not offer" }],
+    fallback: "off",
+    limitReason: "Needs migration 1000 and the learning library on (without either nothing is offered and nothing is written). Notes written here are kept out of the Ask saved-learning source. No AI of its own. Default: off.",
   },
   // SCHOLAR-SEARCH-HISTORY-01 (owner directive 4 Nov 2026, P1, SALE learner continuity): My Search History in the library.
   {
@@ -2590,6 +2599,7 @@ export type IndividualPolicy = {
   scholarNextBestActionMax: number;
   scholarActiveNotebook: "on" | "off";
   /** SCHOLAR-SEARCH-HISTORY-01: My Search History in the library (migration 992). Default off. */
+  scholarPersonalNotebook: "on" | "off";
   scholarSearchHistory: "on" | "off";
   /** LOCAL-TIME-ZONES: Scholar times in the learner's own zone. Display only. Default off. */
   scholarReaderTimeZone: "on" | "off";
@@ -2854,6 +2864,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarNextBestAction: clampChoice(policyDef("scholar_next_best_action") as ChoicePolicy, published.get(policyPath("scholar_next_best_action"))) as "on" | "off",
     scholarNextBestActionMax: int("scholar_next_best_action_max"),
     scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
+    scholarPersonalNotebook: clampChoice(policyDef("scholar_personal_notebook") as ChoicePolicy, published.get(policyPath("scholar_personal_notebook"))) as "on" | "off",
     scholarSearchHistory: clampChoice(policyDef("scholar_search_history") as ChoicePolicy, published.get(policyPath("scholar_search_history"))) as "on" | "off",
     scholarReaderTimeZone: clampChoice(policyDef("scholar_reader_time_zone") as ChoicePolicy, published.get(policyPath("scholar_reader_time_zone"))) as "on" | "off",
     scholarGlobalSearch: clampChoice(policyDef("scholar_global_search") as ChoicePolicy, published.get(policyPath("scholar_global_search"))) as "on" | "off",

@@ -54,7 +54,7 @@ const EXPORT_FORM = "saved-lessons-export";
 const ukDay = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? String(iso).slice(0, 10) : d.toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" }); };
 const pill = "inline-flex items-center rounded-full border border-gray-200 bg-gray-50 px-2.5 py-0.5 text-[12px] font-semibold text-gray-700";
 const ghost = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
-const linkCls = `font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`;
+const linkCls = `pointer-coarse:inline-flex pointer-coarse:min-h-[var(--cmp-touch-min)] pointer-coarse:items-center font-semibold text-gray-900 underline underline-offset-2 ${focusRing}`;
 const field = `mt-1 block w-full min-w-0 min-h-[40px] rounded-lg border border-gray-300 bg-white px-2 text-[13.5px] pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const actionCls = `inline-flex min-h-[40px] items-center px-1 font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
@@ -634,6 +634,8 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mo
     if (h.kind === "artefact") return urlWithVersion(h.id);
     if (h.artefactId) return urlWithVersion(h.artefactId);
     if (h.materialId) return href(h.chunkId ? `study/${h.materialId}#c-${h.chunkId}` : `study/${h.materialId}`);
+    // COMPETEN-NOTEBOOK-001: a free-standing note has no lesson or material. It opens in My Notebook.
+    if (h.kind === "note") return href(`study/notebook/${encodeURIComponent(h.id)}`);
     return href("study/saved");
   };
   const title = (h: LibraryHit) => h.kind === "lesson" ? displaySessionTitle(h.label)

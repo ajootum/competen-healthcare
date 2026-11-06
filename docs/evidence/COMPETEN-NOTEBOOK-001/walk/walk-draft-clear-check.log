@@ -1,0 +1,17 @@
+PASS [drafts] a note is saved on the server before any of this
+PASS [drafts] lost connection: the words are in a draft on this device
+PASS [drafts] the same learner, on the next page: the draft is still there
+PASS [drafts] recovered and saved on the server
+PASS [drafts] and the draft is gone once saved
+PASS [drafts] before signing out: a draft and refused identifier text are both on the device
+PASS [drafts] after pressing sign out: no draft is left in browser storage
+PASS [drafts] and none of those words are anywhere in browser storage
+PASS [drafts] a second tab left open keeps no draft after the sign-out
+PASS [drafts] saved notes are still on the server after sign-out
+PASS [drafts] signing out neither added nor removed a note on the server (175 before, 175 after)
+PASS [drafts] before the session ends: the draft is on the device
+PASS [drafts] a session that ended with no sign-out: the next page clears the drafts
+PASS [drafts] and words that never reached the server were not saved by clearing them
+PASS [drafts] another account: its draft is gone once this learner is signed in
+PASS [drafts] and nothing of it can be seen or restored
+PASS [drafts] and this learner's saved notes are all still there

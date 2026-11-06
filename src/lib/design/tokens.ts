@@ -219,6 +219,8 @@ export const learningTone = {
   practice:   { light: { surface: "#EDF7F6", border: "#BCDFDB", accent: "#1B7A73", ink: "#11564F" }, dark: { surface: "#12262A", border: "#2F6E69", accent: "#7FD0C7", ink: "#C2EDE8" } },
   quickCheck: { light: { surface: "#F9F2FB", border: "#E3CDEE", accent: "#8A43A8", ink: "#632C7B" }, dark: { surface: "#26182C", border: "#74488A", accent: "#DDA9F0", ink: "#F0D8F8" } },
   notes:      { light: { surface: "#FCF9F0", border: "#E7DCBF", accent: "#8A6A1F", ink: "#5E4712" }, dark: { surface: "#262013", border: "#6E5A2A", accent: "#E0C27A", ink: "#F2E3BC" } },
+  // COMPETEN-NOTEBOOK-001: the learner's own writing, warm amber, apart from the uploaded notes' cream and from AI teaching and research.
+  ideas:      { light: { surface: "#FDF1D6", border: "#E2BC6B", accent: "#8A5A00", ink: "#6B4300" }, dark: { surface: "#2B2009", border: "#8A6A1E", accent: "#EBC06A", ink: "#F7E2B4" } },
   sources:    { light: { surface: "#F6F6FA", border: "#D9D9E6", accent: "#5A5B7A", ink: "#3D3E58" }, dark: { surface: "#1C1D2A", border: "#4E5070", accent: "#B4B6D6", ink: "#DADBF0" } },
   next:       { light: { surface: "#EBF8FB", border: "#A9DDE8", accent: "#0E7490", ink: "#155E75" }, dark: { surface: "#0F252B", border: "#2F7A8F", accent: "#8FD3E4", ink: "#CDEEF6" } },
   memory:     { light: { surface: "#FDF0F4", border: "#F0C3D2", accent: "#B5345E", ink: "#86203F" }, dark: { surface: "#2B1520", border: "#8A3B58", accent: "#F4A3BE", ink: "#FBD5E2" } },

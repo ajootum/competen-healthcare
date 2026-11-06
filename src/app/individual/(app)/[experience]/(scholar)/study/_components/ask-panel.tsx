@@ -107,7 +107,7 @@ function AskDialog({ surface, chunkIds, materialId, sessionId, step, refLabel, p
     const ctl = new AbortController(); abort.current = ctl;
     let shown = false;
     const body = askRequestBody({
-      question: text, context: { surface, chunkIds, materialId, studyId: activeStudyId(), refLabel, prefill }, sessionId, step,
+      question: text, context: { surface, chunkIds, materialId, studyId: activeStudyId(), refLabel }, sessionId, step,
       depth, purpose, followUp, spelling: spellingField(readSpellingChoice()),
     });
     const patch = (p: Partial<Turn>) => setTurns(t => t.map(x => (x.id === id ? { ...x, ...p } : x)));

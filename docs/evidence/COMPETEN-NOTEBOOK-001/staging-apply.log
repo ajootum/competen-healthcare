@@ -1,0 +1,43 @@
+file supabase/migrations/1000-individual-scholar-personal-notebook.sql
+sha256 a5453ef6d36352d56e4ff5df0e0fca1ebd84941f86d6504ab038a514a703e2b3
+Committed 2026-11-06T12:02:36.526Z
+file supabase/migrations/1000-individual-scholar-personal-notebook.sql
+sha256 a5453ef6d36352d56e4ff5df0e0fca1ebd84941f86d6504ab038a514a703e2b3
+Committed 2026-11-06T12:02:41.487Z
+file docs/evidence/COMPETEN-NOTEBOOK-001/PRECHECK-1000.sql
+sha256 518ff7672b69ea1876d6dfe4f3b0454709cc7496d762b920b904952c0d422449
+[
+ {
+  "new_columns": "12",
+  "new_functions": "5",
+  "notes": "13",
+  "note_kind": "8",
+  "highlights": "0",
+  "bookmarks": "2",
+  "summaries": "3",
+  "note_text_md5": "a46a3f9c855362d59d2128470e3db884",
+  "materials": "12",
+  "sessions": "7"
+ }
+]
+Rolled back 2026-11-06T12:02:46.311Z
+file docs/evidence/COMPETEN-NOTEBOOK-001/VERIFY-1000.sql
+sha256 ed82c94592ffd7450e77d356e1586d3b3acfb5e06540f1f45723449d283d7843
+notice: word is too long to be indexed
+notice: word is too long to be indexed
+notice: word is too long to be indexed
+notice: word is too long to be indexed
+notice: word is too long to be indexed
+notice: word is too long to be indexed
+FAILED, rolled back: column "scope_ref" of relation "individual_scholar_learning_session" does not exist
+file docs/evidence/COMPETEN-NOTEBOOK-001/VERIFY-1000.sql
+sha256 06a4b324a944b77791c69b3aa9685651f06306987a31cefcf9fb88573f50c979
+notice: VERIFY-1000 PASS
+Rolled back 2026-11-06T12:03:14.734Z
+file docs/evidence/COMPETEN-NOTEBOOK-001/VERIFY-1000.sql
+sha256 06a4b324a944b77791c69b3aa9685651f06306987a31cefcf9fb88573f50c979
+notice: VERIFY-1000 PASS
+Rolled back 2026-11-06T12:03:19.394Z
+FAILED, rolled back: planted: revision expected 2
+sha256 07b5e30b458679192e26ecd0155a18f68431d02d3494da075624d0a0c0be23f9
+Rolled back 2026-11-06T12:03:28.065Z
