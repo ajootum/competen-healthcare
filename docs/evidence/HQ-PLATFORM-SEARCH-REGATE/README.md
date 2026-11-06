@@ -24,3 +24,10 @@ Min 2, max 60 cleaned (400 above 120 raw), 10 per source cap (default 6), `_` `%
 
 ## Redundancy (recommendation only)
 Not redundant by consumer count (one console, wired in nav). Every source has its own page and directory with filters, so the console is a convenience layer; if usage is low, propose retirement separately.
+
+## Second read
+
+- Frameworks: a delegate's search now covers shared, active frameworks only (`hospital_id is null`), which is tighter than the frameworks page. The owner's is unchanged.
+- An escaped `_` inside PostgREST's `or()` was run against staging: it matches a literal underscore (0 rows), where a raw `_` matched every framework (24 of 24).
+- All five capability names exist in the HQ catalogue code.
+- Abuse protection is the query and result limits only, because the repository has no shared rate limiter and none was built.

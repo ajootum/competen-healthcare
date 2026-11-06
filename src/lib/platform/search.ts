@@ -44,7 +44,8 @@ async function searchSource(admin: any, src: Source, q: string, perSource: numbe
     const or = src.cols.map(c => `${c}.ilike.%${e}%`).join(",");
     let query = admin.from(src.table).select(src.select).or(or).limit(perSource);
     // The frameworks page lists active frameworks only; a delegate sees no more than that. The owner keeps today's behaviour.
-    if (src.activeOnly && !owner) query = query.eq("is_active", true);
+    // and a hospital's own framework stays with that hospital, so a delegate's search covers shared frameworks only.
+    if (src.activeOnly && !owner) query = query.eq("is_active", true).is("hospital_id", null);
     if (src.table === "audit_log") query = query.order("created_at", { ascending: false });
     const { data, error } = await query;
     if (error || !data?.length) return null;

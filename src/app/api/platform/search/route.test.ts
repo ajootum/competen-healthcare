@@ -14,7 +14,9 @@ const stub = () => ({
   from(table: string) {
     reads.push(table);
     const q: any = {
-      select: () => q, order: () => q, eq: () => q, limit: () => q,
+      select: () => q, order: () => q, limit: () => q,
+      eq: (c: string, v: unknown) => { filters.push(`${table}.${c}=${v}`); return q; },
+      is: (c: string, v: unknown) => { filters.push(`${table}.${c} is ${v}`); return q; },
       or: (f: string) => { filters.push(f); return q; },
       then: (res: any) => res({ data: [{ id: "1", name: "Alpha", slug: "a", full_name: "A", email: "e@x", label: "L", code: "c", entity_name: "E", action: "x" }], error: null }),
     };
@@ -71,5 +73,17 @@ describe("GET /api/platform/search", () => {
     await call("a_b");
     expect(filters[0]).toContain(String.raw`ilike.%a\_b%`);
     expect(escapeLike("50%_\\")).toBe(String.raw`50\%\_\\`);
+  });
+  it("a delegate's framework search covers shared, active frameworks only; the owner's is unchanged", async () => {
+    asCaller(false, ["hq.learning.competencies.view"]);
+    const r = await call("alpha");
+    expect(r.status).toBe(200);
+    expect(filters).toContain("frameworks.hospital_id is null");
+    expect(filters).toContain("frameworks.is_active=true");
+    expect((await r.json()).searched).toEqual(["Frameworks"]);
+    asCaller(true, []);
+    filters = [];
+    await call("alpha");
+    expect(filters).not.toContain("frameworks.hospital_id is null");
   });
 });
