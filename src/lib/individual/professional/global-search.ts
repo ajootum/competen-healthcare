@@ -63,8 +63,8 @@ function sources(ctx: Ctx): Record<ProfessionalSearchKey, Source> {
       const needs = (r.needs ?? []).filter(n => matchesSearch([n.title, n.detail ?? ""], q));
       const goals = (r.goals ?? []).filter(g => matchesSearch([g.title, g.detail ?? ""], q));
       return [
-        { label: "Development needs", results: needs.slice(0, PER_TYPE).map(n => ({ id: n.id, title: n.title, detail: NEED_STATUS_LABEL[n.status] ?? n.status, path: `development?need=${encodeURIComponent(n.id)}#needs-h` })) },
-        { label: "Goals", results: goals.slice(0, PER_TYPE).map(g => ({ id: g.id, title: g.title, detail: [GOAL_STATUS_LABEL[g.status] ?? g.status, g.target_date ? `target ${date(g.target_date)}` : null].filter(Boolean).join(", "), path: `development?goal=${encodeURIComponent(g.id)}#plan-h` })) },
+        { label: "Development needs", results: needs.slice(0, PER_TYPE).map(n => ({ id: n.id, title: n.title, detail: NEED_STATUS_LABEL[n.status] ?? n.status, path: `development?need=${encodeURIComponent(n.id)}#need-detail` })) },
+        { label: "Goals", results: goals.slice(0, PER_TYPE).map(g => ({ id: g.id, title: g.title, detail: [GOAL_STATUS_LABEL[g.status] ?? g.status, g.target_date ? `target ${date(g.target_date)}` : null].filter(Boolean).join(", "), path: `development?goal=${encodeURIComponent(g.id)}#goal-detail` })) },
       ];
     },
     cpd: async q => {
