@@ -38,13 +38,24 @@ export type AskOfferInput = {
   libraryReady: boolean;
 };
 
+/**
+ * ASK-RESEARCH-GUARD-01 (owner, 6 Nov 2026). ⚠ WHAT A LEARNER TYPES DOES NOT LEAVE COMPETEN. A typed question is free text. The keyword functions remove
+ * identifier shapes and capitalised names, but "my neighbour peter" or "sarah okello" still passes, and PubMed and OpenAlex would receive it. So this is
+ * shut in code, not behind a setting anyone could turn on, until a query built only from a clinical vocabulary exists (docs/design/SCHOLAR-ASK-WEB-SOURCES-DESIGN.md,
+ * F1, F2, F8, gate G1). Research for a lesson's own topics is unaffected. Changing this is the owner's decision, D1 in that document.
+ */
+export const TYPED_QUESTIONS_MAY_LEAVE = false as boolean;
+
+/** Pure. ASK-RESEARCH-GUARD-01: a session's title, as research may use it. A topic session's topic and title are what the learner typed, so neither goes out. */
+export const researchTitleOf = (session: { scopeKind: string; title?: string | null; topic?: string | null }): string | null =>
+  session.scopeKind === "topic" ? null : session.topic ?? session.title ?? null;
 /** Pure. What is offered now. Only what can run: a source that cannot is not shown at all. Web is never offered (see above). */
 export function offeredAskSources(i: AskOfferInput): AskSource[] {
   return [
     "materials",
     ...(i.savedReady ? ["saved" as const] : []),
     ...(i.sourceModes.includes("library") && i.libraryReady ? ["library" as const] : []),
-    ...(i.sourceModes.includes("research") && i.researchOperational ? ["research" as const] : []),
+    ...(TYPED_QUESTIONS_MAY_LEAVE && i.sourceModes.includes("research") && i.researchOperational ? ["research" as const] : []),
   ];
 }
 
