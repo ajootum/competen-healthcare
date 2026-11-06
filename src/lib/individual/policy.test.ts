@@ -146,6 +146,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-GUIDED-LEARNING-01: no lesson is prepared ahead until HQ switches it on.
       scholarLearnPrepareNext: false,
       scholarGoDeeperStructured: false,
+      scholarGuideMeAdaptive: false,
       scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
       scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
       scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",

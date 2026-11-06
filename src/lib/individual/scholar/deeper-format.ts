@@ -16,7 +16,7 @@
 
 import type { ExplanationDepth } from "./config";
 
-export const DEEPER_KINDS = ["principle", "science", "compare", "application", "misconception", "safety", "limits", "advanced"] as const;
+export const DEEPER_KINDS = ["principle", "science", "compare", "application", "misconception", "safety", "limits", "advanced", "memory"] as const;
 export type DeeperKind = (typeof DEEPER_KINDS)[number];
 export type DeeperSource = "notes" | "scholar";
 export type DeeperBlock =
@@ -198,7 +198,7 @@ export function deeperSourcedText(p: DeeperParts): string {
 
 /** When a heading fails the checks, the section keeps its place under one of these. */
 export const DEEPER_NEUTRAL_HEADING: Record<DeeperKind, string> = {
-  principle: "The principle", science: "The science", compare: "A comparison", application: "In practice", misconception: "A common misconception", safety: "Safety", limits: "The limits", advanced: "Further detail",
+  principle: "The principle", science: "The science", compare: "A comparison", application: "In practice", misconception: "A common misconception", safety: "Safety", limits: "The limits", advanced: "Further detail", memory: "A way to remember it",
 };
 
 /** The headings the page shows: the card, the grey block, the source of each section and the evidence footer. */

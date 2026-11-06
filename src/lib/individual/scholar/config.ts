@@ -141,6 +141,9 @@ export const PROMPT_VERSIONS = {
   // SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): the structured round (deeper-format.ts), used only where policy scholar_go_deeper_structured is on.
   // ADDED beside v2, which stays the version in force with the policy off. Rounds saved under v2 are kept, counted as taught ground, and shown as they are.
   learnDeeperStructured: "scholar-learn-deeper-v3",
+  // SCHOLAR-GUIDE-ME-001 (owner, 6 Nov 2026): a Guide Me turn, saved as the existing explain kind under this version, so it is never served as an Explain, and an Explain is never served as it.
+  guideMe: "scholar-guide-me-v1",
+  guidedClarify: "scholar-guide-clarify-v1",
   // SCHOLAR-CUMULATIVE-TEACHING-01: the suffix of any answer written with a TAUGHT SO FAR block (learn-context.ts), on top of
   // the action's own version, so what was taught WITH prior context is never served as a context-free answer and vice versa.
   cumulative: "scholar-learn-cumulative-v1",

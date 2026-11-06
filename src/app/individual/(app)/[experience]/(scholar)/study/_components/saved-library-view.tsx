@@ -351,7 +351,7 @@ const urlWithVersion = (id: string) => `${href("study/saved")}?version=${encodeU
 
 function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> }) {
   // SCHOLAR-GO-DEEPER-001: a saved structured round says where each section comes from, so Scholar's explanation is never read as the notes.
-  const round = a.action === "deeper" ? parseDeeperAnswer(a.content) : null;
+  const round = parseDeeperAnswer(a.content);
   const research = round ? deeperResearchText(a.content) : null;
   const shown = round ? `${deeperSourcedText(round)}${research ? `\n\n${GO_DEEPER_COPY.research}\n${research}` : ""}` : a.content;
   return (

@@ -330,6 +330,9 @@ export const readCount = (facts: readonly LessonFacts[]) => facts.filter(f => f.
 
 // ── SAVED TEACHING, FOUND WITHOUT AI (the open:true fallback, and the records) ──
 
+/** SCHOLAR-GUIDE-ME-001: a saved Guide Me turn (the explain kind, under its own version). It is taught ground, never an Explain to reopen or list. */
+export const isGuideTurnVersion = (promptVersion: string | null | undefined) => !!promptVersion && promptVersion.includes("+scholar-guide-me-");
+
 /** 415 individual_scholar_artefact_source: ordinal between 1 and 10. store.ts saveArtefact keeps the first ten. */
 export const ARTEFACT_SOURCES_MAX = 10;
 
@@ -360,12 +363,12 @@ export function restoredSources(sources: readonly string[], chunkIds: readonly s
 }
 
 /** Pure. The newest saved artefact for this action, material and lesson chunk set -- any prompt version, depth or mode. */
-export function newestSavedLesson<T extends { action: string; materialId: string; sources: readonly string[]; createdAt: string } & SavedFor>(
+export function newestSavedLesson<T extends { action: string; materialId: string; sources: readonly string[]; createdAt: string; promptVersion?: string } & SavedFor>(
   rows: readonly T[], q: { action: string; materialId?: string | null; chunkIds: readonly string[]; lesson?: LessonPlace | null },
 ): T | null {
   let best: T | null = null;
   for (const r of rows) {
-    if (r.action !== q.action || (q.materialId && r.materialId !== q.materialId) || !coversLesson(r.sources, q.chunkIds, { row: r, lesson: q.lesson ?? null })) continue;
+    if (r.action !== q.action || (q.materialId && r.materialId !== q.materialId) || !coversLesson(r.sources, q.chunkIds, { row: r, lesson: q.lesson ?? null }) || isGuideTurnVersion(r.promptVersion)) continue;
     if (!best || r.createdAt > best.createdAt) best = r;
   }
   return best;

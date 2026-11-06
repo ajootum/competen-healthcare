@@ -27,12 +27,12 @@ export type GoDeeperLevels = {
 const MAX_PICTURE_PAGES = 6;
 
 const KIND_ICON: Record<DeeperKind, LearningIconName> = {
-  principle: "bulb", science: "layers", compare: "list", application: "target", misconception: "warn", safety: "warn", limits: "search", advanced: "spark",
+  principle: "bulb", science: "layers", compare: "list", application: "target", misconception: "warn", safety: "warn", limits: "search", advanced: "spark", memory: "bulb",
 };
 
 /** ONE place a section's note is captured. COMPETEN-NOTEBOOK-001's My Ideas & Notes (MyIdeasBox: chunkId, materialId, sectionLabel, anchor) is drawn here when it lands: nothing else changes. No second capture is built. */
 export type SectionNoteProps = { anchor: string; label: string; chunkId: string | null; materialId: string | null };
-const SectionNote: (props: SectionNoteProps) => ReactNode = () => null;
+export const SectionNote: (props: SectionNoteProps) => ReactNode = () => null;
 
 const firstSource = (section: DeeperSection, sources: readonly Source[]) => {
   const text = section.blocks.map(b => (b.t === "p" ? b.text : b.t === "list" ? b.items.join(" ") : b.t === "flow" ? b.steps.join(" ") : b.rows.flat().join(" "))).join(" ");
@@ -40,13 +40,13 @@ const firstSource = (section: DeeperSection, sources: readonly Source[]) => {
   return tag ? sources.find(s => s.tag === `S${tag}`) ?? null : null;
 };
 
-function SourceChip({ source }: { source: DeeperSection["source"] }) {
+export function SourceChip({ source }: { source: DeeperSection["source"] }) {
   return source === "notes"
     ? <span className={`${learnTone("teach")} inline-flex items-center gap-1 rounded-full bg-[var(--learn-surface)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--learn-ink)] ring-1 ring-[var(--learn-border)]`}><LearningIcon name="book" className="h-3.5 w-3.5" />{GO_DEEPER_COPY.notes}</span>
     : <span className={`${learnTone("aiBeyond")} inline-flex items-center gap-1 rounded-full bg-[var(--learn-surface)] px-2 py-0.5 text-[11.5px] font-semibold text-[var(--learn-ink)] ring-1 ring-[var(--learn-border)]`} title={GO_DEEPER_COPY.scholarNote}><LearningIcon name="robot" className="h-3.5 w-3.5" />{GO_DEEPER_COPY.scholar}</span>;
 }
 
-function Blocks({ blocks, cite }: { blocks: readonly DeeperBlock[]; cite: (text: string) => ReactNode }) {
+export function Blocks({ blocks, cite }: { blocks: readonly DeeperBlock[]; cite: (text: string) => ReactNode }) {
   return (
     <>
       {blocks.map((b, i) => {

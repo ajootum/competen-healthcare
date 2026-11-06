@@ -39,6 +39,7 @@ import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
 import { GoDeeperCard, type GoDeeperLevels } from "./go-deeper-view";
+import { GUIDE_FRESH, GuideMePanel, type GuideState } from "./guide-me-panel";
 import { GO_DEEPER_COPY, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
 import { AskAbout, type AskAboutProps } from "./ask-panel";
@@ -259,6 +260,8 @@ export function LearnWorkspace(props: {
   inline?: InlinePolicy;
   /** SCHOLAR-INLINE-CHECKS-01: sections with an accepted competency mapping -- the clinical-relevance signal for Apply (learn-inline.ts applyEligible). */
   applyChunkIds?: string[];
+  /** SCHOLAR-GUIDE-ME-001: policy scholar_guide_me_adaptive (absent: off, Guide me as it was). */
+  guideAdaptive?: boolean;
   /** SCHOLAR-LEARN-STYLE-01: scholar_learn_style_guide / _challenge / scholar_learn_more_menu (absent: all on). Explain is always on. */
   styleOn?: StylePolicy;
   /** SCHOLAR-LESSON-VISUALS-01: policy scholar_lesson_visuals and scholar_lesson_visuals_max_per_section -- the learner's own slide / page pictures under a lesson. */
@@ -366,6 +369,7 @@ export function LearnWorkspace(props: {
   const [styleChosen, setStyleChosen] = useState<TeachingStyle>("explain");
   const styleRef = useRef<TeachingStyle>("explain");
   const [styleMem, setStyleMem] = useState<Record<string, ApproachMemory>>({});
+  const [guideStates, setGuideStates] = useState<Record<number, GuideState>>({});
   const remember = useCallback((k: string, m: ApproachMemory) => setStyleMem(o => ({ ...o, [k]: m })), []);
   /** Per lesson: whether Practise is open. */
   const [practiceOpen, setPracticeOpen] = useState<Record<number, boolean>>({});
@@ -1519,6 +1523,14 @@ export function LearnWorkspace(props: {
               verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
               run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent}
               memory={styleMem} remember={remember}
+              guidePanel={props.guideAdaptive ? (
+                <GuideMePanel state={guideStates[st.step] ?? GUIDE_FRESH}
+                  setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
+                  run={runApproach(st)} busy={!!busy} disabled={busyHere || !props.consent}
+                  cite={(t, srcs) => <Cited text={t} sources={srcs as Source[]} />}
+                  answeredOf={q => { const h = (checks[st.step] ?? []).filter(x => x.question === q).at(-1); return h?.response?.verdict ?? (h ? "attempted" : null); }}
+                  renderResearch={x => <ResearchBlock x={x as ResearchReply} />} />
+              ) : undefined}
               askAction={group.ask ? <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] gap-1.5 border-[var(--cmp-learn-next-border)] bg-[var(--cmp-app-surface)] text-[var(--cmp-learn-next-ink)] hover:bg-[var(--cmp-learn-next-surface)]`}><LearningIcon name="chat" className="h-4 w-4" />{props.labels.ask}</button> : undefined} />
           </div>
         </div>
