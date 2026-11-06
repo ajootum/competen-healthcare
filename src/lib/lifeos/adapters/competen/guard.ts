@@ -6,6 +6,7 @@ import { ISSUER_COMPETEN_AUTH, readActiveIndividual } from "../../core/provision
 import type { LifeosStore, Principal } from "../../core/types";
 import { supabaseStore } from "../supabase-store";
 import { LIFEOS_CORE_FLAG } from "../../api/dispatch";
+import type { SessionIdentity } from "../../core/optin";
 
 // ADR-018. THE ONLY FILE IN LIFEOS THAT IMPORTS FROM THE REST OF COMPETEN (scripts/lifeos-seal-harness.ts holds this).
 // A carve-out replaces this one file.
@@ -29,8 +30,41 @@ export async function requireLifeosPrincipal(store: LifeosStore): Promise<Princi
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new LifeosError("unauthenticated", "Sign in to use LifeOS.");
-  const individual = await readActiveIndividual(store, ISSUER_COMPETEN_AUTH, user.id);
+  const individual = await readActiveIndividual(store, ISSUER_COMPETEN_AUTH, user.id, async e => (
+    e.source === "competen_individual" ? competenIndividualLive(user.id) : true
+  ));
   return { kind: "session", individualId: String(individual.id), scopes: "*", clientId: null };
+}
+
+/**
+ * The one question LifeOS asks of Competen Individual: does this person hold a live entitlement? It reads a yes or no
+ * and nothing about what they do there. A failed read is no.
+ */
+async function competenIndividualLive(userId: string): Promise<boolean> {
+  const admin = createAdminClientOrNull() as unknown as SupabaseClient | null;
+  if (!admin) return false;
+  try {
+    const { data, error } = await admin.from("individual_live_entitlement").select("user_id").eq("user_id", userId).limit(1);
+    if (error) return false;
+    return (data ?? []).length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/** Who is signed in, for the opt-in door. It grants nothing. */
+export async function requireLifeosSession(): Promise<SessionIdentity> {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new LifeosError("unauthenticated", "Sign in to use LifeOS.");
+  const admin = createAdminClientOrNull() as unknown as SupabaseClient | null;
+  const profile = admin ? (await admin.from("profiles").select("full_name").eq("id", user.id).maybeSingle()).data : null;
+  return {
+    issuer: ISSUER_COMPETEN_AUTH,
+    subject: user.id,
+    displayName: String(profile?.full_name ?? "").trim() || "LifeOS member",
+    competenIndividualLive: await competenIndividualLive(user.id),
+  };
 }
 
 export type LifeosShell = "DISABLED" | "AUTH_REQUIRED" | "NO_ACCESS" | "READY";

@@ -92,7 +92,7 @@ export function BottomNav({ experience }: { experience: ExperienceKey }) {
  * md up, where the sidebar shows everything, it holds Profile & history, Settings and Sign out. The bar itself is
  * unchanged (CPR-MOB-001).
  */
-export function AccountMenu({ experience, initials, name, preview = false, scholarModules = [] }: { experience: ExperienceKey; initials: string; name: string; preview?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
+export function AccountMenu({ experience, initials, name, preview = false, scholarModules = [], lifeos = false }: { lifeos?: boolean; experience: ExperienceKey; initials: string; name: string; preview?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
   const [open, setOpen] = useState(false);
@@ -137,6 +137,13 @@ export function AccountMenu({ experience, initials, name, preview = false, schol
           <ul className="space-y-0.5">
             {overflowNavFor(experience, allowedPrivate).map(i => item(i, "md:hidden"))}
             {desktop.map(i => item(i, "hidden md:block"))}
+            {lifeos && (
+              <li>
+                <Link prefetch={false} href="/lifeos" onClick={() => setOpen(false)} className={`flex min-h-[44px] items-center gap-3 rounded-lg px-3 text-[14.5px] font-medium text-gray-900 hover:bg-gray-50 ${focusRing}`}>
+                  <span aria-hidden className="w-5 text-center">◈</span>LifeOS
+                </Link>
+              </li>
+            )}
           </ul>
           <div className="mt-2 border-t border-gray-100 px-1 pt-2">{preview ? <EndPreviewButton /> : <SignOutButton />}</div>
         </div>

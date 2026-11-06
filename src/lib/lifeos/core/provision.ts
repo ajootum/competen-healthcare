@@ -83,13 +83,18 @@ export async function grantEntitlement(store: LifeosStore, actor: string, e: New
 }
 
 /** The person's account exists and is active, and they hold a live entitlement. */
-export async function readActiveIndividual(store: LifeosStore, issuer: string, subject: string): Promise<Row> {
+export async function readActiveIndividual(
+  store: LifeosStore, issuer: string, subject: string,
+  /** Whether an entitlement's source still stands. Access through another product ends when that product does. */
+  sourceStands: (entitlement: Row) => Promise<boolean> = async () => true,
+): Promise<Row> {
   const [link] = await store.where("lifeos_identity_link", { issuer, subject, status: "active" }, { limit: 1 });
   if (!link) throw new LifeosError("forbidden", "LifeOS has not been enabled for this account.");
   const individual = await store.get("lifeos_individual", String(link.individual_id));
   if (!individual || individual.status !== "active") throw new LifeosError("forbidden", "This LifeOS account is not active.");
   // The live view judges the period by the database clock. No live entitlement means no access.
-  const live = await store.where("lifeos_live_entitlement", { individual_id: String(individual.id) }, { limit: 1 });
-  if (live.length === 0) throw new LifeosError("forbidden", "This account does not currently hold LifeOS access.");
+  const live = await store.where("lifeos_live_entitlement", { individual_id: String(individual.id) }, { limit: 50 });
+  const standing = await Promise.all(live.map(sourceStands));
+  if (!standing.some(Boolean)) throw new LifeosError("forbidden", "This account does not currently hold LifeOS access.");
   return individual;
 }

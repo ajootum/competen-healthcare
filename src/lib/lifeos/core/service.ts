@@ -350,6 +350,23 @@ export async function updateMe(c: RequestContext, input: unknown): Promise<Row> 
   return row;
 }
 
+/** A person's own choice to stop. Only access they chose themselves can be ended here. Their records stay. */
+export async function endOwnEntitlement(c: RequestContext, id: string, input: unknown): Promise<Row> {
+  const parsed = VersionInput.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error);
+  const row = await c.store.get("lifeos_entitlement", id);
+  if (!row || row.individual_id !== c.principal.individualId) throw notFound();
+  if (row.source !== "competen_individual") throw new LifeosError("forbidden", "This access was given to you, so it is ended by whoever gave it.");
+  if (row.status !== "active") throw new LifeosError("conflict", "This access has already ended.");
+  await commit(c, "", null, async () => [{
+    t: "lifeos_entitlement", op: "update", id, expected_version: parsed.data.expectedVersion,
+    values: { status: "revoked", revoked_at: new Date().toISOString(), provenance_source: "user" },
+  }]);
+  const after = await c.store.get("lifeos_entitlement", id);
+  if (!after) throw notFound();
+  return after;
+}
+
 export async function listWorkspaces(c: RequestContext): Promise<Row[]> {
   const memberships = await c.store.where("lifeos_membership", { individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
   const rows = await Promise.all(memberships.map(m => c.store.get("lifeos_workspace", String(m.workspace_id))));

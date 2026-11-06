@@ -1,11 +1,12 @@
 import { z } from "zod";
 import {
-  AuditEventV1, EntitlementV1, GenerateInput, IndividualV1, MeInput, MembershipV1, SuggestionV1, TransitionInput, VersionInput, WorkspaceV1,
+  AccessStatusV1, ActivateInput, AuditEventV1, EntitlementV1, GenerateInput, VersionInput, IndividualV1, MeInput, MembershipV1, SuggestionV1, TransitionInput, WorkspaceV1,
 } from "../core/contracts";
 import { RESOURCES, RESOURCE_NAMES, type ResourceName, camelRow } from "../core/resources";
 import * as svc from "../core/service";
 import type { RequestContext } from "../core/service";
-import type { Row } from "../core/types";
+import { type SessionIdentity, accessStatus, activateFromCompetenIndividual } from "../core/optin";
+import type { LifeosStore, Row } from "../core/types";
 import { buildOpenApi } from "./openapi";
 
 // LIFEOS-API-001 section 6. The one route table. The dispatcher, the scope check, the rate limit and the OpenAPI
@@ -31,6 +32,9 @@ export type Route = {
   input?: z.ZodType;
   output: z.ZodType;
   list?: boolean;
+  /** "session": this route comes before holding LifeOS. It has a signed-in identity and no principal. */
+  admission?: "session";
+  sessionHandler?: (i: { store: LifeosStore; identity: SessionIdentity; body: unknown }) => Promise<HandlerResult>;
   handler: (i: RouteInput) => Promise<HandlerResult>;
 };
 
@@ -82,7 +86,29 @@ function resourceRoutes(name: ResourceName): Route[] {
   return routes;
 }
 
+const noPrincipal = async (): Promise<HandlerResult> => { throw new Error("session route reached the principal path"); };
+
 export const ROUTES: Route[] = [
+  {
+    method: "GET", path: "/access/status", summary: "Whether this signed-in person may turn on LifeOS", visibility: "internal", scope: null, bucket: "read", output: AccessStatusV1,
+    admission: "session", handler: noPrincipal,
+    sessionHandler: async ({ store, identity }) => ({ data: await accessStatus(store, identity) }),
+  },
+  {
+    method: "POST", path: "/access/competen-individual", summary: "A Competen Individual person's own choice to turn on LifeOS, accepting the terms", visibility: "internal", scope: null, bucket: "write", input: ActivateInput, output: z.object({ individualId: z.string(), created: z.boolean() }),
+    admission: "session", handler: noPrincipal,
+    sessionHandler: async ({ store, identity, body }) => {
+      const r = await activateFromCompetenIndividual(store, identity, ActivateInput.parse(body).termsVersion);
+      return { status: r.created ? 201 : 200, data: r };
+    },
+  },
+  {
+    method: "POST", path: "/me/entitlements/:id/end", summary: "Turn off LifeOS access the person chose. Their records are kept.", visibility: "internal", scope: null, bucket: "write", input: VersionInput, output: EntitlementV1,
+    handler: async ({ ctx, params, body }) => {
+      const r = await svc.endOwnEntitlement(ctx, params.id, body);
+      return { data: EntitlementV1.parse(camelRow(r)) };
+    },
+  },
   {
     method: "GET", path: "/me", summary: "The caller and their workspaces", visibility: "internal", scope: null, bucket: "read", output: MeOutput,
     handler: async ({ ctx }) => {

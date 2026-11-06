@@ -289,6 +289,12 @@ const EXCLUDED: Exclusion[] = [
  */
 const STAGING_ONLY: Exclusion[] = [
   {
+    file: "lifeos-individual-access-harness.ts",
+    reason:
+      "LIFEOS-API-001 step 6 acceptance. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), the staging service-role "
+      + "key and real sessions. It creates fixture people per run and turns the staging flags on for its run. Refuses any other project.",
+  },
+  {
     file: "lifeos-ui-harness.ts",
     reason:
       "LIFEOS-API-001 step 5 browser walk. Needs a RUNNING dev server pointed at the staging project (LIFEOS_BASE_URL), Chromium and the "

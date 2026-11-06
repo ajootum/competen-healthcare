@@ -5,7 +5,7 @@ import { addDays, mondayOf, todayIn } from "../core/time";
 import { startInstant } from "../core/suggestions";
 import {
   ApiError, all, get, patch, post,
-  type BigRock, type Commitment, type Delegation, type Individual, type Me, type ProtectedBlock, type Suggestion,
+  type BigRock, type Commitment, type Delegation, type Entitlement, type Individual, type Me, type ProtectedBlock, type Suggestion,
   type WeeklyPlan, type WeeklyReview, type Workspace, type World,
 } from "./client";
 
@@ -40,6 +40,7 @@ export type CommitmentFields = {
 
 export function useLifeos() {
   const [me, setMe] = useState<Individual | null>(null);
+  const [chosenAccess, setChosenAccess] = useState<Entitlement | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
@@ -60,6 +61,7 @@ export function useLifeos() {
     try {
       const m = await get<Me>("/me");
       setMe(m.individual);
+      setChosenAccess(m.entitlements.find(e => e.source === "competen_individual") ?? null);
       setWorkspaces(m.workspaces);
       const saved = typeof window !== "undefined" ? window.localStorage.getItem(WS_KEY) : null;
       const pick = m.workspaces.find(w => w.id === saved) ?? m.workspaces.find(w => w.kind === "personal") ?? m.workspaces[0];
@@ -227,8 +229,14 @@ export function useLifeos() {
     await loadMe();
   }), [act, loadMe, me]);
 
+  const turnOff = useCallback(async () => {
+    if (!chosenAccess) return;
+    const ok = await act(() => post(`/me/entitlements/${chosenAccess.id}/end`, { expectedVersion: chosenAccess.version }));
+    if (ok) window.location.reload();
+  }, [act, chosenAccess]);
+
   return {
-    me, workspaces, workspaceId, chooseWorkspace, offset, setOffset, today, weekStart, days, timeZone, data, loading, busy, error, setError, fatal,
+    chosenAccess, turnOff, me, workspaces, workspaceId, chooseWorkspace, offset, setOffset, today, weekStart, days, timeZone, data, loading, busy, error, setError, fatal,
     retry: reload, capture, saveCommitment, toggleDone, toggleRock, delegate, saveWorld, saveIntention, saveReview, generate, decide, applyBrowserTimeZone,
   };
 }

@@ -235,7 +235,7 @@ Base path `/api/lifeos/v1`. The major version is in the path. The OpenAPI docume
 | 3 Design | This document |
 | 4 Commitment Engine and API | This PR, gate off |
 | 5 Connect the interface | Done on its own branch: nine screens at `/lifeos`, reading and writing only through the API, gate off. See the build record. |
-| 6 Individual access | Not started. The entitlement model exists. It needs the adapter. |
+| 6 Individual access | Done on its own branch: a person's own opt-in, behind two flags and published terms. See the build record. |
 | 7 Custom domains | Not started. |
 | 8 External pilot | Not started |
 | 9 Public API | Not started. Needs OAuth with user-delegated scopes. |

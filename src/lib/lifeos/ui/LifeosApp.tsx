@@ -16,6 +16,8 @@ import styles from "./lifeos.module.css";
 const BOTTOM: Screen[] = ["calendar", "today", "capture", "commitments"];
 const MORE: Screen[] = ["plan", "worlds", "quadrants", "review", "ai"];
 
+const TURN_OFF = "Turn off LifeOS? Your records are kept, and you can turn it on again later.";
+
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -180,6 +182,7 @@ export function LifeosApp({ initialScreen }: { initialScreen: Screen }) {
             ))}
           </nav>
           <p className={styles.sidenote}>🔒 Private by default. Nothing is shared unless you share it.</p>
+          {l.chosenAccess && <button onClick={() => { if (window.confirm(TURN_OFF)) void l.turnOff(); }}>Turn off LifeOS</button>}
         </aside>
         <main className={styles.main}>
           <header className={styles.header}>
@@ -294,6 +297,7 @@ export function LifeosApp({ initialScreen }: { initialScreen: Screen }) {
             </div>
           )}
           {MORE.map(k => <button key={k} className={styles.sheetItem} onClick={() => go(k)}>{SCREENS[k].icon} {SCREENS[k].label}</button>)}
+          {l.chosenAccess && <button className={styles.sheetItem} onClick={() => { if (window.confirm(TURN_OFF)) void l.turnOff(); }}>Turn off LifeOS</button>}
           <p><button onClick={close}>Close</button></p>
         </Modal>
       )}

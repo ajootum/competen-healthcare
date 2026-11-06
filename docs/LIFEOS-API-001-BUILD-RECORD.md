@@ -80,6 +80,33 @@ The V1.1 baseline rebuilt on the API at `/lifeos`: Calendar, Today, Capture, Com
 - Search covers open commitments, this week and worlds, and says so when nothing matches.
 - After each change the view reloads from the server, so a slow connection shows disabled buttons rather than instant updates.
 
+## Stage 3: optional access for Competen Individuals (delivery step 6)
+
+A person with a live Competen Individual entitlement can choose to turn on LifeOS, and can turn it off.
+
+- **Closed four ways, each failing closed:** the `lifeos_core` gate, the `lifeos_individual_access` flag, the eligibility read, and published terms in `lifeos_terms`.
+- **Their choice:** nothing is created until they accept the terms. The version and time are recorded on the entitlement, and the database refuses opt-in access with no terms recorded.
+- **Separation:** the adapter asks Competen Individual one yes-or-no question. Nothing flows the other way. LifeOS writes nothing to Competen Individual, and the two products cannot read each other's records.
+- **Lifetime:** access through Individual ends when Individual ends, and the records survive. Turning LifeOS off keeps the records, and turning it on again finds them.
+- **The link:** one plain link in the Individual account menu, behind `individual_lifeos_entry` in the estate's existing flag table. Absent means no link. Individual imports nothing from LifeOS.
+
+### Migration 902-lifeos-access-terms.sql
+
+- **Dependencies:** 901. Application order: 901, then 902.
+- **Pre-application state on staging:** no `lifeos_terms` table.
+- **sha256:** `129f70c051762235d30b00c83c277e36bb304777e0682ed05e81e346c3ff6535`
+- **Applied to staging:** twice, the second run a no-op. It writes no row.
+- **Rollback:** [rollback-902.sql](evidence/LIFEOS-API-001/rollback-902.sql), rehearsed on staging inside a rolled-back transaction.
+- **Not applied to production.**
+
+**Verified:** `scripts/lifeos-individual-access-harness.ts`, 32 of 32 over real HTTP on staging, and the opt-in screen in the browser walk.
+
+**Not verified:** the Individual account-menu link in a browser. It renders only with its flag on, and is covered by the type check and lint only. No independent security read was run on this stage.
+
+**Owner decisions this stage needs before it can be used:** LifeOS terms of use, then the flags. See the PR.
+
+**Known limit:** the interface has no sign-out control of its own yet.
+
 ## Not done at this stage
 
 - **No way to get access outside a script.** Provisioning and entitlement grants are `core/provision.ts`, called by the harness. There is no commercial plan or billing behind `lifeos_entitlement` yet. Step 6.

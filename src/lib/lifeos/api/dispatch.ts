@@ -2,8 +2,9 @@ import { createHash } from "node:crypto";
 import { hasScope } from "../core/access";
 import { LifeosError } from "../core/errors";
 import { ListQueryInput } from "../core/contracts";
+import type { SessionIdentity } from "../core/optin";
 import type { LifeosStore, Principal } from "../core/types";
-import { matchRoute, type Bucket } from "./routes";
+import { matchRoute, type Bucket, type Route } from "./routes";
 
 // LIFEOS-API-001 sections 2, 6 and 9. The one door. In order: gate, authentication, route, scope, rate limit,
 // request shape, handler. Every LifeOS endpoint passes through this function, and nothing else serves them.
@@ -22,6 +23,8 @@ export type DispatchDeps = {
   store: LifeosStore | null;
   /** Resolves the principal, or throws a LifeosError. */
   authenticate: () => Promise<Principal>;
+  /** Who is signed in, for the routes that come before holding LifeOS. */
+  session?: () => Promise<SessionIdentity>;
   traceId: string;
 };
 
@@ -39,9 +42,11 @@ function errorResponse(e: LifeosError, traceId: string) {
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 async function run(req: Request, segments: string[], deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
+  const matched = matchRoute(req.method, segments);
+  if (matched && matched !== "method_not_allowed" && matched.route.admission === "session") return runSession(req, matched.route, deps);
+
   const principal = await deps.authenticate();
 
-  const matched = matchRoute(req.method, segments);
   if (!matched) throw new LifeosError("not_found", "That was not found.");
   if (matched === "method_not_allowed") throw new LifeosError("method_not_allowed", "That method is not available here.");
   const { route, params } = matched;
@@ -98,6 +103,30 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
       ...(result.replayed ? { replayed: true } : {}),
     },
   });
+}
+
+/** The door before holding LifeOS: a signed-in session, its own rate limit, the same request rules, and no principal. */
+async function runSession(req: Request, route: Route, deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
+  if (!deps.session) throw new LifeosError("forbidden", "This is not available here.");
+  const identity = await deps.session();
+  const limit = RATE_LIMITS[route.bucket];
+  const rate = await deps.store.rateTake(`session:${identity.subject}`, route.bucket, limit.max, limit.windowSeconds);
+  if (!rate.allowed) throw new LifeosError("rate_limited", "Too many requests. Wait a moment and try again.", { retryAfter: rate.retryAfter });
+  let body: unknown = undefined;
+  if (route.method !== "GET") {
+    if (!(req.headers.get("content-type") ?? "").toLowerCase().startsWith("application/json")) {
+      throw new LifeosError("validation_failed", "Send this request as application/json.");
+    }
+    try {
+      body = JSON.parse((await req.text()) || "{}");
+    } catch {
+      throw new LifeosError("validation_failed", "The request body is not valid JSON.");
+    }
+    const parsed = route.input?.safeParse(body);
+    if (parsed && !parsed.success) throw new LifeosError("validation_failed", "Some of those values are not valid.", { details: parsed.error.issues.map(i => ({ path: i.path.join("."), message: i.message })) });
+  }
+  const result = await route.sessionHandler!({ store: deps.store, identity, body });
+  return json(result.status ?? 200, { data: result.data, meta: { traceId: deps.traceId } });
 }
 
 export async function dispatch(req: Request, segments: string[], deps: DispatchDeps): Promise<Response> {

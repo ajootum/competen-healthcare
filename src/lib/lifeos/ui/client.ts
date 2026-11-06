@@ -68,4 +68,5 @@ export type WeeklyPlan = Stamped & { weekStart: string; intention: string | null
 export type BigRock = Stamped & { weeklyPlanId: string; commitmentId: string };
 export type WeeklyReview = Stamped & { weekStart: string; reflection: string | null; nextWeekFocus: string | null; snapshot: Record<string, number | string> | null };
 export type Suggestion = Stamped & { kind: string; materiality: "informational" | "material"; title: string; rationale: string | null; generator: string };
-export type Me = { individual: Individual; workspaces: Workspace[] };
+export type Entitlement = { id: string; version: number; source: string };
+export type Me = { individual: Individual; entitlements: Entitlement[]; workspaces: Workspace[] };

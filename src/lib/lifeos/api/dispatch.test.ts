@@ -95,6 +95,33 @@ describe("the order of the door", () => {
   });
 });
 
+describe("the door before holding LifeOS", () => {
+  const identity = { issuer: "i", subject: "s", displayName: "d", competenIndividualLive: true };
+  const call2 = (store: LifeosStore, session?: () => Promise<typeof identity>) => dispatch(
+    new Request("http://x/api/lifeos/v1/access/status"), ["access", "status"],
+    { store, authenticate: async () => { throw new LifeosError("forbidden", "no"); }, session, traceId: "t" },
+  );
+  it("does not need a principal", async () => {
+    const store = fakeStore({ where: vi.fn(async () => []) });
+    const res = await call2(store, async () => identity);
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toMatchObject({ enabled: true, eligible: true, active: false, terms: null });
+  });
+  it("with the flag off, nobody is eligible, whatever they hold", async () => {
+    const store = fakeStore({ flagEnabled: vi.fn(async (f: string) => f === "lifeos_core") });
+    const res = await call2(store, async () => identity);
+    expect((await res.json()).data.eligible).toBe(false);
+  });
+  it("is refused with no session reader", async () => {
+    expect((await call2(fakeStore())).status).toBe(403);
+  });
+  it("with the gate off, it does not exist", async () => {
+    const res = await call2(fakeStore({ flagEnabled: vi.fn(async () => false) }), async () => identity);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("");
+  });
+});
+
 describe("write requirements", () => {
   const path = `workspaces/${WS}/commitments`;
   it("needs application/json", async () => {

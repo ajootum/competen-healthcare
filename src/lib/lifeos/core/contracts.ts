@@ -280,6 +280,13 @@ export const inputs = {
   },
 } as const;
 
+export const ActivateInput = z.object({ termsVersion: z.string().min(1).max(80) }).strict().meta({ title: "ActivateInput" });
+
+export const AccessStatusV1 = z.object({
+  enabled: z.boolean(), eligible: z.boolean(), active: z.boolean(),
+  terms: z.object({ version: z.string(), title: z.string(), url: z.string() }).nullable(),
+}).meta({ title: "AccessStatus" });
+
 export const MeInput = z.object({
   displayName: z.string().trim().min(1).max(200).optional(),
   timezone: z.string().min(1).max(64).refine(tz => {
