@@ -41,7 +41,7 @@ export function guideGround(headings: readonly string[], step: number, of: numbe
 /** Pure. What makes a guided answer the same request: the same turn on the same step reuses what is saved. A hint keeps its level. */
 export const guideKeyContext = (a: Pick<GuideAsk, "turn" | "step" | "level">, of: number) => `guide:${a.turn}:${a.step}:${of}${a.turn === "hint" ? `:${a.level}` : ""}`;
 
-const WORDS: Record<GuideTurn, string> = { teach: "Teach me this step.", hint: "Give me a hint, not the answer.", example: "Show me example reasoning on a similar case.", explain: "Just explain this step to me." };
+const WORDS: Record<GuideTurn, string> = { teach: "Teach me this step.", hint: "Give me a hint, not the answer.", example: "Show me example reasoning on a similar idea.", explain: "Just explain this step to me." };
 /** Pure. The request as the model and the grounding check read it. */
 export const guidePrompt = (a: GuideAsk) => `${WORDS[a.turn]}${a.question ? `\nThe question I am working on: ${a.question}` : ""}`;
 

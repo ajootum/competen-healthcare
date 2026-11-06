@@ -44,8 +44,8 @@ const open = async () => {
   await page.getByRole("radio", { name: /Guide me/ }).first().waitFor({ timeout: 200_000 });
   await page.waitForTimeout(1500);
   const panel = page.locator('[data-testid="guide-me"]');
-  if (!(await panel.count())) await page.getByRole("radio", { name: /Guide me/ }).first().click();
-  await panel.waitFor({ timeout: 60_000 });
+  // The page may still be hydrating on a dev server's first compile, so the choice is made until it takes.
+  await until(async () => { if (await panel.count()) return true; await page.getByRole("radio", { name: /Guide me/ }).first().click(); await page.waitForTimeout(2000); return (await panel.count()) > 0; }, 120_000);
 };
 await open();
 const panel = page.locator('[data-testid="guide-me"]');
@@ -62,7 +62,7 @@ const step1 = await panel.innerText();
 writeFileSync(join(OUT, "walk-step1.txt"), step1);
 ok((await panel.locator('[data-testid="guide-step"]').innerText()).startsWith("Step 1 of"), `the step pill reads "${await panel.locator('[data-testid="guide-step"]').innerText()}"`);
 ok((await progress()) === "Nothing answered yet", "progress says nothing has been answered");
-ok(step1.includes("Think about this") && step1.indexOf("From your notes") < step1.indexOf("Think about this"), "it teaches before it asks");
+ok(/think about this/i.test(step1) && step1.indexOf("From your notes") < step1.search(/think about this/i), "it teaches before it asks");
 ok(!/Explain it directly|guidance \d of \d|\[!MEMORY\]/.test(step1), "none of the old navigation or stage wording");
 ok(await checkBtn.isDisabled(), "a blank answer cannot be sent");
 await box.fill("I don't know");

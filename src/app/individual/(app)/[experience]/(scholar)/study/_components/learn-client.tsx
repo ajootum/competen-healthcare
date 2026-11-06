@@ -1099,6 +1099,21 @@ export function LearnWorkspace(props: {
     if (r) keepAsked(q);
   }
   /** A teaching approach's request, through the same route and body as every Learn action (allowance, grounding, dedupe). */
+  // SCHOLAR-GUIDE-ME-001: the same request as any approach, with the clinical-risk gate's question handed to the panel, so it is answered where the learner is and the panel carries on.
+  const runGuide = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
+    if (!session) return null;
+    const { action, ...extra } = body;
+    const a = String(action);
+    setBusy(a); setBusyAt(st.step); setError(""); setPending(null);
+    const r = await call(ACT_URL, studyBody(bodyFor(st, a, { mode, depth }, extra)));
+    setBusy(""); setBusyAt(null);
+    const prompt = r.ok ? null : clarifyFrom(r.json);
+    if (prompt) return { ok: false, json: { clarify: prompt } };
+    if (r.json.continuity) return { ok: false, json: { error: r.json.continuity.message } };
+    if (r.ok && !r.json.withheld) setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "guide"])], verdict: r.json.verdict?.value ?? p[st.step]?.verdict ?? null } }));
+    if (r.json.verdict?.value) dispatch({ type: "verdict", index: indexOf(st.step), value: String(r.json.verdict.value) });
+    return r;
+  };
   const runApproach = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
     if (!session) return null;
     const { action, ...extra } = body;
@@ -1526,7 +1541,8 @@ export function LearnWorkspace(props: {
               guidePanel={props.guideAdaptive ? (
                 <GuideMePanel state={guideStates[st.step] ?? GUIDE_FRESH}
                   setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
-                  run={runApproach(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")}
+                  run={runGuide(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")}
+                  renderClarify={(p, retry) => <ClarifyPurpose clarify={p as ClarifyPrompt} busy={!!busy} accent={accent} onEducation={() => { confirmStudy(true); retry(); }} onPatient={() => confirmStudy(false)} />}
                   cite={(t, srcs) => <Cited text={t} sources={srcs as Source[]} />}
                   answeredOf={q => { const h = (checks[st.step] ?? []).filter(x => x.question === q).at(-1); return h?.response?.verdict ?? (h ? "attempted" : null); }}
                   renderResearch={x => <ResearchBlock x={x as ResearchReply} />} />

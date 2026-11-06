@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type Dispatch, type ReactNode, type SetStateAction } from "react";
+import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { DisclaimerBadge, FeedbackParts, LearningCallout, LearningIcon, VerdictLine, learnAction, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
 import { CHECK_VERDICT_LABEL, INFORMAL_CHECK_LABEL } from "@/lib/individual/scholar/config";
 import { GO_DEEPER_COPY, deeperEvidenceStatement, parseDeeperAnswer, type DeeperParts } from "@/lib/individual/scholar/deeper-format";
@@ -15,6 +15,7 @@ import { Blocks, SectionNote, SourceChip } from "./go-deeper-view";
 
 type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
 export type GuideReply = { answer?: string; sources?: Source[]; withheld?: boolean; message?: string; next?: { why?: string }; open?: string; verdict?: { value: string; label?: string } | null; salvage?: { note: string } | null; research?: { text?: string } | null; guide?: { step: number; of: number; turn: GuideTurn } | null; error?: string };
+/** `json.clarify`: the clinical-risk gate asks whether this is study or a real patient. It is put to the learner here, where they are, and nothing has been sent to a model. */
 export type GuideRun = (body: Record<string, unknown>) => Promise<{ ok: boolean; json: Record<string, unknown> } | null>;
 
 type StepState = { reply: GuideReply | null; hints: GuideReply[]; example: GuideReply | null; explained: GuideReply | null; showExplained: boolean; question: string | null; answer: string; feedback: GuideReply | null; note: string | null };
@@ -22,7 +23,8 @@ export type GuideState = { of: number | null; current: number; status: StepStatu
 export const GUIDE_FRESH: GuideState = { of: null, current: 0, status: [], steps: {}, opened: false, finished: false };
 const FRESH_STEP: StepState = { reply: null, hints: [], example: null, explained: null, showExplained: false, question: null, answer: "", feedback: null, note: null };
 
-export function GuideMePanel({ state, setState, run, busy, disabled, cite, answeredOf, renderResearch }: {
+export function GuideMePanel({ state, setState, run, busy, disabled, cite, answeredOf, renderResearch, renderClarify }: {
+  renderClarify: (prompt: unknown, retry: () => void) => ReactNode;
   state: GuideState; setState: Dispatch<SetStateAction<GuideState>>; run: GuideRun; busy: boolean; disabled?: boolean;
   cite: (text: string, sources: readonly Source[]) => ReactNode;
   /** The latest kept verdict for a question of this lesson (the page's checks), so progress comes back on any device with no AI. */
@@ -32,11 +34,13 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
   const id = useId();
   const box = useRef<HTMLTextAreaElement>(null);
   const here = state.steps[state.current] ?? FRESH_STEP;
+  const [clarify, setClarify] = useState<{ prompt: unknown; retry: () => void } | null>(null);
   const patch = (step: number, p: Partial<StepState>) => setState(s => ({ ...s, steps: { ...s.steps, [step]: { ...(s.steps[step] ?? FRESH_STEP), ...p } } }));
   const setStatus = (step: number, now: StepStatus) => setState(s => { const status = [...s.status]; status[step] = mergeStatus(status[step] ?? "open", now); return { ...s, status }; });
-  const ask = async (turn: GuideTurn, step: number, extra: Record<string, unknown> = {}, open = false): Promise<GuideReply | null> => {
+  const ask = async (turn: GuideTurn, step: number, extra: Record<string, unknown> = {}, open = false, retry?: () => void): Promise<GuideReply | null> => {
     const r = await run({ action: "explain", guide: { turn, step, ...extra }, ...(open ? { open: true } : {}) });
     if (!r) return null;
+    if (r.json.clarify) { setClarify({ prompt: r.json.clarify, retry: retry ?? (() => {}) }); return null; }
     const json = r.json as GuideReply;
     if (!r.ok && !json.withheld) { patch(step, { note: String(json.error ?? "Scholar could not answer just now.") }); return null; }
     if (json.guide?.of) setState(s => (s.of === json.guide!.of ? s : { ...s, of: json.guide!.of, status: Array.from({ length: json.guide!.of }, (_, i) => s.status[i] ?? "open") }));
@@ -72,7 +76,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
     setState(s => ({ ...s, current: step, finished: false }));
     if (state.steps[step]?.reply?.answer) return;
     patch(step, { note: null });
-    const r = await ask("teach", step);
+    const r = await ask("teach", step, {}, false, () => void teach(step));
     if (!r) return;
     if (r.withheld) { patch(step, { note: r.next?.why ?? r.message ?? "This step could not be taught from your notes just now." }); return; }
     patch(step, { reply: r });
@@ -97,6 +101,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
     const tag = citedTags(questionRaw)[0];
     const r = await run({ action: "clarify", checkQuestion: question, answer, guided: true, ...(tag ? { checkCited: tag } : {}) });
     if (!r) return;
+    if (r.json.clarify) { setClarify({ prompt: r.json.clarify, retry: () => void check() }); return; }
     const json = r.json as GuideReply;
     if (!r.ok || json.withheld) { patch(step, { feedback: null, note: json.next?.why ?? json.message ?? json.error ?? "Your answer could not be checked just now." }); return; }
     patch(step, { feedback: json, note: null });
@@ -104,21 +109,21 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
   };
   const hint = async () => {
     const step = state.current, level = Math.min(GUIDE_HINT_LEVELS, here.hints.length + 1);
-    const r = await ask("hint", step, { level, question });
+    const r = await ask("hint", step, { level, question }, false, () => void hint());
     if (r?.withheld) patch(step, { note: r.next?.why ?? r.message ?? "A hint could not be written just now." });
     else if (r?.answer) patch(step, { hints: [...here.hints, r] });
   };
   const example = async () => {
     const step = state.current;
     if (here.example) return;
-    const r = await ask("example", step, { question });
+    const r = await ask("example", step, { question }, false, () => void example());
     if (r?.withheld) patch(step, { note: r.next?.why ?? r.message ?? "An example could not be written just now." });
     else if (r?.answer) patch(step, { example: r });
   };
   const explain = async () => {
     const step = state.current;
     if (here.explained) { patch(step, { showExplained: true }); return; }
-    const r = await ask("explain", step, { question });
+    const r = await ask("explain", step, { question }, false, () => void explain());
     if (r?.withheld) { patch(step, { note: r.next?.why ?? r.message ?? "This could not be explained from your notes just now." }); return; }
     if (r?.answer) { patch(step, { explained: r, showExplained: true }); if (status === "open") setStatus(step, "explained"); }
   };
@@ -160,6 +165,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
             : <button type="button" className={learnAction.primary} disabled={disabled} onClick={() => void teach(state.current)}>{GUIDE_COPY.start}</button>}
         </div>
       )}
+      {clarify && <div className="mt-3">{renderClarify(clarify.prompt, () => { const go = clarify.retry; setClarify(null); go(); })}</div>}
       {here.note && <p role="status" className="mt-2 rounded-lg border border-gray-200 bg-[var(--cmp-app-surface)] px-3 py-2 text-[13.5px] text-gray-800">{here.note}</p>}
 
       {state.finished && (
