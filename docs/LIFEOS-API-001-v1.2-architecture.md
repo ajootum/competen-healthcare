@@ -237,7 +237,7 @@ Base path `/api/lifeos/v1`. The major version is in the path. The OpenAPI docume
 | 5 Connect the interface | Done on its own branch: nine screens at `/lifeos`, reading and writing only through the API, gate off. See the build record. |
 | 6 Individual access | Done on its own branch: a person's own opt-in, behind two flags and published terms. See the build record. |
 | 7 Custom domains | Done on its own branch: verified domains, branding and own sign-in, inert until `LIFEOS_TENANT_HOSTS=1`. See the build record. |
-| 8 External pilot | Not started |
+| 8 External pilot | Ready on its own branch: invitations, member picker, Organisation screen, runbook. Choosing a real organisation is the owner's. |
 | 9 Public API | Not started. Needs OAuth with user-delegated scopes. |
 | 10 Commercial distribution | Not started. **The commercial readiness assessment (ADR-018) comes before the first paying external organisation.** |
 

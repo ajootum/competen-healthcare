@@ -141,14 +141,49 @@ An organisation can offer LifeOS on its own verified domain, under its own name 
 - A tenant's domain has no password reset, and no sign-up page. Stage 5 adds invitations.
 - Adding a domain to the Vercel project is a manual owner step.
 
+## Stage 5: pilot readiness (delivery step 8)
+
+Everything an organisation needs to run a pilot, tested on staging against fixture organisations. **No real organisation has been used. Choosing one is the owner's decision.** The runbook is [LIFEOS-PILOT-001](LIFEOS-PILOT-001-runbook.md).
+
+- **Invitations:** a workspace owner or admin invites one address. The link is shown once, works once and lasts 14 days. The database holds only its hash. It works only for a person signed in with that address. LifeOS sends no email: the organisation sends the link.
+- **Organisation screen:** invitations, name and look, and domains, with no code.
+- **Delegating to a member:** a picker of names, with no addresses. The member can read that one commitment until it closes.
+- **Sharing:** in an organisation, a person chooses who can see a commitment. Private is the default.
+- **Organisation access stands only while it should:** it ends when the organisation is suspended or the person leaves its last workspace. This closes the known limit from the Stage 1 read. Records are kept and return with any new access.
+- **Provisioning:** `scripts/lifeos-emit-provision.ts` prints SQL for a person to read and run. It connects to nothing.
+
+### Migration 904-lifeos-invitations.sql
+
+- **Dependencies:** 901, 903. Application order: 901, 902, 903, 904.
+- **Pre-application state on staging:** no `lifeos_invitation` table.
+- **sha256:** `75c5b1b29d83accde07649a697bd3dba03ce1306ba23de9620f926d87c193edc`
+- **Applied to staging:** twice, the second run a no-op. It writes no row.
+- **Rollback:** [rollback-904.sql](evidence/LIFEOS-API-001/rollback-904.sql), rehearsed on staging inside a rolled-back transaction.
+- **Not applied to production.**
+
+**Verified:** `scripts/lifeos-pilot-harness.ts`, 37 of 37, over real HTTP and in Chromium on staging, including a person joining an organisation and leaving with their personal work intact and unseen.
+
+**Not verified:**
+
+- A real organisation or real users.
+- The sign-up path of an invitation. Only sign-in was walked, because staging's email confirmation setting decides what sign-up does.
+- Email confirmation returning to a tenant's domain.
+- Production.
+
+**Owner decision needed:** someone whose only access came through an organisation loses access when they leave. Their records are kept but unreachable until they regain access. Stage 7 covers export, and the assessment asks whether they should keep reading their personal workspace.
+
+**Known limits:**
+
+- No password reset on a tenant's domain.
+- Invitations are one at a time, with no bulk import.
+- Grants have no screen yet: a person shares a record with the whole workspace, or delegates it to one member.
+
 ## Not done at this stage
 
 - **No way to get access outside a script.** Provisioning and entitlement grants are `core/provision.ts`, called by the harness. There is no commercial plan or billing behind `lifeos_entitlement` yet. Step 6.
 - **No AI model.** The Chief of Staff is rules only, matching the prototype. Connecting a model is a separate owner decision on what data may be sent.
-- **No custom domains, no tenant admin screens.** Step 7.
 - **No integration provider, no OAuth, no public routes.** Steps 8 and 9. Every route is `internal`.
-- **Known limits, from the independent read, to close before organisation access is issued (step 7 or 8):**
-  - An organisation entitlement is not tied to the tenant's status or the person's membership, so it outlives them. It exposes no organisation records, because workspace access is checked separately. Nothing issues these entitlements yet.
+- **Known limits, from the independent read:**
   - A person whose entitlement lapses cannot revoke grants they gave until it is renewed. The grants stay as they set them.
   - Grants made before a person leaves are revoked on leaving. Those on a suspended tenant's workspace stay, and the workspace itself refuses everyone.
 - **Suggestions do not expire automatically,** and `lifeos_idempotency` has no purge job. Neither holds up the gate-off state.
