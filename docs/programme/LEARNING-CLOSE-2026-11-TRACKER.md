@@ -2,6 +2,7 @@
 
 **Authority:** owner directive LEARNING-CLOSE-2026-11, 4 Nov 2026 (§4: "one authoritative tracker"). This file is it. The CE-01..CE-07 register (`SCHOLAR-CE-2026-REGISTER.md`) holds the narrative per workstream and points here for status. Nothing is duplicated in a second tracker.
 **Created:** 4 Nov 2026 by CLOSE-01 against `main` @ `e19a363a` (PR #263). **Production state given by the coordinator at creation:** app `e19a363a`, DB head 942. **Since the 4 Nov releases:** app `09d9da09` (rollback `6d76cdda`), DB includes 950, 955 and 960.
+**Refreshed 6 Nov 2026 against `main` @ `8a577bb3`** (production app `8a577bb3`, deployment `dpl_8vVcMJBDSQKdJSTF1iEtfWuE6crm`, rollback `dc10b205`; live commit equals `main`). Code facts were read from `main`, remote branches and `docs/evidence/*`. **Production switches (HQ policy keys, flags) and production migrations are BY RECORD (coordinator and memory records, 6 Nov), not read from production**, unless a line holds a read-only result and its date (the 4 Nov Q1-Q6 results below are kept as read). Read-only confirmation script: `PROD-CHECK-trackers-6nov.sql` (coordinator folder). Governing instruction since 6 Nov: "Coordinated Learning Experience Completion" (D-18). LifeOS (migrations 901-906 on `main`) is not part of this tracker: its code is off, its migrations are not applied in production, and it is kept out of the Scholar release. **No row is Complete: no signed-in production walk of the recent releases has been done.**
 **Rule (directive §1 and §4):** a row is **Complete** only when it is implemented, integrated, available in its intended environment, governed, tested against its acceptance criteria and accurately recorded here. **Merged is not Complete.** At creation **no row is Complete**.
 
 **Status values (exact):** Not started · Implementing · Ready for review · Blocked · Ready for release · Live — verification pending · Complete.
@@ -29,14 +30,14 @@
 | CE-01-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-01-3 | CE | P2 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-02 | CE | P1 | Engineering (CE) | Live — verification pending | Open children CE-02-1..2 | — |
-| CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) | Not started | Needs a schema decision (820 has no topic target) | — |
+| CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) + My Notebook session | Implementing | Schema decision made 6 Nov (D-18: topic-linked and free-standing notes allowed). Branch `scholar/notebook-001` (pushed, no PR), migration 1000 staging only; whether a note can target a topic as such is not confirmed | — |
 | CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-03 | CE | P1 *(proposed)* | Engineering (CE) | Live — verification pending | Production signed-in walk | — |
 | CE-04A | CE | P0 | CE-04/05 session (PR #275) | Blocked | Patient voice stays off (D-11): a case author supplies the patient script and an independent clinician approves the complete case and permitted responses | — |
-| CE-04B | CE | P1 | CE-04/05 session (PR #275) | Ready for review | — (verified on staging) | — |
-| CE-04C | CE | P1 | CE-04/05 session (PR #275) | Ready for review | Key `scholar_case_deterioration` is off; a clinically approved timeline is needed before use | — |
-| CE-04D | CE | P0 | CE-04/05 session (PR #275) | Ready for review | PR #275 (owner GO to merge given); retention decided (D-13): learner deletion enabled once the implementation is verified, per the documented policy | — |
-| CE-05 | CE | P0 | CE-04/05 session (PR #275) + clinical reviewer | Ready for review | Scenarios stay off (D-3 decided): about ten generated scenarios need independent clinical review first | — |
+| CE-04B | CE | P1 | CE-04/05 session (PR #275, merged) | Live — verification pending | Production walk not done; no production case is known to define a handover (Q7 not run) | — |
+| CE-04C | CE | P1 | CE-04/05 session (PR #275, merged) | Live — verification pending | Code live, key `scholar_case_deterioration` off (code default; no switch-on recorded); a clinically approved timeline is needed before use | — |
+| CE-04D | CE | P0 | CE-04/05 session (PR #275, merged) | Live — verification pending | Code live, `scholar_case_attempt_delete` off; retention decided (D-13): learner deletion enabled once the implementation is verified. The 5 Nov attempt-deletion and retention note is with the owner | — |
+| CE-05 | CE | P0 | CE-04/05 session (PR #275) + clinical reviewer | Ready for review | Scenarios stay off (D-3, D-14 decided): about ten generated scenarios need independent clinical review first. The pack (10 scenarios) is unreviewed and waits for the owner to name an independent clinician. #318 variety and #327 button do not reach learners until `scholar_revision_formats` includes scenario | — |
 | CE-06A | CE | P1 | Engineering (CE) | Live — verification pending | — | — |
 | CE-06A-1 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-06B | CE | P1 | Engineering (CE) | Not started | — | — |
@@ -48,9 +49,9 @@
 | LE-03 | Learning Engine | P1 | LE session (PR #266, merged) | Live — verification pending | Production walk by a learner not yet done | — |
 | LE-04 | Learning Engine | P1 | LE session (PR #266, merged) | Live — verification pending | Production walk by a learner not yet done | — |
 | LE-05 | Learning Engine | P1 *(proposed)* | LE session (PR #266, merged) | Live — verification pending | Production walk by a learner not yet done | — |
-| AI-01 | AI | P0 | Independent clinical reviewer (to be assigned) | Ready for review | Owner assigns the clinician (decided D-12); review must meet the acceptance criteria | — |
-| AI-02 | AI | P0 | Coordinator (config) | Blocked | AI-01 review accepted (D-12: activate only after it meets the criteria) | — |
-| AI-03 | AI | P1 | Coordinator (read-only runs) | Blocked | AI-02 | — |
+| AI-01 | AI | P0 | Independent clinical reviewer | Ready for review | Sign-off recorded 4 Nov (Okaisu Mullen, role given as CEO, no registration number; all cards Safe; Haiku not eligible for clinical-educational). The owner lists the AI-01 clinician as still open: the owner decides whether this meets D-12 | — |
+| AI-02 | AI | P0 | Coordinator (config) | Live — verification pending | Applied by the owner 4 Nov ~20:35 (by record). 24 h check 5 Nov 20:30 unread by the owner; 7-day check 7 Nov 20:30 | — |
+| AI-03 | AI | P1 | Coordinator (read-only runs) | Implementing | Monitoring window running since 4 Nov ~20:35; report after the 7-day check | — |
 | AI-04 | AI | P1 *(proposed)* | Coordinator | Not started | AI-03 | — |
 | AI-05 | AI | P1 *(proposed)* | Coordinator | Not started | AI-03 | — |
 | GOV-01 | Governance | P1 | Owner | Ready for release | Owner grants the right to six positions in Organisation & Appointments; coordinator verifies | — |
@@ -61,8 +62,8 @@
 | REL-02 **PARALLEL** | Release | P1 | Owner | Live — verification pending | — (owner GO given; production already has 610) | — |
 | REL-03 **PARALLEL** | Release | P1 | Owner | Blocked | Owner: payments deferred, revisit 18 Nov 2026 | — |
 | REL-04 **PARALLEL** | Release | P2 | Owner | Blocked | **On hold by owner directive** (keep on hold) | — |
-| OPS-01 **PARALLEL** | Release | P1 | Owner (DNS) | Blocked | DNS record scheduled 5 Nov | — |
-| CLOSE-01 | Learning Engine | P0 | Coordinator + this session | Implementing | — | — |
+| OPS-01 **PARALLEL** | Release | P1 | Owner (DNS) | Blocked | Owner adds the preview CNAME; scheduled 5 Nov, still open on 6 Nov (by record) | — |
+| CLOSE-01 | Learning Engine | P0 | Coordinator + this session | Implementing | Refreshed 6 Nov; final closure waits for learner-level walks | — |
 
 ## Reconciliation against directive §4
 
@@ -174,7 +175,8 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Current state:** Not available: migration 820 has no topic target and #228 allowed no schema change (register decision 2). Section choices show the section's first topic.
 - **Dependency:** owner/engineering decision on whether a topic target is wanted (new migration, four-state path). · **Environment:** development
 - **Acceptance criteria:** Create, edit, remove and filter a topic note; erase-all and export include it.
-- **Evidence:** register CE-02 decision (2); `supabase/migrations/820-*`. · **Status:** Not started · **Blocker:** schema decision · **Completed:** —
+- **6 Nov refresh:** the schema decision is made: the owner's 6 Nov "Coordinated Learning Experience Completion" (D-18) permits topic-linked and free-standing notes. Branch `scholar/notebook-001` (head `12cdf0c5`, pushed, no PR) widens the 820 note table in migration 1000 (free-standing notes, long-form body, title, tags, pin, autosave key and revision, section label and anchor, competency and session hints, a note outlives its source, search). Migration 1000 applied twice on staging 6 Nov 12:02Z (sha256 `a5453ef6...e2b3`), not in production, not merged. Key `scholar_personal_notebook`, default off. The branch has no column that targets a topic by itself, so "a note can target a topic" is only partly met (section and competency hints, tags). The coordinator note says migration 1001 is reserved: the branch uses 1000.
+- **Evidence:** register CE-02 decision (2); `supabase/migrations/820-*`; `docs/evidence/COMPETEN-NOTEBOOK-001/` on the branch. · **Status:** Implementing · **Blocker:** PR, CI, independent read and owner GO; migration 1000 needs its own production GO · **Completed:** —
 
 ### CE-02-2 — CE-02 acceptance walk (desktop and phone)
 - **Programme:** CE · **Priority:** P1 *(proposed)* · **Owner:** Engineering (CE)
@@ -209,7 +211,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** a published case with a handover spec · **Environment:** staging verified (PR #275 open)
 - **Acceptance criteria:** learner completes and receives marked feedback; the answer is part of the attempt record; correct handover not shown beforehand.
 - **Evidence:** PR #237; `src/lib/cases/handover.ts`; `ce04.test.ts`; build record 880 ("SBAR handover task needs no migration"). PR #275.
-- **Status:** Ready for review · **Blocker:** none; awaits PR #275 review · **Completed:** —
+- **Status:** Live — verification pending (6 Nov: PR #275 merged 4 Nov 17:35 and deployed in `6e679c29`) · **Blocker:** Production walk not done · **Completed:** —
 
 ### CE-04C — Deterioration clock
 - **Programme:** CE · **Priority:** P1 · **Owner:** Engineering (CE)
@@ -218,7 +220,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** CE-04A; clinical approval of timeline content through the existing case approval (422) · **Environment:** staging verified (PR #275 open); production off
 - **Acceptance criteria:** timeline authored per case version in Case Studio and approved with the version; progression server-controlled; no premature reveal; clock labelled as simulation; works with the conversation cap and debrief.
 - **Evidence:** repo search 4 Nov 2026; register CE-04 gaps. PR #275 (staging walk 25/25).
-- **Status:** Ready for review · **Blocker:** PR #275 review; the key stays off until a clinically approved timeline exists · **Completed:** —
+- **Status:** Live — verification pending (6 Nov: PR #275 merged and deployed; key off) · **Blocker:** the key stays off until a clinically approved timeline exists · **Completed:** —
 
 ### CE-04D — Attempt-linked conversation storage
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE)
@@ -227,7 +229,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** CE-04A (turns appear only once the switch is on) · **Environment:** staging verified (PR #275 open); production off
 - **Acceptance criteria:** turns survive refresh; deleted attempt removes its turns; erase-all removes library-play turns; no turn reaches Personal AI memory or unrelated answers; a retention rule is recorded.
 - **Evidence:** PR #237; `supabase/migrations/880-individual-scholar-case-conversation.sql` (sha256 `df966c11…2450f` at staging); `docs/evidence/CASE-CONVERSATION/880-build-record.md`; `docs/adr/ADR-016-individual-product-gate.md`. PR #275.
-- **Status:** Ready for review · **Blocker:** PR #275 (owner GO to merge given, merging main in); verification of the delete implementation, then enable `scholar_case_attempt_delete` · **Completed:** —
+- **Status:** Live — verification pending (6 Nov: PR #275 merged and deployed; key off) · **Blocker:** verification of the delete implementation, then the owner enables `scholar_case_attempt_delete` · **Completed:** —
 
 ### CE-05 — Clinical scenario quality and policy activation
 - **Programme:** CE · **Priority:** P0 · **Owner:** Engineering (CE) with a clinical reviewer
@@ -236,6 +238,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** owner decision D-3; clinician read of a sample of generated scenarios · **Environment:** production (code, format off)
 - **Acceptance criteria:** clinician confirms a sample has accurate clinical content, no leakage, patient-centred framing; progression cannot be skipped from the browser; the policy decision is recorded.
 - **Evidence:** PR #236; `scenario.ts`, `scenario-service.ts`, `scenario-quality.test.ts`, `scenario-sessions-wiring.test.ts`; `docs/evidence/SCHOLAR-INDEPENDENT/p3-cost.md` (scenarios 59 % of Scholar AI cost); policy `scholar_revision_formats` in `policy.ts`. PR #275 staging verification.
+- **6 Nov refresh:** scenario variety merged as #318 (6 Nov 17:27, deployed `a1eb16a7`): a decision focus that moves with how many scenarios the scope already holds, other scenarios passed as data, no model calls added, no key, no migration. Per its own evidence the live planner does not write a second scenario on the same section, and allowing that is an owner decision because it adds model calls. "Another scenario" on a section is open PR #327 (`scholar/another-scenario-01`, head `c354da03`, CI 8/8 reported). User-initiated extra scenarios are permitted (D-18) under the existing controls. **None of this reaches learners while `scholar_revision_formats` excludes scenario** (code default off via the format registry; production excluded it at the 3 Nov publication read on 4 Nov, not re-read). The ten-scenario pack and its pass rule (confirmed 5 Nov) wait for an independent clinician.
 - **Status:** Ready for review · **Blocker:** independent clinical review of about ten representative generated scenarios (leakage, accuracy, scoring); then the owner enables the format · **Completed:** —
 
 ### CE-06A — Read-aloud across lessons
@@ -296,7 +299,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Current state:** **MERGED to `main` as 6d76cdda on 4 Nov (owner GO); **DEPLOYED 4 Nov 2026** (app `6d76cdda`, `dpl_7QaBQjko6p2pFryVkSoQZG3Fd3NR`; rollback `e19a363a`; smoke: home 200, scholar 307, learn/checks 401 so the new route is present). Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** Shared AI-off wording for Scholar and Professional. **Scope note:** HQ Copilot and the case studio keep their own AI wording. Earlier state: Scholar has the shared copy (`ai-availability.ts`, `AiAvailability.tsx`; P1 #253: refusal codes, `provider_unavailable`, no "environment" wording). Bespoke strings still exist on Apply and OSCE pages ("AI help is off, so …", `apply/page.tsx:63`, `apply/osce/page.tsx:71`). No use of the shared component found under the Professional routes in this pass. In build.
 - **Dependency:** none · **Environment:** production (deployed 4 Nov)
 - **Acceptance criteria:** same wording and next step across Scholar and Professional; supported non-AI functions stay usable; no internal detail exposed.
-- **Evidence:** PR #253; `src/lib/individual/ai-availability.ts`. · **Status:** Implementing · **Blocker:** — · **Completed:** — PR #266.
+- **Evidence:** PR #253; `src/lib/individual/ai-availability.ts`. · **Status:** Live — verification pending (6 Nov: the detail line said Implementing while the summary and change log said Live; PR #266 deployed 4 Nov; `ai-refusal.tsx` under the Professional components uses the shared wording) · **Blocker:** Production walk by a learner not yet done · **Completed:** — PR #266.
 
 ### LE-02 — Rename learning units
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session
@@ -304,7 +307,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Current state:** **MERGED to `main` as 6d76cdda on 4 Nov (owner GO); **DEPLOYED 4 Nov 2026** (app `6d76cdda`, `dpl_7QaBQjko6p2pFryVkSoQZG3Fd3NR`; rollback `e19a363a`; smoke: home 200, scholar 307, learn/checks 401 so the new route is present). Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** Learning units can be renamed, and the accepted units can be changed again, in My Plan. Earlier state: Learning units exist as My Plan proposals (#256) and Learn lessons planned by heading family (#257). No rename of a unit found in the repository. In build.
 - **Dependency:** none · **Environment:** production (deployed 4 Nov)
 - **Acceptance criteria:** rename persists; progress, annotations, saved explanations, questions, flashcards, attempts and citations keep working.
-- **Evidence:** PRs #256, #257; `docs/programme/SCHOLAR-PLAN-UNITS-01.md`. · **Status:** Implementing · **Blocker:** — · **Completed:** — PR #266; screenshot `desktop-1280-units-card.png`.
+- **Evidence:** PRs #256, #257; `docs/programme/SCHOLAR-PLAN-UNITS-01.md`. · **Status:** Live — verification pending (6 Nov: aligned with the summary; PR #266 deployed 4 Nov) · **Blocker:** Production walk by a learner not yet done · **Completed:** — PR #266; screenshot `desktop-1280-units-card.png`.
 
 ### LE-03 — Re-cut lesson structure
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session
@@ -312,7 +315,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Current state:** **MERGED to `main` as 6d76cdda on 4 Nov (owner GO); **DEPLOYED 4 Nov 2026** (app `6d76cdda`, `dpl_7QaBQjko6p2pFryVkSoQZG3Fd3NR`; rollback `e19a363a`; smoke: home 200, scholar 307, learn/checks 401 so the new route is present) and **migration 955 applied in production by the owner, strict VERIFY passed, coordinator read-only check confirms**. Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** A recorded Learn session's lessons can be re-cut (split, merge, rename) without losing completed work, through migration 955 (one function, one transaction; events moved, copied or detached by containment; position, notes and artefact links follow). 955 is applied twice on staging with strict VERIFY passed; **production needs the owner's GO**; without 955 the route answers 409 and the session is unchanged. **Scope note:** re-cut works only for recorded sessions. Earlier state: Not on `main`. Plan-unit review (merge, split, leave out, put first) exists for My Plan proposals only. In build.
 - **Dependency:** LE-02 identity rules · **Environment:** production (deployed 4 Nov)
 - **Acceptance criteria:** §6.3 restructuring orphans no saved record; progress recalculated, not transferred indiscriminately.
-- **Evidence:** PR #256. · **Status:** Implementing · **Blocker:** LE-02 · **Completed:** — `docs/evidence/LEARNING-CLOSE-WS03/955-build-record.md` (sha256 `472cf84d…7caa`), `verify-955-strict.sql`, `ROLLBACK-955.sql`, desktop and phone screenshots.
+- **Evidence:** PR #256. · **Status:** Live — verification pending (6 Nov: aligned with the summary; migration 955 file is on `main`, applied in production 4 Nov, read-only checked then) · **Blocker:** Production walk by a learner not yet done · **Completed:** — `docs/evidence/LEARNING-CLOSE-WS03/955-build-record.md` (sha256 `472cf84d…7caa`), `verify-955-strict.sql`, `ROLLBACK-955.sql`, desktop and phone screenshots.
 
 ### LE-04 — Configurable Go Deeper limit
 - **Programme:** Learning Engine · **Priority:** P1 · **Owner:** LE session
@@ -329,7 +332,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Current state:** **MERGED to `main` as 6d76cdda on 4 Nov (owner GO); **DEPLOYED 4 Nov 2026** (app `6d76cdda`, `dpl_7QaBQjko6p2pFryVkSoQZG3Fd3NR`; rollback `e19a363a`; smoke: home 200, scholar 307, learn/checks 401 so the new route is present) and **migration 955 applied in production by the owner, strict VERIFY passed, coordinator read-only check confirms**. Built in PR #266 (branch `scholar/learning-close-ws03`, head 05a8057e; commits be29d4fa LE-01+LE-04, 34203b51 LE-02, 05a8057e LE-03+LE-05), reported by the coordinator 4 Nov. Evidence: `docs/evidence/LEARNING-CLOSE-WS03/` on that branch.** Walk on the fixture learner (75-section material, 7 lessons) through two re-cuts: all invariants PASS (questions, attempts, flashcards, artefacts and section notes unchanged; no orphaned events, notes, artefact links or position; a read mark or teach event whose lesson grew beyond what it covered is detached as history only, never counted as completing the larger lesson). Earlier state: Not started; depends on LE-02/LE-03.
 - **Dependency:** LE-02, LE-03 · **Environment:** production (deployed 4 Nov)
 - **Acceptance criteria:** §6.3.
-- **Evidence:** none yet. · **Status:** Not started · **Blocker:** LE-02, LE-03 · **Completed:** — `le05-walk-2026-11-04.json` in the WS03 evidence folder.
+- **Evidence:** `le05-walk-2026-11-04.json` in the WS03 evidence folder (staging fixture walk). · **Status:** Live — verification pending (6 Nov: aligned with the summary; the walk was on staging, not production) · **Blocker:** Production walk by a learner not yet done · **Completed:** —
 
 ### AI-01 — Flashcard clinical review
 - **Programme:** AI · **Priority:** P0 · **Owner:** Independent clinical reviewer (to be named by the owner)
@@ -338,7 +341,8 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** D04 · **Environment:** staging evidence
 - **Acceptance criteria:** a named independent clinician marks each card Safe/Unsafe/Inaccurate/Unclear, comments, and signs the pack with name, role and date; outcome recorded.
 - **Evidence:** `p3-eval-2026-11-03.json`; `docs/evidence/AI-EVAL/run-d5v2-2026-11-03-cost-config.json`; run `55f56e85-87d5-4cab-b22a-f1dbbb20c89d`.
-- **Status:** Ready for review · **Blocker:** owner assigns the independent clinician; the review must meet the acceptance criteria · **Completed:** —
+- **6 Nov refresh:** a sign-off was recorded 4 Nov in the coordinator folder (`REVIEW-PACKS-2026-11-04/SIGNOFF-Flashcard-AI-01.md`, not in this repository): reviewer Okaisu Mullen, role CEO (HQ appointment clinical_content_reviewer), all cards Safe, approve the package as proposed; Haiku Yes for standard-educational and No for clinical-educational, Sonnet and Opus Yes for both; "the reviewer did not build or run the evaluation". The file records no registration number. The owner still names a clinician for AI-01 as open, so the status is kept and the question goes back to the owner.
+- **Status:** Ready for review · **Blocker:** owner confirms the 4 Nov sign-off satisfies D-12 or names an independent clinician · **Completed:** —
 
 ### AI-02 — Flashcard AI configuration
 - **Programme:** AI · **Priority:** P0 · **Owner:** Coordinator (owner-run configuration)
@@ -347,7 +351,8 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** AI-01 signed · **Environment:** production (configuration)
 - **Acceptance criteria:** §6.7 routing follows published permissions and fair-use controls; post-activation queries show clinical notes on Sonnet and standard notes on Haiku; questions, scenarios and OSCE unchanged on Opus; rollback SQL recorded.
 - **Evidence:** PRs #259, #262; `docs/evidence/SCHOLAR-INDEPENDENT/p3-staging-config.sql`, `p3-cost.md`.
-- **Status:** Blocked · **Blocker:** AI-01 review accepted · **Completed:** —
+- **6 Nov refresh:** by record the owner applied the package 4 Nov ~20:35 (verification PASS 8) and the coordinator read it back: flashcards activity cheap tier with standard-educational floor, route Haiku then Sonnet then Opus, three eligibility rows; map, questions and the clinical floor unchanged. The "not applied" production read above (4 Nov) is superseded. Not read from production on 6 Nov. Checks scheduled: 24 h on 5 Nov 20:30 (result unread by the owner) and 7-day on 7 Nov 20:30.
+- **Status:** Live — verification pending · **Blocker:** the 24 h and 7-day cost checks; the D-12 question on AI-01 · **Completed:** —
 
 ### AI-03 — Cost comparison and report
 - **Programme:** AI · **Priority:** P1 · **Owner:** Coordinator (read-only runs)
@@ -356,7 +361,8 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** AI-02 · **Environment:** production (read-only)
 - **Acceptance criteria:** cost per relevant activity, quality outcomes, safety failures and latency reported for a stated window.
 - **Evidence:** `docs/evidence/SCHOLAR-INDEPENDENT/p3-monitoring-queries.md`, `p3-cost.md`.
-- **Status:** Blocked · **Blocker:** AI-02 · **Completed:** —
+- **6 Nov refresh:** unblocked; the after-window started when AI-02 was applied. Baseline above is unchanged.
+- **Status:** Implementing · **Blocker:** the 7-day check (7 Nov 20:30), then the comparison report · **Completed:** —
 
 ### AI-04 — Report cost, quality, safety failures and latency (§3, absent from §4; added)
 - **Programme:** AI · **Priority:** P1 *(proposed)* · **Owner:** Coordinator
@@ -444,7 +450,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** owner adds the record · **Environment:** production
 - **Acceptance criteria:** the preview host resolves and the preview gate works on it.
 - **Evidence:** PR #238; migration 860.
-- **Status:** Blocked · **Blocker:** DNS record scheduled 5 Nov · **Completed:** —
+- **Status:** Blocked · **Blocker:** owner adds the CNAME (scheduled 5 Nov, still open 6 Nov by record) · **Completed:** —
 
 ### CLOSE-01 — Register reconciliation and final closure
 - **Programme:** Learning Engine · **Priority:** P0 · **Owner:** Coordinator + this session
@@ -459,6 +465,42 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Owner decision (4 Nov 2026):** **D-3 decided: scenarios stay disabled** until about ten representative generated scenarios have had independent clinical review, covering answer leakage, clinical accuracy and scoring checks (D-14). `scholar_revision_formats` in production keeps excluding scenario.
 - **Owner decision (4 Nov 2026):** **A reviewer is to be assigned** (independent clinician). The proposed AI settings are activated only after the review meets the established acceptance criteria (D-12). The existing clinical review workflow is used; no new committee.
 - **Owner decision (4 Nov 2026):** Activate the proposed flashcard AI settings **only after** AI-01 meets its acceptance criteria (D-12). Not blocking the 4 Nov release.
+
+---
+
+## Live 5-6 Nov and in flight (added 6 Nov; no new row IDs until the owner asks)
+
+These are not directive rows. They are recorded here so nothing is held only in memory. All statuses use the owner's vocabulary. Key and migration facts about production are by record.
+
+**Merged and live in app `8a577bb3`, verification pending (no signed-in production walk):**
+
+| Item | PR (merge) | Key or switch | Migration |
+|---|---|---|---|
+| Learn lesson redesign, Scholar Learning Design System v1 | #281 (4 Nov) | none | none |
+| Search History (default on after a one-time notice); Ask sources | #287, #289, #292-#294; #300 (5 Nov) | `scholar_search_history`: on for learners by record 5 Nov (publication row not re-read); code default off | 992, 993, 994, 999 applied by record |
+| Revise engine, Revise workspace, Apply connected, Evaluate and My Progress, Study Home | #297, #299, #298, #301, #304 (5 Nov) | none | none |
+| Universal Search stage 1, match fix, stage 2 (Scholar) | #305, #306, #308 (5-6 Nov) | `scholar_global_search`: ON by record since 6 Nov (cb9c546e) | none |
+| Speed work | #307, #309 (6 Nov) | none | none |
+| Learn landing (resume, study next, recent lessons, library) and the Library link | #310 (6 Nov) | none | none |
+| Platform search re-gate | #311 (6 Nov) | none | none |
+| Slide classification and inline pictures (SCHOLAR-VISUAL-001 phase 1) | #314 (6 Nov) | `scholar_lesson_visuals` and `scholar_visual_classify`: code fallback on | none |
+| Scenario variety | #318 (6 Nov) | none; reaches learners only if `scholar_revision_formats` includes scenario | none |
+| HQ record search | #319 (6 Nov) | flag `hq_record_search` in `practice_platform_flags`: absent means off | none |
+| Professional search | #322 (6 Nov) | `professional_global_search`: code default off, policy off by record | none |
+| Ask guard (typed text never leaves Competen) | #325 (6 Nov) | closed in code, not a setting | none |
+
+**Not merged:**
+
+| Item | State | Branch and head | Notes |
+|---|---|---|---|
+| SCHOLAR-GO-DEEPER-001 (#324) | Ready for review | `scholar/go-deeper-001` `483a243f`, pushed | CI 8/8 reported; policy `scholar_go_deeper_structured` default off; staging acceptance of the integrated journey pending; no migration in the diff |
+| SCHOLAR-ANOTHER-SCENARIO-01 (#327) | Ready for review | `scholar/another-scenario-01` `c354da03`, pushed | CI 8/8 reported; no migration; inert while scenario is excluded from the formats policy |
+| SCHOLAR-ASK-WEB-SOURCES design (#323) | Ready for review | `scholar/ask-web-sources-design` `fa28d252`, pushed | docs only (`docs/design/SCHOLAR-ASK-WEB-SOURCES-DESIGN.md`); paid search, credentials and learner activation stay off |
+| SCHOLAR-GUIDE-ME-001 | Implementing | `scholar/guide-me-001` `db7bfd37`, **local, unpushed** | key `scholar_guide_me_adaptive`, default off; stacked on go-deeper; uncommitted evidence edits in its worktree |
+| COMPETEN-NOTEBOOK-001 (My Notebook) | Implementing | `scholar/notebook-001` `12cdf0c5`, pushed, no PR | key `scholar_personal_notebook`, default off; migration 1000, staging only (see CE-02-1) |
+| SCHOLAR-RESEARCH-TEACH-001 | Implementing | `scholar/research-teach-001` `8d32bc3e`, **local, unpushed** | keys `scholar_teach_research` (default off), `_max_searches` 4, `_daily_cost_cents` 100; development and test only, **production activation not authorised**; free approved sources, subject terms only; uncommitted edits in its worktree |
+| Whole-slide rendering and Word/PDF visuals | Not started in code | `scholar/slide-render-01` at `8a577bb3`, no commits, local | worktree is clean, so no work is saved; phase 1 is #314 above |
+| #86 / migration 430 | Blocked (REL-04) | old branch | on hold by owner |
 
 ---
 
@@ -485,6 +527,11 @@ Items decided on 4 Nov 2026 are recorded as decided (they do not resurface). Mig
 | D-15 | **Pilot Question Library** | **Decided 4 Nov:** the 60 pilot questions are authorised for production import **as unpublished drafts** with unverified-source status preserved. Not published or shown to learners until independent clinical review, source verification, Ugandan-practice review and authorised publication are complete | SQIE pilot batch (PR #270 merged) **Appointments made 4 Nov** (author Competen Elisha, reviewer Okaisu Mullen, publisher Elisha Okaisu; clinical leads Elisha Okaisu and Okaisu Mullen); the author blocker for the production import is cleared; the same person may not approve and publish | SQIE tracker |
 | D-16 | **Production GO for SQIE migrations** | **Decided 4 Nov: conditional GO for 990, 991, 995, 996 and 997**; merge #277 before #272; update #272 with the latest scoring code; no deploy with unresolved relevant CI failures | 990 and 991 APPLIED in production and verified read-only (coordinator, 4 Nov); #272 (995-997) in CI | SQIE tracker |
 | D-17 | **Governance process** | **Decided 4 Nov:** keep the existing clinical review and publication workflows; no new committees and no duplicate approval processes. None of the deferred activations blocks the 4 Nov release | | all |
+
+| D-18 | **Coordinated Learning Experience Completion** (owner, 6 Nov evening) | **Decided 6 Nov:** sequence 1-10 as one integrated Growth and Development journey. Topic-linked and free-standing notes allowed; user-initiated additional scenarios allowed under existing AI and safety controls; faithful original-slide rendering in phases; readiness table (completed, failed, blocked, requires owner decision); no new approval gates for decided items; LifeOS decisions kept out; production GO asked only when PRs pass, each deploy still needs a direct GO | See "Live 5-6 Nov and in flight" | CE-02-1, CE-05, SALE-12 |
+| D-19 | **Learn redesign, Library link, search, scenario variety, Ask web sources** (owner, 6 Nov) | **Decided 6 Nov:** "Open your Library" goes to the right Library; Learn landing redesign; platform search retained and re-gated; HQ search defaults (flag may be activated by a Holdings platform administrator and grants no extra access); scenario variety from existing material with no added model calls by default; Ask web sources design only | #310, #311, #319, #318, #323 | CE-05 |
+| D-20 | **Research in Teach Me** (SCHOLAR-RESEARCH-TEACH-001, owner 6 Nov) | **Decided 6 Nov:** development and testing only; production activation NOT authorised and needs a separate GO; automatic search when on (no per-lesson opt-in), subject terms only, free sources only (PubMed, Crossref, PubMed Central; OpenAlex excluded), citations shared across learners but abstract text per learner, abstracts only | Branch local, unpushed | none |
+| D-21 | **Ten-scenario pass rule** (owner, 5 Nov) | **Decided 5 Nov:** all seven checks Yes and Pass with no wording change; Change counts only after re-read; Unsafe stops the review; passing does not enable the format | Pack unreviewed | CE-05 |
 
 Decisions already taken in the directive (D01-D06) are not reopened here. Two points that may need the owner's attention when they arise: D04 says Opus stays for question generation, and the proposed package changes only flashcards (Sonnet for clinical flashcards, Haiku for standard-educational only); and D05 asks that simulation conversations are deleted with the attempt "subject to retention requirements"; the retention rule is now decided (D-13, 4 Nov).
 
@@ -514,10 +561,20 @@ Results of the read-only queries (Q1-Q6), coordinator, 4 Nov 2026:
 - 4 Nov (coordinator): merged to main: #276 (R1), #271 (WS-H/J), #273 (990/991), #270 (pilot), #277 (scoring v3). **Migrations 990 and 991 are APPLIED in production and verified read-only.** #272 (995-997) is in CI. #275 has owner GO and is merging main in.
 - Q7 (do any approved case versions define a patient voice or handover) was not run.
 
+**Added 6 Nov 2026 (BY RECORD, coordinator and memory records of 4-6 Nov; not read from production on 6 Nov):**
+- Application: app `8a577bb3` live (`dpl_8vVcMJBDSQKdJSTF1iEtfWuE6crm`, rollback `dc10b205`) equals `main`. Releases since the 4 Nov entries above: `6e679c29` (4 Nov 18:20: R1 #276, SQIE, #275 Wave 2), `bd89d317` (R3), `4f548907` (4 Nov 23:45: R2, R4, R5), then the 5-6 Nov releases listed under "Live 5-6 Nov".
+- Migrations applied in production by the owner, by record: 990, 991 (4 Nov), 995, 996, 997, 998 (4 Nov), 975 (4 Nov ~21:10), 970, 985, 986 (4 Nov ~23:58), 992, 993, 994 (5 Nov), 999 (5 Nov 17:15). Head 999 plus the 5 Nov data loads. **Migration 1000 (My Notebook) is not applied. Migrations 901-906 (LifeOS) are on `main` and not applied.**
+- Policy keys: published ON by the owner 5 Nov 00:13-00:45 (read-only verified then): `scholar_retrieval_schedule`, `scholar_prerequisite_suggestions`, `scholar_transfer_checks`, `scholar_next_best_action`, `scholar_active_notebook`, `scholar_application_evidence`, `scholar_competency_evidence_views`. AI marking published ON (`ai_then_self`) 5 Nov. `scholar_global_search` ON from the 6 Nov 12:25 release. `scholar_search_history` on for learners by record (5 Nov). `scholar_revision_formats`: last read 4 Nov, excludes scenario. Flag `ckri_research` ON 5 Nov 00:30. Flag `ai_fair_use` absent (metering off), last read 4 Nov. The CE-04/05 keys and `scholar_go_deeper_structured`, `scholar_guide_me_adaptive`, `scholar_personal_notebook`, `scholar_teach_research`: not published (code default off).
+- Flashcards AI package (AI-02) applied 4 Nov ~20:35; 60 pilot questions loaded as drafts 4 Nov (0 approved at 5 Nov 00:30).
+- All of these are what `PROD-CHECK-trackers-6nov.sql` is for.
+
 ## Change log
 
 | Date | Change |
 |---|---|
+| 6 Nov 2026 | **Refresh against `main` 8a577bb3** (production switches and migrations by record, not read from production). **Status changes (old to new):** CE-02-1 Not started to Implementing; CE-04B, CE-04C, CE-04D Ready for review to Live — verification pending (PR #275 merged 4 Nov, deployed, keys off); AI-02 Blocked to Live — verification pending (applied 4 Nov by record); AI-03 Blocked to Implementing; LE-01, LE-02, LE-03 detail lines Implementing to Live — verification pending and LE-05 Not started to Live — verification pending (aligned with the summary table, which already said Live). **Text only, status unchanged:** CE-05 (variety #318, #327 and the format gate), AI-01 (4 Nov sign-off recorded, D-12 question back to the owner), OPS-01 (CNAME still open), CLOSE-01. **Checked on `main` and unchanged:** CE-01-1 (no Ask entry in My Plan), CE-01-3 (no next step in the context block), CE-06A-1 (no Listen in the lesson reader or OSCE), CE-07A and CE-07B (no lazy loading or data-saver code; only the upload code reads `navigator.connection`), CE-04A (Blocked, D-11), GOV-01 (no grant recorded), GOV-02, GOV-04 Complete, REL-01..04, CE-03, CYU-01..04, CE-07C. Decisions D-18 to D-21 added; section "Live 5-6 Nov and in flight" added; production facts (by record) added |
+| 6 Nov 2026 | **Stale statements noticed, not edited here.** SQIE tracker: SQIE-01 summary says PR #269 open; the WS table and the release state say #270, #271, #272, #273, #277 are open or Ready for review (all merged 4 Nov); the last change-log row says none is merged; C-10 and SQIE-05 say 0 library questions in production (60 drafts loaded 4 Nov); "Production at creation: DB head 960"; C-14 and SQIE-12 metering-off statement is still true. CE register: header table and CE-04 line say CE-04A Ready for release, CE-04C Not started, CE-04D Live (this tracker holds the current values); P0 to P3 paragraphs and the cumulative-teaching paragraph still say "not merged, not deployed" for work merged 3-4 Nov; "Acceptance still to do" for CE-01 and CE-02 is unchanged and still true. SALE and this tracker previously disagreed on LE-01..05 detail lines (fixed above) |
+| 6 Nov 2026 | **Left before targeted real-learner testing.** *Blocked:* patient voice (CE-04A, D-11); scenarios (CE-05, until the ten-scenario review); automatic research in production (not authorised); paid web search for Ask (design only); AI metering (until 20 Nov); LEARNING-01 payments (until 18 Nov); GOV-03 nursing audit scoring; OPS-01 preview CNAME. *Needs an owner decision:* name an independent clinician or accept the 4 Nov sign-off for AI-01; name a clinician for the ten-scenario pack; approve and publish the 60 pilot questions; GO for #324 and #327; GO for migration 1000 once My Notebook has a PR; whether a second scenario on the same section may be written (adds model calls); research activation (separate GO later); the preview CNAME; GOV-01 grants. *In progress:* Guide Me (local, unpushed), My Notebook (pushed, no PR), SCHOLAR-RESEARCH-TEACH-001 (local, unpushed, dev and test only), whole-slide rendering (no commits), the integrated Growth and Development staging acceptance, the readiness table, the 7-day flashcard cost check (7 Nov 20:30), and a signed-in production walk of the live releases, which is what moves any row toward Complete |
 | 4 Nov 2026 | Created from directive §4 and the repository at `e19a363a`; rows added: CE-01-1..3, CE-02-1..2, CE-03, CE-06A-1, LE-05, AI-04, AI-05; no row Complete |
 | 4 Nov 2026 | Library appointments recorded under D-15 (see SALE tracker, Appointments); no status changed |
 | 4 Nov 2026 | Owner decisions recorded: R1 defaults (D-8), calculation tolerance, scoring caps, patient voice (D-11), flashcards reviewer (D-12), retention (D-13), scenarios (D-3/D-14), pilot import (D-15), conditional GO 990/991/995/996/997 (D-16), no new committees (D-17). CE-04A, CE-04D, CE-05, AI-01, AI-02 blockers reworded; no status value changed. Merges #276, #271, #273, #270, #277; 990/991 applied in production |
