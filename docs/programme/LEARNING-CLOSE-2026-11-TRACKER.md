@@ -30,8 +30,8 @@
 | CE-01-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-01-3 | CE | P2 *(proposed)* | Engineering (CE) | Not started | — | — |
 | CE-02 | CE | P1 | Engineering (CE) | Live — verification pending | Open children CE-02-1..2 | — |
-| CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) + My Notebook session | Implementing | Schema decision made 6 Nov (D-18: topic-linked and free-standing notes allowed). Branch `scholar/notebook-001` (pushed, no PR), migration 1000 staging only; whether a note can target a topic as such is not confirmed | — |
-| CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) | Not started | — | — |
+| CE-02-1 | CE | P2 *(proposed)* | Engineering (CE) + My Notebook session | Built on branch, awaiting owner GO | D-18 permits topic-linked and free-standing notes. Branch `scholar/notebook-001`. Migration 1001 adds the topic target; 1000 and 1001 are on staging, not production | — |
+| CE-02-2 | CE | P1 *(proposed)* | Engineering (CE) + My Notebook session | Walked on staging, awaiting owner GO | Recorded in `docs/evidence/COMPETEN-NOTEBOOK-001/` on the branch. Production part still to do | — |
 | CE-03 | CE | P1 *(proposed)* | Engineering (CE) | Live — verification pending | Production signed-in walk | — |
 | CE-04A | CE | P0 | CE-04/05 session (PR #275) | Blocked | Patient voice stays off (D-11): a case author supplies the patient script and an independent clinician approves the complete case and permitted responses | — |
 | CE-04B | CE | P1 | CE-04/05 session (PR #275, merged) | Live — verification pending | Production walk not done; no production case is known to define a handover (Q7 not run) | — |
@@ -150,7 +150,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Current state:** The register recorded this as "Acceptance still to do". No walk evidence exists under `docs/evidence/` for CE-01 (search for CE-01 / Ask about this found only the SCHOLAR-PRACTICE acceptance of 31 Oct, which predates the panel).
 - **Dependency:** none · **Environment:** staging, then production
 - **Acceptance criteria:** One screenshot or transcript per entry point; unowned section ids are dropped; AI-off and allowance-limited states shown; no console errors.
-- **Evidence:** none yet. · **Status:** Not started · **Blocker:** — · **Completed:** —
+- **Evidence:** `docs/evidence/COMPETEN-NOTEBOOK-001/walk/` on the branch: search, material filter, library note create, edit and remove, item actions, no sideways scroll at desktop, tablet and phone width, fixture learner on staging. · **Status:** Walked on staging · **Blocker:** owner GO, then the production part · **Completed:** —
 
 ### CE-01-3 — Learner's next step in the study-session context block
 - **Programme:** CE · **Priority:** P2 *(proposed)* · **Owner:** Engineering (CE)
@@ -176,12 +176,12 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 - **Dependency:** owner/engineering decision on whether a topic target is wanted (new migration, four-state path). · **Environment:** development
 - **Acceptance criteria:** Create, edit, remove and filter a topic note; erase-all and export include it.
 - **6 Nov refresh:** the schema decision is made: the owner's 6 Nov "Coordinated Learning Experience Completion" (D-18) permits topic-linked and free-standing notes. Branch `scholar/notebook-001` (head `12cdf0c5`, pushed, no PR) widens the 820 note table in migration 1000 (free-standing notes, long-form body, title, tags, pin, autosave key and revision, section label and anchor, competency and session hints, a note outlives its source, search). Migration 1000 applied twice on staging 6 Nov 12:02Z (sha256 `a5453ef6...e2b3`), not in production, not merged. Key `scholar_personal_notebook`, default off. The branch has no column that targets a topic by itself, so "a note can target a topic" is only partly met (section and competency hints, tags). The coordinator note says migration 1001 is reserved: the branch uses 1000.
-- **Evidence:** register CE-02 decision (2); `supabase/migrations/820-*`; `docs/evidence/COMPETEN-NOTEBOOK-001/` on the branch. · **Status:** Implementing · **Blocker:** PR, CI, independent read and owner GO; migration 1000 needs its own production GO · **Completed:** —
+- **Evidence:** register CE-02 decision (2); `supabase/migrations/820-*`; `docs/evidence/COMPETEN-NOTEBOOK-001/` on the branch. · **Status:** Built on branch · **Blocker:** PR, CI and owner GO; migrations 1000 then 1001 need their own production GO. A note can now target a topic through migration 1001, staging only. Create, edit, remove, filter and export are in the walk; erase-all removes it with the rest of the note table · **Completed:** —
 
 ### CE-02-2 — CE-02 acceptance walk (desktop and phone)
 - **Programme:** CE · **Priority:** P1 *(proposed)* · **Owner:** Engineering (CE)
 - **Deliverable:** A recorded walk of search, filters, notes create/edit/remove and item actions on desktop and a phone-width viewport.
-- **Current state:** Register: "Acceptance still to do"; no CE-02 walk evidence under `docs/evidence/`.
+- **Current state:** Walked on staging by COMPETEN-NOTEBOOK-001. It found one touch target under 44px, in library search, fixed on the branch. Production part not done.
 - **Dependency:** none · **Environment:** staging, then production
 - **Acceptance criteria:** touch targets ≥ `--cmp-touch-min`, no horizontal scroll, filters work, notes keep provenance.
 - **Evidence:** none yet. · **Status:** Not started · **Blocker:** — · **Completed:** —
@@ -497,7 +497,7 @@ These are not directive rows. They are recorded here so nothing is held only in 
 | SCHOLAR-ANOTHER-SCENARIO-01 (#327) | Ready for review | `scholar/another-scenario-01` `c354da03`, pushed | CI 8/8 reported; no migration; inert while scenario is excluded from the formats policy |
 | SCHOLAR-ASK-WEB-SOURCES design (#323) | Ready for review | `scholar/ask-web-sources-design` `fa28d252`, pushed | docs only (`docs/design/SCHOLAR-ASK-WEB-SOURCES-DESIGN.md`); paid search, credentials and learner activation stay off |
 | SCHOLAR-GUIDE-ME-001 | Implementing | `scholar/guide-me-001` `db7bfd37`, **local, unpushed** | key `scholar_guide_me_adaptive`, default off; stacked on go-deeper; uncommitted evidence edits in its worktree |
-| COMPETEN-NOTEBOOK-001 (My Notebook) | Implementing | `scholar/notebook-001` `12cdf0c5`, pushed, no PR | key `scholar_personal_notebook`, default off; migration 1000, staging only (see CE-02-1) |
+| COMPETEN-NOTEBOOK-001 (My Notebook) | Ready for review | `scholar/notebook-001`, PR to follow | key `scholar_personal_notebook`, default off; migrations 1000 and 1001, staging only (see CE-02-1) |
 | SCHOLAR-RESEARCH-TEACH-001 | Implementing | `scholar/research-teach-001` `8d32bc3e`, **local, unpushed** | keys `scholar_teach_research` (default off), `_max_searches` 4, `_daily_cost_cents` 100; development and test only, **production activation not authorised**; free approved sources, subject terms only; uncommitted edits in its worktree |
 | Whole-slide rendering and Word/PDF visuals | Not started in code | `scholar/slide-render-01` at `8a577bb3`, no commits, local | worktree is clean, so no work is saved; phase 1 is #314 above |
 | #86 / migration 430 | Blocked (REL-04) | old branch | on hold by owner |

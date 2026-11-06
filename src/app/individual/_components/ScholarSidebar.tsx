@@ -37,7 +37,7 @@ function Chevron({ open }: { open: boolean }) {
 
 /** The navigation list itself (no wrapper), shared by the sidebar and the drawer. `onNavigate` lets the drawer close on a tap. */
 // `modules`: the private modules this learner may see (private module development access). REQUIRED, so no caller can forget it: a module not named is not drawn.
-export function ScholarNavTree({ myPlan, searchHistory = false, modules, onNavigate }: { myPlan: boolean; searchHistory?: boolean; modules: readonly ScholarModuleKey[]; onNavigate?: () => void }) {
+export function ScholarNavTree({ myPlan, searchHistory = false, notebook = false, modules, onNavigate }: { myPlan: boolean; searchHistory?: boolean; notebook?: boolean; modules: readonly ScholarModuleKey[]; onNavigate?: () => void }) {
   const pathname = usePathname() ?? "";
   const studyId = useActiveStudyId();
   const base = useId();
@@ -103,7 +103,7 @@ export function ScholarNavTree({ myPlan, searchHistory = false, modules, onNavig
               <Chevron open={isOpen} />
             </button>
             <ul id={listId} hidden={!isOpen} className="mt-1 flex flex-col gap-0.5 pl-[22px]">
-              {visibleItems(m, { myPlan, searchHistory }).map(leaf => {
+              {visibleItems(m, { myPlan, searchHistory, notebook }).map(leaf => {
                 const on = active?.leaf.key === leaf.key;
                 const href = experienceHref("scholar", leaf.segment);
                 return (
@@ -128,10 +128,10 @@ export function ScholarNavTree({ myPlan, searchHistory = false, modules, onNavig
 }
 
 /** The desktop sidebar's navigation, with its own scroll area so a long open tree never pushes the footer off the screen. */
-export function ScholarSidebar({ myPlan, searchHistory = false, modules }: { myPlan: boolean; searchHistory?: boolean; modules: readonly ScholarModuleKey[] }) {
+export function ScholarSidebar({ myPlan, searchHistory = false, notebook = false, modules }: { myPlan: boolean; searchHistory?: boolean; notebook?: boolean; modules: readonly ScholarModuleKey[] }) {
   return (
     <nav aria-label="Competen Scholar navigation" className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-[26px]">
-      <ScholarNavTree myPlan={myPlan} searchHistory={searchHistory} modules={modules} />
+      <ScholarNavTree myPlan={myPlan} searchHistory={searchHistory} notebook={notebook} modules={modules} />
     </nav>
   );
 }

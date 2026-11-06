@@ -20,8 +20,8 @@ export type NavLeaf = {
   segment: string;
   /** Other paths below /individual/scholar on which this leaf is current. */
   also?: readonly string[];
-  /** "myPlan": drawn only while My Plan is on. "searchHistory": only while HQ offers My Search History. The layout decides both. */
-  gate?: "myPlan" | "searchHistory";
+  /** "myPlan": drawn only while My Plan is on. "searchHistory": only while HQ offers My Search History. "notebook": only while My Notebook is offered. The layout decides all three. */
+  gate?: "myPlan" | "searchHistory" | "notebook";
   status: "live" | "future";
   /** My Learning leaves carry ?study=<id> while a connected study session is open. */
   carriesStudy?: boolean;
@@ -41,7 +41,11 @@ const learning: NavModule = {
     ...(s.key === "plan" ? { gate: "myPlan" as const } : {}), status: "live" as const, carriesStudy: true,
   },
   // Owner 5 Nov 2026: My Search History must be easy to find, so it has its own leaf beside the library it belongs to. It is a page, not a space.
-  ...(s.key === "library" ? [{ key: "search-history", label: "My Search History", segment: "study/saved/searches", gate: "searchHistory" as const, status: "live" as const, carriesStudy: true }] : [])]),
+  ...(s.key === "library" ? [
+    // COMPETEN-NOTEBOOK-001: My Notebook is a visible destination of its own, beside the library it shares its notes with.
+    { key: "notebook", label: "My Notebook", segment: "study/notebook", gate: "notebook" as const, status: "live" as const, carriesStudy: true },
+    { key: "search-history", label: "My Search History", segment: "study/saved/searches", gate: "searchHistory" as const, status: "live" as const, carriesStudy: true },
+  ] : [])]),
 };
 
 const courses: NavModule = {
@@ -129,4 +133,4 @@ export const visibleModules = (allowed: readonly string[]): NavModule[] =>
   SCHOLAR_NAV.modules.filter(m => m.key === "learning" || allowed.includes(m.key));
 
 /** The leaves a module shows: the gated ones only while their gate is on. */
-export const visibleItems = (m: NavModule, gates: { myPlan: boolean; searchHistory?: boolean }): NavLeaf[] => m.items.filter(l => !l.gate || gates[l.gate]);
+export const visibleItems = (m: NavModule, gates: { myPlan: boolean; searchHistory?: boolean; notebook?: boolean }): NavLeaf[] => m.items.filter(l => !l.gate || gates[l.gate]);

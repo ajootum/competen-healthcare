@@ -35,6 +35,7 @@ Source: `learningTone` in `src/lib/design/tokens.ts`. Tones are named by what th
 | `practice` | teal | Practise this lesson |
 | `quickCheck` | lilac | Quick check |
 | `notes` | cream | Your notes: the uploaded notes and the learner's own notes |
+| `ideas` | warm amber | My Ideas & Notes: what the learner writes in My Notebook, Quick Note and the lesson's capture box (COMPETEN-NOTEBOOK-001). Distinct from AI teaching and research, and from `caution`, whose amber is a clinical warning with a heading that says so |
 | `sources` | lavender-grey | Sources and citations |
 | `next` | cyan | What next?, the suggested next step, Continue where you stopped, the lesson navigator |
 | `memory` | rose | Memory aid callout. It has its own identity, distinct from `aiBeyond` sky and `quickCheck` lilac |
@@ -79,7 +80,7 @@ Each tone has contrast-checked dark values. They are **staged**: they apply unde
 
 ### 2.5 Contrast
 
-`src/lib/design/scholar-learning-contrast.ts` lists the pairs a component draws. There are 8 pairs per tone per scheme, 272 in all. `src/lib/design/scholar-learning-tokens.test.ts` (vitest, CI) asserts every pair and includes a planted failing pair. `npx tsx docs/evidence/LEARN-REDESIGN/contrast.ts` prints the table.
+`src/lib/design/scholar-learning-contrast.ts` lists the pairs a component draws. There are 8 pairs per tone per scheme, 288 in all. `src/lib/design/scholar-learning-tokens.test.ts` (vitest, CI) asserts every pair and includes a planted failing pair. `npx tsx docs/evidence/LEARN-REDESIGN/contrast.ts` prints the table.
 
 At v1:
 

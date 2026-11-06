@@ -7,7 +7,7 @@ import { LEARNING_TONES, cssVariables, learningTone } from "./tokens";
 
 describe("Scholar learning tones", () => {
   it("are the semantic set the design system names", () => {
-    expect(LEARNING_TONES).toEqual(["teach", "check", "aiBeyond", "explain", "guide", "challenge", "practice", "quickCheck", "notes", "sources", "next",
+    expect(LEARNING_TONES).toEqual(["teach", "check", "aiBeyond", "explain", "guide", "challenge", "practice", "quickCheck", "notes", "ideas", "sources", "next",
       "memory", "caution", "key", "example", "record", "summary"]);
   });
   it("clear WCAG AA on every pair, light and dark", () => {
