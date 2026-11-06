@@ -47,7 +47,9 @@ page.on("request", r => {
   if (!b || r.url().includes("/api/individual/scholar/notebook/")) return;
   // The study goal: the learner's own click on Add to My Plan, checked below by its own step. Only that step opens this.
   if (goalApproved && r.url().includes("/api/individual/scholar/plan/entries")) return;
-  for (const w of words) if (b.includes(w)) leaks.push(`${r.method()} ${r.url().slice(0, 100)}`);
+  // The library's own note form, whose own words go to its own notes route. Any other note's words reaching that route still count.
+  const libraryForm = r.url().includes("/api/individual/scholar/library/notes");
+  for (const w of words) if (b.includes(w) && !(libraryForm && w.startsWith("heron"))) leaks.push(`${r.method()} ${r.url().slice(0, 100)}`);
 });
 
 const shot = (name: string) => page.screenshot({ path: join(OUT, "shots", `${VIEW}-${name}.png`) });
@@ -74,6 +76,13 @@ for (let i = 0; i < 3 && !signedIn; i++) {
   signedIn = await page.waitForFunction(() => !location.pathname.startsWith("/login"), null, { timeout: 90_000 }).then(() => true, () => false);
 }
 if (!signedIn) throw new Error("could not sign in");
+// A dev server compiles each route on first use, then reloads open pages. Asked once first, so the reload cannot land mid-step. Reads, and a removal of no real id.
+const NONE = "00000000-0000-4000-8000-000000000000";
+for (const path of [`${R}/notebook`, `${R}/notebook/new`, `${R}/notebook/${NONE}`, `${R}/saved`, `${R}/learn?session=${SESSION}`, "/api/individual/scholar/notebook/export", `/api/individual/scholar/notebook/notes?session=${NONE}&step=0`, `/api/individual/scholar/learn/sessions/${SESSION}`, `/api/individual/scholar/library/notes?sections=${NONE}`, "/api/individual/scholar/plan/entries"]) {
+  await page.request.get(`${BASE}${path}`, { timeout: 300_000 }).catch(() => {});
+}
+await page.request.delete(`${BASE}/api/individual/scholar/notebook/notes/${NONE}`, { timeout: 300_000 }).catch(() => {});
+await page.waitForTimeout(5000);
 
 // ── 1. Open Scholar and write at once ─────────────────────────────────────────────────────────────────────────────────────
 await open("/individual/scholar");
@@ -441,7 +450,7 @@ ok((await noteByWords(`lynx${stamp}`)).length === 1, "taking it out saves the no
 
 // ── 6. Export and removal ─────────────────────────────────────────────────────────────────────────────────────────────────
 await open(`${R}/notebook`);
-const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 180_000 }), page.getByTestId("notebook-export").click()]);
+const [dl] = await Promise.all([page.waitForEvent("download", { timeout: 180_000 }), page.getByTestId("notebook-export").click({ noWaitAfter: true })]);
 const file = join(OUT, `export-${VIEW}.tmp.md`);
 await dl.saveAs(file);
 const md = readFileSync(file, "utf8");
@@ -493,8 +502,8 @@ ok(libRows.length === 1 && libRows[0].target_kind === "material" && !libRows[0].
 await open(`${R}/saved?view=notes&material=${mat}`);
 const libNote = page.locator("div").filter({ hasText: `heron${stamp}` }).filter({ has: page.getByRole("button", { name: /^Edit/ }) }).last();
 await libNote.getByRole("button", { name: /^Edit/ }).click();
-await libNote.locator("textarea").fill(`${libWords} edited`);
-await libNote.getByRole("button", { name: "Save changes" }).click();
+await page.locator('textarea[id^="edit-"]').fill(`${libWords} edited`);
+await page.getByRole("button", { name: "Save changes" }).click();
 await page.waitForFunction(() => !document.querySelector('[id^="edit-"]'), null, { timeout: 90_000 });
 libRows = await noteByWords(`heron${stamp}`);
 ok(libRows[0]?.body === `${libWords} edited`, "CE-02: the library's edit still saves, with its check against a changed copy");
