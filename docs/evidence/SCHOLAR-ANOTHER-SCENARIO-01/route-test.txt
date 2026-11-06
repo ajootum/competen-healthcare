@@ -1,0 +1,11 @@
+stored scenarios for this learner: 7
+starting from a scenario on section e41ef98c: What should the clinician use to combine this person's observations?
+on that section now: 3
+a scenario that is not yours: 404
+a question that is not a scenario: 404
+formats policy before: no row
+formats policy after: "no row"
+another scenario: 200 generated 1 reused 0 note 
+new scenarios stored: 1, on that section now: 4
+  first question: How should the clinician escalate the concern about this person now? | rests on: Escalate using SBAR: situation, background, assessment and recommendat
+  the one before it: What should the clinician use to combine this person's observations? | rests on: Use an early warning score such as NEWS2 to combine respiratory rate, 

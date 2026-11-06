@@ -23,6 +23,14 @@ export const SCENARIO_FOCUSES: readonly ScenarioFocus[] = [
   { key: "prevent", line: "preventing harm: what to do now so that a problem the section describes does not develop or recur" },
 ];
 
+/**
+ * SCHOLAR-ANOTHER-SCENARIO-01 (owner, 6 Nov 2026: "Permit user-initiated generation of additional clinical scenarios"): how many scenarios a learner may
+ * have written on one section. One for each kind of decision. Beyond that a new one could only repeat, and the model call would buy nothing.
+ */
+export const MAX_SCENARIOS_ON_SECTION = SCENARIO_FOCUSES.length;
+/** Pure. Whether this section can take another scenario, from the stored scenarios already read. */
+export const canWriteAnotherScenario = (onSection: number): boolean => onSection < MAX_SCENARIOS_ON_SECTION;
+
 /** Pure. The focus for the next scenario on this section: the one after those it already has, going round. */
 export const focusFor = (existingOnSection: number): ScenarioFocus =>
   SCENARIO_FOCUSES[Math.max(0, Math.trunc(existingOnSection)) % SCENARIO_FOCUSES.length];
