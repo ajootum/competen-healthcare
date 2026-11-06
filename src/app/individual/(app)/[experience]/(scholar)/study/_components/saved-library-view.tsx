@@ -11,7 +11,7 @@ import {
 } from "@/lib/individual/scholar/store";
 import {
   BASIC_SEARCH_ROWS, LESSON_LINK_LABEL, LIBRARY_PAGE_SIZE, LIBRARY_STATUSES, LIBRARY_VIEWS, PROVENANCE_LABEL, STATUS_LABEL, VIEW_LABEL,
-  basicMatches, cardHrefPath, encodeCursor, lessonHrefPath, lessonLinkOf, lessonTitleOf, parseLibraryQuery, provenanceOf, rangeBounds, sectionsHrefPath,
+  basicMatches, cardHrefPath, encodeCursor, savedNothing, lessonHrefPath, lessonLinkOf, lessonTitleOf, parseLibraryQuery, provenanceOf, rangeBounds, sectionsHrefPath,
   snippetParts, versionLabel, type Cursor, type LessonLink, type LibraryQuery, type LibraryStatus,
 } from "@/lib/individual/scholar/saved-library";
 import {
@@ -634,7 +634,8 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mo
       : h.kind === "note" ? (h.label === "highlight" ? "Your highlight" : "Your note") : h.label.slice(0, 120);
   const groups = groupHits(hits);
   const secTotal = sec?.total ?? 0;
-  const nothing = !unreadable && hits.length === 0 && (sec?.hits.length ?? 0) === 0;
+  const sectionsFailed = found !== null && !found.ok;
+  const nothing = savedNothing({ unreadable, sectionsRead: found ? found.ok : null, hits: hits.length, sectionHits: sec?.hits.length ?? 0 });
   // Nothing found as typed: one slip of spelling against the learner's own topics and material titles, said plainly. Never for a filtered or basic search.
   if (nothing && mode === "first" && v820 && !filtered) {
     const fix = correctQuery(words, vocabularyOf([...topicRows.flatMap(t => t.topics), ...titles.values()]));
@@ -650,6 +651,7 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mo
         {capped ? ` Filters apply to your best ${FILTERED_SEARCH_READ} library matches.` : ""}
       </p>
       {unreadable && <div className="mt-2"><Unreadable what="your saved lessons and notes" /></div>}
+      {sectionsFailed && <div className="mt-2"><Unreadable what="the sections of your materials" /></div>}
       {nothing && <Empty>Nothing matches. Try fewer or other words, or OR between them{filtered ? ", or remove a filter" : ""}.</Empty>}
       {groups.map(g => (
         <section key={g.key} aria-labelledby={`grp-${g.key}`} className="mt-4">

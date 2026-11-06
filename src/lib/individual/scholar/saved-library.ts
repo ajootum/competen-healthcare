@@ -310,5 +310,12 @@ export function parseExportScope(u: URLSearchParams): ExportScopeRequest | null 
 export const lessonHrefPath = (sessionId: string, step: number) => `study/learn?session=${encodeURIComponent(sessionId)}#lesson-${step}`;
 /** Learn started on a saved teaching's own sections (the open:true path finds the saved teaching, no AI). */
 export const sectionsHrefPath = (chunkIds: readonly string[]) => `study/learn?${chunkIds.slice(0, 24).map(c => `s=${encodeURIComponent(c)}`).join("&")}`;
+/**
+ * Pure. Whether a Saved search found nothing. A read that FAILED is never "nothing": it is said to be unreadable and no spelling
+ * correction is tried on it. `sectionsRead` is null where the sections were not searched at all (no searchable word).
+ */
+export function savedNothing(s: { unreadable: boolean; sectionsRead: boolean | null; hits: number; sectionHits: number }): boolean {
+  return !s.unreadable && s.sectionsRead !== false && s.hits === 0 && s.sectionHits === 0;
+}
 /** A flashcard, found in All cards by the start of its front. */
 export const cardHrefPath = (front: string) => `study/revise/flashcards?view=cards&q=${encodeURIComponent(front.replace(/\s+/g, " ").trim().slice(0, 60))}`;
