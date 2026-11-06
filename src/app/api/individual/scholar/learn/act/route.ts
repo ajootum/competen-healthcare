@@ -1,6 +1,7 @@
 // Allow up to 60s for AI generation -- the same ceiling the personal AI uses.
 export const maxDuration = 60;
 
+import { researchTitleOf } from "@/lib/individual/scholar/ask-sources";
 import { NextResponse } from "next/server";
 import { recordScholarOutcome } from "@/lib/individual/scholar/outcome";
 import { requireIndividualContext, isGuardRefusal } from "@/lib/individual/guard";
@@ -192,7 +193,7 @@ export async function POST(req: Request) {
   // ── the passages: the step's own sections, by the caller's id ──
   const sessionId = isUuid(body?.sessionId) ? body.sessionId as string : null;
   let stepIds: string[] = [], scopeIds: string[] = [], step = Number.isInteger(body?.step) ? Number(body.step) : 0;
-  let recorded = false, stepTitle: string | null = null, sessionMaterials: string[] = [], sessionStep: number | null = null;
+  let recorded = false, stepTitle: string | null = null, researchTitle: string | null = null, sessionMaterials: string[] = [], sessionStep: number | null = null;
   let sessionSteps: { step: number }[] = [];
   if (sessionId) {
     const s = await getLearningSession(ctx.admin, ctx.userId, sessionId);
@@ -210,6 +211,7 @@ export async function POST(req: Request) {
     }
     // A prepared lesson is not learning: nothing is recorded for it until the learner opens it.
     step = here.step; stepIds = here.sections.map(x => x.chunkId); scopeIds = s.data.steps.flatMap(x => x.sections.map(y => y.chunkId)); recorded = !prepare; stepTitle = s.data.session.topic ?? s.data.session.title ?? null;
+    researchTitle = researchTitleOf(s.data.session);
     sessionMaterials = [...new Set(s.data.steps.flatMap(x => x.sections.map(y => y.materialId)))];
     sessionStep = s.data.session.currentStep;
     sessionSteps = s.data.steps.map(x => ({ step: x.step }));
@@ -544,7 +546,7 @@ export async function POST(req: Request) {
     if (gate) { const w = refusalWords(gate); return continuity(w.message, w.insufficient); }
     // SCHOLAR-SOURCE-QUALITY-01: the result comes back GATED (source-quality.ts), so only abstracts that pass the HQ
     // source-quality rules can reach generation below; the rest are listed as reading only.
-    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: stepTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery), lessonScope);
+    research = await learnResearch(ctx, policy.scholarResearch, { question: action === "ask" ? question : null, topics, title: researchTitle }, ai.actionId, null, qualityOf(policy.scholarRecovery), lessonScope);
   }
   const evidence = [...(research ? researchEvidence(research) : []), ...(recovered?.ok ? recovered.inputs.research : [])];
   clock.mark("research");

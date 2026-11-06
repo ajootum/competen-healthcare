@@ -51,6 +51,7 @@ wish, not a record.
 | [ADR-015](./ADR-015-practice-commercial-precedence.md) | Administrative suspension outranks every commercial fact; `practice_entitlement` is the only gate, and every commercial source writes a period into it | Accepted |
 | [ADR-016](./ADR-016-individual-product-gate.md) | Competen Individual is a third product gate; Scholar and Professional are entitlements inside it | Accepted |
 | [ADR-017](./ADR-017-holdings-shared-learning-service.md) | Competen Learning is a Holdings shared service: shared content, a personal record, and a sibling course ledger | Accepted |
+| [ADR-018](./ADR-018-lifeos-sealed-product.md) | LifeOS is a sealed product inside this repository, built to be carved out | Accepted |
 
 Initial set published under COMP-ENG-001 §5, 2026-08-18. Each ADR below was written by reading the actual
 code, migrations, and harnesses cited in it — not reconstructed from memory of what the decision was

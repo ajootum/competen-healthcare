@@ -83,14 +83,14 @@ export function NeedFields({ policy, n, idPrefix }: { policy: ProfessionalNeedsP
 
 // ── The list (N1) ─────────────────────────────────────────────────────────────────────────────────────────────
 
-export function NeedsOverview({ needs, view, today, policy, accent }: { needs: StageTwoNeed[]; view: View; today: string; policy: ProfessionalNeedsPolicy; accent: string }) {
+export function NeedsOverview({ needs, view, today, policy, accent, q }: { needs: StageTwoNeed[]; view: View; today: string; policy: ProfessionalNeedsPolicy; accent: string; q?: string | null }) {
   const count = (v: View) => needs.filter(n => inView(n, v, today, policy.reviewDays)).length;
   // HFE-01 Wave 4 (F10): filters appear once there is something to filter.
   if (needs.length === 0) return null;
   return (
     <nav aria-label="Filter development needs" className="mb-3 flex flex-wrap gap-2">
       {VIEWS.map(([v, label]) => (
-        <Link key={v} href={`?view=${v}#needs-h`} aria-current={view === v ? "page" : undefined}
+        <Link key={v} href={`?view=${v}${q ? `&q=${encodeURIComponent(q)}` : ""}#needs-h`} aria-current={view === v ? "page" : undefined}
           className={`rounded-full border px-3 py-1 text-[12.5px] font-semibold ${view === v ? "text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"}`}
           style={view === v ? { background: accent, borderColor: accent } : undefined}>
           {label} <span className="font-normal">({count(v)})</span>

@@ -1,5 +1,9 @@
 import Link from "next/link";
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
+import { PageSearch } from "../../../../_components/search/PageSearch";
+import { matchesSearch } from "@/lib/individual/search/match";
+import { pageQuery } from "@/lib/individual/search/page-query";
+import { professionalScopeLine } from "@/lib/individual/search/registry-professional";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
 import { loadSharedFrameworks, referenceNames } from "@/lib/individual/professional/frameworks";
 import { DOCUMENT_MAX_LABEL, EVIDENCE_KIND } from "@/lib/individual/professional/vocabulary";
@@ -40,11 +44,12 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> { return gatedMetadata({ title: "Credentials & evidence" }); }
 
-export default async function EvidencePage({ params }: { params: Promise<{ experience: string }> }) {
+export default async function EvidencePage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "evidence");
   if (!page) return null;
   const { ctx } = page;
   const x = EXPERIENCES.professional;
+  const q = pageQuery((await searchParams).q);
   const today = new Date().toISOString().slice(0, 10);
   const [record, frameworks, prefs, policy, map, learning] = await Promise.all([loadProfessionalRecord(ctx.admin, ctx.userId), loadSharedFrameworks(ctx.admin), loadReminderPrefs(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin), loadMappingView(ctx.admin, ctx.userId), loadProfessionalLearning(ctx.admin, ctx.userId)]);
   const horizonDays = policy.reminderHorizonDays;
@@ -68,12 +73,17 @@ export default async function EvidencePage({ params }: { params: Promise<{ exper
 
       <RenewalsDue items={due} today={today} />
 
+      {evidence !== null && evidence.length > 0 && (
+        <PageSearch scope={professionalScopeLine("evidence")} action={experienceHref("professional", "evidence")} value={q} placeholder="A title, issuing body, description or document" clearHref={experienceHref("professional", "evidence")} />
+      )}
+
       {EVIDENCE_KIND.map(([kind, label]) => {
-        const items = evidence?.filter(e => e.kind === kind) ?? [];
+        const all = evidence?.filter(e => e.kind === kind) ?? [];
+        const items = q ? all.filter(e => matchesSearch([e.title, e.issuing_body ?? "", e.detail ?? "", e.document_name ?? "", e.framework_competency_id ? names.get(e.framework_competency_id) ?? "" : ""], q)) : all;
         return (
           <Section key={kind} title={kind === "credential" ? "Credentials & registrations" : "Competency evidence"}
             note={kind === "credential" ? "Qualifications, licences and certificates you hold." : "What you have done that shows your competence, in your own words."}>
-            {evidence === null ? <Unreadable what="evidence" /> : items.length === 0 ? <Empty>No {label.toLowerCase()} recorded yet.</Empty> : (
+            {evidence === null ? <Unreadable what="evidence" /> : items.length === 0 ? <Empty>{all.length > 0 ? <>Nothing here matches &ldquo;{q}&rdquo;.</> : <>No {label.toLowerCase()} recorded yet.</>}</Empty> : (
               <ul className="divide-y divide-gray-100">
                 {items.map(e => (
                   <li key={e.id} className="py-3">

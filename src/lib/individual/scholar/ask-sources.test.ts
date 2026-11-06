@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { ASK_SOURCES, DEFAULT_ASK_SOURCES, internalSearched, isDefaultSources, libraryListed, offeredAskSources, parseAskSources, researchSearched, searchedLine, toggleAskSource } from "./ask-sources";
+import { ASK_SOURCES, DEFAULT_ASK_SOURCES, internalSearched, isDefaultSources, libraryListed, TYPED_QUESTIONS_MAY_LEAVE, offeredAskSources, parseAskSources, researchSearched, searchedLine, toggleAskSource } from "./ask-sources";
 import { askAcrossInstruction, askAcrossUserPrompt, runAskAcross, savedLearningPassage, splitAskParts, type Passage } from "./generation";
 import { validateCapture } from "./search-history";
 import { lessonQuery } from "./learn-research";
@@ -29,8 +29,12 @@ describe("the choice", () => {
     expect(toggleAskSource(["materials", "research"], "materials")).toEqual(["research"]);
     expect(toggleAskSource(["research"], "research")).toEqual(["research"]);
   });
+  it("\u26a0 never offers research: what a learner types does not leave Competen, whatever HQ has switched on", () => {
+    expect(TYPED_QUESTIONS_MAY_LEAVE).toBe(false);
+    expect(offeredAskSources({ savedReady: true, sourceModes: ["notes", "library", "research"], researchOperational: true, libraryReady: true })).not.toContain("research");
+  });
   it("offers only what can run, and never web, which Ask has no path for", () => {
-    expect(offeredAskSources({ savedReady: true, sourceModes: ["notes", "library", "research"], researchOperational: true, libraryReady: true })).toEqual(["materials", "saved", "library", "research"]);
+    expect(offeredAskSources({ savedReady: true, sourceModes: ["notes", "library", "research"], researchOperational: true, libraryReady: true })).toEqual(["materials", "saved", "library"]);
     expect(offeredAskSources({ savedReady: false, sourceModes: ["notes"], researchOperational: true, libraryReady: true })).toEqual(["materials"]);
     expect(offeredAskSources({ savedReady: true, sourceModes: ["notes", "research"], researchOperational: false, libraryReady: false })).toEqual(["materials", "saved"]);
     for (const on of [true, false]) expect(offeredAskSources({ savedReady: on, sourceModes: ["notes", "library", "research", "web"], researchOperational: on, libraryReady: on })).not.toContain("web");

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 // SCHOLAR-ASK-SOURCES-01: the route with its sources replaced by recorders, so what reaches the model and what reaches the learner
 // are what is asserted. Staging can reach no approved library content, so the library path is proved here.
@@ -42,6 +42,12 @@ vi.mock("@/lib/individual/scholar/generation", () => ({
 }));
 vi.mock("@/lib/individual/scholar/extract", () => ({ findPatientIdentifiers: (t: string) => (t.includes("NHS") ? ["x"] : []) }));
 vi.mock("@/lib/individual/scholar/config", () => ({ AI_LABEL: "AI", QUESTION_MAX: 500, RETRIEVAL_LIMIT: 5 }));
+// ASK-RESEARCH-GUARD-01: research is shut in code. Its dormant path keeps its tests, by opening it here only.
+const open = vi.hoisted(() => ({ research: false }));
+vi.mock("@/lib/individual/scholar/ask-sources", async original => {
+  const real = await original<typeof import("@/lib/individual/scholar/ask-sources")>();
+  return { ...real, offeredAskSources: (i: Parameters<typeof real.offeredAskSources>[0]) => [...real.offeredAskSources(i), ...(open.research && i.sourceModes.includes("research") && i.researchOperational ? ["research" as const] : [])] };
+});
 vi.mock("@/lib/individual/scholar/learn-research", () => ({
   learnResearch: async () => { h.researchCalls++; return h.research; }, researchEvidence: (r: { evidence: unknown[] }) => r.evidence, externalReferences: () => h.refs, scholarResearchOperational: async () => h.researchOperational,
 }));
@@ -104,7 +110,19 @@ describe("Competen Library", () => {
   });
 });
 
+describe("what a learner types", () => {
+  it("\u26a0 sends nothing out, and says research was not run, however the request asks", async () => {
+    open.research = false;
+    h.research = { state: "searched", items: [{}], evidence: [{ title: "T", abstract: "A" }] };
+    const { json } = await ask({ sources: ["materials", "research"], question: "my neighbour peter has hiv, explain cd4" });
+    expect(h.researchCalls).toBe(0);
+    expect(stateOf(json, "research")).toBe("not_run");
+  });
+});
+
 describe("research", () => {
+  beforeEach(() => { open.research = true; });
+  afterEach(() => { open.research = false; });
   const found = { state: "searched", items: [{}, {}], evidence: [{ title: "T", abstract: "A" }] };
   const refs = [
     { kind: "external", tag: "E1", evidence: true, title: "Read and used", journal: "J", year: 2024, provider: "PubMed", url: "https://x/1", excerpt: "e" },
