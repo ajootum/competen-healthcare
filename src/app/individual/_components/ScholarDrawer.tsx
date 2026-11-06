@@ -57,7 +57,7 @@ export function ScholarDrawer({ myPlan, searchHistory = false, modules, learning
             <nav aria-label="Competen Scholar menu" className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
               <ScholarNavTree myPlan={myPlan} searchHistory={searchHistory} modules={modules} onNavigate={close} />
               {learning && (
-                <Link href="/individual/learning" onClick={close}
+                <Link prefetch={false} href="/individual/learning" onClick={close}
                   className={`mt-3 flex items-center gap-3 rounded-[9px] border-t border-gray-100 px-4 py-2.5 pt-3 text-[15px] font-medium text-gray-900 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
                   <span aria-hidden className="w-5 text-center text-[15px]">◫</span>
                   Competen Learning
