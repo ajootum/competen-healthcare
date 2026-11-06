@@ -1,7 +1,7 @@
 import { EXPERIENCES, experienceHref } from "@/lib/individual/experiences";
 import { PageSearch } from "../../../../_components/search/PageSearch";
 import { matchesSearch } from "@/lib/individual/search/match";
-import { pageQuery } from "@/lib/individual/search/page-query";
+import { clearSearchHref, pageQuery } from "@/lib/individual/search/page-query";
 import { professionalSearchModule } from "@/lib/individual/search/registry-professional";
 import { loadIndividualPassport } from "@/lib/individual/passport";
 import { loadProfessionalRecord } from "@/lib/individual/professional/record";
@@ -155,7 +155,7 @@ export default async function DevelopmentPage({ params, searchParams }: { params
         intro="Name what you want to develop, then plan how. Your needs and goals are private to you." />
       {!record.provisioned && <NotProvisioned />}
 
-      {searchable && <PageSearch scope={`Searching ${professionalSearchModule("development").scope}`} action={here} value={q} placeholder="A need or goal" clearHref={here} hidden={{ view: one(sp.view), plan: one(sp.plan) }} />}
+      {searchable && <PageSearch scope={`Searching ${professionalSearchModule("development").scope}`} action={here} value={q} placeholder="A need or goal" clearHref={clearSearchHref(here, { view: one(sp.view), plan: one(sp.plan) })} hidden={{ view: one(sp.view), plan: one(sp.plan) }} />}
 
       {stage2 && (
         <>

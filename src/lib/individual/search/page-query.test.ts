@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { pageQuery } from "./page-query";
+import { clearSearchHref, pageQuery } from "./page-query";
 
 describe("pageQuery", () => {
   it("tidies the words and takes the first value", () => {
@@ -12,5 +12,14 @@ describe("pageQuery", () => {
   });
   it("is capped", () => {
     expect(pageQuery("x".repeat(500))?.length).toBe(200);
+  });
+});
+
+describe("clearSearchHref", () => {
+  it("keeps the filters and drops the words", () => {
+    expect(clearSearchHref("/p/development", { view: "overdue", plan: "done", q: null })).toBe("/p/development?view=overdue&plan=done");
+  });
+  it("is the bare page with no filters", () => {
+    expect(clearSearchHref("/p/development", { view: undefined, plan: "" })).toBe("/p/development");
   });
 });
