@@ -187,7 +187,7 @@ export default async function ExperienceLayout({ children, params }: {
   // My Search History (993): the learner's own choice, once per page, for the notices and for what a page may send. Any failure is off: nothing is kept.
   const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false, pending: false }; } })() : { offered: false, on: false, pending: false };
   const [learning, ai, myPlanOn, moduleSet, historyChoice] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP]);
-  const globalSearchOn = scholar ? await loadIndividualPolicyOnce(shell.ctx.admin).then(p => p.scholarGlobalSearch === "on").catch(() => false) : false;
+  const globalSearchOn = await loadIndividualPolicyOnce(shell.ctx.admin).then(p => (scholar ? p.scholarGlobalSearch : p.professionalGlobalSearch) === "on").catch(() => false);
   const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
@@ -204,7 +204,7 @@ export default async function ExperienceLayout({ children, params }: {
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
           </Link>
           <div className="ml-auto flex items-center gap-2 md:ml-0 md:gap-3">
-            {globalSearchOn && <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}><GlobalSearch /></SearchHistoryChoiceProvider>}
+            {globalSearchOn && (scholar ? <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}><GlobalSearch experience="scholar" /></SearchHistoryChoiceProvider> : <GlobalSearch experience="professional" />)}
             <ExperienceSwitcher current={experience} live={live} />
           </div>
           {learning && <Link href="/individual/learning" className={`${scholar ? "hidden md:inline-flex" : "inline-flex"} min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}

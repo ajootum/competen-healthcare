@@ -7,7 +7,7 @@
 
 import type { ScholarModuleKey } from "../scholar/module-access";
 
-export type SearchProduct = "Scholar";
+export type SearchProduct = "Scholar" | "Professional";
 export type SearchModuleKey = "learn" | "library" | "saved" | "revise" | "apply" | "evaluate" | "plan" | "competencies" | "courses";
 
 export type SearchAccess = {
