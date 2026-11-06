@@ -24,6 +24,11 @@ const STILL_TO_CONVERT: Record<string, { calls: number; why: string }> = {
   "study/_components/progress-view.tsx": { calls: 1, why: "slice 2: server part, needs the clock passed down" },
   "study/_components/library-rows.ts": { calls: 1, why: "slice 2: builds a text row" },
   "study/_components/study-home-model.ts": { calls: 1, why: "slice 2: builds a text line, used on the server and in the browser" },
+  "study/_components/my-ideas-box.tsx": { calls: 1, why: "slice 2: landed with the Notebook release" },
+  "study/_components/notebook-home.tsx": { calls: 1, why: "slice 2: landed with the Notebook release" },
+  "study/_components/note-editor.tsx": { calls: 1, why: "slice 2: landed with the Notebook release, shows a time of day (two calls on one line)" },
+  "study/_components/note-capture.tsx": { calls: 2, why: "slice 2: landed with the Notebook release, shows a time of day. The second call formats a character count, not a time" },
+  "study/_components/note-actions.tsx": { calls: 1, why: "stays: works out a device-local date to pick, nothing is displayed" },
   "study/revise/flashcards/page.tsx": { calls: 1, why: "stays: ukDate is handed to applyContentReview for a content-review date, which is not about the reader" },
   "my-competencies/assessments/[instanceId]/report/page.tsx": { calls: 1, why: "stays: a report made to print, so it must not change with whoever opens it" },
 };

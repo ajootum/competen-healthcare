@@ -85,11 +85,12 @@ timestamps, so it should not arise.
 Do not convert the ~720 calls at once. `src/lib/datetime.scholar-census.test.ts` fails if a file in Scholar's page tree
 formats a new time outside this route, and lists what is left there. It does not cover the `src/lib` files in step 3.
 
-1. **This change:** Scholar pages and client components. It covers six of the seven places that show a time of day.
-   The seventh is the session title from `learn-search`, in step 3.
-2. **After the Scholar coordinated release merges:** the Scholar server parts those branches are editing, or that need
-   a prop passed down (`saved-library-view`, `notebook-view`, `apply-parts`, `evaluate-parts`, `monthly-progress`,
-   `progress-view`, `library-rows`, `study-home-model`).
+1. **This change:** Scholar pages and client components. It covers six of the nine places that show a time of day.
+   The other three are `note-capture` and `note-editor` in step 2, and the session title from `learn-search` in step 3.
+2. **After the Scholar coordinated release merges:** what that release added (`note-capture`, `note-editor`,
+   `my-ideas-box`, `notebook-home`), the Scholar server parts it was editing, and those that need a prop passed down
+   (`saved-library-view`, `notebook-view`, `apply-parts`, `evaluate-parts`, `monthly-progress`, `progress-view`,
+   `library-rows`, `study-home-model`).
 3. **Scholar text built in `src/lib`:** `learn-search`, `global-search`, `library-organise`, `saved-library`.
 4. **Professional.** Same reader-owned pattern, its own policy.
 5. **Shared signed-in surfaces:** notifications, My Profile, account security.
