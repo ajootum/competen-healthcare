@@ -5775,6 +5775,7 @@ export type NotebookNote = {
 };
 
 const NOTEBOOK_COLS = "id, kind, target_kind, title, body, quote, tags, pinned_at, revision, client_key, artefact_id, material_id, chunk_id, session_id, step, section_label, section_anchor, captured_in, competency_id, study_id, was_on, topic, created_at, updated_at";
+/* eslint-disable @typescript-eslint/no-explicit-any */
 const toNotebookNote = (r: any): NotebookNote => ({
   id: r.id, kind: r.kind, targetKind: r.target_kind, title: r.title ?? null, body: r.body ?? null, quote: r.quote ?? null, tags: Array.isArray(r.tags) ? r.tags : [],
   pinnedAt: r.pinned_at ?? null, revision: Number(r.revision), viaNotebook: !!r.client_key,

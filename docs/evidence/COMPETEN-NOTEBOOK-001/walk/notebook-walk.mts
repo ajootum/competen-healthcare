@@ -164,7 +164,7 @@ await shot("06-note-page");
 await page.getByTestId("note-link-open").click();
 await page.getByTestId("note-link-lesson").check();
 await page.getByTestId("note-link-session").selectOption(SESSION);
-await page.waitForFunction(() => (document.querySelector('[data-testid="note-link-step"]') as HTMLSelectElement | null)?.options.length! > 1, null, { timeout: 90_000 });
+await page.waitForFunction(() => ((document.querySelector('[data-testid="note-link-step"]') as HTMLSelectElement | null)?.options.length ?? 0) > 1, null, { timeout: 90_000 });
 await page.getByTestId("note-link-step").selectOption({ index: 1 });
 await shot("07-link");
 await page.getByTestId("note-link-apply").click();
@@ -477,6 +477,18 @@ await settle(page, 3000);
 ok((await noteByWords(`tapir${stamp}`)).length === 0, "removed straight after typing: nothing is saved");
 ok(await page.evaluate(() => !Object.keys(localStorage).some(x => (localStorage.getItem(x) ?? "").includes("tapir"))), "removed straight after typing: no draft is left on the device");
 
+// CE-02-2 asks for touch targets of at least --cmp-touch-min on a phone. Links inside a sentence are exempt, as WCAG 2.5.8 exempts them.
+const smallTargets = () => page.evaluate(() => {
+  const min = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cmp-touch-min")) || 44;
+  const out: string[] = [];
+  for (const el of Array.from(document.querySelectorAll<HTMLElement>("main a, main button, main select, main input:not([type=hidden]), main textarea, main summary"))) {
+    const r = el.getBoundingClientRect();
+    if (!el.getClientRects().length || r.width === 0 || r.height >= min) continue;
+    if (el.tagName === "A" && el.closest("p")) continue;
+    out.push(`${el.tagName.toLowerCase()} "${(el.innerText || el.getAttribute("aria-label") || (el as HTMLInputElement).type || "").trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
+  }
+  return out;
+});
 // ── CE-02-2: the library's own search, filters, notes and item actions still work beside the Notebook ──────────────────────
 await open(`${R}/saved?q=${encodeURIComponent(`zebra${stamp}`)}`);
 await noOverflow("library search");
@@ -484,11 +496,15 @@ ok((await page.locator("body").innerText()).includes(`zebra${stamp}`), "CE-02: t
 const hit = page.locator("li").filter({ hasText: `zebra${stamp}` }).first();
 ok((await hit.locator("a").count()) >= 1, "CE-02: a search result has its item actions");
 await shot("20-library-search");
+if (VIEW === "phone") { const small = await smallTargets(); ok(small.length === 0, `CE-02: library search, touch targets at least 44px (${small.length}: ${small.slice(0, 12).join("; ")})`); }
 const mat = (await admin.from("individual_scholar_material").select("id").eq("user_id", userId).eq("file_name", "Growth and Development.pptx").maybeSingle()).data?.id;
 await open(`${R}/saved?view=notes&material=${mat}`);
 await noOverflow("library notes view");
 ok((await page.locator("body").innerText()).includes(`zebra${stamp}`), "CE-02: the material filter keeps a note on that material");
 await shot("21-library-notes");
+if (VIEW === "phone") { const small = await smallTargets(); ok(small.length === 0, `CE-02: library notes, touch targets at least 44px (${small.length}: ${small.slice(0, 12).join("; ")})`); }
+const kept = (await noteByWords(`zebra${stamp}`))[0];
+ok(kept?.material_id === mat && !!kept?.session_id && !!kept?.section_label, "CE-02: the note keeps where it came from, its material, lesson and section");
 await page.getByText("Write a new note").click();
 const libWords = `Library note heron${stamp}`;
 words.push(`heron${stamp}`);
