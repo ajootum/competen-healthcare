@@ -1526,7 +1526,7 @@ export function LearnWorkspace(props: {
               guidePanel={props.guideAdaptive ? (
                 <GuideMePanel state={guideStates[st.step] ?? GUIDE_FRESH}
                   setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
-                  run={runApproach(st)} busy={!!busy} disabled={busyHere || !props.consent}
+                  run={runApproach(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")}
                   cite={(t, srcs) => <Cited text={t} sources={srcs as Source[]} />}
                   answeredOf={q => { const h = (checks[st.step] ?? []).filter(x => x.question === q).at(-1); return h?.response?.verdict ?? (h ? "attempted" : null); }}
                   renderResearch={x => <ResearchBlock x={x as ResearchReply} />} />

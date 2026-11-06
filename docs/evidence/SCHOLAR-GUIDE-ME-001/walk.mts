@@ -77,7 +77,7 @@ ok((await progress()) === "Nothing answered yet", "a hint does not count as a st
 const ex = await stamp("example reasoning", async () => { await panel.getByRole("button", { name: "Show example reasoning" }).click(); await panel.getByText("Example reasoning, on a similar case").waitFor({ timeout: 180_000 }); });
 ok(ex === 1, `example reasoning is one model call (${ex})`);
 ok((await progress()) === "Nothing answered yet", "nor does an example");
-const wrong = "Because babies have to build up muscle strength in their legs from practice, and the head is lighter, so it has nothing to do with the nervous system.";
+const wrong = "It does not really tell you anything. Babies just do these things at random from birth, so there is nothing to reason about and it does not depend on how their nervous system is developing.";
 await box.fill(wrong);
 const c1 = await stamp("a wrong answer judged", async () => { await checkBtn.click(); await panel.locator('[data-testid="guide-feedback"]').waitFor({ timeout: 180_000 }); });
 ok(c1 === 1, `judging an answer is one model call (${c1})`);
@@ -93,7 +93,10 @@ const again = panel.getByRole("button", { name: /Try this one|Try again/ }).firs
 note(`next move offered: ${await again.innerText()}`);
 await again.click();
 await page.waitForTimeout(500);
-await box.fill("The nervous system matures from the head downwards, so control comes first to the neck and last to the legs. Head control therefore comes before sitting and sitting before walking, and practice builds on that order rather than setting it.");
+// A sound answer: the key points the judge itself gave on the wrong answer.
+const keyPoints = fb1.split(/Key learning points[^\n]*\n/)[1]?.split(/\n(?:What to revise|Try|Next)/)[0]?.replace(/\s*S\d+\s*/g, " ").replace(/\s+/g, " ").trim() ?? "";
+note(`answering with the judge's own key points (${keyPoints.split(" ").length} words)`);
+await box.fill(keyPoints || "It depends on what else is observed, and one response is read with the rest of the picture.");
 const c2 = await stamp("a sound answer judged", async () => { await checkBtn.click(); await panel.locator('[data-testid="guide-feedback"]').waitFor({ timeout: 180_000 }); });
 ok(c2 === 1, `one model call (${c2})`);
 await page.waitForTimeout(500);

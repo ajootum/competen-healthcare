@@ -44,7 +44,7 @@ export function guideInstruction(opts: { turn: GuideTurn; step: number; of: numb
         ...WRITE,
         "Reply in exactly these labelled lines, with no markdown:",
         `${DEEPER_LABEL.focus} the idea this hint is about, in a few plain words.`,
-        `${DEEPER_LABEL.section} principle | source | a short heading, then the hint.`,
+        `${DEEPER_LABEL.section} principle | scholar | a short heading on that line, then the hint on the next line. ONE section only, under ${opts.level === 1 ? 45 : 80} words. Do not explain the science here: a hint points, it does not teach.`,
         "No question, no takeaways. Write nothing else.",
       ].join("\n");
     case "example":
@@ -55,7 +55,7 @@ export function guideInstruction(opts: { turn: GuideTurn; step: number; of: numb
         ...WRITE,
         "Reply in exactly these labelled lines, with no markdown:",
         `${DEEPER_LABEL.focus} what this example shows, in a few plain words.`,
-        `${DEEPER_LABEL.section} application | source | a short heading, then the reasoning. One section. Under 130 words.`,
+        `${DEEPER_LABEL.section} application | scholar | a short heading on that line, then the reasoning on the next. ONE section only, under 130 words.`,
         "No question, no takeaways. Write nothing else.",
       ].join("\n");
     case "explain":
@@ -73,4 +73,4 @@ export function guideInstruction(opts: { turn: GuideTurn; step: number; of: numb
 }
 
 /** What Guide Me adds to the existing clarify: its verdict and parts are unchanged, and kept as every check is. */
-export const GUIDED_CLARIFY = "This answer comes from Guide Me. TAUGHT SO FAR holds what was just taught: judge the student's understanding and reasoning of that teaching and of the passages, never whether they used the notes' wording. A correct idea in their own words is correct. In NEXT: when the verdict is not_yet, write one new short question, ending with '?', that lets them apply the corrected idea; otherwise one short thing to think about next. Never write about buttons or what to click.";
+export const GUIDED_CLARIFY = "This answer comes from Guide Me. TAUGHT SO FAR holds what was just taught: judge the student's understanding and reasoning of that teaching and of the passages, never whether they used the notes' wording. A correct idea in their own words is correct. Sound general science the passages do not cover is not a mistake: credit it under what they got right, saying it goes beyond these passages, and never list it as a misconception. Answer what they actually wrote; if it is off the question, say so plainly. In NEXT: when the verdict is not_yet, write one new short question, ending with '?', that lets them apply the corrected idea; otherwise one short thing to think about next. Never write about buttons or what to click.";

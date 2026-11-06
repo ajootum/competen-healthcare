@@ -54,17 +54,19 @@ const teachRow = saved.data.filter((a: any) => a.action === "teach")[0];
 console.log(`lesson "${lesson.title}", ${passages.length} sections, ${headings.length} headings, ${of} steps; saved Teach me ${teachRow ? "found" : "NOT found"}`);
 const q0 = () => deeper.parseDeeperAnswer(results.teach0?.saved ?? "")?.questions?.[0]?.text ?? "Why does head control come before walking?";
 const ANSWERS: Record<string, string> = {
-  right: "Control of movement comes from the nervous system maturing from the head downwards, so the muscles of the neck come under control before those of the trunk and legs. That is why the head steadies first and walking comes last.",
-  partial: "Because the head is at the top and babies learn the neck first.",
-  wrong: "Because babies have to build up muscle strength in their legs from practice, and the head is lighter, so it has nothing to do with the nervous system.",
+  right: "",
+  partial: "It shows the baby can sense something, but I am not sure what it means.",
+  wrong: "It does not really tell you anything. Babies just do these things at random from birth, so there is nothing to reason about and it does not depend on how their nervous system is developing.",
 };
 const groundOf = (s: number) => G.guideGround(headings, s, of);
 for (const name of process.argv.slice(2)) {
   if (ledger.calls + 1 > CAP_CALLS || ledger.usd >= CAP_USD) { console.log(`CAP reached: ${ledger.calls} calls, USD ${ledger.usd}`); break; }
   const earlier = [...(teachRow ? [{ action: "teach", content: teachRow.content, createdAt: teachRow.createdAt }] : []), ...(name !== "teach0" && results.teach0?.saved ? [{ action: "explain", content: results.teach0.saved, createdAt: "2026-11-06T12:00:00Z" }] : [])];
   const taught = ctxMod.taughtSoFarBlock(ctxMod.buildTaughtSoFar(earlier, [], { objective: lesson.objective, focus: lesson.focus }));
-  let args: any, activity = "explain", prompt = "";
-  if (name === "old") { const tr = { action: "guide", hintLevel: 1, attempt: "", question: "" }; prompt = T.teachingPrompt(tr, null); args = { action: "guide", question: prompt, teaching: { hintLevel: 1, examEvidence: null } }; }
+  // A model answer for "right": the key points the judge itself gave on the wrong answer, in plain sentences.
+  if (name === "right") ANSWERS.right = (results.wrong?.feedback?.keyPoints ?? []).join(" ").replace(/\s*\[[SRE]\d+\]/g, "") || "A model answer could not be read.";
+  let args: any, activity = "deeper", prompt = "";
+  if (name === "old") { const tr = { action: "guide", hintLevel: 1, attempt: "", question: "" }; prompt = T.teachingPrompt(tr, null); activity = "explain"; args = { action: "guide", question: prompt, teaching: { hintLevel: 1, examEvidence: null } }; }
   else if (name in ANSWERS) { prompt = `Your check question was: ${G.questionPlain?.(q0()) ?? q0().replace(/\s*\[S\d+\]/g, "")}\nMy answer: ${ANSWERS[name]}`; activity = "clarify"; args = { action: "clarify", question: prompt, guidedClarify: true }; }
   else {
     const turn = name.startsWith("teach") ? "teach" : name.startsWith("hint") ? "hint" : name;

@@ -909,6 +909,21 @@ export function checkTeachAnswer(main: string, asked: string, passages: Passage[
 }
 
 /**
+ * Pure. SCHOLAR-GUIDE-ME-001: feedback on a Guide Me answer. A learner who wrote an answer should not lose all of the feedback to one word ("the two can coexist"), so a line that fails only
+ * as ungrounded is left out and the rest is checked again, exactly as a lesson's salvage works. Dosing, or an invented number in a safety context, still withholds it all. Plain checks are not touched.
+ */
+export function checkGuidedFeedback(main: string, asked: string, passages: Passage[], references: GovernedReference[]): ExplainCheck {
+  const first = checkLearnMain(main, asked, passages, references);
+  if (first.ok || first.reason !== "ungrounded") return first;
+  const grounding = learnGrounding(passages, references, asked);
+  const fails = (l: string) => groundingViolations(scholarNamedTerms(l.replace(/\[[SR]\d+\]/g, " ")), grounding);
+  const lines = main.split("\n");
+  for (const l of lines) { const vs = fails(l), plain = l.replace(/\[[SRE]\d+\]/g, " "); if (vs.length && (RESEARCH_DOSING.test(plain) || (vs.some(v => v.kind === "ungrounded_number") && SAFETY_CONTEXT.test(plain)))) return first; }
+  const again = checkLearnMain(lines.filter(l => !fails(l).length).join("\n"), asked, passages, references);
+  return again.ok ? again : first;
+}
+
+/**
  * Pure. SCHOLAR-GO-DEEPER-001: a structured round, checked section by section, and never more loosely than a lesson.
  *   - notes section: every sentence must rest on the passages it cites (deeper-prompt.ts sentenceSupported), pass the grounding verifier and
  *     add no firm conclusion or instruction. What fails MOVES to a Scholar section after it (its tags removed) and is judged as that, so
@@ -924,7 +939,7 @@ export function checkTeachAnswer(main: string, asked: string, passages: Passage[
  */
 export function checkDeeperAnswer(main: string, asked: string, passages: Passage[], references: GovernedReference[], opts: { scholar: boolean; title?: string | null;
   /** SCHOLAR-GUIDE-ME-001: its first line is a heading, not a question; a hint or an example need not rest on a notes section (they name no fact as the notes'); and how many questions a turn may hold. */
-  focusIsHeading?: boolean; requireNotes?: boolean; maxQuestions?: number; keepTakeaways?: boolean }): ExplainCheck {
+  focusIsHeading?: boolean; requireNotes?: boolean; maxQuestions?: number; keepTakeaways?: boolean; maxSections?: number }): ExplainCheck {
   // A model's note to itself inside a tag ("[S8 is cognitive; use]") is not a citation, and its digit is not a number the lesson states.
   const clean = main.replace(/\[[SRE]\d+\s+[^\]]+\]/g, " ");
   const parts = parseDeeperAnswer(clean.trim());
@@ -934,7 +949,8 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
   const grounding = learnGrounding(passages, references, asked);
   const passageTexts = passages.map(p => p.content);
   const unsafe = (t: string, vs: PhrasingViolation[]) => { const plain = t.replace(/\[[SRE]\d+\]/g, " "); return RESEARCH_DOSING.test(plain) || (vs.some(v => v.kind === "ungrounded_number") && SAFETY_CONTEXT.test(plain)); };
-  const scholarOk = (t: string) => opts.scholar && checkBackgroundText(t, SCHOLAR_SECTION_CHARS).ok && !scholarClaimViolations(t).length && !/\[[SRE]\d+\]/.test(t);
+  // "two-way" names a kind of exchange, not a count; every other figure word stays refused.
+  const scholarOk = (t: string) => opts.scholar && checkBackgroundText(t.replace(/\btwo-way\b/gi, "mutual"), SCHOLAR_SECTION_CHARS).ok && !scholarClaimViolations(t).length && !/\[[SRE]\d+\]/.test(t);
   const strip = (x: string) => x.replace(/\s*\[[SR]\d+\]/g, "").replace(/\s+([.,;:!?])/g, "$1").trim();
   const untag = (blocks: readonly DeeperBlock[]): DeeperBlock[] => blocks.map(b => (b.t === "p" ? { t: "p", text: strip(b.text) } : b.t === "list" ? { t: "list", items: b.items.map(strip) } : b.t === "flow" ? { t: "flow", steps: b.steps.map(strip) } : { t: "table", rows: b.rows.map(r => r.map(strip)) }));
   /** One piece of a notes section: does it rest on what it cites, and hold nothing the verifier or the claim rules refuse? */
@@ -960,7 +976,8 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
   };
   const kept: DeeperSection[] = [], violations: PhrasingViolation[] = [];
   let removedSections = 0, relabelled = 0, firstFailure: Extract<ExplainCheck, { ok: false }> | null = null;
-  for (const s of parts.sections.slice(0, DEEPER_MAX_SECTIONS)) {
+  const allowed = opts.maxSections ?? DEEPER_MAX_SECTIONS;
+  for (const s of parts.sections.slice(0, allowed)) {
     const text = deeperSectionText(s);
     if (s.source === "scholar") {
       // A stray [S n] on Scholar's own section is not a claim we can honour: it is removed, and the section is judged and shown as what it says it is.
@@ -984,7 +1001,7 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
     if (!oursOk && !moved) { removedSections++; if (!check.ok && !firstFailure) firstFailure = check; }
     else if ((others.length > 0 && !moved) || (ours.length > 0 && !oursOk)) removedSections++;
   }
-  removedSections += Math.max(0, parts.sections.length - DEEPER_MAX_SECTIONS);
+  removedSections += Math.max(0, parts.sections.length - allowed);
   if (!kept.length || (opts.requireNotes !== false && !kept.some(s => s.source === "notes"))) return firstFailure ?? { ok: false, reason: /\bNOT_IN_NOTES\b/.test(main) ? "not_in_notes" : "ungrounded", violations };
   // The focus question and its line are the round's frame: unsupported figures or terms cost the wording, never the round.
   const frameOk = (t: string) => !groundingViolations(scholarNamedTerms(t.replace(/\[[SRE]\d+\]/g, " ")), grounding).length && !scholarClaimViolations(t).length;
@@ -1004,8 +1021,8 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
   const takeaways = (opts.keepTakeaways === false ? [] : parts.takeaways).slice(0, DEEPER_MAX_TAKEAWAYS).filter(t => (citedTags(t).length ? checkLearnMain(t, asked, passages, references).ok && holds(t) : scholarOk(t)));
   const droppedTakeaways = opts.keepTakeaways === false ? 0 : Math.min(parts.takeaways.length, DEEPER_MAX_TAKEAWAYS) - takeaways.length;
   // A heading is read as much as a sentence: it answers to the frame's rules, and a neutral heading says the same job.
-  const headingOk = (t: string) => !!t.trim() && t.length <= 120 && frameOk(t) && !UNIT_OR_DOSE.test(t) && !RESEARCH_DOSING.test(t);
-  const headed = kept.map(s => (headingOk(s.title.replace(/, beyond your notes$/, "")) ? s : { ...s, title: DEEPER_NEUTRAL_HEADING[s.kind] }));
+  const headingOk = (t: string, scholar: boolean) => !!t.trim() && t.length <= 120 && (scholar ? scholarOk(t) : frameOk(t)) && !UNIT_OR_DOSE.test(t) && !RESEARCH_DOSING.test(t);
+  const headed = kept.map(s => (headingOk(s.title.replace(/, beyond your notes$/, ""), s.source === "scholar") ? s : { ...s, title: DEEPER_NEUTRAL_HEADING[s.kind] }));
   const round: DeeperParts = { focus, covers, sections: headed, questions: questions.slice(0, opts.maxQuestions ?? DEEPER_MAX_QUESTIONS), takeaways: opts.keepTakeaways === false ? [] : takeaways };
   const text = composeDeeperAnswer(round);
   // It must read back as exactly what was checked: a label hiding in the text would otherwise become a section with a false source.
@@ -1172,11 +1189,12 @@ export async function runLearn(userId: string, args: {
   const mayBackground = args.background && BACKGROUND_ACTIONS.includes(args.action as LearnAction);
   return {
     ...base,
-    check: guide ? checkDeeperAnswer(split.main, asked, args.passages, args.references, { scholar: args.background, title: args.lesson?.title ?? null, focusIsHeading: true, requireNotes: guide.turn === "teach" || guide.turn === "explain", maxQuestions: guide.turn === "teach" ? 1 : 0, keepTakeaways: false })
+    check: guide ? checkDeeperAnswer(split.main, asked, args.passages, args.references, { scholar: args.background, title: args.lesson?.title ?? null, focusIsHeading: true, requireNotes: guide.turn === "teach" || guide.turn === "explain", maxQuestions: guide.turn === "teach" ? 1 : 0, keepTakeaways: false, ...(guide.turn === "hint" || guide.turn === "example" ? { maxSections: 1 } : {}) })
       : deeperStructured ? checkDeeperAnswer(split.main, asked, args.passages, args.references, { scholar: args.background, title: args.lesson?.title ?? null })
       : lesson ? checkTeachAnswer(split.main, asked, args.passages, args.references).check
       : isTeachingAction(args.action) ? checkTeachingAnswer(args.action, split.main, asked, args.passages, args.references, args.teaching?.examEvidence ?? null)
-        : checkLearnMain(split.main, asked, args.passages, args.references),
+        : guidedClarify ? checkGuidedFeedback(split.main, asked, args.passages, args.references)
+          : checkLearnMain(split.main, asked, args.passages, args.references),
     // A lesson's explanation beyond the notes may run to BACKGROUND_WORDS (about 1600 characters); every other rule is unchanged.
     // SCHOLAR-GO-DEEPER-001: a structured round has its own Scholar sections. A BEYOND THE NOTES line in one is not a second way out of their rules.
     background: split.background === null || structured ? null : mayBackground ? checkBackgroundText(split.background, lesson ? 1600 : 900) : { ok: false, reason: "not_this_mode" },

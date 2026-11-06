@@ -57,7 +57,8 @@ const clean = (s: string) => s.replace(/\*\*|__/g, "").trim();
 function sectionHead(rest: string): Pick<DeeperSection, "kind" | "source" | "title"> {
   const bits = clean(rest).split("|").map(x => x.trim());
   const kind = (DEEPER_KINDS as readonly string[]).includes(bits[0]?.toLowerCase()) ? bits[0].toLowerCase() as DeeperKind : "science";
-  const source: DeeperSource = bits[1]?.toLowerCase() === "scholar" ? "scholar" : "notes";
+  // "scholar | heading", with the kind left out, still says whose it is. Nothing else promotes a section out of the notes rules.
+  const source: DeeperSource = bits[1]?.toLowerCase() === "scholar" || (bits.length === 2 && bits[0]?.toLowerCase() === "scholar") ? "scholar" : "notes";
   const title = bits.length >= 3 ? bits.slice(2).join(" ") : bits[bits.length - 1] ?? "";
   return { kind, source, title: title.trim() };
 }

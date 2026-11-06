@@ -4,7 +4,7 @@ import { guideInstruction, GUIDED_CLARIFY } from "./guide-me-prompt";
 import { parseDeeperAnswer } from "./deeper-format";
 import { isGuideTurnVersion, newestSavedLesson } from "./learn-journey";
 import { buildTaughtSoFar, taughtSoFarBlock } from "./learn-context";
-import { checkDeeperAnswer, learnPromptVersion, learnSystem, runLearn, type Passage } from "./generation";
+import { checkDeeperAnswer, checkGuidedFeedback, learnPromptVersion, learnSystem, runLearn, type Passage } from "./generation";
 
 // SCHOLAR-GUIDE-ME-001: progress is what happened; the teaching and its question; what a response leads to.
 
@@ -129,6 +129,26 @@ describe("the teaching turn", () => {
   });
   it("Scholar's explanation is not asked for where policy does not allow it", () => {
     expect(guideInstruction({ turn: "teach", step: 0, of: 1, ground: [], depth: "brief", scholar: false, taught: false, level: 1 })).not.toMatch(/source 'scholar'/);
+  });
+});
+
+describe("feedback on a real answer", () => {
+  const P = [passage("Head control comes before sitting. Red flags should prompt referral.")];
+  it("one word does not cost a learner all of it; the line goes and the rest stands", () => {
+    const c = checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n\nKEY POINTS:\n- The two can coexist [S1].\n- Red flags should prompt referral [S1].", "my answer", P, []);
+    expect(c.ok).toBe(true);
+    if (c.ok) { expect(c.text).not.toContain("The two"); expect(c.text).toContain("Red flags"); }
+  });
+  it("a dose in the feedback still withholds it all", () => {
+    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n- Give 5 mg of it [S1].", "my answer", P, []).ok).toBe(false);
+  });
+  it("a kind-less section can still say it is Scholar's, and nothing else escapes the notes rules", () => {
+    expect(parseDeeperAnswer("FOCUS QUESTION: X\nSECTION: scholar | A heading\nText.")!.sections[0]).toMatchObject({ source: "scholar", title: "A heading" });
+    expect(parseDeeperAnswer("FOCUS QUESTION: X\nSECTION: principle | A heading\nText.")!.sections[0].source).toBe("notes");
+  });
+  it("'two-way' is an exchange, not a count", () => {
+    const c = check("FOCUS QUESTION: X\nSECTION: principle | notes | N\nHead control comes before sitting, and sitting comes before walking [S1].\nSECTION: science | scholar | S\nThe exchange becomes two-way as the infant responds.");
+    expect(c.ok && parseDeeperAnswer(c.text)!.sections.length).toBe(2);
   });
 });
 
