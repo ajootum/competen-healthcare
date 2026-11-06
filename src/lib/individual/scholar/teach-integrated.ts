@@ -50,7 +50,7 @@ export function integratedSystem(depth: ExplanationDepth): string {
     "",
     "You are given three things, and every sentence you write must say which it rests on, by ending with its tag:",
     "[S n] THE STUDENT'S NOTES. They are the foundation and they set the scope. Teach every heading and every listed idea in them, in their order. Say only what that passage says.",
-    "[E n] PUBLISHED EVIDENCE. Abstracts of published records. Use them to add what the notes lack: mechanisms, findings, limits and contemporary understanding. Say only what that abstract says, about what it studied.",
+    "[E n] PUBLISHED EVIDENCE. Abstracts of published records. Use them to add what the notes lack: mechanisms, findings, limits and contemporary understanding. Say only what that abstract says, about what it studied. Your own connection to the lesson never goes in an [E n] sentence: end the sentence at what the abstract says, and write the connection as its own sentence tagged [AI].",
     `${AI_TAG} YOUR OWN TEACHING. Your own explanation that connects the ideas, defines a word or gives a general principle. General understanding only: never a finding, a study, a statistic, a number or a word for a number (two, three, twice), a dose, an instruction about what to do (no 'should' or 'must'), a promised outcome (no 'always', 'never', 'permanent', 'irreversible'), and never words such as 'research shows' or 'evidence suggests'.`,
     "",
     "RULES, in order of importance:",
@@ -72,7 +72,7 @@ export function integratedSystem(depth: ExplanationDepth): string {
     `${TEACH_LABEL.check} then one or two short open questions, each starting '- ', asking the student to explain, apply or reason, each answerable from the notes, each ending with '?' and then the [S n] that answers it. Never ask for a number.`,
     "",
     `Keep the whole lesson under ${WORDS[depth]} words.`,
-    `LAST, before you reply: these words are read as clinical findings and are checked against the source you cite, so do not write one unless that source contains it: ${[...ASSERTION_MARKERS].join(", ")}. And never say how many of something there are unless the source you cite gives that number.`,
+    `LAST, before you reply: these words are read as clinical findings and are checked against the source you cite, so do not write one unless that source contains it: ${[...ASSERTION_MARKERS].join(", ")}. And never say how many of something there are unless the source you cite gives that number. The word 'one' is read as a number too: write 'a' or 'a single' instead.`,
   ].join("\n");
 }
 
@@ -89,7 +89,7 @@ export function integratedUser(question: string, passages: readonly Passage[], r
 const plainOf = (sentence: string) => sentence.replace(TAGS, "").replace(/\s+([.,;:!?])/g, "$1").trim();
 
 /** Words only a source may say. An [AI] sentence that uses them is presenting a finding it has no source for. */
-const CLAIMS_EVIDENCE = /\b(stud(?:y|ies)|trials?|research(?:ers)?|evidence|meta-?analys[ie]s|systematic reviews?|cohorts?|published|literature|et al|according to|findings?|data (?:show|suggest))\b/i;
+const CLAIMS_EVIDENCE = /\b(stud(?:y|ies)|trials?|research(?:ers)?|evidence|meta-?analys[ie]s|systematic reviews?|reviews?|cohorts?|published|literature|et al|according to|findings?|data (?:show|suggest)|(?:this|that|which|it) (?:supports?|confirms?|refines?|corrects?|proves?|demonstrates?|shows?)|refines? the notes|corrects? the notes)\b/i;
 /** A claim to have read more than an abstract. Never true here. */
 /**
  * Scholar's own explanation teaches an idea. It does not tell anyone what to do with a patient, and it does not promise an outcome: both need
@@ -99,7 +99,10 @@ const AI_DIRECTIVE = /\b(should|must|ought to|need to|needs to|less alarmed|do n
 const AI_CERTAINTY = /\b(irreversibl\w*|inevitabl\w*|permanent\w*|always|never|cannot be undone|for life|for the rest of|guarantee\w*|not optional)\b/i;
 const CLAIMS_FULL_TEXT = /\b(full[- ]text|full paper|the whole (?:paper|article)|read the (?:paper|article) in full)\b/i;
 
-export type DropReason = "unknown_tag" | "notes_ungrounded" | "evidence_ungrounded" | "evidence_dosing" | "ai_rules" | "ai_claims_evidence" | "ai_directive" | "ai_certainty" | "claims_full_text" | "unsupported" | "unverified" | "risk_raised";
+/** A clause that connects a finding to the lesson. In a sentence citing research it is the writer's own conclusion, put in the source's mouth. */
+const OWN_CONCLUSION = /[,;:\u2014-]\s*(which is consistent with|consistent with (?:this|the)|illustrating|this (?:shows|means|suggests)|supporting (?:this|the)|underscoring|reinforcing)\b/i;
+
+export type DropReason = "evidence_own_conclusion" | "unknown_tag" | "notes_ungrounded" | "evidence_ungrounded" | "evidence_dosing" | "ai_rules" | "ai_claims_evidence" | "ai_directive" | "ai_certainty" | "claims_full_text" | "unsupported" | "unverified" | "risk_raised";
 export type Dropped = { reason: DropReason; violations?: PhrasingViolation[] };
 
 /** Pure. Whether a sentence can stand as Scholar's own explanation: the [AI] rules, on its words alone. */
@@ -115,6 +118,7 @@ function judge(sentence: string, ctx: { passages: readonly Passage[]; references
   const cited = [...t.s.map(n => { const p = ctx.passages[n - 1]; return `${passageCitation(p)}\n${p.content}`; }), ...t.e.map(n => { const e = ctx.evidence[n - 1]; return `${e.title}\n${e.journal ?? ""} ${e.year ?? ""}\n${e.abstract}`; })];
   if (t.e.length) {
     if (RESEARCH_DOSING.test(plain)) return { reason: "evidence_dosing" };
+    if (OWN_CONCLUSION.test(plain)) return { reason: "evidence_own_conclusion" };
     const vs = groundingViolations(plain.replace(RESEARCH_METHOD_EXAMINED, "$1 looked at"), [...cited, ctx.asked]);
     return vs.length ? { reason: "evidence_ungrounded", violations: vs } : null;
   }
@@ -237,6 +241,7 @@ export const CLAIM_CHECK_SYSTEM = [
   "You check a lesson's citations. You are given the source texts, tagged, then numbered claims, each naming the tags it cites. For each claim decide one thing: do the texts it cites, and only those, support what the claim says?",
   "A claim is supported if the cited text says it, or says it in other words, or it follows directly. A plain restatement in simpler language is supported.",
   "A claim is NOT supported if it adds a mechanism, a finding, a cause, a population or a certainty the cited text does not give; if it states as fact what the cited text only suggests; or if it attributes to the cited text something that is not there.",
+  "Read every clause. A claim that restates the text and then goes on to its own conclusion ('which is consistent with ...', 'illustrating how ...', 'this means ...', 'describes this as ...') is NOT supported unless the cited text itself says that conclusion too.",
   "Do not use your own knowledge. A claim can be true and still not be supported by its cited text.",
   'Reply with ONE line and nothing else: a JSON array of the numbers of the claims that are NOT supported, such as [2, 5], or [] if all are supported. No reasoning, no prose and no code fence.',
 ].join("\n");

@@ -52,7 +52,7 @@ const leaks = /nambi|okello|mulago|gabriel|ajootum|elish/i;
   // In memory only: the engine as the owner would leave it (PubMed, Crossref, PubMed Central and also OpenAlex Active, to prove the pack leaves it out).
   const stamp = { at: new Date().toISOString(), by: "acceptance", ok: true, detail: "in-memory acceptance only" };
   const registry = Object.fromEntries(["pubmed", "openalex", "crossref", "pmc"].map(id => [id, { ...SEED_REGISTRY[id], status: "active", checks: { connectivity: stamp, approval: stamp, activation: stamp } }]));
-  const docs = [{ config_path: "research.registry", published: registry }, { config_path: "research.workflows", published: { basic: { status: "active" } } }, { config_path: "research.policy", published: {} }];
+  const docs = [{ config_path: "research.registry", published: registry }, { config_path: "research.workflows", published: { basic: { status: "active" } } }, { config_path: "research.policy", published: { rules: { maxEvidence: Number(process.env.PACK_MAX_EVIDENCE ?? 5) } } }];
   const admin = { from: (t: string) => (t === "workspace_config_overrides" ? { select: (cols: string) => { if (cols !== "config_path, published") return real.from(t).select(cols); return { eq: (...a: any[]) => (a[1] === "platform" ? { eq: (_c: string, ref: string) => (ref === "research" ? { in: async () => ({ data: docs, error: null }) } : real.from(t).select(cols).eq("scope_type", "platform").eq("scope_ref", ref)) } : real.from(t).select(cols).eq(...a)) }; } } : real.from(t)) };
   void resolveRegistry;
 

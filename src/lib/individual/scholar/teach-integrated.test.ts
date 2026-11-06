@@ -52,6 +52,12 @@ describe("each sentence is read against the source it names", () => {
     expect(c.check.ok && c.check.text).not.toContain("92");
   });
 
+  it("a sentence citing research that goes on to its own conclusion is left out: the conclusion is not the abstract's", () => {
+    const c = checkIntegrated(lesson("Plasticity declines gradually, which is consistent with this head-to-toe sequence [E1]. Plasticity declines gradually, illustrating how windows close [E1]. Early enrichment partly offset deprivation [E1]."), ctx);
+    expect(c.dropped.map(d => d.reason)).toEqual(["evidence_own_conclusion", "evidence_own_conclusion"]);
+    expect(c.check.ok && c.check.text).toContain("Early enrichment partly offset deprivation [E1].");
+  });
+
   it("a number the abstract does hold stands", () => {
     const c = checkIntegrated(lesson("Across 14 studies early enrichment partly offset deprivation [E1]."), ctx);
     expect(c.dropped).toEqual([]);
@@ -66,6 +72,12 @@ describe("each sentence is read against the source it names", () => {
   it("Scholar's own sentence may not claim evidence, and may not carry a figure", () => {
     const c = checkIntegrated(lesson("Research shows this is permanent [AI]. It takes three years to close [AI]. A window closes slowly [AI]."), ctx);
     expect(c.dropped.map(d => d.reason).sort()).toEqual(["ai_claims_evidence", "ai_rules"]);
+    expect(c.check.ok && c.check.text).toContain("A window closes slowly");
+  });
+
+  it("Scholar's own sentence may not say that a source supports or refines something: that is a research claim with no source", () => {
+    const c = checkIntegrated(lesson("This supports the principle that rate varies [AI]. This refines the notes by showing it begins earlier [AI]. A window closes slowly [AI]."), ctx);
+    expect(c.dropped.map(d => d.reason)).toEqual(["ai_claims_evidence", "ai_claims_evidence"]);
     expect(c.check.ok && c.check.text).toContain("A window closes slowly");
   });
 

@@ -124,6 +124,7 @@ const details = page.locator("details").filter({ hasText: "Scientific evidence a
 const a11y = await details.evaluate(async el => { const r = await (window as unknown as { axe: { run: (e: Element, o: unknown) => Promise<{ violations: { id: string; impact: string }[] }> } }).axe.run(el, { runOnly: ["wcag2a", "wcag2aa"] }); return r.violations.map(v => `${v.id}:${v.impact}`); });
 ok(a11y.length === 0, `axe on the references section: ${a11y.join(", ") || "no violations"}`);
 
+if (process.env.WALK_SKIP_PHONE !== "1") {
 const phone = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, storageState: await ctx.storageState() });
 const p2 = await phone.newPage();
 await p2.goto(LESSON, { waitUntil: "domcontentloaded", timeout: 300_000 });
@@ -136,6 +137,21 @@ await s2.scrollIntoViewIfNeeded();
 await p2.waitForTimeout(400);
 ok(await p2.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1), "no sideways scroll on a phone");
 await p2.screenshot({ path: join(OUT, "4-phone-references.png") });
+}
+
+// The Library shows saved lessons as stored text: it must carry the same label and the research references.
+await page.goto(`${BASE}/individual/scholar/study/saved`, { waitUntil: "domcontentloaded", timeout: 300_000 });
+await page.addStyleTag({ content: "nextjs-portal{display:none!important}" }).catch(() => {});
+await page.waitForTimeout(20_000);
+// Saved lessons sit closed in the page: their text is there. Open the one with research and look at it.
+const inLib = page.locator("details").filter({ hasText: /PMID \d+/ }).first();
+ok(await inLib.count() > 0, "the Library holds the lesson with its research references");
+const held = await inLib.evaluate(el => { (el as HTMLDetailsElement).open = true; return el.textContent ?? ""; });
+ok(/published evidence and Scholar/.test(held), "the Library shows the three-source label, not 'From your notes'");
+ok(/Abstract reviewed, not the full text/.test(held), "the Library says only abstracts were reviewed");
+await inLib.locator("p", { hasText: /published evidence and Scholar/ }).first().scrollIntoViewIfNeeded();
+await page.waitForTimeout(800);
+await page.screenshot({ path: join(OUT, "5-library.png") });
 
 ok(errors.length === 0, `no page errors or 5xx: ${errors.join(" | ") || "none"}`);
 writeFileSync(join(OUT, "..", "walk.txt"), `${log.join("\n")}\n`);

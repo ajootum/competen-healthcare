@@ -4,39 +4,40 @@ Every record was fetched again by PMID from PubMed and by DOI from Crossref, apa
 
 ## The records are real and the details are right
 
-| Tag | PMID | DOI | First author, journal, year | Title and DOI agree across PubMed and the lesson | Crossref agrees |
+| Tag | PMID | DOI | First author, journal, year | Title and DOI agree with PubMed | Crossref agrees |
 |---|---|---|---|---|---|
 | E1 | 32101708 | 10.1016/j.tins.2020.01.002 | Nelson CA, Trends in Neurosciences, 2020 | Yes | Yes |
-| E2 | 31447013 | 10.1016/j.pedhc.2019.04.017 | Hornor G, J Pediatric Health Care, 2019 | Yes | Yes |
 | E3 | 26093365 | 10.1016/j.conb.2015.05.004 | Gervain J, Curr Opin Neurobiology, 2015 | Yes | Yes |
-| E4 | 27567276 | 10.1016/j.ejpn.2016.07.007 | Ismail FY, Eur J Paediatric Neurology, 2017 | Yes | Yes |
-| E5 | 28745146 | 10.1080/14616734.2017.1354040 | Granqvist P, Attachment and Human Development, 2017 | Yes | Yes |
+| E4 | 29752957 | 10.1016/j.neubiorev.2018.05.009 | Hadders-Algra M, Neurosci Biobehav Rev, 2018 | Yes | Yes |
+| E6 | 28745146 | 10.1080/14616734.2017.1354040 | Granqvist P, Attachment and Human Development, 2017 | Yes | Yes |
 
-The model never wrote a reference. Each comes from the provider's record, and the model only wrote the tag.
+The pack held 6 records. E2 and E5 were given to the model, but their sentences were left out by the checks, so they are not listed as references on the lesson. The model never wrote a reference: each comes from the provider's record, and the model only wrote the tag.
 
 ## Each research sentence against its abstract
 
 | Lesson sentence (shortened) | Tag | Abstract says | Verdict |
 |---|---|---|---|
-| Developing brain goes through a heterochronous, cortex-specific profile, "meaning different brain regions mature at different times and rates" | E4 | Names a heterochronous, cortex-specific profile | Supported. The "meaning" clause is the model's gloss, and a fair one |
-| Heightened plasticity in these periods enables construction and consolidation of experience-dependent connections, prenatal and postnatal | E4 | Says this | Supported |
-| Adverse events in a critical period are likely long lasting, as a violation of the expectable environment | E1 | Says this, with "likely" | Supported, and the hedge is kept |
-| Caregiver relationship is the first crucial one, and its health has a profound effect on social and emotional development | E2 | Says this | Supported |
-| Insecure attachments: greater likelihood of physical health difficulties and impaired functioning into adulthood | E2 | Says this ("greater likelihood") | Supported, and the hedge is kept |
-| Attachment classifications are not definitive assessments and not a fixed trait impervious to development or help | E5 | Summarises evidence that these assumptions are false and misleading | Supported. The abstract is about disorganised attachment, and the lesson names that |
-| Prenatal experience with speech shapes perception and how newborns produce communicative sounds | E3 | Says this | Supported |
-| Experience narrows speech perception in the first years, and neural correlates specialise | E3 | Says this | Supported |
-| Key point: adverse events in a critical period are likely to have long-lasting neurobiological effects | E1 | "Long lasting" and "neurobiologically embedded" appear in separate sentences | Supported, though it joins two sentences. Noted |
-| Notes and evidence: early classification as a fixed trait is false and misleading, and caregiving interventions have value | E5 | Says this | Supported |
+| From fetal age, motor behaviour rests on spontaneous activity in brainstem and spinal cord, then shaped by cortical activity | E4 | Says this | Supported |
+| Adverse events violating what the brain expects, in a critical period, likely to have long-lasting effects on development | E1 | Says this, with "likely" | Supported, and the hedge is kept |
+| Attachment classification is not a fixed trait and not impervious to development or intervention | E6 | Summarises evidence that this assumption is false and misleading. The abstract's "fixed trait" point is about disorganised attachment, and the sentence names disorganised attachment | Supported |
+| Speech experience begins before birth, shapes newborn perception and production, and narrows toward the native language | E3 | Says this | Supported |
 
-**Result:** 10 of 10 research statements are supported by the abstract they cite, with one fair gloss and one light joining noted. This check covers one lesson. It is one person's reading, not a sampling study.
+**Result: 4 of 4 research sentences are supported by the abstract they cite.** This is one person's reading of one lesson, not a sampling study.
 
-## What the automatic checks removed in that run
+## What this check found on the way
 
-8 cited sentences were flagged by the claim check. 7 claimed the notes when the notes only name the idea, so they now show as Scholar's own explanation. 1 was left out. 2 further sentences of Scholar's own were left out by rule.
+**The automatic claim check is good but not complete, and the lesson varies between runs.** On the run before this one, the checks passed three sentences that went on past their abstract, for example "which is consistent with this centre-outward, head-to-toe sequence". That is a citation claiming more than its abstract says. So:
+
+- the writing prompt now says a connection to the lesson is its own `[AI]` sentence;
+- the claim check is told to read every clause;
+- a sentence citing research that ends in such a clause is now left out by rule.
+
+In this final run the claim check flagged 6 sentences. 3 that claimed the notes became Scholar's own, and 3 were left out. One more was left out by rule. That is why fewer records are cited here than on earlier runs.
+
+**A reader should still expect the occasional overreach to get through.** The check is a second model reading abstracts, and a rule can only catch known wordings.
 
 ## Limits
 
 - Only abstracts were read, and each reference says so.
-- All five happen to be narrative reviews. The hierarchy prefers guidelines and systematic reviews, but none on these exact topics passed the relevance and applicability checks this time.
+- All the cited records are narrative reviews. The hierarchy prefers guidelines and systematic reviews, but none on these exact topics passed the relevance and applicability checks and also reached the pack.
 - The freshness setting of 15 years drops older foundational works such as Bowlby. Teaching them needs HQ to raise that setting. A consumer can only narrow it.

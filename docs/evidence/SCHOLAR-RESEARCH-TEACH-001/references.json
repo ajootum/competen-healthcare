@@ -12,27 +12,8 @@
   "doi": "10.1016/j.tins.2020.01.002",
   "url": "https://pubmed.ncbi.nlm.nih.gov/32101708/",
   "verified": {
-   "pmid": true,
-   "doi": true
-  },
-  "studyKind": "narrative review",
-  "accessed": "abstract",
-  "openAccess": null
- },
- {
-  "tag": "E2",
-  "title": "Attachment Disorders.",
-  "authors": [
-   "Hornor G"
-  ],
-  "journal": "Journal of pediatric health care : official publication of National Association of Pediatric Nurse Associates & Practitioners",
-  "year": 2019,
-  "pmid": "31447013",
-  "doi": "10.1016/j.pedhc.2019.04.017",
-  "url": "https://pubmed.ncbi.nlm.nih.gov/31447013/",
-  "verified": {
-   "pmid": true,
-   "doi": true
+   "doi": true,
+   "pmid": true
   },
   "studyKind": "narrative review",
   "accessed": "abstract",
@@ -50,8 +31,8 @@
   "doi": "10.1016/j.conb.2015.05.004",
   "url": "https://pubmed.ncbi.nlm.nih.gov/26093365/",
   "verified": {
-   "pmid": true,
-   "doi": true
+   "doi": true,
+   "pmid": true
   },
   "studyKind": "narrative review",
   "accessed": "abstract",
@@ -59,27 +40,25 @@
  },
  {
   "tag": "E4",
-  "title": "Cerebral plasticity: Windows of opportunity in the developing brain.",
+  "title": "Early human motor development: From variation to the ability to vary and adapt.",
   "authors": [
-   "Ismail FY",
-   "Fatemi A",
-   "Johnston MV"
+   "Hadders-Algra M"
   ],
-  "journal": "European journal of paediatric neurology : EJPN : official journal of the European Paediatric Neurology Society",
-  "year": 2017,
-  "pmid": "27567276",
-  "doi": "10.1016/j.ejpn.2016.07.007",
-  "url": "https://pubmed.ncbi.nlm.nih.gov/27567276/",
+  "journal": "Neuroscience and biobehavioral reviews",
+  "year": 2018,
+  "pmid": "29752957",
+  "doi": "10.1016/j.neubiorev.2018.05.009",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/29752957/",
   "verified": {
-   "pmid": true,
-   "doi": true
+   "doi": true,
+   "pmid": true
   },
   "studyKind": "narrative review",
   "accessed": "abstract",
   "openAccess": null
  },
  {
-  "tag": "E5",
+  "tag": "E6",
   "title": "Disorganized attachment in infancy: a review of the phenomenon and its implications for clinicians and policy-makers.",
   "authors": [
    "Granqvist P",
@@ -92,16 +71,11 @@
   "doi": "10.1080/14616734.2017.1354040",
   "url": "https://pubmed.ncbi.nlm.nih.gov/28745146/",
   "verified": {
-   "pmid": true,
-   "doi": true
+   "doi": true,
+   "pmid": true
   },
   "studyKind": "narrative review",
   "accessed": "abstract",
-  "openAccess": {
-   "pmcid": "PMC5600694",
-   "licence": "CC BY",
-   "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5600694/",
-   "retracted": false
-  }
+  "openAccess": null
  }
 ]
