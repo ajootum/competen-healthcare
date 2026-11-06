@@ -1,4 +1,4 @@
-import { TransitionInput, VersionInput } from "./contracts";
+import { MeInput, TransitionInput, VersionInput } from "./contracts";
 import { type AccessContext, canRead, canWrite, hasScope, managesWorkspace, ownsWorkspace, toLiveGrant, visibilityFilter } from "./access";
 import { LifeosError, notFound } from "./errors";
 import { MACHINES, assertCommitmentCanMove, assertTransition, missingForWork, resumeStatus } from "./machines";
@@ -19,6 +19,8 @@ export type RequestContext = {
   traceId: string;
   idempotencyKey: string | null;
   requestHash: string | null;
+  /** The TXT records at a name. Injected, so the engine holds no network code. */
+  resolveTxt?: (name: string) => Promise<string[][]>;
 };
 
 export type WriteResult = { data: unknown; replayed: boolean };
@@ -129,6 +131,15 @@ async function presentRefs(c: RequestContext, workspaceId: string, def: Resource
   if (!primary) throw notFound();
   const ctx = await loadAccess(c.store, c.principal, workspaceId);
   return present(def, await readable(c, ctx, def, primary.id));
+}
+
+/** Commits ops on a table outside any workspace, and returns its row. The caller has already checked authority. */
+export async function commitOps(c: RequestContext, table: string, plan: () => Promise<Op[]>): Promise<WriteResult> {
+  const r = await commit(c, "", null, plan);
+  const ref = (r.data as Ref[]).find(x => x.t === table);
+  const row = ref ? await c.store.get(table, ref.id) : null;
+  if (!row) throw notFound();
+  return { data: row, replayed: r.replayed };
 }
 
 const update = (def: ResourceDef, row: Row, values: Row, expectedVersion?: number): Op => ({
@@ -335,6 +346,38 @@ export async function getMe(c: RequestContext) {
   return { individual, entitlements, workspaces: await listWorkspaces(c) };
 }
 
+/** A person's own settings. They own this record, so no workspace access applies. */
+export async function updateMe(c: RequestContext, input: unknown): Promise<Row> {
+  const parsed = MeInput.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error);
+  const { expectedVersion, ...fields } = parsed.data;
+  if (Object.keys(fields).length === 0) throw new LifeosError("validation_failed", "Nothing to change.");
+  await commit(c, "", null, async () => [{
+    t: "lifeos_individual", op: "update", id: c.principal.individualId, expected_version: expectedVersion,
+    values: { ...snakeFields(fields), provenance_source: "user" },
+  }]);
+  const row = await c.store.get("lifeos_individual", c.principal.individualId);
+  if (!row) throw notFound();
+  return row;
+}
+
+/** A person's own choice to stop. Only access they chose themselves can be ended here. Their records stay. */
+export async function endOwnEntitlement(c: RequestContext, id: string, input: unknown): Promise<Row> {
+  const parsed = VersionInput.safeParse(input);
+  if (!parsed.success) throw validationError(parsed.error);
+  const row = await c.store.get("lifeos_entitlement", id);
+  if (!row || row.individual_id !== c.principal.individualId) throw notFound();
+  if (row.source !== "competen_individual") throw new LifeosError("forbidden", "This access was given to you, so it is ended by whoever gave it.");
+  if (row.status !== "active") throw new LifeosError("conflict", "This access has already ended.");
+  await commit(c, "", null, async () => [{
+    t: "lifeos_entitlement", op: "update", id, expected_version: parsed.data.expectedVersion,
+    values: { status: "revoked", revoked_at: new Date().toISOString(), provenance_source: "user" },
+  }]);
+  const after = await c.store.get("lifeos_entitlement", id);
+  if (!after) throw notFound();
+  return after;
+}
+
 export async function listWorkspaces(c: RequestContext): Promise<Row[]> {
   const memberships = await c.store.where("lifeos_membership", { individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
   const rows = await Promise.all(memberships.map(m => c.store.get("lifeos_workspace", String(m.workspace_id))));
@@ -363,9 +406,11 @@ export async function leaveWorkspace(c: RequestContext, workspaceId: string): Pr
     const [m] = await c.store.where("lifeos_membership", { workspace_id: workspaceId, individual_id: c.principal.individualId }, { limit: 1 });
     if (ownsWorkspace(String(m.role))) throw new LifeosError("conflict", "The owner of an organisation workspace cannot leave it.");
     const given = await c.store.where(GRANT.table, { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
+    const invited = await c.store.where("lifeos_invitation", { workspace_id: workspaceId, owner_individual_id: c.principal.individualId, status: "pending" }, { limit: INTERNAL_READ_LIMIT });
     return [
       { t: "lifeos_membership", op: "update", id: String(m.id), workspace_id: workspaceId, values: { status: "left", provenance_source: "user" } },
       ...given.map(g => update(GRANT, g, { status: "revoked", revoked_at: new Date().toISOString() })),
+      ...invited.map((i): Op => ({ t: "lifeos_invitation", op: "update", id: String(i.id), workspace_id: workspaceId, values: { status: "revoked", provenance_source: "user" } })),
     ];
   });
 }
@@ -402,6 +447,9 @@ export async function listResource(c: RequestContext, workspaceId: string, name:
   const limit = Number(params.limit ?? LIST_DEFAULT);
   const rows = await c.store.list(def.table, {
     workspaceId, filters, visibility: visibilityFilter(ctx, def.entity, def.extraReaderColumn), hasArchive: def.hasArchive,
+    range: def.name === "commitments" && (params.scheduledFrom || params.scheduledTo)
+      ? { column: "scheduled_on", from: params.scheduledFrom as string | undefined, to: params.scheduledTo as string | undefined }
+      : null,
     includeArchived: params.includeArchived === "true", orderColumn: "created_at",
     cursor: params.cursor ? decodeCursor(String(params.cursor)) : null, limit: limit + 1,
   });

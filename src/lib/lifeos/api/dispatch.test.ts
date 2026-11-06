@@ -71,7 +71,7 @@ describe("the order of the door", () => {
   });
   it("an unknown path is a 404 envelope, and a wrong method is a 405", async () => {
     expect(((await (await call("GET", "nope")).json()).error.code)).toBe("not_found");
-    expect((await call("PATCH", "me")).status).toBe(405);
+    expect((await call("POST", "me")).status).toBe(405);
   });
   it("a path id that is not a UUID is a 404 and reaches no query", async () => {
     const store = fakeStore();
@@ -92,6 +92,33 @@ describe("the order of the door", () => {
     expect(res.headers.get("retry-after")).toBe("7");
     expect(store.rateTake).toHaveBeenCalledWith(ME, "write", RATE_LIMITS.write.max, RATE_LIMITS.write.windowSeconds);
     expect(store.mutate).not.toHaveBeenCalled();
+  });
+});
+
+describe("the door before holding LifeOS", () => {
+  const identity = { issuer: "i", subject: "s", displayName: "d", email: null, competenIndividualLive: true };
+  const call2 = (store: LifeosStore, session?: () => Promise<typeof identity>) => dispatch(
+    new Request("http://x/api/lifeos/v1/access/status"), ["access", "status"],
+    { store, authenticate: async () => { throw new LifeosError("forbidden", "no"); }, session, traceId: "t" },
+  );
+  it("does not need a principal", async () => {
+    const store = fakeStore({ where: vi.fn(async () => []) });
+    const res = await call2(store, async () => identity);
+    expect(res.status).toBe(200);
+    expect((await res.json()).data).toMatchObject({ enabled: true, eligible: true, active: false, terms: null });
+  });
+  it("with the flag off, nobody is eligible, whatever they hold", async () => {
+    const store = fakeStore({ flagEnabled: vi.fn(async (f: string) => f === "lifeos_core") });
+    const res = await call2(store, async () => identity);
+    expect((await res.json()).data.eligible).toBe(false);
+  });
+  it("is refused with no session reader", async () => {
+    expect((await call2(fakeStore())).status).toBe(403);
+  });
+  it("with the gate off, it does not exist", async () => {
+    const res = await call2(fakeStore({ flagEnabled: vi.fn(async () => false) }), async () => identity);
+    expect(res.status).toBe(404);
+    expect(await res.text()).toBe("");
   });
 });
 

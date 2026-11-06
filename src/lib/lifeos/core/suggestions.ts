@@ -42,7 +42,7 @@ const isLive = (c: Row) => !c.archived_at && ["inbox", "planned", "in_progress"]
 const blockedIds = (blocks: Row[]) => new Set(blocks.map(b => b.commitment_id).filter(Boolean));
 
 /** Local wall-clock time as an instant in that zone, for a proposed block. */
-function startInstant(date: string, time: string, timeZone: string): string {
+export function startInstant(date: string, time: string, timeZone: string): string {
   const guess = new Date(`${date}T${time.slice(0, 5)}:00Z`);
   const shown = new Date(guess.toLocaleString("en-US", { timeZone }));
   const utc = new Date(guess.toLocaleString("en-US", { timeZone: "UTC" }));

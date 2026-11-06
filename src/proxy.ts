@@ -2,6 +2,7 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { DEVICE_COOKIE, DEVICE_COOKIE_OPTIONS, mintDeviceId, needsDeviceCookie } from "@/lib/practice/device-register";
 import { gatewayEntryRewrite } from "@/lib/identity/gateway-entry";
+import { LIFEOS_TENANT_HOSTS_ENV, lifeosTenantRoute } from "@/lib/lifeos/host";
 import { isPreviewHost } from "@/lib/identity/domains";
 import { classifyPreviewPath, decidePreviewRequest } from "@/lib/individual/preview/host-policy";
 import {
@@ -190,7 +191,11 @@ export async function proxy(request: NextRequest) {
     if (session.returnOrigin && isRegisteredOrigin(session.returnOrigin)) previewInject[PREVIEW_RETURN_HEADER] = session.returnOrigin;
   }
 
-  const gatewayTarget = gatewayEntryRewrite(request.headers.get("host"), request.nextUrl.pathname);
+  // LIFEOS-API-001 step 7. Inert unless LIFEOS_TENANT_HOSTS=1, and it never answers for a first-party host. A tenant's
+  // domain serves LifeOS and nothing else. It authorizes nothing: LifeOS's own page and API still check everything.
+  const lifeosRoute = lifeosTenantRoute(request.headers.get("host"), request.nextUrl.pathname, process.env[LIFEOS_TENANT_HOSTS_ENV] === "1");
+  if (lifeosRoute?.kind === "block") return finish(new NextResponse(null, { status: 404 }));
+  const gatewayTarget = lifeosRoute?.kind === "rewrite" ? lifeosRoute.pathname : gatewayEntryRewrite(request.headers.get("host"), request.nextUrl.pathname);
   let response: NextResponse;
   if (gatewayTarget) {
     const url = request.nextUrl.clone();

@@ -280,6 +280,22 @@ export const inputs = {
   },
 } as const;
 
+export const ActivateInput = z.object({ termsVersion: z.string().min(1).max(80) }).strict().meta({ title: "ActivateInput" });
+
+export const AccessStatusV1 = z.object({
+  enabled: z.boolean(), eligible: z.boolean(), active: z.boolean(),
+  terms: z.object({ version: z.string(), title: z.string(), url: z.string() }).nullable(),
+}).meta({ title: "AccessStatus" });
+
+export const MeInput = z.object({
+  displayName: z.string().trim().min(1).max(200).optional(),
+  timezone: z.string().min(1).max(64).refine(tz => {
+    try { new Intl.DateTimeFormat("en", { timeZone: tz }); return true; } catch { return false; }
+  }, "That is not a known time zone.").optional(),
+  locale: z.string().min(2).max(35).optional(),
+  expectedVersion,
+}).strict().meta({ title: "MeInput" });
+
 export const TransitionInput = z.object({
   to: z.string().min(1).max(40),
   expectedVersion,
@@ -306,6 +322,8 @@ export const ListQueryInput = z.object({
   weeklyPlanId: uuid.optional(),
   weekStart: isoDate.optional(),
   scheduledOn: isoDate.optional(),
+  scheduledFrom: isoDate.optional(),
+  scheduledTo: isoDate.optional(),
   quadrant: z.enum(["q1", "q2", "q3", "q4"]).optional(),
   entityType: z.string().min(1).max(60).optional(),
   entityId: uuid.optional(),
