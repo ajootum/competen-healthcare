@@ -1,5 +1,7 @@
 import { createHash } from "node:crypto";
 import { hasScope } from "../core/access";
+import { PUBLIC_API_FLAG, principalFromToken } from "../core/oauth";
+import { assertAdmitted } from "../core/provision";
 import { LifeosError } from "../core/errors";
 import { ListQueryInput } from "../core/contracts";
 import type { SessionIdentity } from "../core/optin";
@@ -25,6 +27,8 @@ export type DispatchDeps = {
   authenticate: () => Promise<Principal>;
   /** Who is signed in, for the routes that come before holding LifeOS. */
   session?: () => Promise<SessionIdentity>;
+  /** Whether an entitlement's source still stands, for a bearer token, which has no session to ask. */
+  sourceStands?: (entitlement: Record<string, unknown>, individualId: string) => Promise<boolean>;
   resolveTxt?: (name: string) => Promise<string[][]>;
   traceId: string;
 };
@@ -45,8 +49,10 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 async function run(req: Request, segments: string[], deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
   const matched = matchRoute(req.method, segments);
   if (matched && matched !== "method_not_allowed" && matched.route.admission === "session") return runSession(req, matched.route, deps);
+  if (matched && matched !== "method_not_allowed" && matched.route.admission === "open") return runOpen(req, matched.route, deps);
 
-  const principal = await deps.authenticate();
+  const bearer = (req.headers.get("authorization") ?? "").match(/^Bearer\s+(\S+)$/i)?.[1] ?? null;
+  const principal = bearer ? await bearerPrincipal(bearer, deps) : await deps.authenticate();
 
   if (!matched) throw new LifeosError("not_found", "That was not found.");
   if (matched === "method_not_allowed") throw new LifeosError("method_not_allowed", "That method is not available here.");
@@ -55,10 +61,14 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
   for (const value of Object.values(params)) {
     if (!UUID.test(value)) throw new LifeosError("not_found", "That was not found.");
   }
+  // THE PUBLIC BOUNDARY: a delegated token reaches only routes on the approved list, whatever scopes it holds.
+  if (principal.kind === "delegated_token" && route.visibility !== "public") throw new LifeosError("forbidden", "This is not available to apps.");
   if (route.scope && !hasScope(principal, route.scope)) throw new LifeosError("forbidden", "This access does not include that action.");
 
   const limit = RATE_LIMITS[route.bucket];
-  const rate = await deps.store.rateTake(principal.individualId, route.bucket, limit.max, limit.windowSeconds);
+  // An app has its own allowance for each person, so a busy app cannot use up theirs.
+  const rateSubject = principal.clientId ? `client:${principal.clientId}:${principal.individualId}` : principal.individualId;
+  const rate = await deps.store.rateTake(rateSubject, route.bucket, limit.max, limit.windowSeconds);
   if (!rate.allowed) throw new LifeosError("rate_limited", "Too many requests. Wait a moment and try again.", { retryAfter: rate.retryAfter });
 
   const url = new URL(req.url);
@@ -104,6 +114,33 @@ async function run(req: Request, segments: string[], deps: DispatchDeps & { stor
       ...(result.replayed ? { replayed: true } : {}),
     },
   });
+}
+
+/** A bearer token: the public flag first, then the token, then the same admission a signed-in person passes. */
+async function bearerPrincipal(token: string, deps: DispatchDeps & { store: LifeosStore }): Promise<Principal> {
+  if (!(await deps.store.flagEnabled(PUBLIC_API_FLAG))) throw new LifeosError("not_found", "That was not found.");
+  const { principal, individualId } = await principalFromToken(deps.store, token);
+  await assertAdmitted(deps.store, individualId, async e => (deps.sourceStands ? deps.sourceStands(e, individualId) : true)).catch(() => {
+    throw new LifeosError("unauthenticated", "This access token is not valid.");
+  });
+  return principal;
+}
+
+/** The standard OAuth endpoints: the flag, a rate limit by address, and the form encoding the standard fixes. */
+async function runOpen(req: Request, route: Route, deps: DispatchDeps & { store: LifeosStore }): Promise<Response> {
+  if (!(await deps.store.flagEnabled(PUBLIC_API_FLAG))) return new Response(null, { status: 404 });
+  const limit = RATE_LIMITS[route.bucket];
+  const who = (req.headers.get("x-forwarded-for") ?? "unknown").split(",")[0].trim();
+  const rate = await deps.store.rateTake(`open:${who}`, route.bucket, limit.max, limit.windowSeconds);
+  if (!rate.allowed) throw new LifeosError("rate_limited", "Too many requests. Wait a moment and try again.", { retryAfter: rate.retryAfter });
+  let body: Record<string, unknown> = {};
+  if (route.method !== "GET") {
+    const type = (req.headers.get("content-type") ?? "").toLowerCase();
+    if (type.startsWith("application/x-www-form-urlencoded")) body = Object.fromEntries(new URLSearchParams(await req.text()));
+    else if (type.startsWith("application/json")) body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    else return Response.json({ error: "invalid_request" }, { status: 400 });
+  }
+  return route.openHandler!({ store: deps.store, body });
 }
 
 /** The door before holding LifeOS: a signed-in session, its own rate limit, the same request rules, and no principal. */

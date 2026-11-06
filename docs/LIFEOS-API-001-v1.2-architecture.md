@@ -200,7 +200,7 @@ Base path `/api/lifeos/v1`. The major version is in the path. The OpenAPI docume
 
 **Adapters.** `core/integration.ts` defines the adapter interface. No provider is implemented at this stage. `lifeos_integration_connection.credential_ref` is a pointer to a secret store and never holds a token.
 
-**Public API boundary.** Each route has a `visibility` of `internal` or `public`. **All routes are `internal` today.** Step 9 approves capabilities by changing that value, and the public OpenAPI document includes only those routes.
+**Public API boundary.** Each route has a `visibility` of `internal` or `public`. Only the routes on the `PUBLIC_ROUTES` list are public, and the seal check holds that list. A delegated token reaches nothing else, whatever scopes it holds. The public OpenAPI document includes only those routes.
 
 **Tenants and branding.** `lifeos_tenant.branding` is configuration, validated by a schema. Custom domains are step 7 and need no change to any record in this design. They add one table, `lifeos_tenant_domain`, and host resolution. No tenant ever gets a copy of the code or a separate table.
 
@@ -238,8 +238,8 @@ Base path `/api/lifeos/v1`. The major version is in the path. The OpenAPI docume
 | 6 Individual access | Done on its own branch: a person's own opt-in, behind two flags and published terms. See the build record. |
 | 7 Custom domains | Done on its own branch: verified domains, branding and own sign-in, inert until `LIFEOS_TENANT_HOSTS=1`. See the build record. |
 | 8 External pilot | Ready on its own branch: invitations, member picker, Organisation screen, runbook. Choosing a real organisation is the owner's. |
-| 9 Public API | Not started. Needs OAuth with user-delegated scopes. |
-| 10 Commercial distribution | Not started. **The commercial readiness assessment (ADR-018) comes before the first paying external organisation.** |
+| 9 Public API | Done on its own branch: OAuth 2.1 with PKCE, an approved route list, off by default. See the build record. |
+| 10 Commercial distribution | Assessment written ([LIFEOS-COMMERCIAL-READINESS-001](LIFEOS-COMMERCIAL-READINESS-001.md)), export built. **The decisions in it are the owner's.** |
 
 ## 10a. V1.1 preview
 

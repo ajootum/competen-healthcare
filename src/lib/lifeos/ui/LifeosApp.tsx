@@ -10,6 +10,7 @@ import {
 import { NAV, isScreen, type Screen } from "./nav";
 import { type CommitmentFields, type Lifeos, useLifeos } from "./useLifeos";
 import { useModalFocus } from "./useModalFocus";
+import { ConnectedApps } from "./ConnectedApps";
 import { Organisation } from "./Organisation";
 import { signOut } from "../adapters/competen/browser-auth";
 import { type Branding, brandStyle } from "./branding";
@@ -203,7 +204,7 @@ export function LifeosApp({ initialScreen, branding = {}, tenantId = null, tenan
             </div>
           )}
           <nav aria-label="LifeOS">
-            {[...NAV, ...(inOrganisation ? (["organisation"] as const) : [])].map(k => (
+            {[...NAV, ...(inOrganisation ? (["organisation"] as const) : []), "connected" as const].map(k => (
               <button key={k} className={k === screen ? styles.active : ""} aria-current={k === screen ? "page" : undefined} onClick={() => go(k)}>
                 {SCREENS[k].icon} {SCREENS[k].label}
               </button>
@@ -252,6 +253,7 @@ export function LifeosApp({ initialScreen, branding = {}, tenantId = null, tenan
               {screen === "review" && <Review {...props} />}
               {screen === "ai" && <ChiefOfStaff {...props} />}
               {screen === "organisation" && <Organisation l={l} />}
+              {screen === "connected" && <ConnectedApps />}
             </>
           )}
         </main>
@@ -330,7 +332,7 @@ export function LifeosApp({ initialScreen, branding = {}, tenantId = null, tenan
               </select>
             </div>
           )}
-          {[...MORE, ...(inOrganisation ? (["organisation"] as const) : [])].map(k => <button key={k} className={styles.sheetItem} onClick={() => go(k)}>{SCREENS[k].icon} {SCREENS[k].label}</button>)}
+          {[...MORE, ...(inOrganisation ? (["organisation"] as const) : []), "connected" as const].map(k => <button key={k} className={styles.sheetItem} onClick={() => go(k)}>{SCREENS[k].icon} {SCREENS[k].label}</button>)}
           {l.chosenAccess && <button className={styles.sheetItem} onClick={() => { if (window.confirm(TURN_OFF)) void l.turnOff(); }}>Turn off LifeOS</button>}
           <button className={styles.sheetItem} onClick={() => void leave()}>Sign out</button>
           <p><button onClick={close}>Close</button></p>

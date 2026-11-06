@@ -119,3 +119,10 @@ export async function readSignedInEmail(): Promise<string | null> {
     return null;
   }
 }
+
+/** For a bearer token, which has no session: the same question about Competen Individual, by the person's link. */
+export async function lifeosSourceStands(store: LifeosStore, e: Record<string, unknown>, individualId: string): Promise<boolean> {
+  if (e.source !== "competen_individual") return true;
+  const [link] = await store.where("lifeos_identity_link", { individual_id: individualId, issuer: ISSUER_COMPETEN_AUTH, status: "active" }, { limit: 1 });
+  return link ? competenIndividualLive(String(link.subject)) : false;
+}

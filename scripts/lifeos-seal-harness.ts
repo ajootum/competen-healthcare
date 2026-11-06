@@ -11,7 +11,7 @@
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 import ts from "typescript";
-import { ROUTES } from "../src/lib/lifeos/api/routes";
+import { PUBLIC_ROUTES, ROUTES } from "../src/lib/lifeos/api/routes";
 import { buildOpenApi } from "../src/lib/lifeos/api/openapi";
 import { RESOURCES } from "../src/lib/lifeos/core/resources";
 
@@ -153,14 +153,21 @@ ok("W1", writes.length === 0, `no direct table write or hard delete in LifeOS co
 ok("W2", ROUTES.every(r => (r.method as string) !== "DELETE"), "the API has no DELETE method");
 
 // ---- 5. the route table ----
-ok("R1", ROUTES.every(r => r.visibility === "internal"), "every route is internal: nothing is on the public API boundary yet (step 9)");
-ok("R2", ROUTES.filter(r => r.method !== "GET").every(r => !!r.input), "every write route declares its input schema");
+const OAUTH_OPEN = ["POST /oauth/token", "POST /oauth/revoke", "GET /public/openapi.json"];
+const publicNow = ROUTES.filter(r => r.visibility === "public").map(r => `${r.method} ${r.path}`).sort();
+ok("R1", publicNow.join() === [...PUBLIC_ROUTES, ...OAUTH_OPEN].sort().join(), `only the approved list and the OAuth endpoints are public (${publicNow.length})`);
+const sensitive = /suggestions|permission-grants|invitations|tenants|oauth\/authorize|connected-apps|entitlements|leave|members|audit/;
+ok("R1b", !PUBLIC_ROUTES.some(r => sensitive.test(r)), "approving apps, decisions, sharing, invitations and tenants are not on the public list");
+ok("R1c", ROUTES.filter(r => r.admission === "open").every(r => OAUTH_OPEN.includes(`${r.method} ${r.path}`)), "nothing but the OAuth endpoints and the public document is reachable with no identity");
+ok("R2", ROUTES.filter(r => r.method !== "GET" && r.admission !== "open").every(r => !!r.input), "every write route declares its input schema, apart from the OAuth endpoints, whose form the standard fixes");
 const keys = ROUTES.map(r => `${r.method} ${r.path}`);
 ok("R3", new Set(keys).size === keys.length, "no duplicate route");
 const doc = buildOpenApi(ROUTES) as { paths: Record<string, Record<string, unknown>> };
 const documented = Object.entries(doc.paths).flatMap(([p, ms]) => Object.keys(ms).map(m => `${m.toUpperCase()} ${p}`));
 ok("R4", documented.length === ROUTES.length, `the OpenAPI document lists every route (${documented.length}/${ROUTES.length})`);
-ok("R5", Object.keys((buildOpenApi(ROUTES, "public") as { paths: object }).paths).length === 0, "the public OpenAPI document is empty today");
+const pubDoc = buildOpenApi(ROUTES, "public") as { paths: Record<string, Record<string, unknown>> };
+const pubCount = Object.values(pubDoc.paths).reduce((n, ms) => n + Object.keys(ms).length, 0);
+ok("R5", pubCount === publicNow.length, `the public OpenAPI document lists exactly the public routes (${pubCount})`);
 
 const route = readFileSync(join(ROOT, "src/app/api/lifeos/v1/[...path]/route.ts"), "utf8");
 ok("R6", /\brequireLifeosPrincipal\s*\(/.test(route), "the one route file enters the registered boundary");
