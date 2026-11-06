@@ -5,7 +5,7 @@ import {
   type Passage, type ResearchEvidence,
 } from "./generation";
 import { artefactKey, libraryReferences, relabelReferences } from "./learn";
-import { externalReferences, researchEvidence, type LearnResearch, lessonQuery, nothingButTypedQuestion, withoutTypedQuestion } from "./learn-research";
+import { externalReferences, researchEvidence, type LearnResearch, lessonQuery, nothingButTypedQuestion, withoutTypedQuestion, researchTitleOf } from "./learn-research";
 import { policyPath, resolvePolicy, shownLearnModes } from "../policy";
 
 // COMPETEN-RESEARCH-01: Research & Explain on the ONE Learn engine. The research part is its own kind of content,
@@ -198,6 +198,11 @@ describe("ASK-RESEARCH-GUARD-01: what a learner types does not leave Competen", 
   it("\u26a0 is closed by default, and a question alone leaves nothing to search", () => {
     const typed = withoutTypedQuestion({ question: "my neighbour peter has hiv, explain cd4", topics: [], title: null, plainKeywords: true });
     expect(nothingButTypedQuestion(typed)).toBe(true);
+  });
+  it("⚠ a topic the learner typed to start a session does not go out", () => {
+    expect(researchTitleOf({ scopeKind: "topic", title: "my neighbour peter hiv", topic: "my neighbour peter hiv" })).toBeNull();
+    expect(researchTitleOf({ scopeKind: "document", title: "Sepsis lecture", topic: null })).toBe("Sepsis lecture");
+    expect(researchTitleOf({ scopeKind: "competency", title: "Recognising sepsis", topic: null })).toBe("Recognising sepsis");
   });
   it("a lesson's own topics still search", () => {
     expect(nothingButTypedQuestion(withoutTypedQuestion({ question: null, topics: ["sepsis"], title: null }))).toBe(false);
