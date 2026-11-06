@@ -143,10 +143,10 @@ export async function POST(req: Request) {
   const isCheck = action === "check" || action === "clarify";
   const teaching = isTeachingAction(action);
   if (!isLearnAction(action) && !isCheck) return NextResponse.json({ error: "Unknown learning action." }, { status: 400 });
-  // SCHOLAR-GUIDE-ME-001: one Guide Me turn travels as the explain kind (saved, deduped, metered and researched like it) and is offered where Guide me is.
+  // SCHOLAR-GUIDE-ME-001: one Guide Me turn travels as the explain kind (saved, deduped and researched like it), so it needs both offered: Guide me here, Explain at the gate below.
   const guideAsk = action === "explain" && policy.scholarGuideMeAdaptive && policy.scholarLearningActions.includes("guide") ? parseGuideAsk(body?.guide) : null;
   const guidedClarify = action === "clarify" && policy.scholarGuideMeAdaptive && body?.guided === true;
-  if (isLearnAction(action) && !guideAsk && !policy.scholarLearningActions.includes(action)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
+  if (isLearnAction(action) && !policy.scholarLearningActions.includes(action)) return NextResponse.json({ error: "That way of learning is not offered here." }, { status: 403 });
   // SCHOLAR-GUIDED-LEARNING-01: open (no AI ever) and prepare (the next lesson, policy-gated, default off).
   const prepare = body?.prepare === true, open = body?.open === true && !prepare;
   const notPrepared = (reason: string, extra: Record<string, unknown> = {}) => NextResponse.json({ prepared: false, reason, ...extra });

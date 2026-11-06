@@ -151,7 +151,8 @@ describe("the route option: every generation route takes only the recovery's id,
   it("the activity is never relabelled: the paper stays on its answer activity, Learn on the action, the evaluation on evaluate", () => {
     expect(read(EXAM)).toContain("scholarAiRunner(ctx, req, EXAM_ACTIVITY.answer,");
     // SCHOLAR-COMPANION-01 P1: the action itself, except a teaching action, which is metered as its nearest existing activity.
-    expect(read(ROUTES.learn)).toContain("const activity = meteredActivity(action) as ScholarAiActivity;");
+    // SCHOLAR-GUIDE-ME-001: a Guide Me turn is metered and routed as Go deeper, because it may carry Scholar's own science. A recovery never carries one: it is the same line for every other request.
+    expect(read(ROUTES.learn)).toContain("const activity = (guideAsk ? \"deeper\" : meteredActivity(action)) as ScholarAiActivity;");
     expect(read(ROUTES.learn)).toContain("scholarAiRunner(ctx, req, activity, risk)");
     expect(read(ROUTES.revision)).toContain('scholarAiRunner(ctx, req, "evaluate",');
   });
