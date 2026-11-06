@@ -27,6 +27,11 @@ describe("the Professional search registry", () => {
     expect(allowedProfessionalModules({ modules: new Set<ProfessionalSearchKey>(["cpd"]) }).map(m => m.key)).toEqual(["cpd"]);
     expect(allowedProfessionalModules({ modules: new Set() })).toEqual([]);
   });
+  it("says only what is searched, and offers no page search where the page has no box", () => {
+    expect(professionalScopeLine("registration")).not.toMatch(/qualification/i);
+    expect(professionalSearchPath("registration", "sepsis")).toBeNull();
+    expect(professionalSearchPath("development", "x")).toBe("development?q=x");
+  });
   it("a module search goes to its own page with the words", () => {
     expect(professionalSearchPath("cpd", "sepsis care")).toBe("cpd?q=sepsis+care");
     expect(professionalSearchPath("competencies", "x")).toBe("competencies?q=x");

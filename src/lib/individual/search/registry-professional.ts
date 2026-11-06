@@ -15,12 +15,14 @@ export type ProfessionalSearchModule = Omit<SearchModule, "key" | "allowed" | "p
   key: ProfessionalSearchKey;
   product: "Professional";
   allowed: (a: ProfessionalSearchAccess) => boolean;
+  /** False where the module's page has no search box of its own: Global Search still returns its records, but offers no "search this area" link. */
+  pageSearch?: false;
 };
 
 const listed = (key: ProfessionalSearchKey) => (a: ProfessionalSearchAccess) => a.modules.has(key);
 
 export const PROFESSIONAL_SEARCH_MODULES: readonly ProfessionalSearchModule[] = [
-  { key: "registration", product: "Professional", label: "My practice", scope: "your qualifications, registrations, roles, specialties and aspirations", segment: "registration",
+  { key: "registration", product: "Professional", label: "My practice", scope: "your registrations, employment, specialties, interests and aspirations", segment: "registration", pageSearch: false,
     recordTypes: [{ key: "profile", label: "Profile records" }],
     fields: ["titles", "types", "organisations"], filters: [], allowed: listed("registration") },
   { key: "development", product: "Professional", label: "Needs & plan", scope: "your development needs and goals", segment: "development",
@@ -45,7 +47,8 @@ export const allowedProfessionalModules = (a: ProfessionalSearchAccess): Profess
 /** The line that says what a box searches. */
 export const professionalScopeLine = (key: ProfessionalSearchKey) => `Searching ${professionalSearchModule(key).scope}`;
 
-/** A search on a module's own page, below /individual/professional. */
-export function professionalSearchPath(key: ProfessionalSearchKey, q: string): string {
+/** A search on a module's own page, below /individual/professional, or null where that page has no search box. */
+export function professionalSearchPath(key: ProfessionalSearchKey, q: string): string | null {
+  if (professionalSearchModule(key).pageSearch === false) return null;
   return `${professionalSearchModule(key).segment}?${new URLSearchParams({ q }).toString()}`;
 }

@@ -8,4 +8,4 @@ export const GLOBAL_SEARCH_MAX = 120;
 
 export type GlobalResult = { id: string; title: string; detail: string | null; path: string };
 export type GlobalType = { label: string; results: GlobalResult[] };
-export type GlobalGroup = { module: SearchModuleKey | ProfessionalSearchKey; product: string; label: string; types: GlobalType[]; unreadable: boolean; morePath: string };
+export type GlobalGroup = { module: SearchModuleKey | ProfessionalSearchKey; product: string; label: string; types: GlobalType[]; unreadable: boolean; morePath: string | null };

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { LearningIcon } from "@/components/ui/scholar-learning";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { experienceHref, type ExperienceKey } from "@/lib/individual/experiences";
+import { professionalEnterTarget } from "@/lib/individual/search/enter-target";
 import { GLOBAL_SEARCH_MIN, type GlobalGroup } from "@/lib/individual/scholar/global-search-types";
 import { recordHistory } from "@/lib/individual/scholar/search-history-capture";
 import { HistoryNotice, useSearchHistoryChoice } from "../SearchHistoryChoice";
@@ -86,7 +87,7 @@ export function GlobalSearch({ experience }: { experience: ExperienceKey }) {
     else if (e.key === "Enter") {
       e.preventDefault();
       if (active >= 0 && results[active]) go(results[active].path);
-      else if (experience === "professional") { const first = found[0]; if (first) go(first.morePath); }
+      else if (experience === "professional") { const to = professionalEnterTarget(found, results[0]?.path ?? null); if (to) go(to); }
       else if (q.trim().length >= GLOBAL_SEARCH_MIN) go(`study/learn?q=${encodeURIComponent(q.trim())}`);
     }
   }
@@ -160,12 +161,12 @@ export function GlobalSearch({ experience }: { experience: ExperienceKey }) {
               {state.status === "done" && groups.some(g => g.unreadable) && (
                 <p className="px-1 pb-2 text-[13px] text-gray-800">Could not be searched just now: {groups.filter(g => g.unreadable).map(g => g.label).join(", ")}.</p>
               )}
-              {state.status === "done" && (
+              {state.status === "done" && groups.some(g => g.morePath) && (
                 <div className="border-t border-gray-100 pt-2">
                   <p className="px-1 text-[12px] font-semibold text-gray-600">Search one area, with its filters</p>
                   <p className="mt-1 flex flex-wrap gap-1.5">
-                    {groups.map(g => (
-                      <button key={g.module} type="button" onClick={() => go(g.morePath)} data-search-more={g.module}
+                    {groups.filter(g => g.morePath).map(g => (
+                      <button key={g.module} type="button" onClick={() => go(g.morePath!)} data-search-more={g.module}
                         className={`inline-flex min-h-[36px] items-center rounded-full border border-gray-300 bg-white px-3 text-[13px] font-semibold text-gray-800 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>{g.label}</button>
                     ))}
                   </p>

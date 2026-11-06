@@ -55,8 +55,21 @@ describe("professionalGlobalSearch", () => {
     const labels = groups.flatMap(g => g.types.map(t => t.label)).sort();
     expect(labels).toEqual(["CPD entries", "Competencies", "Competency evidence", "Development needs", "Profile records"]);
     const paths = groups.flatMap(g => g.types.flatMap(t => t.results.map(r => r.path)));
-    expect(paths).toEqual(expect.arrayContaining(["competencies?c=m1#competency", "development?need=n1#needs-h", "registration#sec-reg"]));
+    expect(paths).toEqual(expect.arrayContaining(["competencies?c=m1#competency", "development?need=n1#need-detail", "registration#sec-reg"]));
     expect(paths.every(p => !p.startsWith("/") && !p.startsWith("study"))).toBe(true);
+  });
+  it("opens a need or goal at its own detail panel", async () => {
+    const paths = (await run(ALL)).flatMap(g => g.types.flatMap(t => t.results.map(r => r.path)));
+    expect(paths).toEqual(expect.arrayContaining(["development?need=n1#need-detail"]));
+    const goals = (await run(new Set<ProfessionalSearchKey>(["development"]), "ALS")).flatMap(g => g.types.flatMap(t => t.results.map(r => r.path)));
+    expect(goals).toEqual(["development?goal=g1#goal-detail"]);
+  });
+  it("returns practice records but offers no page search for a page with no box", async () => {
+    const groups = await run(ALL);
+    const reg = groups.find(g => g.module === "registration")!;
+    expect(reg.morePath).toBeNull();
+    expect(reg.types.flatMap(t => t.results).length).toBeGreaterThan(0);
+    expect(groups.find(g => g.module === "cpd")!.morePath).toBe("cpd?q=sepsis");
   });
   it("leaves out removed, withdrawn and non-practice records", async () => {
     const groups = await run(ALL);
