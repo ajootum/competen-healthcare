@@ -627,6 +627,8 @@ async function SearchView({ admin, userId, q, v820, titles, names, topicRows, mo
     if (h.kind === "artefact") return urlWithVersion(h.id);
     if (h.artefactId) return urlWithVersion(h.artefactId);
     if (h.materialId) return href(h.chunkId ? `study/${h.materialId}#c-${h.chunkId}` : `study/${h.materialId}`);
+    // COMPETEN-NOTEBOOK-001: a free-standing note has no lesson or material. It opens in My Notebook.
+    if (h.kind === "note") return href(`study/notebook/${encodeURIComponent(h.id)}`);
     return href("study/saved");
   };
   const title = (h: LibraryHit) => h.kind === "lesson" ? displaySessionTitle(h.label)

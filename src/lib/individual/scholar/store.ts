@@ -3273,7 +3273,16 @@ export async function savedLearningRows(admin: Admin, userId: string, query: str
   const noteIds = hits.data.rows.filter(h => h.kind === "note").map(h => h.id);
   const artefacts = await artefactsByIds(admin, userId, artefactIds, { currentOnly: true });
   if (!artefacts.ok) return artefacts;
-  const notes = noteIds.length ? await admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds) : { data: [], error: null };
+  // COMPETEN-NOTEBOOK-001 (owner, 6 Nov 2026): a note written through the Notebook (1000, client_key set) never reaches a model by this path.
+  // Choosing "My saved learning" for a question is not the learner sending that note. A note goes to AI only when they put it in the question themselves.
+  // Asked first, so the column is never named while 1000 is absent. A transient error is treated as applied: the filter stays on, and nothing extra is sent.
+  const notebook = noteIds.length ? await admin.rpc("individual_scholar_notebook_1000") : null;
+  const notebookAbsent = !!notebook?.error && isMissingRpc(notebook.error);
+  const notes = noteIds.length
+    ? await (notebookAbsent
+      ? admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds)
+      : admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds).is("client_key", null))
+    : { data: [], error: null };
   if (notes.error) return fail(notes.error);
   const byArtefact = new Map(artefacts.data.map(a => [a.id, a]));
   const byNote = new Map(((notes.data ?? []) as { id: string; material_id: string | null; body: string | null; created_at: string }[]).map(n => [n.id, n]));

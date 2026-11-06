@@ -224,7 +224,7 @@ export function noteDatesLabel(createdAt: string, updatedAt?: string | null): st
   return edited ? `Written ${made} · edited ${edited}` : `Written ${made}`;
 }
 
-export type NoteAttach = { targetKind: "artefact" | "lesson" | "material" | "section"; materialTitle?: string | null; lessonTitle?: string | null; sessionTitle?: string | null; step?: number | null; location?: string | null };
+export type NoteAttach = { targetKind: "artefact" | "lesson" | "material" | "section" | "free"; materialTitle?: string | null; lessonTitle?: string | null; sessionTitle?: string | null; step?: number | null; location?: string | null };
 /** Pure. What a note is attached to, in words: "Saved lesson: X", "Lesson 3 of Y", "Material: Z, Slide 4". */
 export function noteAttachedTo(n: NoteAttach): string {
   const mat = n.materialTitle ? `${n.materialTitle}` : "your material";
@@ -232,6 +232,7 @@ export function noteAttachedTo(n: NoteAttach): string {
     case "artefact": return `Saved lesson${n.lessonTitle ? `: ${n.lessonTitle}` : ""}${n.materialTitle ? ` (${n.materialTitle})` : ""}`;
     case "lesson": return `${n.sessionTitle ? `${n.sessionTitle} · ` : ""}Lesson ${(n.step ?? 0) + 1}${n.location ? ` · ${n.location}` : ""}`;
     case "section": return `${mat}${n.location ? `, ${n.location}` : ", one section"}`;
+    case "free": return "Free-standing note";
     default: return `Material: ${mat}`;
   }
 }

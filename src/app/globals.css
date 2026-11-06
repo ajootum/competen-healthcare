@@ -226,6 +226,14 @@
   --cmp-learn-dark-notes-border: #6E5A2A;
   --cmp-learn-dark-notes-accent: #E0C27A;
   --cmp-learn-dark-notes-ink: #F2E3BC;
+  --cmp-learn-ideas-surface: #FDF1D6;
+  --cmp-learn-ideas-border: #E2BC6B;
+  --cmp-learn-ideas-accent: #8A5A00;
+  --cmp-learn-ideas-ink: #6B4300;
+  --cmp-learn-dark-ideas-surface: #2B2009;
+  --cmp-learn-dark-ideas-border: #8A6A1E;
+  --cmp-learn-dark-ideas-accent: #EBC06A;
+  --cmp-learn-dark-ideas-ink: #F7E2B4;
   --cmp-learn-sources-surface: #F6F6FA;
   --cmp-learn-sources-border: #D9D9E6;
   --cmp-learn-sources-accent: #5A5B7A;
@@ -333,6 +341,7 @@
 .cmp-learn-practice { --learn-surface: var(--cmp-learn-practice-surface); --learn-border: var(--cmp-learn-practice-border); --learn-accent: var(--cmp-learn-practice-accent); --learn-ink: var(--cmp-learn-practice-ink); }
 .cmp-learn-quick-check { --learn-surface: var(--cmp-learn-quick-check-surface); --learn-border: var(--cmp-learn-quick-check-border); --learn-accent: var(--cmp-learn-quick-check-accent); --learn-ink: var(--cmp-learn-quick-check-ink); }
 .cmp-learn-notes { --learn-surface: var(--cmp-learn-notes-surface); --learn-border: var(--cmp-learn-notes-border); --learn-accent: var(--cmp-learn-notes-accent); --learn-ink: var(--cmp-learn-notes-ink); }
+.cmp-learn-ideas { --learn-surface: var(--cmp-learn-ideas-surface); --learn-border: var(--cmp-learn-ideas-border); --learn-accent: var(--cmp-learn-ideas-accent); --learn-ink: var(--cmp-learn-ideas-ink); }
 .cmp-learn-sources { --learn-surface: var(--cmp-learn-sources-surface); --learn-border: var(--cmp-learn-sources-border); --learn-accent: var(--cmp-learn-sources-accent); --learn-ink: var(--cmp-learn-sources-ink); }
 .cmp-learn-next { --learn-surface: var(--cmp-learn-next-surface); --learn-border: var(--cmp-learn-next-border); --learn-accent: var(--cmp-learn-next-accent); --learn-ink: var(--cmp-learn-next-ink); }
 .cmp-learn-memory { --learn-surface: var(--cmp-learn-memory-surface); --learn-border: var(--cmp-learn-memory-border); --learn-accent: var(--cmp-learn-memory-accent); --learn-ink: var(--cmp-learn-memory-ink); }
@@ -378,6 +387,10 @@
   --cmp-learn-notes-border: var(--cmp-learn-dark-notes-border);
   --cmp-learn-notes-accent: var(--cmp-learn-dark-notes-accent);
   --cmp-learn-notes-ink: var(--cmp-learn-dark-notes-ink);
+  --cmp-learn-ideas-surface: var(--cmp-learn-dark-ideas-surface);
+  --cmp-learn-ideas-border: var(--cmp-learn-dark-ideas-border);
+  --cmp-learn-ideas-accent: var(--cmp-learn-dark-ideas-accent);
+  --cmp-learn-ideas-ink: var(--cmp-learn-dark-ideas-ink);
   --cmp-learn-sources-surface: var(--cmp-learn-dark-sources-surface);
   --cmp-learn-sources-border: var(--cmp-learn-dark-sources-border);
   --cmp-learn-sources-accent: var(--cmp-learn-dark-sources-accent);

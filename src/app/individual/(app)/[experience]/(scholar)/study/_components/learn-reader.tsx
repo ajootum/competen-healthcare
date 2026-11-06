@@ -14,6 +14,7 @@ import { AskAbout } from "./ask-panel";
 import { carry } from "./study-active";
 import { ActionRow, InlineNote, LearningDisclosure, LearningIcon, NotesText, RefChip, SectionCard, learnAction } from "@/components/ui/scholar-learning";
 import { shortRef } from "@/lib/individual/scholar/notes-layout";
+import { MyIdeasBox } from "./my-ideas-box";
 
 // SCHOLAR-INDEPENDENT-LEARNING-01 P0: YOUR NOTES, INSIDE THE LESSON. The lesson's own sections as the learner uploaded them
 // (GET learn/sessions/[id]/read?step=: a read of their own chunks, no AI, no allowance), each cited, each an anchor the 790
@@ -126,6 +127,7 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                       <AskAbout surface="learn" chunkIds={[s.chunkId]} materialId={s.materialId} sessionId={sessionId} step={step} refLabel={`Your notes: ${s.citation}`} label="Ask about this" variant="primary" />
                       {picture && (s.body || s.notes) && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} />}
                     </ActionRow>
+                    <MyIdeasBox chunkId={s.chunkId} materialId={s.materialId} sectionLabel={s.heading ?? s.citation} anchor={s.anchor} className="mt-3" />
                   </SectionCard>
                 );
               })}

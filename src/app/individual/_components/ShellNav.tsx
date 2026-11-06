@@ -30,10 +30,10 @@ function isActive(pathname: string, href: string, isHome: boolean) {
  * Courses & Training covers Competen Learning, so the standalone link is dropped for Scholar only. `myPlan`: My Plan's gate.
  * `scholarModules`: the private Scholar modules this learner may see (private module development access). Left out: none are drawn.
  */
-export function SidebarNav({ experience, learning = false, myPlan = false, searchHistory = false, scholarModules = [] }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean; searchHistory?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
+export function SidebarNav({ experience, learning = false, myPlan = false, searchHistory = false, notebook = false, scholarModules = [] }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean; searchHistory?: boolean; notebook?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
-  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} searchHistory={searchHistory} modules={scholarModules} />;
+  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} searchHistory={searchHistory} notebook={notebook} modules={scholarModules} />;
   return (
     <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-[7px] px-4 pt-[26px]">
       {navFor(experience).map(item => {
