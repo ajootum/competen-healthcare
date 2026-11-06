@@ -541,6 +541,28 @@ File: `LEARNING-CLOSE-2026-11-prod-readonly-queries.sql` in the coordinator fold
 
 ## Production facts (recorded as received)
 
+**Read from production by the owner, 6 Nov 2026** (read-only checks `PROD-CHECK-trackers-6nov.sql` and `PROD-CHECK-2-research-6nov.sql`, seen as screenshots). These replace "by record" wherever a row below or in the SALE tracker names one of these keys or migrations.
+
+- **Published on:** `scholar_active_notebook`, `scholar_application_evidence`, `scholar_competency_evidence_views`, `scholar_global_search`, `scholar_next_best_action`, `scholar_prerequisite_suggestions`, `scholar_retrieval_schedule`, `scholar_search_history`, `scholar_transfer_checks`. `scholar_material_image_slides` is `ai_transcription`.
+- **No row, code default on:** `scholar_learning_state`, `scholar_adaptive_teaching`, `scholar_lesson_visuals`, `scholar_visual_classify`.
+- **No row, so off or not on `main` yet:** `professional_global_search`, the `scholar_case_*` keys, `scholar_go_deeper_structured`, `scholar_guide_me_adaptive`, `scholar_personal_notebook`, `scholar_teach_research`, `scholar_exam_web_provider`.
+- **Flags:** `ckri_research` true; `ai_fair_use` and `hq_record_search` no row.
+- **Migrations, by their objects:** 950, 955, 975, 985, 986, 990, 992, 998, 999 present, and the expected tables present. LifeOS (901) and My Notebook (1000) absent, as intended.
+- **Flashcard settings (AI-02):** two published AI settings mention flashcards.
+- **Not settled:** `scholar_revision_formats` was cut off on screen after "structu...", so whether it includes `scenario` has not been read.
+
+**Finding, 6 Nov: Learn's Research & Explain is live in production.** `scholar_learn_source_modes` is `notes, library, research`, the Basic workflow is active, and the active sources are PubMed, OpenAlex, Crossref, PMC and the Google Scholar link. This is the learner-chosen mode, not the automatic research of SCHOLAR-RESEARCH-TEACH-001, which is not on `main`. Its search terms come from the lesson's title, objective, concepts and topics, refused only if the patient-identifier check matches, which is weaker than the owner's 6 Nov rule that only sanitised subject terms may leave. Recorded calls since 28 Oct, last on 3 Nov, recorded cost USD 0:
+
+| Source | Rows | Requests |
+|---|---|---|
+| PubMed | 7 | 15 |
+| OpenAlex | 7 | 7 |
+| Crossref | 30 | 30 |
+| PMC | 4 | 15 |
+| Cache | 2 | 0 |
+
+All of these came before the Ask guard (#325, deployed 6 Nov), so a typed question could have been part of a search. Competen keeps only the length of a search, not its words, so what was sent cannot be shown. OpenAlex is metered since 2026 while the registry cost stays 0, so its recorded cost cannot be relied on. **Owner decision, 6 Nov 2026: keep it on.** Closed, not to be raised again. The search-term and OpenAlex facts above stand as the record.
+
 Reported by the coordinator after read-only checks, 4 Nov 2026 (not the Q1-Q6 result rows; those are still to come):
 - Capability `hq.scholar.analytics.identifiable.read` exists in production with no grants; none of the five 940 executive positions is held; only the legacy `chief_executive` (mullenokaisu) is.
 - Production has 550 (four `individual_professional_progress_*` tables) and 610 (`hq_gov_body`, `hq_gov_seat`, `hq_gov_seat_exclusion`, `hq_gov_seat_appointment`).
