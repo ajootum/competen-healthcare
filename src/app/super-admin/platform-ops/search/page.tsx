@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { SEARCH_SOURCES } from "@/lib/platform/search";
 import SearchConsole from "./SearchConsole";
+import RecordSearchSwitch from "./RecordSearchSwitch";
+import { hqRecordSearchEnabled } from "@/lib/hq/record-search/flag";
 import { requireHqCapability } from "@/lib/hq/context";
 
 export const dynamic = "force-dynamic";
@@ -18,7 +20,10 @@ export default async function PlatformSearchConsole() {
   if (!user) redirect("/login");
   const admin = createAdminClient();
   const { data: profile } = await admin.from("profiles").select("role, roles").eq("id", user.id).single();
-  await requireHqCapability("hq.platform.operations.view");
+  const hq = await requireHqCapability("hq.platform.operations.view");
+  // HQ-RECORD-SEARCH-01: the switch, for whoever holds the Holdings right. The route checks it again.
+  const canSwitch = hq.isOwner || hq.capabilities.includes("hq.platform.governance.manage");
+  const recordSearchOn = canSwitch ? await hqRecordSearchEnabled(admin) : false;
 
   return (
     <div className="space-y-4">
@@ -27,6 +32,7 @@ export default async function PlatformSearchConsole() {
         <Link href="/super-admin/platform-ops" className="text-xs text-teal-700 hover:underline shrink-0">← Platform Operations</Link>
       </div>
 
+      {canSwitch && <RecordSearchSwitch initial={recordSearchOn} />}
       <SearchConsole sources={SEARCH_SOURCES} />
 
       <p className="text-[11px] text-gray-500 pb-4">Platform Search (PFS-000 Search / PCS-000 Search Index) runs one query across tenants, organisations, users, frameworks, competencies, workspaces and the audit trail using Postgres ILIKE — the stack&apos;s native full-text capability. Each source is fail-soft. A dedicated search engine (Elasticsearch / OpenSearch) with ranking, facets and typo-tolerance remains an honest infra-scale gap, not pretended-built.</p>

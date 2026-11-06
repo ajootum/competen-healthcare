@@ -1,6 +1,7 @@
 // Allow up to 300s: filling a shortfall may write a few small sets of questions, one passage at a time.
 export const maxDuration = 300;
 
+import { existingScenarioOf, type ExistingScenario } from "@/lib/individual/scholar/scenario-variety";
 import { NextResponse } from "next/server";
 import { answerOutcome, noCalls, recordScholarOutcome, type Withheld } from "@/lib/individual/scholar/outcome";
 import { offerable } from "@/lib/individual/scholar/scenario-service";
@@ -25,7 +26,7 @@ import { SCHOLAR_AI_AUDIT_ACTION, aiPreflight, audit, refusalWords, scholarAiRun
 import { activityOrFallback, activityState, getScholarAiStanding, type ScholarAiActivity } from "@/lib/individual/scholar/ai-standing";
 import { formatPromptVersion, runQuestions, runRevisionQuestions } from "@/lib/individual/scholar/generation";
 import { linkStudy } from "@/lib/individual/scholar/study-context";
-import { GENERATING_MODES, depthOfQuestion, effectiveKind, existingObjectives, keyOf, pickQuestions, planGeneration, rubricOfQuestion, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
+import { GENERATING_MODES, depthOfQuestion, effectiveKind, existingObjectives, scenarioContext, keyOf, pickQuestions, planGeneration, rubricOfQuestion, structuredParts, type PoolItem } from "@/lib/individual/scholar/revision";
 import { missOf, recentMisses, signalsOf } from "@/lib/individual/scholar/misconception";
 import { writeClozeItems } from "@/lib/individual/scholar/cloze-service";
 import { isClozeQuestion } from "@/lib/individual/scholar/cloze";
@@ -351,6 +352,8 @@ export async function POST(req: Request) {
         // Rounds: an item the checks drop leaves the session short, so a second round writes for what is still
         // missing -- never a section and format already written, and never more than REVISION_GENERATION_CALLS_MAX calls.
         await rankSections();
+        // SCHOLAR-SCENARIO-VARIETY-01: the next scenario in this request knows what the last one asked.
+        const scenariosWritten: ExistingScenario[] = [];
         let i = 0, refused = false;
         for (let round = 0; round < 2 && pick.shortfall > 0 && generated < genCap && i < REVISION_GENERATION_CALLS_MAX && !refused; round++) {
                     const plan = planGeneration({ shortfall: Math.min(pick.shortfall, genCap - generated), chunkIds: scopeSections, formats: kinds, existing });
@@ -403,9 +406,9 @@ export async function POST(req: Request) {
             } else {
               // SCHOLAR-FLASHCARDS-QA-01: flashcards to the policy's level mix (by programme level by default).
               const levelMix = call.kind === "flashcard" ? flashcardLevelMix(policy.scholarFlashcardLevelMix, loader.levelDefault) : undefined;
-              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
+              const r = await runRevisionQuestions(ctx.userId, call.kind, passage, mode === "flashcards" ? call.count : Math.max(call.count, 3), ai.run, { context, existing: stems, levelMix, verifyFormats: policy.scholarVerifyFormats, existingScenarios: call.kind === "scenario" ? scenarioContext(pool.questions, passage.chunkId, scenariosWritten) : undefined, existingObjectives: existingObjectives(pool.questions, call.chunkId, call.kind) });
               if (r.ok && r.levelPlan) mixPlan = r.levelPlan;
-              if (r.ok && call.kind === "scenario") scenarioStages = scenarioStageCounts(r.kept);
+              if (r.ok && call.kind === "scenario") { scenarioStages = scenarioStageCounts(r.kept); scenariosWritten.unshift(...r.kept.map(existingScenarioOf)); }
               if (r.ok) {
                 calls = r.calls; r.kept.forEach(d => stems.add(stemKey(d.stem)));
                 const s = await insertRevisionQuestions(ctx.admin, ctx.userId, { passage, kind: call.kind, drafts: r.kept, model: r.model, provider: r.provider, promptVersion: r.promptVersion, competencyId });
