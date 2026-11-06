@@ -6,7 +6,7 @@ describe("the host rule cannot affect the main application", () => {
   const FIRST_PARTY = [
     "competenhealthcare.com", "www.competenhealthcare.com", "practice.competenhealthcare.com", "staff.competenhealthcare.com",
     "individual.competenhealthcare.com", "preview.competenhealthcare.com", "lifeos.competenhealthcare.com",
-    "competen-v5-semacast.vercel.app", "localhost", "localhost:3000", "app.localhost:3000", "127.0.0.1:3100", "[::1]:3000",
+    "competenpractice.com", "booking.competenpractice.com", "competen-v5-semacast.vercel.app", "localhost", "localhost:3000", "app.localhost:3000", "127.0.0.1:3100", "[::1]:3000",
   ];
   it("switched off, it answers nothing for any host at all", () => {
     for (const h of [...FIRST_PARTY, "acme.example.org"]) expect(lifeosTenantRoute(h, "/super-admin", false)).toBeNull();
@@ -25,6 +25,7 @@ describe("the host rule cannot affect the main application", () => {
     expect(isFirstPartyHost("competenhealthcare.com.evil.org")).toBe(false);
     expect(isFirstPartyHost("evilcompetenhealthcare.com")).toBe(false);
     expect(isFirstPartyHost("evilvercel.app")).toBe(false);
+    expect(isFirstPartyHost("competenpractice.com.evil.org")).toBe(false);
   });
 });
 
@@ -45,7 +46,7 @@ describe("hostnames", () => {
   it("normalises case and port", () => { expect(normaliseHost("Plan.ACME.org:8443")).toBe("plan.acme.org"); });
   it("accepts a real public name", () => { expect(validTenantHostname(" Plan.Acme.org ")).toBe("plan.acme.org"); });
   it("refuses ours, and anything malformed", () => {
-    for (const h of ["lifeos.competenhealthcare.com", "x.vercel.app", "localhost", "127.0.0.1", "no-dot", "-bad.example.org", "a b.example.org", "exa_mple.org", "https://acme.org", `${"a".repeat(250)}.org`]) {
+    for (const h of ["lifeos.competenhealthcare.com", "booking.competenpractice.com", "x.vercel.app", "localhost", "127.0.0.1", "no-dot", "-bad.example.org", "a b.example.org", "exa_mple.org", "https://acme.org", `${"a".repeat(250)}.org`]) {
       expect(validTenantHostname(h)).toBeNull();
     }
   });

@@ -109,7 +109,9 @@ async function main() {
   const claim = await http(owner.cookie, "POST", `${T}/domains`, { hostname: claimName });
   ok("D3", claim.status === 201 && claim.body.data.status === "pending" && claim.body.data.verificationToken.length >= 16, "a claim starts pending, with a token to publish", claim.status);
   const dup = await http(member.cookie, "POST", `/tenants/${otherOrg.tenantId}/domains`, { hostname: claimName });
-  ok("D4", dup.status === 409, "a name already claimed cannot be claimed by another organisation", dup.status);
+  ok("D4", dup.status === 201 && dup.body.data.status === "pending", "claiming a name proves nothing and blocks nobody: another organisation can also claim it", dup.status);
+  const dupSame = await http(owner.cookie, "POST", `${T}/domains`, { hostname: claimName });
+  ok("D4b", dupSame.status === 409, "...but one organisation holds one open claim per name", dupSame.status);
   const noTxt = await http(owner.cookie, "POST", `${T}/domains/${claim.body.data.id}/verify`, { expectedVersion: 1 });
   ok("D5", noTxt.status === 409 && noTxt.body.error.details?.name === `_lifeos-verify.${claimName}`, "verifying without the TXT record is refused, and says where it should be", noTxt);
   const stranger = await http(outsider.cookie, "POST", `${T}/domains/${claim.body.data.id}/verify`, { expectedVersion: 1 });
@@ -118,6 +120,24 @@ async function main() {
   ok("D7", removed.status === 200 && removed.body.data.status === "removed", "its owner can remove it", removed.status);
   const listed = await http(owner.cookie, "GET", `${T}/domains`);
   ok("D8", !listed.text.includes(claimName), "...and it leaves the list");
+  const readd = await http(owner.cookie, "POST", `${T}/domains`, { hostname: claimName });
+  ok("D9", readd.status === 201, "...and it can add the name again later", readd.status);
+  const verifiedBoth = await store.mutate({
+    actor: owner.individualId, actorKind: "system", idempotencyKey: null, requestHash: null, traceId: null,
+    ops: [{ t: "lifeos_tenant_domain", op: "update", id: readd.body.data.id, values: { status: "verified", verified_at: new Date().toISOString() } }],
+  }).then(() => "committed", (e: any) => e.code);
+  const secondVerified = await store.mutate({
+    actor: member.individualId, actorKind: "system", idempotencyKey: null, requestHash: null, traceId: null,
+    ops: [{ t: "lifeos_tenant_domain", op: "update", id: dup.body.data.id, values: { status: "verified", verified_at: new Date().toISOString() } }],
+  }).then(() => "committed", (e: any) => e.code);
+  ok("D10", verifiedBoth === "committed" && secondVerified === "conflict", "only one organisation can hold a name verified, at the database", { verifiedBoth, secondVerified });
+  await store.mutate({
+    actor: owner.individualId, actorKind: "system", idempotencyKey: null, requestHash: null, traceId: null,
+    ops: [{ t: "lifeos_tenant_domain", op: "update", id: readd.body.data.id, values: { status: "suspended" } }],
+  });
+  const fresh = (await store.get("lifeos_tenant_domain", readd.body.data.id)) as any;
+  const reverify = await http(owner.cookie, "POST", `${T}/domains/${readd.body.data.id}/verify`, { expectedVersion: fresh.version });
+  ok("D11", reverify.status === 409, "a suspended domain cannot verify itself back", reverify.status);
 
   // A real hostname for the browser. Verified directly, because no real DNS record exists for it.
   const d = crypto.randomUUID();

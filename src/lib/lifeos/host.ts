@@ -7,7 +7,7 @@
 
 export const LIFEOS_TENANT_HOSTS_ENV = "LIFEOS_TENANT_HOSTS";
 
-const FIRST_PARTY_SUFFIXES = ["competenhealthcare.com", "vercel.app", "localhost"];
+const FIRST_PARTY_SUFFIXES = ["competenhealthcare.com", "competenpractice.com", "vercel.app", "localhost"];
 const FIRST_PARTY_EXACT = ["127.0.0.1", "[::1]", "::1"];
 
 export function normaliseHost(raw: string | null | undefined): string | null {

@@ -89,7 +89,8 @@ export async function verifyDomain(c: RequestContext, tenantId: string, domainId
     await ownedTenant(c, tenantId);
     const d = await c.store.get("lifeos_tenant_domain", domainId);
     if (!d || d.tenant_id !== tenantId || d.status === "removed") throw notFound();
-    if (d.status === "verified") throw new LifeosError("conflict", "This domain is already verified.");
+    // Only an open claim can be verified. A suspended domain stays suspended until someone with authority lifts it.
+    if (d.status !== "pending") throw new LifeosError("conflict", d.status === "verified" ? "This domain is already verified." : "This domain is suspended.");
     const name = `${VERIFY_PREFIX}.${String(d.hostname)}`;
     const records = await c.resolveTxt!(name).catch(() => [] as string[][]);
     if (!txtMatches(records, String(d.verification_token))) {
