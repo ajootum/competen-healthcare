@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, guideVerdictOf, isUncertainAnswer, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
 import { guideInstruction, GUIDED_CLARIFY } from "./guide-me-prompt";
 import { parseDeeperAnswer } from "./deeper-format";
-import { isGuideTurnVersion, newestSavedLesson } from "./learn-journey";
+import { isGuideAidVersion, isGuideTurnVersion, newestSavedLesson } from "./learn-journey";
 import { buildTaughtSoFar, taughtSoFarBlock } from "./learn-context";
 import { checkDeeperAnswer, checkGuidedFeedback, learnPromptVersion, learnSystem, runLearn, type Passage } from "./generation";
 
@@ -43,10 +43,13 @@ describe("the request", () => {
     expect([0, 1, 2].flatMap(s => guideGround(h, s, 3))).toEqual(h);
     expect(guideGround([], 0, 1)).toEqual([]);
   });
-  it("the same turn on the same step is the same saved answer; a hint keeps its level", () => {
-    expect(guideKeyContext({ turn: "teach", step: 1, level: 1 }, 3)).toBe(guideKeyContext({ turn: "teach", step: 1, level: 2 }, 3));
-    expect(guideKeyContext({ turn: "hint", step: 1, level: 1 }, 3)).not.toBe(guideKeyContext({ turn: "hint", step: 1, level: 2 }, 3));
-    expect(guideKeyContext({ turn: "teach", step: 0, level: 1 }, 3)).not.toBe(guideKeyContext({ turn: "explain", step: 0, level: 1 }, 3));
+  it("the same turn on the same step is the same saved answer; a hint keeps its level; help is for the question in hand", () => {
+    const k = (turn: "teach" | "hint" | "explain", step: number, level: 1 | 2, question = "Q?") => guideKeyContext({ turn, step, level, question }, 3);
+    expect(k("teach", 1, 1, "A?")).toBe(k("teach", 1, 2, "B?"));
+    expect(k("hint", 1, 1)).not.toBe(k("hint", 1, 2));
+    expect(k("teach", 0, 1)).not.toBe(k("explain", 0, 1));
+    expect(k("hint", 0, 1, "A?")).not.toBe(k("hint", 0, 1, "B?"));
+    expect(k("explain", 0, 1, "A?")).not.toBe(k("explain", 0, 1, "B?"));
   });
   it("says the question it is about", () => {
     expect(guidePrompt({ turn: "hint", step: 0, level: 1, question: "Why?" })).toContain("The question I am working on: Why?");
@@ -54,10 +57,10 @@ describe("the request", () => {
 });
 
 describe("a response decides what happens next", () => {
-  it.each(["I don't know", "dont know", "not sure", "No idea.", "idk", "?", "I'm stuck", "I can't remember", "unsure"])("met with help, not a verdict: %s", t => {
+  it.each(["I don't know", "dont know", "not sure", "No idea.", "idk", "?", "-", "I'm stuck", "I can't remember", "unsure", "I have no idea", "Sorry, I don't know", "idk really"])("met with help, not a verdict: %s", t => {
     expect(isUncertainAnswer(t)).toBe(true);
   });
-  it.each(["", "   ", "The head comes first because pathways mature from the top", "I don't know exactly, but the nerves mature from the top down, so head control comes first in a child"])("not treated as uncertainty: %s", t => {
+  it.each(["", "   ", "The head comes first because pathways mature from the top", "I don't know exactly, but the nerves mature from the top down, so head control comes first in a child", "Lost fluid lowers preload, so output falls", "Confused patients are at risk of falls", "Stuck receptors cannot bind", "not sure, but perhaps it lowers afterload"])("not treated as uncertainty: %s", t => {
     expect(isUncertainAnswer(t)).toBe(false);
   });
   it("correct advances; partial gets another go; a misconception gets a new question where there is one", () => {
@@ -70,6 +73,7 @@ describe("a response decides what happens next", () => {
     expect(followUpOf("Now apply it. Why does sitting come first? [S1]")).toBe("Why does sitting come first?");
     expect(followUpOf("Revise the order of development [S1].")).toBeNull();
     expect(followUpOf(null)).toBeNull();
+    expect(followUpOf(`${"word ".repeat(90)}why?`)).toBeNull(); // longer than the route can take
   });
 });
 
@@ -123,6 +127,11 @@ describe("the teaching turn", () => {
     expect(check(own).ok).toBe(false);
     expect(check(own, { requireNotes: false, maxQuestions: 0 }).ok).toBe(true);
   });
+  it.each(["Click Next step when you are ready to continue.", "Use the hint button if you are stuck.", "Always check the airway first.", "Give the child a feed first, every time."])("a memory aid is memory, not an instruction: %s", t => {
+    const c = check(`FOCUS QUESTION: X\nSECTION: principle | notes | N\nHead control comes before sitting, and sitting comes before walking [S1].\nSECTION: memory | scholar | Remember\n${t}`);
+    expect(c.ok).toBe(true);
+    if (c.ok) expect(parseDeeperAnswer(c.text)!.sections.some(s => s.kind === "memory")).toBe(false);
+  });
   it("a hint holds no question and the same bans", () => {
     const c = check("FOCUS QUESTION: The idea\nSECTION: principle | scholar | Think\nStudies show this confirms the diagnosis.\nCHECK YOUR REASONING:\n- Why? [S1]", { requireNotes: false, maxQuestions: 0 });
     expect(c.ok).toBe(false);
@@ -152,13 +161,29 @@ describe("the teaching turn", () => {
 
 describe("feedback on a real answer", () => {
   const P = [passage("Head control comes before sitting. Red flags should prompt referral.")];
-  it("one word does not cost a learner all of it; the line goes and the rest stands", () => {
-    const c = checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n\nKEY POINTS:\n- The two can coexist [S1].\n- Red flags should prompt referral [S1].", "my answer", P, []);
+  it("one word does not cost a learner all of it; the bullet goes, the rest stands, and it says so", () => {
+    const c = checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n\nKEY POINTS:\n- The two can coexist [S1].\n- Red flags should prompt referral [S1].", "my answer", P, [], "partly");
     expect(c.ok).toBe(true);
-    if (c.ok) { expect(c.text).not.toContain("The two"); expect(c.text).toContain("Red flags"); }
+    if (c.ok) { expect(c.text).not.toContain("The two"); expect(c.text).toContain("Red flags"); expect(c.salvaged?.removed).toBe(1); }
   });
   it("a dose in the feedback still withholds it all", () => {
-    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n- Give 5 mg of it [S1].", "my answer", P, []).ok).toBe(false);
+    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n- Give 5 mg of it [S1].", "my answer", P, [], "partly").ok).toBe(false);
+  });
+  it("a correction is never quietly lost on an answer not understood", () => {
+    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n\nMISCONCEPTIONS:\n- The two come together [S1].", "my answer", P, [], "not_yet").ok).toBe(false);
+    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n\nMISSING:\n- The two come together [S1].", "my answer", P, [], "partly").ok).toBe(false);
+  });
+  it("only a whole bullet can go: a label's own text or a wrapped line withholds, so nothing is misfiled", () => {
+    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\n\nKEY POINTS: The two come together [S1].\n- Red flags should prompt referral [S1].", "my answer", P, [], "partly").ok).toBe(false);
+    expect(checkGuidedFeedback("RIGHT:\n- Head control comes before sitting [S1].\nand the two together [S1].", "my answer", P, [], "partly").ok).toBe(false);
+  });
+  it("a guided answer with no verdict is not judged, and 'VERDICT: partly.' reads as partly", async () => {
+    const reply = (text: string) => (async () => ({ ok: true, text, model: "m", provider: "p" })) as never;
+    const args = { action: "clarify" as const, question: "Q", passages: P, references: [], depth: "standard" as const, background: false, history: [], learnerContext: null, guidedClarify: true };
+    const none = await runLearn("u", args, reply("RIGHT:\n- Head control comes before sitting [S1]."));
+    expect(none.ok && none.check.ok).toBe(false);
+    const dotted = await runLearn("u", args, reply("VERDICT: partly.\nRIGHT:\n- Head control comes before sitting [S1]."));
+    expect(dotted.ok && dotted.verdict).toBe("partly");
   });
   it("a kind-less section can still say it is Scholar's, and nothing else escapes the notes rules", () => {
     expect(parseDeeperAnswer("FOCUS QUESTION: X\nSECTION: scholar | A heading\nText.")!.sections[0]).toMatchObject({ source: "scholar", title: "A heading" });
@@ -179,7 +204,7 @@ describe("one call, its own version, never an Explain", () => {
     expect(calls).toHaveLength(1);
     expect(calls[0].system).toContain("MODE: GUIDE ME");
     expect(calls[0].maxTokens).toBe(1100);
-    expect(r.ok && r.promptVersion).toContain("+scholar-guide-me-v1");
+    expect(r.ok && r.promptVersion).toContain("+scholar-guide-me-v1:teach");
   });
   it("without the policy's request an Explain is exactly an Explain", () => {
     expect(learnPromptVersion("explain")).not.toContain("guide-me");
@@ -188,9 +213,13 @@ describe("one call, its own version, never an Explain", () => {
     expect(learnSystem("clarify", { depth: "standard", background: false, references: false, guidedClarify: true })).toContain(GUIDED_CLARIFY);
   });
   it("a saved turn is taught ground, told as Guide me, and is never reopened as an Explain", () => {
-    const guide = { action: "explain", content: TURN, createdAt: "2026-11-02" };
+    const guide = { action: "guide", content: TURN, createdAt: "2026-11-02" };
     expect(taughtSoFarBlock(buildTaughtSoFar([guide]))).toContain("Guide me");
-    const v = learnPromptVersion("explain", { guide: true });
+    const v = learnPromptVersion("explain", { guide: "teach" });
+    expect(isGuideAidVersion(v)).toBe(false);
+    expect(isGuideAidVersion(learnPromptVersion("explain", { guide: "hint" }))).toBe(true);
+    expect(isGuideAidVersion(learnPromptVersion("explain", { guide: "example" }))).toBe(true);
+    expect(isGuideAidVersion(learnPromptVersion("explain"))).toBe(false);
     expect(isGuideTurnVersion(v)).toBe(true);
     expect(isGuideTurnVersion(learnPromptVersion("explain"))).toBe(false);
     const row = { action: "explain", materialId: "m", sources: ["c0"], createdAt: "2026-11-02", promptVersion: v };

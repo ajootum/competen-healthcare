@@ -39,7 +39,9 @@ export function guideGround(headings: readonly string[], step: number, of: numbe
 }
 
 /** Pure. What makes a guided answer the same request: the same turn on the same step reuses what is saved. A hint keeps its level. */
-export const guideKeyContext = (a: Pick<GuideAsk, "turn" | "step" | "level">, of: number) => `guide:${a.turn}:${a.step}:${of}${a.turn === "hint" ? `:${a.level}` : ""}`;
+export const guideKeyContext = (a: Pick<GuideAsk, "turn" | "step" | "level" | "question">, of: number) => `guide:${a.turn}:${a.step}:${of}${a.turn === "hint" ? `:${a.level}` : ""}${a.turn === "teach" ? "" : `:${shortHash(a.question)}`}`;
+/** A hint, an example or an explanation is for the question in hand: a new question is a new request. */
+function shortHash(text: string): string { let h = 0x811c9dc5; for (let i = 0; i < text.length; i++) { h ^= text.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, "0"); }
 
 const WORDS: Record<GuideTurn, string> = { teach: "Teach me this step.", hint: "Give me a hint, not the answer.", example: "Show me example reasoning on a similar idea.", explain: "Just explain this step to me." };
 /** Pure. The request as the model and the grounding check read it. */
@@ -49,11 +51,13 @@ export const guidePrompt = (a: GuideAsk) => `${WORDS[a.turn]}${a.question ? `\nT
 
 /** Pure. "I don't know" and its kin: a real and useful response, met with help. Never sent for judging, so it is never told it was wrong. */
 export function isUncertainAnswer(text: string): boolean {
-  const t = text.trim().toLowerCase().replace(/[.!?…]+$/, "").trim();
   if (!text.trim()) return false;
-  if (!t) return true; // only punctuation: "?" says the same
+  // The WHOLE answer says so, with at most a polite word around it: "Lost fluid lowers preload" and "not sure, but perhaps it lowers afterload" are answers, and go to be judged.
+  const t = text.trim().toLowerCase().replace(/[.!?…,\s-]+$/, "").replace(/^[.!?…,\s-]+/, "");
+  if (!t) return true; // only punctuation: "?" or "-" says the same
   if (t.length > 60) return false;
-  return /^(?:i\s+)?(?:really\s+)?(?:don['’]?t|do not|dont)\s+(?:really\s+)?(?:know|understand|remember|get it)\b|^(?:i['’]?m\s+|i am\s+)?(?:not sure|unsure|lost|confused|stuck)\b|^(?:no idea|no clue|idk|dunno|pass|help|\?+|not really)$|^(?:i\s+)?(?:can['’]?t|cannot)\s+(?:answer|remember|say|explain)\b/.test(t);
+  const core = t.replace(/^(?:sorry|um+|hmm+|er+|honestly|really|ok|okay|well)[,\s]+/, "").replace(/[,\s]+(?:sorry|really|at all|honestly|to be honest|yet)$/, "");
+  return /^(?:i\s+)?(?:really\s+)?(?:don['’]?t|do not|dont)\s+(?:really\s+)?(?:know|understand|remember|get it)(?:\s+(?:this|that|it|the answer))?$|^(?:i\s+have\s+)?(?:no idea|no clue)$|^(?:i['’]?m\s+|i am\s+)?(?:not sure|unsure|lost|confused|stuck)$|^(?:idk|dunno|pass|help|not really)$|^(?:i\s+)?(?:can['’]?t|cannot)\s+(?:answer|remember|say|explain)(?:\s+(?:this|that|it))?$/.test(core);
 }
 
 export type StepStatus = "open" | "understood" | "attempted" | "explained" | "skipped";
@@ -66,13 +70,15 @@ export function moveAfterVerdict(verdict: string | null | undefined, followUp: s
   return { primary: "retry", status: "attempted" };
 }
 
+/** The route takes a check question of at most 400 characters: a longer one cannot be asked, so it is not offered. */
+const FOLLOW_UP_MAX = 380;
 /** Pure. A follow-up question out of the feedback's NEXT line: its last sentence ending in '?', without citations. Null when NEXT holds no question. */
 export function followUpOf(next: string | null | undefined): string | null {
   if (!next) return null;
   const plain = next.replace(/\s*\[[SRE]\d+\]/g, "").trim();
   const m = /([^.!?]*\?)\s*$/.exec(plain);
   const q = m?.[1].trim();
-  return q && q.length >= 8 ? q : null;
+  return q && q.length >= 8 && q.length <= FOLLOW_UP_MAX ? q : null;
 }
 
 /** A kept check as far as progress needs it (learn-check-record.ts CheckResponse). */
@@ -112,7 +118,7 @@ export function resumeStep(status: readonly StepStatus[]): number {
   return i < 0 ? status.length : i;
 }
 
-export const STATUS_WORDS: Record<StepStatus, string> = { open: "Not started", understood: "Understood", attempted: "Answered, not yet understood", explained: "Explained to you", skipped: "Moved on" };
+export const STATUS_WORDS: Record<StepStatus, string> = { open: "Not answered", understood: "Understood", attempted: "Answered, not yet understood", explained: "Explained to you", skipped: "Moved on" };
 
 /** Pure. The progress line, in words: only what happened. Nothing is said to be done that was only shown. */
 export function progressWords(status: readonly StepStatus[]): string {
@@ -142,5 +148,5 @@ export const GUIDE_COPY = {
   hintNote: "A hint, not an answer. It does not count as a step done.",
   fallbackQuestion: "In your own words, why does this happen, and what would it change in practice?",
   finished: "You have reached the end of this guided lesson.",
-  notSaved: "Your answer was not judged, so nothing was recorded.",
+  notJudged: "Your answer could not be judged just now, so nothing was recorded. It is still here: try again, or move on.",
 } as const;

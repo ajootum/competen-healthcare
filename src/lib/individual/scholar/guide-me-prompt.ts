@@ -44,7 +44,7 @@ export function guideInstruction(opts: { turn: GuideTurn; step: number; of: numb
         ...WRITE,
         "Reply in exactly these labelled lines, with no markdown:",
         `${DEEPER_LABEL.focus} the idea this hint is about, in a few plain words.`,
-        `${DEEPER_LABEL.section} principle | scholar | a short heading on that line, then the hint on the next line. ONE section only, under ${opts.level === 1 ? 45 : 80} words. Do not explain the science here: a hint points, it does not teach.`,
+        `${DEEPER_LABEL.section} principle | ${opts.scholar ? "scholar" : "notes"} | a short heading on that line, then the hint on the next line. ONE section only, under ${opts.level === 1 ? 45 : 80} words. Do not explain the science here: a hint points, it does not teach.`,
         "No question, no takeaways. Write nothing else.",
       ].join("\n");
     case "example":
@@ -55,7 +55,7 @@ export function guideInstruction(opts: { turn: GuideTurn; step: number; of: numb
         ...WRITE,
         "Reply in exactly these labelled lines, with no markdown:",
         `${DEEPER_LABEL.focus} what this example shows, in a few plain words.`,
-        `${DEEPER_LABEL.section} application | scholar | a short heading on that line, then the reasoning on the next. ONE section only, under 130 words.`,
+        `${DEEPER_LABEL.section} application | ${opts.scholar ? "scholar" : "notes"} | a short heading on that line, then the reasoning on the next. ONE section only, under 130 words.`,
         "No question, no takeaways. Write nothing else.",
       ].join("\n");
     case "explain":

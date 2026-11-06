@@ -113,7 +113,6 @@ function roundOf(r: TaughtRecord): TaughtRound {
   // SCHOLAR-GO-DEEPER-001: a structured round tells what it taught: the question it explored, each section's heading and first sentence, its takeaways.
   const deep = parseDeeperAnswer(r.content);
   if (deep) {
-    if (r.action !== "deeper") round.action = "guide"; // SCHOLAR-GUIDE-ME-001: saved as the explain kind, told as what it was
     add(round.understanding, [deep.focus, ...deep.sections.map(s => `${s.title}: ${firstSentence(deeperSectionText(s).split("\n")[0] ?? "")}`)], ROUND_MAX.understanding);
     add(round.concepts, deep.takeaways, ROUND_MAX.concepts);
     add(round.questions, deep.questions.map(q => questionText(q.text)), ROUND_MAX.questions);

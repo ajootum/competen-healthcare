@@ -2,7 +2,7 @@
 
 import { useEffect, useId, useRef, useState, type Dispatch, type ReactNode, type SetStateAction } from "react";
 import { DisclaimerBadge, FeedbackParts, LearningCallout, LearningIcon, VerdictLine, learnAction, learnBox, learnTone, type FeedbackKind } from "@/components/ui/scholar-learning";
-import { CHECK_VERDICT_LABEL, INFORMAL_CHECK_LABEL } from "@/lib/individual/scholar/config";
+import { CHECK_VERDICT_LABEL, INFORMAL_CHECK_LABEL, QUESTION_MAX } from "@/lib/individual/scholar/config";
 import { GO_DEEPER_COPY, deeperEvidenceStatement, parseDeeperAnswer, type DeeperParts } from "@/lib/individual/scholar/deeper-format";
 import { CHECK_FEEDBACK_HEADING, parseCheckFeedback } from "@/lib/individual/scholar/learn-check";
 import { GUIDE_COPY, GUIDE_HINT_LEVELS, STATUS_WORDS, followUpOf, isUncertainAnswer, mergeStatus, moveAfterVerdict, progressWords, resumeStep, type GuideTurn, type StepStatus } from "@/lib/individual/scholar/guide-me";
@@ -14,7 +14,7 @@ import { Blocks, SectionNote, SourceChip } from "./go-deeper-view";
 // opening a step that is already saved is not a model call. Kept by the page across a style switch.
 
 type Source = { tag: string; chunkId: string; materialId: string; materialTitle: string; citation: string };
-export type GuideReply = { answer?: string; sources?: Source[]; withheld?: boolean; message?: string; next?: { why?: string }; open?: string; verdict?: { value: string; label?: string } | null; salvage?: { note: string } | null; research?: { text?: string } | null; guide?: { step: number; of: number; turn: GuideTurn } | null; error?: string };
+export type GuideReply = { flags?: readonly { text: string }[]; retry?: boolean; uncertain?: boolean; answer?: string; sources?: Source[]; withheld?: boolean; message?: string; next?: { why?: string }; open?: string; verdict?: { value: string; label?: string } | null; salvage?: { note: string } | null; research?: { text?: string } | null; guide?: { step: number; of: number; turn: GuideTurn } | null; error?: string };
 /** `json.clarify`: the clinical-risk gate asks whether this is study or a real patient. It is put to the learner here, where they are, and nothing has been sent to a model. */
 export type GuideRun = (body: Record<string, unknown>) => Promise<{ ok: boolean; json: Record<string, unknown> } | null>;
 
@@ -23,7 +23,10 @@ export type GuideState = { of: number | null; current: number; status: StepStatu
 export const GUIDE_FRESH: GuideState = { of: null, current: 0, status: [], steps: {}, opened: false, finished: false };
 const FRESH_STEP: StepState = { reply: null, hints: [], example: null, explained: null, showExplained: false, question: null, answer: "", feedback: null, note: null };
 
-export function GuideMePanel({ state, setState, run, busy, disabled, cite, answeredOf, renderResearch, renderClarify }: {
+export function GuideMePanel({ state, setState, run, busy, disabled, checkDisabled, offNote, cite, answeredOf, renderResearch, renderClarify, renderFlags }: {
+  /** The judged path has its own availability; `offNote`: why teaching is unavailable, in words. */
+  checkDisabled?: boolean; offNote?: string | null;
+  renderFlags: (flags: readonly { text: string }[]) => ReactNode;
   renderClarify: (prompt: unknown, retry: () => void) => ReactNode;
   state: GuideState; setState: Dispatch<SetStateAction<GuideState>>; run: GuideRun; busy: boolean; disabled?: boolean;
   cite: (text: string, sources: readonly Source[]) => ReactNode;
@@ -33,6 +36,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
 }) {
   const id = useId();
   const box = useRef<HTMLTextAreaElement>(null);
+  const heading = useRef<HTMLParagraphElement>(null);
   const here = state.steps[state.current] ?? FRESH_STEP;
   const [clarify, setClarify] = useState<{ prompt: unknown; retry: () => void } | null>(null);
   const patch = (step: number, p: Partial<StepState>) => setState(s => ({ ...s, steps: { ...s.steps, [step]: { ...(s.steps[step] ?? FRESH_STEP), ...p } } }));
@@ -77,9 +81,10 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
     patch(step, { note: null });
     const r = await ask("teach", step, {}, false, () => void teach(step));
     if (!r) return;
-    if (r.withheld) { patch(step, { note: r.next?.why ?? r.message ?? "This step could not be taught from your notes just now." }); return; }
+    if (r.withheld || !r.answer) { patch(step, { note: r.next?.why ?? r.message ?? "This step could not be taught from your notes just now." }); return; }
     patch(step, { reply: r });
-    setTimeout(() => box.current?.focus(), 50);
+    // The new step's heading, so reading starts at the teaching. Focusing the answer box would open a phone's keyboard and scroll past it.
+    setTimeout(() => heading.current?.focus(), 50);
   };
   const parts = partsOf(here.reply);
   const baseQuestion = parts?.questions[0]?.text ?? (parts ? GUIDE_COPY.fallbackQuestion : "");
@@ -102,40 +107,42 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
     if (!r) return;
     if (r.json.clarify) { setClarify({ prompt: r.json.clarify, retry: () => void check() }); return; }
     const json = r.json as GuideReply;
-    if (!r.ok || json.withheld) { patch(step, { feedback: null, note: json.next?.why ?? json.message ?? json.error ?? "Your answer could not be checked just now." }); return; }
+    if (json.uncertain) { patch(step, { note: GUIDE_COPY.uncertain }); return; }
+    if (!r.ok || json.withheld || !json.verdict) { patch(step, { feedback: null, note: json.next?.why ?? json.message ?? json.error ?? GUIDE_COPY.notJudged }); return; }
     patch(step, { feedback: json, note: null });
-    if (json.verdict) setStatus(step, moveAfterVerdict(json.verdict.value, null).status);
+    setStatus(step, moveAfterVerdict(json.verdict.value, null).status);
   };
   const hint = async () => {
     const step = state.current, level = Math.min(GUIDE_HINT_LEVELS, here.hints.length + 1);
     const r = await ask("hint", step, { level, question }, false, () => void hint());
-    if (r?.withheld) patch(step, { note: r.next?.why ?? r.message ?? "A hint could not be written just now." });
-    else if (r?.answer) patch(step, { hints: [...here.hints, r] });
+    if (r?.withheld || (r && !r.answer)) patch(step, { note: r.next?.why ?? r.message ?? "A hint could not be written just now." });
+    else if (r?.answer) patch(step, { hints: [...here.hints, r], note: null });
   };
   const example = async () => {
     const step = state.current;
     if (here.example) return;
     const r = await ask("example", step, { question }, false, () => void example());
-    if (r?.withheld) patch(step, { note: r.next?.why ?? r.message ?? "An example could not be written just now." });
-    else if (r?.answer) patch(step, { example: r });
+    if (r?.withheld || (r && !r.answer)) patch(step, { note: r.next?.why ?? r.message ?? "An example could not be written just now." });
+    else if (r?.answer) patch(step, { example: r, note: null });
   };
   const explain = async () => {
     const step = state.current;
     if (here.explained) { patch(step, { showExplained: true }); return; }
     const r = await ask("explain", step, { question }, false, () => void explain());
-    if (r?.withheld) { patch(step, { note: r.next?.why ?? r.message ?? "This could not be explained from your notes just now." }); return; }
-    if (r?.answer) { patch(step, { explained: r, showExplained: true }); if (status === "open") setStatus(step, "explained"); }
+    if (r?.withheld || (r && !r.answer)) { patch(step, { note: r.next?.why ?? r.message ?? "This could not be explained from your notes just now." }); return; }
+    if (r?.answer) { patch(step, { explained: r, showExplained: true, note: null }); if (status === "open") setStatus(step, "explained"); }
   };
   const nextStep = () => {
     if (lastStep) { setState(s => ({ ...s, finished: true })); return; }
     void teach(state.current + 1);
   };
   const skip = () => { if (status === "open") setStatus(state.current, "skipped"); nextStep(); };
-  const retry = (newQuestion?: string) => { patch(state.current, { feedback: null, ...(newQuestion ? { question: newQuestion, answer: "" } : {}) }); setTimeout(() => box.current?.focus(), 50); };
+  // A new question starts its own help: hints, an example and an explanation were for the last one.
+  const retry = (newQuestion?: string) => { patch(state.current, { feedback: null, note: null, ...(newQuestion ? { question: newQuestion, answer: "", hints: [], example: null, explained: null, showExplained: false } : {}) }); setTimeout(() => box.current?.focus(), 50); };
 
   const body = (r: GuideReply, p: DeeperParts, sectionNotes = false) => p.sections.map((s, i) => (
     s.kind === "memory"
-      ? <div key={i} className="mt-3"><LearningCallout tone="memory" icon="bulb" emphasis="prominent" label={`Memory aid: ${s.title}`}><Blocks blocks={s.blocks} cite={t => cite(t, r.sources ?? [])} /></LearningCallout></div>
+      ? <div key={i} className="mt-3"><LearningCallout tone="memory" icon="bulb" emphasis="prominent" label={`Memory aid: ${s.title}`}><p><SourceChip source={s.source} /></p><Blocks blocks={s.blocks} cite={t => cite(t, r.sources ?? [])} /></LearningCallout></div>
       : (s.kind === "misconception" || s.kind === "safety")
         ? <div key={i} className="mt-3"><LearningCallout tone="caution" icon="warn" emphasis={s.kind === "safety" ? "safety" : "standard"} label={s.kind === "safety" ? `Safety: ${s.title}` : s.title}><p><SourceChip source={s.source} /></p><Blocks blocks={s.blocks} cite={t => cite(t, r.sources ?? [])} /></LearningCallout></div>
         : (
@@ -148,7 +155,10 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
             {sectionNotes && <SectionNote anchor={`guide-${state.current}-s${i}`} label={s.title} chunkId={null} materialId={null} />}
           </div>
         )));
-  const statement = deeperEvidenceStatement({ research: here.reply?.research?.text ? "shown" : here.reply?.research ? "looked" : "none", scholar: !!parts?.sections.some(s => s.source === "scholar") });
+  // What is on screen decides what is said about it: a hint, an example or an explanation may be Scholar's where the teaching was not.
+  const onScreen = [here.reply, ...here.hints, here.example, here.showExplained ? here.explained : null].filter((x): x is GuideReply => !!x);
+  const researched = [here.reply, here.showExplained ? here.explained : null].filter((x): x is GuideReply => !!x);
+  const statement = deeperEvidenceStatement({ research: researched.some(x => x.research?.text) ? "shown" : researched.some(x => x.research) ? "looked" : "none", scholar: onScreen.some(x => !!partsOf(x)?.sections.some(s => s.source === "scholar")) });
 
   return (
     <section aria-labelledby={`${id}-h`} data-testid="guide-me" className={`${learnBox("guide")} mt-3 p-4 sm:p-5`}>
@@ -158,14 +168,18 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
       </div>
       {state.of && <p data-testid="guide-progress" className="mt-0.5 text-[12.5px] text-gray-700">{progressWords(state.status)}</p>}
 
+      {offNote && <p role="status" className="mt-2 text-[13px] text-gray-700">{offNote}</p>}
       {!parts && !state.finished && (
-        <div className="mt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           {busy ? <p role="status" className="text-[14px] text-gray-700">Working…</p>
-            : <button type="button" className={learnAction.primary} disabled={disabled} onClick={() => void teach(state.current)}>{GUIDE_COPY.start}</button>}
+            : <button type="button" className={learnAction.primary} disabled={disabled} onClick={() => void teach(state.current)}>{here.note ? GUIDE_COPY.retry : GUIDE_COPY.start}</button>}
+          {/* A step that cannot be taught just now is not a dead end. */}
+          {here.note && !busy && <button type="button" className={learnAction.link} onClick={skip}>{GUIDE_COPY.moveOn}</button>}
         </div>
       )}
+
       {clarify && <div className="mt-3">{renderClarify(clarify.prompt, () => { const go = clarify.retry; setClarify(null); go(); })}</div>}
-      {here.note && <p role="status" className="mt-2 rounded-lg border border-gray-200 bg-[var(--cmp-app-surface)] px-3 py-2 text-[13.5px] text-gray-800">{here.note}</p>}
+      {!parts && here.note && <p role="status" className="mt-2 rounded-lg border border-gray-200 bg-[var(--cmp-app-surface)] px-3 py-2 text-[13.5px] text-gray-800">{here.note}</p>}
 
       {state.finished && (
         <div className="mt-3 text-[14.5px] text-gray-900" role="status">
@@ -178,12 +192,13 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
       {parts && !state.finished && (
         <>
           <div className="mt-3 rounded-xl bg-gray-100 px-4 py-3.5">
-            <p className="break-words text-[17px] font-bold leading-snug text-gray-900">{parts.focus}</p>
+            <p ref={heading} tabIndex={-1} className="break-words text-[17px] font-bold leading-snug text-gray-900 outline-none">{parts.focus}</p>
             {parts.covers && <p className="mt-0.5 text-[13.5px] text-gray-700">{parts.covers}</p>}
             <div className="mt-2 break-words">{body(here.reply!, parts)}</div>
             {here.reply?.research?.text && <div className="mt-3">{renderResearch(here.reply.research)}</div>}
           </div>
           {here.reply?.salvage && <p className="mt-2 text-[12.5px] text-gray-700">{here.reply.salvage.note}</p>}
+          {!!here.reply?.flags?.length && renderFlags(here.reply.flags)}
           <div className="mt-2"><DisclaimerBadge>{GO_DEEPER_COPY.ai}</DisclaimerBadge></div>
 
           {/* The question, and the answer directly under it. */}
@@ -191,7 +206,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
             <p className="cmp-learn-ink flex items-center gap-1.5 text-[13px] font-bold uppercase tracking-[0.08em]"><LearningIcon name="question" className="h-4 w-4" />{GUIDE_COPY.think}</p>
             <p id={`${id}-q`} className="mt-1 break-words text-[16px] font-semibold leading-snug text-gray-900">{question}</p>
             <label htmlFor={`${id}-a`} className="mt-2 block text-[12.5px] font-semibold text-gray-700">Your reasoning</label>
-            <textarea ref={box} id={`${id}-a`} aria-describedby={`${id}-q`} rows={4} maxLength={1500} value={here.answer} readOnly={busy || !!fb} placeholder={GUIDE_COPY.placeholder}
+            <textarea ref={box} id={`${id}-a`} aria-describedby={`${id}-q`} rows={4} maxLength={QUESTION_MAX} value={here.answer} readOnly={busy || !!fb || !!clarify} placeholder={GUIDE_COPY.placeholder}
               onChange={e => patch(state.current, { answer: e.target.value })}
               className={`mt-1 w-full rounded-xl border border-gray-300 bg-[var(--cmp-app-surface)] px-3 py-2.5 text-[15px] leading-relaxed text-gray-900 focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-gray-900 ${fb ? "opacity-80" : ""}`} />
             {!fb && thinking && <p role="status" className="mt-1.5 text-[13.5px] text-gray-800">{GUIDE_COPY.uncertain}</p>}
@@ -199,7 +214,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
             {!fb && (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <button type="button" className={learnAction.secondary} disabled={busy || disabled || !!here.example} onClick={() => void example()}>{GUIDE_COPY.example}</button>
-                <button type="button" className={learnAction.primary} disabled={busy || disabled || !here.answer.trim() || thinking} onClick={() => void check()}>{busy ? "Working…" : GUIDE_COPY.check}</button>
+                <button type="button" className={learnAction.primary} disabled={busy || checkDisabled || !here.answer.trim() || thinking} onClick={() => void check()}>{busy ? "Working…" : GUIDE_COPY.check}</button>
               </div>
             )}
             {!fb && (
@@ -212,6 +227,8 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
             )}
           </div>
 
+          {/* Where the learner just pressed, not above the teaching. */}
+          {here.note && <p role="status" className="mt-2 rounded-lg border border-gray-200 bg-[var(--cmp-app-surface)] px-3 py-2 text-[13.5px] text-gray-800">{here.note}</p>}
           {here.hints.map((h, i) => { const p = partsOf(h); return p && (
             <div key={i} className="mt-3 rounded-xl border border-gray-200 bg-[var(--cmp-app-surface)] px-3.5 py-3">
               <p className="text-[12.5px] font-bold text-gray-800">Hint {i + 1}. <span className="font-normal">{GUIDE_COPY.hintNote}</span></p>
@@ -229,6 +246,9 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
             <div data-testid="guide-explained" className="mt-3 rounded-xl border border-gray-200 bg-[var(--cmp-app-surface)] px-3.5 py-3">
               <p className="text-[13px] font-bold text-gray-900">{GUIDE_COPY.explain}</p>
               <div className="mt-1.5">{body(here.explained, partsOf(here.explained)!)}</div>
+              {here.explained.research?.text && <div className="mt-3">{renderResearch(here.explained.research)}</div>}
+              {here.explained.salvage && <p className="mt-2 text-[12.5px] text-gray-700">{here.explained.salvage.note}</p>}
+              {!!here.explained.flags?.length && renderFlags(here.explained.flags)}
               <div className="mt-2 flex flex-wrap gap-2">
                 <button type="button" className={learnAction.secondary} onClick={() => { patch(state.current, { showExplained: false }); setTimeout(() => box.current?.focus(), 50); }}>{GUIDE_COPY.back}</button>
                 <button type="button" className={learnAction.primary} disabled={busy} onClick={nextStep}>{lastStep ? GUIDE_COPY.finish : GUIDE_COPY.next}</button>
@@ -244,10 +264,12 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
                 {fbParts
                   ? <FeedbackParts level={5} parts={[
                       ...(["right", "missing", "misconceptions", "keyPoints"] as const).filter(k => fbParts[k].length > 0).map(k => ({ kind: k as FeedbackKind, heading: CHECK_FEEDBACK_HEADING[k], body: <ul className="mt-1 list-disc space-y-1 pl-5">{fbParts[k].map((x, i) => <li key={i}>{cite(x, fb.sources ?? [])}</li>)}</ul> })),
-                      ...(fbParts.next && !followUp ? [{ kind: "next" as FeedbackKind, heading: CHECK_FEEDBACK_HEADING.next, body: <p className="mt-1">{cite(fbParts.next, fb.sources ?? [])}</p> }] : []),
+                      ...(fbParts.next && move?.primary !== "new_question" ? [{ kind: "next" as FeedbackKind, heading: CHECK_FEEDBACK_HEADING.next, body: <p className="mt-1">{cite(fbParts.next, fb.sources ?? [])}</p> }] : []),
                     ]} />
                   : <div className="whitespace-pre-wrap">{cite(fb.answer ?? "", fb.sources ?? [])}</div>}
               </div>
+              {fb.salvage && <p className="mt-2 text-[12.5px] text-gray-700">{fb.salvage.note}</p>}
+              {!!fb.flags?.length && renderFlags(fb.flags)}
               {move?.primary === "new_question" && followUp && <p className="mt-3 text-[15px] font-semibold text-gray-900">{followUp}</p>}
               <div className="mt-3 flex flex-wrap gap-2">
                 {move?.primary === "next" && <button type="button" className={learnAction.primary} disabled={busy} onClick={nextStep}>{lastStep ? GUIDE_COPY.finish : GUIDE_COPY.next}</button>}

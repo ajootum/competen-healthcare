@@ -30,11 +30,13 @@ The cycle is explain, question, response, feedback, adapt, progress.
 
 ## 3. Decisions
 
-**One saved kind, no migration.** A teach, hint, example or explain turn is saved as the existing `explain` kind, under its own prompt version (`scholar-guide-me-v1`) and key (`guide:<turn>:<step>:<of>`). It counts as taught ground, told as "Guide me". It is never opened or listed as an Explain (`isGuideTurnVersion`). 415's check on action names means a new kind would need a migration, with nothing gained.
+**One saved kind, no migration.** A teach, hint, example or explain turn is saved as the existing `explain` kind, under its own prompt version (`scholar-guide-me-v1:<turn>`) and key (`guide:<turn>:<step>:<of>`, and for help, the question it was for). A step or an explanation counts as taught ground, told as "Guide me". A hint or an example does not: it is help with a question. None is opened or listed as an Explain or a saved lesson (`isGuideTurnVersion`). 415's check on action names means a new kind would need a migration, with nothing gained.
 
 **Judging is the existing check.** A real answer goes to `clarify` with `guided: true`, which adds one instruction: judge understanding rather than wording, credit sound science beyond the notes, and write a new question in NEXT when the verdict is not yet. The verdict and parts are the same, and it is kept the same way. A guided check that fails on one word loses that line rather than all the feedback (`checkGuidedFeedback`), unless it carries a dose or an invented number in a safety context.
 
 **Metered and routed as Go deeper, not Explain.** The first counted run used the Explain route (Sonnet on staging). It wrote that a sleeping brain crosses a threshold more easily, which is doubtful science stated with confidence. A turn may carry Scholar's own science, so accuracy decides this. It costs about two to three times a plain Explain turn (table in the evidence). Production routing still follows HQ's eligibility rows.
+
+**What counts at lesson level.** Only a real teach, an explanation or a judged answer records a learning event or lesson progress. Opening what is saved, a hint and an example record nothing, so none can mark a lesson taught or read. A judged answer counts as one of the lesson's checks, as any check in Learn does, so a verdict on step 1 of 3 shows at lesson level as that check's result, and a lesson's "checked" state follows the existing check rule. Say if the owner wants the lesson to wait for every step: that is a small change.
 
 **Steps come from the lesson.** About three headings a step, at most three. The server decides, from the lesson's own headings. It is the lesson's size, not a fixed script.
 
@@ -47,7 +49,11 @@ Nothing. Guide me is the hint form as it was, and an Explain stays an Explain.
 ## 5. Known limits
 
 - Progress returning after a reopen is read from the kept checks, following the new questions feedback offered.
-- Moved-on and explained states are held by the page for the visit: on reopen those steps read as not started, and the saved teaching still returns with no AI call.
+- Moved-on and explained states are held by the page for the visit: on reopen those steps read as not answered, and the saved teaching still returns with no AI call.
+- A learner can reach "understood" on a retry after the feedback showed a model answer. This follows from showing that answer, and it is said as an informal check.
+- A lesson that spans several materials is not saved (the existing rule), so its steps do not reopen free.
+- A library page may show fewer items than its size where Guide Me turns are hidden.
+- Guide me needs Explain offered as well, because a turn travels as that kind.
 - A learner's answer is judged against the lesson and what was taught, so an accurate point far from both can be under-credited. The instruction asks for credit, and a model decides.
 - The notes test compares words and a few sense words, as in Go Deeper.
 

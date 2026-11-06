@@ -237,3 +237,81 @@ describe("policy on: a structured round", () => {
     expect(r.json.goDeeperLevels).toBeUndefined();
   });
 });
+
+describe("SCHOLAR-GUIDE-ME-001: a Guide Me turn through the route", () => {
+  const G = { ...ON, scholarGoDeeperStructured: false, scholarGuideMeAdaptive: true };
+  const turn = (guide: Record<string, unknown>, extra: Record<string, unknown> = {}) => post({ action: "explain", sessionId: S, step: 1, depth: "standard", guide, ...extra });
+  const TURN = "FOCUS QUESTION: Why blame silences reports\nSECTION: principle | notes | What a just culture balances\nA just culture balances accountability and learning [S1]. Staff report errors without fear of blame [S1].\nCHECK YOUR REASONING:\n- Why would reports fall if staff feared blame? [S1]";
+  const HINT = "FOCUS QUESTION: Where to start\nSECTION: principle | scholar | Think about fear\nThink about what people do with a mistake they expect to be punished for.";
+  beforeEach(() => { db.policy = G; db.aiText = TURN; });
+  it("off: the guide field is ignored, and an Explain is an Explain", async () => {
+    db.policy = {};
+    db.aiText = "A just culture balances accountability and learning [S1].";
+    const r = await turn({ turn: "teach", step: 0 });
+    expect(r.json.guide).toBeUndefined();
+    expect(db.systems[0]).not.toContain("GUIDE ME");
+    expect(r.json.provenance.promptVersion).not.toContain("guide-me");
+  });
+  it("one call, metered apart from an Explain, and it says which step of how many", async () => {
+    const r = await turn({ turn: "teach", step: 0 });
+    expect(db.aiCalls).toBe(1);
+    expect(db.systems[0]).toContain("MODE: GUIDE ME");
+    expect(r.json.guide).toEqual({ step: 0, of: 1, turn: "teach" });
+    expect(r.json.provenance.promptVersion).toContain("+scholar-guide-me-v1:teach");
+  });
+  it("the first turn on a lesson is found again once it is itself taught ground, with no AI", async () => {
+    await turn({ turn: "teach", step: 0 });
+    db.list = [...db.artefacts.values()] as never[];
+    const back = await turn({ turn: "teach", step: 0 }, { open: true });
+    expect(db.aiCalls).toBe(1);
+    expect(back.json).toMatchObject({ cached: true, guide: { step: 0, of: 1, turn: "teach" } });
+    expect(back.json.answer).toContain("Why blame silences reports");
+  });
+  it("opening what is saved, a hint and an example record nothing, so none can mark a lesson taught or read", async () => {
+    await turn({ turn: "teach", step: 0 }, { open: true });
+    expect(db.events).toHaveLength(0);
+    db.aiText = HINT;
+    await turn({ turn: "hint", step: 0, level: 1, question: "Why?" });
+    await turn({ turn: "example", step: 0, question: "Why?" });
+    expect(db.events).toHaveLength(0);
+    expect(db.sessionUpdates).toHaveLength(0);
+    db.aiText = TURN;
+    await turn({ turn: "teach", step: 0 });
+    expect(db.events).toHaveLength(1);
+  });
+  it("a hint needs no notes section, and is not taught ground for what comes next", async () => {
+    db.aiText = HINT;
+    const r = await turn({ turn: "hint", step: 0, level: 1, question: "Why?" });
+    expect(r.json.withheld).toBeUndefined();
+    db.list = [...db.artefacts.values()] as never[];
+    db.aiText = TURN;
+    await turn({ turn: "teach", step: 0 });
+    expect(db.systems[1]).not.toContain("Think about what people do");
+    expect(db.systems[1]).not.toContain("ALREADY been taught");
+  });
+  it("help is for the question in hand: another question is another request", async () => {
+    db.aiText = HINT;
+    await turn({ turn: "hint", step: 0, level: 1, question: "Why?" });
+    await turn({ turn: "hint", step: 0, level: 1, question: "Why?" });
+    expect(db.aiCalls).toBe(1);
+    await turn({ turn: "hint", step: 0, level: 1, question: "And then what?" });
+    expect(db.aiCalls).toBe(2);
+  });
+  it("a crafted question with an identifier is refused, as any typed text is", async () => {
+    const r = await turn({ turn: "hint", step: 0, question: "NHS number 943 476 5919, why?" });
+    expect(r.status).toBe(422);
+    expect(db.aiCalls).toBe(0);
+  });
+  it("'I don't know' is not judged, whatever a client sends", async () => {
+    const r = await post({ action: "clarify", sessionId: S, step: 1, checkQuestion: "Why would reports fall?", answer: "I don't know", guided: true });
+    expect(r.json.uncertain).toBe(true);
+    expect(db.aiCalls).toBe(0);
+    expect(db.events).toHaveLength(0);
+  });
+  it("Explain is never served a saved turn, and a saved turn never joins the lesson's other teaching", async () => {
+    await turn({ turn: "teach", step: 0 });
+    const plain = await post({ action: "explain", sessionId: S, step: 1, depth: "standard", open: true });
+    expect(plain.json.open).toBe("generate");
+    expect(plain.json.answer).toBeUndefined();
+  });
+});

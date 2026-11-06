@@ -12,7 +12,7 @@ import { AiBadge } from "./client";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { AiFeedback } from "./ai-feedback";
 import ClarifyPurpose from "@/app/individual/_components/ai/ClarifyPurpose";
-import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
+import { aiReasonCopy, clarifyFrom, type AiUnavailableReason, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type Expansion, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
@@ -1111,7 +1111,10 @@ export function LearnWorkspace(props: {
     const prompt = r.ok ? null : clarifyFrom(r.json);
     if (prompt) return { ok: false, json: { clarify: prompt } };
     if (r.json.continuity) return { ok: false, json: { error: r.json.continuity.message } };
-    if (r.ok && !r.json.withheld) setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "guide"])], verdict: r.json.verdict?.value ?? p[st.step]?.verdict ?? null } }));
+    // Progress is what happened: a real teach, explanation or judged answer. Opening what is saved, a hint and an example are none of those.
+    const guided = extra.guide as { turn?: string } | undefined;
+    const learned = r.ok && !r.json.withheld && !extra.open && (a === "clarify" || guided?.turn === "teach" || guided?.turn === "explain") && !!r.json.answer;
+    if (learned) setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "guide"])], verdict: r.json.verdict?.value ?? p[st.step]?.verdict ?? null } }));
     if (r.json.verdict?.value) dispatch({ type: "verdict", index: indexOf(st.step), value: String(r.json.verdict.value) });
     return r;
   };
@@ -1542,7 +1545,9 @@ export function LearnWorkspace(props: {
               guidePanel={props.guideAdaptive ? (
                 <GuideMePanel key={st.step} state={guideStates[st.step] ?? GUIDE_FRESH}
                   setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
-                  run={runGuide(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")}
+                  run={runGuide(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")} checkDisabled={busyHere || !props.consent || !!offReason("clarify") || props.checks === "off"}
+                  offNote={offReason("deeper") ? aiReasonCopy(offReason("deeper") as AiUnavailableReason, "scholar").text : null}
+                  renderFlags={f => <AiFlagList flags={f} />}
                   renderClarify={(p, retry) => <ClarifyPurpose clarify={p as ClarifyPrompt} busy={!!busy} accent={accent} onEducation={() => { confirmStudy(true); retry(); }} onPatient={() => confirmStudy(false)} />}
                   cite={(t, srcs) => <Cited text={t} sources={srcs as Source[]} />}
                   answeredOf={q => guideVerdictOf(q, (checks[st.step] ?? []).map(x => ({ question: x.question, verdict: x.response?.verdict ?? null, next: x.response?.feedback?.next ?? null })))}

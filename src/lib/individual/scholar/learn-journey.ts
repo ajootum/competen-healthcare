@@ -332,6 +332,8 @@ export const readCount = (facts: readonly LessonFacts[]) => facts.filter(f => f.
 
 /** SCHOLAR-GUIDE-ME-001: a saved Guide Me turn (the explain kind, under its own version). It is taught ground, never an Explain to reopen or list. */
 export const isGuideTurnVersion = (promptVersion: string | null | undefined) => !!promptVersion && promptVersion.includes("+scholar-guide-me-");
+/** A hint or an example is help with a question, not teaching: it is neither taught ground nor a round. */
+export const isGuideAidVersion = (promptVersion: string | null | undefined) => isGuideTurnVersion(promptVersion) && /:(?:hint|example)(?:\+|$)/.test(promptVersion!);
 
 /** 415 individual_scholar_artefact_source: ordinal between 1 and 10. store.ts saveArtefact keeps the first ten. */
 export const ARTEFACT_SOURCES_MAX = 10;

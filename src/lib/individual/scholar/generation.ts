@@ -647,6 +647,7 @@ export function learnSystem(action: LearnAction | "check" | "clarify", opts: { d
     return [
       EXPLAIN_SYSTEM, "", guideInstruction({ ...opts.guide, depth: opts.depth, scholar: opts.background, taught: !!opts.taught }),
       NO_COUNT_LAST, AVOID_WORDS_LAST, ...(opts.references ? [REFERENCES_RULE] : []),
+      ...(opts.guide.turn === "teach" || opts.guide.turn === "explain" ? [FLAG_RULE] : []),
       ...(opts.research ? [researchInstruction(DEPTH_WORDS[opts.depth])] : []),
     ].join("\n");
   }
@@ -909,18 +910,33 @@ export function checkTeachAnswer(main: string, asked: string, passages: Passage[
 }
 
 /**
- * Pure. SCHOLAR-GUIDE-ME-001: feedback on a Guide Me answer. A learner who wrote an answer should not lose all of the feedback to one word ("the two can coexist"), so a line that fails only
- * as ungrounded is left out and the rest is checked again, exactly as a lesson's salvage works. Dosing, or an invented number in a safety context, still withholds it all. Plain checks are not touched.
+ * Pure. SCHOLAR-GUIDE-ME-001: feedback on a Guide Me answer. A learner who wrote an answer should not lose all of the feedback to one word ("the two can coexist"), so a whole bullet that fails only as
+ * ungrounded is left out, the rest is checked again, and it says so (salvaged: the outcome and the note both tell the truth). It withholds instead when: the line is not a whole bullet of a part (a label's own
+ * text, a wrapped line); a correction or a missing point would be lost on an answer not understood, since that is what the learner came for; or it carries a dose or an invented number in a safety context.
  */
-export function checkGuidedFeedback(main: string, asked: string, passages: Passage[], references: GovernedReference[]): ExplainCheck {
+export function checkGuidedFeedback(main: string, asked: string, passages: Passage[], references: GovernedReference[], verdict: CheckVerdict | null): ExplainCheck {
   const first = checkLearnMain(main, asked, passages, references);
   if (first.ok || first.reason !== "ungrounded") return first;
   const grounding = learnGrounding(passages, references, asked);
-  const fails = (l: string) => groundingViolations(scholarNamedTerms(l.replace(/\[[SR]\d+\]/g, " ")), grounding);
-  const lines = main.split("\n");
-  for (const l of lines) { const vs = fails(l), plain = l.replace(/\[[SRE]\d+\]/g, " "); if (vs.length && (RESEARCH_DOSING.test(plain) || (vs.some(v => v.kind === "ungrounded_number") && SAFETY_CONTEXT.test(plain)))) return first; }
-  const again = checkLearnMain(lines.filter(l => !fails(l).length).join("\n"), asked, passages, references);
-  return again.ok ? again : first;
+  const fails = (l: string) => l.trim() ? groundingViolations(scholarNamedTerms(l.replace(/\[[SR]\d+\]/g, " ")), grounding) : [];
+  const LABEL = /^\s*(RIGHT|MISSING|MISCONCEPTIONS?|KEY (?:LEARNING )?POINTS|NEXT)\s*:/i;
+  const kept: string[] = [], violations: PhrasingViolation[] = [];
+  let part = "", removed = 0;
+  for (const l of main.split("\n")) {
+    const label = LABEL.exec(l);
+    if (label) part = label[1].toUpperCase();
+    const vs = fails(l);
+    if (!vs.length) { kept.push(l); continue; }
+    const plain = l.replace(/\[[SRE]\d+\]/g, " ");
+    if (RESEARCH_DOSING.test(plain) || (vs.some(v => v.kind === "ungrounded_number") && SAFETY_CONTEXT.test(plain))) return first;
+    const bullet = /^\s*-\s+/.test(l), isNext = part === "NEXT" && !!label;
+    if (!bullet && !isNext) return first;
+    if (verdict !== "understood" && /^(?:MISSING|MISCONCEPTION)/.test(part)) return first;
+    removed++; violations.push(...vs);
+  }
+  const again = checkLearnMain(kept.join("\n"), asked, passages, references);
+  if (!again.ok) return first;
+  return { ...again, salvaged: { removed, parts: { overview: false, points: removed, example: false, questions: 0 }, violations } };
 }
 
 /**
@@ -974,6 +990,8 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
     }
     return { ours, others: untag(others) };
   };
+  // A memory aid helps to remember. Words about the page or an instruction are not one, whatever the section calls itself (SCHOLAR-GUIDE-ME-001 item 9).
+  const memoryOk = (t: string) => !/\b(?:click|press|tap|button|scroll|select|next step|hint|choose)\b/i.test(t) && !sentencesOf(t).some(x => /^(?:always|never|give|call|check|start|stop|use|do not|don['’]t|make sure|ensure|remember to)\b/i.test(x));
   const kept: DeeperSection[] = [], violations: PhrasingViolation[] = [];
   let removedSections = 0, relabelled = 0, firstFailure: Extract<ExplainCheck, { ok: false }> | null = null;
   const allowed = opts.maxSections ?? DEEPER_MAX_SECTIONS;
@@ -982,9 +1000,10 @@ export function checkDeeperAnswer(main: string, asked: string, passages: Passage
     if (s.source === "scholar") {
       // A stray [S n] on Scholar's own section is not a claim we can honour: it is removed, and the section is judged and shown as what it says it is.
       const blocks = untag(s.blocks);
-      if (s.kind !== "safety" && scholarOk(deeperSectionText({ blocks }))) kept.push({ ...s, blocks }); else removedSections++;
+      if (s.kind !== "safety" && scholarOk(deeperSectionText({ blocks })) && (s.kind !== "memory" || memoryOk(deeperSectionText({ blocks })))) kept.push({ ...s, blocks }); else removedSections++;
       continue;
     }
+    if (s.kind === "memory" && !memoryOk(text)) { removedSections++; continue; }
     const check = checkLearnMain(text, asked, passages, references);
     const vs = check.ok ? [] : check.violations ?? [];
     if (vs.length && unsafe(text, vs)) return { ok: false, reason: "ungrounded", violations: vs };
@@ -1108,7 +1127,7 @@ export function parseVerdict(raw: string): { verdict: CheckVerdict | null; rest:
 }
 
 /** SCHOLAR-LEARN-FIX-01 L-B: Teach Me adds its structured-lesson version, so its saved answers key apart from the free-text ones. */
-export const learnPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: boolean; guidedClarify?: boolean } = {}) => `${PROMPT_VERSIONS.learn}:${action}${opts.guide && action === "explain" ? `+${PROMPT_VERSIONS.guideMe}` : ""}${opts.guidedClarify && action === "clarify" ? `+${PROMPT_VERSIONS.guidedClarify}` : ""}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : action === "deeper" ? `+${opts.deeperStructured ? PROMPT_VERSIONS.learnDeeperStructured : PROMPT_VERSIONS.learnDeeper}` : action === "clarify" ? `+${PROMPT_VERSIONS.learnClarify}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
+export const learnPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: GuideTurn | null; guidedClarify?: boolean } = {}) => `${PROMPT_VERSIONS.learn}:${action}${opts.guide && action === "explain" ? `+${PROMPT_VERSIONS.guideMe}:${opts.guide}` : ""}${opts.guidedClarify && action === "clarify" ? `+${PROMPT_VERSIONS.guidedClarify}` : ""}${action === "teach" ? `+${PROMPT_VERSIONS.learnTeach}` : action === "deeper" ? `+${opts.deeperStructured ? PROMPT_VERSIONS.learnDeeperStructured : PROMPT_VERSIONS.learnDeeper}` : action === "clarify" ? `+${PROMPT_VERSIONS.learnClarify}` : isTeachingAction(action) ? `+${PROMPT_VERSIONS.teaching}` : ""}`;
 /** SCHOLAR-CUMULATIVE-TEACHING-01: an answer written with a TAUGHT SO FAR block carries the cumulative suffix, so it is never served as a context-free one. */
 export const cumulativePromptVersion = (version: string) => `${version}+${PROMPT_VERSIONS.cumulative}`;
 /** SCHOLAR-GUIDED-LEARNING-01: the earlier Teach Me versions whose saved lessons are still opened with no AI call (LEARN_TEACH_LEGACY). */
@@ -1127,7 +1146,7 @@ export type LearnResult = AiFailure | {
 
 /** COMPETEN-RESEARCH-01: a Research & Explain answer carries its own prompt version, so a saved one is never reused as notes-only. */
 export const RESEARCH_PROMPT_SUFFIX = "+research-v2";
-export const learnResearchPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: boolean } = {}) => `${learnPromptVersion(action, opts)}${RESEARCH_PROMPT_SUFFIX}`;
+export const learnResearchPromptVersion = (action: LearnAction | "check" | "clarify", opts: { deeperStructured?: boolean; guide?: GuideTurn | null } = {}) => `${learnPromptVersion(action, opts)}${RESEARCH_PROMPT_SUFFIX}`;
 /** Its own operation, so its spend is separable in plat_ai_requests (the per-learner cost limit, the HQ panel). */
 export const LEARN_RESEARCH_OPERATION = "individual_scholar_learn_research";
 
@@ -1173,7 +1192,7 @@ export async function runLearn(userId: string, args: {
     context: { userId, attribution: { scope: "person" }, operation: research.length ? LEARN_RESEARCH_OPERATION : "individual_scholar_learn" },
   });
   if (!r.ok) return { ok: false, error: r.error };
-  const version = `${research.length ? learnResearchPromptVersion(args.action, { deeperStructured, guide: !!guide }) : learnPromptVersion(args.action, { deeperStructured, guide: !!guide, guidedClarify })}${studyContext ? `+${PROMPT_VERSIONS.studySession}` : ""}`;
+  const version = `${research.length ? learnResearchPromptVersion(args.action, { deeperStructured, guide: guide?.turn ?? null }) : learnPromptVersion(args.action, { deeperStructured, guide: guide?.turn ?? null, guidedClarify })}${studyContext ? `+${PROMPT_VERSIONS.studySession}` : ""}`;
   const base = { ok: true as const, action: args.action, model: r.model, provider: r.provider, promptVersion: taught ? cumulativePromptVersion(version) : version };
   if (args.action === "check") {
     const question = checkCheckQuestion(r.text, args.passages);
@@ -1183,7 +1202,8 @@ export async function runLearn(userId: string, args: {
   const depthReached = args.action === "deeper" && taught ? parseDepthReached(r.text) : null; // never on a Guide Me turn: it is an explain
   if (depthReached) return { ...base, check: { ok: false, reason: "not_in_notes" }, background: null, flags: { kept: [], dropped: 0 }, verdict: null, question: null, research: null, depthReached };
   // SCHOLAR-CUMULATIVE-TEACHING-01: "[S7, S8]" and "[S7-S9]" become "[S7][S8]..." before anything reads the reply.
-  const { verdict, rest } = args.action === "clarify" || args.action === "teach_back" ? parseVerdict(normaliseCitations(r.text)) : { verdict: null, rest: normaliseCitations(r.text) };
+  // SCHOLAR-GUIDE-ME-001: "VERDICT: partly." reads as partly. A guided answer with no verdict at all is not judged, so it is neither kept nor shown as if it were (just below).
+  const { verdict, rest } = args.action === "clarify" || args.action === "teach_back" ? parseVerdict(normaliseCitations(guidedClarify ? r.text.replace(/^(\s*\**VERDICT:\s*(?:understood|partly|not[_ ]yet))\b[^\n]*$/im, "$1") : r.text)) : { verdict: null, rest: normaliseCitations(r.text) };
   const split = splitLearnAnswer(rest);
   const asked = [args.question, ...args.history.map(t => t.text), ...(args.learnerTexts ?? [])].join("\n");
   const mayBackground = args.background && BACKGROUND_ACTIONS.includes(args.action as LearnAction);
@@ -1193,7 +1213,7 @@ export async function runLearn(userId: string, args: {
       : deeperStructured ? checkDeeperAnswer(split.main, asked, args.passages, args.references, { scholar: args.background, title: args.lesson?.title ?? null })
       : lesson ? checkTeachAnswer(split.main, asked, args.passages, args.references).check
       : isTeachingAction(args.action) ? checkTeachingAnswer(args.action, split.main, asked, args.passages, args.references, args.teaching?.examEvidence ?? null)
-        : guidedClarify ? checkGuidedFeedback(split.main, asked, args.passages, args.references)
+        : guidedClarify ? (verdict ? checkGuidedFeedback(split.main, asked, args.passages, args.references, verdict) : { ok: false as const, reason: "ungrounded" as const })
           : checkLearnMain(split.main, asked, args.passages, args.references),
     // A lesson's explanation beyond the notes may run to BACKGROUND_WORDS (about 1600 characters); every other rule is unchanged.
     // SCHOLAR-GO-DEEPER-001: a structured round has its own Scholar sections. A BEYOND THE NOTES line in one is not a second way out of their rules.
