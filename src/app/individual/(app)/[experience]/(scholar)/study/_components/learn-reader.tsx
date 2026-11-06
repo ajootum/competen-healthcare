@@ -42,9 +42,9 @@ export function loadReader(sessionId: string, step: number): Promise<ReaderReply
   return p;
 }
 
-export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards, hidePictures }: {
+export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards, hidePictures, wordPictures }: {
   /** While the learner recalls the lesson, a picture must not give the answer away. */
-  hidePictures?: boolean;
+  hidePictures?: boolean; wordPictures?: boolean;
   sessionId: string; step: number; index: number;
   /** The active lesson: its notes are read at once (a saved place inside them must be findable), others only when opened. */
   current: boolean;
@@ -103,8 +103,8 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                 // SCHOLAR-VISUAL-001: a long slide has several sections; its pictures come once, with the first of them.
                 const sameSlide = (o: typeof s | undefined) => !!o && o.materialId === s.materialId && s.pageFrom !== null && o.pageFrom === s.pageFrom;
                 const href = carry(sourceHref(s.materialId, s.chunkId));
-                // A Word section has no page: its pictures are filed under its ordinal. Policy off: the list is empty and nothing shows.
-                const picture = s.unit !== "section" || s.pageFrom === null;
+                // A Word section has no page: its pictures are filed under its ordinal. Policy off: not even asked for.
+                const picture = s.unit !== "section" || !!wordPictures;
                 return (
                   <SectionCard as="li" key={s.chunkId} id={lessonAnchorId(step, s.anchor)} className="scroll-mt-4">
                     <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">

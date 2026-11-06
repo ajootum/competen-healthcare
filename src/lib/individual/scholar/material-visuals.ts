@@ -127,6 +127,10 @@ export function isRepeated(slidesWith: number, slides: number): boolean {
   return slidesWith >= REPEAT_MIN_SLIDES && slidesWith >= REPEAT_MIN_SHARE * Math.max(1, slides);
 }
 
+/** Pure. In a Word file, only a picture this small on both sides is a bullet or an icon. */
+const WORD_ICON_PX = 48;
+const isWordIcon = (p: PictureFact) => p.width !== null && p.height !== null && Math.max(p.width, p.height) < WORD_ICON_PX;
+
 /** Pure. Why one measured picture is decorative, or null when it counts as content. */
 export function decorativeReason(p: PictureFact, minPx: number): "tiny" | "small_file" | "banner" | null {
   if (p.bytes < MIN_VISUAL_BYTES) return "small_file";
@@ -253,12 +257,14 @@ export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { 
   const repeated = (media: string | null) => !!media && !!scan && isRepeated(perMedia.get(media)?.size ?? 0, scan.slides);
 
   let notShown = 0;
-  for (const u of scan?.undisplayable ?? []) if (!repeated(u.media)) notShown += 1;
+  // A Word file: every picture stays except a bullet or an icon. It has no whole-page fallback, so a wide ECG strip, a small formula or a figure used twice would simply be gone.
+  const word = unit === "section";
+  for (const u of scan?.undisplayable ?? []) if (word || !repeated(u.media)) notShown += 1;
   const bySlide = new Map<number, PictureFact[]>();
   for (const p of scan?.pictures ?? []) {
-    if (repeated(p.media)) continue;
+    if (!word && repeated(p.media)) continue;
     if (p.kind === null && p.via !== "page") { notShown += 1; continue; }
-    if (decorativeReason(p, minPx)) continue;
+    if (word ? isWordIcon(p) : decorativeReason(p, minPx)) continue;
     bySlide.set(p.n, [...(bySlide.get(p.n) ?? []), p]);
   }
   const visuals: Visual[] = [];

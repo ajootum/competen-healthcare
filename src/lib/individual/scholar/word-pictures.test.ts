@@ -13,23 +13,30 @@ describe("reading the pictures of a Word file", () => {
     const got = wordPictures(`${blip("rId1")}${t("Alpha one.")}${blip("rId2")}${t("Beta &amp; two.")}${blip("rId3")}`, r);
     expect(got.map(p => p.part)).toEqual(["word/media/a.png", "word/media/b.jpg", "word/media/c.emf"]);
     expect(got.map(p => p.before)).toEqual(["", "Alphaone.", "Alphaone.Beta&two."]);
-    expect(got[0].through).toBe(0);
-    expect(got[2].through).toBe(1);
+    expect(got.map(p => p.offset)).toEqual([0, 9, 18]);
   });
   it("Word's two forms of one shape count once", () => {
     const xml = `<mc:AlternateContent><mc:Choice Requires="wps">${blip("rId1")}</mc:Choice><mc:Fallback><v:imagedata r:id="rId1"/></mc:Fallback></mc:AlternateContent>`;
     expect(wordPictures(xml, r)).toHaveLength(1);
   });
+  it("an empty fallback swallows nothing after it", () => {
+    const xml = `<mc:AlternateContent><mc:Choice Requires="wps">${blip("rId1")}</mc:Choice><mc:Fallback/></mc:AlternateContent>${t("Between.")}${blip("rId2")}<mc:AlternateContent><mc:Choice Requires="wps">${blip("rId1")}</mc:Choice><mc:Fallback><v:imagedata r:id="rId1"/></mc:Fallback></mc:AlternateContent>`;
+    expect(wordPictures(xml, r).map(p => p.part)).toEqual(["word/media/a.png", "word/media/b.jpg", "word/media/a.png"]);
+  });
+  it("a shape whose picture is only in the fallback is still found", () => {
+    const xml = `<mc:AlternateContent><mc:Choice Requires="wpi"><w:contentPart r:id="rIdInk"/></mc:Choice><mc:Fallback><v:imagedata r:id="rId2"/></mc:Fallback></mc:AlternateContent>`;
+    expect(wordPictures(xml, r).map(p => p.part)).toEqual(["word/media/b.jpg"]);
+  });
   it("an old-style picture alone is found", () => {
     expect(wordPictures(`<w:pict><v:imagedata r:id="rId2"/></w:pict>`, r).map(p => p.part)).toEqual(["word/media/b.jpg"]);
   });
   it("a linked picture is known to be outside the file", () => {
-    expect(wordPictures(`<a:blip r:link="rId4"/>`, r)).toEqual([{ part: null, before: "", through: 0 }]);
+    expect(wordPictures(`<a:blip r:link="rId4"/>`, r)).toEqual([{ part: null, before: "", offset: 0 }]);
   });
   it("a chart or a diagram is known to be there, though it has no picture to show", () => {
     const uri = "http://schemas.openxmlformats.org/drawingml/2006";
     expect(wordPictures(`${t("Before.")}<a:graphicData uri="${uri}/chart"></a:graphicData><a:graphicData uri="${uri}/diagram"></a:graphicData><a:graphicData uri="${uri}/picture"></a:graphicData>`, r))
-      .toEqual([{ part: null, before: "Before.", through: 1 }, { part: null, before: "Before.", through: 1 }]);
+      .toEqual([{ part: null, before: "Before.", offset: 7 }, { part: null, before: "Before.", offset: 7 }]);
   });
   it("a reference to something not a picture is ignored", () => {
     expect(wordPictures(`<a:blip r:embed="rIdX"/><a:blip r:embed="rIdMissing"/>`, r)).toEqual([]);
@@ -50,38 +57,58 @@ describe("finding each picture's section", () => {
     { ordinal: 3, content: "Gamma three is here." },
   ];
   it("the section holding the text before it", () => {
-    expect(placeWordPictures([{ before: "Alphagoeson.", through: 0.3 }, { before: "Betagoeson.", through: 0.6 }, { before: "Gammathreeishere.", through: 1 }], chunks)).toEqual([1, 2, 3]);
+    expect(placeWordPictures([{ before: "Alphagoeson.", offset: 27 }, { before: "Betagoeson.", offset: 50 }, { before: "Gammathreeishere.", offset: 67 }], chunks)).toEqual([1, 2, 3]);
   });
   it("before any text: the first section", () => {
-    expect(placeWordPictures([{ before: "", through: 0 }], chunks)).toEqual([1]);
+    expect(placeWordPictures([{ before: "", offset: 0 }], chunks)).toEqual([1]);
   });
   it("text ending exactly at a section's end stays with that section", () => {
-    expect(placeWordPictures([{ before: "Alphagoeson.", through: 0.3 }], chunks)).toEqual([1]);
+    expect(placeWordPictures([{ before: "Alphagoeson.", offset: 27 }], chunks)).toEqual([1]);
   });
   it("bullets and spaces do not get in the way", () => {
-    expect(placeWordPictures([{ before: "Betatwoishere.", through: 0.5 }], chunks)).toEqual([2]);
+    expect(placeWordPictures([{ before: "Betatwoishere.", offset: 41 }], chunks)).toEqual([2]);
   });
-  it("text that cannot be found falls back to how far through it is", () => {
-    expect(placeWordPictures([{ before: "NOT IN THE STORED TEXT", through: 0.99 }], chunks)).toEqual([3]);
-    expect(placeWordPictures([{ before: "NOT IN THE STORED TEXT", through: 0.01 }], chunks)).toEqual([1]);
+  it("text that cannot be found falls back to where it should be, and never past the end", () => {
+    expect(placeWordPictures([{ before: "NOT IN THE STORED TEXT", offset: 60 }], chunks)).toEqual([3]);
+    expect(placeWordPictures([{ before: "NOT IN THE STORED TEXT", offset: 2 }], chunks)).toEqual([1]);
+    expect(placeWordPictures([{ before: "NOT IN THE STORED TEXT", offset: 9999 }], chunks)).toEqual([3]);
+  });
+  it("footnotes do not move a picture: markers are ignored, and notes appended at the end do not stretch the document", () => {
+    const body = "One sentence about growth here. ";
+    const notes = [
+      { ordinal: 1, content: `${body.repeat(3)}Marked point.[1]` },
+      { ordinal: 2, content: body.repeat(4) },
+      { ordinal: 3, content: body.repeat(4) },
+      { ordinal: 4, content: "A long footnote appended to the stored text. ".repeat(20) },
+    ];
+    const unit = "Onesentenceaboutgrowthhere.".length;
+    const first = "Onesentenceaboutgrowthhere.".repeat(2) + "Markedpoint.";
+    expect(placeWordPictures([{ before: first.slice(-60), offset: unit * 3 + 12 }, { before: "Onesentenceaboutgrowthhere.".repeat(2), offset: unit * 8 + 12 }], notes)).toEqual([1, 3]);
+  });
+  it("when the longer text reads differently, the last words still find it", () => {
+    expect(placeWordPictures([{ before: "SOMETHING DIFFERENT HEREBetagoeson.", offset: 50 }], chunks)).toEqual([2]);
   });
   it("order is kept even where the same text comes twice", () => {
     const twice = [{ ordinal: 1, content: "Repeat me here." }, { ordinal: 2, content: "Middle." }, { ordinal: 3, content: "Repeat me here." }];
-    expect(placeWordPictures([{ before: "Repeatmehere.", through: 0.3 }, { before: "Repeatmehere.", through: 0.9 }], twice)).toEqual([1, 3]);
+    expect(placeWordPictures([{ before: "Repeatmehere.", offset: 13 }, { before: "Repeatmehere.", offset: 32 }], twice)).toEqual([1, 3]);
   });
   it("words that repeat through the notes: the match nearest to how far through the picture is", () => {
     const same = "The same sentence again. ";
     const repeated = [{ ordinal: 1, content: same.repeat(4) }, { ordinal: 2, content: same.repeat(4) }, { ordinal: 3, content: same.repeat(4) }];
     const before = "Thesamesentenceagain.".repeat(3);
-    expect(placeWordPictures([{ before, through: 8 / 12 }], repeated)).toEqual([2]);
-    expect(placeWordPictures([{ before, through: 11 / 12 }], repeated)).toEqual([3]);
-    expect(placeWordPictures([{ before, through: 0.3 }, { before, through: 0.6 }, { before, through: 1 }], repeated)).toEqual([1, 2, 3]);
+    const one = "Thesamesentenceagain.".length;
+    expect(placeWordPictures([{ before, offset: one * 8 }], repeated)).toEqual([2]);
+    expect(placeWordPictures([{ before, offset: one * 11 }], repeated)).toEqual([3]);
+    expect(placeWordPictures([{ before, offset: one * 4 }, { before, offset: one * 7 }, { before, offset: one * 12 }], repeated)).toEqual([1, 2, 3]);
+  });
+  it("pictures with no text between them stay together", () => {
+    expect(placeWordPictures([{ before: "Alphagoeson.", offset: 27 }, { before: "Alphagoeson.", offset: 27 }, { before: "Alphagoeson.", offset: 27 }], chunks)).toEqual([1, 1, 1]);
   });
   it("never moves backwards", () => {
-    expect(placeWordPictures([{ before: "Gammathreeishere.", through: 1 }, { before: "NOT THERE", through: 0.01 }], chunks)).toEqual([3, 3]);
+    expect(placeWordPictures([{ before: "Gammathreeishere.", offset: 67 }, { before: "NOT THERE", offset: 1 }], chunks)).toEqual([3, 3]);
   });
   it("no sections: nothing to place", () => {
-    expect(placeWordPictures([{ before: "x", through: 0 }], [])).toEqual([]);
+    expect(placeWordPictures([{ before: "x", offset: 0 }], [])).toEqual([]);
   });
 });
 
@@ -91,6 +118,18 @@ describe("a Word picture among the visuals", () => {
   it("keeps the document's order inside a section, not largest first", () => {
     const { visuals } = buildVisuals(scan, { unit: "section", classify: false, maxPerSlide: 20 });
     expect(visuals.map(v => v.media)).toEqual(["word/media/b.png", "word/media/a.png", "word/media/c.png"]);
+  });
+  it("a small, wide or repeated picture stays: a Word file has no whole-page fallback, and an ECG strip or a formula is meaningful", () => {
+    const strip = { n: 1, media: "word/media/ecg.png", kind: "png" as const, width: 1600, height: 90, bytes: 3000, sha: "dddddddddddddddd" };
+    const formula = { n: 2, media: "word/media/f.png", kind: "png" as const, width: 200, height: 40, bytes: 900, sha: "eeeeeeeeeeeeeeee" };
+    const again = [1, 2, 3].map(n => ({ n, media: "word/media/g.png", kind: "png" as const, width: 500, height: 400, bytes: 50_000, sha: "ffffffffffffffff" }));
+    const { visuals } = buildVisuals({ slides: 3, pictures: [strip, formula, ...again], undisplayable: [] }, { unit: "section", classify: false, maxPerSlide: 20 });
+    expect(visuals.map(v => v.media)).toEqual(expect.arrayContaining(["word/media/ecg.png", "word/media/f.png"]));
+    expect(visuals.filter(v => v.media === "word/media/g.png")).toHaveLength(3);
+  });
+  it("only a bullet or an icon is dropped", () => {
+    const icon = { n: 1, media: "word/media/i.png", kind: "png" as const, width: 24, height: 24, bytes: 300, sha: "1111111111111111" };
+    expect(buildVisuals({ slides: 1, pictures: [icon], undisplayable: [] }, { unit: "section", classify: false }).visuals).toEqual([]);
   });
   it("has its own key, and says it is from a section", () => {
     const { visuals, notShown } = buildVisuals(scan, { unit: "section", classify: false, maxPerSlide: 20 });

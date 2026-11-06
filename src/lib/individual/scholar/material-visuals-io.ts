@@ -117,7 +117,8 @@ export async function scanWord(bytes: Uint8Array, chunks: readonly { ordinal: nu
         measured.set(p.part, data ? { kind, bytes: data.byteLength, sha: sha16(data), ...(kind ? await dimensions(data) : { width: null, height: null }) } : null);
       }
       const fact = measured.get(p.part);
-      if (!fact) continue;
+      // Named by the document but missing from the file: said, not skipped.
+      if (!fact) { scan.undisplayable.push({ n, media: p.part }); continue; }
       if (fact.kind) scan.pictures.push({ n, media: p.part, ...fact });
       else scan.undisplayable.push({ n, media: p.part });
     }
@@ -148,6 +149,8 @@ async function indexOf(ctx: IndividualContext, material: MaterialRow, policy: Se
   const empty = quality?.emptyUnits ?? [], aiRead = quality?.aiReadUnits ?? [];
   const pages = pageInfoOf(chunks?.ok ? chunks.data : [], empty, aiRead);
 
+  // A Word picture's place is found in the sections. Without them there is nothing true to say, and nothing is kept for later.
+  if (word && !chunks?.ok) return { ok: false, out: json(503, { error: "Your notes could not be read just now." }) };
   let scan = cacheGet(cacheKey(material)) ?? null;
   if (!scan) {
     const bytes = await materialBytes(ctx.admin, ctx.userId, material.id);

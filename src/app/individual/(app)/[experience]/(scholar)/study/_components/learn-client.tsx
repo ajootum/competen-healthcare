@@ -256,7 +256,7 @@ export function LearnWorkspace(props: {
   /** SCHOLAR-LEARN-STYLE-01: scholar_learn_style_guide / _challenge / scholar_learn_more_menu (absent: all on). Explain is always on. */
   styleOn?: StylePolicy;
   /** SCHOLAR-LESSON-VISUALS-01: policy scholar_lesson_visuals and scholar_lesson_visuals_max_per_section -- the learner's own slide / page pictures under a lesson. */
-  visuals?: { on: boolean; max: number };
+  visuals?: { on: boolean; word?: boolean; max: number };
   /** LEARNING-CLOSE-2026-11 D01 (CYU-03/04): the session's kept understanding checks, per lesson step (the server's, so any device). */
   initialChecks?: Record<number, CheckHistoryItem[]>;
   /** CYU-01: policy scholar_learn_check_placement (absent: distributed). */
@@ -1368,7 +1368,7 @@ export function LearnWorkspace(props: {
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
         {/* SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes first (no AI), with their competencies, what exists to practise with, and Mark as read. */}
         {session.id && session.recorded && (
-          <LessonReader hidePictures={!!recalling[st.step]} sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
+          <LessonReader hidePictures={!!recalling[st.step]} wordPictures={!!props.visuals?.word} sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
             markedNote={markedNote[st.step] ?? null} accent={accent} onLoaded={readerLoaded} onMarkRead={markRead} ownCards={!!props.ownCards && !!first?.materialId} />
         )}
         {/* Nothing here yet: a calm line and the one way in (the learner's choice). Manual: the starting action, as before. */}
@@ -1428,7 +1428,7 @@ export function LearnWorkspace(props: {
         {/* SCHOLAR-LESSON-VISUALS-01: the original pictures of the slides / pages this lesson cites (no AI), after its teaching and before its
             actions. Hidden while the learner recalls the lesson, so a picture cannot give the answer away. */}
         {props.visuals?.on && hasLesson && !recalling[st.step] && (
-          <LearnVisuals enabled max={props.visuals.max}
+          <LearnVisuals enabled word={!!props.visuals.word} max={props.visuals.max}
             sections={st.sections.map(x => ({ chunkId: x.chunkId, materialId: x.materialId, materialTitle: x.materialTitle, unit: x.unit, pageFrom: x.pageFrom, pageTo: x.pageTo, citation: x.citation }))} />
         )}
 

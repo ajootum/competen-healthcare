@@ -205,7 +205,7 @@ export function SectionPictures({ materialId, materialTitle, from, to, first, la
   if (!found.length && !hidden) return null;
   return (
     <div className="mt-3 space-y-3">
-      {hidden && <p role="note" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-800">This section holds a picture, chart or diagram that cannot be shown here. <a href={`/api/individual/scholar/materials/${materialId}`} className={`font-semibold underline ${touch} ${focusRing}`}>Download the original file</a> to see it.</p>}
+      {hidden && <p role="note" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-[13px] text-gray-800">This section holds a picture, chart or diagram that cannot be shown here. <a href={`/api/individual/scholar/materials/${materialId}`} className={`inline-flex items-center font-semibold underline ${touch} ${focusRing}`}>Download the original file</a> to see it.</p>}
       {found.map(v => {
         const where = `${capital(noun(v))} ${v.n}`;
         const usesPage = v.kind === "pdf_page";
@@ -244,8 +244,9 @@ const withSectionNumbers = (s: LessonSection): LessonSection => {
 };
 
 /** Shown by Learn after a lesson's teaching and before its actions: the original pictures of the slides / pages it cites. */
-export function LearnVisuals({ sections, max, enabled }: { sections: readonly LessonSection[]; max: number; enabled: boolean }) {
-  const numbered = sections.map(withSectionNumbers);
+export function LearnVisuals({ sections, max, enabled, word }: { sections: readonly LessonSection[]; max: number; enabled: boolean; word?: boolean }) {
+  // Word pictures off: a section has nothing to ask for, as before.
+  const numbered = sections.filter(s => word || s.unit !== "section").map(withSectionNumbers);
   const materials = [...new Map(numbered.filter(s => s.pageFrom !== null).map(s => [s.materialId, s.materialTitle])).entries()];
   if (!enabled || !materials.length) return null;
   return (
