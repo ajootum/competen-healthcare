@@ -4,7 +4,7 @@ import Link from "next/link";
 import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useState, useId } from "react";
 import { LearningCallout, LearningIcon, LearningSectionHead, ProgressMark, learnAction, learnBox, type ProgressState } from "@/components/ui/scholar-learning";
 import { sourceHref, studyHref } from "./question-view";
 import {
@@ -855,6 +855,7 @@ const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFi
 
 /** SCHOLAR-ANOTHER-SCENARIO-01: another scenario on this section, about a different decision. Only on this click, and it says it uses AI. */
 function AnotherScenarioButton({ questionId }: { questionId: string }) {
+  const aiNote = useId();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -867,8 +868,8 @@ function AnotherScenarioButton({ questionId }: { questionId: string }) {
   }
   return (
     <>
-      <button type="button" className={btn} disabled={busy} onClick={() => void go()} aria-describedby="another-scenario-ai">{busy ? "Writing a new one…" : "Try another scenario on this"}</button>
-      <span id="another-scenario-ai" className="basis-full text-[12px] text-gray-700">AI writes it from this section of your notes, about a different decision. It uses your AI allowance.</span>
+      <button type="button" className={btn} disabled={busy} onClick={() => void go()} aria-describedby={aiNote}>{busy ? "Writing a new one…" : "Try another scenario on this"}</button>
+      <span id={aiNote} className="basis-full text-[12px] text-gray-700">AI writes it from this section of your notes, about a different decision. It uses your AI allowance.</span>
       {error && <p role="alert" className="basis-full text-[13px] font-semibold text-red-800">{error}</p>}
     </>
   );

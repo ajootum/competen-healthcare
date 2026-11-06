@@ -29,6 +29,10 @@ It goes through the same route, preflight, allowance, sufficiency check and scen
 - **Model calls per press** weren't metered in this test. By design it is one generation with the existing retry, at most two calls and the same as any scenario write.
 - **No clinician has reviewed these scenarios.**
 
+## Independent read
+
+No blockers. Two should-fix items are fixed: when no scenario could be written the learner was told they had nothing saved, and a client could ask for end-of-session feedback a scenario cannot use. Left as a note: the limit counts only scenarios at the current prompt version, and it is checked once before writing, so a learner with older scenarios, or a second tab, could pass five. Each extra still costs them allowance and passes every check.
+
 ## For the owner to know
 
 - In production the button only appears after a scenario, and scenarios appear only where the `scholar_revision_formats` policy offers them. If scenarios are off there, this changes nothing until that policy includes them.

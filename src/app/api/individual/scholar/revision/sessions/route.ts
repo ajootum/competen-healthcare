@@ -100,7 +100,7 @@ export async function POST(req: Request) {
   const mode = body?.mode as RevisionMode;
   if (!(REVISION_MODES as readonly string[]).includes(mode)) return NextResponse.json({ error: "Unknown way of revising." }, { status: 400 });
   if (!policy.scholarRevisionModes.includes(mode)) return NextResponse.json({ error: "That way of revising is not offered here." }, { status: 403 });
-  const feedback: "immediate" | "end" = mode === "mock" ? "end" : body?.feedback === "end" || body?.feedback === "immediate" ? body.feedback : policy.scholarRevisionFeedback;
+  const feedback: "immediate" | "end" = mode === "mock" ? "end" : isUuid(body?.anotherScenarioOf) ? "immediate" : body?.feedback === "end" || body?.feedback === "immediate" ? body.feedback : policy.scholarRevisionFeedback;
 
   // ── SCHOLAR-FLASHCARDS-01: offered by policy, and a deck or chosen cards are studied as they are, with no AI ──
   if (mode === "flashcards" && policy.scholarFlashcards !== "on") return NextResponse.json({ error: "Flashcards are not offered here." }, { status: 403 });
@@ -465,6 +465,8 @@ export async function POST(req: Request) {
   const withheld: Withheld | null = aiCalls > 0 && generated === 0 && pick.shortfall > 0 ? { reason: "insufficient_grounding" } : null;
   if (!pick.ids.length) {
     // Continuity with nothing stored: there is no session to "use your saved questions", so say what is true instead.
+    // SCHOLAR-ANOTHER-SCENARIO-01: this learner has scenarios on this section, so "nothing saved" would be false. Say what really happened.
+    if (anotherOf) return NextResponse.json({ error: scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE : `Another scenario could not be written just now. Your saved scenarios are unchanged.${note ? ` ${note.replace(/ This session uses your saved questions( only)?\.$/, "").replace(/: this session uses your saved questions only\.$/, ".")}` : ""}` }, { status: 409 });
     const nothingSaved = note ? `${note.replace(/ This session uses your saved questions( only)?\.$/, "").replace(/: this session uses your saved questions only\.$/, ".")} You have no saved questions for this yet, so there is nothing to revise here until new ones can be written. Your cards, saved sets and history are unaffected.` : null;
     return NextResponse.json({
       error: mode === "spaced" ? "Nothing is due for review today." : mode === "weak" ? "Nothing to revise here yet: questions you get wrong show up in Weak areas." : nothingSaved ?? (scenarioSkipped ? SCENARIO_INSUFFICIENT_NOTE : "There are no questions for this yet."),
