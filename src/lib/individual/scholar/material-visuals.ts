@@ -307,6 +307,32 @@ export function visualsForPages(visuals: readonly Visual[], from: number | null 
   return visuals.filter(v => v.n >= from && v.n <= hi);
 }
 
+/**
+ * Pure. SCHOLAR-VISUAL-001 s2 Rule 2: the pictures that belong with one section of the notes, in slide or page order. A section's own
+ * slide, shown once where a long slide has several sections (`first`), and after its last section (`last`) the slides that follow with
+ * no section of their own: a picture-only slide stays where it is in the file, with the notes before it, not in a gallery. `leading`
+ * does the same for picture-only slides before the first section. Nothing is shown twice.
+ */
+export function visualsForSection(visuals: readonly Visual[], noSection: readonly number[], s: { from: number | null | undefined; to?: number | null; first: boolean; last: boolean; leading?: boolean }): Visual[] {
+  if (s.from === null || s.from === undefined || !Number.isInteger(s.from)) return [];
+  const none = new Set(noSection);
+  const hi = s.to === null || s.to === undefined || !Number.isInteger(s.to) || s.to < s.from ? s.from : s.to;
+  const pages: number[] = [];
+  if (s.leading) for (let n = 1; n < s.from && none.has(n); n++) pages.push(n);
+  if (s.first) for (let n = s.from; n <= hi; n++) pages.push(n);
+  if (s.last) for (let n = hi + 1; none.has(n); n++) pages.push(n);
+  const wanted = new Set(pages);
+  return visuals.filter(v => wanted.has(v.n)).slice().sort((a, b) => a.n - b.n);
+}
+
+/** Pure. A lesson's pictures: those its sections cite, and the picture-only slides that follow them. In order, each once. */
+export function visualsForLesson(visuals: readonly Visual[], noSection: readonly number[], ranges: readonly { pageFrom: number | null; pageTo: number | null }[]): Visual[] {
+  const cited = visualsForSections(visuals, ranges as Parameters<typeof visualsForSections>[1]);
+  const following = ranges.flatMap(r => visualsForSection(visuals, noSection, { from: r.pageFrom, to: r.pageTo, first: false, last: true }));
+  const seen = new Set<string>();
+  return [...cited, ...following].filter(v => (seen.has(v.key) ? false : (seen.add(v.key), true))).sort((a, b) => a.n - b.n);
+}
+
 /** Pure. A visual key as the URL carries it, or null when it is not one (nothing else is ever looked up). */
 export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | null {
   const slide = /^([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);

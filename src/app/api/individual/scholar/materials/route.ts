@@ -8,6 +8,8 @@ import { claimUpload, createMaterial, discardUpload, findDuplicate, isUuid, kept
 import { finishDecision, isSha256 } from "@/lib/individual/scholar/upload-record";
 import { type MaterialMime, PDF_MIME, PPTX_MIME, UPLOAD_INTEGRITY_MESSAGE, UPLOAD_ATTESTATION_REQUIRED, UPLOAD_SESSION_MINUTES, sessionRefusal, uploadRules } from "@/lib/individual/scholar/config";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
+import { applySlideFacts, picturesCanBeRead } from "@/lib/individual/scholar/slide-classify";
+import { readSlideFacts } from "@/lib/individual/scholar/slide-structure";
 import { EXTRACTION_MESSAGE, PII_LABEL, chunkPages, extractMaterial, extractionQuality, findPatientIdentifiers, qualitySummary, sniffUpload, titleFromFileName } from "@/lib/individual/scholar/extract";
 import { audit } from "@/lib/individual/scholar/http";
 import type { ExtractionQuality } from "@/lib/individual/scholar/extract";
@@ -46,7 +48,7 @@ export async function POST(req: Request) {
   // the first finish gave, and nothing is read, extracted or removed again. The material id IS the upload id.
   const already = await keptMaterial(ctx.admin, ctx.userId, uploadId);
   if (already === "unreadable") return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly.", retryable: true }, { status: 503 });
-  if (already) return keptAnswer(already, policy.scholarMaterialImageSlides === "ai_transcription");
+  if (already) return keptAnswer(already, policy.scholarMaterialImageSlides === "ai_transcription", policy.scholarLessonVisuals === "on");
 
   // The single finish claim (migration 960): one finish reads and extracts an upload, any other waits for its answer.
   const now = Date.now();
@@ -132,6 +134,9 @@ export async function POST(req: Request) {
 
   // UPLOAD-01 U2: how completely it was read, stored with it and returned -- "partial" is never reported as clean.
   const quality = extractionQuality(mime, extraction.pages, chunks);
+  // SCHOLAR-PPTX-READING-01: and what each slide holds, so a blank slide is not reported as unread. A file it cannot open keeps the plain record.
+  const facts = mime === PPTX_MIME ? await readSlideFacts(bytes, extraction.pages, new Date().toISOString()) : null;
+  if (facts) Object.assign(quality, applySlideFacts(quality, facts));
   const created = await createMaterial(ctx.admin, ctx.userId, {
     id: uploadId, path, title: titleFromFileName(fileName), fileName, mime, bytes,
     pageCount: extraction.pageCount, extractor: extraction.extractor, chunks, quality,
@@ -147,13 +152,13 @@ export async function POST(req: Request) {
   // SCHOLAR-CE07C: another finish of this upload kept it first (possible only without 960's claim). Its answer, its audit.
   if (created.existing) {
     const kept = await keptMaterial(ctx.admin, ctx.userId, uploadId);
-    if (kept && kept !== "unreadable") return keptAnswer(kept, policy.scholarMaterialImageSlides === "ai_transcription");
+    if (kept && kept !== "unreadable") return keptAnswer(kept, policy.scholarMaterialImageSlides === "ai_transcription", policy.scholarLessonVisuals === "on");
   }
 
   // SCHOLAR-IMAGE-RECOVERY: where the image-only pages (or picture-only slides) can be read on request, the summary says so.
-  const recoverable = policy.scholarMaterialImageSlides === "ai_transcription" && quality.emptyUnits.length > 0
+  const recoverable = policy.scholarMaterialImageSlides === "ai_transcription" && picturesCanBeRead(quality)
     && ((mime === PDF_MIME && quality.unit === "page") || (mime === PPTX_MIME && quality.unit === "slide"));
-  const summary = qualitySummary(quality, { recoverable });
+  const summary = qualitySummary(quality, { recoverable, picturesShown: policy.scholarLessonVisuals === "on" });
   await audit(ctx, "individual_scholar_material_uploaded", "individual_scholar_material", created.id,
     { mime, bytes: bytes.byteLength, pages: extraction.pageCount, chunks: chunks.length, extractor: extraction.extractor, partial: summary.partial, empty_units: quality.emptyUnits.length });
   return NextResponse.json({ ok: true, id: created.id, chunks: chunks.length, pages: extraction.pageCount,
@@ -161,11 +166,11 @@ export async function POST(req: Request) {
 }
 
 /** SCHOLAR-CE07C: the answer a kept upload's finish gives, rebuilt from the stored material for a retried finish. */
-function keptAnswer(m: { id: string; mime: MaterialMime; chunks: number; pages: number | null; quality: ExtractionQuality | null }, imageSlidesAi: boolean) {
+function keptAnswer(m: { id: string; mime: MaterialMime; chunks: number; pages: number | null; quality: ExtractionQuality | null }, imageSlidesAi: boolean, picturesShown: boolean) {
   if (!m.quality) return NextResponse.json({ ok: true, id: m.id, chunks: m.chunks, pages: m.pages, status: "ready", already: true });
-  const recoverable = imageSlidesAi && m.quality.emptyUnits.length > 0
+  const recoverable = imageSlidesAi && picturesCanBeRead(m.quality)
     && ((m.mime === PDF_MIME && m.quality.unit === "page") || (m.mime === PPTX_MIME && m.quality.unit === "slide"));
-  const summary = qualitySummary(m.quality, { recoverable });
+  const summary = qualitySummary(m.quality, { recoverable, picturesShown });
   // The same partial/ready rule as a first finish (U2: partial is never a bare success).
   const state = summary.partial ? "partial" : "ready";
   return NextResponse.json({ ok: true, id: m.id, chunks: m.chunks, pages: m.pages, status: state,
