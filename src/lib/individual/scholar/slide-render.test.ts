@@ -132,8 +132,8 @@ describe("the stored record", () => {
 
 describe("a drawn slide among the pictures", () => {
   const unit = { n: 35, sha: "abcdefabcdefabcd", width: 1920, height: 1080, bytes: 1000 };
-  const picture = { n: 35, key: "35-0123456789abcdef", whole: undefined } as unknown as Visual;
-  const other = { n: 36, key: "36-0123456789abcdef", whole: undefined } as unknown as Visual;
+  const pictureOf = (n: number) => ({ n, key: [n, "0".repeat(16)].join("-"), whole: undefined }) as unknown as Visual;
+  const picture = pictureOf(35), other = pictureOf(36);
   it("has its own key, never confused with a picture's", () => {
     const v = wholeSlideVisual(unit);
     expect(v).toMatchObject({ key: "w35-abcdefabcdefabcd", whole: true, media: null, kind: "webp", unit: "slide", n: 35 });
