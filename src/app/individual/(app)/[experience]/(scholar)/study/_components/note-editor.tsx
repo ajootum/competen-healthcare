@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { experienceHref } from "@/lib/individual/experiences";
-import { FREE_CONTEXT, IDEAS, cleanTags, type NoteContext, type NoteDraft, type NoteLink } from "@/lib/individual/scholar/personal-notebook";
+import { FREE_CONTEXT, IDEAS, cleanTags, linkFields, type NoteContext, type NoteDraft, type NoteLink } from "@/lib/individual/scholar/personal-notebook";
 import type { NotebookNote } from "@/lib/individual/scholar/store";
 import type { NoteWhere, RelatedLink } from "@/lib/individual/scholar/personal-notebook-data";
 import { NoteField, newClientKey, notebookHref, readDrafts, useNoteSaver } from "./note-capture";
@@ -143,17 +143,19 @@ function Editor({ userId, clientKey, context, options, draft, note, where, relat
 function NoteLinks({ saver, note, draftContext, where, options }: { saver: ReturnType<typeof useNoteSaver>["saver"]; note: NotebookNote | null; draftContext: NoteContext; where: NoteWhere | null; options: LinkOptions }) {
   const uid = useId();
   const initial = note ?? null;
-  const [kind, setKind] = useState<"none" | "lesson" | "section" | "topic">(initial?.targetKind === "lesson" ? "lesson" : initial?.targetKind === "section" || initial?.targetKind === "material" ? "section" : initial?.targetKind === "topic" ? "topic" : "none");
-  const [topic, setTopic] = useState(initial?.topic ?? "");
-  const [sessionId, setSessionId] = useState(initial?.sessionId ?? "");
+  // A note not yet saved may be a restored draft: the form starts from the link it will save.
+  const fromDraft = initial ? null : linkFields(draftContext.link);
+const [kind, setKind] = useState<"none" | "lesson" | "section" | "topic">(fromDraft ? fromDraft.kind : initial?.targetKind === "lesson" ? "lesson" : initial?.targetKind === "section" || initial?.targetKind === "material" ? "section" : initial?.targetKind === "topic" ? "topic" : "none");
+  const [topic, setTopic] = useState(fromDraft?.topic ?? initial?.topic ?? "");
+  const [sessionId, setSessionId] = useState(fromDraft?.sessionId ?? initial?.sessionId ?? "");
   const [steps, setSteps] = useState<{ step: number; title: string }[] | null>(null);
-  const [step, setStep] = useState(initial?.step !== null && initial?.step !== undefined ? String(initial.step) : "");
-  const [materialId, setMaterialId] = useState(initial?.materialId ?? "");
+  const [step, setStep] = useState(fromDraft ? fromDraft.step : initial?.step !== null && initial?.step !== undefined ? String(initial.step) : "");
+  const [materialId, setMaterialId] = useState(fromDraft?.materialId ?? initial?.materialId ?? "");
   const [sections, setSections] = useState<{ id: string; label: string }[] | null>(null);
-  const [chunkId, setChunkId] = useState(initial?.chunkId ?? "");
+  const [chunkId, setChunkId] = useState(fromDraft?.chunkId ?? initial?.chunkId ?? "");
   const [competencyId, setCompetencyId] = useState(initial?.competencyId ?? "");
   const [studyId, setStudyId] = useState(initial?.studyId ?? "");
-  const [linked, setLinked] = useState<string | null>(where?.where ?? null);
+  const [linked, setLinked] = useState<string | null>(where?.where ?? (fromDraft?.kind === "topic" ? `Topic: ${fromDraft.topic}` : fromDraft?.kind === "lesson" ? options.lessons.find(l => l.id === fromDraft.sessionId)?.title ?? "Your lesson" : fromDraft?.kind === "section" ? options.materials.find(m => m.id === fromDraft.materialId)?.title ?? "Your material" : null));
   const [open, setOpen] = useState(false);
   const canFree = !note || note.viaNotebook;
   const fixedTarget = !!note && (note.kind !== "note" || note.targetKind === "artefact");
@@ -175,10 +177,12 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
     return () => { live = false; };
   }, [open, kind, materialId]);
 
-  const startKey = useState(() => JSON.stringify([kind, sessionId, step, materialId, chunkId, topic]))[0];
+  // The link last asked for, so going back to an earlier link is a change too.
+  const sentKey = useRef(JSON.stringify([kind, sessionId, step, materialId, chunkId, topic]));
   const apply = () => {
     // Only what changed: adding a competency must not take the note off its section.
-    const linkChanged = !fixedTarget && JSON.stringify([kind, sessionId, step, materialId, chunkId, topic]) !== startKey;
+    const key = JSON.stringify([kind, sessionId, step, materialId, chunkId, topic]);
+    const linkChanged = !fixedTarget && key !== sentKey.current;
     let link: NoteLink | null = null;
     let label: string | null = null;
     if (kind === "none") { if (canFree) link = { targetKind: "free" }; }
@@ -195,6 +199,7 @@ function NoteLinks({ saver, note, draftContext, where, options }: { saver: Retur
       if (chunkId) label = `${label}, ${sections?.find(s => s.id === chunkId)?.label ?? "one section"}`;
     }
     if (link && linkChanged) {
+      sentKey.current = key;
       saver.setContext({ ...draftContext, link, sectionLabel: null, sectionAnchor: null });
       saver.patch({ link, sectionLabel: null, sectionAnchor: null });
       setLinked(label);

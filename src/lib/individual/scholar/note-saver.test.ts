@@ -350,6 +350,30 @@ describe("NoteSaver: the corners a review found", () => {
   });
 });
 
+describe("NoteSaver: a refused link can be corrected", () => {
+  beforeEach(() => { vi.useFakeTimers(); });
+  afterEach(() => { vi.useRealTimers(); });
+
+  it("a new link after a refusal is sent, not left waiting for the words to change", async () => {
+    const { saver, sent } = rig();
+    saver.setBody("A thought");
+    await vi.advanceTimersByTimeAsync(AUTOSAVE_DELAY_MS);
+    sent[0].resolve(ok(1)); await settle();
+    saver.patch({ link: { targetKind: "topic", topic: "MRN 1234567" } });
+    await vi.advanceTimersByTimeAsync(0);
+    sent[1].resolve({ kind: "refused", message: "That looks like it could identify a patient." }); await settle();
+    expect(saver.getSnapshot().status).toBe("refused");
+    saver.patch({ link: { targetKind: "topic", topic: "Motor milestones" } });
+    expect(saver.getSnapshot()).toMatchObject({ status: "typing", message: null });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(sent).toHaveLength(3);
+    expect(JSON.stringify(sent[2].req)).toContain("Motor milestones");
+    expect(JSON.stringify(sent[2].req)).not.toContain("MRN");
+    sent[2].resolve(ok(2)); await settle();
+    expect(saver.getSnapshot().status).toBe("saved");
+  });
+});
+
 describe("statusWords", () => {
   it("says each state in words", () => {
     const s = (status: Parameters<typeof statusWords>[0]["status"], message: string | null = null) => statusWords({ status, message, dirty: false });

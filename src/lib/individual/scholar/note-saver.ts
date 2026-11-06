@@ -124,7 +124,9 @@ export class NoteSaver {
   /** A change that is not typing (a pin, a link): saved straight away, in the same queue, against the same revision. */
   patch(meta: MetaPatch) {
     this.meta = { ...this.meta, ...meta };
-    this.set({ dirty: true, status: this.snap.status === "idle" || this.snap.status === "saved" ? "typing" : this.snap.status });
+    // A refusal can be for this very link, a topic that looks like a patient identifier, so a changed link is a new attempt. If the words are what was refused, they are refused again.
+    const fresh = this.snap.status === "idle" || this.snap.status === "saved" || this.snap.status === "refused";
+    this.set(fresh ? { dirty: true, status: "typing", message: null } : { dirty: true });
     this.schedule(0);
   }
 

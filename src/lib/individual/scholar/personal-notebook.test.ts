@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DRAFT_MAX_AGE_MS, FREE_CONTEXT, NOTEBOOK_BODY_MAX, NOTEBOOK_TAGS_MAX, askPrefill, capturedInOf, cleanBody, cleanTags, linkColumns, noteHeading, notesToMarkdown,
   parseDraft, parseNoteLink, pickReadingBox, validateCreate, validatePatch,
+  linkFields,
 } from "./personal-notebook";
 import { relatedByTags } from "./personal-notebook-data";
 import { notebookOffered } from "./store";
@@ -176,5 +177,15 @@ describe("notebookOffered", () => {
     expect(notebookOffered({ scholarPersonalNotebook: "off", scholarLearningLibrary: "on" }, true)).toBe(false);
     expect(notebookOffered({ scholarPersonalNotebook: "on", scholarLearningLibrary: "off" }, true)).toBe(false);
     expect(notebookOffered({ scholarPersonalNotebook: "on", scholarLearningLibrary: "on" }, false)).toBe(false);
+  });
+});
+
+describe("linkFields: a restored draft shows the link it will save", () => {
+  it("each link fills its own fields and no other", () => {
+    expect(linkFields({ targetKind: "free" }).kind).toBe("none");
+    expect(linkFields({ targetKind: "topic", topic: "Motor milestones" })).toMatchObject({ kind: "topic", topic: "Motor milestones", materialId: "" });
+    expect(linkFields({ targetKind: "lesson", sessionId: "s", step: 0, materialId: null, chunkId: null })).toMatchObject({ kind: "lesson", sessionId: "s", step: "0", topic: "" });
+    expect(linkFields({ targetKind: "section", materialId: "m", chunkId: "c" })).toMatchObject({ kind: "section", materialId: "m", chunkId: "c" });
+    expect(linkFields({ targetKind: "material", materialId: "m" })).toMatchObject({ kind: "section", materialId: "m", chunkId: "" });
   });
 });

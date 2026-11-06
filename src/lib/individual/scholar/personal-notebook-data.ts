@@ -40,7 +40,7 @@ export async function describeNotes(admin: Admin, userId: string, notes: readonl
   for (const n of notes) {
     if (n.targetKind === "free") { out.set(n.id, FREE); continue; }
     if (n.targetKind === "topic") {
-      out.set(n.id, { where: `Topic: ${n.topic}`, openHref: `study/saved?topic=${encodeURIComponent(n.topic ?? "")}`, openLabel: "This topic in My Library", sectionHref: null, picture: null });
+      out.set(n.id, { where: `Topic: ${n.topic}`, openHref: `study/notebook?topic=${encodeURIComponent(n.topic ?? "")}`, openLabel: "Notes on this topic", sectionHref: null, picture: null });
       continue;
     }
     const ses = n.sessionId ? sesById.get(n.sessionId) : undefined, art = n.artefactId ? artById.get(n.artefactId) : undefined;

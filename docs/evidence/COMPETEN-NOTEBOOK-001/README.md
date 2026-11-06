@@ -79,11 +79,13 @@ A separate second read before the PR (blockers 1 to 4, should-fix 5 to 14). All 
 
 Remove is honoured, even with words waiting (`discard`). A link problem is no longer read as a removed note, which had made a second note. A restored draft cannot overwrite newer words. An in-place edit stays current. A proxy's page is not a save. A lost reply plus more typing is not a false conflict. A pin refused for an old revision goes again. Save link no longer wipes the section. A highlight with no comment can be pinned. A stale study id cannot block a save. A section link opens once. The library's older edit checks its copy. Unlinking during a first save is honoured. A retry cannot save into another person's notebook after a sign-out and sign-in. Section labels are screened. Filtered search says when it was cut off. Ask no longer receives the prefill.
 
+A second, short read covered what came after: the topic link (1001) and the touch fix. No blockers, and four should-fix, all fixed. A corrected topic now saves after a refusal. Going back to an earlier link is a change. A restored draft shows the link it will save. A topic note opens its notes in My Notebook, not an empty library view.
+
 **Left, for the owner:** see the PR's decisions.
 
 ## Tests
 
-Vitest: `note-saver.test.ts`, `personal-notebook.test.ts`, `personal-notebook-store.test.ts`, `api/individual/scholar/notebook/notes/route.test.ts`, plus the pinned updates to `nav.test.ts`, `policy.test.ts` and `scholar-learning-tokens.test.ts`. On the merged code: type check clean, lint clean on the changed files, 2,852 focused tests passed (170 files), and harnesses `scholar-learning-harness` (182 of 182), `individual-foundation-harness` (77 of 77) and `sidebar-active-harness` (15 of 15). CI runs the full suites. `scholar-learning-harness` found two real breaks on the way: notebook writes outside the one Scholar store, moved into it, and the reserved phrase "learning library" in page words.
+Vitest: `note-saver.test.ts`, `personal-notebook.test.ts`, `personal-notebook-store.test.ts`, `api/individual/scholar/notebook/notes/route.test.ts`, plus the pinned updates to `nav.test.ts`, `policy.test.ts` and `scholar-learning-tokens.test.ts`. On the merged code: type check clean, lint clean on the changed files, 2,852 focused tests passed (170 files) before the second read's corrections, then 73 on the changed notebook files after them, and harnesses `scholar-learning-harness` (182 of 182), `individual-foundation-harness` (77 of 77) and `sidebar-active-harness` (15 of 15). CI runs the full suites. `scholar-learning-harness` found two real breaks on the way: notebook writes outside the one Scholar store, moved into it, and the reserved phrase "learning library" in page words.
 
 ## Walk
 
@@ -98,9 +100,10 @@ Vitest: `note-saver.test.ts`, `personal-notebook.test.ts`, `personal-notebook-st
 | `walk-desktop.log` | 95 passed, 1 red | The same |
 | `walk-touch-check.log` | 2 of 2 | Phone, after the fix: 89 controls on library search and 274 on library notes, none under 44px |
 | `walk-other-learner.log` | 5 of 5 | Signed in as the fixture learner, another learner's note: its page, a change, the export and a search all reach nothing, and the note is unchanged |
+| `walk-topic-link-check.log` | 10 of 10 | The four corrections from the second read, in the browser |
 | `walk-key-off.log` | 8 of 8 | Policy off: nothing offered, saving and export refused, nothing written |
 
-**Not rerun, on the owner's instruction of 6 Nov** ("Dont run all checks - only the safe and important ones"). The three walk logs were not rerun to clear those reds. The tablet and desktop logs were taken before the corrected check and before two later changes: one lint comment and one class on a library link. Only the phone run has the touch check.
+**Not rerun, on the owner's instruction of 6 Nov** ("Dont run all checks - only the safe and important ones"). The three walk logs were not rerun to clear those reds. The tablet and desktop logs were taken before the corrected check. All three logs predate the second read's four corrections, and tablet and desktop also predate one lint comment and one class on a library link. Those changes were checked by the focused tests, the type check, `walk-touch-check.log` and `walk-topic-link-check.log`. Only the phone run has the touch check.
 
 Staging holds one labelled probe note on a `competen.test` account, written for `walk-other-learner.log` because staging held no other learner's note to test against. It stays, as agents do not hard-delete.
 

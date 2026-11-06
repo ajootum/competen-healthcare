@@ -77,6 +77,18 @@ export type NoteLink =
   | { targetKind: "section"; materialId: string; chunkId: string }
   | { targetKind: "lesson"; sessionId: string; step: number; materialId: string | null; chunkId: string | null };
 
+/** A link as the fields of the link form, so a restored draft shows the link it will save. */
+export function linkFields(link: NoteLink): { kind: "none" | "lesson" | "section" | "topic"; topic: string; sessionId: string; step: string; materialId: string; chunkId: string } {
+  const none = { topic: "", sessionId: "", step: "", materialId: "", chunkId: "" };
+  switch (link.targetKind) {
+    case "topic": return { ...none, kind: "topic", topic: link.topic };
+    case "lesson": return { ...none, kind: "lesson", sessionId: link.sessionId, step: String(link.step) };
+    case "section": return { ...none, kind: "section", materialId: link.materialId, chunkId: link.chunkId };
+    case "material": return { ...none, kind: "section", materialId: link.materialId };
+    default: return { ...none, kind: "none" };
+  }
+}
+
 /** What a capture knows about where it happens. Every id is read again on the server by the caller's id. */
 export type NoteContext = {
   link: NoteLink;
