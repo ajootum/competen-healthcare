@@ -93,7 +93,7 @@ export function LearningLibrary({ materials, savedOn, coursesOn, extra }: { mate
       {coursesOn && (
         <>
           <p className="mb-1 mt-3 px-0.5 text-[12px] font-semibold text-gray-600">From Competen</p>
-          <div className={box}><Row href={experienceHref("scholar", "courses")} title="Courses & Training" detail="Learning provided by Competen, separate from your own notes" icon="book" /></div>
+          <div className={box}><Row href={experienceHref("scholar", "courses")} title="Courses" detail="Learning provided by Competen, separate from your own notes" icon="book" /></div>
         </>
       )}
       {extra}
