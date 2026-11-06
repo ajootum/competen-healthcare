@@ -12,7 +12,7 @@ import { AiBadge } from "./client";
 import { AiFlagList, GovernedReferenceList } from "./learn-kinds";
 import { AiFeedback } from "./ai-feedback";
 import ClarifyPurpose from "@/app/individual/_components/ai/ClarifyPurpose";
-import { aiReasonCopy, clarifyFrom, type ClarifyPrompt } from "@/lib/individual/ai-availability";
+import { aiReasonCopy, clarifyFrom, type AiUnavailableReason, type ClarifyPrompt } from "@/lib/individual/ai-availability";
 import { useAiAvailabilityOf } from "@/app/individual/_components/ai/AiAvailabilityContext";
 import { FormativeAiLabel } from "./edu-notice";
 import { RecoveryFlow, type Expansion, type ExplainOutcome, type RecoveryRequestBody } from "./evidence-recovery";
@@ -39,6 +39,8 @@ import { usePaneGrid } from "@/components/ui/pane-grid";
 import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
 import { GoDeeperCard, type GoDeeperLevels } from "./go-deeper-view";
+import { GUIDE_FRESH, GuideMePanel, type GuideOutcome, type GuideState } from "./guide-me-panel";
+import { guideVerdictOf } from "@/lib/individual/scholar/guide-me";
 import { GO_DEEPER_COPY, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
 import { AskAbout, type AskAboutProps } from "./ask-panel";
@@ -259,6 +261,8 @@ export function LearnWorkspace(props: {
   inline?: InlinePolicy;
   /** SCHOLAR-INLINE-CHECKS-01: sections with an accepted competency mapping -- the clinical-relevance signal for Apply (learn-inline.ts applyEligible). */
   applyChunkIds?: string[];
+  /** SCHOLAR-GUIDE-ME-001: policy scholar_guide_me_adaptive (absent: off, Guide me as it was). */
+  guideAdaptive?: boolean;
   /** SCHOLAR-LEARN-STYLE-01: scholar_learn_style_guide / _challenge / scholar_learn_more_menu (absent: all on). Explain is always on. */
   styleOn?: StylePolicy;
   /** SCHOLAR-LESSON-VISUALS-01: policy scholar_lesson_visuals and scholar_lesson_visuals_max_per_section -- the learner's own slide / page pictures under a lesson. */
@@ -366,6 +370,7 @@ export function LearnWorkspace(props: {
   const [styleChosen, setStyleChosen] = useState<TeachingStyle>("explain");
   const styleRef = useRef<TeachingStyle>("explain");
   const [styleMem, setStyleMem] = useState<Record<string, ApproachMemory>>({});
+  const [guideStates, setGuideStates] = useState<Record<number, GuideState>>({});
   const remember = useCallback((k: string, m: ApproachMemory) => setStyleMem(o => ({ ...o, [k]: m })), []);
   /** Per lesson: whether Practise is open. */
   const [practiceOpen, setPracticeOpen] = useState<Record<number, boolean>>({});
@@ -1095,6 +1100,37 @@ export function LearnWorkspace(props: {
     if (r) keepAsked(q);
   }
   /** A teaching approach's request, through the same route and body as every Learn action (allowance, grounding, dedupe). */
+  // SCHOLAR-GUIDE-ME-001: the same request as any approach, with the clinical-risk gate's question handed to the panel, so it is answered where the learner is and the panel carries on.
+  const runGuide = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
+    if (!session) return null;
+    const { action, ...extra } = body;
+    const a = String(action);
+    setBusy(a); setBusyAt(st.step); setError(""); setPending(null);
+    const r = await call(ACT_URL, studyBody(bodyFor(st, a, { mode, depth }, extra)));
+    setBusy(""); setBusyAt(null);
+    const prompt = r.ok ? null : clarifyFrom(r.json);
+    if (prompt) return { ok: false, json: { clarify: prompt } };
+    if (r.json.continuity) return { ok: false, json: { error: r.json.continuity.message } };
+    // Progress is what happened: a real teach, explanation or judged answer. Opening what is saved, a hint and an example are none of those.
+    const guided = extra.guide as { turn?: string } | undefined;
+    // Owner decision RELEASE-001 item 3: a step's verdict is the step's. The lesson's own state changes when the guided activity is complete (guideComplete below).
+    const learned = r.ok && !r.json.withheld && !extra.open && (a === "clarify" || guided?.turn === "teach" || guided?.turn === "explain") && !!r.json.answer;
+    if (learned) setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "guide"])], verdict: p[st.step]?.verdict ?? null } }));
+    return r;
+  };
+  /** The learner reached the end of the guided lesson: the server decides what that means, from its own records. No AI. */
+  const guideComplete = (st: Step) => async (): Promise<GuideOutcome | null> => {
+    if (!session?.id) return null;
+    const r = await call("/api/individual/scholar/learn/guide-complete", { sessionId: session.id, step: st.step });
+    if (!r.ok) return null;
+    const out = r.json as { complete?: boolean; verdict?: string | null; recorded?: boolean; already?: boolean };
+    // The lesson's state changes only with a record behind it, and not again when finishing again added nothing.
+    if (out.complete && out.recorded && !out.already) {
+      setProgress(p => ({ ...p, [st.step]: { actions: [...new Set([...(p[st.step]?.actions ?? []), "explain"])], verdict: out.verdict ?? p[st.step]?.verdict ?? null } }));
+      if (out.verdict) dispatch({ type: "verdict", index: indexOf(st.step), value: out.verdict });
+    }
+    return { complete: !!out.complete, verdict: out.verdict ?? null, recorded: out.recorded, already: out.already };
+  };
   const runApproach = (st: Step) => async (body: Record<string, unknown>): Promise<ApproachResult> => {
     if (!session) return null;
     const { action, ...extra } = body;
@@ -1519,6 +1555,17 @@ export function LearnWorkspace(props: {
               verdict={verdict} checks={thread.filter(c => !!c.reply.verdict).length}
               run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent}
               memory={styleMem} remember={remember}
+              guidePanel={props.guideAdaptive ? (
+                <GuideMePanel key={st.step} state={guideStates[st.step] ?? GUIDE_FRESH}
+                  setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
+                  run={runGuide(st)} complete={guideComplete(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")} checkDisabled={busyHere || !props.consent || !!offReason("clarify") || props.checks === "off"}
+                  offNote={offReason("deeper") ? aiReasonCopy(offReason("deeper") as AiUnavailableReason, "scholar").text : null}
+                  renderFlags={f => <AiFlagList flags={f} />}
+                  renderClarify={(p, retry) => <ClarifyPurpose clarify={p as ClarifyPrompt} busy={!!busy} accent={accent} onEducation={() => { confirmStudy(true); retry(); }} onPatient={() => confirmStudy(false)} />}
+                  cite={(t, srcs) => <Cited text={t} sources={srcs as Source[]} />}
+                  answeredOf={q => guideVerdictOf(q, (checks[st.step] ?? []).map(x => ({ question: x.question, verdict: x.response?.verdict ?? null, next: x.response?.feedback?.next ?? null })))}
+                  renderResearch={x => <ResearchBlock x={x as ResearchReply} />} />
+              ) : undefined}
               askAction={group.ask ? <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] gap-1.5 border-[var(--cmp-learn-next-border)] bg-[var(--cmp-app-surface)] text-[var(--cmp-learn-next-ink)] hover:bg-[var(--cmp-learn-next-surface)]`}><LearningIcon name="chat" className="h-4 w-4" />{props.labels.ask}</button> : undefined} />
           </div>
         </div>

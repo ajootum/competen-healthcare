@@ -19,9 +19,9 @@ const LEVEL_INSTRUCTION: Record<ExplanationDepth, string> = {
   detailed: "LEVEL: ADVANCED. Finer mechanisms, competing explanations, the boundary of what is known, and application that takes judgement. Assume the principle is understood; still explain each technical term in context, and put the most specialised detail in an 'advanced' section.",
 };
 
-/** Pure. The whole instruction for a structured round. `scholar`: policy allows Scholar's own explanation beyond the notes (scholar_beyond_notes). */
-export function deeperInstruction(opts: { depth: ExplanationDepth; scholar: boolean; taught: boolean; depthReached: string }): string {
-  const sources = opts.scholar
+/** Pure. The rule every structured answer starts from: where each section comes from. */
+export function sourceRules(scholar: boolean): string[] {
+  return scholar
     ? [
       "EVERY SECTION SAYS WHERE IT COMES FROM. This is the rule that matters most.",
       "- source 'notes': rules 1 to 3 above hold exactly. Every sentence states only what the passages say and ends with its [S n]. Do not put anything into a notes section because you know it to be true.",
@@ -31,6 +31,11 @@ export function deeperInstruction(opts: { depth: ExplanationDepth; scholar: bool
     : [
       "EVERY SECTION USES source 'notes': rules 1 to 3 above hold exactly, and every sentence ends with its [S n]. Where the notes state something without explaining it, say the reason is not in these notes.",
     ];
+}
+
+/** Pure. The whole instruction for a structured round. `scholar`: policy allows Scholar's own explanation beyond the notes (scholar_beyond_notes). */
+export function deeperInstruction(opts: { depth: ExplanationDepth; scholar: boolean; taught: boolean; depthReached: string }): string {
+  const sources = sourceRules(opts.scholar);
   return [
     "MODE: GO DEEPER, one structured teaching round. It must deepen understanding, not lengthen the answer: scientific understanding, clinical reasoning and application.",
     opts.taught

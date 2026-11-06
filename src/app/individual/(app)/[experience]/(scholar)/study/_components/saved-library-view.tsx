@@ -22,7 +22,7 @@ import {
 import { resolveFilterScope } from "@/lib/individual/scholar/library-scope";
 import { rankChunks, toTsQuery } from "@/lib/individual/scholar/retrieval";
 import { UNIT_OF } from "@/lib/individual/scholar/config";
-import { coversLesson } from "@/lib/individual/scholar/learn-journey";
+import { coversLesson, isGuideTurnVersion } from "@/lib/individual/scholar/learn-journey";
 import { displaySessionTitle } from "@/lib/individual/scholar/learn-search";
 import { referenceSource, relabelReferences } from "@/lib/individual/scholar/learn";
 import { AI_LABEL, LEARN_ACTION_LABEL, SOURCE_KIND_LABEL, SUPPLEMENTARY_LABEL, type LearnAction } from "@/lib/individual/scholar/config";
@@ -297,6 +297,8 @@ function itemTitle(a: ArtefactRow, c: ItemCtx): string {
 }
 
 function ArtefactItem({ a, c, open = false }: { a: ArtefactRow; c: ItemCtx; open?: boolean }) {
+  // SCHOLAR-GUIDE-ME-001: a Guide Me turn is part of that activity, not a saved lesson of its own.
+  if (isGuideTurnVersion(a.promptVersion)) return null;
   const l = c.links.get(a.id) ?? null;
   const live = l && c.sessions.has(l.sessionId) ? l : null;
   const counts = a.sources.reduce((t, id) => { const x = c.counts.get(id); return x ? { cards: t.cards + x.cards, questions: t.questions + x.questions, attempts: t.attempts + x.attempts } : t; }, { cards: 0, questions: 0, attempts: 0 });
@@ -351,7 +353,7 @@ const urlWithVersion = (id: string) => `${href("study/saved")}?version=${encodeU
 
 function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> }) {
   // SCHOLAR-GO-DEEPER-001: a saved structured round says where each section comes from, so Scholar's explanation is never read as the notes.
-  const round = a.action === "deeper" ? parseDeeperAnswer(a.content) : null;
+  const round = parseDeeperAnswer(a.content);
   const research = round ? deeperResearchText(a.content) : null;
   const shown = round ? `${deeperSourcedText(round)}${research ? `\n\n${GO_DEEPER_COPY.research}\n${research}` : ""}` : a.content;
   return (
