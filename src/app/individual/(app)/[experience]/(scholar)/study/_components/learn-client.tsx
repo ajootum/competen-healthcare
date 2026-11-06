@@ -101,8 +101,12 @@ type Reference = { tag: string; title: string; code: string | null; outcome: str
 /** COMPETEN-RESEARCH-01: one external record, exactly as the provider returned it. Untagged = further reading only. */
 type ExternalRef = { tag: string | null; provider: string; title: string; journal: string | null; year: number | null; authors: string[]; pmid: string | null; doi: string | null; url: string; evidence: boolean; excerpt: string | null; verified: { pmid: boolean; doi: boolean | null };
   /** SCHOLAR-SOURCE-QUALITY-01: why it is reading only (absent on answers saved before it). */
-  notUsed?: keyof typeof RECOVERY_NOT_USED_LABEL | null };
-type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string; excludedCount?: number };
+  notUsed?: keyof typeof RECOVERY_NOT_USED_LABEL | null;
+  /** SCHOLAR-RESEARCH-TEACH-001: what kind of work it is, and the open-access copy PubMed Central knows of, if any. */
+  studyKind?: string; openAccess?: { url: string; licence: string | null } | null };
+type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string; excludedCount?: number;
+  /** SCHOLAR-RESEARCH-TEACH-001: a lesson written from the notes and an evidence pack. Its references are under "Scientific evidence and references". */
+  integrated?: boolean; notice?: string | null; accessNote?: string | null; endorsementNote?: string | null };
 const MODE_KEY = "scholar.learn.mode";
 const noSubscribe = () => () => {};
 const rememberedMode = (): string | null => { try { return window.localStorage.getItem(MODE_KEY); } catch { return null; } };
@@ -390,6 +394,8 @@ export function LearnWorkspace(props: {
   const fxRef = useRef<(f: JourneyEffect) => void>(() => {});
   const cardsRef = useRef(cards);
   const teachCtl = useRef<{ step: number; ctl: AbortController } | null>(null);
+  /** SCHOLAR-RESEARCH-TEACH-001: this step's lesson is consulting scholarly sources, so the waiting line says so and says what is sent. */
+  const [consulting, setConsulting] = useState<Record<number, boolean>>({});
   const prefetchCtl = useRef<AbortController | null>(null);
   /** The lesson index the server's current_step holds, and the one this device remembers as where the learner stopped. */
   const serverAt = useRef(0);
@@ -528,6 +534,7 @@ export function LearnWorkspace(props: {
         if (!requests.current.isCurrent(k) || ctl.signal.aborted) { requests.current.release(k); return; }
         // AI not available now: nothing is generated; the "Not available yet" line says why.
         if (offReason(action)) return;
+        if (r.json.teachResearch === true) setConsulting(c => ({ ...c, [stepNo]: true }));
         r = await call(ACT_URL, body, "POST", {}, ctl.signal);
         if (r.json.aborted) { requests.current.release(k); return; }
         phase = lessonPhase("generate", r.ok, r.json);
@@ -543,6 +550,7 @@ export function LearnWorkspace(props: {
       requests.current.end(k);
       if (teachCtl.current?.ctl === ctl) teachCtl.current = null;
       setLoading(l => { const rest = { ...l }; delete rest[k]; return rest; });
+      setConsulting(c => { const rest = { ...c }; delete rest[stepNo]; return rest; });
       dispatch({ type: shown ? "taught" : "teachEnded", index: indexOf(stepNo) });
     }
   }, [session, props.startAction, bodyFor, record, offReason, studyBody, indexOf, dispatch]);
@@ -1836,7 +1844,8 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
             <FormativeAiLabel className="mt-1" />
           )}
           <div className={teachCard ? "mt-3" : "mt-2"}><AiBadge /></div>
-          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{SOURCE_KIND_LABEL.notes}</p>
+          <p className={`mt-3 text-[11.5px] font-bold uppercase tracking-[0.1em] ${teachCard ? "cmp-learn-ink" : "text-gray-600"}`}>{r.research?.integrated ? "From your notes, published evidence and Scholar's own explanation" : SOURCE_KIND_LABEL.notes}</p>
+          {r.research?.integrated && <p className="mt-1 text-[12px] text-gray-700">Each sentence says what it rests on: a slide or page of your notes, a published source (E), or Scholar&apos;s own explanation (AI).</p>}
           {/* CE-06: the lesson read aloud by the browser's own voice (citation markers and markdown are not spoken). LESSON REDESIGN:
               the listening and asking tools sit on their own row, apart from the reading text. */}
           {r.answer && (
@@ -1874,7 +1883,7 @@ function ReplyCard({ card, labels, compact = false, onFresh, onRephrase, recover
           </LearningSection>
         ) : r.background.withheld ? <p className="mt-2 text-[12.5px] text-gray-600">{r.background.withheld}</p> : null
       )}
-      {r.research && <ResearchBlock x={r.research} />}
+      {r.research && (r.research.notice !== undefined ? <LessonEvidence x={r.research} sources={r.sources} /> : <ResearchBlock x={r.research} />)}
       {r.withheld && recover && <RecoveryFlow request={recover.request} explain={recover.explain} expansions={expansions} />}
       {r.withheld && !recover && <ExpansionRow expansions={expansions} />}
       {r.flags && r.flags.length > 0 && <AiFlagList flags={r.flags} />}
@@ -1938,7 +1947,11 @@ function CiteLink({ n, sources }: { n: number; sources: Source[] }) {
   return <CitationChip tag={s.tag} href={sourceHref(s.materialId, s.chunkId)} label={`${s.citation}${s.aiRead && s.aiReadNote ? `. ${s.aiReadNote}` : ""}`} aiRead={!!s.aiRead} />;
 }
 function Cited({ text, sources }: { text: string; sources: Source[] }) {
-  return <>{citationSegments(text).map((x, i) => ("tag" in x ? <CiteLink key={i} n={x.tag} sources={sources} /> : <span key={i}>{x.text}</span>))}</>;
+  return <>{citationSegments(text).map((x, i) => (
+    "tag" in x ? <CiteLink key={i} n={x.tag} sources={sources} />
+      : "evidence" in x ? <a key={i} href={`#evidence-E${x.evidence}`} className={`rounded-sm px-0.5 font-mono text-[12px] font-bold text-indigo-900 underline underline-offset-2 ${focusRing}`} aria-label={`Published research, reference E${x.evidence}`}>E{x.evidence}</a>
+        : "ai" in x ? <span key={i} className="rounded-sm bg-gray-100 px-1 text-[11px] font-semibold text-gray-700" title="Scholar's own explanation, not from your notes or a published source">AI<span className="sr-only"> (Scholar&apos;s own explanation)</span></span>
+          : <span key={i}>{x.text}</span>))}</>;
 }
 
 /**
@@ -2002,6 +2015,13 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
       {!!parts.understanding?.length && (
         <div id={idPrefix ? `${idPrefix}-un` : undefined} className="mt-3">
           {parts.understanding.map((p, i) => <p key={i}><Cited text={p} sources={sources} /></p>)}
+        </div>
+      )}
+      {/* SCHOLAR-RESEARCH-TEACH-001: where published evidence refines a statement in the notes. Both are shown and both are cited. The notes are never changed. */}
+      {!!parts.distinctions?.length && (
+        <div className="mt-4 rounded-xl bg-indigo-50/70 px-4 py-3 ring-1 ring-indigo-200">
+          <h4 className={`${sub} text-indigo-900`}>Your notes and the published evidence</h4>
+          <ul className="mt-2 list-disc space-y-1.5 pl-5">{parts.distinctions.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
         </div>
       )}
       {questionBlock(placed.mid, idPrefix ? `${idPrefix}-qm` : undefined, "A quick check on what you have just read, before the key points. Optional.")}
@@ -2128,6 +2148,36 @@ function ResearchBlock({ x }: { x: ResearchReply }) {
         </p>
       )}
     </section>
+  );
+}
+
+/**
+ * SCHOLAR-RESEARCH-TEACH-001: the lesson's sources in two categories that never mix. My notes (where in the material) and Research (the
+ * provider's own record, its links, what kind of work it is, and that only its abstract was read). Closed by default, so the lesson reads
+ * as one lesson. Without research the single plain sentence says so.
+ */
+function LessonEvidence({ x, sources }: { x: ResearchReply; sources: Source[] }) {
+  if (!x.integrated) return x.message ? <p className="mt-3 text-[12.5px] text-gray-700">{x.message}</p> : null;
+  return (
+    <details className="mt-3 rounded-lg border border-indigo-200 bg-indigo-50/70 px-3 py-2.5">
+      <summary className={`cursor-pointer text-[13px] font-bold text-indigo-900 ${focusRing}`}>{x.label} ({x.references.length + sources.length})</summary>
+      <div className="mt-2">
+        <h4 className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-gray-800">My notes</h4>
+        <ul className="mt-1 space-y-1">{sources.map(s => <li key={s.tag} className="text-[12.5px] text-gray-800"><CiteLink n={Number(s.tag.slice(1))} sources={sources} /> {s.citation}</li>)}</ul>
+      </div>
+      <div className="mt-3 border-t border-indigo-200 pt-2">
+        <h4 className="text-[11.5px] font-bold uppercase tracking-[0.08em] text-indigo-900">Research</h4>
+        {x.accessNote && <p className="text-[12px] text-gray-700">{x.accessNote} {x.endorsementNote}</p>}
+        <ul className="mt-1 space-y-2">{x.references.map(r => (
+          <li key={r.url} id={r.tag ? `evidence-${r.tag}` : undefined} className="scroll-mt-24">
+            <ExternalRefLine r={r} />
+            {r.studyKind && <span className="block text-[11.5px] text-gray-600">Kind of work: {r.studyKind}. {x.accessNote}</span>}
+            {r.openAccess && <a href={r.openAccess.url} target="_blank" rel="noopener noreferrer" className={`text-[11.5px] underline ${focusRing}`}>Open-access copy{r.openAccess.licence ? ` (${r.openAccess.licence})` : ""}</a>}
+          </li>
+        ))}</ul>
+      </div>
+      {x.notice && <p className="mt-3 text-[12px] text-gray-700">{x.notice}</p>}
+    </details>
   );
 }
 

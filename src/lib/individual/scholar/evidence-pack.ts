@@ -68,7 +68,7 @@ const slug = (s: string) => s.replace(/\s+/g, "-");
 const PHRASE_TOPICS: readonly SubjectTopic[] = SUBJECT_PHRASES.map(p => ({ id: slug(p), label: p, match: [p], query: `"${p}"[tiab]`, concepts: [p] }));
 export const SUBJECT_TOPICS: readonly SubjectTopic[] = [...CURATED, ...PHRASE_TOPICS];
 /** Bumped when the list changes, so results are searched afresh under the new list. */
-export const VOCABULARY_VERSION = "subject-topics-v3";
+export const VOCABULARY_VERSION = "subject-topics-2026-11-06";
 
 /** Pure. One word as matching reads it: lowercase, no accents, one spelling. */
 const tokens = (s: string): string[] => s.toLowerCase().normalize("NFKD").replace(/[̀-ͯ]/g, "").split(/[^a-z0-9]+/).filter(Boolean).map(canonWord);

@@ -32,7 +32,7 @@ import type { PackEvidence } from "./teach-integrated";
 export const PACK_SOURCES = ["pubmed", "crossref", "pmc"] as const;
 export const TEACH_RESEARCH_OPERATION = "individual_scholar_teach_research";
 /** The wall clock the whole preparation may take, so a slow source cannot use up the lesson's own time. */
-export const PACK_DEADLINE_MS = 14_000;
+export const PACK_DEADLINE_MS = 20_000;
 /** How long a learner waits for another learner's search of the same topic before going on without it. */
 const PEER_WAIT_MS = 4_000, PEER_POLL_MS = 500;
 /** A claim outlives no more than this: a crashed search frees its topic. */
@@ -63,7 +63,8 @@ const none = (state: PackState, codes: string[], started: number, topics: string
 
 /** The plan for this pack: the engine's, narrowed to the free sources. The search itself is told not to verify: that runs once on what is kept. */
 export function packPlan(engine: ResearchEngine): ResearchPlan {
-  return narrowPlan(planFor(engine, "scholar", "learn"), { providers: PACK_SOURCES, maxResults: 5, timeoutMs: 6000 });
+  // The engine's own timeout stands: this narrows the sources, not how long a slow one may take.
+  return narrowPlan(planFor(engine, "scholar", "learn"), { providers: PACK_SOURCES, maxResults: 5, timeoutMs: engine.policy.limits.timeoutMs });
 }
 const searchOnly = (plan: ResearchPlan): ResearchPlan => ({ ...plan, policy: { ...plan.policy, rules: { ...plan.policy.rules, doiVerification: false, openAccessLinks: false } } });
 

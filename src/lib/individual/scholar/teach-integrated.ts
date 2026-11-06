@@ -1,5 +1,5 @@
 import type { GenerateArgs, GenerateResult } from "@/lib/ai/client";
-import { ASSERTION_MARKERS, SAFETY_CONTEXT, parseJsonArray, type PhrasingViolation } from "@/lib/ai/grounding";
+import { ASSERTION_MARKERS, SAFETY_CONTEXT, type PhrasingViolation } from "@/lib/ai/grounding";
 import { findPatientIdentifiers } from "./extract";
 import { PROMPT_VERSIONS, type ExplanationDepth } from "./config";
 import {
@@ -49,14 +49,14 @@ export function integratedSystem(depth: ExplanationDepth): string {
     "You are given three things, and every sentence you write must say which it rests on, by ending with its tag:",
     "[S n] THE STUDENT'S NOTES. They are the foundation and they set the scope. Teach every heading and every listed idea in them, in their order. Say only what that passage says.",
     "[E n] PUBLISHED EVIDENCE. Abstracts of published records. Use them to add what the notes lack: mechanisms, findings, limits and contemporary understanding. Say only what that abstract says, about what it studied.",
-    `${AI_TAG} YOUR OWN TEACHING. Your own explanation that connects the ideas, defines a word or gives a general principle. General understanding only: never a finding, a study, a statistic, a number or a word for a number (two, three, twice), a dose or a recommendation, and never words such as 'research shows' or 'evidence suggests'.`,
+    `${AI_TAG} YOUR OWN TEACHING. Your own explanation that connects the ideas, defines a word or gives a general principle. General understanding only: never a finding, a study, a statistic, a number or a word for a number (two, three, twice), a dose, an instruction about what to do (no 'should' or 'must'), a promised outcome (no 'always', 'never', 'permanent', 'irreversible'), and never words such as 'research shows' or 'evidence suggests'.`,
     "",
     "RULES, in order of importance:",
-    "1. Every sentence ends with its tags, before the full stop, for example: 'Each stage has its own window [S4].' Use only tags you were given. A sentence may carry [S n] and [E n] together only if each really supports it.",
+    "1. Every sentence ends with its tags, before the full stop, for example: 'Each stage has its own window [S4].' Use only tags you were given. A sentence may carry [S n] and [E n] together only if each really supports it. Never put [AI] on a sentence with another tag: split it into two sentences.",
     "2. Never tag [S n] on something that came from an abstract or from you. If the notes do not say it, it is not from the notes.",
     "3. You have seen abstracts only, never the full papers. Never imply you read more. Say what kind of work it is in plain words (a systematic review, a trial), from what you were given. Citation counts and a journal's name prove nothing: do not lean on them.",
     "4. Keep the source's own caution. Association is not cause. Do not write that something always, inevitably or permanently follows unless the source says so. Say plainly where evidence is limited, mixed or missing, including where the abstracts given do not cover a concept.",
-    "5. Where the notes only name or list something without explaining it (a heading, a word in a list), that is what this lesson is for: state that the notes name it, tagged [S n], then explain what it means and how it works in its own sentences tagged [AI] or [E n]. Never leave a listed idea as a bare name, and never tag your explanation of it [S n].",
+    "5. Where the notes only name or list something without explaining it (a heading, a word in a list), that is what this lesson is for: give each listed idea its own short sentences: first that the notes name it, tagged [S n], then what it means and how it works, tagged [AI] or [E n]. For example: 'The notes name homeostasis [S1]. It means the body keeps its internal conditions steady [AI].' Never leave a listed idea as a bare name, and never tag your explanation of it [S n] even when the word itself is in the notes.",
     "6. Teach, do not stack. Never paraphrase the notes slide by slide and never recite abstracts one after another. Weave the sources into one coherent explanation: foundations, how and why it works, how the ideas relate, what was found, how it applies in caring for patients, what remains uncertain, and the misconceptions a student may hold.",
     "7. Use an abstract only where it adds understanding to a concept in these notes. Never cite merely to have a citation. An abstract that does not bear on the lesson is left out.",
     "8. Never write a number, in digits or in words, that the source you cite does not contain. No doses, drug regimens or advice about any real patient. No names.",
@@ -66,7 +66,7 @@ export function integratedSystem(depth: ExplanationDepth): string {
     `${TEACH_LABEL.understanding} the teaching itself, in connected paragraphs separated by a blank line (not a list), building from simple to more detailed, and ending with what this means when caring for patients and their families.`,
     `${TEACH_LABEL.distinctions} ONLY where the evidence you were given shows a statement in the notes is oversimplified or has been refined: one '- ' line each, saying what the notes say with its [S n], then what the published evidence adds or changes with its [E n], and why the difference matters. The notes are not wrong to have said it and are never rewritten: never present the refinement as being in the notes. If there is nothing to say, leave this part out entirely.`,
     `${TEACH_LABEL.points} then the essential points for revision, one line each starting '- ', each a different idea, each ending with its tags.`,
-    `${TEACH_LABEL.example} one or two sentences showing an idea applied in the care of 'a child', 'a patient' or 'the person caring for them', tagged like any other sentence. No names, ages or numbers the sources do not give. Leave it out if the sources give nothing to base one on.`,
+    `${TEACH_LABEL.example} one or two sentences showing an idea applied in the care of 'a child', 'a patient' or 'the person caring for them'. It is your own illustration, so tag it [AI], unless a source states exactly that. No names, ages or numbers.`,
     `${TEACH_LABEL.check} then one or two short open questions, each starting '- ', asking the student to explain, apply or reason, each answerable from the notes, each ending with '?' and then the [S n] that answers it. Never ask for a number.`,
     "",
     `Keep the whole lesson under ${WORDS[depth]} words.`,
@@ -94,7 +94,8 @@ const TAG_AFTER_STOP = /([.!?])((?:\s*\[(?:[SER]\d+|AI)\])+)/g;
 export function sentencesOf(text: string): string[] {
   const moved = text.replace(TAG_AFTER_STOP, (_m, stop: string, tags: string) => `${tags}${stop}`);
   const masked = moved.replace(ABBREV, m => m.replace(/\.$/, MASK));
-  return masked.split(/(?<=[.!?])\s+/).map(s => s.split(MASK).join(".").trim()).filter(Boolean);
+  // A rule, a stray tag or a bullet with no words in it is not a sentence. Emphasis marks are not shown, so they do not stay in the text.
+  return masked.split(/(?<=[.!?])\s+/).map(s => s.split(MASK).join(".").replace(/\*+|(?<!\w)_+|_+(?!\w)/g, "").trim()).filter(s => /[a-z]{2}/i.test(s.replace(TAGS, "")));
 }
 
 export type SentenceTags = { s: number[]; e: number[]; r: number[]; ai: boolean };
@@ -107,13 +108,19 @@ const plainOf = (sentence: string) => sentence.replace(TAGS, "").replace(/\s+([.
 /** Words only a source may say. An [AI] sentence that uses them is presenting a finding it has no source for. */
 const CLAIMS_EVIDENCE = /\b(stud(?:y|ies)|trials?|research(?:ers)?|evidence|meta-?analys[ie]s|systematic reviews?|cohorts?|published|literature|et al|according to|findings?|data (?:show|suggest))\b/i;
 /** A claim to have read more than an abstract. Never true here. */
+/**
+ * Scholar's own explanation teaches an idea. It does not tell anyone what to do with a patient, and it does not promise an outcome: both need
+ * a source. An instruction or a certainty in an [AI] sentence goes, where the same words from a cited source would be read against that source.
+ */
+const AI_DIRECTIVE = /\b(should|must|ought to|need to|needs to|less alarmed|do not worry|no need to)\b/i;
+const AI_CERTAINTY = /\b(irreversibl\w*|inevitabl\w*|permanent\w*|always|never|cannot be undone|for life|for the rest of|guarantee\w*|not optional)\b/i;
 const CLAIMS_FULL_TEXT = /\b(full[- ]text|full paper|the whole (?:paper|article)|read the (?:paper|article) in full)\b/i;
 
-export type DropReason = "unknown_tag" | "notes_ungrounded" | "evidence_ungrounded" | "evidence_dosing" | "ai_rules" | "ai_claims_evidence" | "claims_full_text" | "unsupported" | "unverified" | "risk_raised";
+export type DropReason = "unknown_tag" | "notes_ungrounded" | "evidence_ungrounded" | "evidence_dosing" | "ai_rules" | "ai_claims_evidence" | "ai_directive" | "ai_certainty" | "claims_full_text" | "unsupported" | "unverified" | "risk_raised";
 export type Dropped = { reason: DropReason; violations?: PhrasingViolation[] };
 
 /** Pure. Whether a sentence can stand as Scholar's own explanation: the [AI] rules, on its words alone. */
-const fitsAi = (plain: string) => checkBackgroundText(plain, 900).ok && !CLAIMS_EVIDENCE.test(plain);
+const fitsAi = (plain: string) => checkBackgroundText(plain, 900).ok && !CLAIMS_EVIDENCE.test(plain) && !AI_DIRECTIVE.test(plain) && !AI_CERTAINTY.test(plain);
 /** Pure. The sentence, with its source tags replaced by [AI]. */
 const asAi = (sentence: string) => { const p = plainOf(sentence); return /[.!?]$/.test(p) ? `${p.slice(0, -1)} ${AI_TAG}${p.slice(-1)}` : `${p} ${AI_TAG}`; };
 
@@ -138,6 +145,8 @@ function judge(sentence: string, ctx: { passages: readonly Passage[]; references
   // [AI], or a sentence with no tag at all: it is Scholar's own, and it is labelled as such.
   if (!checkBackgroundText(plain, 900).ok) return { reason: "ai_rules" };
   if (CLAIMS_EVIDENCE.test(plain)) return { reason: "ai_claims_evidence" };
+  if (AI_DIRECTIVE.test(plain)) return { reason: "ai_directive" };
+  if (AI_CERTAINTY.test(plain)) return { reason: "ai_certainty" };
   return null;
 }
 
@@ -243,7 +252,7 @@ export const CLAIM_CHECK_SYSTEM = [
   "A claim is supported if the cited text says it, or says it in other words, or it follows directly. A plain restatement in simpler language is supported.",
   "A claim is NOT supported if it adds a mechanism, a finding, a cause, a population or a certainty the cited text does not give; if it states as fact what the cited text only suggests; or if it attributes to the cited text something that is not there.",
   "Do not use your own knowledge. A claim can be true and still not be supported by its cited text.",
-  'Reply with JSON ONLY, no prose and no code fence: an array of the numbers of the claims that are NOT supported, such as [2, 5], or [] if all are supported.',
+  'Reply with ONE line and nothing else: a JSON array of the numbers of the claims that are NOT supported, such as [2, 5], or [] if all are supported. No reasoning, no prose and no code fence.',
 ].join("\n");
 
 export type Claim = { sentence: string; plain: string; cites: string[] };
@@ -267,11 +276,14 @@ export function claimCheckUser(claims: readonly Claim[], ctx: CheckSources): str
   return `SOURCE TEXTS:\n\n${used.map(t => `[${t}]\n${text(t)}`).join("\n\n")}\n\nCLAIMS:\n\n${claims.map((c, i) => `${i + 1}. (cites ${c.cites.join(", ")}) ${c.plain}`).join("\n")}`;
 }
 
-/** Pure. The model's list, or null when it cannot be read. Numbers outside the list are ignored. */
+/**
+ * Pure. The model's list, or null when it cannot be read: the array that ENDS the reply, since a model may reason first, and a reply cut off
+ * before its answer has none (an earlier "[3]" in the reasoning is not an answer). Numbers outside the list are ignored.
+ */
 export function parseUnsupported(raw: string, total: number): Set<number> | null {
-  const arr = parseJsonArray(raw);
-  if (!arr) return null;
-  return new Set(arr.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= total));
+  const m = /\[\s*((?:\d+\s*(?:,\s*\d+\s*)*)?)\]\s*(?:```)?\s*$/.exec(raw.trim());
+  if (!m) return null;
+  return new Set(m[1].split(",").map(x => x.trim()).filter(Boolean).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= total));
 }
 
 /** Pure. The lesson without the given sentences, and the reason each went. */
@@ -319,7 +331,7 @@ export async function runIntegratedTeach(userId: string, args: { question: strin
   if (first.check.ok && first.lesson) {
     const list = claimsOf(first.lesson);
     claims = list.length;
-    const v = list.length ? await run({ system: CLAIM_CHECK_SYSTEM, user: claimCheckUser(list, ctx), tier: "cheap", maxTokens: 400, context: { ...context, operation: `${LEARN_RESEARCH_OPERATION}_verify` } }, "verify") : null;
+    const v = list.length ? await run({ system: CLAIM_CHECK_SYSTEM, user: claimCheckUser(list, ctx), tier: "cheap", maxTokens: 900, context: { ...context, operation: `${LEARN_RESEARCH_OPERATION}_verify` } }, "verify") : null;
     const bad = v?.ok ? parseUnsupported(v.text, list.length) : null;
     verified = !!bad;
     const unsupportedSentences = new Set(bad ? [...bad].map(n => list[n - 1].sentence) : []);

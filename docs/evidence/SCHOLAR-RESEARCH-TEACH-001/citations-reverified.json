@@ -1,0 +1,100 @@
+[
+ {
+  "tag": "E1",
+  "pmid": "32101708",
+  "doi": "10.1016/j.tins.2020.01.002",
+  "pubmed_title": "Early Adversity and Critical Periods: Neurodevelopmental Consequences of Violating the Expectable Environment.",
+  "pubmed_journal": "Trends in neurosciences",
+  "pubmed_year": "2020",
+  "pubmed_first_author": "Nelson CA 3rd",
+  "pubmed_doi": "10.1016/j.tins.2020.01.002",
+  "pubtype": [
+   "Journal Article",
+   "Research Support, N.I.H., Extramural",
+   "Research Support, Non-U.S. Gov't",
+   "Review"
+  ],
+  "crossref_title": "Early Adversity and Critical Periods: Neurodevelopmental Consequences of Violating the Expectable Environment",
+  "crossref_year": 2020,
+  "crossref_first_author": "Nelson",
+  "title_match": true,
+  "doi_match": true
+ },
+ {
+  "tag": "E2",
+  "pmid": "31447013",
+  "doi": "10.1016/j.pedhc.2019.04.017",
+  "pubmed_title": "Attachment Disorders.",
+  "pubmed_journal": "Journal of pediatric health care : official publication of National Association of Pediatric Nurse Associates & Practitioners",
+  "pubmed_year": "2019",
+  "pubmed_first_author": "Hornor G",
+  "pubmed_doi": "10.1016/j.pedhc.2019.04.017",
+  "pubtype": [
+   "Journal Article",
+   "Review"
+  ],
+  "crossref_title": "Attachment Disorders",
+  "crossref_year": 2019,
+  "crossref_first_author": "Hornor",
+  "title_match": true,
+  "doi_match": true
+ },
+ {
+  "tag": "E3",
+  "pmid": "26093365",
+  "doi": "10.1016/j.conb.2015.05.004",
+  "pubmed_title": "Plasticity in early language acquisition: the effects of prenatal and early childhood experience.",
+  "pubmed_journal": "Current opinion in neurobiology",
+  "pubmed_year": "2015",
+  "pubmed_first_author": "Gervain J",
+  "pubmed_doi": "10.1016/j.conb.2015.05.004",
+  "pubtype": [
+   "Journal Article",
+   "Research Support, Non-U.S. Gov't",
+   "Review"
+  ],
+  "crossref_title": "Plasticity in early language acquisition: the effects of prenatal and early childhood experience",
+  "crossref_year": 2015,
+  "crossref_first_author": "Gervain",
+  "title_match": true,
+  "doi_match": true
+ },
+ {
+  "tag": "E4",
+  "pmid": "27567276",
+  "doi": "10.1016/j.ejpn.2016.07.007",
+  "pubmed_title": "Cerebral plasticity: Windows of opportunity in the developing brain.",
+  "pubmed_journal": "European journal of paediatric neurology : EJPN : official journal of the European Paediatric Neurology Society",
+  "pubmed_year": "2017",
+  "pubmed_first_author": "Ismail FY",
+  "pubmed_doi": "10.1016/j.ejpn.2016.07.007",
+  "pubtype": [
+   "Journal Article",
+   "Review"
+  ],
+  "crossref_title": "Cerebral plasticity: Windows of opportunity in the developing brain",
+  "crossref_year": 2017,
+  "crossref_first_author": "Ismail",
+  "title_match": true,
+  "doi_match": true
+ },
+ {
+  "tag": "E5",
+  "pmid": "28745146",
+  "doi": "10.1080/14616734.2017.1354040",
+  "pubmed_title": "Disorganized attachment in infancy: a review of the phenomenon and its implications for clinicians and policy-makers.",
+  "pubmed_journal": "Attachment & human development",
+  "pubmed_year": "2017",
+  "pubmed_first_author": "Granqvist P",
+  "pubmed_doi": "10.1080/14616734.2017.1354040",
+  "pubtype": [
+   "Journal Article",
+   "Review"
+  ],
+  "crossref_title": "Disorganized attachment in infancy: a review of the phenomenon and its implications for clinicians and policy-makers",
+  "crossref_year": 2017,
+  "crossref_first_author": "Granqvist",
+  "title_match": true,
+  "doi_match": true
+ }
+]

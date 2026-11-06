@@ -1,0 +1,19 @@
+INFO signed in as the fixture learner
+INFO session: status 200, resumed, 
+INFO first requests: []
+INFO no lesson saved before the switch on this session
+INFO steps: [{"step":0,"title":"Critical sensitive periods"}]
+INFO lesson page loaded
+INFO moved to the lesson
+INFO requests after moving: [{"open":true,"fresh":false,"cached":true,"promptVersion":"scholar-learn-v3:teach+scholar-learn-teach-v3+research-teach-v1+partial:4","step":0,"research":{"integrated":true,"refs":5,"message":null}}]
+PASS reopening is served from what was saved: open only, no generation
+PASS no raw [E n] or [AI] tag shows in the lesson ([S n] is the app's own citation chip; the first run of this line wrongly tested for it)
+PASS research citations are links to their reference
+PASS Scholar's own sentences carry their AI label
+INFO lesson on the page: 788 words
+PASS the references are in two categories: My notes and Research
+PASS says only abstracts were reviewed
+PASS tells the learner only subject terms are sent
+PASS axe on the references section: no violations
+PASS no sideways scroll on a phone
+PASS no page errors or 5xx: none

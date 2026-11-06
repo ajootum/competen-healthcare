@@ -65,6 +65,20 @@ describe("each sentence is read against the source it names", () => {
     expect(c.check.ok && c.check.text).toContain("A window closes slowly");
   });
 
+  it("Scholar's own sentence may not tell anyone what to do with a patient, or promise an outcome", () => {
+    const c = checkIntegrated(lesson("A clinician should be less alarmed by a slower child [AI]. Missing a window is irreversible [AI]. A window closes slowly [AI]."), ctx);
+    expect(c.dropped.map(d => d.reason).sort()).toEqual(["ai_certainty", "ai_directive"]);
+    expect(c.check.ok && c.check.text).toContain("A window closes slowly");
+  });
+
+  it("a rule, a stray tag and emphasis marks do not become sentences", () => {
+    const c = checkIntegrated(lesson("A window closes *slowly* [AI].\n\n--- [AI]"), ctx);
+    const text = c.check.ok ? c.check.text : "";
+    expect(text).not.toContain("---");
+    expect(text).not.toContain("*");
+    expect(text).toContain("A window closes slowly [AI].");
+  });
+
   it("a sentence with no tag at all is Scholar's own, and says so", () => {
     const c = checkIntegrated(lesson("A window closes slowly."), ctx);
     expect(c.check.ok && c.check.text).toContain("A window closes slowly [AI].");
@@ -194,6 +208,13 @@ describe("the claim check", () => {
   it("reads a list, and ignores numbers outside it", () => {
     expect([...parseUnsupported("[2, 9, 0]", 3)!]).toEqual([2]);
     expect(parseUnsupported("nope", 3)).toBeNull();
+    expect([...parseUnsupported("[]", 3)!]).toEqual([]);
+  });
+
+  it("reads the answer that ends the reply, and a reply cut off before its answer is not read as one", () => {
+    expect([...parseUnsupported("Claim [S1] looks fine. Claim 3 adds a cause.\n\n[3, 5]", 9)!]).toEqual([3, 5]);
+    expect([...parseUnsupported("```json\n[3]\n```", 9)!]).toEqual([3]);
+    expect(parseUnsupported("Claim [3] adds a cause. Claim 5 adds", 9)).toBeNull();
   });
 });
 

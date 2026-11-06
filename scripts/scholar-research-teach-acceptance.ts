@@ -46,6 +46,7 @@ const leaks = /nambi|okello|mulago|gabriel|ajootum|elish/i;
   const { classifyRisk } = await import("../src/lib/ai/clinical-risk");
   const { routeCandidates, selectRoute, clinicalGate } = await import("../src/lib/ai/model-routing");
   const { lessonTopics, approvedQuery } = await import("../src/lib/individual/scholar/evidence-pack");
+  const { estimateCost } = await import("../src/lib/ai/gateway");
 
   const real = createClient(url, key, { auth: { persistSession: false } }) as any;
   // In memory only: the engine as the owner would leave it (PubMed, Crossref, PubMed Central and also OpenAlex Active, to prove the pack leaves it out).
@@ -96,7 +97,8 @@ const leaks = /nambi|okello|mulago|gabriel|ajootum|elish/i;
       const route = mainRoute;
       const t0 = Date.now();
       const x = await generate({ ...g, route, context: { ...g.context } });
-      ledger.model.push({ part, model: x.model, input: x.usage?.input, output: x.usage?.output, ms: Date.now() - t0, ok: x.ok });
+      // The measured call at its own model's price, and the same tokens at the heavier model production's routing may require at this risk tier (an estimate, said so).
+      ledger.model.push({ part, model: x.model, input: x.usage?.input, output: x.usage?.output, ms: Date.now() - t0, ok: x.ok, usd: estimateCost(x.model, x.usage?.input ?? 0, x.usage?.output ?? 0), usdIfOpusEstimate: estimateCost("claude-opus-4-8", x.usage?.input ?? 0, x.usage?.output ?? 0) });
       if (x.ok) writeFileSync(join(OUT, `raw-${part}.txt`), x.text);
       return x;
     };
