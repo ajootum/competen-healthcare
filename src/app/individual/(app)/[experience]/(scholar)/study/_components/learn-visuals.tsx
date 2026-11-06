@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { sourceHref } from "./question-view";
-import { arrangeStrip, pagesOfCitation, visualUrl, visualsForPages, visualsForSections, visualsListUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
+import { arrangeStrip, pagesOfCitation, visualUrl, visualsForPages, visualsForSection, visualsForSections, visualsListUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
 
 // SCHOLAR-LESSON-VISUALS-01 (owner GO "Visual Learning From Uploaded Presentations"): THE STUDENT'S OWN PICTURES BESIDE THE LESSON.
 //
@@ -24,7 +24,7 @@ const NOTE = (unit: "slide" | "page") => unit === "slide"
   ? "The slide’s own layout is not reproduced here; the pictures are shown exactly as in your file."
   : "The pictures are shown exactly as in your file. View the original page to see it whole.";
 
-export type VisualsReply = { unit?: string; visuals: Visual[]; notShown?: number; off?: boolean };
+export type VisualsReply = { unit?: string; visuals: Visual[]; notShown?: number; off?: boolean; noSection?: number[] };
 
 // ── ONE ASK PER MATERIAL PER PAGE VIEW (memoised; a failed ask is forgotten so a later click can try again) ──
 const asked = new Map<string, Promise<VisualsReply | null>>();
@@ -51,6 +51,9 @@ function useVisuals(materialId: string, enabled: boolean): VisualsReply | null {
   return enabled && state?.id === materialId ? state.reply : null;
 }
 
+const ZOOM_STEP = 0.5;
+const ZOOM_MAX = 4;
+const zoomBtn = `inline-flex min-h-[40px] min-w-[40px] items-center justify-center rounded-lg border border-gray-300 bg-white px-3 text-[13.5px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${touch} ${focusRing}`;
 const noun = (v: Pick<Visual, "unit">) => (v.unit === "slide" ? "slide" : "page");
 const capital = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -63,6 +66,8 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
   const [key, setKey] = useState(startKey);
   // A picture taken out of a PDF page: the whole original page can be shown in its place (the single page, as it is in the file).
   const [whole, setWhole] = useState(false);
+  // SCHOLAR-VISUAL-001 s4.3: fits the width first, with nothing cropped. Larger than that, it moves by scrolling, a swipe or the arrow keys.
+  const [zoom, setZoom] = useState(1);
   const current = visuals.find(v => v.key === key) ?? visuals[0];
   // The native modal dialog already traps focus; the shared hook keeps the doctrine (pui-a11y) and returns focus to the trigger.
   // It is declared FIRST so it records the trigger before showModal() moves focus into the dialog.
@@ -90,8 +95,16 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
           <button type="button" aria-label="Close" onClick={() => ref.current?.close()}
             className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-[15px] font-semibold hover:bg-gray-50 ${touch} ${focusRing}`}>{"✕"}</button>
         </div>
-        {/* The original, at its own size, scrolled inside the dialog only (pinch to zoom on a touch screen). */}
-        <div className="min-h-0 flex-1 overflow-auto bg-white p-2 [touch-action:pan-x_pan-y_pinch-zoom]">
+        {!page && !whole && (
+          <div role="group" aria-label="Picture size" className="flex flex-wrap items-center gap-2 border-b border-gray-200 px-4 py-2">
+            <button type="button" aria-label="Make the picture smaller" disabled={zoom <= 1} onClick={() => setZoom(z => Math.max(1, z - ZOOM_STEP))} className={zoomBtn}>−</button>
+            <button type="button" aria-label="Make the picture larger" disabled={zoom >= ZOOM_MAX} onClick={() => setZoom(z => Math.min(ZOOM_MAX, z + ZOOM_STEP))} className={zoomBtn}>+</button>
+            <button type="button" disabled={zoom === 1} onClick={() => setZoom(1)} className={zoomBtn}>Fit to width</button>
+            <span role="status" className="text-[12.5px] text-gray-700">{zoom === 1 ? "Fitted to width" : `${Math.round(zoom * 100)}% of the width`}</span>
+          </div>
+        )}
+        {/* The original, never cropped, scrolled inside the dialog only (pinch to zoom on a touch screen). Focusable, so the arrow keys move it. */}
+        <div tabIndex={0} role="group" aria-label="The picture" className={`min-h-0 flex-1 overflow-auto bg-white p-2 [touch-action:pan-x_pan-y_pinch-zoom] ${focusRing}`}>
           {page || whole ? (
             <>
               <iframe title={`Original ${noun(current)} ${current.n} of ${materialTitle}`} src={visualUrl(materialId, page ? current.key : `p${current.n}`)} className="h-[70vh] w-full rounded-lg border border-gray-200 bg-white" />
@@ -99,7 +112,7 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
-            <img src={visualUrl(materialId, current.key)} alt={`Original picture from ${noun(current)} ${current.n} of ${materialTitle}`} className="block h-auto max-w-none bg-white" />
+            <img src={visualUrl(materialId, current.key)} alt={`Original picture from ${noun(current)} ${current.n} of ${materialTitle}`} style={zoom === 1 ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} className={`block h-auto bg-white ${zoom === 1 ? "mx-auto max-w-full" : ""}`} />
           )}
         </div>
         <div className="space-y-3 border-t border-gray-200 p-4 text-[13px] text-gray-800">
@@ -112,7 +125,7 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
               <ul className="mt-2 flex flex-wrap gap-2">
                 {same.map((v, i) => (
                   <li key={v.key}>
-                    <button type="button" aria-pressed={v.key === current.key} aria-label={`Picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setKey(v.key); setWhole(false); }}
+                    <button type="button" aria-pressed={v.key === current.key} aria-label={`Picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setZoom(1); setKey(v.key); setWhole(false); }}
                       className={`rounded-lg border bg-white p-1 ${touch} ${focusRing} ${v.key === current.key ? "border-gray-900" : "border-gray-300"}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
                       <img src={visualUrl(materialId, v.key)} alt="" loading="lazy" className="h-14 w-auto max-w-[120px] object-contain" />
@@ -130,6 +143,45 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
         </div>
       </div>
     </dialog>
+  );
+}
+
+// ── THE PICTURES IN THE NOTES ── SCHOLAR-VISUAL-001 s2 Rule 2, s4 ──
+/**
+ * The original pictures of one section, in the notes, shown without a click. Fitted to the width, never cropped, and enlarged by choosing
+ * one. No AI. A failed load, policy off or no pictures: nothing here, and the notes are unaffected.
+ */
+export function SectionPictures({ materialId, materialTitle, from, to, first, last, leading }: { materialId: string; materialTitle: string; from: number | null; to: number | null; first: boolean; last: boolean; leading?: boolean }) {
+  const reply = useVisuals(materialId, from !== null);
+  const [open, setOpen] = useState<string | null>(null);
+  if (!reply || reply.off || !reply.visuals?.length) return null;
+  const found = visualsForSection(reply.visuals, reply.noSection ?? [], { from, to, first, last, leading });
+  if (!found.length) return null;
+  return (
+    <div className="mt-3 space-y-3">
+      {found.map(v => {
+        const where = `${capital(noun(v))} ${v.n}`;
+        const usesPage = v.kind === "pdf_page";
+        return (
+          <figure key={v.key} className="m-0">
+            <button type="button" onClick={() => setOpen(v.key)} aria-label={`Enlarge the original picture from ${where.toLowerCase()}`} className={`block w-full rounded-lg border border-gray-200 bg-white p-1 text-left hover:border-gray-400 ${touch} ${focusRing}`}>
+              {usesPage ? (
+                <span className="block px-3 py-6 text-center text-[13.5px] font-semibold text-gray-800">Open {where.toLowerCase()} as it is in your file</span>
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
+                <img src={visualUrl(materialId, v.key)} alt={`Original picture from ${where.toLowerCase()} of ${materialTitle}`} loading="lazy" decoding="async" width={v.width ?? undefined} height={v.height ?? undefined}
+                  className="mx-auto block h-auto max-h-[70vh] w-auto max-w-full rounded object-contain" />
+              )}
+            </button>
+            <figcaption className="mt-1 text-[12.5px] text-gray-700">
+              <span className="font-semibold text-gray-800">{where}</span> · {ORIGINAL}{!usesPage && " · Select to enlarge"}
+              {v.aiRead && <span className="block">{AI_NOTE}</span>}
+            </figcaption>
+          </figure>
+        );
+      })}
+      {open && <VisualDialog materialId={materialId} materialTitle={materialTitle} visuals={reply.visuals} startKey={open} onClose={() => setOpen(null)} />}
+    </div>
   );
 }
 

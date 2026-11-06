@@ -1,5 +1,6 @@
 "use client";
 
+import { SLIDE_READING_EVENT } from "@/lib/individual/scholar/slide-classify";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -230,6 +231,7 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
     setBusy(true); setError("");
     const r1: number[] = [], s1: { slide: number; reason: string }[] = [];
     setSent(toRead);
+    window.dispatchEvent(new CustomEvent(SLIDE_READING_EVENT, { detail: { materialId, slides: ticked } }));
     for (;;) {
       const r = await send(`/api/individual/scholar/materials/${materialId}/slides`, planned ? { pages: ticked } : {});
       if (!r.ok) { setError(r.json.error ?? "Reading stopped."); break; }
@@ -237,6 +239,7 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
       setRead([...r1]); setSkipped([...s1]);
       if (!r.json.remaining || !((r.json.read ?? []).length + (r.json.skipped ?? []).length)) break;
     }
+    window.dispatchEvent(new CustomEvent(SLIDE_READING_EVENT, { detail: { materialId, slides: [] } }));
     setBusy(false);
     router.refresh();
   }

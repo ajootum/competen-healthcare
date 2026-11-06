@@ -1,3 +1,4 @@
+import { readingAttention } from "@/lib/individual/scholar/slide-classify";
 import { experienceHref } from "@/lib/individual/experiences";
 import { FORMAT_LABEL, FORMAT_OF, UNIT_OF } from "@/lib/individual/scholar/config";
 import { qualitySummary } from "@/lib/individual/scholar/extract";
@@ -25,6 +26,6 @@ export function libraryRow(m: MaterialRow, opts: { quality?: Parameters<typeof q
   return {
     id: m.id, title: m.title, href: experienceHref("scholar", `study/${m.id}`), tile: TILE[format] ?? "DOC", meta,
     badge: opts.paper ? "Examination paper" : null,
-    warning: partial ? `Partly read: ${q!.emptyUnits.length} ${unit}${q!.emptyUnits.length === 1 ? "" : "s"} without readable text` : null,
+    warning: partial && q!.slideFacts ? `Partly read: ${readingAttention(q)} slide${readingAttention(q) === 1 ? " needs" : "s need"} attention` : partial ? `Partly read: ${q!.emptyUnits.length} ${unit}${q!.emptyUnits.length === 1 ? "" : "s"} without readable text` : null,
   };
 }

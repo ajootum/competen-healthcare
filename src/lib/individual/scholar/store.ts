@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { applySlideFacts, pictureReadingInput, type SlideFacts, type SlideSkipReason } from "./slide-classify";
 import { parseAskSources } from "./ask-sources";
 import { DIFFICULTY_NUMBER } from "./library-meta";
 import { createHash } from "node:crypto";
@@ -297,7 +298,15 @@ const toQualityJson = (q: ExtractionQuality) => ({
   unit: q.unit, units: q.units, empty_units: q.emptyUnits, chars: q.chars, sections: q.sections,
   ...(q.aiReadUnits ? { ai_read_units: q.aiReadUnits } : {}), ...(q.aiTriedUnits ? { ai_tried_units: q.aiTriedUnits } : {}),
   ...(q.aiProvenance?.length ? { ai_provenance: q.aiProvenance.map(r => ({ units: r.units, model: r.model, prompt_version: r.promptVersion, extracted_at: r.extractedAt })) } : {}),
+  // SCHOLAR-PPTX-READING-01: extra keys again, so no migration.
+  ...(q.aiSkipped?.length ? { ai_skipped: q.aiSkipped } : {}),
+  ...(q.slideFacts ? { slide_facts: q.slideFacts } : {}),
 });
+const slideFactsOf = (v: any): SlideFacts | undefined => v && typeof v === "object" && Array.isArray(v.blank) && Array.isArray(v.mixed) && Array.isArray(v.review)
+  ? { version: Number(v.version), checkedAt: String(v.checkedAt ?? ""), blank: v.blank.map(Number), mixed: v.mixed.map(Number), grouped: Array.isArray(v.grouped) ? v.grouped.map(Number) : [],
+      review: v.review.map((r: any) => ({ unit: Number(r.unit), kinds: Array.isArray(r.kinds) ? r.kinds : [], picture: !!r.picture })) }
+  : undefined;
+const skippedOf = (v: unknown): { unit: number; reason: SlideSkipReason }[] | undefined => Array.isArray(v) ? v.map((s: any) => ({ unit: Number(s?.unit), reason: s?.reason })) : undefined;
 const provenance = (v: unknown): AiReading[] | undefined => Array.isArray(v)
   ? v.filter((r: any) => r && Array.isArray(r.units) && typeof r.model === "string").map((r: any) => ({ units: r.units.map(Number).filter(Number.isFinite), model: String(r.model), promptVersion: String(r.prompt_version ?? ""), extractedAt: String(r.extracted_at ?? "") }))
   : undefined;
@@ -308,6 +317,8 @@ export const fromQualityJson = (j: any): ExtractionQuality | null =>
       unit: j.unit, units: Number(j.units), emptyUnits: (j.empty_units as unknown[]).map(Number), chars: Number(j.chars), sections: Number(j.sections),
       ...(numbers(j.ai_read_units) ? { aiReadUnits: numbers(j.ai_read_units) } : {}), ...(numbers(j.ai_tried_units) ? { aiTriedUnits: numbers(j.ai_tried_units) } : {}),
       ...(provenance(j.ai_provenance) ? { aiProvenance: provenance(j.ai_provenance) } : {}),
+      ...(skippedOf(j.ai_skipped) ? { aiSkipped: skippedOf(j.ai_skipped) } : {}),
+      ...(slideFactsOf(j.slide_facts) ? { slideFacts: slideFactsOf(j.slide_facts) } : {}),
     }
     : null;
 
@@ -4020,6 +4031,8 @@ export async function materialBytes(admin: Admin, userId: string, id: string): P
  */
 export async function addPictureSlideSections(admin: Admin, userId: string, materialId: string, input: {
   additions: NewChunk[]; read: readonly number[]; tried: readonly number[]; extractorTag: string;
+  /** SCHOLAR-PPTX-READING-01: why a slide was not kept, so the learner can be told. */
+  skipped?: readonly { unit: number; reason: SlideSkipReason }[];
   /** SCHOLAR-IMAGE-RECOVERY: the model, prompt version and time of this reading, kept on the material (ai_provenance). */
   provenance?: { model: string; promptVersion: string; extractedAt: string } | null;
 }): Promise<{ ok: true; added: number; recorded: boolean } | { ok: false; error: string }> {
@@ -4033,7 +4046,9 @@ export async function addPictureSlideSections(admin: Admin, userId: string, mate
   if (cErr) return { ok: false, error: "chunks" };
   const existing = ((rows ?? []) as any[]).map(r => ({ id: r.id as string, ordinal: Number(r.ordinal), pageFrom: r.page_from as number | null }));
   const haveSection = new Set(existing.map(c => c.pageFrom));
-  const open = new Set(q.emptyUnits.filter(n => !(q.aiTriedUnits ?? []).includes(n) && !haveSection.has(n)));
+  // SCHOLAR-PPTX-READING-01: a slide with text and a picture has a section already; its picture may still be read, once.
+  const reading = pictureReadingInput(q);
+  const open = new Set([...reading.emptyUnits.filter(n => !haveSection.has(n)), ...reading.mixedUnits].filter(n => !(q.aiTriedUnits ?? []).includes(n)));
   const additions = input.additions.filter(a => open.has(a.pageFrom));
   const read = input.read.filter(n => open.has(n) && additions.some(a => a.pageFrom === n));
   const tried = input.tried.filter(n => open.has(n));
@@ -4054,6 +4069,7 @@ export async function addPictureSlideSections(admin: Admin, userId: string, mate
     ...q, emptyUnits: q.emptyUnits.filter(n => !read.includes(n)), chars: q.chars + chars, sections: q.sections + plan.inserts.length,
     aiReadUnits: [...new Set([...(q.aiReadUnits ?? []), ...read])].sort((a, b) => a - b),
     aiTriedUnits: [...new Set([...(q.aiTriedUnits ?? []), ...tried])].sort((a, b) => a - b),
+    ...(input.skipped?.length || q.aiSkipped?.length ? { aiSkipped: [...(q.aiSkipped ?? []), ...(input.skipped ?? []).filter(s => tried.includes(s.unit))] } : {}),
     ...(input.provenance && read.length ? { aiProvenance: [...(q.aiProvenance ?? []), { units: [...read], ...input.provenance }] } : {}),
   };
   const extractor = String(row.extractor ?? "").includes(input.extractorTag) ? row.extractor : `${row.extractor}+${input.extractorTag}`;
@@ -4063,6 +4079,24 @@ export async function addPictureSlideSections(admin: Admin, userId: string, mate
   }).eq("user_id", userId).eq("id", materialId);
   return { ok: true, added: plan.inserts.length, recorded: !uErr };
 }
+/**
+ * SCHOLAR-PPTX-READING-01: record what a stored presentation's slides hold. Only the quality record changes: no section, lesson, plan
+ * or AI reading is touched, nothing is added, and it can run again with the same result.
+ */
+export async function saveSlideFacts(admin: Admin, userId: string, materialId: string, facts: SlideFacts): Promise<{ ok: true; quality: ExtractionQuality } | { ok: false; error: string }> {
+  const { data: row, error } = await admin.from("individual_scholar_material").select("extraction_quality").eq("user_id", userId).eq("id", materialId).maybeSingle();
+  if (error || !row) return { ok: false, error: "material" };
+  const q = fromQualityJson(row.extraction_quality);
+  if (!q || q.unit !== "slide") return { ok: false, error: "quality" };
+  const { data: rows, error: cErr } = await admin.from("individual_scholar_chunk").select("page_from, page_to").eq("user_id", userId).eq("material_id", materialId).limit(2000);
+  if (cErr) return { ok: false, error: "chunks" };
+  const withSections = new Set<number>();
+  for (const c of (rows ?? []) as any[]) for (let n = Number(c.page_from ?? 0); n > 0 && n <= Number(c.page_to ?? c.page_from); n++) withSections.add(n);
+  const quality = applySlideFacts(q, facts, withSections);
+  const { error: uErr } = await admin.from("individual_scholar_material").update({ extraction_quality: toQualityJson(quality) }).eq("user_id", userId).eq("id", materialId);
+  return uErr ? { ok: false, error: "save" } : { ok: true, quality };
+}
+
 // ── WHAT THE STUDENT ALREADY HAS, BEFORE ANYTHING NEW IS WRITTEN ── COMPETEN-SCHOLAR-AI-OPT-01 (Wave 2, s6) ─────────
 //
 // Saved private content is offered again before new AI is paid for: unanswered questions on a section, a step-by-step

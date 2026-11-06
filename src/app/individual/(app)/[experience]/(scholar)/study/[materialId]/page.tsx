@@ -1,3 +1,6 @@
+import { SectionPictures } from "../_components/learn-visuals";
+import { pictureReadingInput, slideExtracts, slideRows } from "@/lib/individual/scholar/slide-classify";
+import { CheckSlidesAgain, ReadingDetails } from "../_components/reading-details";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -124,16 +127,19 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   // SCHOLAR-IMAGE-RECOVERY: a PDF's image-only pages are recovered the same way as a PowerPoint's picture-only slides.
   const recoverable = (m.mimeType === PPTX_MIME && rawQuality?.unit === "slide") || (m.mimeType === PDF_MIME && rawQuality?.unit === "page");
   const policyOn = policy.scholarMaterialImageSlides === "ai_transcription";
-  const pictures = recoverable && rawQuality && chunks.ok && (policyOn || rawQuality.emptyUnits.length)
-    ? planPictureSlides({ emptyUnits: rawQuality.emptyUnits, triedUnits: rawQuality.aiTriedUnits, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
+  // SCHOLAR-PPTX-READING-01: the pictures on slides with text can be asked for too; a blank slide never is.
+  const readingInput = recoverable && rawQuality ? pictureReadingInput(rawQuality) : null;
+  const pictures = readingInput && chunks.ok && (policyOn || readingInput.emptyUnits.length)
+    ? planPictureSlides({ ...readingInput, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
     : null;
-  const unreadableUnits = recoverable && rawQuality ? rawQuality.emptyUnits.length : 0;
+  const unreadableUnits = readingInput ? readingInput.emptyUnits.length + (pictures?.slides.filter(n => readingInput.mixedUnits.includes(n)).length ?? 0) : 0;
+  const rows = slideRows(rawQuality);
   // SCHOLAR-VISUAL-CLASSIFY-01: the page picker -- each page the plan would read, with its index label; charts and tables unticked.
   const planned = pictures && rawQuality && chunks.ok && policyOn
     ? plannedPages(pictures.slides, pageInfoOf(chunks.data, rawQuality.emptyUnits, rawQuality.aiReadUnits ?? []), rawQuality.unit === "page" ? "page" : "slide")
     : undefined;
   // SCHOLAR-IMAGE-RECOVERY: while a reading is on offer, the warning says so instead of "cannot be read".
-  if (policyOn && pictures?.slides.length && rawQuality) quality = qualitySummary(rawQuality, { recoverable: true });
+  if (rawQuality) quality = qualitySummary(rawQuality, { recoverable: !!(policyOn && pictures?.slides.length), picturesShown: policy.scholarLessonVisuals === "on" });
   const offMessage = status ? aiOffMessage(status) : "Your AI help setting could not be read just now, so explanations and practice questions are not available. Try again shortly.";
   const byChunk = new Map<string, ReturnType<typeof questionView>[]>();
   let caseCount = 0;
@@ -153,8 +159,10 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         intro={`${unit === "section" ? (m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)") : `${FORMAT_LABEL[FORMAT_OF[m.mimeType]]}, ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}`} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
       {quality && (
-        <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.text}</p>
+        <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.heading && <span className="font-semibold">{quality.heading}. </span>}{quality.heading ? quality.text.replace(/^Partly read: /, "") : quality.text}</p>
       )}
+      {rows && <ReadingDetails materialId={m.id} rows={rows} extracts={slideExtracts(rows, chunks.ok ? chunks.data : [])} />}
+      {!rows && m.mimeType === PPTX_MIME && rawQuality?.unit === "slide" && <CheckSlidesAgain materialId={m.id} />}
       {pictures && (
         <PictureSlides materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
           beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} requests={policyOn ? Math.ceil(pictures.slides.length / TRANSCRIBE_BATCH) : null} planned={planned} batch={TRANSCRIBE_BATCH} />
@@ -237,7 +245,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
         <h2 id="sections-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Sections</h2>
         {!chunks.ok ? <div className="mt-3"><Unreadable what="material text" /></div> : (
           <ol className="mt-3 space-y-4">
-            {chunks.data.map(c => {
+            {chunks.data.map((c, i, all) => {
               const qs = byChunk.get(c.id) ?? [];
               return (
                 <li key={c.id} id={`c-${c.id}`} className="scroll-mt-20 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
@@ -253,15 +261,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
                         const r = aiReadingOf(rawQuality, c.pageFrom);
                         return r ? <span className="ml-2 text-[12px] text-gray-600">Read {r.extractedAt.slice(0, 10)} · {r.model} · {r.promptVersion}</span> : null;
                       })()}
-                      {/* Compare with the original: a PowerPoint's own slide picture, or the PDF opened at that page. */}
-                      {m.mimeType === PPTX_MIME && (
-                        <details className="mt-1">
-                          <summary className={`cursor-pointer text-[12.5px] font-semibold ${focusRing}`} style={{ color: x.accent }}>Compare with the original slide picture</summary>
-                          {/* eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served privately by the slides route */}
-                          <img src={`/api/individual/scholar/materials/${m.id}/slides?slide=${c.pageFrom}`} alt={`The original picture on slide ${c.pageFrom}`} loading="lazy"
-                            className="mt-1 max-h-72 max-w-full rounded-md border border-gray-200" />
-                        </details>
-                      )}
+                      {/* Compare with the original: a PowerPoint's picture is inline below; a PDF opens at that page. */}
                       {m.mimeType === PDF_MIME && (
                         <a href={`/api/individual/scholar/materials/${m.id}#page=${c.pageFrom}`} target="_blank" rel="noreferrer"
                           className={`ml-2 text-[12.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Open the original at page {c.pageFrom}</a>
@@ -276,6 +276,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
                     </summary>
                     <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{c.content}</p>
                   </details>
+                  {c.pageFrom !== null && <SectionPictures materialId={m.id} materialTitle={m.title} from={c.pageFrom} to={c.pageTo} first={all[i - 1]?.pageFrom !== c.pageFrom} last={all[i + 1]?.pageFrom !== c.pageFrom} leading={i === 0} />}
                   {competenciesOn && mapped.ok && (mapped.data.concepts.has(c.id) || mappingsByChunk.has(c.id)) && (
                     <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
                       options={learner.programme ? options : []} corrected={mapped.data.corrected.has(c.id)} correction={mapped.data.correctionsOn} />
