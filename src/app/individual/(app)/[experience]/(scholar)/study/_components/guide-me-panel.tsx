@@ -50,27 +50,26 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
   const statusFromSaved = (r: GuideReply) => { const q = partsOf(r)?.questions[0]?.text; const kept = q ? answeredOf(questionText(q)) : null; return kept === "understood" ? "understood" as const : kept ? "attempted" as const : null; };
 
   // OPENING: every step already saved comes back with no AI, and the learner resumes where they were.
+  const opening = useRef(false);
   useEffect(() => {
-    if (state.opened) return;
-    let live = true;
+    if (state.opened || opening.current) return;
+    opening.current = true;
     void (async () => {
       setState(s => ({ ...s, opened: true }));
       const first = await ask("teach", 0, {}, true);
-      if (!live || !first) return;
+      if (!first) return;
       const of = first.guide?.of ?? 1, got: Record<number, GuideReply> = {};
       if (first.answer) got[0] = first;
       for (let i = 1; i < of && got[i - 1]; i++) { const r = await ask("teach", i, {}, true); if (r?.answer) got[i] = r; }
-      if (!live) return;
       const status = Array.from({ length: of }, (_, i) => (got[i] ? statusFromSaved(got[i]) ?? "open" : "open") as StepStatus);
       const last = Object.keys(got).map(Number).sort((a, b) => b - a)[0];
       const resume = resumeStep(status);
       setState(s => ({ ...s, of, status, current: last === undefined ? 0 : Math.min(resume, last), finished: false,
         steps: { ...s.steps, ...Object.fromEntries(Object.entries(got).map(([k, v]) => [k, { ...FRESH_STEP, ...(s.steps[Number(k)] ?? {}), reply: v }])) } }));
     })();
-    return () => { live = false; };
-    // Once per lesson, when the panel first opens.
+    // Once per lesson, when the panel first opens. The page keeps what it finds, so leaving the style while it reads loses nothing.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.opened]);
+  }, []);
 
   const teach = async (step: number) => {
     setState(s => ({ ...s, current: step, finished: false }));
@@ -207,7 +206,8 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                 <button type="button" className={learnAction.link} disabled={busy || disabled || here.hints.length >= GUIDE_HINT_LEVELS} onClick={() => void hint()}>{here.hints.length ? GUIDE_COPY.biggerHint : GUIDE_COPY.hint}</button>
                 <button type="button" className={learnAction.link} disabled={busy || disabled} onClick={() => void explain()}>{GUIDE_COPY.explain}</button>
-                <button type="button" className={learnAction.link} disabled={busy} onClick={skip}>{GUIDE_COPY.moveOn}</button>
+                {/* Coming back to a step already dealt with: going on is simply the next step, not moving on without answering. */}
+                <button type="button" className={learnAction.link} disabled={busy} onClick={skip}>{status === "open" || status === "attempted" ? GUIDE_COPY.moveOn : lastStep ? GUIDE_COPY.finish : GUIDE_COPY.next}</button>
               </div>
             )}
           </div>
