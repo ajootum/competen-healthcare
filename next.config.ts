@@ -265,8 +265,8 @@ const nextConfig: NextConfig = {
    */
   poweredByHeader: false,
 
-  /** SCHOLAR-VISUAL-001 phase 2: a native module, loaded at run time by the whole-slide job. It cannot be bundled. */
-  serverExternalPackages: ["@napi-rs/canvas"],
+  /** SCHOLAR-VISUAL-001 phase 2: finds its own .wasm beside its code at run time, so it stays a package rather than a bundle. */
+  serverExternalPackages: ["@hyzyla/pdfium"],
 
   /**
    * The Document Studio's Unicode PDF fonts (src/lib/individual/documents/pdf.ts) are read from disk at
@@ -287,6 +287,7 @@ const nextConfig: NextConfig = {
       "./node_modules/@matbee/libreoffice-converter/dist/*.cjs",
       "./node_modules/@matbee/libreoffice-converter/wasm/*.cjs",
       "./node_modules/zod/**/*",
+      "./node_modules/@hyzyla/pdfium/dist/pdfium.wasm",
     ],
   },
   /** The engine unpacked is about 250 MB. Its compressed copy in .render-engine is what ships, and no function may trace the original. */

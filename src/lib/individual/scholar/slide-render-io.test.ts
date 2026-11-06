@@ -12,8 +12,9 @@ const h = vi.hoisted(() => ({
   bytes: null as Uint8Array | null,
   busy: false,
   pdf: vi.fn(),
-  pages: vi.fn(),
+  pages: 1,
   webp: vi.fn(),
+  closed: 0,
 }));
 vi.mock("../policy", () => ({ loadIndividualPolicy: async () => h.policy }));
 vi.mock("./material-visuals-io", () => ({ scanDeck: async () => ({ slides: 1, pictures: [], undisplayable: [] }) }));
@@ -24,7 +25,8 @@ vi.mock("./store", () => ({
 }));
 vi.mock("./slide-render-engine", () => ({
   RenderError: class RenderError extends Error { constructor(public code: string) { super(code); } },
-  deckToPdf: h.pdf, pdfPageCount: h.pages, pageToWebp: h.webp,
+  deckToPdf: h.pdf,
+  openPdfDrawing: async () => ({ pageCount: h.pages, draw: h.webp, close: () => { h.closed += 1; } }),
   reserveEngine: () => { if (h.busy) return false; h.busy = true; return true; },
   releaseEngine: () => { h.busy = false; },
 }));
@@ -92,8 +94,9 @@ beforeEach(async () => {
   h.bytes = await deck();
   h.busy = false;
   h.pdf.mockReset().mockResolvedValue(new Uint8Array([9]));
-  h.pages.mockReset().mockResolvedValue(1);
-  h.webp.mockReset().mockResolvedValue({ bytes: new Uint8Array([1, 2]), width: 1920, height: 1080 });
+  h.pages = 1;
+  h.closed = 0;
+  h.webp.mockReset().mockResolvedValue({ bytes: new Uint8Array([1, 2]), width: 1920, height: 1080, blank: false });
 });
 
 describe("the claim", () => {
@@ -182,11 +185,19 @@ describe("the job", () => {
   });
   it("a page count that differs stores nothing: a page must be a place in the deck", async () => {
     const f = fake();
-    h.pages.mockResolvedValue(2);
+    h.pages = 2;
     await (await startWholeSlides(ctxOf(f.admin, A), "m1")).run!();
     expect(f.rows.get("m1")).toMatchObject({ status: "failed", reason: "page_count_differs", units: [] });
     expect(f.stored.size).toBe(0);
     expect(h.webp).not.toHaveBeenCalled();
+    expect(h.closed).toBe(1);
+  });
+  it("a slide that draws as flat colour is not stored, and is named as not drawn", async () => {
+    const f = fake();
+    h.webp.mockResolvedValue({ bytes: new Uint8Array([1]), width: 1920, height: 1080, blank: true });
+    await (await startWholeSlides(ctxOf(f.admin, A), "m1")).run!();
+    expect(f.rows.get("m1")).toMatchObject({ status: "partial", units: [], not_drawn: [1] });
+    expect(f.stored.size).toBe(0);
   });
   it("a deck whose order cannot be read is never drawn", async () => {
     const f = fake();
@@ -200,7 +211,7 @@ describe("the job", () => {
   it("a file deleted while it was being drawn leaves no image behind", async () => {
     const f = fake();
     const { run } = await startWholeSlides(ctxOf(f.admin, A), "m1");
-    h.webp.mockImplementationOnce(async () => { f.rows.delete("m1"); return { bytes: new Uint8Array([1]), width: 1920, height: 1080 }; });
+    h.webp.mockImplementationOnce(async () => { f.rows.delete("m1"); return { bytes: new Uint8Array([1]), width: 1920, height: 1080, blank: false }; });
     await run!();
     expect(f.stored.size).toBe(0);
     expect(f.removed).toHaveLength(1);

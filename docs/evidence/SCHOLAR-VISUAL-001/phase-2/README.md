@@ -19,14 +19,14 @@ Measured on `Growth and Development.pptx` (38 slides). PowerPoint's own export o
 | Outside converters, Microsoft viewer | not tested | not tested | none | a new outside service | per use | The owner's decision. No learner file was sent |
 | Our own conversion server | as native | as native | new hosting | new hosting | monthly | The owner's decision. Not built |
 
-Peak memory of the WebAssembly engine: about 1.6 GB. The job in full, cold: about 190 s (unpack 10 s, start up to 140 s, convert about 25 s, draw about 1.3 s a slide), against 280 s allowed and a route limit of 300 s.
+Measured end to end with the worker laid out as a function will have it: 147 s cold to the PDF, including unpacking, 38 slides, peak 1,641 MB, one CPU, no network. Peak memory of the WebAssembly engine: about 1.6 GB. The job in full, cold: about 190 s (unpack 10 s, start up to 140 s, convert about 25 s, draw about 1 s a slide), against 280 s allowed and a route limit of 300 s.
 
 ## What it does
 
 1. Opening a presentation asks once for its slides to be drawn (`POST .../materials/[id]/whole-slides`). The answer is immediate and the job runs in `after()`. The row's primary key is the claim, so a second request starts nothing.
 2. A working copy of the deck has its fonts named by their metric-compatible equivalents (Calibri to Carlito, Cambria to Caladea, Arial to Liberation Sans, Times New Roman to Liberation Serif), so a line breaks where PowerPoint breaks it. The stored file is never written to.
-3. LibreOffice, in a child process with no secrets in its environment, makes a PDF: lossless, every picture at its own resolution, hidden slides included.
-4. pdf.js draws the slides that need it, 1920 wide, stored as lossless WebP in the same private bucket under the learner's own folder.
+3. LibreOffice, in a child process started as a plain `node` file outside the app bundle, with no secrets in its environment, makes a PDF: lossless, every picture at its own resolution, hidden slides included.
+4. PDFium (Chrome's PDF engine, compiled to WebAssembly, no native module) draws the slides that need it, 1920 wide, on white, stored as lossless WebP in the same private bucket under the learner's own folder.
 5. The visuals list adds a whole slide ahead of that slide's pictures. In the notes and the lesson strip the whole slide stands for them. In the dialog they stay one tap away, labelled original. Saved lessons hold no copy, so they show drawn slides with nothing regenerated.
 
 **Slides drawn:** those holding a content picture, a picture a browser cannot show, a chart, a diagram, a table, a group, a connector, or two or more drawn shapes. Plain text, blank and logo-only slides are not. Growth and Development: 10 of 38, 1.2 MB stored.
@@ -84,7 +84,11 @@ A second read before the PR found one blocker and six should-fix items, all fixe
 - Wording that called a drawn slide original is corrected, and the note no longer promises pictures on a chart-only slide.
 - The .render-engine folder is kept out of the deploy archive. The page stops checking once the server says drawing is off.
 
-Not verifiable from the code, and so to be confirmed by a preview deployment: the function's final size, @napi-rs/canvas loading on Vercel, the time on Vercel, and process-group kill there.
+Not verifiable from the code, and so to be confirmed by a preview deployment: the function's final size, the time on Vercel, and process-group kill there.
+
+After the review, drawing moved from pdf.js with a native canvas module to PDFium in WebAssembly: pdf.js in this build could not decode CCITT or JPEG 2000 scans, and the native module was the largest unknown on Vercel. Measured on the function-like container: 0.9 s a slide for this deck, start-up 0.25 s, peak 384 MB. The drawn output was compared to PowerPoint by eye. `walk.txt` and `walk-2.txt` ran before this change. The focused recheck is `walk-3.txt`.
+
+CI then found what a webpack dev server cannot: a Turbopack production build resolves the argument of `child_process.fork` as a module and failed. The worker is now started as a plain `node <file>`, and every path to the engine lives inside that file, so the bundler sees none of them.
 
 These fixes came after the browser walks. They were checked by unit tests (slide-render-store.test.ts, slide-render-io.test.ts), not by a further walk.
 

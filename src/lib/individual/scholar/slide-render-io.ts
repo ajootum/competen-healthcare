@@ -5,7 +5,7 @@ import { loadIndividualPolicy } from "../policy";
 import { BUCKET, PPTX_MIME } from "./config";
 import { openOfficeZip, slidePartNames } from "./extract";
 import { scanDeck } from "./material-visuals-io";
-import { deckToPdf, pageToWebp, pdfPageCount, releaseEngine, RenderError, reserveEngine } from "./slide-render-engine";
+import { deckToPdf, openPdfDrawing, releaseEngine, RenderError, reserveEngine } from "./slide-render-engine";
 import {
   FONT_PARTS, RENDER_BUDGET_MS, RENDER_ENGINE, aliasFonts, claimDecision, layoutMatters, pagesExpected, renderPath, slidePageMap, slidesToDraw,
   type RenderUnit,
@@ -113,20 +113,26 @@ async function drawDeck(ctx: IndividualContext, material: MaterialRow, attempts:
     const devBudget = process.env.NODE_ENV === "production" ? 0 : Number(process.env.SCHOLAR_RENDER_DEV_BUDGET_MS) || 0;
     const left = () => (devBudget || RENDER_BUDGET_MS) - (Date.now() - started);
     const pdf = await deckToPdf(copy, Math.max(1000, left() - 20_000));
-    // A page count that differs from the deck's means a page number is no longer a place in the deck: nothing is stored.
-    if ((await pdfPageCount(pdf)) !== pagesExpected(pages)) { await finish(ctx, material.id, attempts, { status: "failed", reason: "page_count_differs" }); return; }
-
+    const drawing = await openPdfDrawing(pdf);
     const units: RenderUnit[] = [];
     const missed: number[] = [...notDrawn];
-    for (const n of draw) {
-      if (left() < 5000) { missed.push(n); continue; }
-      const { bytes: webp, width, height } = await pageToWebp(pdf, pages.get(n) as number);
-      const sha = sha16(webp);
-      const path = renderPath(ctx.userId, material.id, n, sha);
-      const up = await ctx.admin.storage.from(BUCKET).upload(path, Buffer.from(webp), { contentType: "image/webp", upsert: true });
-      if (up.error) throw new RenderError("engine_failed");
-      stored.push(path);
-      units.push({ n, path, sha, width, height, bytes: webp.byteLength });
+    try {
+      // A page count that differs from the deck's means a page number is no longer a place in the deck: nothing is stored.
+      if (drawing.pageCount !== pagesExpected(pages)) { await finish(ctx, material.id, attempts, { status: "failed", reason: "page_count_differs" }); return; }
+      for (const n of draw) {
+        if (left() < 5000) { missed.push(n); continue; }
+        const { bytes: webp, width, height, blank } = await drawing.draw(pages.get(n) as number);
+        // Flat colour on a slide known to hold something: not drawn, not stored. Its original pictures stay.
+        if (blank) { missed.push(n); continue; }
+        const sha = sha16(webp);
+        const path = renderPath(ctx.userId, material.id, n, sha);
+        const up = await ctx.admin.storage.from(BUCKET).upload(path, Buffer.from(webp), { contentType: "image/webp", upsert: true });
+        if (up.error) throw new RenderError("engine_failed");
+        stored.push(path);
+        units.push({ n, path, sha, width, height, bytes: webp.byteLength });
+      }
+    } finally {
+      drawing.close();
     }
     missed.sort((a, b) => a - b);
     // The learner may have deleted the file while it was being drawn. Then no record points at these images, so they go now.

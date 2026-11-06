@@ -15,7 +15,7 @@ import type { SlideFacts } from "./slide-classify";
 // The drawing is never presented as the original picture: the original bytes stay one tap away (material-visuals-io.ts).
 
 /** Written on the row, so a later engine can tell what drew what. */
-export const RENDER_ENGINE = "libreoffice-wasm-2.7.2+pdfjs-lossless";
+export const RENDER_ENGINE = "libreoffice-wasm-2.7.2+pdfium-3.0.0-lossless";
 /** The width of a drawn slide. Wide enough for a phone at 3x and a desktop dialog; the original pictures keep their own size. */
 export const RENDER_WIDTH = 1920;
 /** The whole job, against the route's 300 s. */
