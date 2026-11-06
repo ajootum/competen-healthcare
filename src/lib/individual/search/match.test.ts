@@ -36,6 +36,29 @@ describe("matchesSearch", () => {
     expect(matchesSearch("Hyperkalaemia", "hypokalaemia")).toBe(false);
     expect(matchesSearch("Hyperglycaemia", "hypoglycaemia")).toBe(false);
   });
+  it("⚠ a typo never lands on an opposite", () => {
+    for (const typo of ["hypetension", "hyprtension", "hypotnsion", "hyptension"]) {
+      expect(matchesSearch("Hypertension", typo)).toBe(false);
+      expect(matchesSearch("Hypotension", typo)).toBe(false);
+    }
+    expect(matchesSearch("Hypokalaemia", "hypekalaemia")).toBe(false);
+    expect(matchesSearch("Hypothermia", "hypthermia")).toBe(false);
+  });
+  it("⚠ never swaps terms that differ by one letter", () => {
+    for (const [a, b] of [["abduction", "adduction"], ["exophthalmos", "enophthalmos"], ["dysphagia", "dysphasia"], ["aphasia", "aphagia"], ["perineal", "peroneal"], ["ileum", "ilium"], ["prostate", "prostrate"], ["colic", "cholic"], ["insulin", "inulin"]]) {
+      expect(matchesSearch(b, a)).toBe(false);
+      expect(matchesSearch(a, b)).toBe(false);
+      expect(matchesSearch(a, a)).toBe(true);
+    }
+  });
+  it("a synonym counts only as whole words", () => {
+    expect(matchesSearch("A solution of saline", "urinary tract infection")).toBe(false);
+    expect(matchesSearch("Acute appendicitis", "personal protective equipment")).toBe(false);
+    expect(matchesSearch("The oesophagus", "standard operating procedure")).toBe(false);
+    expect(matchesSearch("Treating a UTI at home", "urinary tract infection")).toBe(true);
+    expect(matchesSearch("Choosing PPE", "personal protective equipment")).toBe(true);
+    expect(matchesSearch("Personal protective equipment", "ppe")).toBe(true);
+  });
   it("does not stretch short words", () => {
     expect(matchesSearch("Pain score", "rain")).toBe(false);
     expect(matchesSearch("The cat", "cut")).toBe(false);
@@ -49,6 +72,7 @@ describe("oneSlip", () => {
     expect(oneSlip("sepssi", "sepsis")).toBe(true);
     expect(oneSlip("aepsis", "sepsis")).toBe(false);
     expect(oneSlip("sepxyz", "sepsis")).toBe(false);
+    expect(oneSlip("sepsos", "sepsis")).toBe(false);
   });
   it("splits words the same way as matching", () => {
     expect(searchWords("  Plan-Do  ")).toEqual(["plan", "do"]);
