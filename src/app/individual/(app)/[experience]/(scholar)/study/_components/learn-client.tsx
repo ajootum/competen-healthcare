@@ -40,6 +40,7 @@ import { LibraryNotes } from "./library-notes-client";
 import { LearnVisuals } from "./learn-visuals";
 import { GoDeeperCard, type GoDeeperLevels } from "./go-deeper-view";
 import { GUIDE_FRESH, GuideMePanel, type GuideState } from "./guide-me-panel";
+import { guideVerdictOf } from "@/lib/individual/scholar/guide-me";
 import { GO_DEEPER_COPY, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import { ReadAloudButton, SpeechSetting } from "@/app/individual/_components/speech/speech-buttons";
 import { AskAbout, type AskAboutProps } from "./ask-panel";
@@ -1544,7 +1545,7 @@ export function LearnWorkspace(props: {
                   run={runGuide(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")}
                   renderClarify={(p, retry) => <ClarifyPurpose clarify={p as ClarifyPrompt} busy={!!busy} accent={accent} onEducation={() => { confirmStudy(true); retry(); }} onPatient={() => confirmStudy(false)} />}
                   cite={(t, srcs) => <Cited text={t} sources={srcs as Source[]} />}
-                  answeredOf={q => { const h = (checks[st.step] ?? []).filter(x => x.question === q).at(-1); return h?.response?.verdict ?? (h ? "attempted" : null); }}
+                  answeredOf={q => guideVerdictOf(q, (checks[st.step] ?? []).map(x => ({ question: x.question, verdict: x.response?.verdict ?? null, next: x.response?.feedback?.next ?? null })))}
                   renderResearch={x => <ResearchBlock x={x as ResearchReply} />} />
               ) : undefined}
               askAction={group.ask ? <button type="button" onClick={() => rephrase("")} className={`${chip} min-h-[44px] gap-1.5 border-[var(--cmp-learn-next-border)] bg-[var(--cmp-app-surface)] text-[var(--cmp-learn-next-ink)] hover:bg-[var(--cmp-learn-next-surface)]`}><LearningIcon name="chat" className="h-4 w-4" />{props.labels.ask}</button> : undefined} />

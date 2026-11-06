@@ -75,6 +75,31 @@ export function followUpOf(next: string | null | undefined): string | null {
   return q && q.length >= 8 ? q : null;
 }
 
+/** A kept check as far as progress needs it (learn-check-record.ts CheckResponse). */
+export type GuideKeptCheck = { question: string; verdict: string | null; next: string | null };
+
+/**
+ * Pure. What the kept checks say about a step's question, following the new questions feedback offered: an answer that reached understanding on a follow-up reached it on the step.
+ * "understood", "attempted", or null when it has not been answered. No second record: this reads only what the existing check already keeps.
+ */
+export function guideVerdictOf(question: string, checks: readonly GuideKeptCheck[]): "understood" | "attempted" | null {
+  const seen = new Set<string>(), queue = [question];
+  let answered = false;
+  while (queue.length) {
+    const q = queue.shift()!;
+    if (seen.has(q)) continue;
+    seen.add(q);
+    for (const c of checks) {
+      if (c.question !== q) continue;
+      answered = true;
+      if (c.verdict === "understood") return "understood";
+      const next = followUpOf(c.next);
+      if (next) queue.push(next);
+    }
+  }
+  return answered ? "attempted" : null;
+}
+
 /** Pure. A later status never undoes understanding, and moving on never counts as understanding. */
 export function mergeStatus(was: StepStatus, now: StepStatus): StepStatus {
   if (was === "understood") return "understood";

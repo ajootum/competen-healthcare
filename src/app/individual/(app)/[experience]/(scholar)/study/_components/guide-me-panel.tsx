@@ -27,8 +27,8 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
   renderClarify: (prompt: unknown, retry: () => void) => ReactNode;
   state: GuideState; setState: Dispatch<SetStateAction<GuideState>>; run: GuideRun; busy: boolean; disabled?: boolean;
   cite: (text: string, sources: readonly Source[]) => ReactNode;
-  /** The latest kept verdict for a question of this lesson (the page's checks), so progress comes back on any device with no AI. */
-  answeredOf: (question: string) => string | null;
+  /** What this lesson's kept checks say about a question (guide-me.ts guideVerdictOf), so progress comes back on any device with no AI. */
+  answeredOf: (question: string) => "understood" | "attempted" | null;
   renderResearch: (x: NonNullable<GuideReply["research"]>) => ReactNode;
 }) {
   const id = useId();
@@ -47,7 +47,7 @@ export function GuideMePanel({ state, setState, run, busy, disabled, cite, answe
     return json;
   };
   const partsOf = (r: GuideReply | null): DeeperParts | null => (r?.answer ? parseDeeperAnswer(r.answer) : null);
-  const statusFromSaved = (r: GuideReply) => { const q = partsOf(r)?.questions[0]?.text; const kept = q ? answeredOf(questionText(q)) : null; return kept === "understood" ? "understood" as const : kept ? "attempted" as const : null; };
+  const statusFromSaved = (r: GuideReply) => { const q = partsOf(r)?.questions[0]?.text; return q ? answeredOf(questionText(q)) : null; };
 
   // OPENING: every step already saved comes back with no AI, and the learner resumes where they were.
   const opening = useRef(false);

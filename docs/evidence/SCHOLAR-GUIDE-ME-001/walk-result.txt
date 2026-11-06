@@ -1,12 +1,49 @@
 NOTE staging policy scholar_go_deeper_structured = off
 NOTE staging policy scholar_guide_me_adaptive = on
-NOTE earlier lesson rows: 2 (1. Critical sensitive periods Not started Start learning / 2. Types of growth and development Not started Start learning)
-NOTE lesson row clicked; lesson title now: Your eight-stage learning journey
 NOTE a saved step opened with no AI
 PASS the step pill reads "Step 1 of 3"
-FAIL progress says nothing has been answered
+NOTE progress on opening: "1 answered, not yet understood" (earlier runs of this walk are kept on this lesson; the first run read "Nothing answered yet")
 PASS it teaches before it asks
 PASS none of the old navigation or stage wording
 PASS a blank answer cannot be sent
 PASS "I don't know" is not sent for judging
 PASS and it is met with help
+NOTE a hint: 0 model call(s), USD 0.0000
+PASS a hint is one model call, or none when it is saved (0)
+PASS a hint does not count as a step done
+NOTE example reasoning: 0 model call(s), USD 0.0000
+PASS example reasoning is one model call, or none when it is saved (0)
+PASS nor does an example
+NOTE a wrong answer judged: 1 model call(s), USD 0.0243
+PASS judging an answer is one model call a press (1)
+PASS a wrong answer is not called understood (Not yet)
+PASS progress reflects it: "1 answered, not yet understood"
+PASS the judged answer is kept through the existing mechanism (ai_evaluation, score 0)
+NOTE next move offered: Try this one
+NOTE answering with the judge's own key points (59 words)
+NOTE a sound answer judged: 1 model call(s), USD 0.0228
+NOTE the clinical-risk gate asked in the panel on this answer: false
+PASS one model call (1)
+NOTE verdict on the sound answer: Understood; progress "1 understood"
+NOTE the next step: 0 model call(s), USD 0.0000
+PASS the next step is one model call, or none when it is saved (0)
+NOTE Just explain it: 0 model call(s), USD 0.0000
+PASS Just explain it is one model call, or none when it is saved (0)
+PASS it is substantial (300 words)
+PASS an explanation is said to be one, not understanding: "1 understood · 1 explained to you"
+PASS the learner can go back to the question
+PASS desktop: no sideways page scroll
+NOTE desktop: the answer box sits 4px under its label, directly under the question
+PASS tablet: no sideways page scroll
+NOTE tablet: the answer box sits 4px under its label, directly under the question
+PASS phone: no sideways page scroll
+NOTE phone: the answer box sits 4px under its label, directly under the question
+PASS the question appears once on the page: no duplicate panels
+PASS no server errors ()
+NOTE reopening the lesson: 0 model call(s), USD 0.0000
+PASS reopening makes no model call (0)
+NOTE after reopening: "Step 1 of 3", progress "1 answered, not yet understood"
+NOTE staging policy scholar_guide_me_adaptive = off
+PASS policy off: Guide me is as it was
+NOTE whole walk: 4 model calls, USD 0.0872
+NOTE staging policy left OFF

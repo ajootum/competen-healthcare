@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, isUncertainAnswer, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
+import { GUIDE_STEPS_MAX, followUpOf, guideGround, guideKeyContext, guidePrompt, guideStepCount, guideVerdictOf, isUncertainAnswer, mergeStatus, moveAfterVerdict, parseGuideAsk, progressWords, resumeStep } from "./guide-me";
 import { guideInstruction, GUIDED_CLARIFY } from "./guide-me-prompt";
 import { parseDeeperAnswer } from "./deeper-format";
 import { isGuideTurnVersion, newestSavedLesson } from "./learn-journey";
@@ -86,6 +86,24 @@ describe("progress is what happened", () => {
   it("resumes at the first step left open or not yet understood, and past the end when none is", () => {
     expect(resumeStep(["understood", "attempted", "open"])).toBe(1);
     expect(resumeStep(["understood", "explained", "skipped"])).toBe(3);
+  });
+});
+
+describe("progress after a reopen comes from what is kept", () => {
+  const Q = "Why does sitting come first?";
+  it("reads a step's own question", () => {
+    expect(guideVerdictOf(Q, [])).toBeNull();
+    expect(guideVerdictOf(Q, [{ question: Q, verdict: "not_yet", next: null }])).toBe("attempted");
+    expect(guideVerdictOf(Q, [{ question: Q, verdict: "not_yet", next: null }, { question: Q, verdict: "understood", next: null }])).toBe("understood");
+    expect(guideVerdictOf(Q, [{ question: "Another?", verdict: "understood", next: null }])).toBeNull();
+  });
+  it("follows the new question feedback offered, so understanding reached there counts", () => {
+    const F = "What would that mean for a child who sits late?";
+    expect(guideVerdictOf(Q, [{ question: Q, verdict: "not_yet", next: `Now apply it. ${F} [S1]` }, { question: F, verdict: "understood", next: null }])).toBe("understood");
+    expect(guideVerdictOf(Q, [{ question: Q, verdict: "not_yet", next: F }, { question: F, verdict: "partly", next: null }])).toBe("attempted");
+  });
+  it("a loop in the follow-ups cannot hang it", () => {
+    expect(guideVerdictOf("A?", [{ question: "A?", verdict: "not_yet", next: "B is the one to ask?" }, { question: "B is the one to ask?", verdict: "not_yet", next: "A?" }])).toBe("attempted");
   });
 });
 
