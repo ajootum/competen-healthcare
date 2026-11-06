@@ -303,7 +303,7 @@ const toQualityJson = (q: ExtractionQuality) => ({
   ...(q.slideFacts ? { slide_facts: q.slideFacts } : {}),
 });
 const slideFactsOf = (v: any): SlideFacts | undefined => v && typeof v === "object" && Array.isArray(v.blank) && Array.isArray(v.mixed) && Array.isArray(v.review)
-  ? { version: Number(v.version), checkedAt: String(v.checkedAt ?? ""), blank: v.blank.map(Number), mixed: v.mixed.map(Number), grouped: Array.isArray(v.grouped) ? v.grouped.map(Number) : [],
+  ? { version: Number(v.version), checkedAt: String(v.checkedAt ?? ""), blank: v.blank.map(Number), mixed: v.mixed.map(Number), grouped: Array.isArray(v.grouped) ? v.grouped.map(Number) : [], decorativeOnly: Array.isArray(v.decorativeOnly) ? v.decorativeOnly.map(Number) : [],
       review: v.review.map((r: any) => ({ unit: Number(r.unit), kinds: Array.isArray(r.kinds) ? r.kinds : [], picture: !!r.picture })) }
   : undefined;
 const skippedOf = (v: unknown): { unit: number; reason: SlideSkipReason }[] | undefined => Array.isArray(v) ? v.map((s: any) => ({ unit: Number(s?.unit), reason: s?.reason })) : undefined;
@@ -4054,15 +4054,27 @@ export async function addPictureSlideSections(admin: Admin, userId: string, mate
   const tried = input.tried.filter(n => open.has(n));
   if (!tried.length) return { ok: true, added: 0, recorded: false };
   const plan = planChunkInsertion(existing, additions);
+  // SCHOLAR-PPTX-READING-01: a slide with text has sections already, so nothing else can show its picture was read. It is recorded BEFORE its
+  // section is added: if the last save below fails, it is not read (and charged) again and added twice. A failure before the sections exist undoes this.
+  const mixedHere = tried.filter(n => reading.mixedUnits.includes(n));
+  const undo = async () => { if (mixedHere.length) await admin.from("individual_scholar_material").update({ extraction_quality: toQualityJson(q) }).eq("user_id", userId).eq("id", materialId); };
+  if (mixedHere.length) {
+    const { error } = await admin.from("individual_scholar_material").update({ extraction_quality: toQualityJson({
+      ...q,
+      aiTriedUnits: [...new Set([...(q.aiTriedUnits ?? []), ...mixedHere])].sort((a, b) => a - b),
+      aiReadUnits: [...new Set([...(q.aiReadUnits ?? []), ...read.filter(n => mixedHere.includes(n))])].sort((a, b) => a - b),
+    }) }).eq("user_id", userId).eq("id", materialId);
+    if (error) return { ok: false, error: "record" };
+  }
   for (const m of plan.moves) {
     const { error } = await admin.from("individual_scholar_chunk").update({ ordinal: m.to }).eq("user_id", userId).eq("material_id", materialId).eq("id", m.id);
-    if (error) return { ok: false, error: "move" };
+    if (error) { await undo(); return { ok: false, error: "move" }; }
   }
   if (plan.inserts.length) {
     const { error } = await admin.from("individual_scholar_chunk").insert(plan.inserts.map(c => ({
       material_id: materialId, user_id: userId, ordinal: c.ordinal, page_from: c.pageFrom, page_to: c.pageTo, content: c.content,
     })));
-    if (error) return { ok: false, error: "insert" };
+    if (error) { await undo(); return { ok: false, error: "insert" }; }
   }
   const chars = plan.inserts.reduce((n, c) => n + c.content.length, 0);
   const quality: ExtractionQuality = {

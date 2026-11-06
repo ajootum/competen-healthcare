@@ -203,7 +203,7 @@ const SKIP_TEXT: Record<string, string> = {
   no_text: "no text could be read from its picture",
 };
 
-export function PictureSlides({ materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true, requests = null, planned, batch = 2 }: {
+export function PictureSlides({ mixed = 0, materialId, unit = "slide", slides, unreadable = slides, beyondCap, consent, policyOn = true, requests = null, planned, batch = 2 }: { mixed?: number;
   materialId: string; unit?: "slide" | "page"; slides: number; beyondCap: number; consent: boolean;
   /** Units with no readable text (including ones the cap or an earlier attempt leaves out). */
   unreadable?: number; policyOn?: boolean;
@@ -250,11 +250,11 @@ export function PictureSlides({ materialId, unit = "slide", slides, unreadable =
   return (
     <section aria-labelledby="pictures-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4">
       <h2 id="pictures-h" className="text-[15px] font-bold text-gray-900">
-        {count > 0 ? `${count} ${Us(count)} ${U === "page" ? (count === 1 ? "is" : "are") + " images only" : (count === 1 ? "has" : "have") + " pictures only"}` : (U === "page" ? "Image-only pages" : "Picture-only slides")}
+        {mixed > 0 ? `${count} ${Us(count)} ${count === 1 ? "has a picture" : "have pictures"} Scholar has not read` : count > 0 ? `${count} ${Us(count)} ${U === "page" ? (count === 1 ? "is" : "are") + " images only" : (count === 1 ? "has" : "have") + " pictures only"}` : (U === "page" ? "Image-only pages" : "Picture-only slides")}
       </h2>
       <p className="mt-1 text-[13.5px] text-gray-700">
         {slides > 0
-          ? `Scholar can ask AI to read the text in the pictures on ${slides === 1 ? `the ${U}` : `the ${U}s`} that held no text. What it reads is labelled on each section, for you to check against the original. You can keep studying while it reads.`
+          ? `Scholar can ask AI to read the text in the pictures on ${slides === 1 ? `the ${U}` : `the ${U}s`}${mixed > 0 ? "" : " that held no text"}. What it reads is labelled on each section, for you to check against the original. You can keep studying while it reads.`
           : count > 0
             ? `Scholar could not read any text from ${count === 1 ? `this ${U}` : `these ${U}s`}, so it cannot teach from ${count === 1 ? "it" : "them"}.`
             // Nothing is left unread: the run just finished, so the card reports what was read, never "could not read".

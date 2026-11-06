@@ -42,7 +42,9 @@ export function loadReader(sessionId: string, step: number): Promise<ReaderReply
   return p;
 }
 
-export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards }: {
+export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards, hidePictures }: {
+  /** While the learner recalls the lesson, a picture must not give the answer away. */
+  hidePictures?: boolean;
   sessionId: string; step: number; index: number;
   /** The active lesson: its notes are read at once (a saved place inside them must be findable), others only when opened. */
   current: boolean;
@@ -124,7 +126,7 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                         <div className="mt-1 border-l-2 border-[var(--learn-border)] pl-3"><NotesText text={s.notes} className="text-gray-800" /></div>
                       </details>
                     )}
-                    {picture && <SectionPictures materialId={s.materialId} materialTitle={s.materialTitle} from={s.pageFrom} to={s.pageTo} first={!sameSlide(all[i - 1])} last={!sameSlide(all[i + 1])} leading={s.ordinal === 1} />}
+                    {picture && !hidePictures && <SectionPictures materialId={s.materialId} materialTitle={s.materialTitle} from={s.pageFrom} to={s.pageTo} first={!sameSlide(all[i - 1])} last={!sameSlide(all[i + 1])} leading={s.ordinal === 1} />}
                     <ActionRow label={`For ${s.citation}`}>
                       <AskAbout surface="learn" chunkIds={[s.chunkId]} materialId={s.materialId} sessionId={sessionId} step={step} refLabel={`Your notes: ${s.citation}`} label="Ask about this" variant="primary" />
                       {s.unit === "page" && (s.body || s.notes) && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} />}

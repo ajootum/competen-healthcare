@@ -139,7 +139,7 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
         {cards.map(({ m, analysis, mapped, competencies, labels, topics, related, proposal }) => {
           const unit = UNIT_OF(m.mimeType);
           const plan = plans.get(m.id) ?? null;
-          const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null, { recoverable: !!plan?.slides.length }) : null;
+          const q = extras.qualityOn ? qualitySummary(extras.byId.get(m.id)?.quality ?? null, { recoverable: !!plan?.slides.length, picturesShown: policy.scholarLessonVisuals === "on" }) : null;
           const analysed = analysis.ok && analysis.data.analysed >= analysis.data.sections;
           // SCHOLAR-UPLOAD-FIX: "none" only once every section was looked at; while finding, how far it has got.
           const topicsLine = topicsState({ consent: consentOn, analysed: analysis.ok ? analysis.data.analysed : null, sections: analysis.ok ? analysis.data.sections : null, topics: topics.length });
@@ -161,10 +161,10 @@ export default async function ReadyPage({ params, searchParams }: { params: Prom
                 <span className="font-semibold">{q === null ? "Reading: " : q.heading ? `${q.heading}. ` : q.partial ? "Partly read. " : "Read. "}</span>
                 {q === null ? "How completely this file was read is not recorded here." : q.partial ? q.text.replace(/^Partly read: /, "") : q.text}
               </p>
-              {rowsOf.get(m.id) && <div className="mt-3"><ReadingDetails materialId={m.id} rows={rowsOf.get(m.id)!.rows} extracts={rowsOf.get(m.id)!.extracts} /></div>}
+              {rowsOf.get(m.id) && <div className="mt-3"><ReadingDetails picturesShown={policy.scholarLessonVisuals === "on"} materialId={m.id} rows={rowsOf.get(m.id)!.rows} extracts={rowsOf.get(m.id)!.extracts} /></div>}
               {plan && plan.slides.length > 0 && (
                 <div className="mt-3">
-                  <PictureSlides materialId={m.id} unit={extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide"} slides={plan.slides.length}
+                  <PictureSlides mixed={plan.slides.filter(n => extras.byId.get(m.id)?.quality?.slideFacts?.mixed.includes(n)).length} materialId={m.id} unit={extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide"} slides={plan.slides.length}
                     unreadable={plan.slides.length + plan.beyondCap} beyondCap={plan.beyondCap} consent={consentOn} policyOn
                     requests={Math.ceil(plan.slides.length / TRANSCRIBE_BATCH)} batch={TRANSCRIBE_BATCH}
                     planned={plannedPages(plan.slides, plan.pages, extras.byId.get(m.id)?.quality?.unit === "page" ? "page" : "slide")} />

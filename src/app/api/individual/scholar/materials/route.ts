@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   // the first finish gave, and nothing is read, extracted or removed again. The material id IS the upload id.
   const already = await keptMaterial(ctx.admin, ctx.userId, uploadId);
   if (already === "unreadable") return NextResponse.json({ error: "Your study space could not be read just now. Try again shortly.", retryable: true }, { status: 503 });
-  if (already) return keptAnswer(already, policy.scholarMaterialImageSlides === "ai_transcription");
+  if (already) return keptAnswer(already, policy.scholarMaterialImageSlides === "ai_transcription", policy.scholarLessonVisuals === "on");
 
   // The single finish claim (migration 960): one finish reads and extracts an upload, any other waits for its answer.
   const now = Date.now();
@@ -152,7 +152,7 @@ export async function POST(req: Request) {
   // SCHOLAR-CE07C: another finish of this upload kept it first (possible only without 960's claim). Its answer, its audit.
   if (created.existing) {
     const kept = await keptMaterial(ctx.admin, ctx.userId, uploadId);
-    if (kept && kept !== "unreadable") return keptAnswer(kept, policy.scholarMaterialImageSlides === "ai_transcription");
+    if (kept && kept !== "unreadable") return keptAnswer(kept, policy.scholarMaterialImageSlides === "ai_transcription", policy.scholarLessonVisuals === "on");
   }
 
   // SCHOLAR-IMAGE-RECOVERY: where the image-only pages (or picture-only slides) can be read on request, the summary says so.
@@ -166,11 +166,11 @@ export async function POST(req: Request) {
 }
 
 /** SCHOLAR-CE07C: the answer a kept upload's finish gives, rebuilt from the stored material for a retried finish. */
-function keptAnswer(m: { id: string; mime: MaterialMime; chunks: number; pages: number | null; quality: ExtractionQuality | null }, imageSlidesAi: boolean) {
+function keptAnswer(m: { id: string; mime: MaterialMime; chunks: number; pages: number | null; quality: ExtractionQuality | null }, imageSlidesAi: boolean, picturesShown: boolean) {
   if (!m.quality) return NextResponse.json({ ok: true, id: m.id, chunks: m.chunks, pages: m.pages, status: "ready", already: true });
   const recoverable = imageSlidesAi && picturesCanBeRead(m.quality)
     && ((m.mime === PDF_MIME && m.quality.unit === "page") || (m.mime === PPTX_MIME && m.quality.unit === "slide"));
-  const summary = qualitySummary(m.quality, { recoverable });
+  const summary = qualitySummary(m.quality, { recoverable, picturesShown });
   // The same partial/ready rule as a first finish (U2: partial is never a bare success).
   const state = summary.partial ? "partial" : "ready";
   return NextResponse.json({ ok: true, id: m.id, chunks: m.chunks, pages: m.pages, status: state,

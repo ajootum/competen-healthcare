@@ -39,6 +39,8 @@ export type SlideFacts = {
   mixed: number[];
   /** A group at any depth was looked inside. */
   grouped: number[];
+  /** No text, and only a logo, an icon or a small picture: not blank, not shown in lessons, not worth an AI reading. */
+  decorativeOnly: number[];
   review: { unit: number; kinds: SlideContentKind[]; picture: boolean }[];
 };
 
@@ -65,7 +67,8 @@ function drawnShape(shape: string): boolean {
   if (!/<a:(?:prstGeom|custGeom)\b/.test(props)) return false;
   const line = props.match(/<a:ln\b[\s\S]*?<\/a:ln>/)?.[0] ?? "";
   const filled = !/<a:noFill\s*\/>/.test(line ? props.replace(line, "") : props);
-  const lined = !!line && !/<a:noFill\s*\/>/.test(line);
+  // No line of its own: the shape's style decides (a freehand curve or an outline box usually has only this).
+  const lined = line ? !/<a:noFill\s*\/>/.test(line) : /<a:lnRef\b[^>]*\bidx="[1-9]/.test(shape);
   return filled || lined;
 }
 
@@ -78,8 +81,11 @@ export function slideContent(slide: number, xml: string, rels: string | null, ha
   const pictures = slidePictures(xml, rels);
   const media = slideMedia(xml, rels);
   const kinds = new Set<SlideContentKind>();
-  if (/<a:graphicData\b[^>]*uri="[^"]*\/chart"/.test(xml)) kinds.add("chart");
-  if (/<a:graphicData\b[^>]*uri="[^"]*\/diagram"/.test(xml)) kinds.add("diagram");
+  // A table's text is already read. Every other kind of frame is content Scholar does not read, including kinds not named here.
+  for (const [, uri] of xml.matchAll(/<a:graphicData\b[^>]*\buri="([^"]*)"/g)) {
+    if (/\/table$/.test(uri)) continue;
+    kinds.add(/chart/i.test(uri) ? "chart" : /\/diagram$/.test(uri) ? "diagram" : "embedded");
+  }
   if (/<p:oleObj\b/.test(xml)) kinds.add("embedded");
   if (/<a:(?:videoFile|audioFile|quickTimeFile|wavAudioFile)\b/.test(xml) || /<p14:media\b/.test(xml)) kinds.add("media");
   if (/<p:contentPart\b/.test(xml)) kinds.add("ink");
@@ -98,6 +104,7 @@ export function buildSlideFacts(structures: readonly SlideStructure[], withText:
     blank: ordered(structures.filter(s => !has(s) && !s.pictures && !s.decorative && !s.kinds.length).map(s => s.slide)),
     mixed: ordered(structures.filter(s => has(s) && s.pictures > 0).map(s => s.slide)),
     grouped: ordered(structures.filter(s => s.grouped).map(s => s.slide)),
+    decorativeOnly: ordered(structures.filter(s => !has(s) && !s.pictures && s.decorative > 0).map(s => s.slide)),
     review: structures.filter(s => s.kinds.length).map(s => ({ unit: s.slide, kinds: s.kinds, picture: s.pictures + s.decorative > 0 })),
   };
 }
@@ -139,12 +146,13 @@ const SKIP_REASON: Record<SlideSkipReason, string> = {
   no_text: "a picture with no words Scholar could read reliably",
 };
 const TRIED_UNKNOWN = "a picture Scholar could not read reliably";
+const DECORATIVE_ONLY = "only a small picture or logo, which lessons do not show";
 
 /** Pure. Every slide with its one status, in slide order. Null when this material has not had this reading. */
 export function slideRows(q: ExtractionQuality | null, opts: { processing?: readonly number[] } = {}): SlideRow[] | null {
   if (!hasSlideFacts(q)) return null;
   const f = q.slideFacts;
-  const blank = new Set(f.blank), mixed = new Set(f.mixed), grouped = new Set(f.grouped), empty = new Set(q.emptyUnits);
+  const blank = new Set(f.blank), mixed = new Set(f.mixed), grouped = new Set(f.grouped), empty = new Set(q.emptyUnits), decorativeOnly = new Set(f.decorativeOnly);
   const read = new Set(q.aiReadUnits ?? []), tried = new Set(q.aiTriedUnits ?? []), processing = new Set(opts.processing ?? []);
   const review = new Map(f.review.map(r => [r.unit, r]));
   const skipped = new Map((q.aiSkipped ?? []).map(s => [s.unit, s.reason]));
@@ -153,16 +161,20 @@ export function slideRows(q: ExtractionQuality | null, opts: { processing?: read
     const native = !empty.has(slide) && !blank.has(slide) && (!read.has(slide) || mixed.has(slide));
     const methods: SlideRow["methods"] = [...(native ? ["slide_text" as const] : []), ...(read.has(slide) ? ["ai_picture" as const] : [])];
     const reasons = (review.get(slide)?.kinds ?? []).map(k => KIND_REASON[k]);
-    const wantsReading = (empty.has(slide) && (review.get(slide)?.picture ?? true)) || mixed.has(slide);
+    if (decorativeOnly.has(slide) && !read.has(slide)) reasons.push(DECORATIVE_ONLY);
+    const wantsReading = (empty.has(slide) && !decorativeOnly.has(slide) && (review.get(slide)?.picture ?? true)) || mixed.has(slide);
     let pictureWaiting = false;
+    // A photo on a slide with text often has no words in it. Its picture is still kept and the slide's text was read, so that is no warning.
+    let keptOnly = false;
     if (wantsReading && !read.has(slide)) {
-      if (tried.has(slide)) reasons.push(skipped.has(slide) ? SKIP_REASON[skipped.get(slide)!] : TRIED_UNKNOWN);
-      else pictureWaiting = true;
+      if (!tried.has(slide)) pictureWaiting = true;
+      else if (mixed.has(slide) && skipped.get(slide) === "no_text") keptOnly = true;
+      else reasons.push(skipped.has(slide) ? SKIP_REASON[skipped.get(slide)!] : TRIED_UNKNOWN);
     }
     const status: SlideStatus = processing.has(slide) ? "processing"
       : blank.has(slide) ? "blank"
       : reasons.length ? "review"
-      : pictureWaiting ? "preserved"
+      : pictureWaiting || keptOnly ? "preserved"
       : read.has(slide) ? (mixed.has(slide) ? "mixed" : "image")
       : "text";
     rows.push({ slide, status, reasons: [...new Set(reasons)], methods, grouped: grouped.has(slide), pictureWaiting });
@@ -204,7 +216,7 @@ export function picturesCanBeRead(q: ExtractionQuality | null): boolean {
 
 /** Pure. What an AI reading may be asked for: picture-only slides first, then the pictures on slides that also have text. */
 export function pictureReadingInput(q: ExtractionQuality): { emptyUnits: number[]; mixedUnits: number[]; triedUnits?: number[] } {
-  const noPicture = new Set((q.slideFacts?.review ?? []).filter(r => !r.picture).map(r => r.unit));
+  const noPicture = new Set([...(q.slideFacts?.review ?? []).filter(r => !r.picture).map(r => r.unit), ...(q.slideFacts?.decorativeOnly ?? [])]);
   return { emptyUnits: q.emptyUnits.filter(n => !noPicture.has(n)), mixedUnits: q.slideFacts?.mixed ?? [], triedUnits: q.aiTriedUnits };
 }
 
@@ -217,7 +229,7 @@ export function slideSummary(rows: readonly SlideRow[], opts: { recoverable?: bo
   const interpreted = c.image + c.mixed ? " Some slides were interpreted from pictures. You can review these against your original slides." : "";
   const kept = rows.filter(r => r.status === "preserved").map(r => r.slide);
   const shown = opts.picturesShown !== false;
-  const ask = opts.recoverable ? " To have Scholar read them, choose Read the pictures." : "";
+  const ask = opts.recoverable && rows.some(r => r.pictureWaiting) ? " To have Scholar read them, choose Read the pictures." : "";
   const preserved = !kept.length ? "" : shown
     ? ` ${listSlides(kept)}: the original picture${kept.length === 1 ? " is" : "s are"} kept in your notes and lessons, and Scholar has not interpreted ${kept.length === 1 ? "it" : "them"} yet.${ask}`
     : "";

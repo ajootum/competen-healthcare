@@ -50,6 +50,12 @@ No model calls were added. Blank slides no longer use up the per-material readin
 marked test text and no model call. A real reading of a text-and-picture slide was NOT run, because the policy is off on staging: the reading code is
 unchanged, and the save path for it was tested.
 
+## Independent review
+
+A second read before the PR found no blockers and nine should-fix items, all fixed: an outline from a shape's style, and new chart kinds, could read as blank; a failed save could re-read and duplicate a mixed slide's section (now recorded first and undone on failure, `slide-sections-store.test.ts`); a logo-only slide was called kept in lessons and offered for AI; a wordless photo on a text slide raised a lasting warning; card wording counted mixed slides as picture-only; pictures stayed visible during recall; the lesson-pictures policy was not passed everywhere; and the compare picture was lost when lesson pictures are off.
+
+Left as notes: after an AI reading the page shows a slide's picture twice until a reload (the visuals list is kept per page view); speaker notes count as text, so a drawn diagram with notes reads as text; section anchors use the ordinal, so a reading shifts them, as readings already did for picture-only slides.
+
 ## Known limits, not fixed here
 
 1. **Whole-slide view.** A PowerPoint slide cannot be rendered whole without a renderer on the server. Pictures and text show separately, so a grouped

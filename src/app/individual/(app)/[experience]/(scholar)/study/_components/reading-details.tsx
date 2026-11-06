@@ -19,9 +19,9 @@ const STATUS_LABEL: Record<SlideStatus, string> = {
 };
 
 const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900";
-const chip = `min-h-[36px] rounded-lg border px-3 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
+const chip = `min-h-[36px] min-w-[36px] pointer-coarse:min-w-[var(--cmp-touch-min)] rounded-lg border px-3 text-[12.5px] font-semibold pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 
-function SlidePanel({ materialId, row, extract }: { materialId: string; row: SlideRow; extract: string | undefined }) {
+function SlidePanel({ materialId, row, extract, picturesShown }: { materialId: string; row: SlideRow; extract: string | undefined; picturesShown: boolean }) {
   const [noPicture, setNoPicture] = useState<number | null>(null);
   const usedAi = row.methods.includes("ai_picture");
   return (
@@ -29,7 +29,7 @@ function SlidePanel({ materialId, row, extract }: { materialId: string; row: Sli
       <p className="font-semibold text-gray-900">Slide {row.slide}: {STATUS_LABEL[row.status]}</p>
       {row.status === "blank" && <p className="mt-1">This slide has no learning content, so Scholar does not teach from it or count it.</p>}
       {row.reasons.length > 0 && <p className="mt-1">It holds {row.reasons.join(", and ")}.</p>}
-      {row.status === "preserved" && <p className="mt-1">The original picture is kept and shown with your notes. Scholar has not interpreted it yet, so nothing has been said about it.</p>}
+      {row.status === "preserved" && <p className="mt-1">{picturesShown ? "The original picture is kept and shown with your notes." : "The original picture is kept in your file."} Scholar has not interpreted it, so nothing has been said about it.</p>}
       {row.grouped && <p className="mt-1">Scholar looked inside the grouped items on this slide.</p>}
       {usedAi && <p className="mt-1 font-medium">{aiReadLabel("slide", row.slide)}.</p>}
       {row.status !== "blank" && noPicture !== row.slide && (
@@ -49,7 +49,7 @@ function SlidePanel({ materialId, row, extract }: { materialId: string; row: Sli
   );
 }
 
-export function ReadingDetails({ materialId, rows, extracts }: { materialId: string; rows: SlideRow[]; extracts: Record<number, string> }) {
+export function ReadingDetails({ materialId, rows, extracts, picturesShown = true }: { materialId: string; rows: SlideRow[]; extracts: Record<number, string>; picturesShown?: boolean }) {
   const [reading, setReading] = useState<number[]>([]);
   const [selected, setSelected] = useState<number | null>(null);
   useEffect(() => {
@@ -92,7 +92,7 @@ export function ReadingDetails({ materialId, rows, extracts }: { materialId: str
           </div>
         </>
       )}
-      {row && <SlidePanel materialId={materialId} row={row} extract={extracts[row.slide]} />}
+      {row && <SlidePanel materialId={materialId} row={row} extract={extracts[row.slide]} picturesShown={picturesShown} />}
     </details>
   );
 }

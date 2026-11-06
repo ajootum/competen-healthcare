@@ -28,6 +28,18 @@ describe("what a slide holds", () => {
     for (const body of [PIC, group(PIC), group(group(PIC)), group(DRAWN), DRAWN, frame("chart"), frame("diagram"), `<p:cxnSp/>`, `<p:contentPart/>`, `<p:graphicFrame><p:oleObj/></p:graphicFrame>`, `<a:videoFile r:link="rId9"/>`])
       expect(blank(slideContent(1, slide(body), RELS, false))).toBe(false);
   });
+  it("\u26a0 an outline that comes only from the shape's style is still something on the slide", () => {
+    const curve = `<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom/><a:noFill/></p:spPr><p:style><a:lnRef idx="2"/></p:style></p:sp>`;
+    expect(blank(slideContent(1, slide(curve), null, false))).toBe(false);
+    const noLine = `<p:sp><p:nvSpPr><p:nvPr/></p:nvSpPr><p:spPr><a:custGeom/><a:noFill/></p:spPr><p:style><a:lnRef idx="0"/></p:style></p:sp>`;
+    expect(blank(slideContent(1, slide(noLine), null, false))).toBe(true);
+  });
+  it("\u26a0 a frame of a kind Scholar does not read is never blank; a table's text is read", () => {
+    const chartex = `<a:graphicData uri="http://schemas.microsoft.com/office/drawing/2014/chartex"/>`;
+    expect(slideContent(1, slide(chartex), null, false).kinds).toEqual(["chart"]);
+    expect(slideContent(1, slide(`<a:graphicData uri="http://example.com/new/thing"/>`), null, false).kinds).toEqual(["embedded"]);
+    expect(slideContent(1, slide(frame("table")), null, true).kinds).toEqual([]);
+  });
   it("finds a picture at any depth in a group, and says the slide was grouped", () => {
     const s = slideContent(36, slide(group(group(PIC))), RELS, true);
     expect(s).toMatchObject({ pictures: 1, grouped: true, kinds: [] });
@@ -105,6 +117,23 @@ describe("one status for each slide", () => {
     const q = applySlideFacts(quality({ units: 2, emptyUnits: [2] }), facts);
     expect(slideRows(q)!.map(r => r.reasons)).toEqual([["a chart Scholar cannot read yet"], ["shapes or a drawing Scholar cannot read yet"]]);
     expect(pictureReadingInput(q)).toMatchObject({ emptyUnits: [], mixedUnits: [] });
+  });
+  it("a slide with only a logo is not blank, not called kept in lessons, and costs no AI reading", () => {
+    const facts = buildSlideFacts([S(1), S(2, { decorative: 1 })], new Set([1]), AT);
+    const q = applySlideFacts(quality({ units: 2, emptyUnits: [2] }), facts);
+    expect(facts.blank).toEqual([]);
+    const [, row] = slideRows(q)!;
+    expect(row.status).toBe("review");
+    expect(row.reasons).toEqual(["only a small picture or logo, which lessons do not show"]);
+    expect(pictureReadingInput(q).emptyUnits).toEqual([]);
+  });
+  it("a photo with no words on a slide with text stays calm, and is not offered again", () => {
+    const q = example({ emptyUnits: [], aiReadUnits: [2], aiTriedUnits: [2, 3], aiSkipped: [{ unit: 3, reason: "no_text" }] });
+    const rows = slideRows(q)!;
+    expect(rows[2].status).toBe("preserved");
+    expect(rows[2].pictureWaiting).toBe(false);
+    expect(qualitySummary(q, { recoverable: true }).partial).toBe(false);
+    expect(qualitySummary(q, { recoverable: true }).text).not.toContain("Read the pictures");
   });
   it("leaves a material uploaded before this reading as it was", () => {
     const q = quality({ units: 3, emptyUnits: [2] });

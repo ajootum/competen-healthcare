@@ -132,7 +132,9 @@ export default async function MaterialPage({ params, searchParams }: { params: P
   const pictures = readingInput && chunks.ok && (policyOn || readingInput.emptyUnits.length)
     ? planPictureSlides({ ...readingInput, slidesWithSections: chunks.data.map(c => c.pageFrom ?? 0), cap: MAX_AI_SLIDES_PER_MATERIAL })
     : null;
-  const unreadableUnits = readingInput ? readingInput.emptyUnits.length + (pictures?.slides.filter(n => readingInput.mixedUnits.includes(n)).length ?? 0) : 0;
+  // Pictures on slides with text are counted only while they can be asked for: they are not "unread slides" otherwise.
+  const mixedOffered = policyOn && readingInput ? pictures?.slides.filter(n => readingInput.mixedUnits.includes(n)).length ?? 0 : 0;
+  const unreadableUnits = readingInput ? readingInput.emptyUnits.length + mixedOffered : 0;
   const rows = slideRows(rawQuality);
   // SCHOLAR-VISUAL-CLASSIFY-01: the page picker -- each page the plan would read, with its index label; charts and tables unticked.
   const planned = pictures && rawQuality && chunks.ok && policyOn
@@ -161,10 +163,10 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       {quality && (
         <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.heading && <span className="font-semibold">{quality.heading}. </span>}{quality.heading ? quality.text.replace(/^Partly read: /, "") : quality.text}</p>
       )}
-      {rows && <ReadingDetails materialId={m.id} rows={rows} extracts={slideExtracts(rows, chunks.ok ? chunks.data : [])} />}
+      {rows && <ReadingDetails picturesShown={policy.scholarLessonVisuals === "on"} materialId={m.id} rows={rows} extracts={slideExtracts(rows, chunks.ok ? chunks.data : [])} />}
       {!rows && m.mimeType === PPTX_MIME && rawQuality?.unit === "slide" && <CheckSlidesAgain materialId={m.id} />}
       {pictures && (
-        <PictureSlides materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
+        <PictureSlides mixed={mixedOffered} materialId={m.id} unit={rawQuality?.unit === "page" ? "page" : "slide"} slides={policyOn ? pictures.slides.length : 0} unreadable={unreadableUnits}
           beyondCap={pictures.beyondCap} consent={consentOn} policyOn={policyOn} requests={policyOn ? Math.ceil(pictures.slides.length / TRANSCRIBE_BATCH) : null} planned={planned} batch={TRANSCRIBE_BATCH} />
       )}
 
@@ -261,7 +263,15 @@ export default async function MaterialPage({ params, searchParams }: { params: P
                         const r = aiReadingOf(rawQuality, c.pageFrom);
                         return r ? <span className="ml-2 text-[12px] text-gray-600">Read {r.extractedAt.slice(0, 10)} · {r.model} · {r.promptVersion}</span> : null;
                       })()}
-                      {/* Compare with the original: a PowerPoint's picture is inline below; a PDF opens at that page. */}
+                      {/* Compare with the original: a PowerPoint's picture is inline below (here only where lesson pictures are off); a PDF opens at that page. */}
+                      {m.mimeType === PPTX_MIME && policy.scholarLessonVisuals !== "on" && (
+                        <details className="mt-1">
+                          <summary className={`cursor-pointer text-[12.5px] font-semibold ${focusRing}`} style={{ color: x.accent }}>Compare with the original slide picture</summary>
+                          {/* eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served privately by the slides route */}
+                          <img src={`/api/individual/scholar/materials/${m.id}/slides?slide=${c.pageFrom}`} alt={`The original picture on slide ${c.pageFrom}`} loading="lazy"
+                            className="mt-1 max-h-72 max-w-full rounded-md border border-gray-200" />
+                        </details>
+                      )}
                       {m.mimeType === PDF_MIME && (
                         <a href={`/api/individual/scholar/materials/${m.id}#page=${c.pageFrom}`} target="_blank" rel="noreferrer"
                           className={`ml-2 text-[12.5px] font-semibold underline underline-offset-2 ${focusRing}`} style={{ color: x.accent }}>Open the original at page {c.pageFrom}</a>

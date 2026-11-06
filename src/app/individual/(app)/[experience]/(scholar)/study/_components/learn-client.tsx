@@ -1368,7 +1368,7 @@ export function LearnWorkspace(props: {
       <LessonCard key={st.step} step={st.step} index={i} count={count} title={st.title || lastTeach?.reply.lesson?.title || ""} objective={st.objective || lastTeach?.reply.lesson?.objective || ""} status={status} accent={accent}>
         {/* SCHOLAR-INDEPENDENT-LEARNING-01: the lesson's own notes first (no AI), with their competencies, what exists to practise with, and Mark as read. */}
         {session.id && session.recorded && (
-          <LessonReader sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
+          <LessonReader hidePictures={!!recalling[st.step]} sessionId={session.id} step={st.step} index={i} current={j?.current === i} hasLesson={hasLesson} aiAvailable={props.consent && !offReason(props.startAction)} marked={!!facts[i]?.marked}
             markedNote={markedNote[st.step] ?? null} accent={accent} onLoaded={readerLoaded} onMarkRead={markRead} ownCards={!!props.ownCards && !!first?.materialId} />
         )}
         {/* Nothing here yet: a calm line and the one way in (the learner's choice). Manual: the starting action, as before. */}
