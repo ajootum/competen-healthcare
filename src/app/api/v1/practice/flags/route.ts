@@ -3,6 +3,7 @@ import { getCaller, isResponse } from "@/lib/api-auth";
 import { hqApiGate, isHqRefusal } from "@/lib/hq/api-gate";
 import { audit } from "@/lib/practice/audit";
 import { FLAG_CONSEQUENCE } from "@/lib/practice/operations";
+import { HQ_RECORD_SEARCH_FLAG } from "@/lib/hq/record-search/flag";
 
 // PATCH /api/v1/practice/flags -- move Competen Practice along IAM-001 s14.1's launch ladder.
 //
@@ -20,6 +21,9 @@ const FLAGS: Record<string, string> = {
   practice_pilot_provisioning: "Platform-operator pilot provisioning of test workspaces.",
   practice_sign_in: "Practice sign-in page accepts credentials.",
   practice_public_signup: "Self-service individual signup.",
+  // HQ-RECORD-SEARCH-01: shows the record search in the HQ palette. It grants NO data access: every /api/hq/search route still checks its own
+  // capability. Its row is not seeded (no migration), so the first flip creates it. Its own gate is below.
+  hq_record_search: "HQ palette record search (policies, instruments, frameworks, positions, staff directory).",
 };
 
 // The consequence copy lives in src/lib/practice/operations.ts, imported by the operator page too, so
@@ -45,6 +49,11 @@ export async function PATCH(req: NextRequest) {
   try { body = await req.json(); } catch { return NextResponse.json({ error: "invalid JSON" }, { status: 400 }); }
 
   const flag = String(body.flag ?? "");
+  // HQ-RECORD-SEARCH-01, the owner's default of 6 Nov 2026: "a Holdings platform administrator may activate the flag". The Practice right above is not
+  // enough for this flag: it also takes the Holdings right, hq.platform.governance.manage. No position holds that by default, so today this means the
+  // owner. This stays the one flag writer behind the one gate (individual-foundation 12j, 12k), so no other right reaches it.
+  if (flag === HQ_RECORD_SEARCH_FLAG && !gate.isOwner && !gate.capabilities.includes("hq.platform.governance.manage"))
+    return NextResponse.json({ error: "Turning this on takes a Holdings platform right." }, { status: 403 });
   if (!FLAGS[flag]) return NextResponse.json({ error: `flag must be one of: ${Object.keys(FLAGS).join(", ")}` }, { status: 400 });
   if (typeof body.enabled !== "boolean") return NextResponse.json({ error: "enabled must be true or false" }, { status: 400 });
 
@@ -71,21 +80,29 @@ export async function PATCH(req: NextRequest) {
   }
 
   const { data: before } = await c.admin.from("practice_platform_flags").select("enabled").eq("flag", flag).maybeSingle();
-  if (!before) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!before && flag !== HQ_RECORD_SEARCH_FLAG) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  const { error } = await c.admin.from("practice_platform_flags").update({ enabled: body.enabled }).eq("flag", flag);
+  const { error } = before
+    ? await c.admin.from("practice_platform_flags").update({ enabled: body.enabled }).eq("flag", flag)
+    : await c.admin.from("practice_platform_flags").insert({ flag, enabled: body.enabled, note: FLAGS[flag] });
   if (error) return NextResponse.json({ error: error.message }, { status: 400 });
 
-  await audit(c.admin, {
+  const audited = await audit(c.admin, {
     actorId: c.userId, eventType: "practice.launch_flag_changed",
     // §7.2 B: "Every change writes an audit event with before/after value, actor, time and reason."
     // Actor and time come from the audit helper itself; the other three are here.
-    payload: { flag, from: before.enabled, to: body.enabled, reason: reason || null },
+    payload: { flag, from: before?.enabled ?? null, to: body.enabled, reason: reason || null },
     correlationId: c.traceId,
   });
 
+  // HQ-RECORD-SEARCH-01: a change to this flag nobody can attribute does not stand. Absent and false both read as off.
+  if (!audited && flag === HQ_RECORD_SEARCH_FLAG) {
+    await c.admin.from("practice_platform_flags").update({ enabled: before?.enabled ?? false }).eq("flag", flag);
+    return NextResponse.json({ error: "The change could not be recorded, so it was not kept." }, { status: 503 });
+  }
+
   return NextResponse.json({
-    flag, enabled: body.enabled, changed: before.enabled !== body.enabled,
+    flag, enabled: body.enabled, changed: (before?.enabled ?? false) !== body.enabled,
     consequence: body.enabled ? (FLAG_CONSEQUENCE[flag] ?? null) : null,
     correlationId: c.traceId,
   });

@@ -8,7 +8,7 @@ The HQ search box gains record sources: policies, instruments, frameworks, posit
 
 | Owner's default | How it is met |
 |---|---|
-| A Holdings platform administrator may activate; activation grants no extra access | `PATCH /api/hq/search/flag`, gated by `hq.platform.governance.manage`. No position holds that right by default, so today it means the owner, or someone the owner appoints. The Practice Product Director's right does not open it. With the flag on and no capability, a route answers 403 with zero reads |
+| A Holdings platform administrator may activate; activation grants no extra access | `PATCH /api/v1/practice/flags`, the one flag writer behind its one gate (a harness requires both). For this flag it also takes `hq.platform.governance.manage`. No position holds that by default, so today it means the owner. Anyone else the owner appoints needs both rights. The Practice Product Director's right does not open it. With the flag on and no capability, a route answers 403 with zero reads |
 | Staff names only, within an authorised scope, no private data | `hq.platform.users.view`. Reads `ogs_offices`, `ogs_office_appointments`, `hq_position`; never `profiles`. Only appointments, offices and positions in force, by the same test as HQ authority |
 | Holdings-wide instruments for authorised users; entity instruments restricted | `owner_scope = holdings`, and frameworks with no `hospital_id` |
 | Each result shows source module and authorised link | Yes |

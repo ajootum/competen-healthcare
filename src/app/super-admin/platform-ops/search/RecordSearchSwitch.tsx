@@ -9,7 +9,7 @@ export default function RecordSearchSwitch({ initial }: { initial: boolean }) {
   const [error, setError] = useState("");
   const flip = async () => {
     setBusy(true); setError("");
-    const r = await fetch("/api/hq/search/flag", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !enabled }) }).catch(() => null);
+    const r = await fetch("/api/v1/practice/flags", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ flag: "hq_record_search", enabled: !enabled }) }).catch(() => null);
     setBusy(false);
     if (r?.ok) { setEnabled(!enabled); return; }
     setError((await r?.json().catch(() => null))?.error ?? "The switch could not be changed. Try again shortly.");
