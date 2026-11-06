@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ApiError, get, post } from "./client";
+import { ApiError, downloadExport, get, post } from "./client";
 import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 delivery step 6. A signed-in person without LifeOS. If they are eligible, they may choose to turn it on.
 // Nothing here turns anything on without that choice.
 
-type Status = { enabled: boolean; eligible: boolean; active: boolean; terms: { version: string; title: string; url: string } | null };
+type Status = { enabled: boolean; eligible: boolean; active: boolean; hasRecords: boolean; terms: { version: string; title: string; url: string } | null };
 
 export function ActivateAccess() {
   const [status, setStatus] = useState<Status | null>(null);
@@ -44,6 +44,10 @@ export function ActivateAccess() {
             {status === null && !failed
               ? <p className={styles.muted} role="status">Checking…</p>
               : <p>This account does not currently hold LifeOS access. Ask the person who invited you to check it.</p>}
+            {status !== null && status.hasRecords && (
+              <p>Your records are kept. <button onClick={() => { downloadExport().catch(() => setError("Your records could not be prepared just now.")); }}>Download my records</button></p>
+            )}
+            {error && <div className={styles.alert} role="alert"><span>{error}</span></div>}
           </>
         )}
         {canOffer && status.terms && (

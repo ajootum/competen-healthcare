@@ -171,6 +171,23 @@ async function main() {
   const afterLeave = await http(newAcc.cookie, "GET", "/me");
   ok("N6", leave2.status === 200 && afterLeave.status === 403, "leaving ends access that came only through the organisation", afterLeave.status);
 
+  // ---- taking their records with them, after access has ended ----
+  const exported = await http(newAcc.cookie, "GET", "/access/export");
+  ok("V1", exported.status === 200 && exported.body.data.format === "lifeos-export-v1" && exported.text.includes(`Mine ${RUN}`), "someone whose access has ended can still export their own records", exported.status);
+  ok("V2", !exported.text.includes(SECRET) && !exported.text.includes(`Org shared ${RUN}`), "the export holds only what they own");
+  ok("V3", Array.isArray(exported.body.data.truncated) && exported.body.data.truncated.length === 0, "and it says whether anything was left out");
+  const statusAfter = await http(newAcc.cookie, "GET", "/access/status");
+  ok("V4", statusAfter.body.data.hasRecords === true && statusAfter.body.data.active === false, "the page can tell them their records are kept", statusAfter.body);
+  const nobody = await account("nobody");
+  const noRecords = await http(nobody.cookie, "GET", "/access/export");
+  ok("V5", noRecords.status === 404, "someone with no LifeOS records gets nothing", noRecords.status);
+  const anonExport = await fetch(`${API}/access/export`);
+  ok("V6", anonExport.status === 401, "and it needs a signed-in person", anonExport.status);
+  const connFixture = crypto.randomUUID();
+  await store.mutate({ actor: person.individualId, actorKind: "system", idempotencyKey: null, requestHash: null, traceId: null, ops: [{ t: "lifeos_integration_connection", op: "insert", values: { id: connFixture, workspace_id: person.personalWorkspaceId, owner_individual_id: person.individualId, provider: "x", credential_ref: `vault://${RUN}`, provenance_source: "system" } }] });
+  const personExport = await http(personAcc.cookie, "GET", "/access/export");
+  ok("V7", !personExport.text.includes("vault://") && !personExport.text.includes("dedupe_key"), "an export never holds credential references or internal bookkeeping");
+
   // ---- accepting cannot change a standing member ----
   const ownerSelf = await http(ownerAcc.cookie, "POST", `${W}/invitations`, { email: ownerAcc.email, role: "member" });
   const ownerAccepts = await http(ownerAcc.cookie, "POST", "/access/invitation", { token: ownerSelf.body.data.token });

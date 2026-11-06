@@ -70,3 +70,14 @@ export type WeeklyReview = Stamped & { weekStart: string; reflection: string | n
 export type Suggestion = Stamped & { kind: string; materiality: "informational" | "material"; title: string; rationale: string | null; generator: string };
 export type Entitlement = { id: string; version: number; source: string };
 export type Me = { individual: Individual; entitlements: Entitlement[]; workspaces: Workspace[] };
+
+/** Saves the person's own records as a file. */
+export async function downloadExport(): Promise<void> {
+  const data = await get<unknown>("/access/export");
+  const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "my-lifeos-records.json";
+  a.click();
+  URL.revokeObjectURL(url);
+}

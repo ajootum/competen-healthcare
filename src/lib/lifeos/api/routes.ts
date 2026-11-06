@@ -8,6 +8,7 @@ import * as svc from "../core/service";
 import * as tenants from "../core/tenants";
 import * as invitations from "../core/invitations";
 import * as oauth from "../core/oauth";
+import { exportOwnRecords } from "../core/export";
 import type { RequestContext } from "../core/service";
 import { type SessionIdentity, accessStatus, activateFromCompetenIndividual } from "../core/optin";
 import type { LifeosStore, Row } from "../core/types";
@@ -161,6 +162,11 @@ export const ROUTES: Route[] = [
     method: "POST", path: "/access/invitation", summary: "The invited person accepts, signed in with the invited address", visibility: "internal", scope: null, bucket: "write", input: invitations.AcceptInput, output: z.object({ workspaceId: z.string(), individualId: z.string() }),
     admission: "session", handler: noPrincipal,
     sessionHandler: async ({ store, identity, body }) => ({ data: await invitations.acceptInvitation(store, identity, invitations.AcceptInput.parse(body).token, null) }),
+  },
+  {
+    method: "GET", path: "/access/export", summary: "Everything the signed-in person owns, including after their access has ended", visibility: "internal", scope: null, bucket: "generate", output: z.record(z.string(), z.unknown()),
+    admission: "session", handler: noPrincipal,
+    sessionHandler: async ({ store, identity }) => ({ data: await exportOwnRecords(store, identity) }),
   },
   {
     method: "POST", path: "/me/entitlements/:id/end", summary: "Turn off LifeOS access the person chose. Their records are kept.", visibility: "internal", scope: null, bucket: "write", input: VersionInput, output: EntitlementV1,
