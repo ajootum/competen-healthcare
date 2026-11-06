@@ -49,13 +49,15 @@ const open = async () => {
   await page.waitForTimeout(3000);
   // Lesson 2 of the deck: no earlier Guide Me on it, so the walk starts from nothing. Its Teach me is written first if it has none.
   const rows = page.locator("nav[aria-label='Earlier lessons'] button, nav[aria-label='Earlier lessons'] a");
-  if ((await rows.count()) >= 2) { await rows.nth(1).click(); await page.waitForTimeout(3000); }
+  note(`earlier lesson rows: ${await rows.count()} (${(await rows.allInnerTexts()).join(" / ").replace(/\s+/g, " ").slice(0, 120)})`);
+  if ((await rows.count()) >= 2) { await rows.nth(1).click(); await page.waitForTimeout(4000); note(`lesson row clicked; lesson title now: ${(await page.locator("h2, h3").first().innerText().catch(() => "")).slice(0, 60)}`); }
   await until(async () => !(await page.getByText(/^Writing|Preparing/).count()), 120_000).catch(() => {});
   const panel = page.locator('[data-testid="guide-me"]');
   // The page may still be hydrating on a dev server's first compile, so the choice is made until it takes.
   await until(async () => { if (await panel.count()) return true; await page.getByRole("radio", { name: /Guide me/ }).first().click(); await page.waitForTimeout(2000); return (await panel.count()) > 0; }, 120_000);
 };
 await open();
+await page.waitForTimeout(10_000); // the newly chosen lesson's panel reads what is saved for it
 const panel = page.locator('[data-testid="guide-me"]');
 const progress = () => panel.locator('[data-testid="guide-progress"]').innerText().catch(() => "");
 const box = panel.getByLabel("Your reasoning");
@@ -112,6 +114,8 @@ const c2 = await stamp("a sound answer judged", async () => {
   await until(async () => {
     if (await panel.locator('[data-testid="guide-feedback"]').count()) return true;
     const gate = panel.locator('[role="status"]:has(button)');
+    const said = await panel.locator('p[role="status"]').allInnerTexts();
+    if (said.some(t => /could not|not available|used up|limit/i.test(t))) throw new Error(`the panel said: ${said.join(" | ")}`);
     if (await gate.count()) { gateAsked = true; await panel.screenshot({ path: join(OUT, "shots/02b-risk-question-in-panel.png") }); await gate.locator("button").first().click(); await page.waitForTimeout(800); }
     return false;
   });

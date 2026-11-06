@@ -1539,7 +1539,7 @@ export function LearnWorkspace(props: {
               run={runApproach(st)} onQuestion={q => checkThis(st, q)} lastCheck={lastCheck[st.step] ?? null} depth={depth} disabled={busyHere || !props.consent} accent={accent}
               memory={styleMem} remember={remember}
               guidePanel={props.guideAdaptive ? (
-                <GuideMePanel state={guideStates[st.step] ?? GUIDE_FRESH}
+                <GuideMePanel key={st.step} state={guideStates[st.step] ?? GUIDE_FRESH}
                   setState={u => setGuideStates(m => ({ ...m, [st.step]: typeof u === "function" ? u(m[st.step] ?? GUIDE_FRESH) : u }))}
                   run={runGuide(st)} busy={!!busy} disabled={busyHere || !props.consent || !!offReason("deeper")}
                   renderClarify={(p, retry) => <ClarifyPurpose clarify={p as ClarifyPrompt} busy={!!busy} accent={accent} onEducation={() => { confirmStudy(true); retry(); }} onPatient={() => confirmStudy(false)} />}
