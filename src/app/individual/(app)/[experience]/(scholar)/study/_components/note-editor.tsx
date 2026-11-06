@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useEffect, useId, useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
 import { experienceHref } from "@/lib/individual/experiences";
@@ -53,7 +52,6 @@ export function FullNote({ userId, note, where, options, related }: { userId: st
 function Editor({ userId, clientKey, context, options, draft, note, where, related }: {
   userId: string; clientKey: string; context: NoteContext; options: LinkOptions; draft: NoteDraft | null; note: NotebookNote | null; where: NoteWhere | null; related: RelatedLink[];
 }) {
-  const router = useRouter();
   const uid = useId();
   const { saver, snap } = useNoteSaver({
     userId, clientKey, context,

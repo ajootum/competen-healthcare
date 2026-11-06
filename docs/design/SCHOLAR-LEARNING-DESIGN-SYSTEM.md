@@ -80,7 +80,7 @@ Each tone has contrast-checked dark values. They are **staged**: they apply unde
 
 ### 2.5 Contrast
 
-`src/lib/design/scholar-learning-contrast.ts` lists the pairs a component draws. There are 8 pairs per tone per scheme, 272 in all. `src/lib/design/scholar-learning-tokens.test.ts` (vitest, CI) asserts every pair and includes a planted failing pair. `npx tsx docs/evidence/LEARN-REDESIGN/contrast.ts` prints the table.
+`src/lib/design/scholar-learning-contrast.ts` lists the pairs a component draws. There are 8 pairs per tone per scheme, 288 in all. `src/lib/design/scholar-learning-tokens.test.ts` (vitest, CI) asserts every pair and includes a planted failing pair. `npx tsx docs/evidence/LEARN-REDESIGN/contrast.ts` prints the table.
 
 At v1:
 
