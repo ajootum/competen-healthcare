@@ -12,6 +12,8 @@
 // The learner's chosen style is kept per learning session in the existing 790 position object (`unfinished.style`, one
 // letter: g or c; Explain is the default and is not stored). No schema change.
 
+import type { CognitiveLevel } from "./question-intel";
+
 export const STYLES = ["explain", "guide", "challenge"] as const;
 export type TeachingStyle = (typeof STYLES)[number];
 /** The most primary choices a section ever shows. A hard rule, enforced in styleChoices. */
@@ -123,3 +125,20 @@ export function effectiveStyle(chosen: TeachingStyle, choices: readonly StyleCho
   const c = choices.find(x => x.style === chosen);
   return c && !c.disabled ? chosen : "explain";
 }
+
+// ── THE LEVEL ASK ME AND CHALLENGE ME SEND ──
+// The server's rungs are names (question-intel.ts COGNITIVE_LEVELS, read by learn-teaching.ts parseTeachingRequest), and it answers in names. The page used to keep a number, so each request was
+// refused with a 400. Both approaches now go through approachLevelBody. The names are repeated here because question-intel.ts is not for the browser; learn-style.test.ts holds the two lists equal.
+const APPROACH_LEVELS: readonly CognitiveLevel[] = ["recall", "understanding", "application", "reasoning"];
+/** Where each starts. Challenge me climbs from the first rung. Ask me has no ladder, and asks at the level the server's own default and the lesson's other Ask me use. */
+export const APPROACH_START_LEVEL = { challenge: APPROACH_LEVELS[0], ask_me: "understanding" } as const satisfies Record<"ask_me" | "challenge", CognitiveLevel>;
+export const isApproachLevel = (v: unknown): v is CognitiveLevel => typeof v === "string" && (APPROACH_LEVELS as readonly string[]).includes(v);
+/** Pure. A rung the server accepts, whatever was remembered: a name stays, a number from the older page is that rung, anything else is where the approach starts. */
+export function approachLevel(action: "ask_me" | "challenge", v: unknown): CognitiveLevel {
+  if (isApproachLevel(v)) return v;
+  return (typeof v === "number" && Number.isInteger(v) ? APPROACH_LEVELS[v - 1] : undefined) ?? APPROACH_START_LEVEL[action];
+}
+/** Pure. The rung's number, for the button's "level 2". */
+export const approachLevelNumber = (level: CognitiveLevel): number => APPROACH_LEVELS.indexOf(level) + 1;
+/** Pure. The request both approaches send. */
+export const approachLevelBody = (action: "ask_me" | "challenge", level: unknown): { action: "ask_me" | "challenge"; level: CognitiveLevel } => ({ action, level: approachLevel(action, level) });
