@@ -52,7 +52,7 @@ export function supabaseStore(admin: SupabaseClient): LifeosStore {
       assertLifeosTable(table);
       let q = admin.from(table).select("*");
       for (const [k, v] of Object.entries(eq)) q = q.eq(k, v);
-      const { data, error } = await q.order("created_at", { ascending: true }).limit(opts?.limit ?? 1000);
+      const { data, error } = await q.order(opts?.order ?? "created_at", { ascending: true }).limit(opts?.limit ?? 1000);
       if (error) throw fromDatabaseError(error);
       return (data ?? []) as Row[];
     },

@@ -58,7 +58,7 @@ export interface LifeosStore {
   mutate(args: MutateArgs): Promise<MutateResult>;
   peekIdempotency(actor: string, key: string): Promise<{ requestHash: string; refs: Ref[] } | null>;
   get(table: string, id: string): Promise<Row | null>;
-  where(table: string, eq: Record<string, string>, opts?: { limit?: number }): Promise<Row[]>;
+  where(table: string, eq: Record<string, string>, opts?: { limit?: number; order?: string }): Promise<Row[]>;
   list(table: string, q: ListQuery): Promise<Row[]>;
   liveGrants(workspaceId: string, granteeId: string): Promise<Row[]>;
 }

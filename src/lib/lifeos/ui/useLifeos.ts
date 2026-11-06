@@ -5,7 +5,7 @@ import { addDays, mondayOf, todayIn } from "../core/time";
 import { startInstant } from "../core/suggestions";
 import {
   ApiError, all, get, patch, post,
-  type BigRock, type Commitment, type Delegation, type Individual, type Me, type ProtectedBlock, type Suggestion,
+  type BigRock, type Commitment, type Delegation, type Entitlement, type Individual, type Me, type ProtectedBlock, type Suggestion,
   type WeeklyPlan, type WeeklyReview, type Workspace, type World,
 } from "./client";
 
@@ -36,10 +36,12 @@ export type CommitmentFields = {
   scheduledOn: string | null;
   scheduledTime: string | null;
   estimatedMinutes: number | null;
+  accessScope?: "private" | "workspace";
 };
 
-export function useLifeos() {
+export function useLifeos(tenantId: string | null = null) {
   const [me, setMe] = useState<Individual | null>(null);
+  const [chosenAccess, setChosenAccess] = useState<Entitlement | null>(null);
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
@@ -60,17 +62,22 @@ export function useLifeos() {
     try {
       const m = await get<Me>("/me");
       setMe(m.individual);
-      setWorkspaces(m.workspaces);
+      setChosenAccess(m.entitlements.find(e => e.source === "competen_individual") ?? null);
+      // On a tenant's domain the person sees that organisation and their own personal workspace, and no other organisation.
+      const visible = tenantId ? m.workspaces.filter(w => w.kind === "personal" || w.tenantId === tenantId) : m.workspaces;
+      setWorkspaces(visible);
       const saved = typeof window !== "undefined" ? window.localStorage.getItem(WS_KEY) : null;
-      const pick = m.workspaces.find(w => w.id === saved) ?? m.workspaces.find(w => w.kind === "personal") ?? m.workspaces[0];
+      const pick = visible.find(w => w.id === saved)
+        ?? (tenantId ? visible.find(w => w.tenantId === tenantId) : null)
+        ?? visible.find(w => w.kind === "personal") ?? visible[0];
       setWorkspaceId(pick?.id ?? null);
       if (!pick) setLoading(false);
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) { window.location.href = "/login?next=/lifeos"; return; }
+      if (e instanceof ApiError && e.status === 401) { window.location.reload(); return; }
       setFatal(e instanceof Error ? e.message : "LifeOS could not be reached.");
       setLoading(false);
     }
-  }, []);
+  }, [tenantId]);
 
   const reload = useCallback(async () => {
     if (!base) return;
@@ -199,8 +206,13 @@ export function useLifeos() {
 
   const toggleRock = useCallback((c: Commitment, on: boolean) => act(() => setRock(c, on)), [act, setRock]);
 
-  const delegate = useCallback((c: Commitment, label: string, followUpOn: string) =>
-    act(() => post(`${base}/delegations`, { commitmentId: c.id, delegateeLabel: label, followUpOn })), [act, base]);
+  const delegate = useCallback((c: Commitment, person: { label: string } | { individualId: string }, followUpOn: string) =>
+    act(() => post(`${base}/delegations`, {
+      commitmentId: c.id, followUpOn,
+      ...("individualId" in person ? { delegateeIndividualId: person.individualId } : { delegateeLabel: person.label }),
+    })), [act, base]);
+
+  const loadDirectory = useCallback(async () => (base ? get<{ individualId: string; displayName: string }[]>(`${base}/directory`) : []), [base]);
 
   const saveWorld = useCallback((w: World | null, f: { title: string; context: string | null; purpose: string | null }) => act(() => (
     w ? patch(`${base}/worlds/${w.id}`, { ...f, expectedVersion: w.version }) : post(`${base}/worlds`, f)
@@ -227,9 +239,15 @@ export function useLifeos() {
     await loadMe();
   }), [act, loadMe, me]);
 
+  const turnOff = useCallback(async () => {
+    if (!chosenAccess) return;
+    const ok = await act(() => post(`/me/entitlements/${chosenAccess.id}/end`, { expectedVersion: chosenAccess.version }));
+    if (ok) window.location.reload();
+  }, [act, chosenAccess]);
+
   return {
-    me, workspaces, workspaceId, chooseWorkspace, offset, setOffset, today, weekStart, days, timeZone, data, loading, busy, error, setError, fatal,
-    retry: reload, capture, saveCommitment, toggleDone, toggleRock, delegate, saveWorld, saveIntention, saveReview, generate, decide, applyBrowserTimeZone,
+    chosenAccess, turnOff, me, workspaces, workspaceId, chooseWorkspace, offset, setOffset, today, weekStart, days, timeZone, data, loading, busy, error, setError, fatal,
+    loadDirectory, retry: reload, capture, saveCommitment, toggleDone, toggleRock, delegate, saveWorld, saveIntention, saveReview, generate, decide, applyBrowserTimeZone,
   };
 }
 

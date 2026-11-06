@@ -82,14 +82,29 @@ export async function grantEntitlement(store: LifeosStore, actor: string, e: New
   return id;
 }
 
+/** Access through an organisation lasts while the organisation is active and the person is still in one of its workspaces. */
+async function organisationStands(store: LifeosStore, e: Row, individualId: string): Promise<boolean> {
+  if (e.source !== "organisation") return true;
+  const tenant = await store.get("lifeos_tenant", String(e.tenant_id));
+  if (!tenant || tenant.status !== "active") return false;
+  const workspaces = await store.where("lifeos_workspace", { tenant_id: String(e.tenant_id) }, { limit: 200 });
+  const memberships = await store.where("lifeos_membership", { individual_id: individualId, status: "active" }, { limit: 500 });
+  return memberships.some(m => workspaces.some(w => w.id === m.workspace_id));
+}
+
 /** The person's account exists and is active, and they hold a live entitlement. */
-export async function readActiveIndividual(store: LifeosStore, issuer: string, subject: string): Promise<Row> {
+export async function readActiveIndividual(
+  store: LifeosStore, issuer: string, subject: string,
+  /** Whether an entitlement's source still stands. Access through another product ends when that product does. */
+  sourceStands: (entitlement: Row) => Promise<boolean> = async () => true,
+): Promise<Row> {
   const [link] = await store.where("lifeos_identity_link", { issuer, subject, status: "active" }, { limit: 1 });
   if (!link) throw new LifeosError("forbidden", "LifeOS has not been enabled for this account.");
   const individual = await store.get("lifeos_individual", String(link.individual_id));
   if (!individual || individual.status !== "active") throw new LifeosError("forbidden", "This LifeOS account is not active.");
   // The live view judges the period by the database clock. No live entitlement means no access.
-  const live = await store.where("lifeos_live_entitlement", { individual_id: String(individual.id) }, { limit: 1 });
-  if (live.length === 0) throw new LifeosError("forbidden", "This account does not currently hold LifeOS access.");
+  const live = await store.where("lifeos_live_entitlement", { individual_id: String(individual.id) }, { limit: 50 });
+  const standing = await Promise.all(live.map(async e => (await organisationStands(store, e, String(individual.id))) && sourceStands(e)));
+  if (!standing.some(Boolean)) throw new LifeosError("forbidden", "This account does not currently hold LifeOS access.");
   return individual;
 }

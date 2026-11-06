@@ -103,6 +103,36 @@ async function main() {
     await outsiderPage.getByText("not enabled for this account").waitFor({ timeout: 60000 }).catch(() => {});
     ok("G3", (await outsiderPage.textContent("body"))?.includes("not enabled for this account"), "a signed-in Competen person with no LifeOS access is told so");
 
+    // Opt-in: a Competen Individual person chooses LifeOS. Nothing is on until they do.
+    const optin = await person("optin");
+    const version = `ui-${RUN}`;
+    const ent = await admin.from("individual_entitlement").insert({ user_id: optin.subject, experience_code: "professional", source: "hq_grant", operating_entity: "competen_holdings", status: "active" });
+    if (ent.error) throw new Error(`entitle: ${ent.error.message}`);
+    for (const r of (await admin.from("lifeos_terms").select("version").eq("status", "published")).data ?? []) await admin.from("lifeos_terms").update({ status: "retired" }).eq("version", r.version);
+    await admin.from("lifeos_terms").insert({ version, title: "LifeOS test terms", url: "https://example.test/terms" });
+    await admin.from("lifeos_flag").upsert({ flag: "lifeos_individual_access", enabled: true, note: "staging ui harness", updated_at: new Date().toISOString() });
+    const optinCtx = await contextFor(browser, optin.cookies);
+    const op = await optinCtx.newPage();
+    await op.goto(`${BASE}/lifeos`, { timeout: 120000 });
+    const turnOn = op.getByRole("button", { name: "Turn on LifeOS" });
+    await turnOn.waitFor({ timeout: 60000 });
+    ok("O1", await turnOn.isDisabled(), "an eligible person is offered LifeOS, and the button waits for them to accept the terms");
+    ok("O2", (await op.textContent("main"))?.includes("cannot read it"), "the offer says plainly that other products cannot read it");
+    await op.getByRole("checkbox").check();
+    await turnOn.click();
+    await op.getByRole("heading", { name: "Calendar", level: 1 }).waitFor({ timeout: 90000 });
+    await settled(op);
+    await op.locator("aside").getByRole("button", { name: "Turn off LifeOS" }).waitFor({ timeout: 30000 }).catch(() => {});
+    ok("O3", await op.getByRole("heading", { name: "Calendar", level: 1 }).isVisible(), "accepting opens LifeOS");
+    ok("O4", await op.locator("aside").getByRole("button", { name: "Turn off LifeOS" }).isVisible(), "and they can see how to turn it off");
+    op.once("dialog", d => d.accept());
+    await op.locator("aside").getByRole("button", { name: "Turn off LifeOS" }).click();
+    await turnOn.waitFor({ timeout: 60000 });
+    ok("O5", true, "turning it off returns to the offer");
+    await admin.from("lifeos_flag").upsert({ flag: "lifeos_individual_access", enabled: false, note: "staging ui harness", updated_at: new Date().toISOString() });
+    await admin.from("lifeos_terms").update({ status: "retired" }).eq("version", version);
+    await optinCtx.close();
+
     const a = await person("a");
     const pa = await provisionIndividual(store, { issuer: ISSUER_COMPETEN_AUTH, subject: a.subject, displayName: "UI Harness", accessSource: "platform_grant" });
     await grantEntitlement(store, pa.individualId, { individualId: pa.individualId, source: "platform_grant", planCode: "ui-harness" });
@@ -335,5 +365,6 @@ async function main() {
 main().catch(async e => {
   console.error(String(e).slice(0, 1500));
   await setGate(false).catch(() => {});
+  await admin.from("lifeos_flag").update({ enabled: false }).eq("flag", "lifeos_individual_access").then(() => {}, () => {});
   process.exit(1);
 });
