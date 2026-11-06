@@ -82,6 +82,8 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
   const words = loaded && loaded !== "failed" ? relatedWords({ cards: loaded.related.cards, questions: loaded.related.questions, attempts: loaded.related.attempts, cases: loaded.related.cases.length, stations: loaded.related.stations.length, savedLessons: loaded.related.savedLessons }) : null;
   return (
     // SCHOLAR LEARNING DESIGN SYSTEM: the learner's own notes, a shared LearningDisclosure in the notes (cream) tone; no AI.
+    // COMPETEN-NOTEBOOK-001: writing in a box here keeps the panel open, even when saved teaching arrives and would otherwise fold it away.
+    <div onFocusCapture={e => { if (e.target instanceof HTMLTextAreaElement) setOpen(o => o ?? true); }}>
     <LearningDisclosure tone="notes" icon="notes" title={`Your notes${n !== null ? ` · ${n} ${n === 1 ? "section" : "sections"}` : ""}`} open={isOpen} onToggle={setOpen} className="mt-3"
       meta={marked ? <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900">{READ_MARK.done}</span> : null}>
 
@@ -185,5 +187,6 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
           </>
         )}
     </LearningDisclosure>
+    </div>
   );
 }

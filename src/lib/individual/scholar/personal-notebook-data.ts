@@ -53,7 +53,7 @@ export async function describeNotes(admin: Admin, userId: string, notes: readonl
     out.set(n.id, {
       where: n.sectionLabel ? `${base} · ${n.sectionLabel}` : base,
       openHref: open, openLabel: art ? "Open saved lesson" : lesson ? "Back to the lesson" : "Open the material",
-      sectionHref: lesson && n.sectionAnchor ? `${lesson.split("#")[0]}#ideas-${n.sectionAnchor}` : null,
+      sectionHref: lesson && n.sectionAnchor ? `${lesson.split("#")[0]}#ideas-${n.step}-${n.sectionAnchor}` : null,
       picture: chunk && materialId && unit !== "section" ? { materialId, materialTitle: titles.get(materialId) ?? "Your material", citation: `${titles.get(materialId) ?? "Your material"}, ${location ?? ""}`.replace(/,\s*$/, "") } : null,
     });
   }

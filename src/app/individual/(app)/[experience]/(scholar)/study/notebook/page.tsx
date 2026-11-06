@@ -1,17 +1,15 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { SCHOLAR } from "@/lib/individual/experiences";
+import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { loadIndividualPolicy } from "@/lib/individual/policy";
 import { describeNotes } from "@/lib/individual/scholar/personal-notebook-data";
-import { listNotebookNotes, notebookOffered, notebookSchema, notebookTags, searchNotebook } from "@/lib/individual/scholar/store";
 import { NOTEBOOK_PAGE } from "@/lib/individual/scholar/personal-notebook";
 import { countDue, isUuid, listLearningSessions, listMaterials, listNotebookNotes, notebookOffered, notebookSchema, notebookTags, searchNotebook, type NotebookNote } from "@/lib/individual/scholar/store";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { PageHeader, StatePanel, Unreadable, focusRing } from "../../../../../_components/chrome";
 import StudyNav from "../_components/StudyNav";
-import { NoteCard, NotebookSearch, NotebookSection, StartWriting, practiseHref, type NotebookCard } from "../_components/notebook-home";
-import type { NotebookNote } from "@/lib/individual/scholar/store";
+import { NoteCard, NotebookSearch, NotebookSection, StartWriting, type NotebookCard } from "../_components/notebook-home";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build.
 export const dynamic = "force-dynamic";
@@ -112,7 +110,7 @@ export default async function NotebookPage({ params, searchParams }: { params: P
         )}
         <p className="mt-5 flex flex-wrap gap-x-4 gap-y-1 text-[13.5px]">
           <a href="/api/individual/scholar/notebook/export" className={`inline-flex min-h-[40px] items-center font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`} data-testid="notebook-export">Download all my notes</a>
-          {policy.scholarActiveNotebook === "on" && <Link href={practiseHref()} className={`inline-flex min-h-[40px] items-center font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Make practice from my notes</Link>}
+          {policy.scholarActiveNotebook === "on" && <Link href={experienceHref("scholar", "study/saved?view=notebook")} className={`inline-flex min-h-[40px] items-center font-semibold text-gray-900 underline underline-offset-2 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>Make practice from my notes</Link>}
         </p>
       </div>
     </>

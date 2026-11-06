@@ -2017,6 +2017,7 @@ function AnswerBody({ idPrefix, text, action, sources, onAnswer, canAnswer, rend
           <ul className="mt-2 list-disc space-y-1.5 pl-5 marker:text-[var(--learn-accent)]">{parts.points.map((p, i) => <li key={i}><Cited text={p} sources={sources} /></li>)}</ul>
         </div>
       )}
+      {only === "lesson" && parts.points.length > 0 && <MyIdeasBox sectionLabel="Key points" anchor={`points-${action}`} className="my-4" />}
       {parts.example && (
         <ShowMore label="Show more: an example from your notes">
           <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">

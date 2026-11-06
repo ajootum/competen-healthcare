@@ -26,10 +26,10 @@ export function MyIdeasBox({ chunkId = null, materialId = null, sectionLabel, an
   const [writerKey, setWriterKey] = useState<string | null>(null);
   const [current, setCurrent] = useState<{ id: string | null; words: boolean; preview: string }>({ id: null, words: false, preview: "" });
 
-  // The read is asked once for the lesson, by the first box drawn. A note link to this section opens it (`#ideas-<anchor>`).
+  // The read is asked once for the lesson, by the first box drawn. A note link to this section opens it (`#ideas-<step>-<anchor>`).
   useEffect(() => { if (nb && scope?.sessionId) scope.load(); }, [nb, scope]);
   useEffect(() => {
-    if (!scope || scope.notes === null || window.location.hash !== `#ideas-${anchor}`) return;
+    if (!scope || scope.notes === null || window.location.hash !== `#ideas-${scope.step}-${anchor}`) return;
     const t = window.setTimeout(() => { setOpen(true); setEverOpened(true); root.current?.scrollIntoView({ block: "center" }); }, 400);
     return () => window.clearTimeout(t);
   }, [scope, anchor]);
@@ -50,7 +50,7 @@ export function MyIdeasBox({ chunkId = null, materialId = null, sectionLabel, an
   const another = () => { scope.reload(); setCurrent({ id: null, words: false, preview: "" }); setWriterKey(newClientKey()); };
 
   return (
-    <div ref={root} id={`ideas-${anchor}`} className={`${learnBox("ideas")} scroll-mt-20 ${className}`} data-note-box={JSON.stringify(context)} data-testid="my-ideas-box">
+    <div ref={root} id={`ideas-${scope.step}-${anchor}`} className={`${learnBox("ideas")} scroll-mt-20 ${className}`} data-note-box={JSON.stringify(context)} data-testid="my-ideas-box">
       <button type="button" aria-expanded={open} aria-controls={panelId} onClick={() => expand(!open)}
         className="flex min-h-[48px] w-full flex-wrap items-center gap-x-2 gap-y-0.5 rounded-2xl px-3.5 py-2 text-left pointer-coarse:min-h-[var(--cmp-touch-min)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-gray-900">
         <span className="cmp-learn-accent"><LearningIcon name="bulb" className="h-5 w-5" /></span>

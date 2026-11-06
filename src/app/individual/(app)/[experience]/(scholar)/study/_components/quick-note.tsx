@@ -21,7 +21,8 @@ function readContext(pathname: string): NoteContext {
     if (!raw) return null;
     try { const c = JSON.parse(raw) as Partial<NoteContext>; return parseNoteLink(c.link) ? c : null; } catch { return null; }
   };
-  const boxes = [...document.querySelectorAll<HTMLElement>("[data-note-box]")].map(el => ({ el, bottom: el.getBoundingClientRect().bottom }));
+  // Only boxes on screen count: one inside a closed panel has no place, and would read as the top of the page.
+  const boxes = [...document.querySelectorAll<HTMLElement>("[data-note-box]")].filter(el => el.getClientRects().length > 0).map(el => ({ el, bottom: el.getBoundingClientRect().bottom }));
   const hit = pickReadingBox(boxes, window.innerHeight * 0.35);
   // Several marks: the newest one on the page (the question now on screen, in Revise).
   const marks = document.querySelectorAll<HTMLElement>("[data-note-page]");

@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { LearningIcon, learnAction, learnBox } from "@/components/ui/scholar-learning";
-import { experienceHref } from "@/lib/individual/experiences";
-import { IDEAS, NOTEBOOK_PAGE, noteHeading, type NoteDraft } from "@/lib/individual/scholar/personal-notebook";
+import { IDEAS, noteHeading, type NoteDraft } from "@/lib/individual/scholar/personal-notebook";
 import type { NotebookNote } from "@/lib/individual/scholar/store";
 import { DraftRecovery, notebookHref } from "./note-capture";
 import { rememberRestoredDraft } from "./note-editor";
@@ -134,5 +133,3 @@ export function NotebookSearch({ q, tags, tag, material, materials }: { q: strin
   );
 }
 
-export const pageSize = NOTEBOOK_PAGE;
-export const practiseHref = () => experienceHref("scholar", "study/saved?view=notebook");
