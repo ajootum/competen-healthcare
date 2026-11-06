@@ -1,0 +1,98 @@
+PASS [tablet] Quick Note is on Scholar Home
+PASS [tablet] the control is big enough to tap (45px)
+PASS [tablet] Home with the header control: nothing runs off the side
+PASS [tablet] one tap: the cursor is in the field at once
+PASS [tablet] opening it does not navigate
+PASS [tablet] no title, tag or category is offered before writing starts
+PASS [tablet] shows Saved
+PASS [tablet] title and tags are offered once writing has started
+PASS [tablet] saved with no lesson, title or category: free-standing, one row
+PASS [tablet] it records where it was written (home)
+NOTE [tablet] panel 448x402 at y 84; bottom bar at y none
+PASS [tablet] the panel fits the width
+PASS [tablet] Escape closes it
+PASS [tablet] focus goes back to the control
+PASS [tablet] My Notebook opens
+PASS [tablet] the first thing is a place to start writing
+PASS [tablet] My Notebook: nothing runs off the side
+PASS [tablet] a part-typed word finds it
+PASS [tablet] the note is in the results
+PASS [tablet] the matched word is marked
+PASS [tablet] the note's page: nothing runs off the side
+PASS [tablet] edit, title, tags and pin all saved
+PASS [tablet] the revision rises (4)
+PASS [tablet] linked to a lesson when wanted
+PASS [tablet] it is under Pinned
+PASS [tablet] a tag finds it
+PASS [tablet] a note links to a topic when wanted, with nothing else required
+PASS [tablet] the topic filter finds it
+PASS [tablet] its topic is offered as a filter
+PASS [tablet] searching the topic's words finds it
+PASS [tablet] and it can go back to free-standing
+PASS [tablet] a box follows each section (7)
+PASS [tablet] closed, it is one compact line, no large empty box (63px)
+PASS [tablet] no empty text area breaks the reading flow
+PASS [tablet] the lesson: nothing runs off the side
+PASS [tablet] opening the box focuses the field at once
+PASS [tablet] opening it does not lose the reading place
+PASS [tablet] opening it does not navigate or reset the lesson
+PASS [tablet] the owner's line is shown
+PASS [tablet] Personal · Private is shown
+PASS [tablet] the owner's placeholder is shown
+PASS [tablet] the field does not make a phone zoom (16px)
+PASS [tablet] writing and saving leave the reading place where it was
+PASS [tablet] attached by itself to the lesson and section ("Principles of Growth and Development")
+PASS [tablet] a second note goes on the same section
+PASS [tablet] Develop this idea is offered
+PASS [tablet] Research this question is offered
+PASS [tablet] Ask opens with the note's words to edit
+PASS [tablet] opening Ask sends nothing to AI
+PASS [tablet] no note's words were sent anywhere but the notes route (0)
+PASS [tablet] the study goal form adds nothing by itself
+PASS [tablet] Cancel adds nothing
+PASS [tablet] Quick Note in a lesson: the cursor is in the field
+PASS [tablet] Quick Note does not move the lesson
+PASS [tablet] it attaches to what is being read: Linked to Principles of Growth and Development. Keep it free-standing
+PASS [tablet] Quick Note in a lesson saved on that lesson
+PASS [tablet] the panel does not cover the control that opened it
+PASS [tablet] every control in the panel is big enough to tap ()
+PASS [tablet] closing it leaves the reading place
+PASS [tablet] reopened: the box says what is there ("My Ideas & Notes · 17 notes Personal · Private ▶ Quick lesson llamatabletmw5cc8n")
+PASS [tablet] reopened: both notes are on that section, word for word
+PASS [tablet] an existing note is editable in place
+PASS [tablet] the same note appears in My Notebook
+PASS [tablet] it says which lesson it is on
+PASS [tablet] the note offers the way back to its lesson
+PASS [tablet] back at the lesson, the section the learner left is on screen again (lesson-0-s3 at y 16, left at scrollY 1687, back at 1733)
+PASS [tablet] a link to a section opens that note's box
+PASS [tablet] network lost: says the words are kept on this device
+PASS [tablet] network lost: the draft is on this device, under this learner
+PASS [tablet] network lost: nothing reached the server
+PASS [tablet] network back: saved once, no duplicate
+PASS [tablet] network back: the draft is gone
+PASS [tablet] after an interrupted visit, My Notebook offers the unsaved words
+PASS [tablet] the recovered words are the learner's own
+PASS [tablet] Restore saves it, once
+PASS [tablet] its address is the note's id, and never its words
+PASS [tablet] the blank page: the cursor is in the field
+PASS [tablet] the blank page asks for no title
+PASS [tablet] a patient identifier is refused, and says why
+PASS [tablet] nothing identifying reached the database
+PASS [tablet] taking it out saves the note
+PASS [tablet] export holds the learner's notes, free-standing and lesson
+PASS [tablet] the learner can remove a note, and it is gone
+PASS [tablet] removed straight after typing: nothing is saved
+PASS [tablet] removed straight after typing: no draft is left on the device
+PASS [tablet] library search: nothing runs off the side
+PASS [tablet] CE-02: the library's search finds a lesson note written in the box
+PASS [tablet] CE-02: a search result has its item actions
+PASS [tablet] library notes view: nothing runs off the side
+PASS [tablet] CE-02: the material filter keeps a note on that material
+PASS [tablet] CE-02: the library's own note form still writes its own note
+PASS [tablet] CE-02: the library's edit still saves, with its check against a changed copy
+PASS [tablet] CE-02: the library's remove still removes
+PASS [tablet] signed out: the route refuses (401)
+PASS [tablet] signed out: export refuses (401)
+PASS [tablet] a session that is not theirs reads nothing
+FAIL [tablet] end of walk: no note's words left the notes route, other than to My Plan on the learner's approval (2: POST http://localhost:3206/api/individual/scholar/library/notes, PATCH http://localhost:3206/api/individual/scholar/library/notes)
+PASS [tablet] no server error or page error ()

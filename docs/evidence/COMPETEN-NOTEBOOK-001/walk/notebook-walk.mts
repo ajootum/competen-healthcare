@@ -484,7 +484,7 @@ const smallTargets = () => page.evaluate(() => {
   for (const el of Array.from(document.querySelectorAll<HTMLElement>("main a, main button, main select, main input:not([type=hidden]), main textarea, main summary"))) {
     const r = el.getBoundingClientRect();
     if (!el.getClientRects().length || r.width === 0 || r.height >= min) continue;
-    if (el.tagName === "A" && el.closest("p")) continue;
+    if (el.tagName === "A" && el.closest("p, footer")) continue;
     out.push(`${el.tagName.toLowerCase()} "${(el.innerText || el.getAttribute("aria-label") || (el as HTMLInputElement).type || "").trim().slice(0, 30)}" ${Math.round(r.width)}x${Math.round(r.height)}`);
   }
   return out;

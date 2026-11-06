@@ -181,7 +181,7 @@ Field order in every row: Programme · Deliverable · Current state (verified) �
 ### CE-02-2 — CE-02 acceptance walk (desktop and phone)
 - **Programme:** CE · **Priority:** P1 *(proposed)* · **Owner:** Engineering (CE)
 - **Deliverable:** A recorded walk of search, filters, notes create/edit/remove and item actions on desktop and a phone-width viewport.
-- **Current state:** Register: "Acceptance still to do"; no CE-02 walk evidence under `docs/evidence/`.
+- **Current state:** Walked on staging by COMPETEN-NOTEBOOK-001. It found one touch target under 44px, in library search, fixed on the branch. Production part not done.
 - **Dependency:** none · **Environment:** staging, then production
 - **Acceptance criteria:** touch targets ≥ `--cmp-touch-min`, no horizontal scroll, filters work, notes keep provenance.
 - **Evidence:** none yet. · **Status:** Not started · **Blocker:** — · **Completed:** —

@@ -83,11 +83,26 @@ Remove is honoured, even with words waiting (`discard`). A link problem is no lo
 
 ## Tests
 
-Vitest: `note-saver.test.ts`, `personal-notebook.test.ts`, `personal-notebook-store.test.ts`, `api/individual/scholar/notebook/notes/route.test.ts`, plus the pinned updates to `nav.test.ts`, `policy.test.ts` and `scholar-learning-tokens.test.ts`. Harnesses: `scholar-learning-harness` (182 of 182), `individual-foundation-harness` (77 of 77) and `sidebar-active-harness` (15 of 15). `scholar-learning-harness` found two real breaks on the way: notebook writes outside the one Scholar store, moved into it, and the reserved phrase "learning library" in page words.
+Vitest: `note-saver.test.ts`, `personal-notebook.test.ts`, `personal-notebook-store.test.ts`, `api/individual/scholar/notebook/notes/route.test.ts`, plus the pinned updates to `nav.test.ts`, `policy.test.ts` and `scholar-learning-tokens.test.ts`. On the merged code: type check clean, lint clean on the changed files, 2,852 focused tests passed (170 files), and harnesses `scholar-learning-harness` (182 of 182), `individual-foundation-harness` (77 of 77) and `sidebar-active-harness` (15 of 15). CI runs the full suites. `scholar-learning-harness` found two real breaks on the way: notebook writes outside the one Scholar store, moved into it, and the reserved phrase "learning library" in page words.
 
 ## Walk
 
 `walk/notebook-walk.mts` at desktop 1440, tablet 820 and phone 390, fixture learner on staging, dev server. Logs `walk/walk-*.log`, screenshots `walk/shots/`. It also serves as the CE-02-2 acceptance walk.
+
+### Results as recorded
+
+| Log | Result | What the reds are |
+|---|---|---|
+| `walk-phone.log` | 98 passed, 2 red | Both are the touch-target check added last for CE-02-2. "Your note" in library search was 20px tall: a real miss, fixed. "Privacy & AI controls" is a link inside the footer's sentence, exempt as links inside a sentence are, so the check was corrected |
+| `walk-tablet.log` | 96 passed, 1 red | The check itself counted the library form's own words reaching its own notes route. Corrected. Nothing was sent anywhere else |
+| `walk-desktop.log` | 95 passed, 1 red | The same |
+| `walk-touch-check.log` | 2 of 2 | Phone, after the fix: 89 controls on library search and 274 on library notes, none under 44px |
+| `walk-other-learner.log` | 5 of 5 | Signed in as the fixture learner, another learner's note: its page, a change, the export and a search all reach nothing, and the note is unchanged |
+| `walk-key-off.log` | 8 of 8 | Policy off: nothing offered, saving and export refused, nothing written |
+
+**Not rerun, on the owner's instruction of 6 Nov** ("Dont run all checks - only the safe and important ones"). The three walk logs were not rerun to clear those reds. The tablet and desktop logs were taken before the corrected check and before two later changes: one lint comment and one class on a library link. Only the phone run has the touch check.
+
+Staging holds one labelled probe note on a `competen.test` account, written for `walk-other-learner.log` because staging held no other learner's note to test against. It stays, as agents do not hard-delete.
 
 The fixture's Growth and Development deck has no section titled "Cephalocaudal development". Slide 1 is "Principles of Growth and Development", which lists cephalocaudal, and that is the section the walk writes on.
 
