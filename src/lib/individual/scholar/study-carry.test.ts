@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  adaptivePrefill, casePrefill, chooseOutcome, evaluationPrefill, flashcardPrefill, isStudyId, osceFilterPrefill, revisePrefill, stageHref,
+  adaptivePrefill, casePrefill, chooseOutcome, evaluationPrefill, flashcardPrefill, isStudyId, osceClearSearchHref, osceFilterPrefill, revisePrefill, stageHref,
   studyScopeOf, studyStages, withStudy, type StudyScope,
 } from "./study-carry";
 
@@ -66,6 +66,12 @@ describe("scope -> prefill of each page's existing control", () => {
     expect(casePrefill(scope({ competencyId: C1 }), have)).toEqual({ entry: "competency", competencyId: C1 });
     expect(casePrefill(scope({ materialIds: [M2] }), have)).toEqual({ entry: "notes", materialId: M2 });
     expect(casePrefill(scope({ materialIds: [] }), have)).toBeNull();
+  });
+  it("OSCE: Clear search keeps the other filters and drops the words", () => {
+    const p = "/individual/scholar/study/apply/osce";
+    expect(osceClearSearchHref(p, { competency: C1, programme: "RN", difficulty: "hard", source: "mine" }, null)).toBe(`${p}?competency=${C1}&programme=RN&difficulty=hard&source=mine`);
+    expect(osceClearSearchHref(p, {}, null)).toBe(p);
+    expect(osceClearSearchHref(p, { difficulty: "easy" }, "s1")).toBe(`${p}?all=1&difficulty=easy`);
   });
   it("OSCE: the competency filter, else the topic search", () => {
     expect(osceFilterPrefill(scope({ competencyId: C1, topic: "x" }))).toEqual({ competency: C1 });

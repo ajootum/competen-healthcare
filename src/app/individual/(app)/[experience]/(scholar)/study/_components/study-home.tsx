@@ -34,7 +34,7 @@ export function ContinueCard({ s, href, more }: { s: SessionHit; href: string; m
     <section aria-labelledby="home-continue-h" className="cmp-learn-next" data-study-continue={s.id}>
       <div className="mb-2 flex flex-wrap items-center justify-between gap-x-3">
         <h2 id="home-continue-h" className="text-[17px] font-bold text-gray-900">Continue learning</h2>
-        {more && <Link href={learnHref({ tab: "sessions" })} className={textLink}>View all sessions<span aria-hidden>→</span></Link>}
+        {more && <Link prefetch={false} href={learnHref({ tab: "sessions" })} className={textLink}>View all sessions<span aria-hidden>→</span></Link>}
       </div>
       <div className="cmp-learn-box flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0 flex-1">
@@ -43,7 +43,7 @@ export function ContinueCard({ s, href, more }: { s: SessionHit; href: string; m
           {at && <div className="mt-3"><StepMarks step={at.step} of={at.of} /></div>}
           <p className="mt-1.5 text-[13px] font-medium text-gray-700">{[at?.label, when].filter(Boolean).join(" · ")}</p>
         </div>
-        <Link href={href} className={`${toneAction.primary} w-full shrink-0 justify-center md:w-auto`}>Continue learning<span className="sr-only">: {heading}</span><span aria-hidden className="ml-1.5">→</span></Link>
+        <Link prefetch={false} href={href} className={`${toneAction.primary} w-full shrink-0 justify-center md:w-auto`}>Continue learning<span className="sr-only">: {heading}</span><span aria-hidden className="ml-1.5">→</span></Link>
       </div>
     </section>
   );
@@ -64,8 +64,8 @@ export function StartLearning({ hasMaterials, historyOn, sessionsLink, libraryHr
       <p className="mt-2 text-[12.5px] text-gray-600">No AI is used until you choose an AI learning action in Learn.</p>
       <HistoryNotice className="mt-1" />
       <p className="mt-1 flex flex-wrap gap-x-4">
-        {hasMaterials && <Link href={libraryHref} className={textLink}>Or choose from your materials</Link>}
-        {sessionsLink && <Link href={learnHref({ tab: "sessions" })} className={textLink}>View all study sessions</Link>}
+        {hasMaterials && <Link prefetch={false} href={libraryHref} className={textLink}>Or choose from your materials</Link>}
+        {sessionsLink && <Link prefetch={false} href={learnHref({ tab: "sessions" })} className={textLink}>View all study sessions</Link>}
       </p>
     </section>
   );
@@ -80,7 +80,7 @@ export function RecentMaterials({ rows, unreadable, upload, libraryHref }: { row
         <h2 id="home-recent-h" className="text-[17px] font-bold text-gray-900">Recent materials</h2>
         <div className="flex flex-wrap items-center gap-x-3">
           {rows.length > 0 && upload}
-          <Link href={libraryHref} className={textLink} data-open-library>Open my library<span aria-hidden>→</span></Link>
+          <Link prefetch={false} href={libraryHref} className={textLink} data-open-library>Open my library<span aria-hidden>→</span></Link>
         </div>
       </div>
       {unreadable ? <Unreadable what="study materials" /> : rows.length === 0 ? (
@@ -94,7 +94,7 @@ export function RecentMaterials({ rows, unreadable, upload, libraryHref }: { row
           {rows.map((m, i) => (
             // Three on a phone, up to five on a wider screen.
             <li key={m.id} className={i >= 3 ? "hidden md:block" : undefined}>
-              <Link href={experienceHref("scholar", `study/${m.id}`)} data-study-material={m.id}
+              <Link prefetch={false} href={experienceHref("scholar", `study/${m.id}`)} data-study-material={m.id}
                 className={`flex min-h-[56px] items-center gap-3 px-3.5 py-2.5 hover:bg-[var(--learn-surface)] ${focusRing} focus-visible:-outline-offset-2`}>
                 <span aria-hidden className="cmp-learn-accent grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-[var(--learn-surface)]"><LearningIcon name="notes" className="h-5 w-5" /></span>
                 <span className="min-w-0 flex-1">

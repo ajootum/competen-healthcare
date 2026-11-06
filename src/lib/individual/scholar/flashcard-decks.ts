@@ -5,8 +5,8 @@
 // review. flashcard-service.ts runs the plans; routes under api/individual/scholar/flashcards/decks check ownership.
 
 import type { PersonalDeck } from "./flashcards";
+import { matchesSearch } from "../search/match";
 
-const flat = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 
 export const DECK_TITLE_MAX = 120;
 export const DECK_COPY_SUFFIX = " (copy)";
@@ -52,10 +52,9 @@ export function sortDecks<T extends Sortable>(decks: readonly T[], by: DeckSort)
       : recent(b).localeCompare(recent(a)) || name(a, b));
 }
 
-/** Pure. Decks whose title holds every word typed (case and punctuation ignored). Nothing typed: all of them. */
+/** Pure. Decks whose title answers the search by the shared matcher (part of a word, a listed synonym, one slip). Nothing typed: all of them. */
 export function searchDecks<T extends { title: string }>(decks: readonly T[], query: string): T[] {
-  const words = flat(query).split(" ").filter(Boolean);
-  return words.length ? decks.filter(d => words.every(w => flat(d.title).includes(w))) : [...decks];
+  return decks.filter(d => matchesSearch(d.title, query));
 }
 
 export const ORGANISE_GROUP_LABEL: Record<PersonalDeck["organiseBy"], string> = {

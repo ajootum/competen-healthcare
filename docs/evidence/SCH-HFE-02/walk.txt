@@ -1,0 +1,55 @@
+PASS 390 Resume, Search, Recent lessons and My learning library, in that order
+PASS 390 Study next shows
+PASS 390 the library marks what is the learner's own
+NOTE 390 page height 1960 px
+PASS 390 no sideways scroll
+FAIL 390 every control reaches 44 px on touch (Open your Library dividual/scholar/study/library 22)
+NOTE 390 tucked away: Recently added
+PASS 390 Resume opens the same lesson
+PASS 390 reopening a lesson makes no AI call ()
+PASS 390 a recent lesson reopens
+PASS 390 a saved lesson reopens with no AI call ()
+PASS 390 My Library opens directly
+PASS 390 search shows results
+PASS 390 the tabs move on to Revise and Apply
+PASS 390 no AI call anywhere ()
+NOTE 390 lesson calls: open cached=true open=undefined status=200 | open cached=undefined open=undefined status=200
+PASS 390 no page or hydration error ()
+PASS 820 Resume, Search, Recent lessons and My learning library, in that order
+PASS 820 Study next shows
+PASS 820 the library marks what is the learner's own
+NOTE 820 page height 1809 px
+PASS 820 no sideways scroll
+FAIL 820 every control reaches 44 px on touch (Open your Library dividual/scholar/study/library 22)
+NOTE 820 tucked away: Recently added
+PASS 820 Resume opens the same lesson
+PASS 820 reopening a lesson makes no AI call ()
+PASS 820 a recent lesson reopens
+PASS 820 a saved lesson reopens with no AI call ()
+PASS 820 My Library opens directly
+PASS 820 search shows results
+PASS 820 the tabs move on to Revise and Apply
+PASS 820 no AI call anywhere ()
+NOTE 820 lesson calls: open cached=undefined open=undefined status=200
+PASS 820 no page or hydration error ()
+PASS 1440 Resume, Search, Recent lessons and My learning library, in that order
+PASS 1440 Study next shows
+PASS 1440 the library marks what is the learner's own
+NOTE 1440 page height 1661 px
+PASS 1440 no sideways scroll
+FAIL 1440 every control reaches 44 px on touch (Open your Library dividual/scholar/study/library 22)
+NOTE 1440 tucked away: Recently added
+PASS Recently added is still there
+PASS Learn from it still works from it
+PASS its Open your Library goes to the library
+PASS 1440 Resume opens the same lesson
+PASS 1440 reopening a lesson makes no AI call ()
+PASS 1440 a recent lesson reopens
+PASS 1440 a saved lesson reopens with no AI call ()
+PASS 1440 My Library opens directly
+PASS 1440 search shows results
+PASS 1440 the tabs move on to Revise and Apply
+PASS 1440 no AI call anywhere ()
+NOTE 1440 lesson calls: open cached=true open=undefined status=200 | open cached=undefined open=undefined status=200
+PASS 1440 no page or hydration error ()
+PASS no session was created or moved

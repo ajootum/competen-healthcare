@@ -1,5 +1,7 @@
 import { headers } from "next/headers";
 import type { Metadata } from "next";
+import { PageSearch } from "@/app/individual/_components/search/PageSearch";
+import { pageScope } from "@/lib/individual/search/registry";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { learnerToday } from "@/lib/individual/scholar/learning-definitions";
 import { loadIndividualPassport } from "@/lib/individual/passport";
@@ -11,7 +13,7 @@ import { expectedMap, loadSelfSide, verificationFacts } from "@/lib/assessment/a
 import { NOT_VERIFIED_LINE, VERIFICATION_UNREADABLE } from "@/lib/assessment/adapters/scholar/vocab";
 import { Block, EmptyLine, TextLink } from "../../_module/module-parts";
 import { EvidenceSections } from "../evidence-sections";
-import { FORMAL_RECORDS_TITLE, LEARNER_EVIDENCE_TITLE, NO_EVIDENCE, assessmentEvidenceSections, evidenceView } from "../competencies-view";
+import { FORMAL_RECORDS_TITLE, LEARNER_EVIDENCE_TITLE, NO_EVIDENCE, assessmentEvidenceSections, evidenceView, filterEvidenceSections } from "../competencies-view";
 
 export const dynamic = "force-dynamic";
 
@@ -23,11 +25,13 @@ export const dynamic = "force-dynamic";
 
 export async function generateMetadata(): Promise<Metadata> { return gatedModuleMetadata("competencies", { title: "My Evidence" }); }
 
-export default async function MyEvidence({ params }: { params: Promise<{ experience: string }> }) {
+export default async function MyEvidence({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ q?: string }> }) {
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
   const { ctx } = page;
+  const rawQ = (await searchParams).q;
+  const q = typeof rawQ === "string" ? rawQ.slice(0, 200).trim() : "";
   const x = SCHOLAR;
   const passport = await loadIndividualPassport(ctx.admin, ctx.userId, learnerToday(await headers())).catch(() => null);
   const learner = await loadLearnerCatalogue(ctx.admin, ctx.userId);
@@ -43,15 +47,16 @@ export default async function MyEvidence({ params }: { params: Promise<{ experie
       <Notice>Read only. Your learning evidence and your self-assessments are formative and never verified. Formal records are decided or confirmed by an organisation or Competen Holdings.</Notice>
       {v === null ? <Unreadable what="evidence" /> : (
         <>
+          <PageSearch scope={pageScope("evidence")} action={experienceHref("scholar", "my-competencies/evidence")} value={q} placeholder="Search your evidence and assessments" clearHref={experienceHref("scholar", "my-competencies/evidence")} />
           {v.allEmpty && asmt.self.state !== "items" && asmt.assessor.state !== "items" && <EmptyLine>{NO_EVIDENCE}</EmptyLine>}
           <Block id="learner-h" title={LEARNER_EVIDENCE_TITLE} note="Practice and evaluations from your own notes that you chose to show. Private to you unless you share your Passport.">
-            <EvidenceSections sections={v.learner} />
+            <EvidenceSections sections={filterEvidenceSections(v.learner, q)} />
           </Block>
           <Block id="assessments-h" title="Your assessments" note="Each says who recorded it. A self-assessment is your own rating, and an assessor-led assessment is not formal verification. Neither is added to your Passport.">
-            <EvidenceSections sections={[asmt.self, asmt.assessor]} />
+            <EvidenceSections sections={filterEvidenceSections([asmt.self, asmt.assessor], q)} />
           </Block>
           <Block id="formal-h" title={FORMAL_RECORDS_TITLE} note="Issued or confirmed by others. Each says who.">
-            <EvidenceSections sections={v.formal} />
+            <EvidenceSections sections={filterEvidenceSections(v.formal, q)} />
           </Block>
           <Block id="verification" title="Verification" note="Independent verification of a competency. A self-assessment and a practice result never count as one.">
             <p className="rounded-2xl border border-gray-200 bg-white px-4 py-3 text-[14px] font-semibold text-gray-900" role="status">

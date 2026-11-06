@@ -1,0 +1,38 @@
+PASS Saved learning keeps the words in the shared box
+PASS Saved learning can be cleared
+PASS My Search History has the shared box
+PASS My Search History searches by the address
+PASS searching My Search History keeps no new entry
+PASS the OSCE list has the shared box
+PASS OSCE Clear search removes only the words (/study/apply/osce?difficulty=advanced)
+NOTE the fixture shows no deck box on Flashcards, so its scope line was not seen
+PASS the card browser's Clear search takes the words out of the address
+PASS My Progress has a box
+PASS My Progress takes the search to its history
+NOTE My Courses answered 404 for the fixture, so its box was not seen
+NOTE My Programmes answered 404 for the fixture, so its box was not seen
+NOTE Learning Progress answered 404 for the fixture, so its box was not seen
+NOTE Assessments answered 0 for the fixture, so its box was not seen
+PASS My Evidence has the box
+FAIL Learn finds a document despite a slip, directly from its title
+NOTE Saved learning for a slip: corrects and says so
+PASS ⚠ Learn never corrects a hyp word
+PASS a search with an exclusion is not corrected
+PASS a filtered search is not corrected
+PASS My Search History keeps what the learner typed, not the correction
+PASS Global Search lists Revise records
+NOTE first Revise result: Quality Improvement Science and Methods
+PASS Global Search makes no silent correction in Learn's results
+PASS no AI or session call ()
+PASS no session was created (4)
+PASS no page or hydration error ()
+PASS 390 saved: no sideways scroll
+PASS 390 saved: the box's controls reach 44 px on touch ()
+PASS 390 history: no sideways scroll
+PASS 390 history: the box's controls reach 44 px on touch ()
+PASS 390 osce: no sideways scroll
+PASS 390 osce: the box's controls reach 44 px on touch ()
+PASS 390 flashcards: no sideways scroll
+PASS 390 flashcards: the box's controls reach 44 px on touch ()
+PASS 390 progress: no sideways scroll
+PASS 390 progress: the box's controls reach 44 px on touch ()
