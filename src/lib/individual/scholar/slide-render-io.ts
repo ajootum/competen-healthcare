@@ -102,8 +102,10 @@ async function drawPdf(ctx: IndividualContext, material: MaterialRow, attempts: 
     try {
       for (const n of draw) {
         if (left() < 5000 || total >= RENDER_MAX_BYTES) { missed.push(n); continue; }
-        const { bytes: webp, width, height, blank } = await drawing.draw(n);
-        if (blank || total + webp.byteLength > RENDER_MAX_BYTES) { missed.push(n); continue; }
+        // One page that cannot be drawn keeps its button. It does not cost the other pages their drawing.
+        const shown = await drawing.draw(n).catch(() => null);
+        if (!shown || shown.blank || total + shown.bytes.byteLength > RENDER_MAX_BYTES) { missed.push(n); continue; }
+        const { bytes: webp, width, height } = shown;
         const sha = sha16(webp);
         const path = renderPath(ctx.userId, material.id, n, sha);
         const up = await ctx.admin.storage.from(BUCKET).upload(path, Buffer.from(webp), { contentType: "image/webp", upsert: true });

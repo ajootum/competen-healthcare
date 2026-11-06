@@ -22,6 +22,7 @@ export const PDF_RENDER_ENGINE = "pdfium-3.0.0-lossless";
 export const RENDER_MAX_BYTES = 60 * 1024 * 1024;
 /** The width of a drawn slide. Wide enough for a phone at 3x and a desktop dialog; the original pictures keep their own size. */
 export const RENDER_WIDTH = 1920;
+export const RENDER_MAX_HEIGHT = 6000;
 /** The whole job, against the route's 300 s. */
 export const RENDER_BUDGET_MS = 280_000;
 /** A row still "running" after this long died with its function. */

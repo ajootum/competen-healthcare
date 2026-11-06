@@ -234,6 +234,16 @@ describe("the job for a PDF", () => {
     expect((row.units as { n: number }[]).map(u => u.n)).toEqual([2]);
     expect(h.closed).toBe(1);
   });
+  it("one page that cannot be drawn does not cost the others their drawing", async () => {
+    const f = fake();
+    pdf();
+    const q = h.quality; h.quality = { emptyUnits: [2], aiReadUnits: [] };
+    h.webp.mockRejectedValueOnce(new Error("decode"));
+    await (await startWholeSlides(ctxOf(f.admin, A), "m1")).run!();
+    h.quality = q;
+    expect(f.rows.get("m1")).toMatchObject({ status: "partial", units: [], not_drawn: [2] });
+    expect(h.closed).toBe(1);
+  });
   it("a page that draws as flat colour is not stored: the button to the original page stays", async () => {
     const f = fake();
     pdf();

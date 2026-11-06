@@ -156,7 +156,7 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
           <p className="text-gray-700"><span className="mr-1 inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11.5px] font-semibold text-gray-800">{current.label}</span>{current.caption}</p>
           {current.aiRead && <p role="note" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-semibold">{AI_NOTE}</p>}
           {current.safeText && <SafeText text={current.safeText} />}
-          <section aria-label={`View original ${noun(current)} ${current.n}`}>
+          <section aria-label={same.some(v => v.whole) ? `${capital(noun(current))} ${current.n}: drawn whole, and its originals` : `View original ${noun(current)} ${current.n}`}>
             <h3 className="text-[13.5px] font-bold text-gray-900">{same.some(v => v.whole) ? `${capital(noun(current))} ${current.n}: drawn whole, and its originals` : `View original ${noun(current)} ${current.n}`}</h3>
             {same.length > 1 ? (
               <ul className="mt-2 flex flex-wrap gap-2">

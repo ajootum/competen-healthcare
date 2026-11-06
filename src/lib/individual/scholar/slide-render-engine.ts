@@ -2,7 +2,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RENDER_WIDTH } from "./slide-render";
+import { RENDER_MAX_HEIGHT, RENDER_WIDTH } from "./slide-render";
 
 // ── DRAWING A DECK, ON OUR OWN FUNCTION ── SCHOLAR-VISUAL-001 phase 2 ───────────────────────────────────────────────────
 //
@@ -79,7 +79,9 @@ export async function openPdfDrawing(pdf: Uint8Array): Promise<PdfDrawing> {
       pageCount: doc.getPageCount(),
       draw: async page => {
         const it = doc.getPage(page - 1);
-        const shown = await it.render({ scale: RENDER_WIDTH / it.getOriginalSize().originalWidth, render: "bitmap" });
+        const { originalWidth, originalHeight } = it.getOriginalSize();
+        // A very tall page stays within what a browser and a function can hold.
+        const shown = await it.render({ scale: Math.min(RENDER_WIDTH / originalWidth, RENDER_MAX_HEIGHT / originalHeight), render: "bitmap" });
         const flat = sharp(Buffer.from(shown.data), { raw: { width: shown.width, height: shown.height, channels: 4 } }).flatten({ background: "#ffffff" });
         const { channels } = await flat.clone().stats();
         const { data, info } = await flat.webp({ lossless: true, effort: 4 }).toBuffer({ resolveWithObject: true });
