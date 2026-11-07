@@ -9,7 +9,7 @@ import { buildOpenApi } from "./openapi";
 const ME = "11111111-1111-4111-8111-111111111111";
 const WS = "44444444-4444-4444-8444-444444444444";
 const REC = "33333333-3333-4333-8333-333333333333";
-const session: Principal = { kind: "session", individualId: ME, scopes: "*", clientId: null };
+const session: Principal = { kind: "session", individualId: ME, scopes: "*", clientId: null, boundWorkspaceId: null };
 
 function fakeStore(over: Partial<LifeosStore> = {}): LifeosStore {
   return {
@@ -80,7 +80,7 @@ describe("the order of the door", () => {
   });
   it("a delegated token without the scope is refused before the store is asked", async () => {
     const store = fakeStore();
-    const token: Principal = { kind: "delegated_token", individualId: ME, scopes: ["goals:read"], clientId: "app" };
+    const token: Principal = { kind: "delegated_token", boundWorkspaceId: WS, individualId: ME, scopes: ["goals:read"], clientId: "app" };
     const res = await call("GET", `workspaces/${WS}/commitments`, { store, authenticate: async () => token });
     expect(res.status).toBe(403);
     expect(store.rateTake).not.toHaveBeenCalled();
@@ -259,13 +259,19 @@ describe("the route table", () => {
     const tokenHash = "x";
     const store = fakeStore({
       where: vi.fn(async (t: string) => (t === "lifeos_live_oauth_token"
-        ? [{ access_live: true, client_id: REC, individual_id: ME, scopes: ["*", "suggestions:write", "grants:write"], version: 1, id: tokenHash }]
+        ? [{ access_live: true, client_id: REC, individual_id: ME, scopes: ["*", "suggestions:write", "grants:write"], version: 1, id: tokenHash, bound_workspace_id: WS }]
         : t === "lifeos_live_entitlement" ? [{ source: "direct" }] : [])) as LifeosStore["where"],
-      get: vi.fn(async (t: string) => (t === "lifeos_api_client" ? { status: "approved" } : { status: "active", id: ME })) as LifeosStore["get"],
+      get: vi.fn(async (t: string) => (t === "lifeos_api_client" ? { status: "approved", allowed_scopes: ["*", "suggestions:write", "grants:write"] } : { status: "active", id: ME })) as LifeosStore["get"],
     });
     const req = new Request(`http://x/api/lifeos/v1/workspaces/${WS}/permission-grants`, { headers: { authorization: "Bearer lo_at_x" } });
-    const res = await dispatch(req, ["workspaces", WS, "permission-grants"], { store, authenticate: async () => session, traceId: "t" });
+    const stands = { accountStands: async () => true, sourceStands: async () => true };
+    const res = await dispatch(req, ["workspaces", WS, "permission-grants"], { store, authenticate: async () => session, traceId: "t", ...stands });
     expect(res.status).toBe(403);
+    // With nothing able to say the person's account still stands, the answer is no.
+    const unasked = await dispatch(req.clone(), ["workspaces", WS, "permission-grants"], { store, authenticate: async () => session, traceId: "t" });
+    expect(unasked.status).toBe(401);
+    const banned = await dispatch(req.clone(), ["workspaces", WS, "permission-grants"], { store, authenticate: async () => session, traceId: "t", ...stands, accountStands: async () => false });
+    expect(banned.status).toBe(401);
   });
   it("with the public flag off, a bearer token gets not found", async () => {
     const store = fakeStore({ flagEnabled: vi.fn(async (f: string) => f === "lifeos_core") });

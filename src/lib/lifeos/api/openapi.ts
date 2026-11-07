@@ -33,6 +33,7 @@ export function buildOpenApi(routes: Route[], only?: "public") {
     const path = r.path.replace(/:([a-z]+)/g, "{$1}");
     const pathParams = [...r.path.matchAll(/:([a-z]+)/g)].map(m => ({ name: m[1], in: "path", required: true, schema: { type: "string", format: "uuid" } }));
     const isWrite = r.method !== "GET";
+    const output = (only && r.publicOutput) || r.output;
     const headers = isWrite ? [{ name: "Idempotency-Key", in: "header", required: true, schema: { type: "string", maxLength: 255 } }] : [];
     paths[path] ??= {};
     paths[path][r.method.toLowerCase()] = {
@@ -51,7 +52,7 @@ export function buildOpenApi(routes: Route[], only?: "public") {
                 type: "object",
                 required: ["data", "meta"],
                 properties: {
-                  data: r.list ? { type: "array", items: jsonSchema(r.output) } : jsonSchema(r.output),
+                  data: r.list ? { type: "array", items: jsonSchema(output) } : jsonSchema(output),
                   meta: { type: "object", properties: { traceId: { type: "string" }, nextCursor: { type: ["string", "null"] }, replayed: { type: "boolean" } } },
                 },
               },

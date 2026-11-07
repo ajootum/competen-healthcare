@@ -12,6 +12,8 @@ export type Principal = {
   individualId: string;
   scopes: "*" | readonly string[];
   clientId: string | null;
+  /** The one workspace a delegated token was approved for. Null for a person signed in. */
+  boundWorkspaceId: string | null;
 };
 
 export type ActorKind = "user" | "ai" | "integration" | "system";

@@ -176,7 +176,7 @@ async function main() {
     const me = await call({ token: access }, "GET", "/me");
     ok("U1", me.status === 200 && me.body.data.individual.id === person.individualId, "the app acts as the person who approved it", me.status);
     const list = await call({ token: access }, "GET", `${P}/commitments`);
-    ok("U2", list.status === 200 && list.text.includes(secretTitle), "it reads what they can read, with the scope they granted", list.status);
+    ok("U2", list.status === 200 && list.text.includes(secretTitle), "it reads the person's own records, with the scope they granted", list.status);
     const write = await call({ token: access }, "POST", `${P}/commitments`, { title: "From the app" });
     ok("U3", write.status === 403, "it cannot write without the write scope", write.status);
     const otherWs = await call({ token: access }, "GET", `/workspaces/${otherOrg.workspaceId}/commitments`);
@@ -200,11 +200,13 @@ async function main() {
 
     // ---- writing, with the write scope, and provenance ----
     const w = pkce();
-    await p.goto(authorizeUrl(clientId, w.challenge, "commitments:read commitments:write"), { timeout: 120000 });
+    await p.goto(authorizeUrl(clientId, w.challenge, "profile:read commitments:read commitments:write"), { timeout: 120000 });
     const r3 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
     await p.getByRole("button", { name: "Allow", exact: true }).click();
     const code2 = new URL((await r3).url()).searchParams.get("code") ?? "";
     const tok2 = await tokenCall({ grant_type: "authorization_code", code: code2, code_verifier: w.verifier, client_id: clientId, redirect_uri: REDIRECT });
+    const superseded = await call({ token: access }, "GET", "/me");
+    ok("W0", superseded.status === 401, "approving the app again replaces the earlier approval", superseded.status);
     const created = await call({ token: tok2.body.access_token }, "POST", `${P}/commitments`, { title: `From the app ${RUN}` });
     ok("W1", created.status === 201 && created.body.data.provenanceSource === "integration" && created.body.data.provenanceRef === clientId, "a write is marked as coming from this app", created.body?.data?.provenanceSource);
     const audit = await call({ cookie: person.cookie }, "GET", `${P}/audit-events?entityId=${created.body.data.id}`);
@@ -213,25 +215,51 @@ async function main() {
     ok("W3", notifyOwner.status === 200 && notifyOwner.body.data.ownerIndividualId === person.individualId, "the person owns what the app created");
 
     // ---- refresh rotates, and replay ends it ----
-    const rotated = await tokenCall({ grant_type: "refresh_token", refresh_token: refresh, client_id: clientId });
-    ok("R1", rotated.status === 200 && rotated.body.refresh_token !== refresh, "refreshing rotates the token", rotated.status);
-    const stillOld = await call({ token: access }, "GET", "/me");
+    const rotated = await tokenCall({ grant_type: "refresh_token", refresh_token: tok2.body.refresh_token, client_id: clientId });
+    ok("R1", rotated.status === 200 && rotated.body.refresh_token !== tok2.body.refresh_token, "refreshing rotates the token", rotated.status);
+    const stillOld = await call({ token: tok2.body.access_token }, "GET", "/me");
     ok("R2", stillOld.status === 401, "the old access token ends with it", stillOld.status);
     const nu = await call({ token: rotated.body.access_token }, "GET", "/me");
     ok("R3", nu.status === 200, "the new one works", nu.status);
-    const replay = await tokenCall({ grant_type: "refresh_token", refresh_token: refresh, client_id: clientId });
+    const replay = await tokenCall({ grant_type: "refresh_token", refresh_token: tok2.body.refresh_token, client_id: clientId });
     ok("R4", replay.status === 400, "replaying a used refresh token is refused", replay.status);
     const afterReplay = await call({ token: rotated.body.access_token }, "GET", "/me");
     ok("R5", afterReplay.status === 401, "and it ends the whole approval, because it means a token was stolen", afterReplay.status);
 
+    // ---- the person chooses the workspace ----
+    const chosenOrg = await provisionOrganisation(store, person.individualId, { slug: `api-chosen-${RUN}`, name: "Chosen Org" });
+    const choice = pkce();
+    await p.goto(authorizeUrl(clientId, choice.challenge, "commitments:read"), { timeout: 120000 });
+    const radio = p.getByRole("radio", { name: "Chosen Org" });
+    await radio.waitFor({ timeout: 60000 });
+    const allowBtn = p.getByRole("button", { name: "Allow", exact: true });
+    ok("K1", await allowBtn.isDisabled() && (await p.getByRole("radio").count()) === 2, "with several workspaces the person must choose one, and nothing is chosen for them");
+    await radio.check();
+    const r6 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
+    await allowBtn.click();
+    const code5 = new URL((await r6).url()).searchParams.get("code") ?? "";
+    const tok5 = await tokenCall({ grant_type: "authorization_code", code: code5, code_verifier: choice.verifier, client_id: clientId, redirect_uri: REDIRECT });
+    ok("K2", tok5.body.workspace_id === chosenOrg.workspaceId, "the token is for the workspace they chose", tok5.body.workspace_id);
+    const offChoice = await call({ token: tok5.body.access_token }, "GET", `${P}/commitments`);
+    ok("K3", offChoice.status === 404, "and reaches no other", offChoice.status);
+    const shownApps = await call({ cookie: person.cookie }, "GET", "/me/connected-apps");
+    ok("K4", shownApps.body.data.some((a: any) => a.workspaceName === "Chosen Org"), "Connected apps says which workspace each approval is for");
+
     // ---- the person ends it ----
+    const again = pkce();
+    await p.goto(authorizeUrl(clientId, again.challenge, "commitments:read commitments:write"), { timeout: 120000 });
+    await p.getByRole("radio", { name: "Personal" }).check({ timeout: 60000 });
+    const r5 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
+    await p.getByRole("button", { name: "Allow", exact: true }).click();
+    const code4 = new URL((await r5).url()).searchParams.get("code") ?? "";
+    const tok4 = await tokenCall({ grant_type: "authorization_code", code: code4, code_verifier: again.verifier, client_id: clientId, redirect_uri: REDIRECT });
     const apps = await call({ cookie: person.cookie }, "GET", "/me/connected-apps");
     const app = apps.body.data.find((a: any) => a.scopes.includes("commitments:write"));
     ok("P1", !!app && app.appName === `Test App ${RUN}`, "the person sees the app they connected", apps.body?.data?.length);
     const otherTries = await call({ cookie: other.cookie }, "POST", `/me/connected-apps/${app.id}/disconnect`, {});
     ok("P2", otherTries.status === 404, "nobody else can see or end it", otherTries.status);
     const disc = await call({ cookie: person.cookie }, "POST", `/me/connected-apps/${app.id}/disconnect`, {});
-    const ended = await call({ token: tok2.body.access_token }, "GET", `${P}/commitments`);
+    const ended = await call({ token: tok4.body.access_token }, "GET", `${P}/commitments`);
     ok("P3", disc.status === 200 && ended.status === 401, "disconnecting ends its access at once", ended.status);
     await p.goto(`${BASE}/lifeos/connected`, { timeout: 120000 });
     await p.getByRole("heading", { name: "Connected apps", level: 2 }).waitFor({ timeout: 60000 });
@@ -240,6 +268,7 @@ async function main() {
     // ---- the app, and the person, losing standing ----
     const s = pkce();
     await p.goto(authorizeUrl(clientId, s.challenge, "profile:read"), { timeout: 120000 });
+    await p.getByRole("radio", { name: "Personal" }).check({ timeout: 60000 });
     const r4 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
     await p.getByRole("button", { name: "Allow", exact: true }).click();
     const code3 = new URL((await r4).url()).searchParams.get("code") ?? "";

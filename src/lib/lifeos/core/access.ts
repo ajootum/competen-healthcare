@@ -26,6 +26,11 @@ export type AccessContext = {
   workspaceId: string;
   role: MemberRole;
   grants: LiveGrant[];
+  /**
+   * An app holding a token. It reaches only records the approving person owns: the consent screen says "your commitments",
+   * and colleagues never approved the app. Workspace sharing, grants and delegation apply to people, signed in.
+   */
+  ownRecordsOnly: boolean;
 };
 
 export const toLiveGrant = (r: Row): LiveGrant => ({
@@ -43,6 +48,7 @@ const grantCovers = (g: LiveGrant, resourceType: string, record: Row, wants: "re
 
 export function canRead(ctx: AccessContext, resourceType: string, record: Row, extraReaderColumn?: string): boolean {
   if (record.owner_individual_id === ctx.individualId) return true;
+  if (ctx.ownRecordsOnly) return false;
   if (extraReaderColumn && record[extraReaderColumn] === ctx.individualId) return true;
   if (record.access_scope === "workspace") return true;
   return ctx.grants.some(g => grantCovers(g, resourceType, record, "read"));
@@ -50,6 +56,7 @@ export function canRead(ctx: AccessContext, resourceType: string, record: Row, e
 
 export function canWrite(ctx: AccessContext, resourceType: string, record: Row): boolean {
   if (record.owner_individual_id === ctx.individualId) return true;
+  if (ctx.ownRecordsOnly) return false;
   if (record.access_scope === "workspace" && managesWorkspace(ctx.role)) return true;
   return ctx.grants.some(g => grantCovers(g, resourceType, record, "write"));
 }
@@ -64,6 +71,7 @@ export function visibilityFilter(ctx: AccessContext, resourceType: string, extra
     if (!uuid.test(v)) throw new LifeosError("unavailable", "LifeOS could not complete that just now.");
     return v;
   };
+  if (ctx.ownRecordsOnly) return `owner_individual_id.eq.${safe(ctx.individualId)}`;
   const parts = [`owner_individual_id.eq.${safe(ctx.individualId)}`, "access_scope.eq.workspace"];
   if (extraReaderColumn) parts.push(`${extraReaderColumn}.eq.${safe(ctx.individualId)}`);
   for (const g of ctx.grants) {

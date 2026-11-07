@@ -36,7 +36,7 @@ export async function requireLifeosPrincipal(store: LifeosStore): Promise<Princi
   const individual = await readActiveIndividual(store, ISSUER_COMPETEN_AUTH, user.id, async e => (
     e.source === "competen_individual" ? competenIndividualLive(user.id) : true
   ));
-  return { kind: "session", individualId: String(individual.id), scopes: "*", clientId: null };
+  return { kind: "session", individualId: String(individual.id), scopes: "*", clientId: null, boundWorkspaceId: null };
 }
 
 /**
@@ -117,6 +117,24 @@ export async function readSignedInEmail(): Promise<string | null> {
     return user?.email ?? null;
   } catch {
     return null;
+  }
+}
+
+/**
+ * For a bearer token, which has no session to fail: is the person's identity link active, and is the sign-in account behind it
+ * still there and not banned? A failed read is no. The ban time is Supabase Auth's own, read as it reads it.
+ */
+export async function lifeosAccountStands(store: LifeosStore, individualId: string): Promise<boolean> {
+  const [link] = await store.where("lifeos_identity_link", { individual_id: individualId, issuer: ISSUER_COMPETEN_AUTH, status: "active" }, { limit: 1 });
+  const admin = createAdminClientOrNull() as unknown as SupabaseClient | null;
+  if (!link || !admin) return false;
+  try {
+    const { data, error } = await admin.auth.admin.getUserById(String(link.subject));
+    if (error || !data.user || data.user.deleted_at) return false;
+    const bannedUntil = data.user.banned_until;
+    return !bannedUntil || new Date(bannedUntil).getTime() <= Date.now();
+  } catch {
+    return false;
   }
 }
 

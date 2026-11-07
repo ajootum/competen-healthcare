@@ -36,13 +36,15 @@ export type Route = {
   bucket: Bucket;
   input?: z.ZodType;
   output: z.ZodType;
+  /** What an app receives, when it is less than what the person signed in receives. The public document describes this one. */
+  publicOutput?: z.ZodType;
   list?: boolean;
   /** "session": this route comes before holding LifeOS. It has a signed-in identity and no principal. */
   /** "session": before holding LifeOS, with a signed-in identity. "open": the standard OAuth endpoints, with no identity. */
   admission?: "session" | "open";
   /** A complete response, for an endpoint whose format a standard fixes. */
-  openHandler?: (i: { store: LifeosStore; body: Record<string, unknown> }) => Promise<Response>;
-  sessionHandler?: (i: { store: LifeosStore; identity: SessionIdentity; body: unknown }) => Promise<HandlerResult>;
+  openHandler?: (i: { store: LifeosStore; body: Record<string, unknown>; assertSubject: oauth.SubjectCheck }) => Promise<Response>;
+  sessionHandler?: (i: { store: LifeosStore; identity: SessionIdentity; body: unknown; params: Record<string, string> }) => Promise<HandlerResult>;
   handler: (i: RouteInput) => Promise<HandlerResult>;
 };
 
@@ -55,6 +57,11 @@ const changed = (r: svc.WriteResult): HandlerResult => ({ data: r.data, replayed
 
 const MeOutput = z.object({ individual: IndividualV1, entitlements: z.array(EntitlementV1), workspaces: z.array(WorkspaceV1) }).meta({ title: "Me" });
 const RefsOutput = z.array(z.object({ t: z.string(), id: z.string() }));
+
+// profile:read says "your name and the names of your workspaces". An app receives that, and the ids it needs to ask for more.
+const AppWorkspace = z.object({ id: z.string(), kind: z.enum(["personal", "organisation"]), name: z.string() }).meta({ title: "AppWorkspace" });
+const AppMe = z.object({ individual: z.object({ id: z.string(), displayName: z.string() }), workspaces: z.array(AppWorkspace) }).meta({ title: "AppMe" });
+const forSession = (ctx: RequestContext) => ctx.principal.kind === "session";
 
 function resourceRoutes(name: ResourceName): Route[] {
   const def = RESOURCES[name];
@@ -110,10 +117,10 @@ export const ROUTES: Route[] = [
   {
     method: "POST", path: "/oauth/token", summary: "OAuth 2.1 token endpoint: authorization_code with PKCE, and refresh_token", visibility: "public", scope: null, bucket: "write", output: z.record(z.string(), z.unknown()),
     admission: "open", handler: noPrincipal,
-    openHandler: async ({ store, body }) => {
+    openHandler: async ({ store, body, assertSubject }) => {
       try {
-        const tokens = body.grant_type === "authorization_code" ? await oauth.exchangeCode(store, body)
-          : body.grant_type === "refresh_token" ? await oauth.refreshTokens(store, body)
+        const tokens = body.grant_type === "authorization_code" ? await oauth.exchangeCode(store, body, assertSubject)
+          : body.grant_type === "refresh_token" ? await oauth.refreshTokens(store, body, assertSubject)
           : (() => { throw new oauth.OAuthError("unsupported_grant_type"); })();
         return Response.json(tokens, { headers: { "Cache-Control": "no-store" } });
       } catch (e) { return oauthError(e); }
@@ -128,20 +135,22 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    method: "POST", path: "/oauth/authorize", summary: "The signed-in person allows an app. Never reachable with a delegated token.", visibility: "internal", scope: null, bucket: "write", input: oauth.AuthorizeInput, output: z.object({ redirect: z.string() }),
+    method: "POST", path: "/oauth/authorize", summary: "The signed-in person allows an app. Never reachable with a delegated token.", visibility: "internal", scope: null, bucket: "write", input: oauth.ApproveInput, output: z.object({ redirect: z.string() }),
     handler: async ({ ctx, body }) => {
       if (ctx.principal.kind !== "session") throw new LifeosError("forbidden", "Allowing an app needs the person, signed in.");
-      return { data: await oauth.approve(ctx.store, ctx.principal.individualId, oauth.AuthorizeInput.parse(body), ctx.traceId) };
+      return { data: await oauth.approve(ctx.store, ctx.principal.individualId, oauth.ApproveInput.parse(body), ctx.traceId) };
     },
   },
   {
-    method: "GET", path: "/me/connected-apps", summary: "Apps the person has allowed", visibility: "internal", scope: null, bucket: "read", output: z.object({ id: z.string(), appName: z.string(), scopes: z.array(z.string()), connectedAt: z.string() }), list: true,
-    handler: async ({ ctx }) => ({ data: await oauth.listConnectedApps(ctx.store, ctx.principal.individualId), nextCursor: null }),
+    method: "GET", path: "/me/connected-apps", summary: "Apps the person has allowed", visibility: "internal", scope: null, bucket: "read", output: z.object({ id: z.string(), appName: z.string(), workspaceName: z.string(), scopes: z.array(z.string()), connectedAt: z.string() }), list: true,
+    admission: "session", handler: noPrincipal,
+    sessionHandler: async ({ store, identity }) => ({ data: await oauth.listConnectedApps(store, identity) }),
   },
   {
     method: "POST", path: "/me/connected-apps/:id/disconnect", summary: "End an app's access", visibility: "internal", scope: null, bucket: "write", input: z.object({}).strict(), output: z.object({ disconnected: z.boolean() }),
-    handler: async ({ ctx, params }) => {
-      await oauth.disconnectApp(ctx.store, ctx.principal.individualId, params.id);
+    admission: "session", handler: noPrincipal,
+    sessionHandler: async ({ store, identity, params }) => {
+      await oauth.disconnectApp(store, identity, params.id);
       return { data: { disconnected: true } };
     },
   },
@@ -176,9 +185,10 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    method: "GET", path: "/me", summary: "The caller and their workspaces", visibility: "internal", scope: "profile:read", bucket: "read", output: MeOutput,
+    method: "GET", path: "/me", summary: "The caller and their workspaces", visibility: "internal", scope: "profile:read", bucket: "read", output: MeOutput, publicOutput: AppMe,
     handler: async ({ ctx }) => {
       const me = await svc.getMe(ctx);
+      if (!forSession(ctx)) return { data: AppMe.parse({ individual: camelRow(me.individual), workspaces: me.workspaces.map(camelRow) }) };
       return { data: { individual: presentIndividual(me.individual), entitlements: me.entitlements.map(r => EntitlementV1.parse(camelRow(r))), workspaces: me.workspaces.map(presentWorkspace) } };
     },
   },
@@ -187,8 +197,11 @@ export const ROUTES: Route[] = [
     handler: async ({ ctx, body }) => ({ data: presentIndividual(await svc.updateMe(ctx, body)) }),
   },
   {
-    method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of", visibility: "internal", scope: "profile:read", bucket: "read", output: WorkspaceV1, list: true,
-    handler: async ({ ctx }) => ({ data: (await svc.listWorkspaces(ctx)).map(presentWorkspace), nextCursor: null }),
+    method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of. An app sees only the one workspace it was approved for.", visibility: "internal", scope: "profile:read", bucket: "read", output: WorkspaceV1, publicOutput: AppWorkspace, list: true,
+    handler: async ({ ctx }) => {
+      const rows = await svc.listWorkspaces(ctx);
+      return { data: forSession(ctx) ? rows.map(presentWorkspace) : rows.map(r => AppWorkspace.parse(camelRow(r))), nextCursor: null };
+    },
   },
   {
     method: "GET", path: "/workspaces/:ws", summary: "One workspace", visibility: "internal", scope: null, bucket: "read", output: WorkspaceV1,
@@ -197,6 +210,10 @@ export const ROUTES: Route[] = [
   {
     method: "GET", path: "/workspaces/:ws/members", summary: "Members, for a workspace owner or admin", visibility: "internal", scope: "workspaces:manage", bucket: "read", output: MembershipV1, list: true,
     handler: async ({ ctx, params }) => ({ data: (await svc.listMembers(ctx, params.ws)).map(presentMember), nextCursor: null }),
+  },
+  {
+    method: "POST", path: "/workspaces/:ws/members/:id/remove", summary: "An organisation ends someone's access to this workspace. Their private records stay theirs.", visibility: "internal", scope: "workspaces:manage", bucket: "write", input: z.object({}).strict(), output: RefsOutput,
+    handler: async ({ ctx, params }) => changed(await svc.removeMember(ctx, params.ws, params.id)),
   },
   {
     method: "POST", path: "/workspaces/:ws/leave", summary: "Leave an organisation workspace. The personal workspace is untouched.", visibility: "internal", scope: "workspaces:leave", bucket: "write", input: z.object({}).strict(), output: RefsOutput,

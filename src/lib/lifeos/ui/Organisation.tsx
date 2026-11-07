@@ -11,11 +11,15 @@ import styles from "./lifeos.module.css";
 type Tenant = { id: string; name: string; version: number; branding: { productName?: string; primaryColor?: string; logoUrl?: string } };
 type Domain = { id: string; hostname: string; status: string; verificationToken: string; version: number };
 type Invitation = { id: string; email: string; role: string; expiresAt: string; version: number };
+type Member = { id: string; individualId: string; role: string; status: string };
+type Name = { individualId: string; displayName: string };
 
 export function Organisation({ l }: { l: Lifeos }) {
   const [tenant, setTenant] = useState<Tenant | null>(null);
   const [domains, setDomains] = useState<Domain[]>([]);
   const [invites, setInvites] = useState<Invitation[]>([]);
+  const [members, setMembers] = useState<Member[]>([]);
+  const [names, setNames] = useState<Name[]>([]);
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -24,12 +28,14 @@ export function Organisation({ l }: { l: Lifeos }) {
 
   const load = useCallback(async () => {
     if (!tenantId || !l.workspaceId) return;
-    const [t, d, i] = await Promise.all([
+    const [t, d, i, m, n] = await Promise.all([
       get<Tenant>(`/tenants/${tenantId}`).catch(() => null),
       get<Domain[]>(`/tenants/${tenantId}/domains`).catch(() => []),
       get<Invitation[]>(`/workspaces/${l.workspaceId}/invitations`).catch(() => []),
+      get<Member[]>(`/workspaces/${l.workspaceId}/members`).catch(() => []),
+      get<Name[]>(`/workspaces/${l.workspaceId}/directory`).catch(() => []),
     ]);
-    setTenant(t); setDomains(d); setInvites(i);
+    setTenant(t); setDomains(d); setInvites(i); setMembers(m); setNames(n);
   }, [tenantId, l.workspaceId]);
   // eslint-disable-next-line react-hooks/set-state-in-effect -- reads the API when the workspace changes
   useEffect(() => { void load(); }, [load]);
@@ -77,6 +83,22 @@ export function Organisation({ l }: { l: Lifeos }) {
             </div>
           ))}
           <p className={styles.muted}>Administrators cannot read a member&apos;s private records. A member chooses what to share.</p>
+          <h3>People</h3>
+          {members.filter(m => m.status === "active").map(m => {
+            const name = names.find(n => n.individualId === m.individualId)?.displayName ?? "Member";
+            return (
+              <div key={m.id} className={styles.row}>
+                <span>{name} · {m.role}</span>
+                {m.role !== "owner" && m.individualId !== l.me?.id && (
+                  <button disabled={busy} onClick={() => {
+                    if (window.confirm(`Remove ${name} from this organisation? Access they gave and received here ends. Their private records stay theirs.`)) {
+                      void run(() => post(`/workspaces/${l.workspaceId}/members/${m.id}/remove`, {}));
+                    }
+                  }}>Remove</button>
+                )}
+              </div>
+            );
+          })}
         </div>
         {tenant ? (
           <div>
