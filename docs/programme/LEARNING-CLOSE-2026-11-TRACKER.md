@@ -500,7 +500,7 @@ These are not directive rows. They are recorded here so nothing is held only in 
 | Notes inside teaching | #339 (7 Nov 05:50) | follows the Notebook and teaching switches | none |
 | SCHOLAR-RESEARCH-TEACH-001 phase 1 | #331 (7 Nov 05:52) | `scholar_teach_research`, no production row (off). Owner: automatic research off in production | none |
 | Local time zones | #334 (7 Nov 05:53) | `scholar_reader_time_zone`, off. Never run signed in on a real session | none |
-| Whole-slide rendering A to D | #333, #336, #337, #338 (7 Nov 05:55 to 06:20) | whole-slide switch off. Keep off (reliability, see the readiness table) | 1010: **not applied in production** |
+| Whole-slide rendering A to D | #333, #336, #337, #338 (7 Nov 05:55 to 06:20) | `scholar_whole_slides` (slides #333 and PDF pages #336, per the PR text), `scholar_word_pictures` (Word pictures #337); both off with no production row. #338 (charts) is a decision with no code beyond piece A, so it uses the same key. Keep off (reliability, see the readiness table) | 1010: **not applied in production** |
 
 **Not merged:**
 

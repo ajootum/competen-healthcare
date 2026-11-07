@@ -12,7 +12,7 @@
 | 4 | Notes inside teaching | #339 | Merged, live, switch off | **Completed** |
 | 5 | Research-grounded teaching, phase 1 | #331 | Merged, live. `scholar_teach_research` has no production row, so it is off | **Completed** |
 | 6 | Local time zones | #334 | Merged, live, switch off. Never run signed in on a real session | **Completed** (not proven signed in) |
-| 7 | Whole-slide rendering, pieces A to D | #333, #336, #337, #338 | Merged, live, switch off. See rows 10 and 11 | **Completed** (code), reliability open |
+| 7 | Whole-slide rendering, pieces A to D | #333, #336, #337, #338 | Merged, live. `scholar_whole_slides` (slides, and PDF pages per #336's PR text) and `scholar_word_pictures` (Word) are off, no production row. #338 (charts) adds no code beyond piece A. See rows 10 and 11 | **Completed** (code), reliability open |
 | 8 | Challenge me / Ask me fix | #335 | Live since 7 Nov 00:59 EAT | **Completed** |
 | 9 | Integrated Growth and Development journey (step 8), `main` 74672f45 | journey report | No blockers. 16 of 18 lines pass (two fail, same cause, row 10) | **Completed**, one should-fix |
 | 10 | **Should-fix:** a restored reading place is lost when saved teaching arrives after it (notes panel folds again; a control below the teaching is pushed about 7,800 px away) | journey 5d, 5e | Seen in every run that watched it. Notes, position and lesson are intact. Dev-server timing; not measured on production. Fix in progress | **Failed** |
