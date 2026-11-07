@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aliasFonts, claimDecision, layoutMatters, renderPath, renderRowOf, pdfPagesToDraw, renderState, RENDER_MAX_ATTEMPTS, RENDER_STALE_MS, slidePageMap, slidesToDraw } from "./slide-render";
+import { addCpuSample, admission, aliasFonts, claimDecision, cpuStalled, layoutMatters, mergeUnits, renderPath, renderRowOf, renderTestHook, pdfPagesToDraw, renderState, RENDER_MAX_ATTEMPTS, RENDER_STALE_MS, RENDER_STALL_WINDOW_MS, slidePageMap, slidesToDraw } from "./slide-render";
 import { parseVisualKey, preferWhole, wholeSlideVisual, type Visual } from "./material-visuals";
 import type { DeckScan } from "./material-visuals";
 import type { SlideFacts } from "./slide-classify";
@@ -175,5 +175,88 @@ describe("a drawn PDF page", () => {
   it("says it is the whole page", () => {
     const w = wholeSlideVisual({ n: 3, sha: "abcdefabcdefabcd", width: 1920, height: 2717, bytes: 9 }, { unit: "page" });
     expect(w).toMatchObject({ unit: "page", whole: true, kind: "webp", caption: "Page 3 · the whole page from your file" });
+  });
+});
+
+describe("the stall watchdog's rule", () => {
+  const at = (s: number, cpuS: number) => ({ atMs: s * 1000, cpuMs: cpuS * 1000 });
+  const feed = (xs: { atMs: number; cpuMs: number }[]) => xs.reduce<{ atMs: number; cpuMs: number }[]>((kept, s) => addCpuSample(kept, s), []);
+  it("a job just started is never stalled, however idle", () => {
+    expect(cpuStalled(feed([at(0, 0), at(10, 0), at(28, 0)]))).toBe(false);
+  });
+  it("a full window under the floor is stalled", () => {
+    expect(cpuStalled(feed([at(0, 5), at(10, 5.5), at(20, 6), at(30, 6.5)]))).toBe(true);
+  });
+  it("slow but working is not stalled: a large deck may take minutes", () => {
+    const xs = Array.from({ length: 100 }, (_, i) => at(i * 2, i * 0.4));
+    expect(cpuStalled(feed(xs))).toBe(false);
+  });
+  it("a stall after a busy start is seen, whatever was used before it", () => {
+    const busy = Array.from({ length: 11 }, (_, i) => at(i * 2, i * 2));
+    const idle = Array.from({ length: 17 }, (_, i) => at(22 + i * 2, 20));
+    expect(cpuStalled(feed([...busy, ...idle]))).toBe(true);
+  });
+  it("working again before the window ends is not a stall", () => {
+    expect(cpuStalled(feed([at(0, 5), at(20, 5), at(30, 12)]))).toBe(false);
+  });
+  it("a process ending makes the count start again, not a false stall", () => {
+    const kept = addCpuSample(feed([at(0, 50), at(30, 90)]), at(32, 2));
+    expect(kept).toEqual([at(32, 2)]);
+    expect(cpuStalled(kept)).toBe(false);
+  });
+  it("keeps a bounded number of samples", () => {
+    const xs = Array.from({ length: 200 }, (_, i) => at(i * 2, i * 2));
+    expect(feed(xs).length).toBeLessThan(RENDER_STALL_WINDOW_MS / 2000 + 3);
+  });
+});
+
+describe("how many jobs run at once", () => {
+  const job = (materialId: string, userId: string, claimedAt: string) => ({ materialId, userId, claimedAt });
+  it("one job per learner", () => {
+    const jobs = [job("m1", "a", "2026-01-01T00:00:00.000Z"), job("m2", "a", "2026-01-01T00:00:01.000Z")];
+    expect(admission(jobs, { materialId: "m1", userId: "a" }, 5)).toBe("go");
+    expect(admission(jobs, { materialId: "m2", userId: "a" }, 5)).toBe("learner");
+  });
+  it("no more than the platform's limit, oldest first", () => {
+    const jobs = [job("m1", "a", "2026-01-01T00:00:00.000Z"), job("m2", "b", "2026-01-01T00:00:01.000Z"), job("m3", "c", "2026-01-01T00:00:02.000Z")];
+    expect(admission(jobs, { materialId: "m2", userId: "b" }, 2)).toBe("go");
+    expect(admission(jobs, { materialId: "m3", userId: "c" }, 2)).toBe("platform");
+  });
+  it("two claimed in the same millisecond agree on who goes", () => {
+    const same = "2026-01-01T00:00:00.000Z";
+    const jobs = [job("m9", "b", same), job("m1", "a", same)];
+    expect(admission(jobs, { materialId: "m1", userId: "a" }, 1)).toBe("go");
+    expect(admission([...jobs].reverse(), { materialId: "m9", userId: "b" }, 1)).toBe("platform");
+  });
+  it("a limit below one still lets one run", () => {
+    expect(admission([job("m1", "a", "x")], { materialId: "m1", userId: "a" }, 0)).toBe("go");
+  });
+});
+
+describe("what a retry keeps", () => {
+  const unit = (n: number, sha: string) => ({ n, sha, path: `u/render-m-${n}-${sha}.webp`, width: 1, height: 1, bytes: 1 });
+  it("one record per slide, in slide order, the later drawing winning", () => {
+    expect(mergeUnits([unit(3, "a"), unit(1, "a")], [unit(1, "b"), unit(2, "a")]).map(u => `${u.n}${u.sha}`)).toEqual(["1b", "2a", "3a"]);
+  });
+  it("attempts stay inside what the table allows", () => {
+    expect(RENDER_MAX_ATTEMPTS).toBeLessThanOrEqual(3);
+  });
+  it("a row is only called dead once no function can still be running it", () => {
+    expect(RENDER_STALE_MS).toBeGreaterThan(300_000);
+  });
+});
+
+describe("the forced stall and kill", () => {
+  const on = { VERCEL_ENV: "preview", SCHOLAR_RENDER_TEST_HOOKS: "1" };
+  it("works only on a preview that asked for it", () => {
+    expect(renderTestHook("x render-test-stall-2 render-test-kill-3.pptx", on)).toEqual({ stallTries: 2, killAfterSlides: 3 });
+    expect(renderTestHook("x.pptx", on)).toEqual({ stallTries: 0, killAfterSlides: 0 });
+  });
+  it("can never run in production, or anywhere else", () => {
+    const name = "render-test-kill-3.pptx";
+    expect(renderTestHook(name, { VERCEL_ENV: "production", SCHOLAR_RENDER_TEST_HOOKS: "1" })).toBeNull();
+    expect(renderTestHook(name, { SCHOLAR_RENDER_TEST_HOOKS: "1" })).toBeNull();
+    expect(renderTestHook(name, { VERCEL_ENV: "preview" })).toBeNull();
+    expect(renderTestHook(name, {})).toBeNull();
   });
 });

@@ -46,7 +46,8 @@ export function loadVisuals(materialId: string): Promise<VisualsReply | null> {
 // ── WHOLE SLIDES (SCHOLAR-VISUAL-001 phase 2): opening a presentation asks for its slides to be drawn, at most once; the server decides. The original
 // pictures show meanwhile. One quiet check per material per half minute swaps each slide in when it is ready, and stops after a few minutes.
 const CHECK_EVERY_MS = 30_000;
-const CHECKS_MAX = 12;
+// Long enough to outlast a job that died (six minutes), ask again, and see the retry finish.
+const CHECKS_MAX = 16;
 const listeners = new Map<string, Set<(reply: VisualsReply) => void>>();
 const roundsLeft = new Map<string, number>();
 const waiting = new Set<string>();

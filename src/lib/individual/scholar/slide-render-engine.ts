@@ -2,7 +2,8 @@ import { spawn } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { RENDER_MAX_HEIGHT, RENDER_WIDTH } from "./slide-render";
+import { RENDER_LOW_MEMORY_MB, RENDER_MAX_HEIGHT, RENDER_WATCH_EVERY_MS, RENDER_WIDTH, addCpuSample, cpuStalled, type CpuSample } from "./slide-render";
+import { availableMb, treeCpuMs } from "./slide-render-mem";
 
 // ── DRAWING A DECK, ON OUR OWN FUNCTION ── SCHOLAR-VISUAL-001 phase 2 ───────────────────────────────────────────────────
 //
@@ -17,14 +18,15 @@ import { RENDER_MAX_HEIGHT, RENDER_WIDTH } from "./slide-render";
 
 /** Why a job did not produce a drawing. A short code, stored on the row: never any of the file's content. */
 export class RenderError extends Error {
-  constructor(public code: "engine_missing" | "engine_failed" | "timed_out") { super(code); }
+  constructor(public code: "engine_missing" | "engine_failed" | "timed_out" | "stalled" | "memory_low") { super(code); }
 }
 
 /**
- * Runs the engine in its own process, with no secrets in its environment, for at most `budgetMs`. A plain `node <file>` on purpose: the file is not part of the
+ * Runs the engine in its own process, with no secrets in its environment, for at most `budgetMs`, and stops it early if it has stopped working or
+ * free memory has run low, so that a stalled job ends cleanly here and is not left to take the instance down. A plain `node <file>` on purpose: the file is not part of the
  * app's bundle (a bundler resolves the argument of child_process.fork as a module, and fails the build), and every path to the engine lives inside it.
  */
-function runWorker(job: string, budgetMs: number): Promise<void> {
+function runWorker(job: string, budgetMs: number, opts: DeckOptions): Promise<void> {
   const app = process.cwd();
   const env: NodeJS.ProcessEnv = { NODE_ENV: "production", RENDER_APP: app, RENDER_JOB: job, RENDER_TMP: tmpdir(), HOME: job, TMPDIR: job, PATH: process.env.PATH };
   // Local development only: where the engine package is, when it is not in this checkout's node_modules.
@@ -39,10 +41,26 @@ function runWorker(job: string, budgetMs: number): Promise<void> {
         if (process.platform !== "win32" && child.pid) process.kill(-child.pid, "SIGKILL"); else child.kill("SIGKILL");
       } catch { /* already gone */ }
     };
-    const timer = setTimeout(() => { killAll(); reject(new RenderError("timed_out")); }, budgetMs);
-    child.once("error", () => { clearTimeout(timer); killAll(); reject(new RenderError("engine_failed")); });
+    let samples: CpuSample[] = [];
+    const stop = () => { clearTimeout(timer); clearInterval(watch); if (test) clearTimeout(test); };
+    const fail = (code: RenderError["code"]) => { stop(); killAll(); reject(new RenderError(code)); };
+    const timer = setTimeout(() => fail("timed_out"), budgetMs);
+    // Where /proc cannot be read (a development machine) there is no watch, and the budget alone bounds the job.
+    const watch = setInterval(() => {
+      if (!child.pid) return;
+      const cpuMs = treeCpuMs(child.pid);
+      if (cpuMs !== null) {
+        samples = addCpuSample(samples, { atMs: Date.now(), cpuMs });
+        if (cpuStalled(samples)) { fail("stalled"); return; }
+      }
+      const free = availableMb();
+      if (free !== null && free < RENDER_LOW_MEMORY_MB) fail("memory_low");
+    }, RENDER_WATCH_EVERY_MS);
+    // A preview's forced stall: the engine stops running, exactly as the stall that was observed, while staying in memory.
+    const test = opts.stallAfterMs ? setTimeout(() => { try { if (child.pid) process.kill(-child.pid, "SIGSTOP"); } catch { /* already gone */ } }, opts.stallAfterMs) : null;
+    child.once("error", () => fail("engine_failed"));
     child.once("exit", code => {
-      clearTimeout(timer);
+      stop();
       killAll();
       if (code === 0) resolve();
       else reject(new RenderError(code === 3 ? "engine_missing" : "engine_failed"));
@@ -50,12 +68,14 @@ function runWorker(job: string, budgetMs: number): Promise<void> {
   });
 }
 
+export type DeckOptions = { stallAfterMs?: number };
+
 /** The deck as a PDF, with its fonts named for the engine. `aliased` is a working copy: the stored file is never written to. */
-export async function deckToPdf(aliased: Uint8Array, budgetMs: number): Promise<Uint8Array> {
+export async function deckToPdf(aliased: Uint8Array, budgetMs: number, opts: DeckOptions = {}): Promise<Uint8Array> {
   const job = await mkdtemp(join(tmpdir(), "scholar-render-job-"));
   try {
     await writeFile(join(job, "in.pptx"), aliased);
-    await runWorker(job, budgetMs);
+    await runWorker(job, budgetMs, opts);
     return new Uint8Array(await readFile(join(job, "out.pdf")));
   } finally {
     await rm(job, { recursive: true, force: true }).catch(() => {});

@@ -25,9 +25,20 @@ export const RENDER_WIDTH = 1920;
 export const RENDER_MAX_HEIGHT = 6000;
 /** The whole job, against the route's 300 s. */
 export const RENDER_BUDGET_MS = 280_000;
-/** A row still "running" after this long died with its function. */
-export const RENDER_STALE_MS = 10 * 60_000;
-export const RENDER_MAX_ATTEMPTS = 2;
+/** A row still "running" after this long died with its function: longer than the route's 300 s, so no job can still be alive. */
+export const RENDER_STALE_MS = 6 * 60_000;
+/** Jobs for one file, whatever ended them. The table's own check allows three. */
+export const RENDER_MAX_ATTEMPTS = 3;
+/** Engine starts within one job. A second start is only worth it where the first stopped working, and only with this much of the budget left. */
+export const RENDER_ENGINE_TRIES = 2;
+export const RENDER_RETRY_MIN_MS = 60_000;
+/** How often the engine is checked while it converts. */
+export const RENDER_WATCH_EVERY_MS = 2000;
+/** The engine is stalled when it has used under 10% of one CPU for this long. A working engine uses all of one: a slow deck is not a stalled one. */
+export const RENDER_STALL_WINDOW_MS = 30_000;
+export const RENDER_STALL_MIN_CPU_MS = 3000;
+/** Stop the engine with less than this free. A healthy run at 2 GB has been seen at 215 MB free, and an instance killed for memory takes other requests with it. */
+export const RENDER_LOW_MEMORY_MB = 120;
 /** The most slide parts a deck is taken to number; matches the upload's own slide cap. */
 const MAX_NUMBER = 99_999;
 
@@ -136,6 +147,52 @@ export function claimDecision(row: Pick<RenderRow, "status" | "attempts" | "clai
   if (row.attempts >= RENDER_MAX_ATTEMPTS) return row.status === "running" && !stale ? "running" : "finished";
   if (!stale) return row.status === "running" ? "running" : "finished";
   return "reclaim";
+}
+
+export type CpuSample = { atMs: number; cpuMs: number };
+/** Pure. Keeps enough samples to judge the window. CPU time going backwards means a process in the tree ended, so the count starts again. */
+export function addCpuSample(samples: readonly CpuSample[], next: CpuSample): CpuSample[] {
+  const last = samples[samples.length - 1];
+  if (last && next.cpuMs < last.cpuMs) return [next];
+  const kept = [...samples, next];
+  const from = kept.findLastIndex(s => s.atMs <= next.atMs - RENDER_STALL_WINDOW_MS);
+  return from > 0 ? kept.slice(from) : kept;
+}
+/** Pure. True only with a full window on record: a job that has just started is never stalled. */
+export function cpuStalled(samples: readonly CpuSample[]): boolean {
+  const last = samples[samples.length - 1];
+  const first = samples[0];
+  if (!last || !first || last.atMs - first.atMs < RENDER_STALL_WINDOW_MS) return false;
+  return last.cpuMs - first.cpuMs < RENDER_STALL_MIN_CPU_MS;
+}
+
+export type RunningJob = { materialId: string; userId: string; claimedAt: string };
+/**
+ * Pure. Whether this job may run, given every job running with it, itself included. Oldest first, so requests that raced each other agree on who goes: one job
+ * per learner, and no more than `max` on the platform. A job told no gives its claim back and the page asks again later.
+ */
+export function admission(jobs: readonly RunningJob[], me: Pick<RunningJob, "materialId" | "userId">, max: number): "go" | "learner" | "platform" {
+  const order = [...jobs].sort((a, b) => a.claimedAt.localeCompare(b.claimedAt) || a.materialId.localeCompare(b.materialId));
+  const firstOfLearner = order.find(j => j.userId === me.userId);
+  if (firstOfLearner && firstOfLearner.materialId !== me.materialId) return "learner";
+  return order.findIndex(j => j.materialId === me.materialId) < Math.max(1, max) ? "go" : "platform";
+}
+
+/** Pure. What a retry keeps: one unit per slide, the later drawing of a slide replacing the earlier. A retry can never make two records of one slide. */
+export function mergeUnits(prior: readonly RenderUnit[], next: readonly RenderUnit[]): RenderUnit[] {
+  const byN = new Map<number, RenderUnit>();
+  for (const u of [...prior, ...next]) byN.set(u.n, u);
+  return [...byN.values()].sort((a, b) => a.n - b.n);
+}
+
+/**
+ * Pure. On a preview that asked for it, a test copy named so makes the job stall or die, to prove what happens then. Nothing else can turn this on, and
+ * it is null everywhere but a Vercel preview with SCHOLAR_RENDER_TEST_HOOKS=1, so it can never run in production.
+ */
+export function renderTestHook(fileName: string, env: Record<string, string | undefined> = process.env): { stallTries: number; killAfterSlides: number } | null {
+  if (env.VERCEL_ENV !== "preview" || env.SCHOLAR_RENDER_TEST_HOOKS !== "1") return null;
+  const n = (word: string) => Number(new RegExp(`render-test-${word}-(\\d+)`).exec(fileName)?.[1] ?? 0);
+  return { stallTries: n("stall"), killAfterSlides: n("kill") };
 }
 
 /** Pure. The state the page is told, from the policy, whether drawing is possible, and the row. */

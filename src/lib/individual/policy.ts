@@ -79,7 +79,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
-  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words" | "scholar_whole_slides_max"
+  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words" | "scholar_whole_slides_max" | "scholar_whole_slides_concurrent"
   | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max" | "scholar_next_best_action_max"
   | "scholar_learning_state_min_evidence" | "scholar_learning_state_distinct_questions" | "scholar_learning_state_delay_days" | "scholar_learning_state_stale_days"
   | "scholar_adaptive_reteach_max" | "scholar_adaptive_prerequisite_misses"
@@ -2144,6 +2144,13 @@ export const POLICIES: readonly PolicyDef[] = [
     limitReason: "One to 150. Each slide takes about a second, and the whole job has five minutes. Default: 80.",
   },
   {
+    key: "scholar_whole_slides_concurrent", kind: "int", product: "Scholar", unit: "files",
+    label: "Whole slides and pages: most files drawn at once",
+    help: "The most files being drawn at the same time, across all students. One student is always limited to one. A student over the limit keeps seeing the original pictures, and the page asks again.",
+    fallback: 3, min: 1, max: 20,
+    limitReason: "One to 20. Each file being drawn holds most of one server's memory. Default: 3.",
+  },
+  {
     key: "scholar_lesson_visuals_max_per_section", kind: "int", product: "Scholar", unit: "pictures",
     label: "Lesson pictures: most shown with a lesson",
     help: "The most original pictures shown under one lesson section. The rest stay one tap away in the slide's own view.",
@@ -2786,6 +2793,7 @@ export type IndividualPolicy = {
   /** SCHOLAR-VISUAL-001 phase 2, piece C. */
   scholarWordPictures: "on" | "off";
   scholarWholeSlidesMax: number;
+  scholarWholeSlidesConcurrent: number;
   /** PLP-01..04: My Plan. */
   scholarMyPlan: "on" | "off";
   /** Private module development access: who may see Courses & Training and My Competencies. Closed unless HQ publishes otherwise. */
@@ -3025,6 +3033,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarVisualTextWords: int("scholar_visual_text_words"),
     scholarWholeSlides: clampChoice(policyDef("scholar_whole_slides") as ChoicePolicy, published.get(policyPath("scholar_whole_slides"))) as "on" | "off",
     scholarWholeSlidesMax: int("scholar_whole_slides_max"),
+    scholarWholeSlidesConcurrent: int("scholar_whole_slides_concurrent"),
     scholarWordPictures: clampChoice(policyDef("scholar_word_pictures") as ChoicePolicy, published.get(policyPath("scholar_word_pictures"))) as "on" | "off",
     scholarMyPlan: clampChoice(policyDef("scholar_my_plan") as ChoicePolicy, published.get(policyPath("scholar_my_plan"))) as "on" | "off",
     scholarModuleAccess: {
