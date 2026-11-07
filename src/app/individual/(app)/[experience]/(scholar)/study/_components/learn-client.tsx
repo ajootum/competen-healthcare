@@ -112,7 +112,7 @@ type ExternalRef = { tag: string | null; provider: string; title: string; journa
   notUsed?: keyof typeof RECOVERY_NOT_USED_LABEL | null;
   /** SCHOLAR-RESEARCH-TEACH-001: what kind of work it is, and the open-access copy PubMed Central knows of, if any. */
   studyKind?: string; openAccess?: { url: string; licence: string | null } | null };
-type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string; excludedCount?: number;
+type ResearchReply = { state: string; label: string; message: string | null; query?: string | null; scholarLink?: string | null; selfSearch?: { label: string; url: string }[]; references: ExternalRef[]; text?: string; cited?: number[]; withheld?: string; excludedCount?: number;
   /** SCHOLAR-RESEARCH-TEACH-001: a lesson written from the notes and an evidence pack. Its references are under "Scientific evidence and references". */
   integrated?: boolean; notice?: string | null; accessNote?: string | null; endorsementNote?: string | null };
 const MODE_KEY = "scholar.learn.mode";
@@ -2267,6 +2267,12 @@ function ResearchBlock({ x }: { x: ResearchReply }) {
           <p className="text-[12px] text-gray-600">{x.text ? "Other verified sources found for this topic. They do not support the summary above." : "Verified sources found for this topic. No research summary is shown, so none of these supports an answer."}</p>
           <ul className="mt-1 space-y-2">{further.map(r => <li key={r.url}><ExternalRefLine r={{ ...r, tag: null, excerpt: null }} /></li>)}</ul>
         </div>
+      )}
+      {!!x.selfSearch?.length && (
+        <p className="mt-2 text-[12px] text-gray-700">
+          Search yourself:{" "}
+          {x.selfSearch.map((s, i) => <span key={s.url}>{i > 0 && ", "}<a href={s.url} target="_blank" rel="noopener noreferrer" className={`font-semibold underline underline-offset-2 ${focusRing}`}>{s.label}</a></span>)} (opens outside Competen; nothing from this lesson is sent)
+        </p>
       )}
       {x.scholarLink && (
         <p className="mt-2 text-[12px] text-gray-700">

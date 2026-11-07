@@ -23,7 +23,7 @@ export type LessonContext = { title?: string | null; objective?: string | null; 
 export type Concept = { text: string; tokens: string[]; phrase: boolean; alts?: string[][]; idea?: boolean };
 
 /** Function words and lesson-instruction words: never a concept, and skipped when looking for a phrase. */
-const FUNCTION_WORDS: ReadonlySet<string> = new Set((
+export const FUNCTION_WORDS: ReadonlySet<string> = new Set((
   "the and for with from that this what when which into about their there these those have has had been were was are how why who does did can could should would will may might must not but its our your you they them than then also such each other "
   + "of in on to a an or by as at is it be if so no vs via per use used using "
   + "explain teach tell give show please help understand understanding notes note section step lesson learn learning more simply example examples summary summarise summarize deeper detail detailed "
@@ -44,7 +44,7 @@ const WEAK_WORDS: ReadonlySet<string> = new Set([
 const isGeneric = (w: string) => FUNCTION_WORDS.has(w) || GENERIC_TOPIC_WORDS.has(w) || WEAK_WORDS.has(w);
 
 /** Multi-word concepts that are one idea although their words are generic. Matched in the lesson text, in order, function words skipped. */
-const KNOWN_PHRASES: readonly string[] = [
+export const KNOWN_PHRASES: readonly string[] = [
   "structure process outcome", "quality improvement", "continuous quality improvement", "patient safety", "improvement science", "quality of care", "quality care",
   "healthcare quality", "health care quality", "quality assurance", "plan do study act", "root cause analysis", "clinical governance", "clinical audit",
   "evidence based practice", "evidence based medicine", "infection prevention", "infection control", "person centred care", "patient centred care", "patient experience",

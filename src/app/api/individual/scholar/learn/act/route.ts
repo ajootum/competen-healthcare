@@ -772,7 +772,7 @@ ${rr.text}` : notes, background: bg?.ok ? bg.text : null, flags: r.flags.kept,
     // COMPETEN-RESEARCH-01: external research, apart from the notes, with the providers' own records. Never mixed in.
     research: teachResearch && !research ? lessonEvidence(packReferences, pack?.searched ? "searched" : "cached") : research ? {
       excludedCount: research.excluded?.length ?? 0,
-      state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, references: externalReferences(research),
+      state: research.state, label: SOURCE_KIND_LABEL.research, query: research.query, scholarLink: research.scholarLink, selfSearch: research.selfSearch, references: externalReferences(research),
       message: research.message ?? (evidence.length && !rr ? "The research found did not add to this request, so nothing from it is shown." : !evidence.length && Object.keys(research.notUsed ?? {}).length ? RESEARCH_READING_ONLY
           : !evidence.length && research.items.length ? "Research found records without a verified abstract: listed as further reading only." : null),
       ...(rr ? (rr.ok ? { text: rr.text, cited: rr.cited } : { withheld: RESEARCH_WITHHELD[rr.reason] }) : {}),

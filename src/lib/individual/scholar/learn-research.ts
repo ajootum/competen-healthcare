@@ -1,7 +1,8 @@
-import { cachedResult, researchKey, researchQuery, runResearch, searchSources, type ProviderCall, type ResearchPlan, type ResearchResult } from "@/lib/holdings/research/service";
+import { cachedResult, researchKey, runResearch, searchSources, type ProviderCall, type ResearchPlan, type ResearchResult } from "@/lib/holdings/research/service";
 import { loadResearchEngine, planFor, researchOperational, researchUsage, type ResearchEngine } from "@/lib/holdings/research/load";
 import { toEvidenceRecord } from "@/lib/holdings/research/evidence";
 import { PROVIDER_LABEL, type OpenAccess, type ResearchItem } from "@/lib/holdings/research/providers";
+import { notInvocable, type Capability } from "@/lib/holdings/research/registry";
 import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 import type { IndividualContext } from "../guard";
 import type { ScholarResearchPolicy } from "../policy";
@@ -9,7 +10,8 @@ import { LEARN_RESEARCH_OPERATION, type ResearchEvidence } from "./generation";
 import { audit } from "./http";
 import { TYPED_QUESTIONS_MAY_LEAVE } from "./ask-sources";
 import { DEFAULT_QUALITY, gateResearch, queryKeywords, type EvidenceQuality, type NotUsedByIndex, type NotUsedReason } from "./source-quality";
-import { DEFAULT_RELEVANCE, buildResearchQuery, declaresIrrelevant, exclusionReason, lessonConcepts, lessonVocabulary, rankRelevant, scoreRelevance, type ExcludedSource, type LessonContext, type RelevanceLevel } from "./research-relevance";
+import { DEFAULT_RELEVANCE, declaresIrrelevant, exclusionReason, lessonConcepts, lessonVocabulary, rankRelevant, scoreRelevance, type ExcludedSource, type LessonContext, type RelevanceLevel } from "./research-relevance";
+import { isSubjectQuery, subjectKeywords, subjectQuery } from "./subject-query";
 import { LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, aiSpendToday, learnResearchToday, readResearchCache, writeResearchCache } from "./store";
 
 // ── LEARN: RESEARCH & EXPLAIN ── COMPETEN-RESEARCH-01 + ADDENDUM V2 ─────────────────────────────────────────────────────
@@ -17,8 +19,8 @@ import { LEARN_RESEARCH_AUDIT_ACTION, LEARN_RESEARCH_ENTITY, aiSpendToday, learn
 // Scholar's side of the shared Research & Evidence Engine (src/lib/holdings/research). The ENGINE decides what may run:
 // its published registry (only Active sources, through its one gate), source policy, evidence rules, budgets and the
 // Basic workflow, which must be operational. SCHOLAR decides only whether this learner may search now -- its own mode
-// setting and per-learner limits (policy.ts scholarResearch) -- and what the search is: topic keywords, screened for
-// identifiers, never the passages. The public cache is migration 570's (no user id, nothing of the learner's). The AI
+// setting and per-learner limits (policy.ts scholarResearch) -- and what the search is: subject terms from a closed
+// vocabulary (subject-query.ts), never the passages and never any other word of the lesson. The public cache is migration 570's (no user id, nothing of the learner's). The AI
 // path -- routing, eligibility, the grounding check -- is the existing Learn engine's, unchanged.
 //
 // Called only when the learner chose Research & Explain for this request. Never for every request.
@@ -30,6 +32,8 @@ export type LearnResearch = {
   message: string | null;
   query: string | null;
   scholarLink: string | null;
+  /** When no search could be sent: public sites the learner can search themselves. Plain addresses, carrying nothing. */
+  selfSearch?: SelfSearchLink[];
   items: ResearchItem[];
   /**
    * Indexes into items: the verified abstracts the model may use, in [E n] order. SCHOLAR-SOURCE-QUALITY-01: only those
@@ -61,6 +65,19 @@ const none = (state: LearnResearchState, message: string | null, codes: string[]
 
 /** SCHOLAR-RESEARCH-RELEVANCE-01: said when nothing found was directly relevant. Teaching carries on from the supported material. */
 export const NO_RELEVANT_RESEARCH = "No additional research directly relevant to this lesson was found.";
+
+/** Said when nothing was sent because the lesson holds no subject term that may leave. */
+export const NO_SAFE_QUERY = "Research was not run for this lesson: Scholar found no subject term it could safely send to outside sources. The answer below is from your notes. You can search a scholarly database yourself for the subject you want.";
+
+export type SelfSearchLink = { label: string; url: string };
+const SELF_SEARCH: readonly { id: string; capability: Capability; label: string; url: string }[] = [
+  { id: "pubmed", capability: "search", label: "PubMed", url: "https://pubmed.ncbi.nlm.nih.gov/" },
+  { id: "google_scholar_link", capability: "external_link", label: "Google Scholar", url: "https://scholar.google.com/" },
+];
+/** Pure. The sites a learner may be pointed to, as the engine's published settings allow. Never with a query on the address. */
+export const selfSearchLinks = (plan: ResearchPlan): SelfSearchLink[] => SELF_SEARCH
+  .filter(s => (s.id !== "google_scholar_link" || plan.policy.rules.scholarLink) && notInvocable(plan.registry[s.id], { product: plan.product, activity: plan.activity, capability: s.capability }) === null)
+  .map(({ label, url }) => ({ label, url }));
 
 const MESSAGE: Partial<Record<LearnResearchState, string>> = {
   not_found: NO_RELEVANT_RESEARCH,
@@ -117,17 +134,20 @@ export function withLessonScope(input: ResearchInput, scope: LessonScope | null 
 /** Pure. The lesson context relevance is judged against, for a request. */
 export const contextOf = (input: ResearchInput): LessonContext => ({ title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question });
 
+export type LessonQuery = { ok: true; query: string } | { ok: false; reason: "empty" | "identifier" | "no_safe_terms" };
+
 /**
- * SCHOLAR-RESEARCH-RELEVANCE-01. The query that leaves Competen, built from the lesson's own distinctive concepts (quoted
- * phrases first), not from generic topic words. Privacy as researchQuery: refused if the source text may identify a patient.
- * Falls back to the engine's plain keyword query when the lesson yields no concept (a question of generic words only).
+ * The query that leaves Competen. SCHOLAR-RESEARCH-RELEVANCE-01 chose the lesson's own distinctive concepts, quoted phrases
+ * first. Research Search Privacy Alignment (owner, 6 Nov 2026): only subject terms of a closed vocabulary may be in it, so
+ * a name, place, code or date in a title or topic cannot be sent (subject-query.ts). Refused outright if the source text
+ * may identify a patient. When no subject term is left, nothing is sent: there is no fallback to the lesson's other words.
  */
-export function lessonQuery(input: ResearchInput): ReturnType<typeof researchQuery> {
-  const ctx: LessonContext = { title: input.title, objective: input.objective, concepts: input.concepts, topics: input.topics, question: input.question };
+export function lessonQuery(input: ResearchInput): LessonQuery {
   const source = [input.title, input.objective, ...(input.concepts ?? []), ...input.topics.slice(0, 8), input.question].filter(Boolean).join(" ").slice(0, 1200);
+  if (!source.trim()) return { ok: false, reason: "empty" };
   if (findPatientIdentifiers(source).length) return { ok: false, reason: "identifier" };
-  const query = input.plainKeywords ? "" : buildResearchQuery(ctx);
-  return query ? { ok: true, query } : researchQuery(input);
+  const query = input.plainKeywords ? subjectKeywords(input.question) : subjectQuery(contextOf(input));
+  return query && isSubjectQuery(query) ? { ok: true, query } : { ok: false, reason: "no_safe_terms" };
 }
 
 /**
@@ -152,7 +172,13 @@ export async function learnResearch(ctx: IndividualContext, p: ScholarResearchPo
   const engine = await loadResearchEngine(ctx.admin);
   if (!p.modes.includes("research") || !researchOperational(engine, "scholar", "learn")) return none("off", "Research & Explain is not available on Scholar at the moment.", ["off"]);
   const q = lessonQuery(input);
-  if (!q.ok) return none("refused", q.reason === "identifier" ? "Research was not run: the topic looks like it identifies a patient." : "There was no topic to research.", [`query_${q.reason}`]);
+  if (!q.ok) {
+    // Counted with the searches, as a row that sent nothing, so HQ can see how often a lesson had nothing safe to send.
+    const whole = planFor(engine, "scholar", "learn");
+    await researchUsage(ctx.admin, { actionId, product: "scholar", operation: LEARN_RESEARCH_OPERATION, workflow: "basic", policy: whole.policy }).record({ provider: "query_guard", capability: "search", requests: 0, results: 0, outcome: "refused", latencyMs: 0, costUsd: 0 });
+    const message = q.reason === "identifier" ? "Research was not run: the topic looks like it identifies a patient." : q.reason === "no_safe_terms" ? NO_SAFE_QUERY : "There was no topic to research.";
+    return { ...none("refused", message, [`query_${q.reason}`]), selfSearch: selfSearchLinks(whole) };
+  }
   const plan = narrow ? narrowPlan(planFor(engine, "scholar", "learn"), narrow) : planFor(engine, "scholar", "learn");
   // A narrowing that leaves no search source runs nothing. (An EMPTY list must be caught here: searchSources reads an
   // empty list as "every Active source by priority".)

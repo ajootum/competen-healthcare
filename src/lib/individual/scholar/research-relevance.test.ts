@@ -56,9 +56,9 @@ describe("lesson concepts and the grounded query", () => {
   it("a question adds its own distinctive terms to the lesson's", () => {
     expect(buildResearchQuery({ ...LESSON, question: "How does the Donabedian model treat patient experience?" })).toMatch(/donabedian/);
   });
-  it("lessonQuery refuses text that may identify a patient and falls back to plain keywords when no concept exists", () => {
+  it("lessonQuery refuses text that may identify a patient, and sends nothing when no subject term exists", () => {
     expect(lessonQuery({ topics: [], title: "Mrs Jones NHS number 943 476 5919 has low oxygen" })).toMatchObject({ ok: false, reason: "identifier" });
-    expect(lessonQuery({ topics: ["care", "quality"], title: null })).toMatchObject({ ok: true });
+    expect(lessonQuery({ topics: ["care", "quality"], title: null })).toMatchObject({ ok: false, reason: "no_safe_terms" });
     expect(lessonQuery({ topics: [], title: null })).toMatchObject({ ok: false, reason: "empty" });
     expect(lessonQuery({ topics: [], title: LESSON.title, objective: LESSON.objective, concepts: LESSON.concepts })).toMatchObject({ ok: true, query: expect.stringContaining("donabedian") });
   });
