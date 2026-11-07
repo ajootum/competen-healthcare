@@ -4,7 +4,7 @@ import {
   parseDraft, parseNoteLink, pickReadingBox, validateCreate, validatePatch,
   linkFields,
 } from "./personal-notebook";
-import { relatedByTags } from "./personal-notebook-data";
+import { noteSectionHref, relatedByTags } from "./personal-notebook-data";
 import { notebookOffered } from "./store";
 
 const K = "11111111-1111-4111-8111-111111111111", S = "22222222-2222-4222-8222-222222222222", M = "33333333-3333-4333-8333-333333333333", C = "44444444-4444-4444-8444-444444444444";
@@ -187,5 +187,14 @@ describe("linkFields: a restored draft shows the link it will save", () => {
     expect(linkFields({ targetKind: "lesson", sessionId: "s", step: 0, materialId: null, chunkId: null })).toMatchObject({ kind: "lesson", sessionId: "s", step: "0", topic: "" });
     expect(linkFields({ targetKind: "section", materialId: "m", chunkId: "c" })).toMatchObject({ kind: "section", materialId: "m", chunkId: "c" });
     expect(linkFields({ targetKind: "material", materialId: "m" })).toMatchObject({ kind: "section", materialId: "m", chunkId: "" });
+  });
+});
+
+describe("a note's link to its section", () => {
+  it("goes to a section that can be found on arriving, and not to a Guide Me step", () => {
+    expect(noteSectionHref("study/learn?session=a#lesson-2", 2, "gd-36d2e599-s0")).toBe("study/learn?session=a#ideas-2-gd-36d2e599-s0");
+    expect(noteSectionHref("study/learn?session=a", 2, "guide-0")).toBeNull();
+    expect(noteSectionHref(null, 2, "gd-36d2e599-s0")).toBeNull();
+    expect(noteSectionHref("study/learn?session=a", 2, null)).toBeNull();
   });
 });

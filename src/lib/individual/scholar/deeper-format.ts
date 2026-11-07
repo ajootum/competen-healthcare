@@ -163,9 +163,10 @@ export function composeDeeperAnswer(p: DeeperParts): string {
  * Pure. Where a note on a round's section attaches: stable across a reopen and a device, because it comes from the round's own question, not its place in the thread.
  * COMPETEN-NOTEBOOK-001's anchor rule: lower case letters, digits, _ and -, at most forty characters, unique within the lesson.
  */
-export function deeperNoteAnchor(focus: string, section: number): string {
+export function deeperNoteAnchor(focus: string, section: number, depth: string | null = null, title: string | null = null): string {
+  const of = [focus, ...(depth ? [depth] : []), ...(title ? [title] : [])].join("|");
   let h = 0x811c9dc5;
-  for (let i = 0; i < focus.length; i++) { h ^= focus.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
+  for (let i = 0; i < of.length; i++) { h ^= of.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; }
   return `gd-${h.toString(16).padStart(8, "0")}-s${section}`;
 }
 

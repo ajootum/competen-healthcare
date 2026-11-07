@@ -159,7 +159,7 @@ export function GuideMePanel({ state, setState, run, complete, busy, disabled, c
   // A new question starts its own help: hints, an example and an explanation were for the last one.
   const retry = (newQuestion?: string) => { patch(state.current, { feedback: null, note: null, ...(newQuestion ? { question: newQuestion, answer: "", hints: [], example: null, explained: null, showExplained: false } : {}) }); setTimeout(() => box.current?.focus(), 50); };
 
-  const body = (r: GuideReply, p: DeeperParts, sectionNotes = false) => p.sections.map((s, i) => (
+  const body = (r: GuideReply, p: DeeperParts) => p.sections.map((s, i) => (
     s.kind === "memory"
       ? <div key={i} className="mt-3"><LearningCallout tone="memory" icon="bulb" emphasis="prominent" label={`Memory aid: ${s.title}`}><p><SourceChip source={s.source} /></p><Blocks blocks={s.blocks} cite={t => cite(t, r.sources ?? [])} /></LearningCallout></div>
       : (s.kind === "misconception" || s.kind === "safety")
@@ -171,7 +171,6 @@ export function GuideMePanel({ state, setState, run, complete, busy, disabled, c
               <SourceChip source={s.source} />
             </div>
             <div className="mt-1 text-[15px] leading-relaxed text-gray-800"><Blocks blocks={s.blocks} cite={t => cite(t, r.sources ?? [])} /></div>
-            {sectionNotes && <SectionNote anchor={`guide-${state.current}-s${i}`} label={s.title} chunkId={null} materialId={null} />}
           </div>
         )));
   // What is on screen decides what is said about it: a hint, an example or an explanation may be Scholar's where the teaching was not.
@@ -301,8 +300,8 @@ export function GuideMePanel({ state, setState, run, complete, busy, disabled, c
           )}
 
           <p className="mt-3 text-[12.5px] leading-snug text-gray-700">{statement}</p>
-          {/* COMPETEN-NOTEBOOK-001's My Ideas & Notes goes here, for the whole step, when it lands. */}
-          <SectionNote anchor={`guide-${state.current}`} label={parts.focus} chunkId={sources.find(s => s.tag === `S${citedTags(baseQuestion)[0]}`)?.chunkId ?? null} materialId={sources[0]?.materialId ?? null} />
+          {/* My Ideas & Notes, for the whole step. No source section: two steps citing one slide keep their notes apart. */}
+          <SectionNote anchor={`guide-${state.current}`} label={parts.focus} chunkId={null} materialId={sources[0]?.materialId ?? null} refresh />
         </>
       )}
     </section>
