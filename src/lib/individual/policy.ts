@@ -133,6 +133,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_monthly_review" | "scholar_monthly_review_mix" | "scholar_monthly_review_reminders" | "scholar_monthly_review_optout" | "scholar_study_calendar"
   | "scholar_learn_inline_recall" | "scholar_learn_inline_recall_placement" | "scholar_learn_inline_checks" | "scholar_learn_inline_application" | "scholar_learn_inline_skippable" | "scholar_learn_check_placement"
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
+  | "scholar_reader_time_zone"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
   | "scholar_lesson_visuals" | "scholar_visual_classify"
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal"
@@ -1347,6 +1348,15 @@ export const POLICIES: readonly PolicyDef[] = [
     options: [{ value: "on", label: "Offer search history" }, { value: "off", label: "Do not offer" }],
     fallback: "off",
     limitReason: "Needs migration 992 (without it the history says it is not available yet and records nothing). Keeps the learner's words and references, never an answer. Kept until the learner deletes it. Default: off.",
+  },
+  // LOCAL-TIME-ZONES (docs/design/LOCAL-TIME-ZONES.md): how Scholar writes a time, nothing about what is stored or counted.
+  {
+    key: "scholar_reader_time_zone", kind: "choice", product: "Scholar",
+    label: "Times in the learner's own time zone",
+    help: "Whether Scholar shows when a learner saved, answered or started something in that learner's own time zone, named beside the time (23:22 EAT). The zone comes from the learner's own choice in Settings, then their device, then their connection, then Africa/Kampala. Calendar days such as an exam date stay as they are.",
+    options: [{ value: "on", label: "Show in the learner's zone" }, { value: "off", label: "Show as before" }],
+    fallback: "off",
+    limitReason: "Changes display only. A learner's streak, their today and every stored time stay as they are. Turning it on sets one device cookie holding the zone name, so check the privacy notice first. Default: off.",
   },
   // SCHOLAR-INLINE-CHECKS-01 (owner GO, 1 Nov 2026): short checks INSIDE the scrolling lesson. No new stage, engine or AI call: the
   // recall card reads the saved lesson, the quick check reads a stored question (writing one stays the learner's click), the
@@ -2617,6 +2627,8 @@ export type IndividualPolicy = {
   /** SCHOLAR-SEARCH-HISTORY-01: My Search History in the library (migration 992). Default off. */
   scholarPersonalNotebook: "on" | "off";
   scholarSearchHistory: "on" | "off";
+  /** LOCAL-TIME-ZONES: Scholar times in the learner's own zone. Display only. Default off. */
+  scholarReaderTimeZone: "on" | "off";
   scholarGlobalSearch: "on" | "off";
   /** SEARCH-STANDARD-01: Global Search across Professional. Default off. */
   professionalGlobalSearch: "on" | "off";
@@ -2881,6 +2893,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarActiveNotebook: clampChoice(policyDef("scholar_active_notebook") as ChoicePolicy, published.get(policyPath("scholar_active_notebook"))) as "on" | "off",
     scholarPersonalNotebook: clampChoice(policyDef("scholar_personal_notebook") as ChoicePolicy, published.get(policyPath("scholar_personal_notebook"))) as "on" | "off",
     scholarSearchHistory: clampChoice(policyDef("scholar_search_history") as ChoicePolicy, published.get(policyPath("scholar_search_history"))) as "on" | "off",
+    scholarReaderTimeZone: clampChoice(policyDef("scholar_reader_time_zone") as ChoicePolicy, published.get(policyPath("scholar_reader_time_zone"))) as "on" | "off",
     scholarGlobalSearch: clampChoice(policyDef("scholar_global_search") as ChoicePolicy, published.get(policyPath("scholar_global_search"))) as "on" | "off",
     professionalGlobalSearch: clampChoice(policyDef("professional_global_search") as ChoicePolicy, published.get(policyPath("professional_global_search"))) as "on" | "off",
     scholarLearnInlineRecall: clampChoice(policyDef("scholar_learn_inline_recall") as ChoicePolicy, published.get(policyPath("scholar_learn_inline_recall"))) as "on" | "off",

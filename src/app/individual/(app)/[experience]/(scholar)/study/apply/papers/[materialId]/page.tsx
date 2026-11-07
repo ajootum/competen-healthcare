@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader, type ReaderClock } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
@@ -30,6 +32,7 @@ export default async function PaperPage({ params, searchParams }: { params: Prom
   const { experience, materialId } = await params;
   const page = await experienceModulePage(experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   const [material, paper, due, policy] = await Promise.all([
@@ -91,7 +94,7 @@ export default async function PaperPage({ params, searchParams }: { params: Prom
             <summary className={`inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-semibold text-amber-950 underline underline-offset-2 ${focusRing}`}>Show the original anyway</summary>
             <p className="mt-2 text-[13.5px] text-amber-950">Shown as it was kept, read-only. Lines marked as from the notes are statements, not questions.</p>
             {paper.data.instructions && <p className="mt-2 whitespace-pre-line text-[13.5px] text-gray-700">{paper.data.instructions}</p>}
-            <OriginalPaper views={views} statementIds={statementIds} saved={saved} />
+            <OriginalPaper views={views} statementIds={statementIds} saved={saved} clock={clock} />
           </details>
         </section>
         <PaperActions materialId={materialId} guides={guides} />
@@ -137,7 +140,7 @@ export default async function PaperPage({ params, searchParams }: { params: Prom
           <p className="mt-2 text-[14px] leading-relaxed text-amber-950">They are statements, so they are not offered as questions to answer. <Link href={practise} className={`font-semibold underline underline-offset-2 ${focusRing}`}>Practise questions from this material</Link> to be tested on them.</p>
           <details className="mt-3">
             <summary className={`inline-flex min-h-[44px] cursor-pointer items-center text-[14px] font-semibold text-amber-950 underline underline-offset-2 ${focusRing}`}>Show them anyway</summary>
-            <OriginalPaper views={statementViews} statementIds={statementIds} saved={saved} />
+            <OriginalPaper views={statementViews} statementIds={statementIds} saved={saved} clock={clock} />
           </details>
         </section>
       )}
@@ -150,7 +153,7 @@ export default async function PaperPage({ params, searchParams }: { params: Prom
 const primaryBtn = `inline-flex min-h-[44px] items-center justify-center rounded-[9px] px-4 py-2 text-[14px] font-semibold text-white hover:opacity-90 ${focusRing}`;
 
 /** SCHOLAR-SQIE-CLOSE-01 P0: a kept paper shown read-only, each statement labelled as from the notes, with any saved answer. */
-function OriginalPaper({ views, statementIds, saved }: { views: PaperQuestionView[]; statementIds: Set<string>; saved: Record<string, SavedAnswerView> }) {
+function OriginalPaper({ views, statementIds, saved, clock }: { views: PaperQuestionView[]; statementIds: Set<string>; saved: Record<string, SavedAnswerView>; clock: ReaderClock | null }) {
   return (
     <ol className="mt-3 space-y-3">
       {views.map(q => {
@@ -165,7 +168,7 @@ function OriginalPaper({ views, statementIds, saved }: { views: PaperQuestionVie
             {q.options.length > 0 && <ul className="mt-2 space-y-1 text-[14px] text-gray-800">{q.options.map(o => <li key={o.label}>{o.label}. {o.text}</li>)}</ul>}
             {s && (
               <div className="mt-3 rounded-lg bg-[var(--cmp-app-bg)] p-3 text-[13.5px] text-gray-700">
-                <p className="text-[12px] text-gray-500">Your saved answer · {new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</p>
+                <p className="text-[12px] text-gray-500">Your saved answer · {formatForReader(s.createdAt, clock, "date")}</p>
                 {s.attempt && (s.attempt.option || s.attempt.text) && <p className="mt-1"><span className="font-semibold">Your attempt:</span> {[s.attempt.option, s.attempt.text].filter(Boolean).join(". ")}</p>}
                 {s.content.examAnswer && <p className="mt-1 whitespace-pre-line"><span className="font-semibold">Suggested answer (AI-written):</span> {s.content.examAnswer}</p>}
               </div>

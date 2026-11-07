@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MONTHLY_STANDING_LINE, monthLabel } from "@/lib/individual/scholar/monthly-review";
@@ -24,7 +26,6 @@ export type MonthPanelView = {
   original: ReviewRowView | null; retakes: ReviewRowView[]; resumeHref: string | null; recommended: string; late: boolean;
 };
 
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
 const STATE: Record<MonthPanelView["state"], { word: string; glyph: string }> = {
   no_activity: { word: "Nothing to review yet", glyph: "–" }, ready: { word: "Ready", glyph: "○" }, in_progress: { word: "In progress", glyph: "◐" }, done: { word: "Done", glyph: "✓" },
@@ -91,6 +92,8 @@ export type NudgeView = { month: string; recommended: string; late: boolean };
 export function MonthlyReviewPanel({ panels, nudges, optedOut, canOptOut, reminders, currentMonth }: {
   panels: MonthPanelView[]; nudges: NudgeView[]; optedOut: boolean; canOptOut: boolean; reminders: boolean; currentMonth: string; accent?: string;
 }) {
+  const clock = useReaderClock();
+  const day = (iso: string) => formatForReader(iso, clock, "date", "UTC");
   return (
     <LearningSection tone="check" icon="record" level={2} headingId="mr-h" caps={false} title="Monthly learning review"
       trailing={<span className="rounded-full border border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-2.5 py-0.5 text-[12px] font-semibold text-gray-800">{MONTHLY_STANDING_LINE}</span>}>

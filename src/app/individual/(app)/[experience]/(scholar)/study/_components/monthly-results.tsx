@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { MONTHLY_STANDING_LINE, monthLabel, type MonthlyBreakdown, type SectionResult } from "@/lib/individual/scholar/monthly-review";
@@ -25,7 +27,6 @@ const BAND: Record<string, { word: string; glyph: string; chip: string }> = {
   needs_work: { word: "Needs work", glyph: "▼", chip: "border-red-300 bg-red-50 text-red-900" },
 };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export type MonthlyResultsView = {
   month: string;
@@ -155,6 +156,8 @@ function SectionRow({ s }: { s: SectionResult }) {
 }
 
 export function MonthlyResults({ v, accent }: { v: MonthlyResultsView; accent: string }) {
+  const clock = useReaderClock();
+  const day = (iso: string) => formatForReader(iso, clock, "date", "UTC");
   const o = v.breakdown.overall;
   const weakest = v.breakdown.bySection.filter(s => s.band === "needs_work" || s.band === "developing");
   const materialId = weakest[0]?.materialId || v.breakdown.bySection[0]?.materialId || "";

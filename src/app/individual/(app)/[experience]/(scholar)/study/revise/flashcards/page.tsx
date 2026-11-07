@@ -1,4 +1,6 @@
 import { dueLabel } from "@/lib/individual/scholar/revise-workspace";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import type { Metadata } from "next";
@@ -61,6 +63,7 @@ const glyphOf = (title: string) => title.trim().slice(0, 1).toUpperCase() || "F"
 export default async function Flashcards({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Search> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const q = await searchParams;
   const [due, policy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
@@ -311,7 +314,7 @@ export default async function Flashcards({ params, searchParams }: { params: Pro
                 <tr key={`${h.cardId}-${i}`} className="border-t border-gray-100 align-top">
                   <td className="py-1.5 pl-2 pr-2 text-gray-900">{h.front}</td>
                   <td className="py-1.5 pr-2">{recallOf(h.quality) === "remembered" ? "Remembered" : "Didn't remember"}</td>
-                  <td className="py-1.5 pr-2 tabular-nums">{new Date(h.at).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}</td>
+                  <td className="py-1.5 pr-2 tabular-nums">{formatForReader(h.at, clock, "dayMonth")}</td>
                   <td className="hidden py-1.5 tabular-nums md:table-cell">{h.intervalDays === null ? "Not recorded" : `${h.intervalDays} day${h.intervalDays === 1 ? "" : "s"}`}</td>
                 </tr>
               ))}</tbody>

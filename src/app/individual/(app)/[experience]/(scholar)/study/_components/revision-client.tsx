@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader, type ReaderClock } from "@/lib/datetime";
 import { NotePageMark } from "./note-capture";
 import { AiFeedback } from "./ai-feedback";
 import { FormativeAiLabel } from "./edu-notice";
@@ -270,6 +272,7 @@ export function RevisionStart(props: {
 // ── SAVED REVISION SETS: replayed from stored questions, no AI ──
 
 export function SavedSets({ sets }: { sets: { id: string; title: string; questions: number; lastUsedAt: string | null }[] }) {
+  const clock = useReaderClock();
   const router = useRouter();
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -293,7 +296,7 @@ export function SavedSets({ sets }: { sets: { id: string; title: string; questio
         {sets.map(s => (
           <li key={s.id} className={`flex flex-wrap items-center justify-between gap-2 ${whiteCard} px-3 py-2`}>
             <span className="min-w-0 flex-1 text-[14px]"><span className="font-semibold text-gray-900">{s.title}</span>
-              <span className="text-[13px] text-gray-700"> · {s.questions} question{s.questions === 1 ? "" : "s"}{s.lastUsedAt ? ` · last ${new Date(s.lastUsedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", timeZone: "UTC" })}` : ""}</span></span>
+              <span className="text-[13px] text-gray-700"> · {s.questions} question{s.questions === 1 ? "" : "s"}{s.lastUsedAt ? ` · last ${formatForReader(s.lastUsedAt, clock, "dayMonth", "UTC")}` : ""}</span></span>
             <span className="flex gap-2">
               <button type="button" className={ghost} disabled={!!busy} onClick={() => replay(s.id)}>{busy === s.id ? "Starting…" : "Revise again"}</button>
               <button type="button" className={ghost} disabled={!!busy} onClick={() => remove(s.id)} aria-label={`Remove ${s.title}`}>{busy === `d${s.id}` ? "Removing…" : "Remove"}</button>
@@ -854,7 +857,7 @@ export function FeedbackPartsView({ parts, tone = "amber" }: { parts: FeedbackPa
 }
 
 const OUTCOME_WORD = { correct: "correct", partial: "partly correct", incorrect: "not correct" } as const;
-const shortDate = (iso: string) => { const d = new Date(iso); return Number.isFinite(d.getTime()) ? d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }) : "an earlier date"; };
+const shortDate = (iso: string, clock: ReaderClock | null) => formatForReader(iso, clock, "date", "UTC") || "an earlier date";
 
 /** Revise engine quality 2.5: a different question on what was just missed. The server chooses or writes it, and never repeats this one. */
 function FollowUpButton({ questionId }: { questionId: string }) {
@@ -878,6 +881,7 @@ function FollowUpButton({ questionId }: { questionId: string }) {
 
 /** SCHOLAR-CONTINUITY-01 (791): the question as it was answered, where it has changed since, and any correction of the result -- the original beside it. */
 function AttemptRecordNotes({ f }: { f: RevisionFeedback }) {
+  const clock = useReaderClock();
   if (!f.questionChanged && !f.corrections) return null;
   return (
     <div className="mt-2 space-y-2">
@@ -893,7 +897,7 @@ function AttemptRecordNotes({ f }: { f: RevisionFeedback }) {
           <p className="font-semibold">This result was corrected.</p>
           <ul className="mt-1 space-y-1">
             {f.corrections.entries.map((c, i) => (
-              <li key={i}><span className="font-semibold">{c.basis}</span> ({shortDate(c.at)}): {OUTCOME_WORD[c.from]} changed to {OUTCOME_WORD[c.to]}. {c.reason}</li>
+              <li key={i}><span className="font-semibold">{c.basis}</span> ({shortDate(c.at, clock)}): {OUTCOME_WORD[c.from]} changed to {OUTCOME_WORD[c.to]}. {c.reason}</li>
             ))}
           </ul>
           <p className="mt-1 text-[12px] text-gray-700">Original result, kept as it was: {OUTCOME_WORD[f.corrections.original.outcome]}{f.corrections.original.score !== null ? ` (${Math.round(f.corrections.original.score * 100)}%)` : ""}.</p>

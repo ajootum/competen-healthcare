@@ -1,6 +1,8 @@
 "use client";
 
 import { useRouter } from "next/navigation";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useState } from "react";
 import { SEARCH_HISTORY_FEATURE, SEARCH_HISTORY_NOTICE } from "@/lib/individual/scholar/config";
 import type { HistoryChoiceState, LegalLink } from "@/lib/individual/scholar/consent-gate";
@@ -14,11 +16,12 @@ import { focusRing } from "../../../../../_components/chrome";
 const btn = `inline-flex min-h-[44px] items-center justify-center rounded-xl px-4 py-2 text-[13.5px] font-semibold disabled:opacity-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`;
 const quiet = `${btn} border border-gray-300 bg-white text-gray-800 hover:bg-gray-100`;
 const solid = `${btn} bg-gray-900 text-white hover:bg-gray-800`;
-const day = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
 
 export function SearchHistorySetting({ state, published, unreadable = false, grantedAt, revokedAt, notifiedAt, legal }: {
   state: HistoryChoiceState; published: boolean; unreadable?: boolean; grantedAt: string | null; revokedAt: string | null; notifiedAt: string | null; legal: LegalLink[];
 }) {
+  const clock = useReaderClock();
+  const day = (iso: string) => formatForReader(iso, clock, "date", "UTC");
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
