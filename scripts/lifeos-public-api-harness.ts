@@ -226,9 +226,29 @@ async function main() {
     const afterReplay = await call({ token: rotated.body.access_token }, "GET", "/me");
     ok("R5", afterReplay.status === 401, "and it ends the whole approval, because it means a token was stolen", afterReplay.status);
 
+    // ---- the person chooses the workspace ----
+    const chosenOrg = await provisionOrganisation(store, person.individualId, { slug: `api-chosen-${RUN}`, name: "Chosen Org" });
+    const choice = pkce();
+    await p.goto(authorizeUrl(clientId, choice.challenge, "commitments:read"), { timeout: 120000 });
+    const radio = p.getByRole("radio", { name: "Chosen Org" });
+    await radio.waitFor({ timeout: 60000 });
+    const allowBtn = p.getByRole("button", { name: "Allow", exact: true });
+    ok("K1", await allowBtn.isDisabled() && (await p.getByRole("radio").count()) === 2, "with several workspaces the person must choose one, and nothing is chosen for them");
+    await radio.check();
+    const r6 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
+    await allowBtn.click();
+    const code5 = new URL((await r6).url()).searchParams.get("code") ?? "";
+    const tok5 = await tokenCall({ grant_type: "authorization_code", code: code5, code_verifier: choice.verifier, client_id: clientId, redirect_uri: REDIRECT });
+    ok("K2", tok5.body.workspace_id === chosenOrg.workspaceId, "the token is for the workspace they chose", tok5.body.workspace_id);
+    const offChoice = await call({ token: tok5.body.access_token }, "GET", `${P}/commitments`);
+    ok("K3", offChoice.status === 404, "and reaches no other", offChoice.status);
+    const shownApps = await call({ cookie: person.cookie }, "GET", "/me/connected-apps");
+    ok("K4", shownApps.body.data.some((a: any) => a.workspaceName === "Chosen Org"), "Connected apps says which workspace each approval is for");
+
     // ---- the person ends it ----
     const again = pkce();
     await p.goto(authorizeUrl(clientId, again.challenge, "commitments:read commitments:write"), { timeout: 120000 });
+    await p.getByRole("radio", { name: "Personal" }).check({ timeout: 60000 });
     const r5 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
     await p.getByRole("button", { name: "Allow", exact: true }).click();
     const code4 = new URL((await r5).url()).searchParams.get("code") ?? "";
@@ -248,6 +268,7 @@ async function main() {
     // ---- the app, and the person, losing standing ----
     const s = pkce();
     await p.goto(authorizeUrl(clientId, s.challenge, "profile:read"), { timeout: 120000 });
+    await p.getByRole("radio", { name: "Personal" }).check({ timeout: 60000 });
     const r4 = p.waitForRequest(r => r.url().startsWith(REDIRECT), { timeout: 60000 });
     await p.getByRole("button", { name: "Allow", exact: true }).click();
     const code3 = new URL((await r4).url()).searchParams.get("code") ?? "";

@@ -76,14 +76,14 @@ const tokenCall = async (form: Record<string, string>) => {
   const res = await fetch(`${API}/oauth/token`, { method: "POST", headers: { "content-type": "application/x-www-form-urlencoded" }, body: new URLSearchParams(form).toString() });
   return { status: res.status, body: await res.json().catch(() => null) as any };
 };
-async function tokenFor(individualId: string, clientId: string, scope: string) {
+async function tokenFor(individualId: string, clientId: string, scope: string, workspaceId: string) {
   const verifier = randomBytes(32).toString("base64url");
   const challenge = createHash("sha256").update(verifier).digest("base64url");
-  const { redirect } = await approve(store, individualId, { clientId, redirectUri: REDIRECT, scope, codeChallenge: challenge, codeChallengeMethod: "S256" }, "boundary");
+  const { redirect } = await approve(store, individualId, { clientId, redirectUri: REDIRECT, scope, codeChallenge: challenge, codeChallengeMethod: "S256", workspaceId }, "boundary");
   const code = new URL(redirect).searchParams.get("code") ?? "";
   const t = await tokenCall({ grant_type: "authorization_code", code, code_verifier: verifier, client_id: clientId, redirect_uri: REDIRECT });
   if (t.status !== 200) throw new Error(`token: ${JSON.stringify(t.body)}`);
-  return t.body as { access_token: string; refresh_token: string };
+  return t.body as { access_token: string; refresh_token: string; workspace_id: string };
 }
 const sys = (actor: string, ops: any[]) => store.mutate({ actor, actorKind: "system", idempotencyKey: null, requestHash: null, traceId: null, ops });
 
@@ -115,7 +115,7 @@ async function main() {
   const bobOwn = await call({ cookie: bob.cookie }, "POST", `${W}/commitments`, { title: `Bob own ${RUN}` });
   ok("S0", worldShared.status === 201 && shared.status === 201 && alicePrivate.status === 201 && blockShared.status === 201 && bobOwn.status === 201, "fixtures are in place");
 
-  const bobToken = await tokenFor(bob.individualId, clientId, ALL.join(" "));
+  const bobToken = await tokenFor(bob.individualId, clientId, ALL.join(" "), org.workspaceId);
 
   // ---- H1: a token reaches only the approving person's own records ----
   const list = await call({ token: bobToken.access_token }, "GET", `${W}/commitments`);
@@ -155,7 +155,7 @@ async function main() {
   const me = await call({ token: bobToken.access_token }, "GET", "/me");
   ok("L4", me.status === 200 && me.body.data.individual.id === bob.individualId && !("entitlements" in me.body.data) && !("accessSource" in me.body.data.individual), "/me gives an app the name and workspaces, not plans or access details", Object.keys(me.body?.data ?? {}));
 
-  const appBToken = await tokenFor(bob.individualId, clientB, ALL.join(" "));
+  const appBToken = await tokenFor(bob.individualId, clientB, ALL.join(" "), org.workspaceId);
   const byOtherApp = await call({ token: appBToken.access_token }, "GET", `${W}/commitments/${createPlain.body.data.id}`);
   ok("L4b", byOtherApp.status === 200 && byOtherApp.body.data.provenanceRef === null, "an app cannot see which other app made a record", byOtherApp.body?.data?.provenanceRef);
   const ownMark = await call({ token: bobToken.access_token }, "GET", `${W}/commitments/${createPlain.body.data.id}`);
@@ -170,7 +170,7 @@ async function main() {
   ok("L3", fromA.status === 201 && fromB.status === 201 && fromB.body.data.id !== fromA.body.data.id, "one app's key cannot retrieve another app's record", [fromA.status, fromB.status, fromB.body?.meta]);
 
   // ---- L6: approving again replaces the earlier approval ----
-  const narrow = await tokenFor(bob.individualId, clientId, "profile:read");
+  const narrow = await tokenFor(bob.individualId, clientId, "profile:read", org.workspaceId);
   const oldWide = await call({ token: bobToken.access_token }, "GET", `${W}/commitments`);
   ok("L6", oldWide.status === 401, "approving an app again with less access ends the wider approval", oldWide.status);
   const narrowDenied = await call({ token: narrow.access_token }, "GET", `${W}/commitments`);
@@ -181,7 +181,7 @@ async function main() {
   const carolWs = `/workspaces/${carol.personalWorkspaceId}`;
   const clientC = crypto.randomUUID();
   await sys(carol.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientC, name: `App C ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
-  const carolToken = await tokenFor(carol.individualId, clientC, ALL.join(" "));
+  const carolToken = await tokenFor(carol.individualId, clientC, ALL.join(" "), carol.personalWorkspaceId);
   await sys(carol.individualId, [{ t: "lifeos_api_client", op: "update", id: clientC, values: { allowed_scopes: ["profile:read"] } }]);
   const narrowed = await call({ token: carolToken.access_token }, "GET", `${carolWs}/commitments`);
   ok("L2a", narrowed.status === 403, "narrowing what an app may hold applies to tokens it already has", narrowed.status);
@@ -193,7 +193,7 @@ async function main() {
   const dave = await person("dave");
   const clientD = crypto.randomUUID();
   await sys(dave.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientD, name: `App D ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
-  const daveToken = await tokenFor(dave.individualId, clientD, ALL.join(" "));
+  const daveToken = await tokenFor(dave.individualId, clientD, ALL.join(" "), dave.personalWorkspaceId);
   for (const e of await store.where("lifeos_entitlement", { individual_id: dave.individualId, status: "active" })) {
     await sys(dave.individualId, [{ t: "lifeos_entitlement", op: "update", id: String(e.id), values: { status: "revoked", revoked_at: new Date().toISOString() } }]);
   }
@@ -207,7 +207,7 @@ async function main() {
   const ivy = await person("ivy");
   const clientI = crypto.randomUUID();
   await sys(ivy.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientI, name: `App I ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
-  const ivyToken = await tokenFor(ivy.individualId, clientI, ALL.join(" "));
+  const ivyToken = await tokenFor(ivy.individualId, clientI, ALL.join(" "), ivy.personalWorkspaceId);
   for (const e of await store.where("lifeos_entitlement", { individual_id: ivy.individualId, status: "active" })) {
     await sys(ivy.individualId, [{ t: "lifeos_entitlement", op: "update", id: String(e.id), values: { status: "revoked", revoked_at: new Date().toISOString() } }]);
   }
@@ -220,7 +220,7 @@ async function main() {
   const erin = await person("erin");
   const clientE = crypto.randomUUID();
   await sys(erin.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientE, name: `App E ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
-  const erinToken = await tokenFor(erin.individualId, clientE, ALL.join(" "));
+  const erinToken = await tokenFor(erin.individualId, clientE, ALL.join(" "), erin.personalWorkspaceId);
   await sys(erin.individualId, [{ t: "lifeos_api_client", op: "update", id: clientE, values: { status: "suspended" } }]);
   const suspendedRefresh = await tokenCall({ grant_type: "refresh_token", refresh_token: erinToken.refresh_token, client_id: clientE });
   ok("M2e", suspendedRefresh.status === 400, "a suspended app cannot refresh", suspendedRefresh.status);
@@ -229,7 +229,7 @@ async function main() {
   const fay = await person("fay");
   const clientF = crypto.randomUUID();
   await sys(fay.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientF, name: `App F ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
-  const fayToken = await tokenFor(fay.individualId, clientF, ALL.join(" "));
+  const fayToken = await tokenFor(fay.individualId, clientF, ALL.join(" "), fay.personalWorkspaceId);
   const [link] = await store.where("lifeos_identity_link", { individual_id: fay.individualId });
   await sys(fay.individualId, [{ t: "lifeos_identity_link", op: "update", id: String(link.id), values: { status: "revoked" } }]);
   const revokedLink = await call({ token: fayToken.access_token }, "GET", "/me");
@@ -240,7 +240,7 @@ async function main() {
   const gus = await person("gus");
   const clientG = crypto.randomUUID();
   await sys(gus.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientG, name: `App G ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
-  const gusToken = await tokenFor(gus.individualId, clientG, ALL.join(" "));
+  const gusToken = await tokenFor(gus.individualId, clientG, ALL.join(" "), gus.personalWorkspaceId);
   await admin.auth.admin.updateUserById(gus.subject, { ban_duration: "87600h" });
   const banned = await call({ token: gusToken.access_token }, "GET", "/me");
   ok("M3c", banned.status === 401, "a banned sign-in account stops the token", banned.status);
@@ -270,7 +270,62 @@ async function main() {
   const helenBack = await call({ cookie: inviteHelen.cookie }, "GET", `${W}/commitments/${alicePrivate.body.data.id}`);
   ok("L1", toHelen.status === 201 && helenReads.status === 200 && helenBack.status === 404, "someone who leaves and comes back does not get their old access back", helenBack.status);
 
-  // ---- An organisation can end someone's access ----
+  // ---- M1: a token reaches the one workspace it was approved for ----
+  const kim = await person("kim");
+  const clientK = crypto.randomUUID();
+  await sys(kim.individualId, [{ t: "lifeos_api_client", op: "insert", values: { id: clientK, name: `App K ${RUN}`, redirect_uris: [REDIRECT], allowed_scopes: ALL, status: "approved", provenance_source: "system" } }]);
+  await addMember(store, alice.individualId, org.workspaceId, kim.individualId, "member");
+  const KP = `/workspaces/${kim.personalWorkspaceId}`;
+  await call({ cookie: kim.cookie }, "POST", `${KP}/commitments`, { title: `Kim personal ${RUN}` });
+  await call({ cookie: kim.cookie }, "POST", `${W}/commitments`, { title: `Kim at work ${RUN}` });
+  const workApp = await tokenFor(kim.individualId, clientK, ALL.join(" "), org.workspaceId);
+  ok("B0", workApp.workspace_id === org.workspaceId, "the token response names the one workspace it reaches", workApp.workspace_id);
+  const workReadsWork = await call({ token: workApp.access_token }, "GET", `${W}/commitments`);
+  ok("B1", workReadsWork.status === 200 && workReadsWork.text.includes(`Kim at work ${RUN}`), "an app approved for work reads the person's records at work", workReadsWork.status);
+  const workReadsHome = await call({ token: workApp.access_token }, "GET", `${KP}/commitments`);
+  ok("B2", workReadsHome.status === 404 && !workReadsHome.text.includes(`Kim personal ${RUN}`), "an employer's app cannot read the person's personal commitments", workReadsHome.status);
+  const workWritesHome = await call({ token: workApp.access_token }, "POST", `${KP}/commitments`, { title: "From a work app" });
+  ok("B3", workWritesHome.status === 404, "nor write to their personal workspace", workWritesHome.status);
+  const workList = await call({ token: workApp.access_token }, "GET", "/workspaces");
+  ok("B4", workList.status === 200 && workList.body.data.length === 1 && workList.body.data[0].id === org.workspaceId, "nor learn that it exists from /workspaces", workList.body?.data?.length);
+  const workMe = await call({ token: workApp.access_token }, "GET", "/me");
+  ok("B5", workMe.status === 200 && workMe.body.data.workspaces.length === 1, "or from /me", workMe.body?.data?.workspaces?.length);
+  const workRefreshed = await tokenCall({ grant_type: "refresh_token", refresh_token: workApp.refresh_token, client_id: clientK });
+  const refreshedHome = await call({ token: workRefreshed.body?.access_token }, "GET", `${KP}/commitments`);
+  ok("B6", workRefreshed.status === 200 && workRefreshed.body.workspace_id === org.workspaceId && refreshedHome.status === 404, "refreshing keeps the binding", [workRefreshed.status, refreshedHome.status]);
+  const homeApp = await tokenFor(kim.individualId, clientK, ALL.join(" "), kim.personalWorkspaceId);
+  const homeReadsHome = await call({ token: homeApp.access_token }, "GET", `${KP}/commitments`);
+  const homeReadsWork = await call({ token: homeApp.access_token }, "GET", `${W}/commitments`);
+  ok("B7", homeReadsHome.status === 200 && homeReadsWork.status === 404, "an app approved for the personal workspace cannot reach work either", [homeReadsHome.status, homeReadsWork.status]);
+  const workStill = await call({ token: workRefreshed.body?.access_token }, "GET", `${W}/commitments`);
+  ok("B8", workStill.status === 200, "one app can hold a separate approval for each workspace", workStill.status);
+  const notMine = await tokenFor(kim.individualId, clientK, ALL.join(" "), dave.personalWorkspaceId).then(() => "issued", (e: any) => String(e.code ?? e));
+  ok("B9", notMine === "not_found", "nobody can approve an app for a workspace they are not in", notMine);
+  const workAgain = await tokenFor(kim.individualId, clientK, ALL.join(" "), org.workspaceId);
+  const replaced = await call({ token: workRefreshed.body?.access_token }, "GET", `${W}/commitments`);
+  const homeUntouched = await call({ token: homeApp.access_token }, "GET", `${KP}/commitments`);
+  ok("B10", replaced.status === 401 && homeUntouched.status === 200, "approving again replaces only that workspace's approval", [replaced.status, homeUntouched.status]);
+  const unbound = await sys(kim.individualId, [{ t: "lifeos_oauth_grant", op: "insert", values: { client_id: clientK, individual_id: kim.individualId, scopes: ["profile:read"], provenance_source: "system" } }]).then(() => "written", () => "refused");
+  ok("B11", unbound === "refused", "the database refuses an active approval with no workspace", unbound);
+  const outsider = await sys(kim.individualId, [{ t: "lifeos_oauth_grant", op: "insert", values: { client_id: clientK, individual_id: kim.individualId, bound_workspace_id: dave.personalWorkspaceId, scopes: ["profile:read"], provenance_source: "system" } }]).then(() => "written", () => "refused");
+  ok("B12", outsider === "refused", "and one bound to a workspace the person has never been in", outsider);
+  const [kimGrant] = await store.where("lifeos_oauth_grant", { individual_id: kim.individualId, client_id: clientK, status: "active", bound_workspace_id: org.workspaceId });
+  const rebind = await sys(kim.individualId, [{ t: "lifeos_oauth_grant", op: "update", id: String(kimGrant.id), values: { bound_workspace_id: kim.personalWorkspaceId } }]).then(() => "written", () => "refused");
+  ok("B13", rebind === "refused", "and moving an approval to another workspace", rebind);
+
+  // ---- An organisation can end someone's access, and what the person approved for it ----
+  const kimMembers = await call({ cookie: alice.cookie }, "GET", `${W}/members`);
+  const kimMembership = String(kimMembers.body.data.find((m: any) => m.individualId === kim.individualId)?.id);
+  const kimRemoved = await call({ cookie: alice.cookie }, "POST", `${W}/members/${kimMembership}/remove`, {});
+  const afterRemoval = await call({ token: workAgain.access_token }, "GET", "/workspaces");
+  const refreshAfterRemoval = await tokenCall({ grant_type: "refresh_token", refresh_token: workAgain.refresh_token, client_id: clientK });
+  ok("B14", kimRemoved.status === 200 && afterRemoval.status === 401 && refreshAfterRemoval.status === 400, "removing someone ends the apps they approved for that workspace", [kimRemoved.status, afterRemoval.status, refreshAfterRemoval.status]);
+  await sys(alice.individualId, [{ t: "lifeos_membership", op: "update", id: kimMembership, workspace_id: org.workspaceId, values: { status: "active" } }]);
+  const backAgain = await call({ token: workAgain.access_token }, "GET", `${W}/commitments`);
+  ok("B15", backAgain.status === 401, "and they do not return if the person comes back", backAgain.status);
+  const homeSurvives = await call({ token: homeApp.access_token }, "GET", `${KP}/commitments`);
+  ok("B16", homeSurvives.status === 200, "while an app approved for their personal workspace carries on", homeSurvives.status);
+
   const ivan = await person("ivan");
   const jo = await person("jo");
   await addMember(store, alice.individualId, org.workspaceId, ivan.individualId, "member");
@@ -285,7 +340,7 @@ async function main() {
   ok("O1", byMember.status === 403, "a member cannot remove anyone", byMember.status);
   const ofOwner = await call({ cookie: bob.cookie }, "POST", `${W}/members/${idOf(alice.individualId)}/remove`, {});
   ok("O2", ofOwner.status === 403, "nobody removes the owner", ofOwner.status);
-  const removeToken = await tokenFor(alice.individualId, clientB, ALL.join(" "));
+  const removeToken = await tokenFor(alice.individualId, clientB, ALL.join(" "), org.workspaceId);
   const byApp = await call({ token: removeToken.access_token }, "POST", `${W}/members/${idOf(ivan.individualId)}/remove`, {});
   ok("O3", byApp.status === 403, "an app cannot remove anyone", byApp.status);
   const removed = await call({ cookie: bob.cookie }, "POST", `${W}/members/${idOf(ivan.individualId)}/remove`, {});
@@ -308,7 +363,8 @@ async function main() {
 }
 
 main().catch(async e => {
-  console.error(String(e).slice(0, 1200));
+  console.error(String(e).slice(0, 1200), e?.cause ?? "");
+  console.error(String(e?.stack ?? "").slice(0, 800));
   await setFlag("lifeos_public_api", false);
   await setFlag("lifeos_core", false);
   process.exit(1);

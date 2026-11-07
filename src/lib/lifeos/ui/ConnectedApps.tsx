@@ -6,7 +6,7 @@ import styles from "./lifeos.module.css";
 
 // LIFEOS-API-001 delivery step 9. What a person has connected, and the way to end it.
 
-type App = { id: string; appName: string; scopes: string[]; connectedAt: string };
+type App = { id: string; appName: string; workspaceName: string; scopes: string[]; connectedAt: string };
 
 export function ConnectedApps() {
   const [error, setError] = useState<string | null>(null);
@@ -43,6 +43,7 @@ export function ConnectedAppsCard() {
       {apps?.map(a => (
         <div key={a.id} className={styles.task}>
           <strong>{a.appName}</strong>
+          <div className={styles.muted}>In {a.workspaceName}</div>
           <div className={styles.muted}>{a.scopes.join(", ")}</div>
           <div className={styles.actions}>
             <button onClick={async () => {

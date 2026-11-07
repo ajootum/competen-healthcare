@@ -42,6 +42,8 @@ export const present = (def: ResourceDef, row: Row) => def.output.parse(camelRow
  * tenant, so it cannot be taken away by one.
  */
 export async function loadAccess(store: LifeosStore, principal: Principal, workspaceId: string): Promise<AccessContext> {
+  // An app reaches the one workspace it was approved for. Any other answers exactly as a workspace the person is not in.
+  if (principal.kind !== "session" && principal.boundWorkspaceId !== workspaceId) throw notFound();
   const [m] = await store.where("lifeos_membership", { workspace_id: workspaceId, individual_id: principal.individualId }, { limit: 1 });
   if (!m || m.status !== "active" || m.archived_at) throw notFound();
   const ws = await store.get("lifeos_workspace", workspaceId);
@@ -390,7 +392,8 @@ export async function endOwnEntitlement(c: RequestContext, id: string, input: un
 
 export async function listWorkspaces(c: RequestContext): Promise<Row[]> {
   const memberships = await c.store.where("lifeos_membership", { individual_id: c.principal.individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT });
-  const rows = await Promise.all(memberships.map(m => c.store.get("lifeos_workspace", String(m.workspace_id))));
+  const reachable = c.principal.kind === "session" ? memberships : memberships.filter(m => m.workspace_id === c.principal.boundWorkspaceId);
+  const rows = await Promise.all(reachable.map(m => c.store.get("lifeos_workspace", String(m.workspace_id))));
   return rows.filter((w): w is Row => !!w && !w.archived_at);
 }
 
@@ -409,20 +412,23 @@ export async function listMembers(c: RequestContext, workspaceId: string): Promi
 
 /**
  * Everything that ends with a membership, on leaving or on being removed: access the person gave, access they received, and
- * their open invitations. Coming back later, by a new invitation, starts from nothing.
+ * their open invitations, and apps they approved for this workspace. Coming back later, by a new invitation, starts from nothing.
  */
 async function endMembershipOps(c: RequestContext, workspaceId: string, m: Row, source: Provenance["source"]): Promise<Op[]> {
   const individualId = String(m.individual_id);
   const revoked = () => ({ status: "revoked", revoked_at: new Date().toISOString() });
-  const [given, received, invited] = await Promise.all([
+  const [given, received, invited, approved] = await Promise.all([
     c.store.where(GRANT.table, { workspace_id: workspaceId, owner_individual_id: individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT }),
     c.store.where(GRANT.table, { workspace_id: workspaceId, grantee_individual_id: individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT }),
     c.store.where("lifeos_invitation", { workspace_id: workspaceId, owner_individual_id: individualId, status: "pending" }, { limit: INTERNAL_READ_LIMIT }),
+    // Filtered here, not in the query, so that leaving still works on a database that does not hold migration 907 yet.
+    c.store.where("lifeos_oauth_grant", { individual_id: individualId, status: "active" }, { limit: INTERNAL_READ_LIMIT }),
   ]);
   return [
     { t: "lifeos_membership", op: "update", id: String(m.id), workspace_id: workspaceId, values: { status: "left", provenance_source: source } },
     ...[...given, ...received].map(g => update(GRANT, g, revoked())),
     ...invited.map((i): Op => ({ t: "lifeos_invitation", op: "update", id: String(i.id), workspace_id: workspaceId, values: { status: "revoked", provenance_source: source } })),
+    ...approved.filter(g => g.bound_workspace_id === workspaceId).map((g): Op => ({ t: "lifeos_oauth_grant", op: "update", id: String(g.id), values: revoked() })),
   ];
 }
 

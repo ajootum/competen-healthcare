@@ -69,8 +69,8 @@ describe("access: default private, explicit otherwise", () => {
     expect(() => visibilityFilter(ctx({ individualId: "x,or(id.not.is.null)" }), "commitment")).toThrow(LifeosError);
   });
   it("a session holds every scope. A delegated token holds only what it was given", () => {
-    expect(hasScope({ kind: "session", individualId: ME, scopes: "*", clientId: null }, "commitments:write")).toBe(true);
-    const t = { kind: "delegated_token" as const, individualId: ME, scopes: ["commitments:read"], clientId: "app" };
+    expect(hasScope({ kind: "session", individualId: ME, scopes: "*", clientId: null, boundWorkspaceId: null }, "commitments:write")).toBe(true);
+    const t = { kind: "delegated_token" as const, boundWorkspaceId: WS, individualId: ME, scopes: ["commitments:read"], clientId: "app" };
     expect(hasScope(t, "commitments:read")).toBe(true);
     expect(hasScope(t, "commitments:write")).toBe(false);
   });

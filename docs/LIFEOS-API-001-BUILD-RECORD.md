@@ -205,7 +205,7 @@ An app can act for one person, within what that person approved, until they revo
 - **The boundary is a list.** `PUBLIC_ROUTES` names what a token can reach: profile, commitments, worlds, and reading the schedule. A token cannot reach anything else, whatever scopes it holds. Approving apps, deciding suggestions, sharing, invitations and tenants stay with the person, and the seal check fails if those are added.
 - **Consent:** a real screen that shows what is being asked. It appears only on a first-party host, and refuses an unapproved app, an unregistered return address, or a scope the app may not hold.
 - **Refresh rotates,** and replaying a used refresh token ends the whole approval, because it means a token was stolen.
-- **It reaches only the person's own records.** A token reads and changes records that person owns, in the workspaces they belong to. It does not reach colleagues' workspace-shared records, delegated records or granted records, because those people never approved the app. It cannot change who can see a record, and cannot close a delegation.
+- **It reaches only the person's own records, in one workspace.** The person chooses the workspace on the consent screen, and a token reads and changes only records they own there. Other workspaces answer as if they do not exist, including in `/me` and `/workspaces`. An app can hold a separate approval for each workspace. It does not reach colleagues' workspace-shared records, delegated records or granted records, because those people never approved the app. It cannot change who can see a record, and cannot close a delegation.
 - **It ends when it should:** when the person disconnects it or approves the app again, when the person loses LifeOS, when their identity link or sign-in account ends, and when the app is suspended, archived or narrowed. Refresh passes the same checks as a request. Someone with no LifeOS access left has the approval ended at the next refresh. A person can see and disconnect apps after their access has ended.
 - **Marked:** a write records the app as its source, in the record and in the person's audit trail.
 
@@ -230,12 +230,13 @@ An app can act for one person, within what that person approved, until they revo
 
 ### Independent security review (owner GO, 6 Nov)
 
-A read-only review of the merged code covered the ten areas in the GO. Every finding below was then attacked over real HTTP with real tokens on staging, by `scripts/lifeos-token-boundary-harness.ts`, before and after the fix: 23 of its 31 checks failed before, and all 44 pass now.
+A read-only review of the merged code covered the ten areas in the GO. Every finding below was then attacked over real HTTP with real tokens on staging, by `scripts/lifeos-token-boundary-harness.ts`, before and after the fix: 23 of its first 31 checks failed before, and all 61 pass now, including the checks added with the fixes.
 
 | Finding | Severity | Result |
 |---|---|---|
 | H1. A token reached colleagues' shared and delegated records, and an admin's token could change shared records | High | Fixed: `ownRecordsOnly` in `core/access.ts` |
 | H2. `commitments:write` could share a private commitment with the whole workspace | High | Fixed: sharing needs a signed-in person |
+| M1. A token worked across all the person's workspaces, so a work app could read personal commitments | Medium | Fixed on the owner's decision: migration 907, a choice on the consent screen, and enforcement in `loadAccess` and `listWorkspaces` |
 | M2. Losing LifeOS stopped requests, but refresh kept issuing tokens, and the person could not disconnect | Medium | Fixed |
 | M3. Bearer tokens ignored the identity link and the sign-in account | Medium | Fixed: `lifeosAccountStands` in the adapter |
 | An organisation had no way to remove someone | Medium | Fixed: `POST /workspaces/:ws/members/:id/remove`, and People on the Organisation screen |
@@ -248,9 +249,10 @@ A read-only review of the merged code covered the ten areas in the GO. Every fin
 
 Paging keeps the privacy filter (the review could not test this; check P1 now does).
 
+**Migration 907** (`907-lifeos-token-workspace-binding.sql`, sha256 `0f54e8ee71d5e4e7e6171aadfc019e5a44a1494a56797d123de18763ed4caf74`). Applied twice on staging, house rules clear, rollback rehearsed. Before it, staging held every LifeOS object it holds now except the new column, its two constraints and the view column. It adds `bound_workspace_id` to `lifeos_oauth_grant`. A foreign key to the person's membership and a check on active grants make an unbound grant, or one bound to a workspace they were never in, impossible to write, and the stamp trigger stops it moving. It writes no row. Enforcement was added last, so that the attack checks could be watched failing without it: a work app read and wrote personal commitments, six checks failed, and all pass now. Code that needs the column is behind `lifeos_public_api`, and leaving a workspace does not need it, so main is safe on a database without 907. **`lifeos_public_api` must not go on before 907 is applied.**
+
 **Open, and each holds a switch off:**
 
-- **M1. A token is not bound to a workspace (Medium).** An app a person connects for work can read that person's own commitments in their personal workspace too. The fix needs a new migration, a picker on the consent screen and enforcement in `loadAccess`. It holds `lifeos_public_api` off, pending the owner's decision.
 - **Tenant domains.** The API has no host check, so `POST /oauth/authorize` would answer on a tenant host, including an unverified one, and sessions on tenant domains are undecided. This holds `LIFEOS_TENANT_HOSTS` off.
 - **L7 (Low).** The invitation page sends the invited address to the browser, so a forwarded link shows it. The page uses it to sign in.
 - **Remaining edge (Low).** If access lapses and returns while an app makes no refresh attempt, or ends through its source while a live entitlement row remains, the app is refused meanwhile and resumes afterwards rather than having to ask again.
@@ -277,6 +279,7 @@ Apply in this order, each by the owner in the SQL editor, each with its own GO. 
 | 4 | 904-lifeos-invitations.sql | `75c5b1b29d83accde07649a697bd3dba03ce1306ba23de9620f926d87c193edc` |
 | 5 | 905-lifeos-domain-uniqueness.sql | `0cf78db6ccaad44d978fe8d2f1c4b87ae627c8389953cf01d360086bedea1ea0` |
 | 6 | 906-lifeos-public-api.sql | `943324e458a9d6ef9fd877552d21a32cc5808fcecfb4139565eb2744fbaa6165` |
+| 7 | 907-lifeos-token-workspace-binding.sql | `0f54e8ee71d5e4e7e6171aadfc019e5a44a1494a56797d123de18763ed4caf74` |
 
 Then, each separately: turn on `lifeos_core`, `lifeos_individual_access` with published terms, `individual_lifeos_entry`, `lifeos_public_api` with approved clients, and `LIFEOS_TENANT_HOSTS`. Each one can be off while the others are on.
 

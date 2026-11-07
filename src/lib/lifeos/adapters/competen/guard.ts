@@ -36,7 +36,7 @@ export async function requireLifeosPrincipal(store: LifeosStore): Promise<Princi
   const individual = await readActiveIndividual(store, ISSUER_COMPETEN_AUTH, user.id, async e => (
     e.source === "competen_individual" ? competenIndividualLive(user.id) : true
   ));
-  return { kind: "session", individualId: String(individual.id), scopes: "*", clientId: null };
+  return { kind: "session", individualId: String(individual.id), scopes: "*", clientId: null, boundWorkspaceId: null };
 }
 
 /**

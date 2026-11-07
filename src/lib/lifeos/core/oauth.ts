@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { z } from "zod";
 import { LifeosError, notFound } from "./errors";
 import type { SessionIdentity } from "./optin";
+import { loadAccess } from "./service";
 import type { LifeosStore, Principal, Row } from "./types";
 
 // LIFEOS-API-001 delivery step 9. User-delegated access: OAuth 2.1 authorization code with PKCE. There is no master key.
@@ -11,7 +12,7 @@ import type { LifeosStore, Principal, Row } from "./types";
 export const PUBLIC_API_FLAG = "lifeos_public_api";
 
 export const SCOPES: Record<string, string> = {
-  "profile:read": "See your name and the names of your workspaces",
+  "profile:read": "See your name and the name of this workspace",
   "commitments:read": "See your commitments",
   "commitments:write": "Add and change your commitments",
   "worlds:read": "See your worlds",
@@ -37,6 +38,10 @@ export const AuthorizeInput = z.object({
   codeChallengeMethod: z.literal("S256"),
 }).strict().meta({ title: "AuthorizeInput" });
 export type AuthorizeRequest = z.infer<typeof AuthorizeInput>;
+
+/** The person's yes, with the one workspace they chose. The choice is theirs, so the app's request never carries it. */
+export const ApproveInput = AuthorizeInput.extend({ workspaceId: z.uuid() }).meta({ title: "ApproveInput" });
+export type ApproveRequest = z.infer<typeof ApproveInput>;
 
 /** Exact match only, and https unless it is this machine. An attacker's page must never receive a code. */
 export function redirectAllowed(client: Row, redirectUri: string): boolean {
@@ -70,18 +75,21 @@ export async function checkAuthorizeRequest(store: LifeosStore, r: AuthorizeRequ
 }
 
 /**
- * The signed-in person's yes. A delegated token can never reach this, because this route is not on the public list. It
- * replaces any earlier approval of this app by this person, so what they just saw is what the app holds.
+ * The signed-in person's yes, for one workspace they belong to. A delegated token can never reach this, because this route is
+ * not on the public list. It replaces any earlier approval of this app by this person for that workspace, so what they just saw
+ * is what the app holds there.
  */
-export async function approve(store: LifeosStore, individualId: string, r: AuthorizeRequest, traceId: string): Promise<{ redirect: string }> {
+export async function approve(store: LifeosStore, individualId: string, { workspaceId, ...r }: ApproveRequest, traceId: string): Promise<{ redirect: string }> {
   const { client, scopes } = await checkAuthorizeRequest(store, r);
+  await loadAccess(store, { kind: "session", individualId, scopes: "*", clientId: null, boundWorkspaceId: null }, workspaceId);
   const code = randomBytes(32).toString("base64url");
   const grantId = crypto.randomUUID();
-  const earlier = await store.where("lifeos_oauth_grant", { client_id: String(client.id), individual_id: individualId, status: "active" }, { limit: 200 });
+  const earlier = (await store.where("lifeos_oauth_grant", { client_id: String(client.id), individual_id: individualId, status: "active" }, { limit: 200 }))
+    .filter(g => !g.bound_workspace_id || g.bound_workspace_id === workspaceId);
   await store.mutate({
     actor: individualId, actorKind: "user", idempotencyKey: null, requestHash: null, traceId,
     ops: [
-      { t: "lifeos_oauth_grant", op: "insert", values: { id: grantId, client_id: client.id, individual_id: individualId, scopes, provenance_source: "user" } },
+      { t: "lifeos_oauth_grant", op: "insert", values: { id: grantId, client_id: client.id, individual_id: individualId, bound_workspace_id: workspaceId, scopes, provenance_source: "user" } },
       { t: "lifeos_oauth_code", op: "insert", values: { grant_id: grantId, code_hash: sha256(code), code_challenge: r.codeChallenge, redirect_uri: r.redirectUri, expires_at: inFuture(CODE_SECONDS), provenance_source: "system" } },
       ...earlier.map(g => ({ t: "lifeos_oauth_grant", op: "update" as const, id: String(g.id), values: { status: "revoked", revoked_at: new Date().toISOString() } })),
     ],
@@ -115,7 +123,11 @@ async function issueTokens(store: LifeosStore, grant: Row, extra: Parameters<Lif
       },
     ],
   });
-  return { access_token: access, refresh_token: refresh, token_type: "Bearer", expires_in: ACCESS_SECONDS, scope: (grant.scopes as string[]).join(" ") };
+  return {
+    access_token: access, refresh_token: refresh, token_type: "Bearer", expires_in: ACCESS_SECONDS, scope: (grant.scopes as string[]).join(" "),
+    // The one workspace this token reaches, because an app holding only commitments:read has no other way to learn its id.
+    workspace_id: String(grant.bound_workspace_id),
+  };
 }
 
 /** Code to tokens. One use, for the client it was issued to, with the verifier only that client holds. */
@@ -124,7 +136,7 @@ export async function exchangeCode(store: LifeosStore, b: { code?: unknown; code
   const [code] = await store.where("lifeos_live_oauth_code", { code_hash: sha256(b.code) }, { limit: 1 });
   if (!code) throw new OAuthError("invalid_grant");
   const grant = await store.get("lifeos_oauth_grant", String(code.grant_id));
-  if (!grant || grant.status !== "active" || grant.client_id !== b.client_id) throw new OAuthError("invalid_grant");
+  if (!grant || grant.status !== "active" || grant.client_id !== b.client_id || !grant.bound_workspace_id) throw new OAuthError("invalid_grant");
   if (code.redirect_uri !== b.redirect_uri || pkceChallenge(b.code_verifier) !== code.code_challenge) throw new OAuthError("invalid_grant");
   const client = await store.get("lifeos_api_client", String(grant.client_id));
   if (!clientUsable(client)) throw new OAuthError("invalid_grant");
@@ -155,7 +167,7 @@ export async function refreshTokens(store: LifeosStore, b: { refresh_token?: unk
   }
   if (live.client_id !== b.client_id) throw new OAuthError("invalid_grant");
   const grant = await store.get("lifeos_oauth_grant", String(live.grant_id));
-  if (!grant) throw new OAuthError("invalid_grant");
+  if (!grant || !grant.bound_workspace_id) throw new OAuthError("invalid_grant");
   const client = await store.get("lifeos_api_client", String(live.client_id));
   if (!clientUsable(client)) throw new OAuthError("invalid_grant");
   const individualId = String(grant.individual_id);
@@ -192,9 +204,9 @@ export async function principalFromToken(store: LifeosStore, token: string): Pro
   const [t] = await store.where("lifeos_live_oauth_token", { access_hash: sha256(token) }, { limit: 1 });
   if (!t || t.access_live !== true) throw new LifeosError("unauthenticated", "This access token is not valid.");
   const client = await store.get("lifeos_api_client", String(t.client_id));
-  if (!clientUsable(client)) throw new LifeosError("unauthenticated", "This access token is not valid.");
+  if (!clientUsable(client) || !t.bound_workspace_id) throw new LifeosError("unauthenticated", "This access token is not valid.");
   const individualId = String(t.individual_id);
-  return { individualId, principal: { kind: "delegated_token", individualId, scopes: liveScopes(t.scopes, client), clientId: String(t.client_id) } };
+  return { individualId, principal: { kind: "delegated_token", individualId, scopes: liveScopes(t.scopes, client), clientId: String(t.client_id), boundWorkspaceId: String(t.bound_workspace_id) } };
 }
 
 /**
@@ -211,7 +223,11 @@ export async function listConnectedApps(store: LifeosStore, id: SessionIdentity)
   if (!individualId) return [];
   const grants = await store.where("lifeos_oauth_grant", { individual_id: individualId, status: "active" }, { limit: 200 });
   const clients = await Promise.all(grants.map(g => store.get("lifeos_api_client", String(g.client_id))));
-  return grants.map((g, i) => ({ id: String(g.id), appName: String(clients[i]?.name ?? "Unknown app"), scopes: g.scopes as string[], connectedAt: String(g.created_at) }));
+  const workspaces = await Promise.all(grants.map(g => (g.bound_workspace_id ? store.get("lifeos_workspace", String(g.bound_workspace_id)) : null)));
+  return grants.map((g, i) => ({
+    id: String(g.id), appName: String(clients[i]?.name ?? "Unknown app"), workspaceName: String(workspaces[i]?.name ?? "No workspace"),
+    scopes: g.scopes as string[], connectedAt: String(g.created_at),
+  }));
 }
 
 export async function disconnectApp(store: LifeosStore, id: SessionIdentity, grantId: string): Promise<void> {

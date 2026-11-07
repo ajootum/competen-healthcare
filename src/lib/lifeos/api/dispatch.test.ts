@@ -9,7 +9,7 @@ import { buildOpenApi } from "./openapi";
 const ME = "11111111-1111-4111-8111-111111111111";
 const WS = "44444444-4444-4444-8444-444444444444";
 const REC = "33333333-3333-4333-8333-333333333333";
-const session: Principal = { kind: "session", individualId: ME, scopes: "*", clientId: null };
+const session: Principal = { kind: "session", individualId: ME, scopes: "*", clientId: null, boundWorkspaceId: null };
 
 function fakeStore(over: Partial<LifeosStore> = {}): LifeosStore {
   return {
@@ -80,7 +80,7 @@ describe("the order of the door", () => {
   });
   it("a delegated token without the scope is refused before the store is asked", async () => {
     const store = fakeStore();
-    const token: Principal = { kind: "delegated_token", individualId: ME, scopes: ["goals:read"], clientId: "app" };
+    const token: Principal = { kind: "delegated_token", boundWorkspaceId: WS, individualId: ME, scopes: ["goals:read"], clientId: "app" };
     const res = await call("GET", `workspaces/${WS}/commitments`, { store, authenticate: async () => token });
     expect(res.status).toBe(403);
     expect(store.rateTake).not.toHaveBeenCalled();
@@ -259,7 +259,7 @@ describe("the route table", () => {
     const tokenHash = "x";
     const store = fakeStore({
       where: vi.fn(async (t: string) => (t === "lifeos_live_oauth_token"
-        ? [{ access_live: true, client_id: REC, individual_id: ME, scopes: ["*", "suggestions:write", "grants:write"], version: 1, id: tokenHash }]
+        ? [{ access_live: true, client_id: REC, individual_id: ME, scopes: ["*", "suggestions:write", "grants:write"], version: 1, id: tokenHash, bound_workspace_id: WS }]
         : t === "lifeos_live_entitlement" ? [{ source: "direct" }] : [])) as LifeosStore["where"],
       get: vi.fn(async (t: string) => (t === "lifeos_api_client" ? { status: "approved", allowed_scopes: ["*", "suggestions:write", "grants:write"] } : { status: "active", id: ME })) as LifeosStore["get"],
     });

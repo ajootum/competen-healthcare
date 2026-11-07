@@ -135,14 +135,14 @@ export const ROUTES: Route[] = [
     },
   },
   {
-    method: "POST", path: "/oauth/authorize", summary: "The signed-in person allows an app. Never reachable with a delegated token.", visibility: "internal", scope: null, bucket: "write", input: oauth.AuthorizeInput, output: z.object({ redirect: z.string() }),
+    method: "POST", path: "/oauth/authorize", summary: "The signed-in person allows an app. Never reachable with a delegated token.", visibility: "internal", scope: null, bucket: "write", input: oauth.ApproveInput, output: z.object({ redirect: z.string() }),
     handler: async ({ ctx, body }) => {
       if (ctx.principal.kind !== "session") throw new LifeosError("forbidden", "Allowing an app needs the person, signed in.");
-      return { data: await oauth.approve(ctx.store, ctx.principal.individualId, oauth.AuthorizeInput.parse(body), ctx.traceId) };
+      return { data: await oauth.approve(ctx.store, ctx.principal.individualId, oauth.ApproveInput.parse(body), ctx.traceId) };
     },
   },
   {
-    method: "GET", path: "/me/connected-apps", summary: "Apps the person has allowed", visibility: "internal", scope: null, bucket: "read", output: z.object({ id: z.string(), appName: z.string(), scopes: z.array(z.string()), connectedAt: z.string() }), list: true,
+    method: "GET", path: "/me/connected-apps", summary: "Apps the person has allowed", visibility: "internal", scope: null, bucket: "read", output: z.object({ id: z.string(), appName: z.string(), workspaceName: z.string(), scopes: z.array(z.string()), connectedAt: z.string() }), list: true,
     admission: "session", handler: noPrincipal,
     sessionHandler: async ({ store, identity }) => ({ data: await oauth.listConnectedApps(store, identity) }),
   },
@@ -197,7 +197,7 @@ export const ROUTES: Route[] = [
     handler: async ({ ctx, body }) => ({ data: presentIndividual(await svc.updateMe(ctx, body)) }),
   },
   {
-    method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of", visibility: "internal", scope: "profile:read", bucket: "read", output: WorkspaceV1, publicOutput: AppWorkspace, list: true,
+    method: "GET", path: "/workspaces", summary: "Workspaces the caller is an active member of. An app sees only the one workspace it was approved for.", visibility: "internal", scope: "profile:read", bucket: "read", output: WorkspaceV1, publicOutput: AppWorkspace, list: true,
     handler: async ({ ctx }) => {
       const rows = await svc.listWorkspaces(ctx);
       return { data: forSession(ctx) ? rows.map(presentWorkspace) : rows.map(r => AppWorkspace.parse(camelRow(r))), nextCursor: null };
