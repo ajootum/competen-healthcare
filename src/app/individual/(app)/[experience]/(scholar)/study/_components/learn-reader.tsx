@@ -14,6 +14,7 @@ import { AskAbout } from "./ask-panel";
 import { carry } from "./study-active";
 import { ActionRow, InlineNote, LearningDisclosure, LearningIcon, NotesText, RefChip, SectionCard, learnAction } from "@/components/ui/scholar-learning";
 import { shortRef } from "@/lib/individual/scholar/notes-layout";
+import { MyIdeasBox } from "./my-ideas-box";
 
 // SCHOLAR-INDEPENDENT-LEARNING-01 P0: YOUR NOTES, INSIDE THE LESSON. The lesson's own sections as the learner uploaded them
 // (GET learn/sessions/[id]/read?step=: a read of their own chunks, no AI, no allowance), each cited, each an anchor the 790
@@ -83,6 +84,8 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
   const words = loaded && loaded !== "failed" ? relatedWords({ cards: loaded.related.cards, questions: loaded.related.questions, attempts: loaded.related.attempts, cases: loaded.related.cases.length, stations: loaded.related.stations.length, savedLessons: loaded.related.savedLessons }) : null;
   return (
     // SCHOLAR LEARNING DESIGN SYSTEM: the learner's own notes, a shared LearningDisclosure in the notes (cream) tone; no AI.
+    // COMPETEN-NOTEBOOK-001: writing in a box here keeps the panel open, even when saved teaching arrives and would otherwise fold it away.
+    <div onFocusCapture={e => { if (e.target instanceof HTMLTextAreaElement) setOpen(o => o ?? true); }}>
     <LearningDisclosure tone="notes" icon="notes" title={`Your notes${n !== null ? ` · ${n} ${n === 1 ? "section" : "sections"}` : ""}`} open={isOpen} onToggle={setOpen} className="mt-3"
       meta={marked ? <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900">{READ_MARK.done}</span> : null}>
 
@@ -132,6 +135,7 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                       <AskAbout surface="learn" chunkIds={[s.chunkId]} materialId={s.materialId} sessionId={sessionId} step={step} refLabel={`Your notes: ${s.citation}`} label="Ask about this" variant="primary" />
                       {s.unit === "page" && (s.body || s.notes) && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} />}
                     </ActionRow>
+                    <MyIdeasBox chunkId={s.chunkId} materialId={s.materialId} sectionLabel={s.heading ?? s.citation} anchor={s.anchor} className="mt-3" />
                   </SectionCard>
                 );
               })}
@@ -189,5 +193,6 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
           </>
         )}
     </LearningDisclosure>
+    </div>
   );
 }

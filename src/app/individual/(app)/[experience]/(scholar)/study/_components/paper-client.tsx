@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { Fragment, useId, useState } from "react";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
@@ -88,6 +90,7 @@ function CopyLine({ id, c, tone }: { id?: string; c: AiReasonCopy; tone: "note" 
 }
 
 function EvidenceList({ evidence, prefix }: { evidence: EvidenceView[]; prefix: string }) {
+  const clock = useReaderClock();
   if (!evidence.length) return null;
   return (
     <div className="mt-4">
@@ -108,7 +111,7 @@ function EvidenceList({ evidence, prefix }: { evidence: EvidenceView[]; prefix: 
                         : e.title}
                   </p>
                   <p className="text-[12px] text-gray-600">
-                    {e.citation}{e.kind === "web" && e.retrievedAt ? ` · retrieved ${new Date(e.retrievedAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })}` : ""}
+                    {e.citation}{e.kind === "web" && e.retrievedAt ? ` · retrieved ${formatForReader(e.retrievedAt, clock, "date", "UTC")}` : ""}
                     {e.kind === "web" && !e.published ? " · no publication date shown" : ""}
                   </p>
                   {e.excerpt && e.excerpt !== e.title && <p className="mt-1 text-[12.5px] leading-relaxed text-gray-700">“{e.excerpt.slice(0, 400)}{e.excerpt.length > 400 ? "…" : ""}”</p>}
@@ -123,6 +126,7 @@ function EvidenceList({ evidence, prefix }: { evidence: EvidenceView[]; prefix: 
 }
 
 function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRevise: () => void; onDelete: () => void; busy: boolean }) {
+  const clock = useReaderClock();
   const c = a.content;
   const [ask, setAsk] = useState("");
   const [reply, setReply] = useState<{ text?: string; message?: string } | null>(null);
@@ -144,7 +148,7 @@ function AnswerView({ a, onRevise, onDelete, busy }: { a: SavedAnswerView; onRev
     <div className="mt-4 rounded-xl border border-[var(--cmp-theme-border)] bg-[var(--cmp-app-bg)] p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-semibold text-amber-900"><span aria-hidden>✦</span>{a.recovered ? `${RECOVERY_EXPLANATION_LABEL}. Not an answer key or a mark.` : "Suggested answer, written by AI from the evidence below. Not an answer key or a mark."}</p>
-        <span className="text-[11.5px] text-gray-500">{new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })} · {a.model}</span>
+        <span className="text-[11.5px] text-gray-500">{formatForReader(a.createdAt, clock, "date", "UTC")} · {a.model}</span>
       </div>
       {attempted && (
         <>
@@ -396,6 +400,7 @@ export function StudyAsPaper({ materialId, attestation, transcribable }: { mater
 }
 
 export function PaperActions({ materialId, guides }: { materialId: string; guides: { id: string; text: string; createdAt: string }[] }) {
+  const clock = useReaderClock();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState("");
@@ -424,7 +429,7 @@ export function PaperActions({ materialId, guides }: { materialId: string; guide
       {msg && <p role="alert" className="mt-2 text-[13.5px] font-medium text-red-700">{msg}</p>}
       {guides.slice(0, 1).map(g => (
         <div key={g.id} className="mt-4 rounded-xl bg-[var(--cmp-app-surface)] p-4 ring-1 ring-[var(--learn-border)]">
-          <p className="text-[12px] text-gray-500">Saved {new Date(g.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })} · AI-written from your saved answers</p>
+          <p className="text-[12px] text-gray-500">Saved {formatForReader(g.createdAt, clock, "date", "UTC")} · AI-written from your saved answers</p>
           <p className="mt-2 whitespace-pre-line text-[14px] leading-relaxed text-gray-800"><Cited text={g.text} prefix={`g-${g.id.slice(0, 8)}`} /></p>
         </div>
       ))}

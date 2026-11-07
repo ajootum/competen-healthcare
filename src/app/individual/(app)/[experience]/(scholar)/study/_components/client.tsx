@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { discardInterrupted, recordsFrom, recordsSnapshot, subscribeRecords, uploadScholarFile, type Progress } from "@/lib/individual/scholar/upload-client";
@@ -88,7 +90,8 @@ export function ConsentPanel({ status, recorded, grantedAt, revokedAt, legal }: 
   // its own click with the notice in view, and withdrawal is one click.
   const [reviewing, setReviewing] = useState(false);
   const [agreed, setAgreed] = useState(false);
-  const date = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" });
+  const clock = useReaderClock();
+  const date = (iso: string) => formatForReader(iso, clock, "date", "UTC");
   const notice = (
     <div className="mt-2 space-y-2 text-[13.5px] leading-relaxed text-gray-700">
       <h3 className="text-[14px] font-bold text-gray-900">{CONSENT_NOTICE.heading}</h3>

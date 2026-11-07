@@ -12,6 +12,7 @@ import {
   FONT_PARTS, PDF_RENDER_ENGINE, RENDER_BUDGET_MS, RENDER_ENGINE, RENDER_MAX_BYTES, aliasFonts, claimDecision, layoutMatters, pagesExpected, pdfPagesToDraw, renderPath, slidePageMap, slidesToDraw,
   type RenderUnit,
 } from "./slide-render";
+import { startMemLog } from "./slide-render-mem";
 import { readRender } from "./slide-render-read";
 import { getMaterial, materialBytes, materialExtras, type MaterialRow } from "./store";
 
@@ -128,6 +129,7 @@ async function drawPdf(ctx: IndividualContext, material: MaterialRow, attempts: 
 /** The job. Anything that goes wrong leaves the learner with the original pictures, and a reason on the row: never a half-truth on the page. */
 async function drawDeck(ctx: IndividualContext, material: MaterialRow, attempts: number, started: number, policy: DrawPolicy): Promise<void> {
   const stored: string[] = [];
+  const mem = startMemLog();
   try {
     const bytes = await materialBytes(ctx.admin, ctx.userId, material.id);
     if (!bytes) { await finish(ctx, material.id, attempts, { status: "failed", reason: "file_unreadable" }); return; }
@@ -162,6 +164,7 @@ async function drawDeck(ctx: IndividualContext, material: MaterialRow, attempts:
     const devBudget = process.env.NODE_ENV === "production" ? 0 : Number(process.env.SCHOLAR_RENDER_DEV_BUDGET_MS) || 0;
     const left = () => (devBudget || RENDER_BUDGET_MS) - (Date.now() - started);
     const pdf = await deckToPdf(copy, Math.max(1000, left() - 20_000));
+    mem.mark("pdf");
     const drawing = await openPdfDrawing(pdf);
     const units: RenderUnit[] = [];
     const missed: number[] = [...notDrawn];
@@ -183,6 +186,7 @@ async function drawDeck(ctx: IndividualContext, material: MaterialRow, attempts:
     } finally {
       drawing.close();
     }
+    mem.mark("drawn");
     missed.sort((a, b) => a - b);
     // The learner may have deleted the file while it was being drawn. Then no record points at these images, so they go now.
     if (!(await finish(ctx, material.id, attempts, { status: missed.length ? "partial" : "done", units, notDrawn: missed }))) await ctx.admin.storage.from(BUCKET).remove(stored).catch(() => {});
@@ -190,5 +194,8 @@ async function drawDeck(ctx: IndividualContext, material: MaterialRow, attempts:
     // Nothing half-stored stays behind: the row records no units, so the images would never be shown or erased.
     if (stored.length) await ctx.admin.storage.from(BUCKET).remove(stored).catch(() => {});
     await finish(ctx, material.id, attempts, { status: "failed", reason: e instanceof RenderError ? e.code : "engine_failed" });
+    mem.mark("failed");
+  } finally {
+    mem.stop();
   }
 }

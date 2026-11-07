@@ -12,6 +12,9 @@ import { EraseAll } from "../(scholar)/study/_components/client";
 import { listMaterials } from "@/lib/individual/scholar/store";
 import { SearchHistorySetting } from "../(scholar)/study/_components/search-history-setting";
 import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
+import { TimeZoneSetting } from "../(scholar)/study/_components/time-zone-setting";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
+import { zoneLabel } from "@/lib/datetime";
 import { consentDocuments } from "@/lib/individual/scholar/consent-gate";
 import { loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { professionalSelfAddEnabled } from "@/lib/individual/professional-add";
@@ -39,6 +42,7 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
   const study = experience === "scholar" ? await listMaterials(ctx.admin, ctx.userId) : null;
   const historyChoice = experience === "scholar" ? await readSearchHistoryChoice(ctx.admin, ctx.userId, await loadIndividualPolicyOnce(ctx.admin)) : null;
   const documents = consentDocuments();
+  const clock = experience === "scholar" ? await readerClock(ctx) : null;
   const studyCount = study?.ok ? study.data.length : 0;
   // P5 (prepared, OFF): offered only in Scholar, only without Professional, and only while the server gate is on.
   const canAddProfessional = experience === "scholar" && !ctx.live.includes("professional") && (await professionalSelfAddEnabled(ctx.admin));
@@ -63,6 +67,8 @@ export default async function SettingsPage({ params }: { params: Promise<{ exper
           {studyCount > 0 && <div className="mt-5"><EraseAll count={studyCount} /></div>}
         </section>
       )}
+
+      {clock && <TimeZoneSetting clock={clock} label={zoneLabel(new Date(), clock.zone)} zones={Intl.supportedValuesOf("timeZone")} />}
 
       {experience === "professional" && (
         <section id="privacy" className="mb-5 rounded-2xl border border-gray-200 bg-white p-5 sm:p-6">

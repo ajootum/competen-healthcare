@@ -283,6 +283,9 @@ export type ExternalReference = {
   openAccess: OpenAccess | null;
   /** SCHOLAR-RESEARCH-RELEVANCE-02: set when the relevance filter judged this source against its lesson before it was saved. */
   relevanceChecked?: boolean;
+  /** SCHOLAR-RESEARCH-TEACH-001: what kind of work it is, from PubMed's own types, and what was read of it. Only ever an abstract. */
+  studyKind?: string;
+  accessed?: "abstract";
 };
 
 /**

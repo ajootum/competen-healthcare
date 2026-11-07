@@ -44,7 +44,7 @@ export type InlineLesson = {
 /** Pure. Words in a text, citation tags ([S1]) not counted. */
 export function wordCount(text: string | null | undefined): number {
   if (!text) return 0;
-  return text.replace(/\[[SRE]\d+\]/g, " ").split(/\s+/).filter(Boolean).length;
+  return text.replace(/\[(?:[SRE]\d+|AI)\]/g, " ").split(/\s+/).filter(Boolean).length;
 }
 
 /**
@@ -121,7 +121,7 @@ export const applicationAfter = (index: number, count: number, policy: Pick<Inli
 export function recallContent(x: {
   title: string; question: string | null; points: readonly string[]; overview: string | null; objective: string | null;
 }): { front: string; back: string; why: string } | null {
-  const clean = (s: string, max: number) => s.replace(/\s*\[[SRE]\d+\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+  const clean = (s: string, max: number) => s.replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
   const points = x.points.map(p => clean(p, 300)).filter(Boolean);
   const question = x.question ? clean(x.question, 300) : "";
   if (!question && !points.length) return null;

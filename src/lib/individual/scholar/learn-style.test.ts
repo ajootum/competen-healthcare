@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { PRIMARY_MAX, STYLE_BLURB, STYLE_DEFAULTS, cleanStyleCode, effectiveStyle, moreItems, mistakeOffer, styleChoices, styleCode, styleFromCode, type StyleAvailability } from "./learn-style";
 import { cleanUnfinished, mergeResume, parsePositionPut, type ServerPosition } from "./learn-position";
 import { TEACHING_AI_ACTIVITY } from "./config";
+import { APPROACH_START_LEVEL, approachLevel, approachLevelBody, approachLevelNumber, isApproachLevel } from "./learn-style";
+import { challengeNextLevels, parseTeachingRequest } from "./learn-teaching";
+import { COGNITIVE_LEVELS } from "./question-intel";
+import { readFileSync } from "node:fs";
 
 const ALL = ["teach", "explain", "simplify", "deeper", "examples", "summary", "ask", "ask_me", "guide", "challenge", "mistake", "teach_back", "high_yield"];
 const av = (over: Partial<StyleAvailability> = {}): StyleAvailability => ({ actions: ALL, consent: true, reasonOf: () => null, ...over });
@@ -117,5 +121,40 @@ describe("style persistence (790 unfinished.style)", () => {
     expect(mergeResume({ steps: [0, 1, 2], fallback: 0, local: null, server }).style).toBe("challenge");
     expect(mergeResume({ steps: [0, 1, 2], fallback: 0, local: null, server: { ...server, unfinished: null } }).style).toBe("explain");
     expect(mergeResume({ steps: [0, 1, 2], fallback: 0, local: null, server: null }).style).toBe("explain");
+  });
+});
+
+describe("the level Ask me and Challenge me send", () => {
+  const server = (body: { action: "ask_me" | "challenge"; level: string }) => parseTeachingRequest(body.action, body);
+  it("is one the server accepts, for both approaches, from the first request", () => {
+    expect(server(approachLevelBody("challenge", null))).toEqual({ ok: true, value: { action: "challenge", level: "recall" } });
+    expect(server(approachLevelBody("ask_me", null))).toEqual({ ok: true, value: { action: "ask_me", level: "understanding" } });
+    for (const action of ["ask_me", "challenge"] as const) for (const level of COGNITIVE_LEVELS) expect(server(approachLevelBody(action, level))).toEqual({ ok: true, value: { action, level } });
+  });
+  it("starts Ask me where the server's own default does", () => {
+    expect(parseTeachingRequest("ask_me", {})).toEqual({ ok: true, value: { action: "ask_me", level: APPROACH_START_LEVEL.ask_me } });
+    expect(APPROACH_START_LEVEL.challenge).toBe(COGNITIVE_LEVELS[0]);
+  });
+  it("uses the server's own rungs", () => {
+    expect(COGNITIVE_LEVELS.map(l => approachLevel("challenge", l))).toEqual([...COGNITIVE_LEVELS]);
+    expect(COGNITIVE_LEVELS.map(approachLevelNumber)).toEqual([1, 2, 3, 4]);
+    expect(COGNITIVE_LEVELS.every(isApproachLevel)).toBe(true);
+  });
+  it("never sends a remembered number or anything else the server would refuse", () => {
+    expect(parseTeachingRequest("challenge", { level: 1 }).ok).toBe(false); // the fault: what the page used to send
+    expect(approachLevel("challenge", 1)).toBe("recall");
+    expect(approachLevel("ask_me", 3)).toBe("application");
+    for (const old of [0, 5, 1.5, null, undefined, "expert", {}]) { expect(approachLevel("challenge", old)).toBe("recall"); expect(approachLevel("ask_me", old)).toBe("understanding"); }
+    for (const action of ["ask_me", "challenge"] as const) for (const old of [1, 2, 3, 4, 9, "expert", null]) expect(server(approachLevelBody(action, old)).ok).toBe(true);
+  });
+  it("climbs on the rungs the server names", () => {
+    for (const level of COGNITIVE_LEVELS) for (const next of Object.values(challengeNextLevels(level))) { expect(isApproachLevel(next)).toBe(true); expect(server(approachLevelBody("challenge", next)).ok).toBe(true); }
+    expect(challengeNextLevels("recall").understood).toBe("understanding");
+  });
+  it("is what the page sends, for both approaches", () => {
+    const page = readFileSync("src/app/individual/(app)/[experience]/(scholar)/study/_components/learn-approach.tsx", "utf8");
+    expect(page).toContain('send("challenge", approachLevelBody("challenge", l))');
+    expect(page).toContain('send("ask_me", approachLevelBody("ask_me", mem("ask_me").level))');
+    expect(page).not.toMatch(/Number\.isInteger\(r\.json\.level\)/);
   });
 });

@@ -1,4 +1,5 @@
 import type { Occurrence } from "../learning-plan/types";
+import { validTimeZone } from "../../datetime";
 
 // ── ONE DEFINITION OF EACH LEARNING FACT ── PLP-01..04 (owner GO 2 Nov 2026), My Plan calendar enhancement ───────────
 //
@@ -30,11 +31,7 @@ export const STUDY_ACTIVITY_KINDS: readonly StudyActivityKind[] = ["lesson", "an
 const DAY = 86_400_000;
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
-/** The time zone name if it is a real IANA zone this runtime knows, else null. */
-export function validTimeZone(tz: unknown): string | null {
-  if (typeof tz !== "string" || tz.length === 0 || tz.length > 64 || !/^[A-Za-z0-9_+\-/]+$/.test(tz)) return null;
-  try { new Intl.DateTimeFormat("en-CA", { timeZone: tz }); return tz; } catch { return null; }
-}
+export { validTimeZone };
 
 function formatterFor(tz: string): Intl.DateTimeFormat {
   let f = formatters.get(tz);

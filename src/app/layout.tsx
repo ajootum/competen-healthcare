@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import { SITE_URL, DEFAULT_OG_IMAGE, OG_IMAGE_SIZE } from "@/lib/marketing/site";
+import { NoteDraftGuard } from "@/components/NoteDraftGuard";
 
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist-sans" });
 
@@ -55,7 +56,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {/* Apply the persisted sidebar-collapsed state before paint (no flash). */}
         <script dangerouslySetInnerHTML={{ __html: "try{if(localStorage.getItem('sb-collapsed')==='1')document.documentElement.classList.add('sb-collapsed')}catch(e){}" }} />
       </head>
-      <body className="min-h-full flex flex-col bg-white text-gray-900">{children}</body>
+      <body className="min-h-full flex flex-col bg-white text-gray-900"><NoteDraftGuard />{children}</body>
     </html>
   );
 }

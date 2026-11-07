@@ -107,9 +107,10 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       // SCHOLAR-FLASHCARDS-01: offered, ten new cards at a time, 200 a deck, both source modes, any difficulty, every download.
       scholarFlashcards: "on", scholarMistakeNotebook: "on", scholarLearningLibrary: "on",
       // SALE-2026-11 R3: next best actions and the active Notebook are new learner features, so off; three suggestions at once.
-      scholarNextBestAction: "off", scholarNextBestActionMax: 3, scholarActiveNotebook: "off",
+      scholarNextBestAction: "off", scholarNextBestActionMax: 3, scholarActiveNotebook: "off", scholarPersonalNotebook: "off",
       // SCHOLAR-SEARCH-HISTORY-01: My Search History is a new learner feature, so off.
       scholarSearchHistory: "off",
+      scholarReaderTimeZone: "off",
       scholarGlobalSearch: "off",
       professionalGlobalSearch: "off",
       // SCHOLAR-INLINE-CHECKS-01: required recall block after every 2 lessons, quick check, application once, missed cards ticked.
@@ -148,6 +149,8 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarStudyPlan: false,
       // SCHOLAR-GUIDED-LEARNING-01: no lesson is prepared ahead until HQ switches it on.
       scholarLearnPrepareNext: false,
+      scholarGoDeeperStructured: false,
+      scholarGuideMeAdaptive: false,
       scholarSrsMasteryReps: 5, scholarSrsMasteryDays: 60, scholarSrsMaxIntervalDays: 3650, scholarSrsHarderIntervalPercent: 100,
       scholarCaseContexts: ["general", "medical", "surgical", "paediatric", "maternal", "emergency", "critical_care"], scholarCaseEntries: ["notes", "competency", "library", "surprise"],
       scholarCaseDimensions: ["recognition", "interpretation", "prioritisation", "decision", "reassessment", "escalation"], scholarCaseGeneration: "generate", scholarCaseMode: "guided",
@@ -188,6 +191,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarOsce: { enabled: true, durationMinutes: 8, checklistMin: 8, checklistMax: 12 },
       // COMPETEN-RESEARCH-01: notes only. Research also needs the engine operational (HQ Research Sources).
       scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25, relevance: "standard" },
+      scholarTeachResearch: { on: false, maxSearches: 4, dailyCostCents: 100 },
       // SCHOLAR-SQIE-02: evidence recovery defaults to notes + library, external off, no source enabled.
       // SCHOLAR-SOURCE-QUALITY-01: only PubMed-indexed reviews, guidelines and trials whose title names the topic may explain.
       scholarRecovery: {
@@ -256,6 +260,8 @@ it("SCHOLAR-GUIDED-LEARNING-01: prepare-next defaults off and resolves on only f
     expect(p("scholar_next_best_action", true).scholarNextBestAction).toBe("off");
     expect(p("scholar_active_notebook", "on").scholarActiveNotebook).toBe("on");
     expect(p("scholar_active_notebook", "yes").scholarActiveNotebook).toBe("off");
+    expect(p("scholar_personal_notebook", "on").scholarPersonalNotebook).toBe("on");
+    expect(p("scholar_personal_notebook", "yes").scholarPersonalNotebook).toBe("off");
     expect(p("scholar_next_best_action_max", 9).scholarNextBestActionMax).toBe(5);
     expect(p("scholar_next_best_action_max", 0).scholarNextBestActionMax).toBe(1);
   });
