@@ -79,7 +79,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
   | "scholar_monthly_review_max_new"
-  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words"
+  | "scholar_lesson_visuals_max_per_section" | "scholar_lesson_visuals_min_px" | "scholar_visual_text_words" | "scholar_whole_slides_max"
   | "scholar_plan_section_minutes" | "scholar_plan_max_weekly_minutes" | "scholar_learn_deeper_rounds_max" | "scholar_next_best_action_max"
   | "scholar_learning_state_min_evidence" | "scholar_learning_state_distinct_questions" | "scholar_learning_state_delay_days" | "scholar_learning_state_stale_days"
   | "scholar_adaptive_reteach_max" | "scholar_adaptive_prerequisite_misses"
@@ -135,7 +135,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_reader_time_zone"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
-  | "scholar_lesson_visuals" | "scholar_visual_classify"
+  | "scholar_lesson_visuals" | "scholar_visual_classify" | "scholar_whole_slides"
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal"
   | "scholar_learning_state" | "scholar_adaptive_teaching"
   | "scholar_retrieval_schedule" | "scholar_prerequisite_suggestions" | "scholar_transfer_checks"
@@ -2118,6 +2118,22 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "on",
     limitReason: "Needs no migration and no AI. Pictures that cannot be shown (EMF, WMF, SVG, linked) are counted, not shown. A PDF's text pages carry no extracted pictures. Default: on.",
   },
+  // SCHOLAR-VISUAL-001 phase 2 (owner decision of 6 Nov 2026): the whole slide, drawn once from the learner's own file, so a grouped diagram keeps its layout.
+  {
+    key: "scholar_whole_slides", kind: "choice", product: "Scholar",
+    label: "Whole slides drawn from the student's file",
+    help: "Whether a PowerPoint slide with pictures, a chart, a diagram or a table is also shown whole, drawn once from the student's own file on our own servers and stored privately beside it. No AI, and the file goes to no other service. The original pictures stay one tap away.",
+    options: [{ value: "on", label: "Show whole slides" }, { value: "off", label: "Do not draw" }],
+    fallback: "off",
+    limitReason: "Needs migration 1010 and fails closed without it: students then see the original pictures as they do today. Default: off.",
+  },
+  {
+    key: "scholar_whole_slides_max", kind: "int", product: "Scholar", unit: "slides",
+    label: "Whole slides: most drawn for one file",
+    help: "The most slides drawn whole for one presentation, first come first. The others keep their original pictures.",
+    fallback: 80, min: 1, max: 150,
+    limitReason: "One to 150. Each slide takes about a second, and the whole job has five minutes. Default: 80.",
+  },
   {
     key: "scholar_lesson_visuals_max_per_section", kind: "int", product: "Scholar", unit: "pictures",
     label: "Lesson pictures: most shown with a lesson",
@@ -2756,6 +2772,9 @@ export type IndividualPolicy = {
   /** SCHOLAR-VISUAL-CLASSIFY-01. */
   scholarVisualClassify: "on" | "off";
   scholarVisualTextWords: number;
+  /** SCHOLAR-VISUAL-001 phase 2: whole slides drawn once from the learner's own file. */
+  scholarWholeSlides: "on" | "off";
+  scholarWholeSlidesMax: number;
   /** PLP-01..04: My Plan. */
   scholarMyPlan: "on" | "off";
   /** Private module development access: who may see Courses & Training and My Competencies. Closed unless HQ publishes otherwise. */
@@ -2993,6 +3012,8 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarLessonVisualsMinPx: int("scholar_lesson_visuals_min_px"),
     scholarVisualClassify: clampChoice(policyDef("scholar_visual_classify") as ChoicePolicy, published.get(policyPath("scholar_visual_classify"))) as "on" | "off",
     scholarVisualTextWords: int("scholar_visual_text_words"),
+    scholarWholeSlides: clampChoice(policyDef("scholar_whole_slides") as ChoicePolicy, published.get(policyPath("scholar_whole_slides"))) as "on" | "off",
+    scholarWholeSlidesMax: int("scholar_whole_slides_max"),
     scholarMyPlan: clampChoice(policyDef("scholar_my_plan") as ChoicePolicy, published.get(policyPath("scholar_my_plan"))) as "on" | "off",
     scholarModuleAccess: {
       courses: clampModuleAccess(policyDef("scholar_module_courses_access") as ModuleAccessPolicy, published.get(policyPath("scholar_module_courses_access"))),

@@ -265,6 +265,9 @@ const nextConfig: NextConfig = {
    */
   poweredByHeader: false,
 
+  /** SCHOLAR-VISUAL-001 phase 2: finds its own .wasm beside its code at run time, so it stays a package rather than a bundle. */
+  serverExternalPackages: ["@hyzyla/pdfium"],
+
   /**
    * The Document Studio's Unicode PDF fonts (src/lib/individual/documents/pdf.ts) are read from disk at
    * request time, which the file trace cannot see, so they are included explicitly, and only in the two
@@ -275,6 +278,21 @@ const nextConfig: NextConfig = {
     // Saved-learning PDF (learning-export.ts) embeds the same Unicode fonts when a lesson holds characters outside Windows-1252.
     "/api/individual/scholar/learn/export": ["./src/lib/individual/documents/fonts/*.ttf"],
     "/individual/\\[experience\\]/progress/documents": ["./src/lib/individual/documents/fonts/*.ttf"],
+    // SCHOLAR-VISUAL-001 phase 2: read from disk by a child process, which the file trace cannot see. Only this route carries them.
+    "/api/individual/scholar/materials/\\[id\\]/whole-slides": [
+      "./.render-engine/*.gz",
+      "./src/lib/individual/scholar/render-assets/**/*",
+      "./node_modules/@matbee/libreoffice-converter/package.json",
+      "./node_modules/@matbee/libreoffice-converter/dist/*.js",
+      "./node_modules/@matbee/libreoffice-converter/dist/*.cjs",
+      "./node_modules/@matbee/libreoffice-converter/wasm/*.cjs",
+      "./node_modules/zod/**/*",
+      "./node_modules/@hyzyla/pdfium/dist/pdfium.wasm",
+    ],
+  },
+  /** The engine unpacked is about 250 MB. Its compressed copy in .render-engine is what ships, and no function may trace the original. */
+  outputFileTracingExcludes: {
+    "*": ["./node_modules/@matbee/libreoffice-converter/wasm/soffice.wasm", "./node_modules/@matbee/libreoffice-converter/wasm/soffice.data", "./node_modules/@matbee/libreoffice-converter/wasm/soffice.js"],
   },
 
   async headers() {

@@ -335,6 +335,16 @@ export async function keptMaterial(admin: Admin, userId: string, id: string): Pr
   return { id: data.id, mime: data.mime_type, chunks: Number(data.chunk_count), pages: data.page_count ?? null, quality: fromQualityJson(data.extraction_quality) };
 }
 
+/** SCHOLAR-VISUAL-001 phase 2: the stored images of drawn slides, for erasure. Absent table (1010 not applied): none. Null: could not be read. */
+async function renderPaths(admin: Admin, userId: string, materialId?: string): Promise<string[] | null> {
+  let q = admin.from("individual_scholar_material_render").select("units").eq("user_id", userId);
+  if (materialId) q = q.eq("material_id", materialId);
+  const { data, error } = await q;
+  if (error) return isNotProvisioned(error) ? [] : null;
+  return ((data ?? []) as { units: unknown }[]).flatMap(r => (Array.isArray(r.units) ? r.units as { path?: unknown }[] : []))
+    .map(u => u.path).filter((p): p is string => typeof p === "string" && p.startsWith(`${userId}/`));
+}
+
 /** Owner erasure of one material: the object, then the row (which cascades to everything derived). */
 export async function deleteMaterial(admin: Admin, userId: string, id: string): Promise<{ ok: boolean; found: boolean }> {
   if (!isUuid(id)) return { ok: true, found: false };
@@ -342,7 +352,12 @@ export async function deleteMaterial(admin: Admin, userId: string, id: string): 
     .eq("user_id", userId).eq("id", id).maybeSingle();
   if (error) return { ok: false, found: false };
   if (!data) return { ok: true, found: false };
-  const rm = await admin.storage.from(BUCKET).remove([data.storage_path]);
+  const drawn = await renderPaths(admin, userId, id);
+  if (drawn === null) return { ok: false, found: true };
+  // By its name as well as its record: a job killed part-way, or finishing right now, can have stored an image the record does not name yet.
+  const unrecorded = await admin.storage.from(BUCKET).list(userId, { limit: 1000, search: `render-${id}-` });
+  if (unrecorded.error) return { ok: false, found: true };
+  const rm = await admin.storage.from(BUCKET).remove([data.storage_path, ...drawn, ...((unrecorded.data ?? []) as { name: string }[]).map(o => `${userId}/${o.name}`)]);
   if (rm.error) return { ok: false, found: true };
   const { error: dErr } = await admin.from("individual_scholar_material").delete().eq("user_id", userId).eq("id", id);
   // LEARN-01 L4: the deleted material's steps and sources went with it (414 cascades); a session left with nothing to
@@ -362,9 +377,12 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const rows = (data ?? []) as { id: string; storage_path: string }[];
   const listed = await admin.storage.from(BUCKET).list(userId, { limit: 1000 });
   if (listed.error) return { ok: false, erased: 0 };
-  const paths = new Set([...rows.map(r => r.storage_path), ...((listed.data ?? []) as any[]).map(o => `${userId}/${o.name}`)]);
-  if (paths.size) {
-    const rm = await admin.storage.from(BUCKET).remove([...paths]);
+  // SCHOLAR-VISUAL-001 phase 2: drawn slides by their recorded paths too, since a person can hold more objects than one listing returns.
+  const drawn = await renderPaths(admin, userId);
+  if (drawn === null) return { ok: false, erased: 0 };
+  const paths = [...new Set([...rows.map(r => r.storage_path), ...((listed.data ?? []) as any[]).map(o => `${userId}/${o.name}`), ...drawn])];
+  for (let i = 0; i < paths.length; i += 500) {
+    const rm = await admin.storage.from(BUCKET).remove(paths.slice(i, i + 500));
     if (rm.error) return { ok: false, erased: 0 };
   }
   const { error: dErr } = await admin.from("individual_scholar_material").delete().eq("user_id", userId);
@@ -5420,7 +5438,11 @@ export async function sweepPersonUploads(admin: Admin, userId: string, nowMs: nu
   if (!objects.some(o => o.created_at && nowMs - Date.parse(o.created_at) >= ABANDON_AFTER_MS)) return 0;
   const { data: mats, error } = await admin.from("individual_scholar_material").select("storage_path").eq("user_id", userId).limit(5000);
   if (error) return 0;
-  const kept = new Set(((mats ?? []) as any[]).map(m => m.storage_path as string));
+  // SCHOLAR-VISUAL-001 phase 2: a drawn slide is no abandoned upload. Not knowing which are drawn: nothing is swept this time. An image a killed job
+  // never recorded is in no list here, so it does go, once it is a day old.
+  const drawn = await renderPaths(admin, userId);
+  if (drawn === null) return 0;
+  const kept = new Set([...((mats ?? []) as any[]).map(m => m.storage_path as string), ...drawn]);
   const busy = new Set<string>();
   if (!rErr) for (const r of (rows ?? []) as any[]) if (finishDecision(r, nowMs).kind === "busy") busy.add(uploadPath(userId, r.id, r.mime_type));
   const gone = abandonedObjects(userId, objects, kept, busy, nowMs);

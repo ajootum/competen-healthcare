@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { useModalFocus } from "@/components/ui/use-modal-focus";
 import { sourceHref } from "./question-view";
-import { arrangeStrip, pagesOfCitation, visualUrl, visualsForLesson, visualsForPages, visualsForSection, visualsListUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
+import { arrangeStrip, pagesOfCitation, preferWhole, visualUrl, visualsForLesson, visualsForPages, visualsForSection, visualsListUrl, wholeSlidesUrl, type Visual, type VisualMode } from "@/lib/individual/scholar/material-visuals";
 
 // SCHOLAR-LESSON-VISUALS-01 (owner GO "Visual Learning From Uploaded Presentations"): THE STUDENT'S OWN PICTURES BESIDE THE LESSON.
 //
@@ -18,13 +18,17 @@ const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-
 const touch = "pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const ghostBtn = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${touch} ${focusRing}`;
 const ORIGINAL = "Original image — not AI-generated";
+const WHOLE = "Whole slide drawn from your file — not AI-generated";
+const labelOf = (v: Pick<Visual, "whole">) => (v.whole ? WHOLE : ORIGINAL);
 const AI_NOTE = "Its text was read by AI: check it against the picture.";
 const SAFE_TEXT_LABEL = "Text read by AI from this chart — do not use it for scores or thresholds; check the original";
+const WHOLE_NOTE = "Drawn once from your own file, so a font can differ slightly from PowerPoint.";
+const WHOLE_NOTE_PICTURES = "The original pictures on this slide are kept exactly as they are, and can be chosen here.";
 const NOTE = (unit: "slide" | "page") => unit === "slide"
   ? "The slide’s own layout is not reproduced here; the pictures are shown exactly as in your file."
   : "The pictures are shown exactly as in your file. View the original page to see it whole.";
 
-export type VisualsReply = { unit?: string; visuals: Visual[]; notShown?: number; off?: boolean; noSection?: number[] };
+export type VisualsReply = { unit?: string; visuals: Visual[]; notShown?: number; off?: boolean; noSection?: number[]; render?: "off" | "not_needed" | "not_started" | "running" | "finished" };
 
 // ── ONE ASK PER MATERIAL PER PAGE VIEW (memoised; a failed ask is forgotten so a later click can try again) ──
 const asked = new Map<string, Promise<VisualsReply | null>>();
@@ -34,9 +38,39 @@ export function loadVisuals(materialId: string): Promise<VisualsReply | null> {
   const p = fetch(visualsListUrl(materialId), { credentials: "same-origin" })
     .then(r => (r.ok ? (r.json() as Promise<VisualsReply>) : null))
     .catch(() => null)
-    .then(r => { if (!r) asked.delete(materialId); return r; });
+    .then(r => { if (!r) asked.delete(materialId); else followDrawing(materialId, r); return r; });
   asked.set(materialId, p);
   return p;
+}
+
+// ── WHOLE SLIDES (SCHOLAR-VISUAL-001 phase 2): opening a presentation asks for its slides to be drawn, at most once; the server decides. The original
+// pictures show meanwhile. One quiet check per material per half minute swaps each slide in when it is ready, and stops after a few minutes.
+const CHECK_EVERY_MS = 30_000;
+const CHECKS_MAX = 12;
+const listeners = new Map<string, Set<(reply: VisualsReply) => void>>();
+const roundsLeft = new Map<string, number>();
+const waiting = new Set<string>();
+const askDraw = (materialId: string) => {
+  void fetch(wholeSlidesUrl(materialId), { method: "POST", credentials: "same-origin" })
+    .then(r => (r.ok ? (r.json() as Promise<{ state?: string }>) : null))
+    // Off, or nothing to draw: there will be nothing to swap in, so no more checks.
+    .then(r => { if (r?.state === "off" || r?.state === "not_needed") roundsLeft.set(materialId, 0); })
+    .catch(() => {});
+};
+function followDrawing(materialId: string, reply: VisualsReply) {
+  if (reply.render !== "not_started" && reply.render !== "running") return;
+  // The server decides whether a job may start. An engine busy with another file: asked again at the next check.
+  if (reply.render === "not_started") askDraw(materialId);
+  if (waiting.has(materialId)) return;
+  const left = roundsLeft.get(materialId) ?? CHECKS_MAX;
+  if (left <= 0) return;
+  roundsLeft.set(materialId, left - 1);
+  waiting.add(materialId);
+  window.setTimeout(() => {
+    waiting.delete(materialId);
+    asked.delete(materialId);
+    void loadVisuals(materialId).then(next => { if (next) listeners.get(materialId)?.forEach(l => l(next)); });
+  }, CHECK_EVERY_MS);
 }
 
 /** The material's visuals, or null while they load / when none can be had. Off, a failure or a non-presentation: an empty list. */
@@ -46,7 +80,11 @@ function useVisuals(materialId: string, enabled: boolean): VisualsReply | null {
     if (!enabled) return;
     let live = true;
     void loadVisuals(materialId).then(reply => { if (live) setState({ id: materialId, reply }); });
-    return () => { live = false; };
+    const listen = (reply: VisualsReply) => { if (live) setState({ id: materialId, reply }); };
+    const here = listeners.get(materialId) ?? new Set<(reply: VisualsReply) => void>();
+    here.add(listen);
+    listeners.set(materialId, here);
+    return () => { live = false; here.delete(listen); };
   }, [materialId, enabled]);
   return enabled && state?.id === materialId ? state.reply : null;
 }
@@ -90,7 +128,7 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
         <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4">
           <div className="min-w-0">
             <h2 className="break-words text-[16px] font-bold text-gray-900">{title}</h2>
-            <p className="mt-0.5 text-[12.5px] font-semibold text-gray-700">{ORIGINAL}</p>
+            <p className="mt-0.5 text-[12.5px] font-semibold text-gray-700">{labelOf(current)}</p>
           </div>
           <button type="button" aria-label="Close" onClick={() => ref.current?.close()}
             className={`inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-gray-200 bg-white text-[15px] font-semibold hover:bg-gray-50 ${touch} ${focusRing}`}>{"✕"}</button>
@@ -112,7 +150,7 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
-            <img src={visualUrl(materialId, current.key)} alt={`Original picture from ${noun(current)} ${current.n} of ${materialTitle}`} style={zoom === 1 ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} className={`block h-auto bg-white ${zoom === 1 ? "mx-auto max-w-full" : ""}`} />
+            <img src={visualUrl(materialId, current.key)} alt={current.whole ? `Whole slide ${current.n} of ${materialTitle}` : `Original picture from ${noun(current)} ${current.n} of ${materialTitle}`} style={zoom === 1 ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} className={`block h-auto bg-white ${zoom === 1 ? "mx-auto max-w-full" : ""}`} />
           )}
         </div>
         <div className="space-y-3 border-t border-gray-200 p-4 text-[13px] text-gray-800">
@@ -120,24 +158,24 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
           {current.aiRead && <p role="note" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-semibold">{AI_NOTE}</p>}
           {current.safeText && <SafeText text={current.safeText} />}
           <section aria-label={`View original ${noun(current)} ${current.n}`}>
-            <h3 className="text-[13.5px] font-bold text-gray-900">View original {noun(current)} {current.n}</h3>
+            <h3 className="text-[13.5px] font-bold text-gray-900">{same.some(v => v.whole) ? `Slide ${current.n}: the whole slide and its original pictures` : `View original ${noun(current)} ${current.n}`}</h3>
             {same.length > 1 ? (
               <ul className="mt-2 flex flex-wrap gap-2">
                 {same.map((v, i) => (
                   <li key={v.key}>
-                    <button type="button" aria-pressed={v.key === current.key} aria-label={`Picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setZoom(1); setKey(v.key); setWhole(false); }}
+                    <button type="button" aria-pressed={v.key === current.key} aria-label={v.whole ? `The whole of slide ${v.n}` : `Original picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setZoom(1); setKey(v.key); setWhole(false); }}
                       className={`rounded-lg border bg-white p-1 ${touch} ${focusRing} ${v.key === current.key ? "border-gray-900" : "border-gray-300"}`}>
                       {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
-                      <img src={visualUrl(materialId, v.key)} alt="" loading="lazy" className="h-14 w-auto max-w-[120px] object-contain" />
+                      <img src={visualUrl(materialId, v.key)} alt="" className="h-14 w-auto min-w-14 max-w-[120px] object-contain" />
                     </button>
                   </li>
                 ))}
               </ul>
-            ) : <p className="mt-1 text-gray-700">{page ? "This is the whole page, as it is in your file." : `This is the only picture on ${noun(current)} ${current.n}.`}</p>}
+            ) : <p className="mt-1 text-gray-700">{page ? "This is the whole page, as it is in your file." : current.whole ? `This is the whole of slide ${current.n}.` : `This is the only picture on ${noun(current)} ${current.n}.`}</p>}
             {!page && current.unit === "page" && (
               <button type="button" aria-pressed={whole} onClick={() => setWhole(w => !w)} className={`${ghostBtn} mt-2`}>{whole ? "Back to the picture" : `Show the whole page ${current.n}`}</button>
             )}
-            <p className="mt-2 text-gray-700">{NOTE(current.unit)}</p>
+            <p className="mt-2 text-gray-700">{current.whole ? (same.length > 1 ? `${WHOLE_NOTE} ${WHOLE_NOTE_PICTURES}` : WHOLE_NOTE) : same.some(v => v.whole) ? "This is the original picture, exactly as in your file." : NOTE(current.unit)}</p>
             <p className="mt-2"><a href={`/api/individual/scholar/materials/${materialId}`} className={`inline-flex items-center font-semibold underline ${touch} ${focusRing}`}>{current.unit === "page" ? "Download the original file" : "Download the original presentation"}</a></p>
           </section>
         </div>
@@ -154,8 +192,10 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
 export function SectionPictures({ materialId, materialTitle, from, to, first, last, leading }: { materialId: string; materialTitle: string; from: number | null; to: number | null; first: boolean; last: boolean; leading?: boolean }) {
   const reply = useVisuals(materialId, from !== null);
   const [open, setOpen] = useState<string | null>(null);
+  // A drawn slide that cannot be loaded gives way to the original pictures. Never a broken image where a picture was.
+  const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
   if (!reply || reply.off || !reply.visuals?.length) return null;
-  const found = visualsForSection(reply.visuals, reply.noSection ?? [], { from, to, first, last, leading });
+  const found = preferWhole(visualsForSection(reply.visuals, reply.noSection ?? [], { from, to, first, last, leading }).filter(v => !broken.has(v.key)));
   if (!found.length) return null;
   return (
     <div className="mt-3 space-y-3">
@@ -164,18 +204,18 @@ export function SectionPictures({ materialId, materialTitle, from, to, first, la
         const usesPage = v.kind === "pdf_page";
         return (
           <figure key={v.key} className="m-0">
-            <button type="button" onClick={() => setOpen(v.key)} aria-label={`Enlarge the original picture from ${where.toLowerCase()}`} className={`block w-full rounded-lg border border-gray-200 bg-white p-1 text-left hover:border-gray-400 ${touch} ${focusRing}`}>
+            <button type="button" onClick={() => setOpen(v.key)} aria-label={v.whole ? `Enlarge the whole of ${where.toLowerCase()}` : `Enlarge the original picture from ${where.toLowerCase()}`} className={`block w-full rounded-lg border border-gray-200 bg-white p-1 text-left hover:border-gray-400 ${touch} ${focusRing}`}>
               {usesPage ? (
                 <span className="block px-3 py-6 text-center text-[13.5px] font-semibold text-gray-800">Open {where.toLowerCase()} as it is in your file</span>
               ) : (
                 // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
-                <img src={visualUrl(materialId, v.key)} alt={`Original picture from ${where.toLowerCase()} of ${materialTitle}`} loading="lazy" decoding="async" width={v.width ?? undefined} height={v.height ?? undefined}
+                <img src={visualUrl(materialId, v.key)} alt={v.whole ? `Whole ${where.toLowerCase()} of ${materialTitle}` : `Original picture from ${where.toLowerCase()} of ${materialTitle}`} onError={v.whole ? () => setBroken(b => new Set(b).add(v.key)) : undefined} loading="lazy" decoding="async" width={v.width ?? undefined} height={v.height ?? undefined}
                   style={v.width && v.height ? { width: `min(100%, ${v.width}px)`, aspectRatio: `${v.width} / ${v.height}` } : undefined}
                   className="mx-auto block h-auto max-h-[70vh] w-auto max-w-full rounded object-contain" />
               )}
             </button>
             <figcaption className="mt-1 text-[12.5px] text-gray-700">
-              <span className="font-semibold text-gray-800">{where}</span> · {ORIGINAL}{!usesPage && " · Select to enlarge"}
+              <span className="font-semibold text-gray-800">{where}</span> · {labelOf(v)}{!usesPage && " · Select to enlarge"}
               {v.aiRead && <span className="block">{AI_NOTE}</span>}
             </figcaption>
           </figure>
@@ -224,13 +264,14 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
   const reply = useVisuals(materialId, true);
   const [all, setAll] = useState(false);
   const [open, setOpen] = useState<string | null>(null);
+  const [broken, setBroken] = useState<ReadonlySet<string>>(new Set());
   // The stored choice is read after hydration (the server renders the pictures' own behaviour), then kept in state.
   const stored = useSyncExternalStore(noSubscribe, () => readMode(materialId), () => null);
   const [chosen, setChosen] = useState<{ value: VisualMode | null } | null>(null);
   const mode = chosen ? chosen.value : stored;
   const pick = (value: VisualMode | null) => { setChosen({ value }); writeMode(materialId, value); };
   // SCHOLAR-VISUAL-001: with the picture-only slides that follow these sections, which have no section of their own to be cited by.
-  const found = reply?.visuals?.length ? visualsForLesson(reply.visuals, reply.noSection ?? [], ranges) : [];
+  const found = reply?.visuals?.length ? preferWhole(visualsForLesson(reply.visuals, reply.noSection ?? [], ranges).filter(v => !broken.has(v.key))) : [];
   if (!reply || reply.off || !found.length) return null;
   const arranged = arrangeStrip(found, mode, all ? found.length : max);
   const pages = found[0].unit === "page";
@@ -253,7 +294,7 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
         <ul className={`mt-2 grid grid-cols-1 gap-3 ${arranged.shown.length === 1 ? "" : arranged.shown.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-2 lg:grid-cols-3"}`}>
           {arranged.shown.map(v => (
             <li key={v.key} className="min-w-0">
-              <VisualCard v={v} materialId={materialId} materialTitle={materialTitle} onOpen={() => setOpen(v.key)}
+              <VisualCard v={v} materialId={materialId} materialTitle={materialTitle} onOpen={() => setOpen(v.key)} onBroken={() => setBroken(b => new Set(b).add(v.key))}
                 textHref={v.aiRead ? textHrefOf(v, materialId, ranges) : null} />
             </li>
           ))}
@@ -265,9 +306,9 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
           {arranged.textOnly.map(v => (
             <li key={v.key}>
               <details className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-800">
-                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: the original {noun(v)}</summary>
+                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: {v.whole ? "the whole slide" : `the original ${noun(v)}`}</summary>
                 <p className="mt-1 text-gray-700">{v.hasText ? `The text of this ${noun(v)} teaches it; the original is kept here.` : "No text was read from this picture."}</p>
-                <button type="button" onClick={() => setOpen(v.key)} className={`${ghostBtn} mt-2`}>Open the original {noun(v)}</button>
+                <button type="button" onClick={() => setOpen(v.key)} className={`${ghostBtn} mt-2`}>{v.whole ? "Open the whole slide" : `Open the original ${noun(v)}`}</button>
               </details>
             </li>
           ))}
@@ -294,7 +335,7 @@ function SafeText({ text }: { text: string }) {
   );
 }
 
-function VisualCard({ v, materialId, materialTitle, onOpen, textHref }: { v: Visual; materialId: string; materialTitle: string; onOpen: () => void; textHref: string | null }) {
+function VisualCard({ v, materialId, materialTitle, onOpen, onBroken, textHref }: { v: Visual; materialId: string; materialTitle: string; onOpen: () => void; onBroken: () => void; textHref: string | null }) {
   const page = v.kind === "pdf_page";
   return (
     <figure className="flex h-full flex-col overflow-hidden rounded-xl border border-gray-200 bg-white">
@@ -304,16 +345,16 @@ function VisualCard({ v, materialId, materialTitle, onOpen, textHref }: { v: Vis
           <button type="button" onClick={onOpen} className={ghostBtn}>Open the original page</button>
         </div>
       ) : (
-        <button type="button" onClick={onOpen} aria-label={`Enlarge the original picture from ${noun(v)} ${v.n}`}
+        <button type="button" onClick={onOpen} aria-label={v.whole ? `Enlarge the whole of slide ${v.n}` : `Enlarge the original picture from ${noun(v)} ${v.n}`}
           className={`flex w-full items-center justify-center bg-white p-1 ${touch} ${focusRing}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- the learner's own file, shown as it is: never resized, cropped or stretched */}
-          <img src={visualUrl(materialId, v.key)} loading="lazy" decoding="async" alt={`Original picture from ${noun(v)} ${v.n} of ${materialTitle}`}
+          <img src={visualUrl(materialId, v.key)} onError={v.whole ? onBroken : undefined} loading="lazy" decoding="async" alt={v.whole ? `Whole slide ${v.n} of ${materialTitle}` : `Original picture from ${noun(v)} ${v.n} of ${materialTitle}`}
             className="h-auto max-h-[220px] w-auto max-w-full bg-white object-contain md:max-h-[280px]" />
         </button>
       )}
       <figcaption className="border-t border-gray-200 px-3 py-2 text-[12.5px] text-gray-700">
         {!page && <span className="block font-semibold text-gray-900">{v.caption}</span>}
-        <span className="block"><span className="mr-1 inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11.5px] font-semibold text-gray-800">{v.label}</span>{ORIGINAL}</span>
+        <span className="block"><span className="mr-1 inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11.5px] font-semibold text-gray-800">{v.label}</span>{labelOf(v)}</span>
         {v.aiRead && (
           <span className="mt-0.5 block font-semibold text-gray-900">{AI_NOTE}
             {textHref && <> <Link href={textHref} className={`underline ${focusRing}`}>See that section&apos;s text</Link></>}
@@ -346,7 +387,7 @@ export function SourcePictureButton({ materialId, materialTitle, citation, class
   return (
     <>
       <button type="button" onClick={() => void press()} disabled={state === "loading"} className={className ?? ghostBtn}>
-        {state === "loading" ? "Looking for the picture…" : `View the original ${word} picture`}
+        {state === "loading" ? "Looking for the picture…" : `View the ${word}'s pictures`}
       </button>
       {state === "none" && <span role="status" className="self-center text-[12.5px] text-gray-700">This {word} has no separate original picture{range.unit === "page" ? " (only image-only pages are shown)" : ""}.</span>}
       {state === "failed" && <span role="status" className="self-center text-[12.5px] text-gray-700">The picture could not be fetched just now. Try again shortly.</span>}

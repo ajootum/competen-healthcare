@@ -1,0 +1,9 @@
+NOTE First run, through the plain node worker, drawn from nothing in about 234s on this machine: status done, slides 5,12,16,17,18,29,33,34,35,36, 1567558 bytes. Slide 36 answered 500 once, 'Manifest file is empty', a webpack dev recompile. Rerun below, with no second drawing, so it says about 5s.
+NOTE drawn in about 5s on this machine, status done, reason null, engine libreoffice-wasm-2.7.2+pdfium-3.0.0-lossless, slides 5,12,16,17,18,29,33,34,35,36, 1567558 bytes
+PASS drawn from nothing with PDFium, through the plain node worker
+PASS slide 35: served, mean difference from PowerPoint's picture 1.38 of 255
+PASS slide 36: served, mean difference from PowerPoint's picture 1.40 of 255
+PASS slide 12: served, mean difference from PowerPoint's picture 3.05 of 255
+PASS slide 29: served, mean difference from PowerPoint's picture 5.02 of 255
+PASS the notes show slide 35 whole
+NOTE policy restored

@@ -1,4 +1,5 @@
 # What never needs uploading to Vercel.
+/.render-engine
 #
 # WHY THIS EXISTS. Deploys are made with `vercel --prod --archive=tgz`, which tars the working
 # directory. Without this file that included .next -- 6.3GB locally after a dev server and a

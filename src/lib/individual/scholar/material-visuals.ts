@@ -71,6 +71,8 @@ export type Visual = {
   hasText: boolean;
   /** The AI-read text of a chart or table page, shown only behind a warning (never for scores or thresholds). */
   safeText: string | null;
+  /** SCHOLAR-VISUAL-001 phase 2: the whole slide, drawn once from the learner's file. Not the original bytes: said so wherever it is shown. */
+  whole?: boolean;
 };
 
 /** One picture on one slide / page, as measured: `kind` is null when its bytes are not an image a browser can show. */
@@ -285,6 +287,21 @@ export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { 
   return { visuals, notShown };
 }
 
+/** Pure. A slide drawn whole, classified and captioned like the pictures on it. */
+export function wholeSlideVisual(u: { n: number; sha: string; width: number; height: number; bytes: number }, opts: Pick<BuildOptions, "aiRead" | "pages" | "classify" | "textWords"> = {}): Visual {
+  const v = decorate({
+    key: `w${u.n}-${u.sha}`, unit: "slide", n: u.n, media: null, kind: "webp", width: u.width, height: u.height, bytes: u.bytes, sha: u.sha, decorative: false,
+    aiRead: !!opts.aiRead?.has(u.n),
+  }, { ...opts, unit: "slide" });
+  return { ...v, whole: true, caption: v.title ? `${v.title} · slide ${u.n}` : `Slide ${u.n} · the whole slide from your presentation` };
+}
+
+/** Pure. Where a slide is drawn whole, the whole slide stands for its pictures in the notes and the strip. The pictures stay in the list, for the dialog. */
+export function preferWhole<V extends Pick<Visual, "n" | "whole">>(visuals: readonly V[]): V[] {
+  const drawn = new Set(visuals.filter(v => v.whole).map(v => v.n));
+  return visuals.filter(v => v.whole || !drawn.has(v.n));
+}
+
 /** Pure. A presentation's content pictures (see buildVisuals). */
 export function deckVisuals(scan: DeckScan, opts: BuildOptions = {}): { visuals: Visual[]; notShown: number } {
   return buildVisuals(scan, { ...opts, unit: opts.unit ?? "slide" });
@@ -334,7 +351,9 @@ export function visualsForLesson(visuals: readonly Visual[], noSection: readonly
 }
 
 /** Pure. A visual key as the URL carries it, or null when it is not one (nothing else is ever looked up). */
-export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | null {
+export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | { kind: "whole"; n: number; sha: string } | null {
+  const whole = /^w([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
+  if (whole) return { kind: "whole", n: Number(whole[1]), sha: whole[2] };
   const slide = /^([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
   if (slide) return { kind: "slide", n: Number(slide[1]), sha: slide[2] };
   const page = /^p([1-9]\d{0,4})(?:-([0-9a-f]{16}))?$/.exec(key);
@@ -357,6 +376,8 @@ export function canServeVisual(material: { userId?: string; mimeType: string } |
 /** The URL of the visuals list of a material, and of one picture (or PDF page) in it. */
 export const visualsListUrl = (materialId: string) => `/api/individual/scholar/materials/${materialId}/visuals`;
 export const visualUrl = (materialId: string, key: string) => `${visualsListUrl(materialId)}/${key}`;
+/** SCHOLAR-VISUAL-001 phase 2: asks for a material's slides to be drawn (at most once, however often it is asked). */
+export const wholeSlidesUrl = (materialId: string) => `/api/individual/scholar/materials/${materialId}/whole-slides`;
 
 /**
  * Pure. The unit and range a citation names ("Deck, slide 12" / "Notes, pages 3-4"), or null for a Word / text "section N"
