@@ -135,6 +135,9 @@ export const PROMPT_VERSIONS = {
   // the key points, questions that ask for explanation or reasoning, and the lesson brief in the prompt. A saved v2 lesson is
   // still opened with no AI call (LEARN_TEACH_LEGACY).
   learnTeach: "scholar-learn-teach-v3",
+  // SCHOLAR-RESEARCH-TEACH-001 P1: Teach Me from the notes, an evidence pack and Scholar's own explanation (teach-integrated.ts). A suffix on
+  // learnTeach, so a lesson written this way is told apart, and every lesson saved before it keeps its key and is still served with no AI call.
+  researchTeach: "research-teach-v1",
   // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper is written in the lesson's parts and, given TAUGHT SO FAR, extends the lesson
   // (or declares the depth reached). A saved context-free "scholar-learn-v3:deeper" is still opened (legacyLearnPromptVersions).
   learnDeeper: "scholar-learn-deeper-v2",

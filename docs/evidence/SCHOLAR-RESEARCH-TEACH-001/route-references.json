@@ -1,0 +1,154 @@
+[
+ {
+  "kind": "external",
+  "tag": "E1",
+  "provider": "PubMed",
+  "title": "Early Adversity and Critical Periods: Neurodevelopmental Consequences of Violating the Expectable Environment.",
+  "journal": "Trends in neurosciences",
+  "year": 2020,
+  "authors": [
+   "Nelson CA 3rd",
+   "Gabard-Durnam LJ"
+  ],
+  "pmid": "32101708",
+  "doi": "10.1016/j.tins.2020.01.002",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/32101708/",
+  "evidence": true,
+  "excerpt": "It is now widely recognized that children exposed to adverse life events in the first years of life are at increased risk for a variety of neural, behavioral, and psychological sequelae. As we discuss in this paper, adverse events represent a violation of the expectable environment. If such violations occur during a…",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "retrievedAt": "2026-11-06T17:00:47.155Z",
+  "sourceVersion": "pubmed@v0",
+  "reuse": "private_evidence_excerpt_only",
+  "notUsed": null,
+  "openAccess": null,
+  "relevanceChecked": true,
+  "studyKind": "narrative review",
+  "accessed": "abstract"
+ },
+ {
+  "kind": "external",
+  "tag": "E2",
+  "provider": "PubMed",
+  "title": "Attachment Disorders.",
+  "journal": "Journal of pediatric health care : official publication of National Association of Pediatric Nurse Associates & Practitioners",
+  "year": 2019,
+  "authors": [
+   "Hornor G"
+  ],
+  "pmid": "31447013",
+  "doi": "10.1016/j.pedhc.2019.04.017",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/31447013/",
+  "evidence": true,
+  "excerpt": "The ability to form attachments with other human beings is an essential skill that typically begins early in life. The parent/caregiver-child relationship is the first crucial relationship that an infant forms, and the health of this relationship has a profound effect on the child's social and emotional development.…",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "retrievedAt": "2026-11-06T17:00:51.435Z",
+  "sourceVersion": "pubmed@v0",
+  "reuse": "private_evidence_excerpt_only",
+  "notUsed": null,
+  "openAccess": null,
+  "relevanceChecked": true,
+  "studyKind": "narrative review",
+  "accessed": "abstract"
+ },
+ {
+  "kind": "external",
+  "tag": "E3",
+  "provider": "PubMed",
+  "title": "Cerebral plasticity: Windows of opportunity in the developing brain.",
+  "journal": "European journal of paediatric neurology : EJPN : official journal of the European Paediatric Neurology Society",
+  "year": 2017,
+  "authors": [
+   "Ismail FY",
+   "Fatemi A",
+   "Johnston MV"
+  ],
+  "pmid": "27567276",
+  "doi": "10.1016/j.ejpn.2016.07.007",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/27567276/",
+  "evidence": true,
+  "excerpt": "BACKGROUND: Neuroplasticity refers to the inherently dynamic biological capacity of the central nervous system (CNS) to undergo maturation, change structurally and functionally in response to experience and to adapt following injury. This malleability is achieved by modulating subsets of genetic, molecular and…",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "retrievedAt": "2026-11-06T17:00:47.155Z",
+  "sourceVersion": "pubmed@v0",
+  "reuse": "private_evidence_excerpt_only",
+  "notUsed": null,
+  "openAccess": null,
+  "relevanceChecked": true,
+  "studyKind": "narrative review",
+  "accessed": "abstract"
+ },
+ {
+  "kind": "external",
+  "tag": "E4",
+  "provider": "PubMed",
+  "title": "Disorganized attachment in infancy: a review of the phenomenon and its implications for clinicians and policy-makers.",
+  "journal": "Attachment & human development",
+  "year": 2017,
+  "authors": [
+   "Granqvist P",
+   "Sroufe LA",
+   "Dozier M"
+  ],
+  "pmid": "28745146",
+  "doi": "10.1080/14616734.2017.1354040",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/28745146/",
+  "evidence": true,
+  "excerpt": "Disorganized/Disoriented (D) attachment has seen widespread interest from policy makers, practitioners, and clinicians in recent years. However, some of this interest seems to have been based on some false assumptions that (1) attachment measures can be used as definitive assessments of the individual in…",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "retrievedAt": "2026-11-06T17:00:51.435Z",
+  "sourceVersion": "pubmed@v0",
+  "reuse": "private_evidence_excerpt_only",
+  "notUsed": null,
+  "openAccess": {
+   "url": "https://pmc.ncbi.nlm.nih.gov/articles/PMC5600694/",
+   "pmcid": "PMC5600694",
+   "licence": "CC BY",
+   "retracted": false
+  },
+  "relevanceChecked": true,
+  "studyKind": "narrative review",
+  "accessed": "abstract"
+ },
+ {
+  "kind": "external",
+  "tag": "E5",
+  "provider": "PubMed",
+  "title": "Non-Cell-Autonomous Factors Implicated in Parvalbumin Interneuron Maturation and Critical Periods.",
+  "journal": "Frontiers in neural circuits",
+  "year": 2022,
+  "authors": [
+   "Gibel-Russo R",
+   "Benacom D",
+   "Di Nardo AA"
+  ],
+  "pmid": "35601531",
+  "doi": "10.3389/fncir.2022.875873",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/35601531/",
+  "evidence": true,
+  "excerpt": "From birth to adolescence, the brain adapts to its environmental stimuli through structural and functional remodeling of neural circuits during critical periods of heightened plasticity. They occur across modalities for proper sensory, motor, linguistic, and cognitive development. If they are disrupted by early-life…",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "retrievedAt": "2026-11-06T17:00:47.155Z",
+  "sourceVersion": "pubmed@v0",
+  "reuse": "private_evidence_excerpt_only",
+  "notUsed": null,
+  "openAccess": null,
+  "relevanceChecked": true,
+  "studyKind": "narrative review",
+  "accessed": "abstract"
+ }
+]

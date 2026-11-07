@@ -17,7 +17,7 @@ import { examClaimViolations, highYieldWords, normaliseTeachingMarkdown, teachin
 import type { CognitiveLevel } from "./question-intel";
 import { DEPTH_RULE, SUBJECT_RULE, aboutTheDocument } from "./revision-depth";
 import { citeChunk, findPatientIdentifiers } from "./extract";
-import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
+import { TEACH_LABEL, TEACH_MAX_QUESTIONS, citedTags, composeTeachAnswer, notesSentencesOnly, parseTeachAnswer, questionText, type TeachParts } from "./teach-format";
 import { structureLabel, type CatalogueCompetency } from "./catalogue";
 import {
   REVISION_VERIFY_SYSTEM, VERIFY_SYSTEM, applyRevisionVerification, applyVerification, passageVocabulary, qualityProblems, revisionVerificationPrompt, verificationPrompt,
@@ -528,7 +528,7 @@ export type ResearchReason = "no_citation" | "bad_citation" | "mixed" | "uncited
 export type ResearchCheck = { ok: true; text: string; cited: number[]; dropped?: number } | { ok: false; reason: ResearchReason; violations?: PhrasingViolation[] };
 // Doses, units and dose adjustment. Whether a medicine is prescribed is a fact, not a dose: medication ADVICE is judged
 // by the published risk rules on what the research part wrote (withinRequestRisk, risk_raised), not by a word list.
-const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|titrat\w*|bolus|regimen)\b/i;
+export const RESEARCH_DOSING = /\b(mg|mcg|micrograms?|milligrams?|ml|millilitres?|milliliters?|mmol|iu|units?\/kg|dose[sd]?|dosage|dosing|titrat\w*|bolus|regimen)\b/i;
 
 export const RESEARCH_WITHHELD: Record<ResearchReason, string> = {
   no_citation: "The research summary did not say which source each point came from, so it was not shown.",
@@ -583,7 +583,7 @@ export function checkResearchPart(raw: string, evidence: readonly ResearchEviden
 /** A caveat a lead-in must keep: if the first sentence carries one, it is a claim about the evidence, never mere framing. */
 const RESEARCH_CAVEAT = /\b(limited|mixed|weak|preliminary|early (?:evidence|data|stage|studies|findings|results|research)|uncertain|unclear|conflicting|inconsistent|insufficient|small|few|caution|cautious|not|no|cannot|lack|lacks|lacking|only|however)\b/i;
 /** The study-method use of "examined" (the subject is the study or its authors), and only that. */
-const RESEARCH_METHOD_EXAMINED = /\b(stud(?:y|ies)|trial|trials|review|reviews|analysis|analyses|audit|survey|paper|authors|researchers|investigators|it|they)\s+examined\b/gi;
+export const RESEARCH_METHOD_EXAMINED = /\b(stud(?:y|ies)|trial|trials|review|reviews|analysis|analyses|audit|survey|paper|authors|researchers|investigators|it|they)\s+examined\b/gi;
 
 /** Pure. The research part as units: one per sentence of each line, in order, with whether it cites and whether its line is a heading. */
 function researchUnits(t: string): { text: string; words: number; cited: boolean; heading: boolean; index: number }[] {
@@ -762,7 +762,9 @@ export function savedLearningPassage(row: { id: string; kind: "artefact" | "note
   const notesPart = end ? row.content.slice(0, end.index) : row.content;
   // SCHOLAR-GO-DEEPER-001: a structured round's Scholar sections are not notes, so they never become a passage that answers rest on.
   const round = row.kind === "artefact" ? parseDeeperAnswer(notesPart) : null; // a learner's own note is theirs, whatever words it uses
-  const body = (round ? deeperNotesOnlyText(round) : notesPart).replace(/\s*\[[SRE]\d+\]/g, "").trim();
+  // SCHOLAR-RESEARCH-TEACH-001: the same for a lesson from the three sources: research and Scholar's own sentences must not come back cited as the learner's own.
+  const fromSources = row.kind === "artefact" && /\[E\d+\]|\[AI\]/.test(notesPart);
+  const body = (round ? deeperNotesOnlyText(round) : fromSources ? notesSentencesOnly(notesPart) : notesPart).replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").trim();
   return {
     chunkId: row.id, materialId: row.materialId ?? "", materialTitle: `${row.kind === "note" ? "Your note" : "Saved teaching"}, ${row.createdAt.slice(0, 10)}`,
     ordinal: 0, pageFrom: null, pageTo: null, content: body.slice(0, 1800),
@@ -850,8 +852,9 @@ export function normaliseCitations(text: string): string {
       if (to > from && to - from <= 12) return Array.from({ length: to - from + 1 }, (_, i) => `[${k}${from + i}]`).join("");
       return `[${k}${first}][${k}${to}]`;
     }
-    const nums = [first, ...rest.split(/[,;/]/).map(x => x.replace(/[^0-9]/g, "")).filter(Boolean)];
-    return nums.map(n => `[${k}${n}]`).join("");
+    // Each element keeps its own letter: "[S1, E2]" is a note and a record, never two notes.
+    const more = rest.split(/[,;/]/).map(x => /([SRE])?\s*(\d+)/.exec(x)).filter((m): m is RegExpExecArray => !!m).map(m => `[${m[1] ?? k}${m[2]}]`);
+    return [`[${k}${first}]`, ...more].join("");
   });
 }
 

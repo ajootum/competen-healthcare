@@ -188,6 +188,7 @@ describe("Individual policy catalogue (COMPETEN-CONFIG-002)", () => {
       scholarOsce: { enabled: true, durationMinutes: 8, checklistMin: 8, checklistMax: 12 },
       // COMPETEN-RESEARCH-01: notes only. Research also needs the engine operational (HQ Research Sources).
       scholarResearch: { modes: ["notes"], dailyMax: 5, dailyCostCents: 25, relevance: "standard" },
+      scholarTeachResearch: { on: false, maxSearches: 4, dailyCostCents: 100 },
       // SCHOLAR-SQIE-02: evidence recovery defaults to notes + library, external off, no source enabled.
       // SCHOLAR-SOURCE-QUALITY-01: only PubMed-indexed reviews, guidelines and trials whose title names the topic may explain.
       scholarRecovery: {

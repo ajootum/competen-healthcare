@@ -24,8 +24,8 @@ import type { IndividualContext } from "../guard";
 export const LEARN_FLIGHT_ACTION = "scholar_learn_inflight";
 export const LEARN_SERVED_ACTION = "scholar_learn_served";
 export const LEARN_ENTITY = "individual_scholar_learn";
-/** A generation runs well inside the route's 60 s ceiling; a start row older than this is not in flight. */
-export const FLIGHT_WINDOW_MS = 60_000;
+/** The route's ceiling (SCHOLAR-RESEARCH-TEACH-001: 120 s, for a first lesson with evidence); a start row older than this is not in flight. */
+export const FLIGHT_WINDOW_MS = 120_000;
 /** How long a duplicate waits for the first request's lesson, and how often it looks. */
 export const FLIGHT_WAIT_MS = 40_000;
 export const FLIGHT_POLL_MS = 1_200;

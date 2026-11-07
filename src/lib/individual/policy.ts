@@ -74,7 +74,7 @@ export type IntPolicyKey = "reminder_horizon_days" | "professional_need_review_d
   | "scholar_evaluation_band_developing" | "scholar_evaluation_fresh_quantity" | "scholar_progress_periods" | "scholar_progress_next_max"
   | "professional_evaluation_sufficiency" | "professional_evaluation_recency_days" | "professional_evaluation_period_days" | "professional_evaluation_history_shown"
   | "professional_progress_recent_days" | "scholar_exam_web_daily_max" | "scholar_exam_research_cache_days"
-  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
+  | "scholar_research_daily_max" | "scholar_research_daily_cost_cents" | "scholar_teach_research_max_searches" | "scholar_teach_research_daily_cost_cents" | "scholar_recovery_max_results" | "scholar_recovery_timeout_ms"
   | "scholar_osce_duration_minutes" | "scholar_osce_checklist_min" | "scholar_osce_checklist_max"
   | "scholar_adaptive_length" | "scholar_adaptive_max_length" | "scholar_flashcards_per_generation" | "scholar_flashcard_deck_max" | "scholar_learn_inline_recall_min_words"
   | "scholar_monthly_review_min_questions" | "scholar_monthly_review_max_questions" | "scholar_monthly_review_per_section" | "scholar_monthly_review_recommend_days"
@@ -126,7 +126,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_progress_period" | "scholar_passport_evaluations"
   | "professional_evaluation_sharing" | "professional_evaluation_ai" | "professional_evaluation_ai_reflections" | "professional_evaluation_corrections"
   | "professional_progress_default_period" | "professional_documents_ai" | "professional_global_search" | "scholar_recovery_default_mode" | "scholar_recovery_external"
-  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance"
+  | "scholar_recovery_evidence_indexed" | "scholar_recovery_evidence_on_topic" | "scholar_recovery_sufficiency" | "scholar_research_relevance" | "scholar_teach_research"
   | "scholar_osce" | "scholar_adaptive_exams" | "scholar_flashcards" | "scholar_flashcard_difficulty" | "scholar_flashcard_level_mix"
   | "scholar_study_sessions" | "scholar_learn_prepare_next" | "scholar_go_deeper_structured" | "scholar_guide_me_adaptive" | "scholar_mistake_notebook" | "scholar_study_plan" | "scholar_case_contribution"
   | "scholar_global_search" | "scholar_question_offering" | "scholar_question_offer_days" | "scholar_learning_library" | "scholar_next_best_action" | "scholar_active_notebook" | "scholar_personal_notebook" | "scholar_search_history"
@@ -206,6 +206,8 @@ export type ExamResearchDepth = "quick" | "standard" | "deep";
 /** COMPETEN-RESEARCH-01: the three Learn modes. "notes" is always offered and is the default. */
 export const LEARN_SOURCE_MODES = ["notes", "library", "research"] as const;
 export type LearnSourceMode = (typeof LEARN_SOURCE_MODES)[number];
+/** SCHOLAR-RESEARCH-TEACH-001 P1. Off unless published. Whether a source may be called is still the engine's. */
+export type ScholarTeachResearchPolicy = { on: boolean; maxSearches: number; dailyCostCents: number };
 export type ScholarResearchPolicy = {
   /** The modes Scholar offers, in order. Always includes "notes". "research" is SHOWN only while the engine has it operational. */
   modes: LearnSourceMode[];
@@ -1697,6 +1699,30 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: 25, min: 0, max: 500,
     limitReason: "Zero to five dollars. Default: twenty-five cents.",
   },
+  // SCHOLAR-RESEARCH-TEACH-001 P1 (owner GO for development and testing, 6 Nov 2026; production activation needs its own GO).
+  // Its own switch, apart from scholar_learn_source_modes: turning it on changes nothing about Research & Explain or Ask.
+  {
+    key: "scholar_teach_research", kind: "choice", product: "Scholar",
+    label: "Teach Me with scholarly evidence",
+    help: "When on, the first Teach Me of a lesson consults approved free scholarly sources (PubMed, with Crossref and PubMed Central for checking) and teaches from the learner's notes and published evidence together, each sentence saying which. Only subject terms from Competen's own closed list are sent, never anything from the learner or their notes. Reopening a saved lesson never searches. The sources must also be Active in the Research & Evidence Engine.",
+    options: [{ value: "off", label: "Off (notes only, as now)" }, { value: "on", label: "On" }],
+    fallback: "off",
+    limitReason: "Default: off. Automated retrieval is not clinical endorsement, and clinical safety rules apply unchanged.",
+  },
+  {
+    key: "scholar_teach_research_max_searches", kind: "int", product: "Scholar", unit: "topics",
+    label: "Teach Me with scholarly evidence: topics searched for a lesson",
+    help: "The most subject topics one lesson may search. Each topic is searched once and the result is reused by every learner who reaches it.",
+    fallback: 4, min: 1, max: 5,
+    limitReason: "One to five. Default: four.",
+  },
+  {
+    key: "scholar_teach_research_daily_cost_cents", kind: "int", product: "Scholar", unit: "US cents",
+    label: "Teach Me with scholarly evidence: AI spend per learner per day",
+    help: "The most AI spend these lessons may use for one learner in a day, from the recorded cost. At the limit, Teach Me teaches from the notes and says external research was not included. Saved lessons cost nothing and stay available.",
+    fallback: 100, min: 0, max: 1000,
+    limitReason: "Zero to ten dollars. Default: one dollar. Set from the measured cost of a lesson.",
+  },
   // SCHOLAR-SQIE-02 s5-8 (owner, 30 Oct 2026): EVIDENCE RECOVERY when an answer was withheld or the notes were not enough.
   // Notes first, then the approved Competen library, then -- only if the learner chose references AND HQ switched it on
   // AND the Research & Evidence Engine has the source Active -- external scholarly sources. Default: notes + library.
@@ -2678,6 +2704,7 @@ export type IndividualPolicy = {
   scholarOsce: ScholarOscePolicy;
   /** COMPETEN-RESEARCH-01: the Learn source modes and governed academic research. */
   scholarResearch: ScholarResearchPolicy;
+  scholarTeachResearch: ScholarTeachResearchPolicy;
   /** SCHOLAR-SQIE-02: evidence recovery after a withheld or insufficient answer. */
   scholarRecovery: ScholarRecoveryPolicy;
   scholarOnboardingFields: ("level" | "institution")[];
@@ -2917,6 +2944,11 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarMaterialImageSlides: clampChoice(policyDef("scholar_material_image_slides") as ChoicePolicy, published.get(policyPath("scholar_material_image_slides"))) as "off" | "ai_transcription",
     scholarOsce: resolveScholarOsce(published),
     scholarResearch: resolveScholarResearch(published),
+    scholarTeachResearch: {
+      on: clampChoice(policyDef("scholar_teach_research") as ChoicePolicy, published.get(policyPath("scholar_teach_research"))) === "on",
+      maxSearches: clampInt(policyDef("scholar_teach_research_max_searches") as IntPolicy, published.get(policyPath("scholar_teach_research_max_searches"))),
+      dailyCostCents: clampInt(policyDef("scholar_teach_research_daily_cost_cents") as IntPolicy, published.get(policyPath("scholar_teach_research_daily_cost_cents"))),
+    },
     scholarRecovery: resolveScholarRecovery(published),
     scholarOnboardingFields: clampSet(policyDef("scholar_onboarding_fields") as SetPolicy, published.get(policyPath("scholar_onboarding_fields"))) as ("level" | "institution")[],
     scholarCatalogueMinStatus: clampChoice(policyDef("scholar_catalogue_min_status") as ChoicePolicy, published.get(policyPath("scholar_catalogue_min_status"))) as ContentStatusLevel,

@@ -1,3 +1,5 @@
+import { INTEGRATED_KEY, INTEGRATED_LABEL, isIntegratedVersion } from "@/lib/individual/scholar/teach-format";
+import { SavedEvidenceList } from "./saved-evidence";
 import { GO_DEEPER_COPY, deeperResearchText, deeperSourcedText, parseDeeperAnswer } from "@/lib/individual/scholar/deeper-format";
 import Link from "next/link";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
@@ -358,7 +360,8 @@ function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> 
   const shown = round ? `${deeperSourcedText(round)}${research ? `\n\n${GO_DEEPER_COPY.research}\n${research}` : ""}` : a.content;
   return (
     <>
-      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{round ? GO_DEEPER_COPY.subtitle : SOURCE_KIND_LABEL.notes}</p>
+      <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{round ? GO_DEEPER_COPY.subtitle : isIntegratedVersion(a.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
+      {!round && isIntegratedVersion(a.promptVersion) && <p className="mt-0.5 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
       <ReadAloudButton text={shown} about="this saved lesson" className="mt-1" />
       <div className="mt-1 whitespace-pre-wrap break-words text-[14px] leading-relaxed text-gray-800">{shown}</div>
       <ul className="mt-2 space-y-0.5">
@@ -368,6 +371,7 @@ function ArtefactBody({ a, c }: { a: ArtefactRow; c: Pick<ItemCtx, "refSource"> 
         ))}
       </ul>
       {a.refs.length > 0 && <GovernedReferenceList refs={relabelReferences(a.refs, c.refSource)} />}
+      <SavedEvidenceList refs={a.refs} />
       {a.background && (
         <div className="mt-2 rounded-lg border border-sky-200 bg-sky-50/60 px-3 py-2 text-[13px] text-gray-800">
           <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-sky-900">{SUPPLEMENTARY_LABEL}</p>

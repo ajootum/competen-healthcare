@@ -60,7 +60,7 @@ const OPEN_MAX = 8, LABEL_MAX = 30;
 const PRIOR_LIMITS = { question: 400, answer: 1500, feedback: 3000 } as const;
 const ACTION_WORDS: Record<string, string> = { guide: "Guide me", teach: "Teach me (the lesson)", deeper: "Go deeper", explain: "Explain again", simplify: "Simplify", examples: "Examples", summary: "Summary" };
 
-const plain = (s: string) => s.replace(/\[[SRE]\d+\]/g, "").replace(/\*\*|__|^#+\s*/g, "").replace(/\s+/g, " ").replace(/\s+([?.!,;:])/g, "$1").trim();
+const plain = (s: string) => s.replace(/\[(?:[SRE]\d+|AI)\]/g, "").replace(/\*\*|__|^#+\s*/g, "").replace(/\s+/g, " ").replace(/\s+([?.!,;:])/g, "$1").trim();
 const clip = (s: string, n = ITEM_MAX) => (s.length <= n ? s : `${s.slice(0, s.lastIndexOf(" ", n) > n / 2 ? s.lastIndexOf(" ", n) : n).replace(/[\s,;:]+$/, "")}…`);
 const keyOf = (s: string) => plain(s).toLowerCase().replace(/[^a-z0-9 ]/g, "").split(" ").filter(w => w.length > 3).slice(0, 8).join(" ");
 const firstSentence = (p: string) => { const m = /^(.+?[.!?])(\s|$)/.exec(p); return (m ? m[1] : p).trim(); };

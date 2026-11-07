@@ -1,0 +1,130 @@
+{
+ "risk": {
+  "tier": "clinical_educational",
+  "rule": "clinical.topics"
+ },
+ "route": "claude-sonnet-4-6",
+ "hosts": [
+  "eutils.ncbi.nlm.nih.gov",
+  "api.crossref.org",
+  "pmc.ncbi.nlm.nih.gov",
+  "pmc-oa-opendata.s3.amazonaws.com"
+ ],
+ "openalexCalled": false,
+ "searches": [
+  "(\"critical and sensitive periods\"[ti] OR \"sensitive and critical periods\"[ti] OR \"sensitive periods\"[ti] OR \"sensitive period\"[ti] OR \"Critical Period, Psychological\"[mh]) AND (child*[tiab] OR infant*[tiab] OR \"early life\"[tiab]) AND (development[tiab] OR developmental[tiab] OR plasticity[tiab]) AND (guideline[pt] OR \"practice guideline\"[pt] OR \"systematic review\"[pt] OR \"meta-analysis\"[pt] OR review[pt] OR \"randomized controlled trial\"[pt] OR \"clinical trial\"[pt]) AND english[la] AND \"last 15 years\"[dp]",
+  "((\"attachment\"[ti] AND (infant*[tiab] OR \"early childhood\"[tiab]) AND (caregiv*[tiab] OR parent*[tiab] OR maternal[tiab])) OR \"reactive attachment disorder\"[ti] OR (\"psychosocial deprivation\"[tiab] AND institution*[tiab])) AND (guideline[pt] OR \"practice guideline\"[pt] OR \"systematic review\"[pt] OR \"meta-analysis\"[pt] OR review[pt] OR \"randomized controlled trial\"[pt] OR \"clinical trial\"[pt]) AND english[la] AND \"last 15 years\"[dp]",
+  "(\"language development\"[ti] OR \"language acquisition\"[ti]) AND (\"sensitive period\"[tiab] OR \"sensitive periods\"[tiab] OR \"critical period\"[tiab] OR \"critical periods\"[tiab] OR plasticity[tiab]) AND (infant*[tiab] OR child*[tiab] OR \"early childhood\"[tiab]) AND (guideline[pt] OR \"practice guideline\"[pt] OR \"systematic review\"[pt] OR \"meta-analysis\"[pt] OR review[pt] OR \"randomized controlled trial\"[pt] OR \"clinical trial\"[pt]) AND english[la] AND \"last 15 years\"[dp]",
+  "(\"motor development\"[ti] OR cephalocaudal[tiab] OR proximodistal[tiab]) AND (infant*[ti] OR infancy[tiab] OR \"early human\"[tiab]) AND (guideline[pt] OR \"practice guideline\"[pt] OR \"systematic review\"[pt] OR \"meta-analysis\"[pt] OR review[pt] OR \"randomized controlled trial\"[pt] OR \"clinical trial\"[pt]) AND english[la] AND \"last 15 years\"[dp]"
+ ],
+ "http": {
+  "requests": 28,
+  "failed": 0,
+  "byHost": {
+   "eutils.ncbi.nlm.nih.gov": 13,
+   "api.crossref.org": 12,
+   "pmc.ncbi.nlm.nih.gov": 1,
+   "pmc-oa-opendata.s3.amazonaws.com": 2
+  }
+ },
+ "leakCheck": true,
+ "noteTextSent": false,
+ "model": [
+  {
+   "part": "main",
+   "model": "claude-sonnet-4-6",
+   "input": 2072,
+   "output": 1315,
+   "ms": 34456,
+   "ok": true,
+   "usd": 0.025941,
+   "usdIfOpusEstimate": 0.043235
+  },
+  {
+   "part": "verify",
+   "model": "claude-sonnet-4-6",
+   "input": 2993,
+   "output": 9,
+   "ms": 1405,
+   "ok": true,
+   "usd": 0.009114,
+   "usdIfOpusEstimate": 0.01519
+  }
+ ],
+ "summary": [
+  {
+   "run": 1,
+   "pack": {
+    "state": "ready",
+    "topics": [
+     "critical-sensitive-periods",
+     "infant-attachment-caregiving",
+     "language-development",
+     "motor-development-principles"
+    ],
+    "searched": 4,
+    "reused": 0,
+    "items": 5,
+    "ms": 28159,
+    "http": 27,
+    "codes": []
+   },
+   "generateMs": 35895,
+   "totalMs": 64058,
+   "shown": {
+    "notes": 19,
+    "evidence": 6,
+    "ai": 8
+   },
+   "relabelled": 0,
+   "droppedDetail": [
+    {
+     "reason": "ai_rules",
+     "tokens": []
+    },
+    {
+     "reason": "ai_rules",
+     "tokens": []
+    },
+    {
+     "reason": "unsupported",
+     "tokens": []
+    },
+    {
+     "reason": "unsupported",
+     "tokens": []
+    }
+   ],
+   "cited": [
+    1,
+    2,
+    3,
+    4,
+    5
+   ],
+   "claims": 27,
+   "unsupported": 2,
+   "verified": true,
+   "dropped": [
+    "ai_rules",
+    "ai_rules",
+    "unsupported",
+    "unsupported"
+   ],
+   "checkOk": true
+  },
+  {
+   "run": 2,
+   "label": "second learner, same topics",
+   "pack": {
+    "state": "ready",
+    "searched": 0,
+    "reused": 4,
+    "items": 5,
+    "ms": 3622,
+    "http": 1,
+    "codes": []
+   }
+  }
+ ]
+}
