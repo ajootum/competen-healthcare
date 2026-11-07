@@ -1,4 +1,6 @@
 import { Fragment } from "react";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
@@ -35,12 +37,12 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 const MARKING_WORDS = { self_graded: "your own marks", ai_evaluation: "your marks, with AI suggestions you confirmed (not verified)" } as const;
-const dt = (iso: string) => new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 export default async function OsceStationPage({ params, searchParams }: { params: Promise<{ experience: string; stationId: string }>; searchParams: Promise<{ study?: string }> }) {
   const { experience, stationId } = await params;
   const page = await experienceModulePage(experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   const [due, availability] = await Promise.all([countDue(ctx.admin, ctx.userId), osceAvailability(ctx.admin, ctx.userId)]);
@@ -130,7 +132,7 @@ export default async function OsceStationPage({ params, searchParams }: { params
                   const snap = readSnapshot(r.snapshot, fallback);
                   return (
                     <li key={r.id} className="text-[13px] text-gray-800">
-                      <span className="font-semibold">{dt(r.startedAt)}</span>
+                      <span className="font-semibold">{formatForReader(r.startedAt, clock, "date")}</span>
                       {" · "}version {r.stationVersion ?? snap.version}
                       {" · "}{r.status === "abandoned" ? "discarded" : !r.finishedAt ? "in progress" : `${formatClock(r.durationSeconds ?? 0)}${r.timeUp ? " (time up)" : ""}`}
                       {r.ticks && r.score !== null

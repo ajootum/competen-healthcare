@@ -90,10 +90,11 @@ export async function PATCH(req: Request) {
   const text = typeof body?.body === "string" ? body.body.replace(/\r\n?/g, "\n").trim() : body?.body === null ? null : undefined;
   if (text === undefined || (text !== null && (!text || text.length > NOTE_BODY_MAX))) return NextResponse.json({ error: NOTE_PROBLEM.body }, { status: 400 });
   if (identifies(text)) return NextResponse.json({ error: IDENTIFIER }, { status: 422 });
-  const r = await updateNote(ctx.admin, ctx.userId, body.id, { body: text });
-  if (r !== "ok") return NextResponse.json({ error: r === "not_found" ? "That note could not be found." : r === "invalid" ? NOTE_PROBLEM.body : "Your note could not be saved just now." }, { status: r === "not_found" ? 404 : r === "invalid" ? 400 : 500 });
+  const r = await updateNote(ctx.admin, ctx.userId, body.id, { body: text, updatedAt: typeof body?.updatedAt === "string" ? body.updatedAt : null });
+  if (r === "conflict") return NextResponse.json({ error: "This note was changed somewhere else. Reload the page to see it. Your words here are not saved." }, { status: 409 });
+  if (typeof r === "string" && r !== "ok") return NextResponse.json({ error: r === "not_found" ? "That note could not be found." : r === "invalid" ? NOTE_PROBLEM.body : "Your note could not be saved just now." }, { status: r === "not_found" ? 404 : r === "invalid" ? 400 : 500 });
   await audit(ctx, "individual_scholar_note_changed", "individual_scholar_note", body.id, {});
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, ...(typeof r === "object" ? { updatedAt: r.updatedAt } : {}) });
 }
 
 export async function DELETE(req: Request) {

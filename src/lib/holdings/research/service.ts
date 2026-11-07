@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { findPatientIdentifiers } from "@/lib/privacy/patient-identifiers";
 import {
-  normaliseDoi, pmcOpenAccess, researchContact, scholarSearchUrl, searchOpenAlex, searchPubmed, verifyDoi,
+  fetchPubmedAbstracts, normaliseDoi, pmcOpenAccess, researchContact, scholarSearchUrl, searchOpenAlex, searchPubmed, verifyDoi,
   type FetchLike, type ProviderDeps, type ResearchItem,
 } from "./providers";
 import { invocableProviders, notInvocable, type Capability, type ProviderRecord, type Registry, type ResearchActivity, type ResearchProduct } from "./registry";
@@ -158,13 +158,38 @@ export async function runResearch(query: string, plan: ResearchPlan, deps: Resea
     return cachedResult(query, cached, plan);
   }
 
-  const contact = researchContact();
-  const base = deps.fetch ?? (fetch as unknown as FetchLike);
   const max = Math.max(1, Math.min(RESEARCH_MAX_RESULTS, plan.policy.limits.maxResultsPerRequest, plan.workflow?.maxSources ?? RESEARCH_MAX_RESULTS));
   const calls: ProviderCall[] = [], codes: string[] = [];
+  const call = gatedCaller(plan, deps, codes);
 
-  /** ⚠ Every provider call goes through here: the gate again (defence in depth), the budget, then the adapter. */
-  async function call<T>(r: ProviderRecord, capability: Capability, run: (p: ProviderDeps) => Promise<T | null>): Promise<T | null> {
+  const ADAPTER: Record<string, (p: ProviderDeps, r: ProviderRecord) => Promise<ResearchItem[] | null>> = {
+    pubmed: (p, r) => searchPubmed(p, query, Math.min(max, r.depth), plan.policy.rules.abstractsAsEvidence && r.capabilities.includes("abstracts")),
+    openalex: (p, r) => searchOpenAlex(p, query, Math.min(max, r.depth), plan.policy.rules.abstractsAsEvidence && r.capabilities.includes("abstracts")),
+  };
+  const found = await Promise.all(sources.map(r => (ADAPTER[r.id] ? call(r, "search", p => ADAPTER[r.id](p, r)) : (codes.push(`${r.id}_no_search_adapter`), Promise.resolve(null)))));
+  sources.forEach((r, n) => { calls.push({ provider: r.id, calls: 1, failed: found[n] === null ? 1 : 0 }); if (found[n] === null && !codes.some(c => c.startsWith(`${r.id}_`))) codes.push(`${r.id}_failed`); });
+  if (found.every(f => f === null)) return { ...empty("failed", codes), calls };
+
+  let items = mergeItems(found.filter((f): f is ResearchItem[] => f !== null));
+  const fresh = (i: ResearchItem) => datePlausible(i.year, plan.registry[i.provider]?.freshnessYears ?? 15, now());
+  if (items.some(i => !fresh(i))) codes.push("dropped_date");
+  items = items.filter(fresh).slice(0, max);
+
+  items = await verifyAndLink(items, plan, deps, { call, calls, codes });
+
+  const cacheDays = Math.min(plan.policy.limits.cacheDays, ...sources.map(r => r.cacheDays));
+  if (deps.cache) await deps.cache.write(key, items, sources.map(r => r.id).join("+"), cacheDays).catch(() => {});
+  return { state: items.length ? "searched" : "not_found", query, items, evidence: evidenceOf(items, plan.policy.rules.maxEvidence), calls, codes, scholarLink: linkFor(plan, query), sourceVersions: versions(plan) };
+}
+
+type GatedCall = <T>(r: ProviderRecord, capability: Capability, run: (p: ProviderDeps) => Promise<T | null>) => Promise<T | null>;
+
+/** ⚠ Every provider call goes through here: the gate again (defence in depth), the budget, then the adapter. */
+function gatedCaller(plan: ResearchPlan, deps: ResearchDeps, codes: string[]): GatedCall {
+  const now = deps.now ?? (() => new Date());
+  const contact = researchContact();
+  const base = deps.fetch ?? (fetch as unknown as FetchLike);
+  return async function call<T>(r: ProviderRecord, capability: Capability, run: (p: ProviderDeps) => Promise<T | null>): Promise<T | null> {
     const blocked = notInvocable(r, { product: plan.product, activity: plan.activity, capability, now: now() });
     if (blocked) { codes.push(`${r.id}_${blocked}`); return null; }
     if (deps.usage && !(await deps.usage.allow(r).catch(() => false))) {
@@ -180,24 +205,31 @@ export async function runResearch(query: string, plan: ResearchPlan, deps: Resea
     const results = Array.isArray(out) ? out.length : out === null ? 0 : 1;
     await deps.usage?.record({ provider: r.id, capability, requests: c.count(), results, outcome: out === null ? "failed" : "ok", latencyMs: Date.now() - started, costUsd: +(c.count() * r.costPerRequestUsd).toFixed(4) }).catch(() => {});
     return out;
-  }
-
-  const ADAPTER: Record<string, (p: ProviderDeps, r: ProviderRecord) => Promise<ResearchItem[] | null>> = {
-    pubmed: (p, r) => searchPubmed(p, query, Math.min(max, r.depth), plan.policy.rules.abstractsAsEvidence && r.capabilities.includes("abstracts")),
-    openalex: (p, r) => searchOpenAlex(p, query, Math.min(max, r.depth), plan.policy.rules.abstractsAsEvidence && r.capabilities.includes("abstracts")),
   };
-  const found = await Promise.all(sources.map(r => (ADAPTER[r.id] ? call(r, "search", p => ADAPTER[r.id](p, r)) : (codes.push(`${r.id}_no_search_adapter`), Promise.resolve(null)))));
-  sources.forEach((r, n) => { calls.push({ provider: r.id, calls: 1, failed: found[n] === null ? 1 : 0 }); if (found[n] === null && !codes.some(c => c.startsWith(`${r.id}_`))) codes.push(`${r.id}_failed`); });
-  if (found.every(f => f === null)) return { ...empty("failed", codes), calls };
+}
 
-  let items = mergeItems(found.filter((f): f is ResearchItem[] => f !== null));
-  const fresh = (i: ResearchItem) => datePlausible(i.year, plan.registry[i.provider]?.freshnessYears ?? 15, now());
-  if (items.some(i => !fresh(i))) codes.push("dropped_date");
-  items = items.filter(fresh).slice(0, max);
+/** Crossref publishes a polite concurrency of 3: never more DOI checks than that at once. */
+const CROSSREF_CONCURRENCY = 3;
+async function mapLimit<T, R>(list: readonly T[], limit: number, fn: (x: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(list.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, list.length) }, async () => { while (next < list.length) { const i = next++; out[i] = await fn(list[i]); } }));
+  return out;
+}
 
+/**
+ * The identity and link stage, on items already searched: a DOI is checked against Crossref (a contradicted one is dropped),
+ * PubMed Central's open-access link and licence are added, and every field shown later must be the record's own.
+ * SCHOLAR-RESEARCH-TEACH-001 calls it once on the items a topic kept, with the search itself told not to.
+ */
+export async function verifyAndLink(input: readonly ResearchItem[], plan: ResearchPlan, deps: ResearchDeps = {}, shared?: { call: GatedCall; calls: ProviderCall[]; codes: string[] }): Promise<ResearchItem[]> {
+  const now = deps.now ?? (() => new Date());
+  const codes = shared?.codes ?? [], calls = shared?.calls ?? [];
+  const call = shared?.call ?? gatedCaller(plan, deps, codes);
+  let items = input.map(i => ({ ...i, verified: { ...i.verified } }));
   const v = verifier(plan, now());
   if (v && items.some(i => i.doi)) {
-    const checks = await Promise.all(items.map(i => (i.doi ? call(v, "doi_verification", p => verifyDoi(p, i).then(x => (x === null ? null : { ok: x }))) : Promise.resolve(null))));
+    const checks = await mapLimit(items, CROSSREF_CONCURRENCY, i => (i.doi ? call(v, "doi_verification", p => verifyDoi(p, i).then(x => (x === null ? null : { ok: x }))) : Promise.resolve(null)));
     calls.push({ provider: v.id, calls: items.filter(i => i.doi).length, failed: items.filter((i, k) => i.doi && checks[k] === null).length });
     items.forEach((i, k) => { if (i.doi) i.verified.doi = checks[k] ? checks[k]!.ok : null; });
     if (items.some(i => i.verified.doi === false)) codes.push("dropped_identity");
@@ -220,8 +252,15 @@ export async function runResearch(query: string, plan: ResearchPlan, deps: Resea
   // Belt and braces: every field shown later must be what a provider gave, and the link must be the record's own.
   items = items.filter(i => /^https:\/\/(pubmed\.ncbi\.nlm\.nih\.gov|doi\.org|openalex\.org)\//.test(i.url) && (!i.doi || normaliseDoi(i.doi) === i.doi));
   items.forEach(i => { if (i.openAccess && !/^https:\/\/pmc\.ncbi\.nlm\.nih\.gov\/articles\/PMC\d+\/$/.test(i.openAccess.url)) i.openAccess = null; });
+  return items;
+}
 
-  const cacheDays = Math.min(plan.policy.limits.cacheDays, ...sources.map(r => r.cacheDays));
-  if (deps.cache) await deps.cache.write(key, items, sources.map(r => r.id).join("+"), cacheDays).catch(() => {});
-  return { state: items.length ? "searched" : "not_found", query, items, evidence: evidenceOf(items, plan.policy.rules.maxEvidence), calls, codes, scholarLink: linkFor(plan, query), sourceVersions: versions(plan) };
+/**
+ * SCHOLAR-RESEARCH-TEACH-001: the abstracts of records PubMed already returned, by PMID, through the one gate and the
+ * budget. A shared evidence pack holds citations only, so each learner's lesson reads the text this way. Not a search:
+ * only PMIDs leave. Null: PubMed could not be read or may not be called.
+ */
+export async function readAbstracts(pmids: readonly string[], plan: ResearchPlan, deps: ResearchDeps = {}, codes: string[] = []): Promise<Map<string, string> | null> {
+  if (!pmids.length) return new Map();
+  return gatedCaller(plan, deps, codes)(plan.registry.pubmed, "abstracts", p => fetchPubmedAbstracts(p, pmids));
 }

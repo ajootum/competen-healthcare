@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import type { Metadata } from "next";
 import { loadStudy } from "@/lib/individual/scholar/study-context";
 import { adaptivePrefill, withStudy } from "@/lib/individual/scholar/study-carry";
@@ -38,6 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function AdaptiveExam({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<{ session?: string; study?: string }> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const q = await searchParams;
   const [due, policy] = await Promise.all([countDue(ctx.admin, ctx.userId), loadIndividualPolicy(ctx.admin)]);
@@ -126,7 +129,7 @@ export default async function AdaptiveExam({ params, searchParams }: { params: P
                     <li key={x.session.id} className="py-2 text-[13.5px]">
                       <Link href={adaptiveHref(x.session.id)} className={`font-semibold underline underline-offset-2 ${focusRing}`}>{x.title}</Link>
                       <span className="block text-[12.5px] text-gray-600">
-                        {new Date(x.session.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })} · {x.session.status === "completed" ? "finished" : "in progress"} · {x.session.position} of {bp?.length ?? x.session.total} answered
+                        {formatForReader(x.session.createdAt, clock, "dayMonth")} · {x.session.status === "completed" ? "finished" : "in progress"} · {x.session.position} of {bp?.length ?? x.session.total} answered
                         · practice score {x.marked ? `${Math.round((x.scoreSum / x.marked) * 100)}%` : "not measured yet"}
                       </span>
                     </li>

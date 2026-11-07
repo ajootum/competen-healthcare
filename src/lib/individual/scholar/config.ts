@@ -135,9 +135,18 @@ export const PROMPT_VERSIONS = {
   // the key points, questions that ask for explanation or reasoning, and the lesson brief in the prompt. A saved v2 lesson is
   // still opened with no AI call (LEARN_TEACH_LEGACY).
   learnTeach: "scholar-learn-teach-v3",
+  // SCHOLAR-RESEARCH-TEACH-001 P1: Teach Me from the notes, an evidence pack and Scholar's own explanation (teach-integrated.ts). A suffix on
+  // learnTeach, so a lesson written this way is told apart, and every lesson saved before it keeps its key and is still served with no AI call.
+  researchTeach: "research-teach-v1",
   // SCHOLAR-CUMULATIVE-TEACHING-01: Go deeper is written in the lesson's parts and, given TAUGHT SO FAR, extends the lesson
   // (or declares the depth reached). A saved context-free "scholar-learn-v3:deeper" is still opened (legacyLearnPromptVersions).
   learnDeeper: "scholar-learn-deeper-v2",
+  // SCHOLAR-GO-DEEPER-001 (owner, 6 Nov 2026): the structured round (deeper-format.ts), used only where policy scholar_go_deeper_structured is on.
+  // ADDED beside v2, which stays the version in force with the policy off. Rounds saved under v2 are kept, counted as taught ground, and shown as they are.
+  learnDeeperStructured: "scholar-learn-deeper-v3",
+  // SCHOLAR-GUIDE-ME-001 (owner, 6 Nov 2026): a Guide Me turn, saved as the existing explain kind under this version, so it is never served as an Explain, and an Explain is never served as it.
+  guideMe: "scholar-guide-me-v1",
+  guidedClarify: "scholar-guide-clarify-v1",
   // SCHOLAR-CUMULATIVE-TEACHING-01: the suffix of any answer written with a TAUGHT SO FAR block (learn-context.ts), on top of
   // the action's own version, so what was taught WITH prior context is never served as a context-free answer and vice versa.
   cumulative: "scholar-learn-cumulative-v1",

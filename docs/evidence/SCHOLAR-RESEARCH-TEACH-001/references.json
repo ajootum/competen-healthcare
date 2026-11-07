@@ -1,0 +1,81 @@
+[
+ {
+  "tag": "E1",
+  "title": "Early Adversity and Critical Periods: Neurodevelopmental Consequences of Violating the Expectable Environment.",
+  "authors": [
+   "Nelson CA 3rd",
+   "Gabard-Durnam LJ"
+  ],
+  "journal": "Trends in neurosciences",
+  "year": 2020,
+  "pmid": "32101708",
+  "doi": "10.1016/j.tins.2020.01.002",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/32101708/",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "studyKind": "narrative review",
+  "accessed": "abstract",
+  "openAccess": null
+ },
+ {
+  "tag": "E3",
+  "title": "Plasticity in early language acquisition: the effects of prenatal and early childhood experience.",
+  "authors": [
+   "Gervain J"
+  ],
+  "journal": "Current opinion in neurobiology",
+  "year": 2015,
+  "pmid": "26093365",
+  "doi": "10.1016/j.conb.2015.05.004",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/26093365/",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "studyKind": "narrative review",
+  "accessed": "abstract",
+  "openAccess": null
+ },
+ {
+  "tag": "E4",
+  "title": "Early human motor development: From variation to the ability to vary and adapt.",
+  "authors": [
+   "Hadders-Algra M"
+  ],
+  "journal": "Neuroscience and biobehavioral reviews",
+  "year": 2018,
+  "pmid": "29752957",
+  "doi": "10.1016/j.neubiorev.2018.05.009",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/29752957/",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "studyKind": "narrative review",
+  "accessed": "abstract",
+  "openAccess": null
+ },
+ {
+  "tag": "E6",
+  "title": "Disorganized attachment in infancy: a review of the phenomenon and its implications for clinicians and policy-makers.",
+  "authors": [
+   "Granqvist P",
+   "Sroufe LA",
+   "Dozier M"
+  ],
+  "journal": "Attachment & human development",
+  "year": 2017,
+  "pmid": "28745146",
+  "doi": "10.1080/14616734.2017.1354040",
+  "url": "https://pubmed.ncbi.nlm.nih.gov/28745146/",
+  "verified": {
+   "doi": true,
+   "pmid": true
+  },
+  "studyKind": "narrative review",
+  "accessed": "abstract",
+  "openAccess": null
+ }
+]

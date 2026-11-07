@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
@@ -40,6 +42,7 @@ function scopeOf(q: Q): EvaluationScope | null {
 export default async function ExplorePage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Q> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   const q = await searchParams;
@@ -95,7 +98,7 @@ export default async function ExplorePage({ params, searchParams }: { params: Pr
           <LearningSectionHead icon="library" level={2} id="ex-kept-h" caps={false} title="Evaluations of this area" />
           {same.length === 0 ? <p className="mt-2 text-[13.5px] text-gray-800">None kept yet. You can evaluate it from Evaluate.</p> : (
             <ul className="mt-2 space-y-1 text-[13.5px] pointer-coarse:space-y-3">{same.map(k => (
-              <li key={k.id}><Link href={evaluationHref(k.id)} className={`underline ${focusRing}`}>{new Date(k.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</Link> <span className="text-gray-600">· {EVALUATION_METHOD_LABEL[k.method]} · {EVALUATION_CONFIDENCE_LABEL[k.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? k.confidence}</span></li>
+              <li key={k.id}><Link href={evaluationHref(k.id)} className={`underline ${focusRing}`}>{formatForReader(k.createdAt, clock, "date")}</Link> <span className="text-gray-600">· {EVALUATION_METHOD_LABEL[k.method]} · {EVALUATION_CONFIDENCE_LABEL[k.confidence as keyof typeof EVALUATION_CONFIDENCE_LABEL] ?? k.confidence}</span></li>
             ))}</ul>
           )}
         </section>

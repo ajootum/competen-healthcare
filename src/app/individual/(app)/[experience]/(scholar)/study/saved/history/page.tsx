@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader, type ReaderClock } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../../_components/shell-context";
@@ -21,10 +23,10 @@ export async function generateMetadata(): Promise<Metadata> {
   return gatedMetadata({ title: "Question history" });
 }
 
-const when = (iso: string) => new Date(iso).toLocaleString("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" });
 const pct = (s: number | null) => (s === null ? null : `${Math.round(s * 100)}%`);
 
-function Entry({ e }: { e: HistoryEntry }) {
+function Entry({ e, clock }: { e: HistoryEntry; clock: ReaderClock | null }) {
+  const when = (iso: string) => formatForReader(iso, clock, "dateTime");
   if (e.kind === "exam_answer") {
     return (
       <li className="py-3" data-source="exam_paper">
@@ -57,13 +59,13 @@ function Entry({ e }: { e: HistoryEntry }) {
   );
 }
 
-function Detail({ h }: { h: QuestionHistory }) {
+function Detail({ h, clock }: { h: QuestionHistory; clock: ReaderClock | null }) {
   const counts = Object.entries(h.bySource).map(([k, n]) => `${k === "exam_paper" ? "Exam paper" : HISTORY_SOURCE_LABEL[k as keyof typeof HISTORY_SOURCE_LABEL]} ${n}`).join(" · ");
   return (
     <section aria-labelledby="qh-h" className="mb-6 rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
       <h2 id="qh-h" className="break-words text-[15px] font-bold text-gray-900">{h.stem}</h2>
       <p className="mt-1 text-[12.5px] text-gray-600">{h.entries.length ? counts : "No answers yet."}</p>
-      {h.entries.length > 0 && <ul className="mt-2 divide-y divide-gray-200">{h.entries.map(e => <Entry key={e.kind === "attempt" ? e.attemptId : e.id} e={e} />)}</ul>}
+      {h.entries.length > 0 && <ul className="mt-2 divide-y divide-gray-200">{h.entries.map(e => <Entry key={e.kind === "attempt" ? e.attemptId : e.id} e={e} clock={clock} />)}</ul>}
     </section>
   );
 }
@@ -71,6 +73,7 @@ function Detail({ h }: { h: QuestionHistory }) {
 export default async function QuestionHistoryPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const search = await searchParams;
   const qid = typeof search.q === "string" && isUuid(search.q) ? search.q : null;
@@ -87,7 +90,7 @@ export default async function QuestionHistoryPage({ params, searchParams }: { pa
 
       {detail && (!detail.ok ? <div className="mb-6"><Unreadable what="this question's history" /></div>
         : !detail.data ? <div className="mb-6"><StatePanel title="That question could not be found"><p>It may have been removed with its notes.</p></StatePanel></div>
-          : <Detail h={detail.data} />)}
+          : <Detail h={detail.data} clock={clock} />)}
 
       <section aria-labelledby="qh-list-h" className="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
         <h2 id="qh-list-h" className="text-[13px] font-bold uppercase tracking-[0.14em] text-gray-500">Questions you answered recently</h2>
@@ -100,7 +103,7 @@ export default async function QuestionHistoryPage({ params, searchParams }: { pa
                     <Link href={`${studyHref("saved/history")}?q=${i.questionId}`} aria-current={i.questionId === qid ? "true" : undefined}
                       className={`block min-h-[44px] rounded-lg px-2 py-1.5 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
                       <span className="block break-words text-[14px] font-semibold text-gray-900">{i.stem}</span>
-                      <span className="block text-[12px] text-gray-600">{i.count} answer{i.count === 1 ? "" : "s"} · last {when(i.lastAt)}</span>
+                      <span className="block text-[12px] text-gray-600">{i.count} answer{i.count === 1 ? "" : "s"} · last {formatForReader(i.lastAt, clock, "dateTime")}</span>
                     </Link>
                   </li>
                 ))}

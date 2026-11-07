@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useId, useRef, useState } from "react";
 import { EXPERIENCES, experienceHref, navFor, bottomNavFor, overflowNavFor, type ExperienceKey, type ShellNavItem } from "@/lib/individual/experiences";
 import { createClient } from "@/lib/supabase/client";
+import { closeNoteDrafts, saveOpenNotes } from "@/lib/individual/scholar/note-drafts";
 import { ScholarSidebar } from "./ScholarSidebar";
 import type { ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
@@ -30,10 +31,10 @@ function isActive(pathname: string, href: string, isHome: boolean) {
  * Courses & Training covers Competen Learning, so the standalone link is dropped for Scholar only. `myPlan`: My Plan's gate.
  * `scholarModules`: the private Scholar modules this learner may see (private module development access). Left out: none are drawn.
  */
-export function SidebarNav({ experience, learning = false, myPlan = false, searchHistory = false, scholarModules = [] }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean; searchHistory?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
+export function SidebarNav({ experience, learning = false, myPlan = false, searchHistory = false, notebook = false, scholarModules = [] }: { experience: ExperienceKey; learning?: boolean; myPlan?: boolean; searchHistory?: boolean; notebook?: boolean; scholarModules?: readonly ScholarModuleKey[] }) {
   const pathname = usePathname() ?? "";
   const x = EXPERIENCES[experience];
-  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} searchHistory={searchHistory} modules={scholarModules} />;
+  if (experience === "scholar") return <ScholarSidebar myPlan={myPlan} searchHistory={searchHistory} notebook={notebook} modules={scholarModules} />;
   return (
     <nav aria-label={`${x.name} navigation`} className="flex flex-col gap-[7px] px-4 pt-[26px]">
       {navFor(experience).map(item => {
@@ -155,7 +156,7 @@ export function AccountMenu({ experience, initials, name, preview = false, schol
 export function SignOutButton() {
   return (
     <button type="button"
-      onClick={async () => { await createClient().auth.signOut(); window.location.assign("/individual"); }}
+      onClick={async () => { await saveOpenNotes(); closeNoteDrafts(); await createClient().auth.signOut(); window.location.assign("/individual"); }}
       className={`rounded-lg border border-gray-200 px-3 py-1.5 text-[12.5px] font-medium text-gray-600 hover:bg-gray-50 pointer-coarse:min-h-[var(--cmp-touch-min)] ${focusRing}`}>
       Sign out
     </button>

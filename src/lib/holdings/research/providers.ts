@@ -146,6 +146,14 @@ export async function searchPubmed(deps: ProviderDeps, query: string, max: numbe
   return items;
 }
 
+/** SCHOLAR-RESEARCH-TEACH-001: abstracts by PMID, for records PubMed already returned. Only PMIDs are sent. Null: not readable. */
+export async function fetchPubmedAbstracts(deps: ProviderDeps, pmids: readonly string[]): Promise<Map<string, string> | null> {
+  const ids = [...new Set(pmids.filter(p => /^\d{1,9}$/.test(p)))].slice(0, 20);
+  if (!ids.length) return new Map();
+  const xml = await getText(deps, `${EUTILS}/efetch.fcgi?db=pubmed&rettype=abstract&retmode=xml&id=${ids.join(",")}&${ncbi(deps)}`);
+  return xml ? parsePubmedAbstracts(xml) : null;
+}
+
 // ── OpenAlex ─────────────────────────────────────────────────────────────────────────────────────────────────────
 
 /** Pure. OpenAlex's abstract_inverted_index → the abstract's words in order. */

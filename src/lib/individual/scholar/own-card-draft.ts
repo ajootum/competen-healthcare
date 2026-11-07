@@ -8,7 +8,7 @@ const FRONT_MAX = 300;
 const BACK_MAX = 600;
 
 /** Pure. Citation tags out, whitespace runs to one space, trimmed and cut. */
-const plain = (s: string, max: number) => s.replace(/\s*\[[SRE]\d+\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
+const plain = (s: string, max: number) => s.replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").replace(/\s+/g, " ").trim().slice(0, max);
 
 /** Pure. The own-card draft for one lesson step. */
 export function draftOwnCard(title: string | null | undefined, points: readonly string[], objective: string | null | undefined): { front: string; back: string } {

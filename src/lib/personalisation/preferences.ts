@@ -9,6 +9,7 @@
 // reimplemented here — that already resolves through workspace_config_overrides at user scope. A second
 // visibility mechanism would let a personal view disagree with what the tenant actually enabled.
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { validTimeZone } from "../datetime";
 
 export type PrefType = "enum" | "boolean" | "text";
 export type PrefKey = keyof typeof CATALOGUE;
@@ -142,6 +143,7 @@ export function validateWrite(key: string, value: any, resolved: Resolved[]): { 
   const s = String(value);
   if (def.type === "enum" && def.options && !def.options.includes(s)) return { ok: false, reason: `${def.label} must be one of ${def.options.join(", ")}.` };
   if (s.length > 60) return { ok: false, reason: `${def.label} is too long.` };
+  if (key === "timezone" && !validTimeZone(s)) return { ok: false, reason: `${def.label} must be a real time zone, such as Africa/Kampala.` };
   return { ok: true, stored: s };
 }
 

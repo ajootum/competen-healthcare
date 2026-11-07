@@ -207,6 +207,15 @@ export async function scholarRiskGate(ctx: IndividualContext, activity: ScholarA
 }
 
 /**
+ * SCHOLAR-RESEARCH-TEACH-001: whether the clinical-risk gate would let this request through, in EVERY metering state (scholarRiskGate
+ * answers null with metering on, and leaves the decision to the call). True only when it would. Nothing is refused here: a false only
+ * means no search is made, and the call itself then answers as it always does. Unreadable: false, so nothing is sent.
+ */
+export async function scholarRiskClear(ctx: IndividualContext, activity: ScholarAiActivity, risk: RiskContext): Promise<boolean> {
+  return unmeteredGate(ctx.admin, "scholar", activity, "reasoning", risk).then(g => g.ok, () => false);
+}
+
+/**
  * COMPETEN-RESEARCH-01: which texts stay within the request's OWN risk tier, classified WITH the request's subject by the
  * same published rules. Learn applies it to what the research part WROTE (generation), never to what was found
  * (discovery): research text that would lift the request above its tier is withheld, so research never raises what is

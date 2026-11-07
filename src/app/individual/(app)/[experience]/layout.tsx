@@ -29,8 +29,13 @@ import { NavigationProgress } from "../../_components/NavigationProgress";
 import { GlobalSearch } from "../../_components/search/GlobalSearch";
 import { readSearchHistoryChoice } from "@/lib/individual/scholar/search-history-choice";
 import { MyPlanNavProvider } from "./(scholar)/study/_components/plan-nav";
+import { ReaderClockProvider } from "@/components/ReaderClock";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import { isMyPlanOn, loadIndividualPolicyOnce } from "@/lib/individual/policy";
 import { studyPlanSchema } from "@/lib/individual/scholar/store";
+import { notebookOffered, notebookSchema } from "@/lib/individual/scholar/store";
+import { NotebookProvider } from "./(scholar)/study/_components/note-capture";
+import { QuickNote } from "./(scholar)/study/_components/quick-note";
 import { scholarModulesOnce, type ScholarModuleKey } from "@/lib/individual/scholar/module-access";
 
 // Request-time only: it reads the release gate and the session, and must never be prerendered at build
@@ -188,8 +193,12 @@ export default async function ExperienceLayout({ children, params }: {
   const modulesP: Promise<Set<ScholarModuleKey>> | Set<ScholarModuleKey> = scholar ? scholarModulesOnce(shell.ctx.admin, shell.ctx.userId) : new Set<ScholarModuleKey>();
   // My Search History (993): the learner's own choice, once per page, for the notices and for what a page may send. Any failure is off: nothing is kept.
   const historyP = scholar ? (async () => { try { return await readSearchHistoryChoice(shell.ctx.admin, shell.ctx.userId, await loadIndividualPolicyOnce(shell.ctx.admin)); } catch { return { offered: false, on: false, pending: false }; } })() : { offered: false, on: false, pending: false };
-  const [learning, ai, myPlanOn, moduleSet, historyChoice] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP]);
+  // LOCAL-TIME-ZONES: null while scholar_reader_time_zone is off, and always outside Scholar.
+  const clockP = scholar ? readerClock(shell.ctx) : null;
+  const [learning, ai, myPlanOn, moduleSet, historyChoice, clock] = await Promise.all([learningP, aiP, myPlanP, modulesP, historyP, clockP]);
   const globalSearchOn = await loadIndividualPolicyOnce(shell.ctx.admin).then(p => (scholar ? p.scholarGlobalSearch : p.professionalGlobalSearch) === "on").catch(() => false);
+  // COMPETEN-NOTEBOOK-001: Quick Note, My Ideas & Notes and the My Notebook leaf, only where HQ offers them and migrations 1000 and 1001 are present. Any failure is off.
+  const notebookOn = scholar ? await (async () => { try { const [policy, schema] = await Promise.all([loadIndividualPolicyOnce(shell.ctx.admin), notebookSchema(shell.ctx.admin)]); return notebookOffered(policy, schema); } catch { return false; } })() : false;
   const scholarModules = [...moduleSet];
   const aiSlim = { readable: ai.readable, policyPublished: ai.policyPublished, activities: ai.activities, message: ai.message };
 
@@ -200,13 +209,14 @@ export default async function ExperienceLayout({ children, params }: {
       <Suspense fallback={null}><NavigationProgress /></Suspense>
       <header className="sticky top-[var(--cmp-preview-h,0px)] z-30 border-b border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]">
         <div className="flex h-14 md:h-[76px] items-center gap-3 px-4 md:gap-7 md:px-7">
-          {scholar && <ScholarDrawer myPlan={myPlanOn} searchHistory={historyChoice.offered} modules={scholarModules} learning={learning} />}
+          {scholar && <ScholarDrawer myPlan={myPlanOn} searchHistory={historyChoice.offered} notebook={notebookOn} modules={scholarModules} learning={learning} />}
           <Link href={experienceHref(experience)} className={`rounded-lg md:w-[200px] ${focusRing}`} aria-label={`${x.name} home`}>
             <span className="md:hidden"><ExperienceMark wordmark={x.wordmark} accent={x.accent} size={scholar ? "md" : "sm"} iconOnly={live.length > 1} /></span>
             <span className="hidden md:inline"><ExperienceMark wordmark={x.wordmark} accent={x.accent} /></span>
           </Link>
           <div className="ml-auto flex items-center gap-2 md:ml-0 md:gap-3">
             {globalSearchOn && (scholar ? <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}><GlobalSearch experience="scholar" /></SearchHistoryChoiceProvider> : <GlobalSearch experience="professional" />)}
+            {notebookOn && <NotebookProvider on userId={shell.ctx.userId}><QuickNote userId={shell.ctx.userId} /></NotebookProvider>}
             <ExperienceSwitcher current={experience} live={live} />
           </div>
           {learning && <Link href="/individual/learning" className={`${scholar ? "hidden md:inline-flex" : "inline-flex"} min-h-[36px] pointer-coarse:min-h-[var(--cmp-touch-min)] items-center rounded-lg px-2 text-[13px] font-semibold text-gray-700 hover:bg-gray-50 ${focusRing}`}>Learning</Link>}
@@ -219,7 +229,7 @@ export default async function ExperienceLayout({ children, params }: {
 
       <div className="flex">
         <aside className={`hidden md:flex sticky top-[calc(76px+var(--cmp-preview-h,0px))] h-[calc(100vh-76px-var(--cmp-preview-h,0px))] ${scholar ? "w-[256px]" : "w-[236px]"} shrink-0 flex-col border-r border-[var(--cmp-app-border)] bg-[var(--cmp-app-surface)]`}>
-          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} searchHistory={historyChoice.offered} scholarModules={scholarModules} />
+          <SidebarNav experience={experience} learning={learning} myPlan={myPlanOn} searchHistory={historyChoice.offered} notebook={notebookOn} scholarModules={scholarModules} />
           <div className="mx-4 mt-auto border-t border-[var(--cmp-app-border)] px-2 py-5 text-[12px] leading-relaxed text-gray-600">
             <p><strong className="text-gray-900">Competen Individual</strong></p>
             <p>One account, one Passport.</p>
@@ -231,7 +241,9 @@ export default async function ExperienceLayout({ children, params }: {
           <ShellActionProvider action={action}>
           <AiAvailabilityProvider standing={aiSlim}>
           <SearchHistoryChoiceProvider value={{ offered: historyChoice.offered, on: historyChoice.on, pending: historyChoice.pending }}>
+          <ReaderClockProvider clock={clock}>
           <MyPlanNavProvider on={myPlanOn}>
+          <NotebookProvider on={notebookOn} userId={shell.ctx.userId}>
             <div className={scholar
               ? "w-full max-w-[1600px] px-4 py-6 md:px-[42px] md:pt-[30px] md:pb-[70px]"
               : "mx-auto w-full max-w-5xl px-4 py-6 md:px-8 md:py-8"}>
@@ -244,7 +256,9 @@ export default async function ExperienceLayout({ children, params }: {
                 </footer>
               )}
             </div>
+          </NotebookProvider>
           </MyPlanNavProvider>
+          </ReaderClockProvider>
           </SearchHistoryChoiceProvider>
           </AiAvailabilityProvider>
           </ShellActionProvider>

@@ -1,0 +1,118 @@
+{
+ "risk": {
+  "tier": "clinical_educational",
+  "rule": "clinical.topics"
+ },
+ "route": "claude-sonnet-4-6",
+ "hosts": [
+  "eutils.ncbi.nlm.nih.gov"
+ ],
+ "openalexCalled": false,
+ "searches": [],
+ "http": {
+  "requests": 2,
+  "failed": 0,
+  "byHost": {
+   "eutils.ncbi.nlm.nih.gov": 2
+  }
+ },
+ "leakCheck": true,
+ "noteTextSent": false,
+ "model": [
+  {
+   "part": "main",
+   "model": "claude-sonnet-4-6",
+   "input": 2342,
+   "output": 1448,
+   "ms": 37056,
+   "ok": true,
+   "usd": 0.028746,
+   "usdIfOpusEstimate": 0.04791
+  },
+  {
+   "part": "verify",
+   "model": "claude-sonnet-4-6",
+   "input": 3448,
+   "output": 21,
+   "ms": 1296,
+   "ok": true,
+   "usd": 0.010659,
+   "usdIfOpusEstimate": 0.017765
+  }
+ ],
+ "summary": [
+  {
+   "run": 1,
+   "pack": {
+    "state": "ready",
+    "topics": [
+     "critical-sensitive-periods",
+     "infant-attachment-caregiving",
+     "language-development",
+     "motor-development-principles"
+    ],
+    "searched": 0,
+    "reused": 4,
+    "items": 6,
+    "ms": 3131,
+    "http": 1,
+    "codes": []
+   },
+   "generateMs": 38387,
+   "totalMs": 41521,
+   "shown": {
+    "notes": 17,
+    "evidence": 4,
+    "ai": 12
+   },
+   "relabelled": 3,
+   "droppedDetail": [
+    {
+     "reason": "ai_claims_evidence",
+     "tokens": []
+    },
+    {
+     "reason": "unsupported",
+     "tokens": []
+    },
+    {
+     "reason": "unsupported",
+     "tokens": []
+    },
+    {
+     "reason": "unsupported",
+     "tokens": []
+    }
+   ],
+   "cited": [
+    1,
+    3,
+    4,
+    6
+   ],
+   "claims": 28,
+   "unsupported": 6,
+   "verified": true,
+   "dropped": [
+    "ai_claims_evidence",
+    "unsupported",
+    "unsupported",
+    "unsupported"
+   ],
+   "checkOk": true
+  },
+  {
+   "run": 2,
+   "label": "second learner, same topics",
+   "pack": {
+    "state": "ready",
+    "searched": 0,
+    "reused": 4,
+    "items": 6,
+    "ms": 3145,
+    "http": 1,
+    "codes": []
+   }
+  }
+ ]
+}

@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useId, useState, useSyncExternalStore } from "react";
 import { CALENDAR_REACH_DAYS } from "@/lib/individual/scholar/study-calendar-kinds";
@@ -26,7 +28,6 @@ const shortDay = (iso: string) => new Date(`${iso}T00:00:00Z`).toLocaleDateStrin
 /** True once the page is on the device: times of day are the learner's own local time, which the server cannot know. */
 const subscribeNone = () => () => {};
 export const useOnDevice = () => useSyncExternalStore(subscribeNone, () => true, () => false);
-const timeOf = (at: string) => new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
 
 /** Move a Scholar activity or the monthly review (the existing calendar route), as a small dialog. */
 export function ScholarMove({ item, date, today, accent, onClose }: { item: CalendarItem; date: string; today: string; accent: string; onClose: () => void }) {
@@ -146,6 +147,7 @@ function ItemRow({ item, ctx }: { item: CalendarItem; ctx: RowsContext }) {
 
 /** Completed records of one material and kind, as one row with a disclosure listing each (a time and a link). Nothing is merged: every record is listed. */
 export function DoneGroup<T extends { key: string; title: string; href: string | null }>({ row, studyId }: { row: Extract<DayRow<T>, { type: "group" }>; studyId: string | null }) {
+  const clock = useReaderClock();
   const onDevice = useOnDevice();
   return (
     <li data-group={row.key} className="border-b border-gray-100 py-1 last:border-b-0">
@@ -161,7 +163,7 @@ export function DoneGroup<T extends { key: string; title: string; href: string |
             const href = r.href ? startHref(r.href, studyId) ?? r.href : null;
             return (
               <li key={r.key} className="flex items-center justify-between gap-3 px-3 py-1.5 text-[13.5px] text-gray-800">
-                <span className="tabular-nums">{at && onDevice ? timeOf(at) : `Session ${n + 1}`}</span>
+                <span className="tabular-nums">{at && onDevice ? formatForReader(at, clock, "time") : `Session ${n + 1}`}</span>
                 {href && <Link href={href} className={`${pillOutline} min-h-9`}>Open<span className="sr-only"> session {n + 1}: {r.title}</span></Link>}
               </li>
             );

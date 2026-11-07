@@ -3,7 +3,8 @@ import path from "node:path";
 import fontkit from "@pdf-lib/fontkit";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage, type RGB } from "pdf-lib";
 import { pdfSafe, pdfUnencodable } from "@/lib/individual/documents/pdf";
-import { parseTeachAnswer } from "./teach-format";
+import { parseTeachAnswer, questionText } from "./teach-format";
+import { GO_DEEPER_COPY, deeperResearchText, deeperSectionText, parseDeeperAnswer, takeawayLine } from "./deeper-format";
 
 // ── SAVED LEARNING: THE PDF DOWNLOAD ── owner instruction 1 Nov 2026 (item 2) ───────────────────────────────────────────
 //
@@ -108,7 +109,19 @@ export function teachingBlocks(t: ExportTeaching): Block[] {
   const head = [t.actionLabel, t.depth ? `${t.depth} depth` : null, `saved ${exportDate(t.savedAt)}`].filter(Boolean).join(" · ");
   out.push({ t: "h3", text: head });
   const parts = parseTeachAnswer(t.content);
-  if (parts) {
+  // SCHOLAR-GO-DEEPER-001: a structured round keeps its question, its sections and which of them came from the notes.
+  const deep = parseDeeperAnswer(t.content);
+  if (deep) {
+    out.push({ t: "kv", k: GO_DEEPER_COPY.focus, v: inline(deep.focus) });
+    for (const s of deep.sections) {
+      out.push({ t: "small", text: `${s.title} (${s.source === "notes" ? GO_DEEPER_COPY.notes : GO_DEEPER_COPY.scholar})` });
+      out.push({ t: "p", text: inline(deeperSectionText(s).split("\n").join(" ")) });
+    }
+    if (deep.takeaways.length) { out.push({ t: "small", text: GO_DEEPER_COPY.takeaways }); for (const p of deep.takeaways) out.push({ t: "bullet", text: inline(takeawayLine(p)) }); }
+    const research = deeperResearchText(t.content);
+    if (research) { out.push({ t: "small", text: GO_DEEPER_COPY.research }); out.push({ t: "p", text: inline(research) }); }
+    if (deep.questions.length) { out.push({ t: "small", text: GO_DEEPER_COPY.check }); for (const q of deep.questions) out.push({ t: "bullet", text: inline(questionText(q.text)) }); }
+  } else if (parts) {
     if (parts.overview) { out.push({ t: "kv", k: "Overview", v: inline(parts.overview) }); }
     if (parts.points.length) { out.push({ t: "small", text: "Key points" }); for (const p of parts.points) out.push({ t: "bullet", text: inline(p) }); }
     if (parts.example) out.push({ t: "kv", k: "Example", v: inline(parts.example) });
