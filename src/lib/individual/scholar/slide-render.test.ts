@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aliasFonts, claimDecision, layoutMatters, renderPath, renderRowOf, renderState, RENDER_MAX_ATTEMPTS, RENDER_STALE_MS, slidePageMap, slidesToDraw } from "./slide-render";
+import { aliasFonts, claimDecision, layoutMatters, renderPath, renderRowOf, pdfPagesToDraw, renderState, RENDER_MAX_ATTEMPTS, RENDER_STALE_MS, slidePageMap, slidesToDraw } from "./slide-render";
 import { parseVisualKey, preferWhole, wholeSlideVisual, type Visual } from "./material-visuals";
 import type { DeckScan } from "./material-visuals";
 import type { SlideFacts } from "./slide-classify";
@@ -148,5 +148,32 @@ describe("a drawn slide among the pictures", () => {
     const v = wholeSlideVisual(unit);
     expect(preferWhole([v, picture, other]).map(x => x.key)).toEqual([v.key, other.key]);
     expect(preferWhole([picture, other]).map(x => x.key)).toEqual([picture.key, other.key]);
+  });
+});
+
+describe("which pages of a PDF are drawn", () => {
+  const v = (n: number, kind: "png" | "jpeg" | "pdf_page") => ({ n, kind });
+  it("a page the browser cannot be handed, and an empty page", () => {
+    expect(pdfPagesToDraw({ visuals: [v(3, "pdf_page"), v(7, "pdf_page")], textless: [3, 7], max: 80 }).draw).toEqual([3, 7]);
+  });
+  it("a text page whose picture the browser cannot be handed", () => {
+    expect(pdfPagesToDraw({ visuals: [v(6, "pdf_page")], textless: [], max: 80 }).draw).toEqual([6]);
+  });
+  it("a page with no text layer and two or more pictures: its layout is its meaning", () => {
+    expect(pdfPagesToDraw({ visuals: [v(5, "jpeg"), v(5, "png")], textless: [5], max: 80 }).draw).toEqual([5]);
+  });
+  it("one ordinary picture, or pictures on a page with text, are already shown: not drawn", () => {
+    expect(pdfPagesToDraw({ visuals: [v(2, "jpeg")], textless: [2], max: 80 }).draw).toEqual([]);
+    expect(pdfPagesToDraw({ visuals: [v(4, "jpeg"), v(4, "png")], textless: [], max: 80 }).draw).toEqual([]);
+  });
+  it("over the cap: first come first, the rest named", () => {
+    expect(pdfPagesToDraw({ visuals: [v(1, "pdf_page"), v(2, "pdf_page"), v(3, "pdf_page")], textless: [], max: 2 })).toEqual({ draw: [1, 2], notDrawn: [3] });
+  });
+});
+
+describe("a drawn PDF page", () => {
+  it("says it is the whole page", () => {
+    const w = wholeSlideVisual({ n: 3, sha: "abcdefabcdefabcd", width: 1920, height: 2717, bytes: 9 }, { unit: "page" });
+    expect(w).toMatchObject({ unit: "page", whole: true, kind: "webp", caption: "Page 3 · the whole page from your file" });
   });
 });

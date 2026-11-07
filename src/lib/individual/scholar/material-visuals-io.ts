@@ -5,7 +5,7 @@ import { PDF_MIME } from "./config";
 import { openOfficeZip, slidePartNames } from "./extract";
 import { getMaterial, listChunks, materialBytes, materialExtras, type MaterialRow } from "./store";
 import { readDrawnSlide, readRender } from "./slide-render-read";
-import { renderState, type RenderState } from "./slide-render";
+import { pdfPagesToDraw, renderState, type RenderState } from "./slide-render";
 import { MAX_CONVERT_INPUT_BYTES, imageKind } from "./slide-images";
 import { pdfPagesPdf } from "./slide-reading";
 import { pdfImageFile, scanPdfImages } from "./material-visuals-pdf";
@@ -122,15 +122,17 @@ async function indexOf(ctx: IndividualContext, material: MaterialRow, policy: Se
     unit: pdf ? "page" : "slide", minPx: policy.minPx, maxPerSlide: policy.maxPerSlide, aiRead: new Set(aiRead), emptyUnits: empty,
     pages, classify: policy.classify, textWords: policy.textWords,
   });
-  // SCHOLAR-VISUAL-001 phase 2: a slide drawn whole comes first among its own pictures, which stay in the list for the dialog. Policy off: none.
-  const wholeOn = policy.whole && !pdf;
+  // SCHOLAR-VISUAL-001 phase 2: a slide or page drawn whole comes first among its own pictures, which stay in the list for the dialog. Policy off: none.
+  const wholeOn = policy.whole;
   const drawing = wholeOn ? await readRender(ctx, material.id) : null;
-  const whole = (drawing?.units ?? []).map(u => wholeSlideVisual(u, { aiRead: new Set(aiRead), pages, classify: policy.classify, textWords: policy.textWords }));
+  const whole = (drawing?.units ?? []).map(u => wholeSlideVisual(u, { unit: pdf ? "page" : "slide", aiRead: new Set(aiRead), pages, classify: policy.classify, textWords: policy.textWords }));
   const visuals = [...whole, ...built.visuals].sort((a, b) => a.n - b.n || Number(!!b.whole) - Number(!!a.whole));
   const drawnSlides = new Set(whole.map(v => v.n));
   // A picture no browser can show is no longer missing where the whole slide shows it.
   const notShown = wholeOn ? Math.max(0, built.notShown - (scan?.undisplayable ?? []).filter(u => drawnSlides.has(u.n)).length) : built.notShown;
-  const render = wholeOn ? renderState(true, drawing, Date.now()) : "off";
+  // A PDF with nothing that needs drawing is never asked about, so a text PDF costs no row and no job.
+  const nothingToDraw = pdf && !drawing && !pdfPagesToDraw({ visuals: built.visuals, textless: [...new Set([...empty, ...aiRead])], max: 1 }).draw.length;
+  const render: RenderState = !wholeOn ? "off" : nothingToDraw ? "not_needed" : renderState(true, drawing, Date.now());
   // SCHOLAR-VISUAL-001: the slides or pages with no section of their own, so a picture-only one can be shown where it is in the file.
   const noSection = [...new Set([...empty, ...(quality?.slideFacts?.blank ?? [])])].sort((a, b) => a - b);
   return { ok: true, index: { unit: pdf ? "page" : "slide", visuals, notShown, noSection, render } };

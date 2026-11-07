@@ -18,12 +18,11 @@ const focusRing = "focus-visible:outline-2 focus-visible:outline-offset-2 focus-
 const touch = "pointer-coarse:min-h-[var(--cmp-touch-min)]";
 const ghostBtn = `inline-flex min-h-[44px] items-center justify-center rounded-xl border border-gray-300 bg-white px-4 py-2 text-[14px] font-semibold text-gray-800 hover:bg-gray-50 disabled:opacity-50 ${touch} ${focusRing}`;
 const ORIGINAL = "Original image — not AI-generated";
-const WHOLE = "Whole slide drawn from your file — not AI-generated";
-const labelOf = (v: Pick<Visual, "whole">) => (v.whole ? WHOLE : ORIGINAL);
+const labelOf = (v: Pick<Visual, "whole" | "unit">) => (v.whole ? `Whole ${v.unit === "slide" ? "slide" : "page"} drawn from your file — not AI-generated` : ORIGINAL);
 const AI_NOTE = "Its text was read by AI: check it against the picture.";
 const SAFE_TEXT_LABEL = "Text read by AI from this chart — do not use it for scores or thresholds; check the original";
-const WHOLE_NOTE = "Drawn once from your own file, so a font can differ slightly from PowerPoint.";
-const WHOLE_NOTE_PICTURES = "The original pictures on this slide are kept exactly as they are, and can be chosen here.";
+const WHOLE_NOTE = (v: Pick<Visual, "unit">) => (v.unit === "slide" ? "Drawn once from your own file, so a font can differ slightly from PowerPoint." : "Drawn once from your own file. The original page is kept exactly as it is, and can be opened here.");
+const WHOLE_NOTE_PICTURES = (v: Pick<Visual, "unit">) => `The original pictures on this ${v.unit === "slide" ? "slide" : "page"} are kept exactly as they are, and can be chosen here.`;
 const NOTE = (unit: "slide" | "page") => unit === "slide"
   ? "The slide’s own layout is not reproduced here; the pictures are shown exactly as in your file."
   : "The pictures are shown exactly as in your file. View the original page to see it whole.";
@@ -150,32 +149,36 @@ export function VisualDialog({ materialId, materialTitle, visuals, startKey, onC
             </>
           ) : (
             // eslint-disable-next-line @next/next/no-img-element -- the learner's own file, served as it is: no optimiser may resize or recompress it
-            <img src={visualUrl(materialId, current.key)} alt={current.whole ? `Whole slide ${current.n} of ${materialTitle}` : `Original picture from ${noun(current)} ${current.n} of ${materialTitle}`} style={zoom === 1 ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} className={`block h-auto bg-white ${zoom === 1 ? "mx-auto max-w-full" : ""}`} />
+            <img src={visualUrl(materialId, current.key)} alt={current.whole ? `Whole ${noun(current)} ${current.n} of ${materialTitle}` : `Original picture from ${noun(current)} ${current.n} of ${materialTitle}`} style={zoom === 1 ? undefined : { width: `${zoom * 100}%`, maxWidth: "none" }} className={`block h-auto bg-white ${zoom === 1 ? "mx-auto max-w-full" : ""}`} />
           )}
         </div>
         <div className="space-y-3 border-t border-gray-200 p-4 text-[13px] text-gray-800">
           <p className="text-gray-700"><span className="mr-1 inline-block rounded-full border border-gray-300 bg-gray-50 px-2 py-0.5 text-[11.5px] font-semibold text-gray-800">{current.label}</span>{current.caption}</p>
           {current.aiRead && <p role="note" className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 font-semibold">{AI_NOTE}</p>}
           {current.safeText && <SafeText text={current.safeText} />}
-          <section aria-label={`View original ${noun(current)} ${current.n}`}>
-            <h3 className="text-[13.5px] font-bold text-gray-900">{same.some(v => v.whole) ? `Slide ${current.n}: the whole slide and its original pictures` : `View original ${noun(current)} ${current.n}`}</h3>
+          <section aria-label={same.some(v => v.whole) ? `${capital(noun(current))} ${current.n}: drawn whole, and its originals` : `View original ${noun(current)} ${current.n}`}>
+            <h3 className="text-[13.5px] font-bold text-gray-900">{same.some(v => v.whole) ? `${capital(noun(current))} ${current.n}: drawn whole, and its originals` : `View original ${noun(current)} ${current.n}`}</h3>
             {same.length > 1 ? (
               <ul className="mt-2 flex flex-wrap gap-2">
                 {same.map((v, i) => (
                   <li key={v.key}>
-                    <button type="button" aria-pressed={v.key === current.key} aria-label={v.whole ? `The whole of slide ${v.n}` : `Original picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setZoom(1); setKey(v.key); setWhole(false); }}
+                    <button type="button" aria-pressed={v.key === current.key} aria-label={v.whole ? `The whole of ${noun(v)} ${v.n}` : v.kind === "pdf_page" ? `The original page ${v.n}` : `Original picture ${i + 1} of ${same.length} on ${noun(v)} ${v.n}`} onClick={() => { setZoom(1); setKey(v.key); setWhole(false); }}
                       className={`rounded-lg border bg-white p-1 ${touch} ${focusRing} ${v.key === current.key ? "border-gray-900" : "border-gray-300"}`}>
-                      {/* eslint-disable-next-line @next/next/no-img-element -- see above */}
-                      <img src={visualUrl(materialId, v.key)} alt="" className="h-14 w-auto min-w-14 max-w-[120px] object-contain" />
+                      {v.kind === "pdf_page" ? (
+                        <span className="flex h-14 items-center px-2 text-[12.5px] font-semibold text-gray-800">Original page</span>
+                      ) : (
+                        // eslint-disable-next-line @next/next/no-img-element -- see above
+                        <img src={visualUrl(materialId, v.key)} alt="" className="h-14 w-auto min-w-14 max-w-[120px] object-contain" />
+                      )}
                     </button>
                   </li>
                 ))}
               </ul>
-            ) : <p className="mt-1 text-gray-700">{page ? "This is the whole page, as it is in your file." : current.whole ? `This is the whole of slide ${current.n}.` : `This is the only picture on ${noun(current)} ${current.n}.`}</p>}
-            {!page && current.unit === "page" && (
-              <button type="button" aria-pressed={whole} onClick={() => setWhole(w => !w)} className={`${ghostBtn} mt-2`}>{whole ? "Back to the picture" : `Show the whole page ${current.n}`}</button>
+            ) : <p className="mt-1 text-gray-700">{page ? "This is the whole page, as it is in your file." : current.whole ? `This is the whole of ${noun(current)} ${current.n}.` : `This is the only picture on ${noun(current)} ${current.n}.`}</p>}
+            {!page && current.unit === "page" && !same.some(v => v.kind === "pdf_page") && (
+              <button type="button" aria-pressed={whole} onClick={() => setWhole(w => !w)} className={`${ghostBtn} mt-2`}>{whole ? (current.whole ? "Back to the drawn page" : "Back to the picture") : current.whole ? `Open the original page ${current.n}` : `Show the whole page ${current.n}`}</button>
             )}
-            <p className="mt-2 text-gray-700">{current.whole ? (same.length > 1 ? `${WHOLE_NOTE} ${WHOLE_NOTE_PICTURES}` : WHOLE_NOTE) : same.some(v => v.whole) ? "This is the original picture, exactly as in your file." : NOTE(current.unit)}</p>
+            <p className="mt-2 text-gray-700">{current.whole ? (same.some(v => !v.whole && v.kind !== "pdf_page") ? `${WHOLE_NOTE(current)} ${WHOLE_NOTE_PICTURES(current)}` : WHOLE_NOTE(current)) : same.some(v => v.whole) ? "This is the original picture, exactly as in your file." : NOTE(current.unit)}</p>
             <p className="mt-2"><a href={`/api/individual/scholar/materials/${materialId}`} className={`inline-flex items-center font-semibold underline ${touch} ${focusRing}`}>{current.unit === "page" ? "Download the original file" : "Download the original presentation"}</a></p>
           </section>
         </div>
@@ -306,9 +309,9 @@ function MaterialStrip({ materialId, materialTitle, ranges, max }: { materialId:
           {arranged.textOnly.map(v => (
             <li key={v.key}>
               <details className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[13px] text-gray-800">
-                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: {v.whole ? "the whole slide" : `the original ${noun(v)}`}</summary>
+                <summary className={`cursor-pointer font-semibold ${touch} ${focusRing}`}>{v.caption}: {v.whole ? `the whole ${noun(v)}` : `the original ${noun(v)}`}</summary>
                 <p className="mt-1 text-gray-700">{v.hasText ? `The text of this ${noun(v)} teaches it; the original is kept here.` : "No text was read from this picture."}</p>
-                <button type="button" onClick={() => setOpen(v.key)} className={`${ghostBtn} mt-2`}>{v.whole ? "Open the whole slide" : `Open the original ${noun(v)}`}</button>
+                <button type="button" onClick={() => setOpen(v.key)} className={`${ghostBtn} mt-2`}>{v.whole ? `Open the whole ${noun(v)}` : `Open the original ${noun(v)}`}</button>
               </details>
             </li>
           ))}
@@ -345,10 +348,10 @@ function VisualCard({ v, materialId, materialTitle, onOpen, onBroken, textHref }
           <button type="button" onClick={onOpen} className={ghostBtn}>Open the original page</button>
         </div>
       ) : (
-        <button type="button" onClick={onOpen} aria-label={v.whole ? `Enlarge the whole of slide ${v.n}` : `Enlarge the original picture from ${noun(v)} ${v.n}`}
+        <button type="button" onClick={onOpen} aria-label={v.whole ? `Enlarge the whole of ${noun(v)} ${v.n}` : `Enlarge the original picture from ${noun(v)} ${v.n}`}
           className={`flex w-full items-center justify-center bg-white p-1 ${touch} ${focusRing}`}>
           {/* eslint-disable-next-line @next/next/no-img-element -- the learner's own file, shown as it is: never resized, cropped or stretched */}
-          <img src={visualUrl(materialId, v.key)} onError={v.whole ? onBroken : undefined} loading="lazy" decoding="async" alt={v.whole ? `Whole slide ${v.n} of ${materialTitle}` : `Original picture from ${noun(v)} ${v.n} of ${materialTitle}`}
+          <img src={visualUrl(materialId, v.key)} onError={v.whole ? onBroken : undefined} loading="lazy" decoding="async" alt={v.whole ? `Whole ${noun(v)} ${v.n} of ${materialTitle}` : `Original picture from ${noun(v)} ${v.n} of ${materialTitle}`}
             className="h-auto max-h-[220px] w-auto max-w-full bg-white object-contain md:max-h-[280px]" />
         </button>
       )}

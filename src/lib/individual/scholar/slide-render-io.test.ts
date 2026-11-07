@@ -15,13 +15,15 @@ const h = vi.hoisted(() => ({
   pages: 1,
   webp: vi.fn(),
   closed: 0,
+  quality: { slideFacts: { version: 1, checkedAt: "x", blank: [], mixed: [], grouped: [], decorativeOnly: [], review: [{ unit: 1, kinds: ["chart"], picture: false }] } } as Record<string, unknown>,
 }));
 vi.mock("../policy", () => ({ loadIndividualPolicy: async () => h.policy }));
 vi.mock("./material-visuals-io", () => ({ scanDeck: async () => ({ slides: 1, pictures: [], undisplayable: [] }) }));
+vi.mock("./material-visuals-pdf", () => ({ scanPdfImages: async () => ({ slides: 2, pictures: [], undisplayable: [] }) }));
 vi.mock("./store", () => ({
   getMaterial: async () => ({ ok: true, data: h.material }),
   materialBytes: async () => h.bytes,
-  materialExtras: async () => ({ byId: new Map([["m1", { quality: { slideFacts: { version: 1, checkedAt: "x", blank: [], mixed: [], grouped: [], decorativeOnly: [], review: [{ unit: 1, kinds: ["chart"], picture: false }] } } }]]) }),
+  materialExtras: async () => ({ byId: new Map([["m1", { quality: h.quality }]]) }),
 }));
 vi.mock("./slide-render-engine", () => ({
   RenderError: class RenderError extends Error { constructor(public code: string) { super(code); } },
@@ -114,9 +116,9 @@ describe("the claim", () => {
     expect((await startWholeSlides(ctxOf(f.admin, B), "m1")).out.status).toBe(404);
     expect(f.rows.size).toBe(0);
   });
-  it("a PDF or Word file is not drawn here", async () => {
+  it("a Word file is not drawn here", async () => {
     const f = fake();
-    h.material = { id: "m1", mimeType: "application/pdf" };
+    h.material = { id: "m1", mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" };
     expect((await startWholeSlides(ctxOf(f.admin, A), "m1")).out.body).toEqual({ state: "not_needed" });
   });
   it("runs once: a second request finds the claim and starts nothing", async () => {
@@ -215,6 +217,42 @@ describe("the job", () => {
     await run!();
     expect(f.stored.size).toBe(0);
     expect(f.removed).toHaveLength(1);
+  });
+});
+
+describe("the job for a PDF", () => {
+  const pdf = () => { h.material = { id: "m1", mimeType: "application/pdf" }; h.bytes = new Uint8Array([1]); };
+  it("needs no LibreOffice, and draws a page with no text layer", async () => {
+    const f = fake();
+    pdf();
+    const q = h.quality; h.quality = { emptyUnits: [2], aiReadUnits: [] };
+    await (await startWholeSlides(ctxOf(f.admin, A), "m1")).run!();
+    h.quality = q;
+    expect(h.pdf).not.toHaveBeenCalled();
+    const row = f.rows.get("m1")!;
+    expect(row).toMatchObject({ status: "done" });
+    expect((row.units as { n: number }[]).map(u => u.n)).toEqual([2]);
+    expect(h.closed).toBe(1);
+  });
+  it("one page that cannot be drawn does not cost the others their drawing", async () => {
+    const f = fake();
+    pdf();
+    const q = h.quality; h.quality = { emptyUnits: [2], aiReadUnits: [] };
+    h.webp.mockRejectedValueOnce(new Error("decode"));
+    await (await startWholeSlides(ctxOf(f.admin, A), "m1")).run!();
+    h.quality = q;
+    expect(f.rows.get("m1")).toMatchObject({ status: "partial", units: [], not_drawn: [2] });
+    expect(h.closed).toBe(1);
+  });
+  it("a page that draws as flat colour is not stored: the button to the original page stays", async () => {
+    const f = fake();
+    pdf();
+    const q = h.quality; h.quality = { emptyUnits: [2], aiReadUnits: [] };
+    h.webp.mockResolvedValue({ bytes: new Uint8Array([1]), width: 1920, height: 2717, blank: true });
+    await (await startWholeSlides(ctxOf(f.admin, A), "m1")).run!();
+    h.quality = q;
+    expect(f.rows.get("m1")).toMatchObject({ status: "partial", units: [], not_drawn: [2] });
+    expect(f.stored.size).toBe(0);
   });
 });
 

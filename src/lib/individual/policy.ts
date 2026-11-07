@@ -2121,16 +2121,16 @@ export const POLICIES: readonly PolicyDef[] = [
   // SCHOLAR-VISUAL-001 phase 2 (owner decision of 6 Nov 2026): the whole slide, drawn once from the learner's own file, so a grouped diagram keeps its layout.
   {
     key: "scholar_whole_slides", kind: "choice", product: "Scholar",
-    label: "Whole slides drawn from the student's file",
-    help: "Whether a PowerPoint slide with pictures, a chart, a diagram or a table is also shown whole, drawn once from the student's own file on our own servers and stored privately beside it. No AI, and the file goes to no other service. The original pictures stay one tap away.",
+    label: "Whole slides and pages drawn from the student's file",
+    help: "Whether a PowerPoint slide with pictures, a chart, a diagram or a table, and an image-only PDF page, is also shown whole, drawn once from the student's own file on our own servers and stored privately beside it. No AI, and the file goes to no other service. The originals stay one tap away.",
     options: [{ value: "on", label: "Show whole slides" }, { value: "off", label: "Do not draw" }],
     fallback: "off",
     limitReason: "Needs migration 1010 and fails closed without it: students then see the original pictures as they do today. Default: off.",
   },
   {
     key: "scholar_whole_slides_max", kind: "int", product: "Scholar", unit: "slides",
-    label: "Whole slides: most drawn for one file",
-    help: "The most slides drawn whole for one presentation, first come first. The others keep their original pictures.",
+    label: "Whole slides and pages: most drawn for one file",
+    help: "The most slides or pages drawn whole for one file, first come first. The others keep their originals.",
     fallback: 80, min: 1, max: 150,
     limitReason: "One to 150. Each slide takes about a second, and the whole job has five minutes. Default: 80.",
   },
