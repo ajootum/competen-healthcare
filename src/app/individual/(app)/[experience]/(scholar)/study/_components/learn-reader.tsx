@@ -14,6 +14,7 @@ import { AskAbout } from "./ask-panel";
 import { carry } from "./study-active";
 import { ActionRow, InlineNote, LearningDisclosure, LearningIcon, NotesText, RefChip, SectionCard, learnAction } from "@/components/ui/scholar-learning";
 import { shortRef } from "@/lib/individual/scholar/notes-layout";
+import { MyIdeasBox } from "./my-ideas-box";
 
 // SCHOLAR-INDEPENDENT-LEARNING-01 P0: YOUR NOTES, INSIDE THE LESSON. The lesson's own sections as the learner uploaded them
 // (GET learn/sessions/[id]/read?step=: a read of their own chunks, no AI, no allowance), each cited, each an anchor the 790
@@ -42,9 +43,9 @@ export function loadReader(sessionId: string, step: number): Promise<ReaderReply
   return p;
 }
 
-export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards, hidePictures }: {
+export function LessonReader({ sessionId, step, index, current, hasLesson, aiAvailable, marked, markedNote, onLoaded, onMarkRead, ownCards, hidePictures, wordPictures }: {
   /** While the learner recalls the lesson, a picture must not give the answer away. */
-  hidePictures?: boolean;
+  hidePictures?: boolean; wordPictures?: boolean;
   sessionId: string; step: number; index: number;
   /** The active lesson: its notes are read at once (a saved place inside them must be findable), others only when opened. */
   current: boolean;
@@ -83,6 +84,8 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
   const words = loaded && loaded !== "failed" ? relatedWords({ cards: loaded.related.cards, questions: loaded.related.questions, attempts: loaded.related.attempts, cases: loaded.related.cases.length, stations: loaded.related.stations.length, savedLessons: loaded.related.savedLessons }) : null;
   return (
     // SCHOLAR LEARNING DESIGN SYSTEM: the learner's own notes, a shared LearningDisclosure in the notes (cream) tone; no AI.
+    // COMPETEN-NOTEBOOK-001: writing in a box here keeps the panel open, even when saved teaching arrives and would otherwise fold it away.
+    <div onFocusCapture={e => { if (e.target instanceof HTMLTextAreaElement) setOpen(o => o ?? true); }}>
     <LearningDisclosure tone="notes" icon="notes" title={`Your notes${n !== null ? ` · ${n} ${n === 1 ? "section" : "sections"}` : ""}`} open={isOpen} onToggle={setOpen} className="mt-3"
       meta={marked ? <span className="inline-flex items-center rounded-full border border-emerald-300 bg-emerald-50 px-2 py-0.5 text-[11.5px] font-semibold text-emerald-900">{READ_MARK.done}</span> : null}>
 
@@ -101,9 +104,10 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
               {loaded.sections.map((s, i, all) => {
                 const ref = shortRef(s.unit, s.pageFrom, s.pageTo);
                 // SCHOLAR-VISUAL-001: a long slide has several sections; its pictures come once, with the first of them.
-                const sameSlide = (o: typeof s | undefined) => !!o && o.materialId === s.materialId && o.pageFrom === s.pageFrom;
+                const sameSlide = (o: typeof s | undefined) => !!o && o.materialId === s.materialId && s.pageFrom !== null && o.pageFrom === s.pageFrom;
                 const href = carry(sourceHref(s.materialId, s.chunkId));
-                const picture = s.unit !== "section";
+                // A Word section has no page: its pictures are filed under its ordinal. Policy off: not even asked for.
+                const picture = s.unit !== "section" || !!wordPictures;
                 return (
                   <SectionCard as="li" key={s.chunkId} id={lessonAnchorId(step, s.anchor)} className="scroll-mt-4">
                     <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
@@ -126,11 +130,12 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
                         <div className="mt-1 border-l-2 border-[var(--learn-border)] pl-3"><NotesText text={s.notes} className="text-gray-800" /></div>
                       </details>
                     )}
-                    {picture && !hidePictures && <SectionPictures materialId={s.materialId} materialTitle={s.materialTitle} from={s.pageFrom} to={s.pageTo} first={!sameSlide(all[i - 1])} last={!sameSlide(all[i + 1])} leading={s.ordinal === 1} />}
+                    {picture && !hidePictures && <SectionPictures materialId={s.materialId} materialTitle={s.materialTitle} from={s.pageFrom ?? s.ordinal} to={s.pageTo ?? s.ordinal} first={!sameSlide(all[i - 1])} last={!sameSlide(all[i + 1])} leading={s.ordinal === 1} />}
                     <ActionRow label={`For ${s.citation}`}>
                       <AskAbout surface="learn" chunkIds={[s.chunkId]} materialId={s.materialId} sessionId={sessionId} step={step} refLabel={`Your notes: ${s.citation}`} label="Ask about this" variant="primary" />
                       {s.unit === "page" && (s.body || s.notes) && <SourcePictureButton materialId={s.materialId} materialTitle={s.materialTitle} citation={s.citation} className={learnAction.secondary} />}
                     </ActionRow>
+                    <MyIdeasBox chunkId={s.chunkId} materialId={s.materialId} sectionLabel={s.heading ?? s.citation} anchor={s.anchor} className="mt-3" />
                   </SectionCard>
                 );
               })}
@@ -188,5 +193,6 @@ export function LessonReader({ sessionId, step, index, current, hasLesson, aiAva
           </>
         )}
     </LearningDisclosure>
+    </div>
   );
 }

@@ -1,0 +1,32 @@
+NOTE sections: 12. 1: ALPHA; 2: BRAVO; 3: CHARLIE; 4: DELTA; 5: ECHO; 6: FOXTROT; 7: GOLF; 8: HOTEL+INDIA; 9: ; 10: ; 11: ; 12: 
+PASS policy off: no picture, as today
+PASS policy off: the list is empty
+NOTE pictures: image1.png@s1, image2.jpg@s2, image8.png@s3, image3.jpg@s4, image4.png@s5, image5.jpg@s8, image6.jpeg@s8. Cannot be shown, in sections: 8
+PASS all seven pictures, in the document's order
+PASS the picture before any text goes with the first section
+PASS the picture after BRAVO's text is in BRAVO's section (2)
+PASS the wide, thin strip is kept, after CHARLIE (3)
+PASS the real footnote in BRAVO, with its marker stored, moves nothing (2)
+PASS the picture in the table is with its label (4)
+PASS the floating picture is where it is anchored (5)
+PASS the picture Word writes twice counts once, after HOTEL (8)
+PASS the last picture goes after the last words of the body, not into the footnote text stored after it (8)
+PASS the EMF is known not to be shown, and said where it is (8)
+PASS image1.png: the original bytes, exactly
+PASS image2.jpg: the original bytes, exactly
+PASS image8.png: the original bytes, exactly
+PASS image3.jpg: the original bytes, exactly
+PASS image4.png: the original bytes, exactly
+PASS image5.jpg: the original bytes, exactly
+PASS image6.jpeg: the original bytes, exactly
+PASS refused with no session (401)
+PASS seven pictures in the notes (7)
+PASS captioned by section, labelled original
+PASS the section with the EMF says so, with the original file a link away
+PASS the dialog names the section and says the picture is unchanged
+FAIL walk stopped: TimeoutError: locator.waitFor: Timeout 280000ms exceeded.
+Call log:
+[2m  - waiting for locator('main h1, main h2').first() to be visible[22m
+
+NOTE policy restored: "no row"
+NOTE This last run stopped at the tablet step: a page on the dev server did not answer within 280 s while the machine was short of memory. The run before it, differing only in where two consecutive pictures go, passed: tablet and phone (no sideways scrolling, picture fits), nothing drawn or stored, policy off serves nothing, deleting the test file, no server errors.

@@ -74,7 +74,7 @@ export async function POST(req: Request) {
         session: sessionView({ id: same.session.id, recorded: true, title: displaySessionTitle(same.session.title), scopeKind: same.session.scopeKind, currentStep: Math.min(same.session.currentStep, Math.max(0, same.steps.length - 1)), status: same.session.status, coverage: null, steps: same.steps, topics: await sessionTopics(ctx.admin, ctx.userId, same.steps.flatMap(s => s.sections.map(x => x.chunkId))), profiles, titles: same.lessonTitles }),
         // SCHOLAR-PERSISTENT-LEARNING-01: each lesson's server records (saved teaching of the lesson action, attempts), no AI.
         progress: same.progress, resumed: true,
-        lessons: await learnLessonRecords(ctx.admin, ctx.userId, same.steps, typeof body?.lessonAction === "string" && isOpenable(body.lessonAction) ? body.lessonAction : "teach").catch(() => []),
+        lessons: await learnLessonRecords(ctx.admin, ctx.userId, same.steps, typeof body?.lessonAction === "string" && isOpenable(body.lessonAction) ? body.lessonAction : "teach", same.session.id).catch(() => []),
         note: "You were already learning this, so Scholar carried on with that session where you left it.",
         ...(connect ? { study: (await loadStudy(ctx.admin, ctx.userId, same.session.id, "learn", policy))?.bar ?? null } : {}),
       });

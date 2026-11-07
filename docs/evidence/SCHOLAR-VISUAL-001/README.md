@@ -62,11 +62,10 @@ Left as notes: after an AI reading the page shows a slide's picture twice until 
 
 ## Known limits, not fixed here
 
-1. **Whole-slide view.** A PowerPoint slide cannot be rendered whole without a renderer on the server. Pictures and text show separately, so a grouped
-   diagram whose meaning depends on layout loses that layout here. The original file stays one link away. This is standard s3.3's fallback and needs a decision.
+1. **Whole-slide view.** Done in phase 2, piece A, behind policy: see `phase-2/README.md`.
 2. **Word documents.** Pictures inside a `.docx` are not extracted or shown. This is a failed acceptance test for Word under standard s13.
 3. **PDF pages.** A whole image-only PDF page is offered by a button that opens it, not drawn inline, because the stored form is a one-page PDF.
-4. **Charts and SmartArt.** They are flagged for review by slide and reason. Their text is not extracted.
+4. **Charts and SmartArt.** Flagged for review, their text not extracted. Drawn whole by phase 2, piece A, where its policy is on.
 5. **Mixed-slide labels.** Once a text-and-picture slide has been read, every section on it carries the "read by AI" label, including its native text. This errs on the side of checking against the original.
 6. **Per-slide cap.** The existing policy shows at most three pictures a slide (default), with the rest in the dialog's original file link.
 7. **Reading cap.** At most 10 slides per material can be read with AI, existing policy.

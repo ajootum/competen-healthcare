@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { noteDatesLabel } from "@/lib/individual/scholar/library-organise";
 import { DictateButton } from "@/app/individual/_components/speech/speech-buttons";
 import { LearningIcon, learnAction } from "@/components/ui/scholar-learning";
+import { notebookHref, useNotebook } from "./note-capture";
 
 // SCHOLAR-LIBRARY-01 (owner, 1 Nov 2026): the learner's OWN notes, bookmark and highlights on one saved teaching or one
 // lesson. Learner-authored, private, never AI: every write goes to api/individual/scholar/library/notes (820), which keys
@@ -44,6 +45,7 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const notebook = useNotebook();
   const mine = useCallback((n: ClientNote) => (target.targetKind === "lesson" ? n.step === target.step && !n.artefactId : n.artefactId === target.artefactId), [target]);
 
   const load = useCallback(async () => {
@@ -60,7 +62,7 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
     const r = await send("POST", { ...target, kind, body, quote });
     setBusy(false);
     if (!r.ok) { setMsg(typeof r.json.error === "string" ? r.json.error : "That could not be saved just now."); return false; }
-    if (!r.json.existing) setNotes(n => [{ id: String(r.json.id), kind, body, quote, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), step: target.step ?? null, artefactId: target.targetKind === "artefact" ? target.artefactId : null }, ...(n ?? [])]);
+    if (!r.json.existing) setNotes(n => [{ id: String(r.json.id), kind, body, quote, createdAt: new Date().toISOString(), updatedAt: null, step: target.step ?? null, artefactId: target.targetKind === "artefact" ? target.artefactId : null }, ...(n ?? [])]);
     return true;
   };
   const remove = async (id: string) => {
@@ -84,9 +86,9 @@ export function LibraryNotes({ target, initial, containerId, label = "Your notes
   const bookmark = list.find(n => n.kind === "bookmark");
   const written = list.filter(n => n.kind !== "bookmark");
   return (
-    <details className={tone ? "group mt-3 cmp-learn-notes cmp-learn-box" : "mt-3 rounded-xl border border-gray-200"} open={open} onToggle={e => toggled((e.currentTarget as HTMLDetailsElement).open)}>
+    <details className={tone ? `group mt-3 ${notebook ? "cmp-learn-ideas" : "cmp-learn-notes"} cmp-learn-box` : "mt-3 rounded-xl border border-gray-200"} open={open} onToggle={e => toggled((e.currentTarget as HTMLDetailsElement).open)}>
       <summary className={`flex min-h-[44px] cursor-pointer list-none items-center gap-2 px-3 text-[13.5px] font-semibold text-gray-900 pointer-coarse:min-h-[var(--cmp-touch-min)] [&::-webkit-details-marker]:hidden ${focusRing}`}>
-        {tone && <LearningIcon name="notes" className="cmp-learn-accent h-5 w-5" />}<span className={tone ? "cmp-learn-ink font-bold" : ""}>{label}</span>{notes !== null && <span className="text-[12px] font-normal text-gray-600">· {written.length}{bookmark ? " · bookmarked" : ""}</span>}
+        {tone && <LearningIcon name={notebook ? "bulb" : "notes"} className="cmp-learn-accent h-5 w-5" />}<span className={tone ? "cmp-learn-ink font-bold" : ""}>{label}</span>{notes !== null && <span className="text-[12px] font-normal text-gray-600">· {written.length}{bookmark ? " · bookmarked" : ""}</span>}
       </summary>
       <div className={tone ? "rounded-b-2xl border-t border-[var(--learn-border)] bg-[var(--cmp-app-surface)] px-3 pb-3 pt-2" : "border-t border-gray-200 px-3 pb-3 pt-2"}>
         <p className="text-[12px] text-gray-600">Written by you, private to you. Never shared, never AI.</p>
@@ -135,10 +137,11 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
     const body = text.trim();
     if (needsText && !body) { setMsg("A note needs some words. Remove it instead if you no longer want it."); return; }
     setSaving(true); setMsg(null);
-    const r = await send("PATCH", { id: note.id, body: body || null });
+    // The copy this form opened from, so a note changed since in My Notebook is not overwritten.
+    const r = await send("PATCH", { id: note.id, body: body || null, ...(note.updatedAt ? { updatedAt: note.updatedAt } : {}) });
     setSaving(false);
     if (!r.ok) { setMsg(typeof r.json.error === "string" ? r.json.error : "That could not be saved just now."); return; }
-    onChanged({ ...note, body: body || null, updatedAt: new Date().toISOString() });
+    onChanged({ ...note, body: body || null, updatedAt: typeof r.json.updatedAt === "string" ? r.json.updatedAt : null });
     setEditing(false);
   };
   return (
@@ -159,7 +162,9 @@ export function NoteEntry({ note, busy = false, onRemove, onChanged, attached }:
       {attached && <p className="mt-1 break-words text-[12px] text-gray-600">{attached}</p>}
       <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-gray-600">
         <span>{note.kind === "highlight" ? "Highlight" : note.kind === "summary" ? "Your summary" : "Note"} · {noteDatesLabel(note.createdAt, note.updatedAt)}</span>
-        {!editing && <button type="button" className={`${linkBtn} ${focusRing}`} disabled={busy || saving} onClick={() => { setText(note.body ?? ""); setEditing(true); }}>{note.kind === "highlight" && !note.body ? "Add a comment" : "Edit"}<span className="sr-only"> this {note.kind}</span></button>}
+        {/* COMPETEN-NOTEBOOK-001: a long note is edited on its own page, which holds the 50000 characters this short form cannot. */}
+        {!editing && (note.body?.length ?? 0) > BODY_MAX && <a href={notebookHref(note.id)} className={`${linkBtn} ${focusRing}`}>Edit in My Notebook</a>}
+        {!editing && (note.body?.length ?? 0) <= BODY_MAX && <button type="button" className={`${linkBtn} ${focusRing}`} disabled={busy || saving} onClick={() => { setText(note.body ?? ""); setEditing(true); }}>{note.kind === "highlight" && !note.body ? "Add a comment" : "Edit"}<span className="sr-only"> this {note.kind}</span></button>}
         {confirming ? (
           <span role="group" aria-label="Remove this note?" className="inline-flex items-center gap-2">
             <button type="button" className={`${linkBtn} font-bold ${focusRing}`} disabled={busy} onClick={() => { setConfirming(false); onRemove(note.id); }}>Yes, remove it</button>

@@ -33,7 +33,7 @@ function fakeAdmin(tables: Record<string, Row[]>, failRead: string | null = null
     };
     return q;
   };
-  return { admin: { from, storage: { from: () => ({ remove: async () => ({ error: null }) }) } }, deletes, tables };
+  return { admin: { from, storage: { from: () => ({ remove: async () => ({ error: null }), list: async () => ({ data: [], error: null }) }) } }, deletes, tables };
 }
 
 const world = (): Record<string, Row[]> => ({

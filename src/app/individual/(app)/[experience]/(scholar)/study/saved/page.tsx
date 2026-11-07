@@ -1,4 +1,8 @@
+import { INTEGRATED_KEY, INTEGRATED_LABEL, isIntegratedVersion } from "@/lib/individual/scholar/teach-format";
+import { SavedEvidenceList } from "../_components/saved-evidence";
 import Link from "next/link";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import type { Metadata } from "next";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
@@ -44,6 +48,7 @@ export async function generateMetadata(): Promise<Metadata> {
 export default async function SavedPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const x = SCHOLAR;
   // SCHOLAR-SESSION-AI-02: with a valid ?study= the session bar is shown (database reads only; not a stage, so last_space is untouched).
@@ -124,7 +129,7 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
           <ul className="mt-3 divide-y divide-gray-200">
             {checks.map(c => (
               <li key={c.attemptId} className="py-3">
-                <p className="text-[12px] text-gray-500">{new Date(c.answeredAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}{c.step !== null ? ` · Lesson ${c.step + 1}` : ""} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(c, CHECK_VERDICT_LABEL)}</span></p>
+                <p className="text-[12px] text-gray-500">{formatForReader(c.answeredAt, clock, "date")}{c.step !== null ? ` · Lesson ${c.step + 1}` : ""} · <span className="font-semibold text-gray-800">{checkOutcomeLabel(c, CHECK_VERDICT_LABEL)}</span></p>
                 <p className="mt-0.5 break-words text-[14px] font-semibold text-gray-900">{c.question}</p>
                 <p className="mt-0.5 break-words text-[13.5px] text-gray-800"><span className="font-semibold">You:</span> {c.response.text.length > 220 ? `${c.response.text.slice(0, 220)}…` : c.response.text}</p>
                 <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-gray-600">
@@ -174,11 +179,13 @@ export default async function SavedPage({ params, searchParams }: { params: Prom
                           <details className="rounded-xl border border-gray-200">
                             <summary className={`cursor-pointer list-none px-3 py-2 text-[13.5px] ${focusRing}`}>
                               <span className="font-semibold text-gray-900">{LEARN_ACTION_LABEL[a.action as LearnAction] ?? a.action}</span>
-                              <span className="text-gray-600"> · {a.depth} · {new Date(a.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })} · {a.sources.length} section{a.sources.length === 1 ? "" : "s"}</span>
+                              <span className="text-gray-600"> · {a.depth} · {formatForReader(a.createdAt, clock, "date")} · {a.sources.length} section{a.sources.length === 1 ? "" : "s"}</span>
                             </summary>
                             <div className="border-t border-gray-100 px-3 py-3">
-                              <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{SOURCE_KIND_LABEL.notes}</p>
+                              <p className="text-[11.5px] font-bold uppercase tracking-[0.1em] text-gray-500">{isIntegratedVersion(a.promptVersion) ? INTEGRATED_LABEL : SOURCE_KIND_LABEL.notes}</p>
+                              {isIntegratedVersion(a.promptVersion) && <p className="mt-0.5 text-[12px] text-gray-700">{INTEGRATED_KEY}</p>}
                               <div className="mt-1 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{a.content}</div>
+                              <SavedEvidenceList refs={a.refs} />
                               <ul className="mt-2 space-y-0.5">
                                 {a.sources.map((chunkId, i) => (
                                   <li key={chunkId} className="text-[12.5px]"><span className="font-mono font-bold" style={{ color: x.accent }}>[S{i + 1}]</span>{" "}

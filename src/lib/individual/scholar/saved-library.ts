@@ -158,7 +158,7 @@ export function basicMatches<T extends { id: string }>(rows: readonly T[], q: st
 export function lessonTitleOf(content: string, max = 90): string {
   const lines = String(content ?? "").replace(/\r/g, "").split("\n").map(l => l.trim()).filter(Boolean);
   const heading = lines.find(l => /^#{1,6}\s+\S/.test(l));
-  const raw = (heading ?? lines[0] ?? "").replace(/^#{1,6}\s+/, "").replace(/\*\*|__|`/g, "").replace(/^(overview|title)\s*:\s*/i, "").trim();
+  const raw = (heading ?? lines[0] ?? "").replace(/^#{1,6}\s+/, "").replace(/\*\*|__|`/g, "").replace(/^(overview|title|focus\s+question)\s*:\s*/i, "").replace(/\s*\[(?:[SRE]\d+|AI)\]/g, "").trim();
   return raw.length <= max ? raw : `${raw.slice(0, max - 1).replace(/\s+\S*$/, "")}…`;
 }
 

@@ -1,0 +1,92 @@
+SCHOLAR-TEACHING-P1-RELEASE-001: targeted browser tests. Staging, fixture learner, code at the commit with the second read's fixes. Sections that passed were not repeated.
+
+=== Run A: saved state past ten sections, Go Deeper answer and feedback, real-patient refusal. It then stopped on the walk's own wait, since corrected ===
+NOTE staging policy scholar_go_deeper_structured = on
+NOTE staging policy scholar_guide_me_adaptive = on
+--- 3. saved state, a lesson over ten sections ---
+PASS saved Go Deeper rounds come back (3)
+PASS the round that cites slides past the tenth section is there
+PASS a citation past [S10] is a link to its section (Source S11: Growth and Development, slide 33)
+PASS reopening made no model call
+NOTE earlier lessons: 1. Critical sensitive periods Completed Review saved lesson / 2. Types of growth and development Completed Review saved lesson
+PASS choosing an earlier lesson moves to it
+NOTE later lessons: 2. Types of growth and development Completed Review saved lesson / 3. Hearing Taught · Checked: understood Review saved lesson
+PASS the lesson over ten sections is listed as saved, not 'Start learning'
+--- 2. Go Deeper answer and feedback ---
+PASS feedback appears under the question
+PASS it has a verdict (Partly)
+PASS it explains, in the check's own parts
+PASS the answer is kept once (182 to 183)
+PASS one model call (1)
+--- 1. clinical-risk gate in Guide Me ---
+NOTE a real patient: refused: "I can't help with decisions about a real patient's care here. For a patient you are caring for, follow your local clinical guidance and speak to the nurse in charge, your"
+PASS a real patient is refused in the panel, with no model call (0)
+NOTE "Should I give something for this?": refused I can't help with decisions about a real patient's care here. For a patient you are caring for, follow your local clinic
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE staging policy scholar_guide_me_adaptive = off
+NOTE staging policies left OFF
+
+=== Run B: clinical gate, lesson-level completion, existing teaching and revision. Its study-answer check read old text, so run C replaces that one line ===
+NOTE staging policy scholar_go_deeper_structured = on
+NOTE staging policy scholar_guide_me_adaptive = on
+--- 1. clinical-risk gate in Guide Me ---
+NOTE a real patient: refused: "I can't help with decisions about a real patient's care here. For a patient you are caring for, follow your local clinical guidance and speak to the nurse in charge, your"
+PASS a real patient is refused in the panel, with no model call (0)
+NOTE "Should I give something for this?": asked Is this for your studies or about a patient you are currently caring for? It's for my studies It's about a patient I'm c
+PASS the gate asks in the panel, where the learner is: "Is this for your studies or about a patient you are currently caring for? It's for my studies It's about a patient I'm c"
+PASS nothing was sent to a model while the question is open
+PASS the answer cannot change while the question is open
+NOTE its answers: It's for my studies / It's about a patient I'm caring for
+NOTE after "a patient": Is this for your studies or about a patient you are currently caring for? It's for my studies It's about a patient I'm caring for For a patient you are caring for, please follow your local clinical guidance and speak to 
+PASS saying it is about a patient judges nothing and sends nothing
+PASS saying it is for study carries on in the panel
+NOTE after "for study": feedback 0, model calls 0, said "I can't help with decisions about a real patient's care here. For a patient you are caring for, follow your local clinical guidance and speak to the nurse in ch"
+--- 4. lesson-level completion ---
+NOTE lessons before: 1. Critical sensitive periods Completed Review saved lesson / 2. Types of growth and development Completed Review saved lesson
+NOTE this lesson has 3 step(s)
+NOTE step 1 judged: Not yet; progress "1 answered, not yet understood"
+PASS step result recorded, with no lesson-level verdict (revisit:null, teach:null, clarify:null)
+PASS the step's answer and feedback are kept
+PASS the lesson does not read as checked after one step
+PASS still no lesson-level verdict at "Step 2 of 3"
+PASS still no lesson-level verdict at "Step 3 of 3"
+NOTE at the end: "Counted for this lesson: not yet understood. Your answer to each step is kept."
+NOTE events: revisit:null, teach:null, clarify:null, explain:null, clarify:not_yet
+PASS the guided check counts at the end
+PASS the lesson-level verdict is recorded once the activity is complete
+PASS finishing again adds no event and says so (5 to 5)
+--- 5. existing teaching and revision ---
+NOTE staging policy scholar_guide_me_adaptive = off
+NOTE staging policy scholar_go_deeper_structured = off
+PASS policy off: no Guide Me panel
+FAIL Challenge me still asks its question
+FAIL Challenge me is one model call (0)
+PASS with the policy off Guide me is the old hint form
+PASS study/revise opens
+PASS study/saved opens
+PASS study/learn opens
+PASS saved learning shows no raw labels
+PASS no server or page errors ()
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE staging policy scholar_guide_me_adaptive = off
+NOTE staging policies left OFF
+
+=== Run C: clinical gate only, waiting for the study answer to finish ===
+NOTE staging policy scholar_go_deeper_structured = on
+NOTE staging policy scholar_guide_me_adaptive = on
+--- 1. clinical-risk gate in Guide Me ---
+NOTE a real patient: refused: "I can't help with decisions about a real patient's care here. For a patient you are caring for, follow your local clinical guidance and speak to the nurse in charge, your"
+PASS a real patient is refused in the panel, with no model call (0)
+NOTE "Should I give something for this?": asked Is this for your studies or about a patient you are currently caring for? It's for my studies It's about a patient I'm c
+PASS the gate asks in the panel, where the learner is: "Is this for your studies or about a patient you are currently caring for? It's for my studies It's about a patient I'm c"
+PASS nothing was sent to a model while the question is open
+PASS the answer cannot change while the question is open
+NOTE its answers: It's for my studies / It's about a patient I'm caring for
+NOTE after "a patient": Is this for your studies or about a patient you are currently caring for? It's for my studies It's about a patient I'm caring for For a patient you are caring for, please follow your local clinical guidance and speak to 
+PASS saying it is about a patient judges nothing and sends nothing
+PASS saying it is for study carries on in the panel
+NOTE after "for study": feedback 1, model calls 1, said ""
+PASS no server or page errors ()
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE staging policy scholar_guide_me_adaptive = off
+NOTE staging policies left OFF

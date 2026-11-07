@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { applySlideFacts, pictureReadingInput, type SlideFacts, type SlideSkipReason } from "./slide-classify";
 import { parseAskSources } from "./ask-sources";
+import { linkColumns, type CreateInput, type PatchInput } from "./personal-notebook";
 import { DIFFICULTY_NUMBER } from "./library-meta";
 import { createHash } from "node:crypto";
 import { cache } from "react";
@@ -334,6 +335,16 @@ export async function keptMaterial(admin: Admin, userId: string, id: string): Pr
   return { id: data.id, mime: data.mime_type, chunks: Number(data.chunk_count), pages: data.page_count ?? null, quality: fromQualityJson(data.extraction_quality) };
 }
 
+/** SCHOLAR-VISUAL-001 phase 2: the stored images of drawn slides, for erasure. Absent table (1010 not applied): none. Null: could not be read. */
+async function renderPaths(admin: Admin, userId: string, materialId?: string): Promise<string[] | null> {
+  let q = admin.from("individual_scholar_material_render").select("units").eq("user_id", userId);
+  if (materialId) q = q.eq("material_id", materialId);
+  const { data, error } = await q;
+  if (error) return isNotProvisioned(error) ? [] : null;
+  return ((data ?? []) as { units: unknown }[]).flatMap(r => (Array.isArray(r.units) ? r.units as { path?: unknown }[] : []))
+    .map(u => u.path).filter((p): p is string => typeof p === "string" && p.startsWith(`${userId}/`));
+}
+
 /** Owner erasure of one material: the object, then the row (which cascades to everything derived). */
 export async function deleteMaterial(admin: Admin, userId: string, id: string): Promise<{ ok: boolean; found: boolean }> {
   if (!isUuid(id)) return { ok: true, found: false };
@@ -341,7 +352,12 @@ export async function deleteMaterial(admin: Admin, userId: string, id: string): 
     .eq("user_id", userId).eq("id", id).maybeSingle();
   if (error) return { ok: false, found: false };
   if (!data) return { ok: true, found: false };
-  const rm = await admin.storage.from(BUCKET).remove([data.storage_path]);
+  const drawn = await renderPaths(admin, userId, id);
+  if (drawn === null) return { ok: false, found: true };
+  // By its name as well as its record: a job killed part-way, or finishing right now, can have stored an image the record does not name yet.
+  const unrecorded = await admin.storage.from(BUCKET).list(userId, { limit: 1000, search: `render-${id}-` });
+  if (unrecorded.error) return { ok: false, found: true };
+  const rm = await admin.storage.from(BUCKET).remove([data.storage_path, ...drawn, ...((unrecorded.data ?? []) as { name: string }[]).map(o => `${userId}/${o.name}`)]);
   if (rm.error) return { ok: false, found: true };
   const { error: dErr } = await admin.from("individual_scholar_material").delete().eq("user_id", userId).eq("id", id);
   // LEARN-01 L4: the deleted material's steps and sources went with it (414 cascades); a session left with nothing to
@@ -361,9 +377,12 @@ export async function eraseAllMaterial(admin: Admin, userId: string): Promise<{ 
   const rows = (data ?? []) as { id: string; storage_path: string }[];
   const listed = await admin.storage.from(BUCKET).list(userId, { limit: 1000 });
   if (listed.error) return { ok: false, erased: 0 };
-  const paths = new Set([...rows.map(r => r.storage_path), ...((listed.data ?? []) as any[]).map(o => `${userId}/${o.name}`)]);
-  if (paths.size) {
-    const rm = await admin.storage.from(BUCKET).remove([...paths]);
+  // SCHOLAR-VISUAL-001 phase 2: drawn slides by their recorded paths too, since a person can hold more objects than one listing returns.
+  const drawn = await renderPaths(admin, userId);
+  if (drawn === null) return { ok: false, erased: 0 };
+  const paths = [...new Set([...rows.map(r => r.storage_path), ...((listed.data ?? []) as any[]).map(o => `${userId}/${o.name}`), ...drawn])];
+  for (let i = 0; i < paths.length; i += 500) {
+    const rm = await admin.storage.from(BUCKET).remove(paths.slice(i, i + 500));
     if (rm.error) return { ok: false, erased: 0 };
   }
   const { error: dErr } = await admin.from("individual_scholar_material").delete().eq("user_id", userId);
@@ -2473,6 +2492,16 @@ export type LearningEventRow = { step: number; action: string; verdict: string |
  * A session's events, in order (what was done, and the informal check outcomes). LE-03 (955): an event detached by a
  * re-cut (its lesson no longer exists as one) is left out, so it counts as no lesson's progress.
  */
+/** One lesson's events, newest first, with the kept check each judged. 950 absent: no links. A failed read is a failure, never an empty trail. */
+export async function lessonEventTrail(admin: Admin, userId: string, sessionId: string, step: number): Promise<Read<{ action: string; verdict: string | null; attemptId: string | null }[]>> {
+  const detached = await learningRecutSchema(admin, userId);
+  const read = (cols: string) => { const q = admin.from("individual_scholar_learning_event").select(cols).eq("user_id", userId).eq("session_id", sessionId).eq("step", step); return (detached ? q.is("detached_at", null) : q).order("created_at", { ascending: false }).limit(500); };
+  let { data, error } = await read("action, verdict, attempt_id");
+  if (error && /column|schema cache/i.test(String((error as any)?.message ?? ""))) ({ data, error } = await read("action, verdict"));
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(r => ({ action: r.action, verdict: r.verdict ?? null, attemptId: r.attempt_id ?? null })) };
+}
+
 export async function learningEvents(admin: Admin, userId: string, sessionId: string): Promise<Read<LearningEventRow[]>> {
   let q = admin.from("individual_scholar_learning_event").select("step, action, verdict, created_at").eq("user_id", userId).eq("session_id", sessionId);
   if (await learningRecutSchema(admin, userId)) q = q.is("detached_at", null);
@@ -2836,7 +2865,7 @@ export async function listArtefacts(admin: Admin, userId: string, opts: { materi
  * mode it was written under (learn-journey.ts newestSavedLesson). Learn/act's open falls back to it when the exact key
  * finds nothing, so a lesson taught under an older prompt or other settings reopens with no AI call. Keyed on user_id.
  */
-export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[] }): Promise<ArtefactRow | null> {
+export async function findSavedLesson(admin: Admin, userId: string, q: { action: string; materialId: string | null; chunkIds: readonly string[]; lesson?: { sessionId: string; step: number } | null }): Promise<ArtefactRow | null> {
   if (!q.chunkIds.length) return null;
   const r = await listArtefacts(admin, userId, { chunkIds: [q.chunkIds[0]], ...(q.materialId ? { materialId: q.materialId } : {}) });
   return r.ok ? newestSavedLesson(r.data, q) : null;
@@ -2848,7 +2877,7 @@ export async function findSavedLesson(admin: Admin, userId: string, q: { action:
  * only, keyed on user_id. Anything unreadable (415 / 416 absent) is simply not counted: a lesson then shows what the
  * learning events say, never a fabricated state.
  */
-export async function learnLessonRecords(admin: Admin, userId: string, steps: readonly LearningStep[], action: string): Promise<LessonRecord[]> {
+export async function learnLessonRecords(admin: Admin, userId: string, steps: readonly LearningStep[], action: string, sessionId: string | null = null): Promise<LessonRecord[]> {
   const all = [...new Set(steps.flatMap(s => s.sections.map(x => x.chunkId)))].slice(0, 400);
   const empty: LessonRecord[] = steps.map(s => ({ step: s.step, saved: null, attempts: 0 }));
   if (!all.length) return empty;
@@ -2859,17 +2888,18 @@ export async function learnLessonRecords(admin: Admin, userId: string, steps: re
   const list = (r: { data?: unknown; error?: unknown } | null): any[] => (r && !r.error && Array.isArray(r.data) ? r.data : []);
   const ids: string[] = [...new Set(list(src).map(r => String(r.artefact_id)))];
   const [arts, sources, att] = await Promise.all([
-    ids.length ? (async () => { const q = admin.from("individual_scholar_artefact").select("id, material_id, action, depth, prompt_version, created_at").eq("user_id", userId).eq("action", action).in("id", ids); return (await librarySchema(admin, userId) ? q.is("superseded_at", null) : q).limit(500); })() : null,
+    // SCHOLAR-GO-DEEPER-001: 820's own record of the lesson a row was saved for, so a lesson over ten sections finds its saved teaching here too (learn-journey.ts coversLesson).
+    ids.length ? (async () => { const v820 = await librarySchema(admin, userId); const q = admin.from("individual_scholar_artefact").select(`id, material_id, action, depth, prompt_version, created_at${v820 ? ", session_id, step" : ""}`).eq("user_id", userId).eq("action", action).in("id", ids); return (v820 ? q.is("superseded_at", null) : q).limit(500); })() : null,
     artefactSources(admin, userId, ids),
     list(qs).length ? admin.from("individual_scholar_attempt").select("question_id").eq("user_id", userId).in("question_id", list(qs).map(q => q.id)).limit(5000) : null,
   ]);
-  const rows = list(arts).map(r => ({ id: r.id as string, materialId: r.material_id as string, action: r.action as string, depth: r.depth as string, promptVersion: r.prompt_version as string, createdAt: r.created_at as string, sources: sources.get(r.id) ?? [] }));
+  const rows = list(arts).map(r => ({ id: r.id as string, materialId: r.material_id as string, action: r.action as string, depth: r.depth as string, promptVersion: r.prompt_version as string, createdAt: r.created_at as string, sources: sources.get(r.id) ?? [], sessionId: (r.session_id ?? null) as string | null, step: Number.isInteger(r.step) ? (r.step as number) : null }));
   const chunkOf = new Map<string, string>(list(qs).map(q => [String(q.id), String(q.chunk_id)]));
   const perChunk = new Map<string, number>();
   for (const a of list(att)) { const c = chunkOf.get(a.question_id); if (c) perChunk.set(c, (perChunk.get(c) ?? 0) + 1); }
   return steps.map(s => {
     const chunkIds = s.sections.map(x => x.chunkId);
-    const best = newestSavedLesson(rows, { action, materialId: s.sections[0]?.materialId ?? null, chunkIds });
+    const best = newestSavedLesson(rows, { action, materialId: s.sections[0]?.materialId ?? null, chunkIds, lesson: sessionId ? { sessionId, step: s.step } : null });
     return { step: s.step, saved: best ? { at: best.createdAt, promptVersion: best.promptVersion, depth: best.depth } : null, attempts: chunkIds.reduce((n, c) => n + (perChunk.get(c) ?? 0), 0) };
   });
 }
@@ -3241,12 +3271,20 @@ export async function addNote(admin: Admin, userId: string, n: NoteInput): Promi
   return { ok: false, error: code === "23503" ? "not_found" : "failed" };
 }
 
-/** Change the text of one of the caller's notes or highlights (a bookmark has none). */
-export async function updateNote(admin: Admin, userId: string, id: string, patch: { body: string | null }): Promise<"ok" | "not_found" | "invalid" | "failed"> {
+/**
+ * Change the text of one of the caller's notes or highlights (a bookmark has none). COMPETEN-NOTEBOOK-001: with `updatedAt` (the copy the form was
+ * opened from), a note changed since, in My Notebook or elsewhere, is left alone and answers "conflict", so its newer words are never overwritten.
+ */
+export async function updateNote(admin: Admin, userId: string, id: string, patch: { body: string | null; updatedAt?: string | null }): Promise<"ok" | "not_found" | "invalid" | "failed" | "conflict" | { updatedAt: string }> {
   if (!isUuid(id) || !(await librarySchema(admin, userId))) return "not_found";
-  const { data, error } = await admin.from("individual_scholar_note").update({ body: patch.body }).eq("user_id", userId).eq("id", id).neq("kind", "bookmark").select("id");
+  let q = admin.from("individual_scholar_note").update({ body: patch.body }).eq("user_id", userId).eq("id", id).neq("kind", "bookmark");
+  if (patch.updatedAt) q = q.eq("updated_at", patch.updatedAt);
+  const { data, error } = await q.select("id, updated_at");
   if (error) return String(error.code ?? "") === "23514" ? "invalid" : "failed";
-  return (data ?? []).length ? "ok" : "not_found";
+  if ((data ?? []).length) return { updatedAt: data[0].updated_at };
+  if (!patch.updatedAt) return "not_found";
+  const { data: had } = await admin.from("individual_scholar_note").select("id").eq("user_id", userId).eq("id", id).neq("kind", "bookmark").maybeSingle();
+  return had ? "conflict" : "not_found";
 }
 
 /** Remove one of the caller's notes, bookmarks or highlights. Only theirs: another id simply is not found. */
@@ -3284,7 +3322,16 @@ export async function savedLearningRows(admin: Admin, userId: string, query: str
   const noteIds = hits.data.rows.filter(h => h.kind === "note").map(h => h.id);
   const artefacts = await artefactsByIds(admin, userId, artefactIds, { currentOnly: true });
   if (!artefacts.ok) return artefacts;
-  const notes = noteIds.length ? await admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds) : { data: [], error: null };
+  // COMPETEN-NOTEBOOK-001 (owner, 6 Nov 2026): a note written through the Notebook (1000, client_key set) never reaches a model by this path.
+  // Choosing "My saved learning" for a question is not the learner sending that note. A note goes to AI only when they put it in the question themselves.
+  // Asked first, so the column is never named while 1000 is absent. A transient error is treated as applied: the filter stays on, and nothing extra is sent.
+  const notebook = noteIds.length ? await admin.rpc("individual_scholar_notebook_1000") : null;
+  const notebookAbsent = !!notebook?.error && isMissingRpc(notebook.error);
+  const notes = noteIds.length
+    ? await (notebookAbsent
+      ? admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds)
+      : admin.from("individual_scholar_note").select("id, material_id, body, created_at").eq("user_id", userId).in("id", noteIds).is("client_key", null))
+    : { data: [], error: null };
   if (notes.error) return fail(notes.error);
   const byArtefact = new Map(artefacts.data.map(a => [a.id, a]));
   const byNote = new Map(((notes.data ?? []) as { id: string; material_id: string | null; body: string | null; created_at: string }[]).map(n => [n.id, n]));
@@ -3973,6 +4020,33 @@ export async function writeResearchCache(admin: Admin, row: { key: string; provi
   }, { onConflict: "query_hash" }).then((r: unknown) => r, () => {});
 }
 
+// SCHOLAR-RESEARCH-TEACH-001: one shared row per subject topic. A row with the building provider says a search is under way.
+
+/** The topic's row if it has not expired, with its provider, so a claim is told from a result. */
+export async function readResearchTopic(admin: Admin, key: string, nowIso: string): Promise<{ provider: string; sources: unknown[] } | null> {
+  const { data } = await admin.from("individual_scholar_research_cache").select("provider, sources, expires_at").eq("query_hash", key).maybeSingle();
+  if (!data || (data as any).expires_at <= nowIso) return null;
+  return { provider: (data as any).provider, sources: Array.isArray((data as any).sources) ? (data as any).sources : [] };
+}
+
+/**
+ * Atomic. True for exactly one caller: the row is new, or the one there has expired. The insert ignores a conflict and an expired
+ * row is taken over by a conditional update, so two learners cannot both search. Nothing is deleted. Unreadable: false (no search).
+ */
+export async function claimResearchTopic(admin: Admin, key: string, row: { provider: string; policyVersion: string; ms: number; nowIso: string }): Promise<boolean> {
+  const fields = { provider: row.provider, policy_version: row.policyVersion, sources: [], searches: 0, created_at: row.nowIso, expires_at: new Date(new Date(row.nowIso).getTime() + row.ms).toISOString() };
+  const inserted = await admin.from("individual_scholar_research_cache").upsert({ query_hash: key, ...fields }, { onConflict: "query_hash", ignoreDuplicates: true }).select("query_hash");
+  if (inserted.error) return false;
+  if ((inserted.data ?? []).length) return true;
+  const taken = await admin.from("individual_scholar_research_cache").update(fields).eq("query_hash", key).lte("expires_at", row.nowIso).select("query_hash");
+  return !taken.error && (taken.data ?? []).length > 0;
+}
+
+/** A failed search frees its topic at once, by expiring its own claim. A result already written is left alone. */
+export async function releaseResearchTopic(admin: Admin, key: string, provider: string, nowIso: string): Promise<void> {
+  await admin.from("individual_scholar_research_cache").update({ created_at: nowIso, expires_at: new Date(new Date(nowIso).getTime() + 1000).toISOString() }).eq("query_hash", key).eq("provider", provider).then((r: unknown) => r, () => {});
+}
+
 export const EXAM_RESEARCH_ENTITY = "individual_scholar_exam_research";
 
 /** Fresh web research the person ran today (UTC), from the audit rows each one writes. Unreadable: null (refuse). */
@@ -3999,7 +4073,7 @@ export async function learnResearchToday(admin: Admin, userId: string): Promise<
 /** Today's recorded AI spend (USD, UTC day) on one operation for the person. Unreadable: null (refuse). */
 export async function aiSpendToday(admin: Admin, userId: string, operation: string): Promise<number | null> {
   const since = `${new Date().toISOString().slice(0, 10)}T00:00:00Z`;
-  const { data, error } = await admin.from("plat_ai_requests").select("cost_usd").eq("actor_id", userId).eq("operation", operation).gte("created_at", since).limit(1000);
+  const { data, error } = await admin.from("plat_ai_requests").select("cost_usd").eq("actor_id", userId).in("operation", [operation, `${operation}_verify`]).gte("created_at", since).limit(1000);
   if (error) return null;
   return ((data ?? []) as { cost_usd: number | string | null }[]).reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
 }
@@ -5364,7 +5438,11 @@ export async function sweepPersonUploads(admin: Admin, userId: string, nowMs: nu
   if (!objects.some(o => o.created_at && nowMs - Date.parse(o.created_at) >= ABANDON_AFTER_MS)) return 0;
   const { data: mats, error } = await admin.from("individual_scholar_material").select("storage_path").eq("user_id", userId).limit(5000);
   if (error) return 0;
-  const kept = new Set(((mats ?? []) as any[]).map(m => m.storage_path as string));
+  // SCHOLAR-VISUAL-001 phase 2: a drawn slide is no abandoned upload. Not knowing which are drawn: nothing is swept this time. An image a killed job
+  // never recorded is in no list here, so it does go, once it is a day old.
+  const drawn = await renderPaths(admin, userId);
+  if (drawn === null) return 0;
+  const kept = new Set([...((mats ?? []) as any[]).map(m => m.storage_path as string), ...drawn]);
   const busy = new Set<string>();
   if (!rErr) for (const r of (rows ?? []) as any[]) if (finishDecision(r, nowMs).kind === "busy") busy.add(uploadPath(userId, r.id, r.mime_type));
   const gone = abandonedObjects(userId, objects, kept, busy, nowMs);
@@ -5736,4 +5814,202 @@ export async function clearSearchHistory(admin: Admin, userId: string): Promise<
   if (!(await historySchema(admin))) return { ok: false };
   const { data, error } = await admin.rpc(SH_CLEAR, { p_user_id: userId });
   return error ? { ok: false } : { ok: true, cleared: Number(data ?? 0) };
+}
+
+// ── COMPETEN-NOTEBOOK-001 P1: THE NOTEBOOK'S READS AND WRITES (migration 1000) ────────────────────────────────────────────
+//
+// The same table as the library's notes (820), read with the columns 1000 added. Every statement is keyed on the caller's id, and the
+// composite foreign keys refuse another learner's material, session or study session. Learner text only: nothing here calls a model.
+// The audit rows (in the route) hold codes only, never a note's words.
+
+export type NotebookNote = {
+  id: string; kind: "note" | "highlight" | "summary" | "bookmark"; targetKind: "free" | "topic" | "material" | "section" | "lesson" | "artefact";
+  title: string | null; body: string | null; quote: string | null; tags: string[]; pinnedAt: string | null; revision: number;
+  /** Written through the Notebook. An older note keeps its 820 rules: it can move between targets, but it cannot be free-standing. */
+  viaNotebook: boolean;
+  artefactId: string | null; materialId: string | null; chunkId: string | null; sessionId: string | null; step: number | null;
+  sectionLabel: string | null; sectionAnchor: string | null; capturedIn: string | null; competencyId: string | null; studyId: string | null; wasOn: string | null;
+  /** The topic it is linked to (1001), in the words of the topic. */
+  topic: string | null;
+  createdAt: string; updatedAt: string;
+};
+
+const NOTEBOOK_COLS = "id, kind, target_kind, title, body, quote, tags, pinned_at, revision, client_key, artefact_id, material_id, chunk_id, session_id, step, section_label, section_anchor, captured_in, competency_id, study_id, was_on, topic, created_at, updated_at";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+const toNotebookNote = (r: any): NotebookNote => ({
+  id: r.id, kind: r.kind, targetKind: r.target_kind, title: r.title ?? null, body: r.body ?? null, quote: r.quote ?? null, tags: Array.isArray(r.tags) ? r.tags : [],
+  pinnedAt: r.pinned_at ?? null, revision: Number(r.revision), viaNotebook: !!r.client_key,
+  artefactId: r.artefact_id ?? null, materialId: r.material_id ?? null, chunkId: r.chunk_id ?? null, sessionId: r.session_id ?? null, step: Number.isInteger(r.step) ? r.step : null,
+  sectionLabel: r.section_label ?? null, sectionAnchor: r.section_anchor ?? null, capturedIn: r.captured_in ?? null, competencyId: r.competency_id ?? null, studyId: r.study_id ?? null, wasOn: r.was_on ?? null, topic: r.topic ?? null,
+  createdAt: r.created_at, updatedAt: r.updated_at,
+});
+
+let notebook1000: boolean | null = null;
+/** Whether migrations 1000 and 1001 are applied on this environment (1001 depends on 1000). A transient error is "no" for now, and asked again. */
+export async function notebookSchema(admin: Admin): Promise<boolean> {
+  if (notebook1000 !== null) return notebook1000;
+  const { data, error } = await admin.rpc("individual_scholar_notebook_1001");
+  if (!error) return (notebook1000 = data === true);
+  if (isMissingRpc(error)) return (notebook1000 = false);
+  return false;
+}
+/** Tests only: forget what was detected. */
+export const resetNotebookSchema = (v: boolean | null = null) => { notebook1000 = v; };
+
+/** Policy and schema together: the one question every page, route and shell asks. Any failure is off. */
+export function notebookOffered(policy: { scholarPersonalNotebook: "on" | "off"; scholarLearningLibrary: "on" | "off" }, schema: boolean): boolean {
+  return policy.scholarPersonalNotebook === "on" && policy.scholarLearningLibrary === "on" && schema;
+}
+
+const ownChunk = async (admin: Admin, userId: string, materialId: string, chunkId: string): Promise<"ok" | "not_found" | "failed"> => {
+  const { data, error } = await admin.from("individual_scholar_chunk").select("id").eq("user_id", userId).eq("id", chunkId).eq("material_id", materialId).maybeSingle();
+  if (error) return "failed";
+  return data ? "ok" : "not_found";
+};
+
+export type CreateResult =
+  | { ok: true; id: string; revision: number; existing: boolean; stored?: { body: string | null; title: string | null; tags: string[] } }
+  | { ok: false; error: "not_found" | "limit" | "failed" };
+
+/**
+ * The first save of a note. A retry with the same client key finds the note it already made and says what it holds, so the page can send
+ * only what is newer. Never a second note.
+ */
+export async function createNotebookNote(admin: Admin, userId: string, n: CreateInput): Promise<CreateResult> {
+  const link = n.context.link;
+  if ((link.targetKind === "section" || link.targetKind === "lesson") && link.chunkId) {
+    const own = await ownChunk(admin, userId, link.materialId!, link.chunkId);
+    if (own !== "ok") return { ok: false, error: own };
+  }
+  const { count, error: cErr } = await admin.from("individual_scholar_note").select("id", { count: "exact", head: true }).eq("user_id", userId);
+  if (cErr) return { ok: false, error: "failed" };
+  if ((count ?? 0) >= NOTE_MAX_PER_LEARNER) return { ok: false, error: "limit" };
+  const row = {
+    user_id: userId, kind: "note", body: n.body, quote: null, client_key: n.clientKey, title: n.title, tags: n.tags,
+    ...linkColumns(link),
+    section_label: n.context.sectionLabel, section_anchor: n.context.sectionAnchor, captured_in: n.context.capturedIn, study_id: n.context.studyId,
+  };
+  const { data, error } = await admin.from("individual_scholar_note").insert({ ...row, user_id: userId }).select("id, revision").single();
+  if (!error) return { ok: true, id: data.id, revision: Number(data.revision), existing: false };
+  const code = String(error.code ?? "");
+  if (code === "23505") {
+    const { data: had, error: hErr } = await admin.from("individual_scholar_note").select("id, revision, body, title, tags").eq("user_id", userId).eq("client_key", n.clientKey).maybeSingle();
+    if (hErr || !had) return { ok: false, error: "failed" };
+    return { ok: true, id: had.id, revision: Number(had.revision), existing: true, stored: { body: had.body ?? null, title: had.title ?? null, tags: had.tags ?? [] } };
+  }
+  return { ok: false, error: code === "23503" ? "not_found" : "failed" };
+}
+
+export type UpdateResult =
+  | { ok: true; id: string; revision: number }
+  /** not_found: the note. target: what it was being linked to. The page treats them very differently. */
+  | { ok: false; error: "not_found" | "target" | "invalid" | "failed" }
+  | { ok: false; error: "conflict"; current: { body: string | null; title: string | null; tags: string[]; revision: number } };
+
+/** A change to one of the caller's notes, made from the revision they hold. A different revision changes nothing and returns the stored copy. */
+export async function updateNotebookNote(admin: Admin, userId: string, id: string, p: PatchInput, now: Date = new Date()): Promise<UpdateResult> {
+  if (!isUuid(id)) return { ok: false, error: "not_found" };
+  const set: Record<string, unknown> = {};
+  if (p.body !== undefined) set.body = p.body;
+  if (p.title !== undefined) set.title = p.title;
+  if (p.tags !== undefined) set.tags = p.tags;
+  if (p.pinned !== undefined) set.pinned_at = p.pinned ? now.toISOString() : null;
+  if (p.competencyId !== undefined) set.competency_id = p.competencyId;
+  if (p.studyId !== undefined) set.study_id = p.studyId;
+  if (p.link) {
+    if ((p.link.targetKind === "section" || p.link.targetKind === "lesson") && p.link.chunkId) {
+      const own = await ownChunk(admin, userId, p.link.materialId!, p.link.chunkId);
+      if (own !== "ok") return { ok: false, error: own === "not_found" ? "target" : "failed" };
+    }
+    Object.assign(set, linkColumns(p.link), { section_label: p.sectionLabel ?? null, section_anchor: p.sectionAnchor ?? null, was_on: null });
+  }
+  if (!Object.keys(set).length) return { ok: false, error: "invalid" };
+  const { data, error } = await admin.from("individual_scholar_note").update(set).eq("user_id", userId).eq("id", id).eq("revision", p.expectedRevision).neq("kind", "bookmark").select("id, revision");
+  if (error) {
+    const code = String(error.code ?? "");
+    return { ok: false, error: code === "23514" ? "invalid" : code === "23503" ? "target" : "failed" };
+  }
+  if ((data ?? []).length) return { ok: true, id: data[0].id, revision: Number(data[0].revision) };
+  const { data: had, error: hErr } = await admin.from("individual_scholar_note").select("kind, revision, body, title, tags").eq("user_id", userId).eq("id", id).maybeSingle();
+  if (hErr) return { ok: false, error: "failed" };
+  if (!had || had.kind === "bookmark") return { ok: false, error: "not_found" };
+  return { ok: false, error: "conflict", current: { body: had.body ?? null, title: had.title ?? null, tags: had.tags ?? [], revision: Number(had.revision) } };
+}
+
+/** One of the caller's notes (never a bookmark, which has no words). */
+export async function getNotebookNote(admin: Admin, userId: string, id: string): Promise<Read<NotebookNote | null>> {
+  if (!isUuid(id)) return { ok: true, data: null };
+  const { data, error } = await admin.from("individual_scholar_note").select(NOTEBOOK_COLS).eq("user_id", userId).eq("id", id).neq("kind", "bookmark").maybeSingle();
+  if (error) return fail(error);
+  return { ok: true, data: data ? toNotebookNote(data) : null };
+}
+
+export type NotebookFilter = { pinned?: boolean; tag?: string | null; materialId?: string | null; free?: boolean; topic?: string | null };
+
+/** The caller's notes, last changed first, or pinned first-pinned-newest. A page of `limit`, and whether there is more. */
+export async function listNotebookNotes(admin: Admin, userId: string, o: NotebookFilter & { limit: number; offset?: number }): Promise<Read<{ rows: NotebookNote[]; more: boolean }>> {
+  const offset = Math.max(o.offset ?? 0, 0);
+  let q = admin.from("individual_scholar_note").select(NOTEBOOK_COLS).eq("user_id", userId).neq("kind", "bookmark");
+  if (o.pinned) q = q.not("pinned_at", "is", null);
+  if (o.tag) q = q.contains("tags", [o.tag]);
+  if (o.materialId && isUuid(o.materialId)) q = q.eq("material_id", o.materialId);
+  if (o.free) q = q.eq("target_kind", "free");
+  if (o.topic) q = q.eq("topic", o.topic);
+  q = o.pinned ? q.order("pinned_at", { ascending: false }) : q.order("updated_at", { ascending: false });
+  const { data, error } = await q.order("id", { ascending: false }).range(offset, offset + o.limit);
+  if (error) return fail(error);
+  const rows = (data ?? []) as any[];
+  return { ok: true, data: { rows: rows.slice(0, o.limit).map(toNotebookNote), more: rows.length > o.limit } };
+}
+
+/** Notes written on one lesson of a session, or on any of its sections from elsewhere. Oldest first, so they read in the order they were written. */
+export async function lessonNotes(admin: Admin, userId: string, o: { sessionId: string; step: number; chunkIds: readonly string[] }): Promise<Read<NotebookNote[]>> {
+  if (!isUuid(o.sessionId)) return { ok: true, data: [] };
+  const chunks = o.chunkIds.filter(isUuid).slice(0, 100);
+  const filter = [`and(session_id.eq.${o.sessionId},step.eq.${o.step})`, ...(chunks.length ? [`chunk_id.in.(${chunks.join(",")})`] : [])].join(",");
+  const { data, error } = await admin.from("individual_scholar_note").select(NOTEBOOK_COLS).eq("user_id", userId).in("kind", ["note", "summary"]).or(filter).order("created_at", { ascending: true }).limit(200);
+  if (error) return fail(error);
+  return { ok: true, data: ((data ?? []) as any[]).map(toNotebookNote) };
+}
+
+export type NotebookHit = { note: NotebookNote; headline: string };
+/** Deterministic full-text search over the caller's own notes (1000): each word as a prefix, best first. No AI. */
+export async function searchNotebook(admin: Admin, userId: string, query: string, limit: number, offset: number): Promise<Read<{ hits: NotebookHit[]; total: number }>> {
+  const { data, error } = await admin.rpc("individual_scholar_notebook_search", { p_user_id: userId, p_query: query.slice(0, 200), p_limit: limit, p_offset: offset });
+  if (error) return fail(error);
+  const found = (data ?? []) as { id: string; headline: string; total: number | string }[];
+  if (!found.length) return { ok: true, data: { hits: [], total: 0 } };
+  const { data: rows, error: rErr } = await admin.from("individual_scholar_note").select(NOTEBOOK_COLS).eq("user_id", userId).in("id", found.map(f => f.id));
+  if (rErr) return fail(rErr);
+  const byId = new Map(((rows ?? []) as any[]).map(r => [r.id, toNotebookNote(r)]));
+  return { ok: true, data: { total: Number(found[0].total ?? 0), hits: found.flatMap(f => { const note = byId.get(f.id); return note ? [{ note, headline: String(f.headline ?? "") }] : []; }) } };
+}
+
+/** The topics the caller has linked notes to, for the page's filter. */
+export async function notebookTopics(admin: Admin, userId: string): Promise<string[]> {
+  const { data, error } = await admin.from("individual_scholar_note").select("topic").eq("user_id", userId).eq("target_kind", "topic").order("updated_at", { ascending: false }).limit(500);
+  if (error) return [];
+  return [...new Set(((data ?? []) as { topic: string }[]).map(r => r.topic))].slice(0, 30);
+}
+
+/** The tags the caller has used, most used first (read from their newest notes). */
+export async function notebookTags(admin: Admin, userId: string): Promise<string[]> {
+  const { data, error } = await admin.from("individual_scholar_note").select("tags").eq("user_id", userId).neq("tags", "{}").order("updated_at", { ascending: false }).limit(1000);
+  if (error) return [];
+  const count = new Map<string, number>();
+  for (const r of (data ?? []) as { tags: string[] }[]) for (const t of r.tags ?? []) count.set(t, (count.get(t) ?? 0) + 1);
+  return [...count.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([t]) => t).slice(0, 40);
+}
+
+/** Every note and highlight of the caller's, for their own export. In pages, so a large notebook is not cut off. */
+export async function allNotebookNotes(admin: Admin, userId: string, max = 5000): Promise<Read<NotebookNote[]>> {
+  const out: NotebookNote[] = [];
+  for (let from = 0; from < max; from += 500) {
+    const { data, error } = await admin.from("individual_scholar_note").select(NOTEBOOK_COLS).eq("user_id", userId).neq("kind", "bookmark").order("updated_at", { ascending: false }).order("id", { ascending: false }).range(from, from + 499);
+    if (error) return fail(error);
+    const rows = (data ?? []) as any[];
+    out.push(...rows.map(toNotebookNote));
+    if (rows.length < 500) break;
+  }
+  return { ok: true, data: out };
 }

@@ -1,0 +1,53 @@
+PASS signed in as the fixture learner
+NOTE POST /api/individual/scholar/learn/sessions -> 200
+NOTE PATCH /api/individual/scholar/learn/sessions/3484e65a-ee9c-425a-9b63-b2cca40c898e -> 200
+NOTE POST /api/individual/scholar/learn/act -> 200
+FAIL learn: a session opens from the material
+NOTE learn text: For learning only — AI can be incomplete or wrong. Check again t your cour e material  and current local guideline .
+Full di claimer
+
+SOURCE-GROUNDED STUDY
+
+Learn
+
+Under tand your note . Keep the evidence in view.
+
+✦
+AI help on
+Learn
+Revi e
+54
+card  due
+Apply
+Evaluate
+Growth and Development
+
+Saved: you can leave and re ume thi   e ion.
+
+YOUR LESSONS
+
+3 of 3 read. A learning record for you, not an
+PASS opening it changes no section
+NOTE POST /api/individual/scholar/materials -> 200
+NOTE POST /api/individual/scholar/materials/7766810f-4b4c-472d-becd-993a24ac2bc0/analyse -> 503
+NOTE POST /api/individual/scholar/materials/7766810f-4b4c-472d-becd-993a24ac2bc0/whole-sli -> 202
+NOTE test deck: drawn in about 0s, status done reason null
+PASS test deck: the chart on slide 1 is drawn
+PASS test deck: the SmartArt on slide 2 is drawn
+PASS test deck: the table on slide 3 is drawn
+PASS test deck: the grouped diagram on slide 4 is drawn
+PASS test deck: the flow chart of drawn shapes on slide 5 is drawn
+PASS failed drawing: the original picture shows, and nothing claims to be drawn
+PASS failed drawing: attempts used up, so the page starts no new job
+NOTE POST /api/individual/scholar/materials/7766810f-4b4c-472d-becd-993a24ac2bc0/analyse -> 503
+PASS deleting the test deck (200)
+PASS its drawn images are gone from storage (0 left of 5)
+PASS its record is gone
+NOTE policy restored: "no row"
+PASS policy off: original pictures only, as before
+PASS policy off: drawn image is not served
+PASS policy off: the record stays, so turning it back on needs no second drawing
+FAIL no server or page errors (500 http://127.0.0.1:3211/individual/scholar/study/7766810f-4b4c-472d-becd-993a24ac2bc0; 503 http://127.0.0.1:3211/api/individual/scholar/materials/7766810f-4b4c-472d-becd-993a24ac2bc0/analyse; 503 http://127.0.0.1:3211/api/individual/scholar/materials/7766810f-4b4c-472d-becd-993a24ac2bc0/analyse)
+NOTE policy restored: "no row"
+FAIL a saved lesson reopened: slide 35 shows whole in the notes, with nothing regenerated
+PASS a saved lesson reopened: the whole slide shows in its notes, with nothing regenerated (Slide 12 · Whole  lide drawn from your file — not AI-generated · Select to enlar)

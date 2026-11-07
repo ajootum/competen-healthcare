@@ -244,7 +244,7 @@ export function decideNext(input: {
 
 // ── SALE-07: A DIFFERENT QUESTION ──
 
-const norm = (s: string) => s.replace(/\[[SRE]\d+\]/gi, " ").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
+const norm = (s: string) => s.replace(/\[(?:[SRE]\d+|AI)\]/gi, " ").toLowerCase().replace(/[^a-z0-9 ]+/g, " ").replace(/\s+/g, " ").trim();
 /**
  * Pure. The different question to ask after a corrective step, with NO new generation where one exists: the lesson's own questions
  * not yet answered in this lesson first, then an earlier kept check of the same sections (from another lesson or session). Null:

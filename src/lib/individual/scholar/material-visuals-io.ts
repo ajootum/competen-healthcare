@@ -1,14 +1,17 @@
 import { createHash } from "node:crypto";
 import type { IndividualContext } from "../guard";
 import { loadIndividualPolicy } from "../policy";
-import { PDF_MIME } from "./config";
+import { DOCX_MIME, PDF_MIME } from "./config";
 import { openOfficeZip, slidePartNames } from "./extract";
 import { getMaterial, listChunks, materialBytes, materialExtras, type MaterialRow } from "./store";
+import { readDrawnSlide, readRender } from "./slide-render-read";
+import { placeWordPictures, wordPictures } from "./word-pictures";
+import { pdfPagesToDraw, renderState, type RenderState } from "./slide-render";
 import { MAX_CONVERT_INPUT_BYTES, imageKind } from "./slide-images";
 import { pdfPagesPdf } from "./slide-reading";
 import { pdfImageFile, scanPdfImages } from "./material-visuals-pdf";
 import {
-  BROWSER_KINDS, CONTENT_TYPE, DEFAULT_TEXT_WORDS, buildVisuals, canServeVisual, pageInfoOf, parseVisualKey, slideMedia,
+  BROWSER_KINDS, CONTENT_TYPE, DEFAULT_TEXT_WORDS, buildVisuals, canServeVisual, pageInfoOf, parseVisualKey, slideMedia, wholeSlideVisual,
   type DeckScan, type PictureFact, type Visual,
 } from "./material-visuals";
 
@@ -89,45 +92,101 @@ export async function scanDeck(bytes: Uint8Array): Promise<DeckScan | null> {
   }
 }
 
-type Index = { unit: "slide" | "page"; visuals: Visual[]; notShown: number; noSection: number[] };
+/**
+ * Measure every picture of a Word file once, each under the section it belongs to (word-pictures.ts). Null when the file cannot be opened. A picture a browser
+ * cannot show, and a linked one, are counted, never guessed at. SVG and EMF stay out: only the kinds a browser is handed as they are, or as lossless PNG.
+ */
+export async function scanWord(bytes: Uint8Array, chunks: readonly { ordinal: number; content: string }[]): Promise<DeckScan | null> {
+  const z = await openOfficeZip(bytes);
+  if (!z.ok) return null;
+  const { zip } = z;
+  try {
+    const xml = await zip.file("word/document.xml")?.async("string");
+    if (!xml) return null;
+    const pictures = wordPictures(xml, (await zip.file("word/_rels/document.xml.rels")?.async("string")) ?? null);
+    const places = placeWordPictures(pictures, chunks);
+    const scan: DeckScan = { slides: chunks.length, pictures: [], undisplayable: [] };
+    const measured = new Map<string, Omit<PictureFact, "n" | "media"> | null>();
+    for (const [i, p] of pictures.entries()) {
+      const n = places[i];
+      if (n === undefined) continue;
+      if (!p.part) { scan.undisplayable.push({ n, media: null }); continue; }
+      if (!measured.has(p.part)) {
+        const data = await zip.file(p.part)?.async("uint8array");
+        const kind = data ? imageKind(data) : null;
+        measured.set(p.part, data ? { kind, bytes: data.byteLength, sha: sha16(data), ...(kind ? await dimensions(data) : { width: null, height: null }) } : null);
+      }
+      const fact = measured.get(p.part);
+      // Named by the document but missing from the file: said, not skipped.
+      if (!fact) { scan.undisplayable.push({ n, media: p.part }); continue; }
+      if (fact.kind) scan.pictures.push({ n, media: p.part, ...fact });
+      else scan.undisplayable.push({ n, media: p.part });
+    }
+    return scan;
+  } catch {
+    return null;
+  }
+}
+
+/** A Word section can hold many pictures, and each is meaningful in its order. This is a guard against a damaged file, not a choice among them. */
+const MAX_WORD_PICTURES_PER_SECTION = 40;
+
+type Index = { unit: "slide" | "page" | "section"; visuals: Visual[]; notShown: number; noSection: number[]; render: RenderState; notShownIn: number[] };
 type Indexed = { ok: true; index: Index } | { ok: false; out: Out };
 
-type Settings = { minPx: number; maxPerSlide: number; classify: boolean; textWords: number };
+type Settings = { minPx: number; maxPerSlide: number; classify: boolean; textWords: number; whole: boolean };
 
 /** The visuals of one of the caller's own materials, under the current policy. */
 async function indexOf(ctx: IndividualContext, material: MaterialRow, policy: Settings): Promise<Indexed> {
   const pdf = material.mimeType === PDF_MIME;
+  const word = material.mimeType === DOCX_MIME;
   const [extras, chunks] = await Promise.all([
     materialExtras(ctx.admin, ctx.userId, [material.id]),
-    // The sections already stored (a page's own text layer, or its existing AI reading): read, never written or re-transcribed.
-    policy.classify ? listChunks(ctx.admin, ctx.userId, material.id) : Promise.resolve(null),
+    // The sections already stored (a page's own text layer, or its existing AI reading): read, never written or re-transcribed. A Word picture's place is found in them.
+    policy.classify || word ? listChunks(ctx.admin, ctx.userId, material.id) : Promise.resolve(null),
   ]);
   const quality = extras.byId.get(material.id)?.quality ?? null;
   const empty = quality?.emptyUnits ?? [], aiRead = quality?.aiReadUnits ?? [];
   const pages = pageInfoOf(chunks?.ok ? chunks.data : [], empty, aiRead);
 
+  // A Word picture's place is found in the sections. Without them there is nothing true to say, and nothing is kept for later.
+  if (word && !chunks?.ok) return { ok: false, out: json(503, { error: "Your notes could not be read just now." }) };
   let scan = cacheGet(cacheKey(material)) ?? null;
   if (!scan) {
     const bytes = await materialBytes(ctx.admin, ctx.userId, material.id);
     if (!bytes) return { ok: false, out: json(503, { error: "Your original file could not be read just now. Try again shortly." }) };
-    const fresh = pdf ? await scanPdfImages(bytes) : await scanDeck(bytes);
+    const fresh = word ? await scanWord(bytes, chunks?.ok ? chunks.data : []) : pdf ? await scanPdfImages(bytes) : await scanDeck(bytes);
     // A PDF that cannot be opened for its pictures still has its image-only pages; a presentation that cannot be opened has nothing.
     if (!fresh && !pdf) return { ok: false, out: json(422, { error: "The pictures in your file could not be read." }) };
     if (fresh) cachePut(cacheKey(material), fresh);
     scan = fresh;
   }
-  const { visuals, notShown } = buildVisuals(scan, {
-    unit: pdf ? "page" : "slide", minPx: policy.minPx, maxPerSlide: policy.maxPerSlide, aiRead: new Set(aiRead), emptyUnits: empty,
+  const built = buildVisuals(scan, {
+    unit: word ? "section" : pdf ? "page" : "slide", minPx: policy.minPx, maxPerSlide: word ? MAX_WORD_PICTURES_PER_SECTION : policy.maxPerSlide, aiRead: new Set(aiRead), emptyUnits: empty,
     pages, classify: policy.classify, textWords: policy.textWords,
   });
+  // SCHOLAR-VISUAL-001 phase 2: a slide or page drawn whole comes first among its own pictures, which stay in the list for the dialog. Policy off: none.
+  const wholeOn = policy.whole && !word;
+  const drawing = wholeOn ? await readRender(ctx, material.id) : null;
+  const whole = (drawing?.units ?? []).map(u => wholeSlideVisual(u, { unit: pdf ? "page" : "slide", aiRead: new Set(aiRead), pages, classify: policy.classify, textWords: policy.textWords }));
+  const visuals = [...whole, ...built.visuals].sort((a, b) => a.n - b.n || Number(!!b.whole) - Number(!!a.whole));
+  const drawnSlides = new Set(whole.map(v => v.n));
+  // A picture no browser can show is no longer missing where the whole slide shows it.
+  const notShown = wholeOn ? Math.max(0, built.notShown - (scan?.undisplayable ?? []).filter(u => drawnSlides.has(u.n)).length) : built.notShown;
+  // A PDF with nothing that needs drawing is never asked about, so a text PDF costs no row and no job.
+  const nothingToDraw = pdf && !drawing && !pdfPagesToDraw({ visuals: built.visuals, textless: [...new Set([...empty, ...aiRead])], max: 1 }).draw.length;
+  const render: RenderState = !wholeOn ? "off" : nothingToDraw ? "not_needed" : renderState(true, drawing, Date.now());
   // SCHOLAR-VISUAL-001: the slides or pages with no section of their own, so a picture-only one can be shown where it is in the file.
   const noSection = [...new Set([...empty, ...(quality?.slideFacts?.blank ?? [])])].sort((a, b) => a - b);
-  return { ok: true, index: { unit: pdf ? "page" : "slide", visuals, notShown, noSection } };
+  // A Word section holding what cannot be shown says so where it is. A slide or page has the drawn whole for that.
+  const notShownIn = word ? [...new Set((scan?.undisplayable ?? []).map(u => u.n))].sort((a, b) => a - b) : [];
+  return { ok: true, index: { unit: word ? "section" : pdf ? "page" : "slide", visuals, notShown, noSection, render, notShownIn } };
 }
 
-const settingsOf = (policy: { scholarLessonVisualsMinPx: number; scholarLessonVisualsMaxPerSection: number; scholarVisualClassify?: string; scholarVisualTextWords?: number }): Settings => ({
+const settingsOf = (policy: { scholarLessonVisualsMinPx: number; scholarLessonVisualsMaxPerSection: number; scholarVisualClassify?: string; scholarVisualTextWords?: number; scholarWholeSlides?: string }): Settings => ({
   minPx: policy.scholarLessonVisualsMinPx, maxPerSlide: policy.scholarLessonVisualsMaxPerSection,
   classify: policy.scholarVisualClassify !== "off", textWords: policy.scholarVisualTextWords ?? DEFAULT_TEXT_WORDS,
+  whole: policy.scholarWholeSlides === "on",
 });
 
 async function openMaterial(ctx: IndividualContext, materialId: string): Promise<{ ok: true; material: MaterialRow; supported: boolean } | { ok: false; out: Out }> {
@@ -144,10 +203,11 @@ export async function materialVisuals(ctx: IndividualContext, materialId: string
   if (!opened.ok) return opened.out;
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarLessonVisuals !== "on") return json(200, { visuals: [], off: true });
-  if (!opened.supported) return json(200, { unit: "section", visuals: [], notShown: 0 });
+  // A Word file: its own policy. Off: as it was before this piece, an empty list, and the file is not opened.
+  if (!opened.supported || (opened.material.mimeType === DOCX_MIME && policy.scholarWordPictures !== "on")) return json(200, { unit: "section", visuals: [], notShown: 0 });
   const idx = await indexOf(ctx, opened.material, settingsOf(policy));
   if (!idx.ok) return idx.out;
-  return json(200, { unit: idx.index.unit, visuals: idx.index.visuals, notShown: idx.index.notShown, noSection: idx.index.noSection });
+  return json(200, { unit: idx.index.unit, visuals: idx.index.visuals, notShown: idx.index.notShown, noSection: idx.index.noSection, render: idx.index.render, notShownIn: idx.index.notShownIn });
 }
 
 export type VisualFile = { status: number; error?: string; bytes?: Uint8Array; type?: string; maxAge?: "immutable" | "short" };
@@ -161,6 +221,13 @@ export async function materialVisualFile(ctx: IndividualContext, materialId: str
   if (!opened.supported) return { status: 404, error: "Not found" };
   const policy = await loadIndividualPolicy(ctx.admin);
   if (policy.scholarLessonVisuals !== "on") return { status: 404, error: "Not found" };
+  if (opened.material.mimeType === DOCX_MIME && policy.scholarWordPictures !== "on") return { status: 404, error: "Not found" };
+  // A drawn slide: its image exactly as stored, found by the caller's own record. Its key carries a digest, so it can be cached for good.
+  if (parsed.kind === "whole") {
+    if (policy.scholarWholeSlides !== "on") return { status: 404, error: "Not found" };
+    const drawn = await readDrawnSlide(ctx, materialId, parsed.n, parsed.sha);
+    return drawn ? { status: 200, bytes: drawn, type: "image/webp", maxAge: "immutable" } : { status: 404, error: "Not found" };
+  }
   const idx = await indexOf(ctx, opened.material, settingsOf(policy));
   if (!idx.ok) return { status: idx.out.status, error: String(idx.out.body.error ?? "") };
   // "p{n}" on a PDF page that holds a picture: the whole page, so a picture taken out of it can be seen in its place.

@@ -44,8 +44,8 @@ export const LABEL_DIAGRAM = "Diagram or picture";
 
 export type Visual = {
   key: string;
-  unit: "slide" | "page";
-  /** The slide or page number (1-based), the same numbering as a section's pageFrom. */
+  unit: "slide" | "page" | "section";
+  /** The slide or page number (1-based), the same numbering as a section's pageFrom. A Word file: the section's ordinal. */
   n: number;
   /** The picture's part inside the file (ppt/media/... or a PDF image object "x12"); null for a whole PDF page. */
   media: string | null;
@@ -71,6 +71,8 @@ export type Visual = {
   hasText: boolean;
   /** The AI-read text of a chart or table page, shown only behind a warning (never for scores or thresholds). */
   safeText: string | null;
+  /** SCHOLAR-VISUAL-001 phase 2: the whole slide, drawn once from the learner's file. Not the original bytes: said so wherever it is shown. */
+  whole?: boolean;
 };
 
 /** One picture on one slide / page, as measured: `kind` is null when its bytes are not an image a browser can show. */
@@ -124,6 +126,10 @@ function slidesPerMedia(scan: DeckScan): Map<string, Set<number>> {
 export function isRepeated(slidesWith: number, slides: number): boolean {
   return slidesWith >= REPEAT_MIN_SLIDES && slidesWith >= REPEAT_MIN_SHARE * Math.max(1, slides);
 }
+
+/** Pure. In a Word file, only a picture this small on both sides is a bullet or an icon. */
+const WORD_ICON_PX = 48;
+const isWordIcon = (p: PictureFact) => p.width !== null && p.height !== null && Math.max(p.width, p.height) < WORD_ICON_PX;
 
 /** Pure. Why one measured picture is decorative, or null when it counts as content. */
 export function decorativeReason(p: PictureFact, minPx: number): "tiny" | "small_file" | "banner" | null {
@@ -212,7 +218,7 @@ export function classifyPage(info: PageInfo | undefined, textWords: number = DEF
 }
 
 export type BuildOptions = {
-  unit?: "slide" | "page"; minPx?: number; maxPerSlide?: number; aiRead?: ReadonlySet<number>;
+  unit?: "slide" | "page" | "section"; minPx?: number; maxPerSlide?: number; aiRead?: ReadonlySet<number>;
   /** Pages' text info (pageInfoOf). Absent: no page is known to have text. */
   pages?: ReadonlyMap<number, PageInfo>;
   /** scholar_visual_classify: false = every picture is simply shown (category visual, behaviour image). */
@@ -227,9 +233,10 @@ function decorate(v: Bare, o: BuildOptions): Visual {
   const cls: PageClass = o.classify === false
     ? { category: "visual", behaviour: "image", label: LABEL_DIAGRAM, title: classifyPage(info).title, hasText: false }
     : classifyPage(info, o.textWords);
-  const word = v.unit === "slide" ? "slide" : "page";
+  const word = v.unit;
   const caption = cls.title ? `${cls.title} · ${word} ${v.n}`
     : v.kind === "pdf_page" ? `Page ${v.n} · original page`
+    : word === "section" ? `Section ${v.n} · original picture from your document`
     : `${word === "slide" ? "Slide" : "Page"} ${v.n} · original picture from your ${word === "slide" ? "presentation" : "pages"}`;
   const chart = cls.label === LABEL_SCORING || cls.label === LABEL_TABLE;
   const safeText = o.classify !== false && v.aiRead && cls.behaviour === "both" && chart && info ? cleanText(info.text).slice(0, MAX_SAFE_TEXT) || null : null;
@@ -250,20 +257,23 @@ export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { 
   const repeated = (media: string | null) => !!media && !!scan && isRepeated(perMedia.get(media)?.size ?? 0, scan.slides);
 
   let notShown = 0;
-  for (const u of scan?.undisplayable ?? []) if (!repeated(u.media)) notShown += 1;
+  // A Word file: every picture stays except a bullet or an icon. It has no whole-page fallback, so a wide ECG strip, a small formula or a figure used twice would simply be gone.
+  const word = unit === "section";
+  for (const u of scan?.undisplayable ?? []) if (word || !repeated(u.media)) notShown += 1;
   const bySlide = new Map<number, PictureFact[]>();
   for (const p of scan?.pictures ?? []) {
-    if (repeated(p.media)) continue;
+    if (!word && repeated(p.media)) continue;
     if (p.kind === null && p.via !== "page") { notShown += 1; continue; }
-    if (decorativeReason(p, minPx)) continue;
+    if (word ? isWordIcon(p) : decorativeReason(p, minPx)) continue;
     bySlide.set(p.n, [...(bySlide.get(p.n) ?? []), p]);
   }
   const visuals: Visual[] = [];
   for (const n of [...bySlide.keys()].sort((a, b) => a - b)) {
     const seen = new Set<string>();
-    const ranked = (bySlide.get(n) as PictureFact[])
-      .sort((a, b) => area(b) - area(a) || b.bytes - a.bytes || (a.media < b.media ? -1 : a.media > b.media ? 1 : 0))
-      .map(p => ({ p, key: p.via === "page" ? `p${n}` : unit === "page" ? `p${n}-${p.sha}` : `${n}-${p.sha}` }))
+    // A Word file keeps the document's own order. A slide or page has no reading order for its pictures, so the largest comes first.
+    const inOrder = bySlide.get(n) as PictureFact[];
+    const ranked = (unit === "section" ? inOrder : inOrder.sort((a, b) => area(b) - area(a) || b.bytes - a.bytes || (a.media < b.media ? -1 : a.media > b.media ? 1 : 0)))
+      .map(p => ({ p, key: p.via === "page" ? `p${n}` : unit === "page" ? `p${n}-${p.sha}` : unit === "section" ? `s${n}-${p.sha}` : `${n}-${p.sha}` }))
       .filter(x => { if (seen.has(x.key)) return false; seen.add(x.key); return true; })
       .slice(0, maxPerSlide);
     for (const { p, key } of ranked) {
@@ -283,6 +293,23 @@ export function buildVisuals(scan: DeckScan | null, opts: BuildOptions = {}): { 
     visuals.sort((a, b) => a.n - b.n);
   }
   return { visuals, notShown };
+}
+
+/** Pure. A slide drawn whole, classified and captioned like the pictures on it. */
+export function wholeSlideVisual(u: { n: number; sha: string; width: number; height: number; bytes: number }, opts: Pick<BuildOptions, "aiRead" | "pages" | "classify" | "textWords" | "unit"> = {}): Visual {
+  const unit = opts.unit ?? "slide";
+  const v = decorate({
+    key: `w${u.n}-${u.sha}`, unit, n: u.n, media: null, kind: "webp", width: u.width, height: u.height, bytes: u.bytes, sha: u.sha, decorative: false,
+    aiRead: !!opts.aiRead?.has(u.n),
+  }, { ...opts, unit });
+  const word = unit === "slide" ? "slide" : "page";
+  return { ...v, whole: true, caption: v.title ? `${v.title} · ${word} ${u.n}` : unit === "slide" ? `Slide ${u.n} · the whole slide from your presentation` : `Page ${u.n} · the whole page from your file` };
+}
+
+/** Pure. Where a slide is drawn whole, the whole slide stands for its pictures in the notes and the strip. The pictures stay in the list, for the dialog. */
+export function preferWhole<V extends Pick<Visual, "n" | "whole">>(visuals: readonly V[]): V[] {
+  const drawn = new Set(visuals.filter(v => v.whole).map(v => v.n));
+  return visuals.filter(v => v.whole || !drawn.has(v.n));
 }
 
 /** Pure. A presentation's content pictures (see buildVisuals). */
@@ -334,7 +361,11 @@ export function visualsForLesson(visuals: readonly Visual[], noSection: readonly
 }
 
 /** Pure. A visual key as the URL carries it, or null when it is not one (nothing else is ever looked up). */
-export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | null {
+export function parseVisualKey(key: string): { kind: "slide"; n: number; sha: string } | { kind: "page"; n: number; sha: string | null } | { kind: "whole"; n: number; sha: string } | { kind: "section"; n: number; sha: string } | null {
+  const section = /^s([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
+  if (section) return { kind: "section", n: Number(section[1]), sha: section[2] };
+  const whole = /^w([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
+  if (whole) return { kind: "whole", n: Number(whole[1]), sha: whole[2] };
   const slide = /^([1-9]\d{0,4})-([0-9a-f]{16})$/.exec(key);
   if (slide) return { kind: "slide", n: Number(slide[1]), sha: slide[2] };
   const page = /^p([1-9]\d{0,4})(?:-([0-9a-f]{16}))?$/.exec(key);
@@ -351,23 +382,27 @@ export const CONTENT_TYPE: Record<ImageKind, string> = { png: "image/png", jpeg:
  */
 export function canServeVisual(material: { userId?: string; mimeType: string } | null | undefined, userId: string): "ok" | "not_found" | "not_supported" {
   if (!material || (material.userId !== undefined && material.userId !== userId)) return "not_found";
-  return material.mimeType === "application/pdf" || material.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation" ? "ok" : "not_supported";
+  return material.mimeType === "application/pdf" || material.mimeType === "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    || material.mimeType === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ? "ok" : "not_supported";
 }
 
 /** The URL of the visuals list of a material, and of one picture (or PDF page) in it. */
 export const visualsListUrl = (materialId: string) => `/api/individual/scholar/materials/${materialId}/visuals`;
 export const visualUrl = (materialId: string, key: string) => `${visualsListUrl(materialId)}/${key}`;
+/** SCHOLAR-VISUAL-001 phase 2: asks for a material's slides to be drawn (at most once, however often it is asked). */
+export const wholeSlidesUrl = (materialId: string) => `/api/individual/scholar/materials/${materialId}/whole-slides`;
 
 /**
- * Pure. The unit and range a citation names ("Deck, slide 12" / "Notes, pages 3-4"), or null for a Word / text "section N"
- * citation (nothing to look up). Used where only the citation is at hand (Flashcards, Revise).
+ * Pure. The unit and range a citation names ("Deck, slide 12" / "Notes, pages 3-4" / "Report, section 4"), or null when it names none.
+ * Used where only the citation is at hand (Flashcards, Revise). A section of a Word file holds the pictures placed there; a text file's holds none.
  */
-export function pagesOfCitation(citation: string): { unit: "slide" | "page"; from: number; to: number } | null {
-  const m = /\b(slide|page)s?\s+(\d{1,5})(?:\s*[-–]\s*(\d{1,5}))?\s*$/i.exec(citation.trim());
+export function pagesOfCitation(citation: string): { unit: "slide" | "page" | "section"; from: number; to: number } | null {
+  const m = /\b(slide|page|section)s?\s+(\d{1,5})(?:\s*[-–]\s*(\d{1,5}))?\s*$/i.exec(citation.trim());
   if (!m) return null;
   const from = Number(m[2]);
   const to = m[3] ? Number(m[3]) : from;
-  return { unit: m[1].toLowerCase() === "slide" ? "slide" : "page", from, to: Math.max(from, to) };
+  const named = m[1].toLowerCase();
+  return { unit: named === "slide" ? "slide" : named === "section" ? "section" : "page", from, to: Math.max(from, to) };
 }
 
 /** Pure. The visuals for a lesson's sections (each a slide / page range), in order, without repeats. */

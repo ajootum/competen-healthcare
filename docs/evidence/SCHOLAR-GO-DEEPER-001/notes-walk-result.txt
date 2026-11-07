@@ -1,0 +1,39 @@
+NOTE staging policy scholar_go_deeper_structured = on
+NOTE staging policy scholar_guide_me_adaptive = on
+NOTE staging policy scholar_personal_notebook = on
+--- Go Deeper ---
+PASS a round has a note line for its sections (7)
+PASS each has its own place
+PASS the note is saved by itself
+NOTE saved with: session this one, step 2, anchor gd-0b6aca65-s0, label "What the newborn's movement looks like", chunk none
+PASS it is linked to this lesson and this section
+PASS after a reload it is back under its section, with its words
+PASS the next section does not show it
+--- Guide Me ---
+PASS one note line for the step (1)
+NOTE at "Step 1 of 3"
+PASS the step's note is linked to the step (guide-0)
+PASS coming back to Guide me keeps the step
+PASS the saved note is there, not lost
+NOTE next step "Step 2 of 3" box: "My Ideas & Notes Personal · Private ▶"
+PASS the next step's note line does not carry the words
+PASS it starts closed
+PASS the note was not written twice
+PASS notes make no model call; only teaching a new step can (0)
+--- phone width ---
+PASS nothing scrolls sideways at 390 (0)
+--- My Notebook ---
+PASS both notes are in My Notebook, the one place they live
+--- switches ---
+NOTE staging policy scholar_personal_notebook = off
+PASS notebook off: no note line in Go Deeper or the lesson
+PASS the round is still there
+NOTE staging policy scholar_personal_notebook = on
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE staging policy scholar_guide_me_adaptive = off
+PASS both teaching switches off: neither shows, and no new surface appears
+PASS no server or page errors ()
+NOTE staging policy scholar_go_deeper_structured = off
+NOTE staging policy scholar_guide_me_adaptive = off
+NOTE staging policy scholar_personal_notebook = on
+NOTE staging switches restored: go deeper off, guide me off, notebook on

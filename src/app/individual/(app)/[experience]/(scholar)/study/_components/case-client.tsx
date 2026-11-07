@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader, type ReaderClock } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { sourceHref, studyHref } from "./question-view";
@@ -508,14 +510,15 @@ function DecisionFeedback({ d, fb, materialId, note }: { d: LearnerView["stages"
 
 const OUTCOME_LABEL: Record<string, string> = { correct: "what the case calls for", partial: "partly", incorrect: "not what the case calls for", unmarked: "not marked" };
 const BASIS_LABEL: Record<string, string> = { rubric_error: "the rubric was wrong", key_error: "the answer key was wrong", marking_error: "it was marked wrongly", other: "reviewed" };
-const day = (iso: string) => { const d = new Date(iso); return Number.isNaN(d.getTime()) ? "" : d.toLocaleDateString("en-GB", { timeZone: "UTC", day: "numeric", month: "short", year: "numeric" }); };
+const day = (iso: string, clock: ReaderClock | null) => formatForReader(iso, clock, "date", "UTC");
 
 /** SCHOLAR-CASE-INTEGRITY-01: the finished attempt is kept as it was completed, and any correction is shown beside the original. */
 function AttemptRecord({ a }: { a: Attempt }) {
+  const clock = useReaderClock();
   return (
     <section aria-labelledby="attempt-h" className={`mt-5 ${inner}`}>
       <h3 id="attempt-h" className={subHead}>Your completed attempt</h3>
-      <p className="mt-1 text-[13px] text-gray-700">Kept as you completed it{a.completedAt ? ` on ${day(a.completedAt)}` : ""}. {a.label}</p>
+      <p className="mt-1 text-[13px] text-gray-700">Kept as you completed it{a.completedAt ? ` on ${day(a.completedAt, clock)}` : ""}. {a.label}</p>
       {a.changed && <p role="status" className="mt-2 rounded-lg bg-[var(--cmp-role-revision-soft)] px-3 py-1.5 text-[13.5px] text-[var(--cmp-role-revision-ink)]">This case has changed since you completed it. Your attempt is kept against the case as you played it.</p>}
       {a.corrected.length > 0 && (
         <div className="mt-3">
@@ -525,7 +528,7 @@ function AttemptRecord({ a }: { a: Attempt }) {
               <li key={d.id}>
                 <span className="font-semibold">{d.prompt}</span>
                 <span className="block">Originally: {OUTCOME_LABEL[d.original] ?? d.original}. Now: {OUTCOME_LABEL[d.effective] ?? d.effective}.</span>
-                {d.corrections.map((c, i) => <span key={i} className="block text-[12.5px] text-gray-600">{day(c.at)}: {BASIS_LABEL[c.basis] ?? c.basis}. {c.reason}</span>)}
+                {d.corrections.map((c, i) => <span key={i} className="block text-[12.5px] text-gray-600">{day(c.at, clock)}: {BASIS_LABEL[c.basis] ?? c.basis}. {c.reason}</span>)}
               </li>
             ))}
           </ul>

@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PDF_MIME, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
+import { DOCX_MIME, FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PDF_MIME, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
 import { analysedProgrammes, analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
@@ -19,6 +19,7 @@ import { pageInfoOf, plannedPages } from "@/lib/individual/scholar/material-visu
 import { PageHeader, StatePanel, Unreadable, focusRing, secondaryBtn } from "../../../../../_components/chrome";
 import { questionView } from "../_components/question-view";
 import StudyNav from "../_components/StudyNav";
+import { NotePageMark } from "../_components/note-capture";
 import { PaneGrid } from "@/components/ui/pane-grid";
 import { ChunkActions, DeleteMaterial, ExplainPanel, QuestionCard } from "../_components/client";
 import { aiOffMessage, consentDocuments, consentStatus } from "@/lib/individual/scholar/consent-gate";
@@ -160,6 +161,7 @@ export default async function MaterialPage({ params, searchParams }: { params: P
       <PageHeader accent={x.accent} eyebrow="Your material" title={m.title}
         intro={`${unit === "section" ? (m.mimeType === "text/plain" ? "Text (cited by section)" : "Word document (cited by section, because a Word file has no fixed pages)") : `${FORMAT_LABEL[FORMAT_OF[m.mimeType]]}, ${m.pageCount} ${unit}${m.pageCount === 1 ? "" : "s"}`} · ${m.chunkCount} section${m.chunkCount === 1 ? "" : "s"} · ${m.fileName}${stamp ? ` · uploaded while studying ${stamp}` : ""}`} />
       <StudyNav dueCount={due} study={study?.bar ?? null} />
+      <NotePageMark materialId={m.id} label={m.title} />
       {quality && (
         <p className={`mb-4 rounded-xl px-4 py-2.5 text-[13.5px] ${quality.partial ? "border border-amber-300 bg-amber-50 text-amber-950" : "border border-gray-200 bg-white text-gray-700"}`}>{quality.heading && <span className="font-semibold">{quality.heading}. </span>}{quality.heading ? quality.text.replace(/^Partly read: /, "") : quality.text}</p>
       )}
@@ -287,6 +289,8 @@ export default async function MaterialPage({ params, searchParams }: { params: P
                     <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{c.content}</p>
                   </details>
                   {c.pageFrom !== null && <SectionPictures materialId={m.id} materialTitle={m.title} from={c.pageFrom} to={c.pageTo} first={all[i - 1]?.pageFrom !== c.pageFrom} last={all[i + 1]?.pageFrom !== c.pageFrom} leading={i === 0} />}
+                  {/* A Word section has no page: its pictures are filed under its ordinal. */}
+                  {c.pageFrom === null && m.mimeType === DOCX_MIME && policy.scholarWordPictures === "on" && <SectionPictures materialId={m.id} materialTitle={m.title} from={c.ordinal} to={c.ordinal} first last />}
                   {competenciesOn && mapped.ok && (mapped.data.concepts.has(c.id) || mappingsByChunk.has(c.id)) && (
                     <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
                       options={learner.programme ? options : []} corrected={mapped.data.corrected.has(c.id)} correction={mapped.data.correctionsOn} />

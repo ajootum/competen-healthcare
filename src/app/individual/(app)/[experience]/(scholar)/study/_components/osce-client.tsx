@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { useReaderClock } from "@/components/ReaderClock";
+import { formatForReader } from "@/lib/datetime";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { SCHOLAR } from "@/lib/individual/experiences";
@@ -176,6 +178,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
   /** The checklist only for a finished run not yet marked; otherwise null, and it comes with the finish reply. */
   station: OsceStationView; checklist: OsceChecklistView | null; aiNote: string | null; pending: { attemptId: string; timeUp: boolean } | null; hasOpenRun: boolean;
 }) {
+  const clock = useReaderClock();
   const router = useRouter();
   const [phase, setPhase] = useState<Phase>(pending ? "check" : "brief");
   const [checklist, setChecklist] = useState<OsceChecklistView | null>(given);
@@ -358,7 +361,7 @@ export function OsceRunner({ station, checklist: given, aiNote, pending, hasOpen
               {t.warning && <span className="ml-2 text-[13px] text-amber-800">One minute left</span>}
             </p>
             <span className="text-[12.5px] text-gray-600">
-              {save.state === "saving" ? "Saving…" : save.state === "failed" ? "Not saved yet, retrying" : save.at ? `Saved ${new Date(save.at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}` : "Saved as you write"}
+              {save.state === "saving" ? "Saving…" : save.state === "failed" ? "Not saved yet, retrying" : save.at ? `Saved ${formatForReader(save.at, clock, "timeSeconds")}` : "Saved as you write"}
             </span>
             <button type="button" onClick={() => finish(false)} disabled={busy} className={ghost}>Finish now</button>
           </div>

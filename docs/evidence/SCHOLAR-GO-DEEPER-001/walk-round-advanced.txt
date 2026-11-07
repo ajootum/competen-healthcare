@@ -1,0 +1,124 @@
+Explore at your level
+Understand
+Explore
+Advanced
+
+Finer mechanisms, competing explanations, the limits of what is known, and harder application.
+
+Go Deeper
+
+Scientific understanding · Clinical application
+
+Advanced
+
+THE QUESTION WE ARE EXPLORING
+
+How can a newborn already tell sweet from bitter and sour, and why does this matter so early?
+
+Taste in the newborn, the mechanism behind it, and how it links to feeding and smell.
+
+✦
+AI-generated from your notes, not clinically reviewed
+
+Listen
+Speed
+✦
+Ask about this
+: This lesson: Hearing
+1
+1.
+What the newborn's taste can already do
+From your notes
+
+Taste is well developed in the newborn infant, because bitter and sour fluids are resisted while sweet fluids are accepted [S2].
+
+Smell shows only in the newborn infant's search for the nipple, as he smells breast milk [S2].
+
+2
+2.
+Why acceptance and resisting appear before learning
+Scholar’s explanation
+
+Taste works through receptors on the tongue that respond to chemicals in fluid and send signals to the brainstem, the lower part of the brain that handles basic survival responses.
+
+A newborn has not learned which fluids are good; these responses are built in before experience teaches anything. Accepting sweet and resisting bitter or sour is therefore a protective pattern: sweetness signals energy, while bitter and sour can signal something to avoid.
+
+fluid touches tongue
+→
+receptors fire
+→
+brainstem responds
+→
+accept or resist.
+3
+3.
+How smell guides the newborn to the breast
+Scholar’s explanation
+
+Smell detects chemicals in the air rather than in fluid. The newborn's search for the nipple works because the scent of breast milk draws the infant toward it.
+
+This means taste and smell act together at feeding: smell helps locate the breast, and taste accepts the sweet milk once it reaches the tongue.
+
+4. "WELL DEVELOPED" DOES NOT MEAN FULLY ADULT
+
+Scholar’s explanation
+
+It is tempting to read "well developed" as meaning taste is complete and finished at birth. What the evidence of acceptance and resisting actually shows is that the pattern of responding is present and working, not that it will never change further.
+
+A newborn responding in this way tells you the pathway is functioning; it does not tell you how taste will mature with age.
+
+5
+5.
+Reading feeding alongside the other senses
+From your notes
+
+Acceptance of sweet fluids and resisting of bitter and sour is one observation about the newborn infant [S2]. It is read alongside hearing, where the infant responds to sound with cry or eye movement, cessation of activity and/or startle reaction [S1].
+
+6
+6.
+Reading feeding alongside the other senses, beyond your notes
+Scholar’s explanation
+
+Smell appears only in the search for the nipple, so feeding behaviour draws on more than one sense at once. No single observation would be read on its own; each area shows something of its own.
+
+This is educational reasoning about how the senses fit together, not guidance about any particular infant.
+
+7
+7.
+What these notes do not tell us
+From your notes
+
+The notes give acceptance and resisting as the evidence of taste, but they do not say how taste is tested or how it changes with age [S2].
+
+Smell is described only through the search for the nipple, so other uses of smell are not covered [S2].
+
+8
+Check your reasoning
+If a newborn resists a sour fluid but accepts a sweet one, which sense is this showing, and which other sense helps the infant reach the breast in the first place? [S2]
+Answer this
+Why might a person caring for a newborn think about smell and taste together at feeding rather than taste alone? [S2]
+because milk must be located before it can be tasted
+because taste does not work at birth
+because smell replaces taste in the newborn
+
+Choose one, then say why. Your reasons are what Scholar looks at.
+
+Scholar’s feedback on your answer is for your own learning, not a mark.
+
+Key takeaways
+Taste is well developed in the newborn: sweet fluids are accepted while bitter and sour are resisted [S2].
+Smell shows in the newborn infant's search for the nipple, as he smells breast milk [S2].
+Accepting sweet and resisting bitter or sour is a built-in protective pattern, working before any learning.(Scholar’s explanation)
+Feeding draws on smell to locate the breast and taste to accept the milk, so the senses act together.(Scholar’s explanation)
+Sources and evidence
+Sections marked “From your notes” are cited to your own material. Sections marked “Scholar’s explanation” are general teaching written by AI: they are not from your notes and have not been checked against published research, so check them with your course. No published research was consulted for this round, so nothing here is a verified research finding.
+View sources (2)
+▶
+
+Saved to your learning, so you can come back to it without using AI again.
+
+Model claude-opus-4-8 · prompt scholar-learn-v3:deeper+scholar-learn-deeper-v3+scholar-learn-cumulative-v1
+
+Was this explanation helpful? (optional)
+Helpful
+Not helpful

@@ -1,4 +1,6 @@
 import type { Metadata } from "next";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import { notFound, redirect } from "next/navigation";
 import { SCHOLAR, experienceHref } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedModuleMetadata } from "@/app/individual/_components/shell-context";
@@ -21,6 +23,7 @@ export default async function AssessmentRunPage({ params }: { params: Promise<{ 
   const page = await experienceModulePage((await params).experience, "my-competencies");
   if (!page) return null;
   await requireScholarModule(page.ctx.admin, page.ctx.userId, "competencies");
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const { instanceId } = await params;
   const base = experienceHref("scholar", "my-competencies/assessments");
@@ -40,7 +43,7 @@ export default async function AssessmentRunPage({ params }: { params: Promise<{ 
       title={m.title?.trim() || m.instrumentName} subtitle={`${m.instrumentCode} · version ${m.versionNo} · ${m.deliveryModes.includes(MODE_SELF) ? "Self-assessment" : "Assessment"}`}
       methodLabels={b.loaded.methodLabels}
       materials={materials.ok ? materials.data.slice(0, 50).map(x => ({ id: x.id, label: label(x) })) : []}
-      sessions={sessions.ok ? sessions.data.map(s => ({ id: s.id, label: `${s.mode.replace(/_/g, " ")} session, ${new Date(s.createdAt).toLocaleDateString("en-GB", { day: "numeric", month: "short" })}` })) : []}
+      sessions={sessions.ok ? sessions.data.map(s => ({ id: s.id, label: `${s.mode.replace(/_/g, " ")} session, ${formatForReader(s.createdAt, clock, "dayMonth")}` })) : []}
       readOnly={false} reportHref={`${base}/${instanceId}/report`} listHref={base}
     />
   );

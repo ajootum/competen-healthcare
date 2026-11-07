@@ -1,0 +1,64 @@
+NOTE policy restored: "no row"
+PASS policy off: the page does not ask for drawing
+PASS policy off: no record
+FAIL policy on: opening the material asks once (0)
+NOTE drawn in about 198s after opening, on this machine's dev server. status done attempts 1 reason null engine libreoffice-wasm-2.7.2+pdfjs-lossless
+PASS drawing finished
+NOTE slides drawn: 5,12,16,17,18,29,33,34,35,36 (1236036 bytes in all)
+PASS slide 5 (holds a picture) drawn
+PASS slide 12 (holds a picture) drawn
+PASS slide 16 (holds a picture) drawn
+PASS slide 17 (holds a picture) drawn
+PASS slide 18 (holds a picture) drawn
+PASS slide 29 (holds a picture) drawn
+PASS slide 33 (holds a picture) drawn
+PASS slide 34 (holds a picture) drawn
+PASS slide 35 (holds a picture) drawn
+PASS slide 36 (holds a picture) drawn
+PASS blank slide 37 not drawn
+PASS plain text slide 2 not drawn
+PASS every image is 1920 wide and stored in the learner's own folder
+PASS stored image is not public (400)
+PASS the image route refuses someone with no session (401)
+PASS slide 35: served privately and cached for good
+NOTE slide 35: mean difference from PowerPoint's own picture 1.36 of 255
+PASS slide 36: served privately and cached for good
+NOTE slide 36: mean difference from PowerPoint's own picture 0.93 of 255
+PASS slide 29: served privately and cached for good
+NOTE slide 29: mean difference from PowerPoint's own picture 4.72 of 255
+PASS slide 12: served privately and cached for good
+NOTE slide 12: mean difference from PowerPoint's own picture 2.80 of 255
+PASS a later page view starts nothing (1 asks in all)
+PASS at most once: same claim, one attempt
+FAIL slide 35: one figure in the notes, the whole slide standing for its pictures
+PASS slide 35: said to be drawn, not called an original
+PASS slide 36: one figure in the notes, the whole slide standing for its pictures
+PASS slide 36: said to be drawn, not called an original
+NOTE figures in the notes: 0
+PASS dialog: says it is drawn
+PASS dialog: says a font can differ
+PASS dialog: zooms
+PASS dialog: slide 35's two original pictures are offered (2)
+PASS dialog: an original picture is labelled original
+PASS tablet: no sideways scrolling (0)
+PASS tablet: slide 35 shows whole, fitted, proportions kept (428 of 820)
+PASS tablet: slide 36 shows whole, fitted, proportions kept (428 of 820)
+PASS phone: no sideways scrolling (0)
+PASS phone: slide 35 shows whole, fitted, proportions kept (314 of 390)
+PASS phone: slide 36 shows whole, fitted, proportions kept (314 of 390)
+NOTE lesson sessions on this learner: 0
+PASS drawing changes no section of the material
+PASS the material's sections are unchanged (35)
+NOTE test deck: drawn in about 293s, status failed reason timed_out
+FAIL test deck: the chart on slide 1 is drawn
+FAIL test deck: the SmartArt on slide 2 is drawn
+FAIL test deck: the table on slide 3 is drawn
+FAIL test deck: the grouped diagram on slide 4 is drawn
+FAIL test deck: the flow chart of drawn shapes on slide 5 is drawn
+FAIL walk stopped: TimeoutError: apiRequestContext.delete: Timeout 30000ms exceeded.
+Call log:
+[2m  - → DELETE http://127.0.0.1:3211/api/individual/scholar/materials/c1d60b2d-3803-407f-a0cb-20a04c31cca8[22m
+[2m    - user-agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.7922.34 Safari/537.36[22m
+[2m    - accept: */*[22m
+[2m    - accept-encoding: gzip,
+NOTE policy restored: "no row"

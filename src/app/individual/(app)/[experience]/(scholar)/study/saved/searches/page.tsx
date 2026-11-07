@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { formatForReader } from "@/lib/datetime";
+import { readerClock } from "@/lib/individual/scholar/reader-clock";
 import { PageSearch } from "@/app/individual/_components/search/PageSearch";
 import { pageScope } from "@/lib/individual/search/registry";
 import type { Metadata } from "next";
@@ -85,6 +87,7 @@ function Filters({ q, materials, topics }: { q: HistoryQuery; materials: { id: s
 export default async function SearchHistoryPage({ params, searchParams }: { params: Promise<{ experience: string }>; searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const page = await experienceModulePage((await params).experience, "study");
   if (!page) return null;
+  const clock = await readerClock(page.ctx);
   const { ctx } = page;
   const [policy, due] = await Promise.all([loadIndividualPolicy(ctx.admin), countDue(ctx.admin, ctx.userId)]);
   const nav = (
@@ -112,7 +115,6 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
   // A saved teaching's title says what it taught: its action and its lesson (or material). Titles only, never the AI's words.
   const sessions = new Map((await sessionsByIds(ctx.admin, ctx.userId, shown.filter(e => e.activity !== "lesson" && e.sessionId).map(e => e.sessionId!))).map(s => [s.id, displaySessionTitle(s.title)]));
   const tz = learnerTimeZone(await headers());
-  const fmt = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: tz });
   const toClient = (e: HistoryEntry): ClientEntry => {
     const material = e.materialId ? titles.get(e.materialId) ?? null : null;
     const about = e.sessionId ? sessions.get(e.sessionId) ?? null : null;
@@ -128,7 +130,7 @@ export default async function SearchHistoryPage({ params, searchParams }: { para
     ].filter((x): x is string => !!x);
     const { primary, rest } = splitEntryLinks(entryLinks(e).map(l => ({ label: l.label, href: studyHref(l.path.replace(/^study\/?/, "")), kind: l.kind })));
     return {
-      key: e.key, activity: e.activity, title, when: fmt.format(new Date(e.createdAt)), whenIso: e.createdAt, meta, headline: e.headline, pinned: !!e.pinnedAt,
+      key: e.key, activity: e.activity, title, when: formatForReader(e.createdAt, clock, "dateTime", tz), whenIso: e.createdAt, meta, headline: e.headline, pinned: !!e.pinnedAt,
       primary, rest, save: saveTarget(e), ai: teaching, askNotKept: e.activity === "ask",
     };
   };

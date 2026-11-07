@@ -86,7 +86,7 @@ export function stripForSpeech(input: string): string {
   t = t.replace(/<[^>]{1,200}>/g, " ");                               // stray tags
   t = t.replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1");                      // images: the alt text only
   t = t.replace(/\[([^\]]+)\]\((?:[^)]*)\)/g, "$1");                   // links: the words only
-  t = t.replace(/\[\s*(?:[SRE]\s*\d+(?:\s*[,;–-]\s*[SRE]?\s*\d+)*)\s*\]/gi, ""); // [S1] [S1, S2] [R2] [E3]
+  t = t.replace(/\[\s*(?:[SRE]\s*\d+(?:\s*[,;–-]\s*[SRE]?\s*\d+)*|AI)\s*\]/gi, ""); // [S1] [S1, S2] [R2] [E3] [AI]
   t = t.replace(/\[\s*\d+(?:\s*[,–-]\s*\d+)*\s*\]/g, "");              // [1] [1, 2] [1-3]
   t = t.replace(/\[!\w+\]\s*/g, "");                                   // > [!KEY] callout tags
   t = t.split("\n").map((line): string | null => {
