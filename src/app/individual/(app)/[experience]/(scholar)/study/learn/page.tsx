@@ -162,7 +162,7 @@ export default async function LearnPage({ params, searchParams }: { params: Prom
           inline={{ recall: policy.scholarLearnInlineRecall, placement: policy.scholarLearnInlineRecallPlacement, minWords: policy.scholarLearnInlineRecallMinWords, checks: policy.scholarLearnInlineChecks, application: policy.scholarLearnInlineApplication, skippable: policy.scholarLearnInlineSkippable, required: policy.scholarLearnCheckRequired, every: policy.scholarLearnCheckEvery, saveMissed: policy.scholarLearnSaveMissedCards }}
           guideAdaptive={policy.scholarGuideMeAdaptive}
           styleOn={{ guide: policy.scholarLearnStyleGuide, challenge: policy.scholarLearnStyleChallenge, moreMenu: policy.scholarLearnMoreMenu }}
-          visuals={{ on: policy.scholarLessonVisuals === "on", max: policy.scholarLessonVisualsMaxPerSection }}
+          visuals={{ on: policy.scholarLessonVisuals === "on", word: policy.scholarWordPictures === "on", max: policy.scholarLessonVisualsMaxPerSection }}
           notesOn={policy.scholarLearningLibrary === "on" && await librarySchema(ctx.admin, ctx.userId)} modes={shownLearnModes(policy.scholarResearch, policy.scholarResearch.modes.includes("research") && await scholarResearchOperational(ctx.admin))}
         />
       )}

@@ -104,10 +104,10 @@ describe("keys, URLs and citations", () => {
     for (const bad of ["", "../x", "3-xyz", "3-0123456789ABCDEF", "p0", "0-0123456789abcdef", "p1/../2", "3-0123456789abcdef0"]) expect(parseVisualKey(bad)).toBeNull();
     expect(visualUrl("m1", "p3")).toBe("/api/individual/scholar/materials/m1/visuals/p3");
   });
-  it("reads the unit and range from a citation; a Word section names none", () => {
+  it("reads the unit and range from a citation, a Word section included", () => {
     expect(pagesOfCitation("Respiratory deck, slide 12")).toEqual({ unit: "slide", from: 12, to: 12 });
     expect(pagesOfCitation("Notes, pages 3-4")).toEqual({ unit: "page", from: 3, to: 4 });
-    expect(pagesOfCitation("Notes, section 2")).toBeNull();
+    expect(pagesOfCitation("Notes, section 2")).toEqual({ unit: "section", from: 2, to: 2 });
   });
 });
 

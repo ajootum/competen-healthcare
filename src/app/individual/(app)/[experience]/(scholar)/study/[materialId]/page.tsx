@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 import { SCHOLAR } from "@/lib/individual/experiences";
 import { experienceModulePage, gatedMetadata } from "../../../../../_components/shell-context";
 import { experienceHref } from "@/lib/individual/experiences";
-import { FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PDF_MIME, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
+import { DOCX_MIME, FORMAT_LABEL, FORMAT_OF, NO_APPROVED_COMPETENCIES, PDF_MIME, PPTX_MIME, UNIT_OF } from "@/lib/individual/scholar/config";
 import { analysedProgrammes, analysisStatus, countDue, getMaterial, listChunks, listCollections, listMappings, listProgrammes, listQuestions, materialExtras, readConsent } from "@/lib/individual/scholar/store";
 import { contextHistory, contextStamp } from "@/lib/individual/scholar/context";
 import { competencyAbsence, competencyLabels, loadLearnerCatalogue, type CompetencyLabel } from "@/lib/individual/scholar/competency-view";
@@ -289,6 +289,8 @@ export default async function MaterialPage({ params, searchParams }: { params: P
                     <p className="mt-2 whitespace-pre-wrap text-[14px] leading-relaxed text-gray-800">{c.content}</p>
                   </details>
                   {c.pageFrom !== null && <SectionPictures materialId={m.id} materialTitle={m.title} from={c.pageFrom} to={c.pageTo} first={all[i - 1]?.pageFrom !== c.pageFrom} last={all[i + 1]?.pageFrom !== c.pageFrom} leading={i === 0} />}
+                  {/* A Word section has no page: its pictures are filed under its ordinal. */}
+                  {c.pageFrom === null && m.mimeType === DOCX_MIME && policy.scholarWordPictures === "on" && <SectionPictures materialId={m.id} materialTitle={m.title} from={c.ordinal} to={c.ordinal} first last />}
                   {competenciesOn && mapped.ok && (mapped.data.concepts.has(c.id) || mappingsByChunk.has(c.id)) && (
                     <SectionTopics chunkId={c.id} concepts={mapped.data.concepts.get(c.id) ?? []} mappings={mappingsByChunk.get(c.id) ?? []}
                       options={learner.programme ? options : []} corrected={mapped.data.corrected.has(c.id)} correction={mapped.data.correctionsOn} />

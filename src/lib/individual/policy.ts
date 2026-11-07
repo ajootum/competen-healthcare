@@ -135,7 +135,7 @@ export type ChoicePolicyKey = "scholar_catalogue_min_status" | "professional_pro
   | "scholar_learn_check_required" | "scholar_learn_save_missed_cards" | "scholar_learn_check_every"
   | "scholar_reader_time_zone"
   | "scholar_learn_style_guide" | "scholar_learn_style_challenge" | "scholar_learn_more_menu"
-  | "scholar_lesson_visuals" | "scholar_visual_classify" | "scholar_whole_slides"
+  | "scholar_lesson_visuals" | "scholar_visual_classify" | "scholar_whole_slides" | "scholar_word_pictures"
   | "scholar_my_plan" | "scholar_plan_proposal" | "scholar_plan_weekly_reflection" | "scholar_plan_started_signal"
   | "scholar_learning_state" | "scholar_adaptive_teaching"
   | "scholar_retrieval_schedule" | "scholar_prerequisite_suggestions" | "scholar_transfer_checks"
@@ -2127,6 +2127,15 @@ export const POLICIES: readonly PolicyDef[] = [
     fallback: "off",
     limitReason: "Needs migration 1010 and fails closed without it: students then see the original pictures as they do today. Default: off.",
   },
+  // SCHOLAR-VISUAL-001 phase 2, piece C: the pictures inside a Word file, in their place in the notes.
+  {
+    key: "scholar_word_pictures", kind: "choice", product: "Scholar",
+    label: "Pictures in the student's Word files",
+    help: "Whether the pictures inside a Word file are shown in the notes, in their place in the document, exactly as they are in the file. No AI, nothing new is stored, and the file goes to no other service.",
+    options: [{ value: "on", label: "Show the pictures" }, { value: "off", label: "Do not show" }],
+    fallback: "off",
+    limitReason: "Needs no migration and no AI. A picture a browser cannot show (EMF, WMF, SVG, linked), a Word chart and a Word diagram are counted, not shown. Default: off.",
+  },
   {
     key: "scholar_whole_slides_max", kind: "int", product: "Scholar", unit: "slides",
     label: "Whole slides and pages: most drawn for one file",
@@ -2774,6 +2783,8 @@ export type IndividualPolicy = {
   scholarVisualTextWords: number;
   /** SCHOLAR-VISUAL-001 phase 2: whole slides drawn once from the learner's own file. */
   scholarWholeSlides: "on" | "off";
+  /** SCHOLAR-VISUAL-001 phase 2, piece C. */
+  scholarWordPictures: "on" | "off";
   scholarWholeSlidesMax: number;
   /** PLP-01..04: My Plan. */
   scholarMyPlan: "on" | "off";
@@ -3014,6 +3025,7 @@ export function resolvePolicy(rows: readonly Row[]): IndividualPolicy {
     scholarVisualTextWords: int("scholar_visual_text_words"),
     scholarWholeSlides: clampChoice(policyDef("scholar_whole_slides") as ChoicePolicy, published.get(policyPath("scholar_whole_slides"))) as "on" | "off",
     scholarWholeSlidesMax: int("scholar_whole_slides_max"),
+    scholarWordPictures: clampChoice(policyDef("scholar_word_pictures") as ChoicePolicy, published.get(policyPath("scholar_word_pictures"))) as "on" | "off",
     scholarMyPlan: clampChoice(policyDef("scholar_my_plan") as ChoicePolicy, published.get(policyPath("scholar_my_plan"))) as "on" | "off",
     scholarModuleAccess: {
       courses: clampModuleAccess(policyDef("scholar_module_courses_access") as ModuleAccessPolicy, published.get(policyPath("scholar_module_courses_access"))),
